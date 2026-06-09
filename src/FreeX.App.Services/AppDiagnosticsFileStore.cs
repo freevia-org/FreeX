@@ -18,6 +18,8 @@ public sealed class AppDiagnosticsFileStore
         "extension",
         "fileType",
         "format",
+        "grantKind",
+        "payloadRedacted",
         "reason",
         "scope",
         "source",

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using ClosedXML.Excel;
 using FreeX.Core.Model;
@@ -330,17 +331,33 @@ internal static class XlsxClosedXmlCellMapper
         if (xlColor.ColorType == XLColorType.Theme)
             return theme.ResolveColor(ToWorkbookThemeColorSlot(xlColor.ThemeColor), xlColor.ThemeTint);
 
-        System.Drawing.Color c;
-        try
+        if (!TryMapConcreteColor(xlColor, out var color))
+            return CellColor.Black;
+
+        return color;
+    }
+
+    private static bool TryMapConcreteColor(XLColor xlColor, out CellColor color)
+    {
+        color = default;
+        if (xlColor.ColorType != XLColorType.Color || !xlColor.HasValue)
+            return false;
+
+        // Avoid XLColor.Color here; it exposes drawing types in portable core code.
+        var rgb = xlColor.ToString().Trim().TrimStart('#');
+        if (rgb.Length == 8)
+            rgb = rgb[2..];
+
+        if (rgb.Length != 6 ||
+            !byte.TryParse(rgb[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) ||
+            !byte.TryParse(rgb[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) ||
+            !byte.TryParse(rgb[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
         {
-            c = xlColor.Color;
-        }
-        catch (InvalidOperationException)
-        {
-            return new CellColor(0, 0, 0);
+            return false;
         }
 
-        return new CellColor(c.R, c.G, c.B);
+        color = new CellColor(r, g, b);
+        return true;
     }
 
     private static WorkbookThemeColorSlot ToWorkbookThemeColorSlot(XLThemeColor themeColor) => themeColor switch

@@ -16,6 +16,7 @@ public sealed class WorkbookSessionTests
         session.Workbook.Name.Should().Be(WorkbookFactory.DefaultWorkbookName);
         session.StartupStatus.Should().Be("Created new workbook.");
         session.CurrentFilePath.Should().BeNull();
+        session.CurrentFileAccessIdentity.Should().BeNull();
         session.IsDirty.Should().BeFalse();
         session.CanSaveCurrentSource(out _).Should().BeFalse();
         session.CanUndo.Should().BeFalse();
@@ -37,11 +38,16 @@ public sealed class WorkbookSessionTests
             "Opened .xltx.",
             IsFallback: false,
             SourcePath: sourcePath,
-            OpenedAsTemplate: true);
+            OpenedAsTemplate: true,
+            SourceFileAccessIdentity: new WorkbookFileAccessIdentity(
+                sourcePath,
+                "macos-security-scoped-bookmark",
+                "template-token"));
 
         var session = CreateSession(source);
 
         session.CurrentFilePath.Should().BeNull();
+        session.CurrentFileAccessIdentity.Should().BeNull();
         session.CanSaveCurrentSource(out _).Should().BeFalse();
         session.DisplayName.Should().Be("Budget.xltx");
         session.StartupStatus.Should().Contain("Opened as template.");
@@ -89,6 +95,9 @@ public sealed class WorkbookSessionTests
         message.Should().BeEmpty();
         target.Should().NotBeNull();
         target!.Path.Should().Be(Path.GetFullPath("Book.XLSM"));
+        target.FileAccessIdentity.Should().NotBeNull();
+        target.FileAccessIdentity!.LocalPath.Should().Be(target.Path);
+        target.FileAccessIdentity.HasBookmark.Should().BeFalse();
         target.Adapter.Should().BeSameAs(adapter);
         target.Extension.Should().Be(".XLSM");
         target.Format.FormatName.Should().Be("XLSM Macro-Enabled Workbook");
@@ -136,6 +145,8 @@ public sealed class WorkbookSessionTests
         message.Should().BeEmpty();
         target.Should().NotBeNull();
         target!.Path.Should().Be(expectedPath);
+        target.FileAccessIdentity.Should().NotBeNull();
+        target.FileAccessIdentity!.LocalPath.Should().Be(expectedPath);
         target.Extension.Should().Be(".XLSX");
         target.Adapter.Should().BeSameAs(adapter);
     }
@@ -1623,7 +1634,11 @@ public sealed class WorkbookSessionTests
         [
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Charts, "xl/charts/chart1.xml")
         ]);
-        var target = new WorkbookOpenTarget(path, adapter, ".xltx", format);
+        var identity = new WorkbookFileAccessIdentity(
+            path,
+            "macos-security-scoped-bookmark",
+            "template-token");
+        var target = new WorkbookOpenTarget(path, adapter, ".xltx", format, identity);
         var result = new WorkbookOpenResult(
             workbook,
             featureReport,
@@ -1639,12 +1654,41 @@ public sealed class WorkbookSessionTests
             adapters: [adapter]);
 
         session.CurrentFilePath.Should().BeNull();
+        session.CurrentFileAccessIdentity.Should().BeNull();
         session.CurrentXlsxFeatureReport.Should().BeSameAs(featureReport);
         session.DisplayName.Should().Be("Budget.xltx");
         session.Workbook.Name.Should().Be("Budget.xltx");
         session.StartupStatus.Should().Contain("Opened as template.");
         session.StartupStatus.Should().Contain("Unsupported XLSX features detected.");
         session.StartupStatus.Should().Contain("1 load warning.");
+    }
+
+    [Fact]
+    public void CreateOpened_CarriesTargetFileAccessIdentityIntoCurrentSession()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "Budget.fxl");
+        var format = new FileFormatDescriptor(".fxl", "FreeX Workbook", CanOpen: true, CanSave: true);
+        var adapter = new TestFileAdapter(formats: [format]);
+        var workbook = CreateWorkbook("Budget");
+        var identity = new WorkbookFileAccessIdentity(
+            path,
+            "macos-security-scoped-bookmark",
+            "open-token");
+        var target = new WorkbookOpenTarget(path, adapter, ".fxl", format, identity);
+        var result = new WorkbookOpenResult(workbook, null, "Budget", OpenedAsTemplate: false, LoadWarnings: []);
+
+        var session = new WorkbookSessionFactory().CreateOpened(
+            target,
+            result,
+            viewportHeight: 240,
+            viewportWidth: 320,
+            adapters: [adapter]);
+
+        session.CurrentFilePath.Should().Be(path);
+        session.CurrentFileAccessIdentity.Should().NotBeNull();
+        session.CurrentFileAccessIdentity!.LocalPath.Should().Be(path);
+        session.CurrentFileAccessIdentity.BookmarkKind.Should().Be("macos-security-scoped-bookmark");
+        session.CurrentFileAccessIdentity.BookmarkPayload.Should().Be("open-token");
     }
 
     [Theory]
@@ -8105,6 +8149,10 @@ public sealed class WorkbookSessionTests
     {
         var sourcePath = Path.Combine(Path.GetTempPath(), "Book.xlsx");
         var savedPath = Path.Combine(Path.GetTempPath(), "Saved.fxl");
+        var sourceIdentity = new WorkbookFileAccessIdentity(
+            sourcePath,
+            "macos-security-scoped-bookmark",
+            "source-token");
         var session = CreateSession(new StartupWorkbookLoadResult(
             CreateWorkbook(),
             "Book.xlsx",
@@ -8114,7 +8162,8 @@ public sealed class WorkbookSessionTests
             FeatureReport: new XlsxFeatureReport(
             [
                 new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Charts, "xl/charts/chart1.xml")
-            ])));
+            ]),
+            SourceFileAccessIdentity: sourceIdentity));
         session.SelectCell(session.ActiveCell);
         session.CommitCellText("changed");
 
@@ -8122,9 +8171,37 @@ public sealed class WorkbookSessionTests
 
         session.IsDirty.Should().BeFalse();
         session.CurrentFilePath.Should().Be(savedPath);
+        session.CurrentFileAccessIdentity.Should().NotBeNull();
+        session.CurrentFileAccessIdentity!.LocalPath.Should().Be(savedPath);
+        session.CurrentFileAccessIdentity.HasBookmark.Should().BeFalse();
         session.CurrentXlsxFeatureReport.Should().BeNull();
         session.DisplayName.Should().Be("Saved.fxl");
         session.Workbook.Name.Should().Be("Saved.fxl");
+    }
+
+    [Fact]
+    public void MarkSaved_PreservesCurrentFileAccessIdentityWhenSavingSamePath()
+    {
+        var sourcePath = Path.Combine(Path.GetTempPath(), "Book.fxl");
+        var sourceIdentity = new WorkbookFileAccessIdentity(
+            sourcePath,
+            "macos-security-scoped-bookmark",
+            "same-path-token");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            CreateWorkbook(),
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false,
+            SourcePath: sourcePath,
+            SourceFileAccessIdentity: sourceIdentity));
+
+        session.MarkSaved(sourcePath);
+
+        session.CurrentFilePath.Should().Be(sourcePath);
+        session.CurrentFileAccessIdentity.Should().NotBeNull();
+        session.CurrentFileAccessIdentity!.LocalPath.Should().Be(sourcePath);
+        session.CurrentFileAccessIdentity.BookmarkKind.Should().Be("macos-security-scoped-bookmark");
+        session.CurrentFileAccessIdentity.BookmarkPayload.Should().Be("same-path-token");
     }
 
     [Fact]

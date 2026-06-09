@@ -27,6 +27,32 @@ public sealed class WorkbookShareActionPlannerTests
     }
 
     [Fact]
+    public void CreatePlan_PrefersShareSheetForSavedWorkbookWhenBothNativeActionsAreAvailable()
+    {
+        var surface = new WorkbookShareActionSurface(
+            "macOS Share Sheet",
+            CanShowShareSheet: true,
+            CanOpenContainingFolder: true,
+            OpenContainingFolderLabel: "Reveal in Finder");
+        var expectedPath = Path.GetFullPath("Budget.xlsx");
+
+        var plan = WorkbookShareActionPlanner.CreatePlan(
+            expectedPath,
+            surface,
+            path => path == expectedPath);
+
+        plan.Kind.Should().Be(WorkbookShareActionPlanKind.ShareSheet);
+        plan.Path.Should().Be(expectedPath);
+        plan.ContainingFolderPath.Should().BeNull();
+        plan.SaveAsReason.Should().Be(WorkbookShareReadinessSaveAsReason.None);
+        plan.UnavailableReason.Should().Be(WorkbookShareActionUnavailableReason.None);
+        plan.EffectiveSurface.Should().Be(surface);
+        WorkbookShareActionPlanner.FormatStatus(plan)
+            .Should()
+            .Be($"Ready for macOS Share Sheet from {expectedPath}.");
+    }
+
+    [Fact]
     public void CreatePlan_FallsBackToOpenContainingFolderWhenShareSheetIsUnavailable()
     {
         var surface = new WorkbookShareActionSurface(
@@ -95,6 +121,31 @@ public sealed class WorkbookShareActionPlannerTests
         WorkbookShareActionPlanner.FormatStatus(plan)
             .Should()
             .Be("Save As is required before Reveal in Finder can use the workbook because it has not been saved yet.");
+    }
+
+    [Fact]
+    public void CreatePlan_RequiresSaveAsForUnsavedWorkbookWhenShareSheetCanUseAFile()
+    {
+        var surface = new WorkbookShareActionSurface(
+            "macOS Share Sheet",
+            CanShowShareSheet: true,
+            CanOpenContainingFolder: true,
+            OpenContainingFolderLabel: "Reveal in Finder");
+
+        var plan = WorkbookShareActionPlanner.CreatePlan(
+            currentFilePath: null,
+            surface,
+            _ => throw new InvalidOperationException("unsaved workbooks must not probe the file system"));
+
+        plan.Kind.Should().Be(WorkbookShareActionPlanKind.SaveAsBeforeShare);
+        plan.Path.Should().BeNull();
+        plan.ContainingFolderPath.Should().BeNull();
+        plan.SaveAsReason.Should().Be(WorkbookShareReadinessSaveAsReason.UnsavedWorkbook);
+        plan.CandidatePath.Should().BeNull();
+        plan.UnavailableReason.Should().Be(WorkbookShareActionUnavailableReason.None);
+        WorkbookShareActionPlanner.FormatStatus(plan)
+            .Should()
+            .Be("Save As is required before macOS Share Sheet can use the workbook because it has not been saved yet.");
     }
 
     [Fact]

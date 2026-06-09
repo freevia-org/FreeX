@@ -139,12 +139,72 @@ function Get-ProjectProperty {
 
     foreach ($group in @($Project.Project.PropertyGroup)) {
         $value = $group.$Name
-        if (-not [string]::IsNullOrWhiteSpace($value)) {
-            return [string]$value
+        if ($null -eq $value) {
+            continue
+        }
+
+        if ($value -is [System.Xml.XmlElement]) {
+            $text = [string]$value.InnerText
+        } else {
+            $text = [string]$value
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($text)) {
+            return $text
         }
     }
 
     return $null
+}
+
+function Get-ProjectPropertyNodes {
+    param(
+        [Parameter(Mandatory = $true)][xml]$Project,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $nodes = @()
+    foreach ($group in @($Project.Project.PropertyGroup)) {
+        foreach ($child in @($group.ChildNodes)) {
+            if ($child.NodeType -eq [System.Xml.XmlNodeType]::Element -and $child.LocalName -eq $Name) {
+                $nodes += $child
+            }
+        }
+    }
+
+    return $nodes
+}
+
+function Get-ProjectItemNodes {
+    param(
+        [Parameter(Mandatory = $true)][xml]$Project,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $nodes = @()
+    foreach ($group in @($Project.Project.ItemGroup)) {
+        foreach ($child in @($group.ChildNodes)) {
+            if ($child.NodeType -eq [System.Xml.XmlNodeType]::Element -and $child.LocalName -eq $Name) {
+                $nodes += $child
+            }
+        }
+    }
+
+    return $nodes
+}
+
+function Get-ProjectNodeCondition {
+    param([Parameter(Mandatory = $true)]$Node)
+
+    if ($Node.HasAttribute("Condition")) {
+        return [string]$Node.GetAttribute("Condition")
+    }
+
+    if ($Node.ParentNode -and $Node.ParentNode.HasAttribute("Condition")) {
+        return [string]$Node.ParentNode.GetAttribute("Condition")
+    }
+
+    return ""
 }
 
 function Get-ProjectItems {
@@ -241,6 +301,13 @@ function Test-IsIgnoredSourcePath {
         $segments -contains ".claude"
 }
 
+function Test-IsMacOsConditionalSourcePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $relative = Get-RepoRelativePath $Path
+    return $relative.StartsWith("src/FreeX.App.Avalonia/MacOs/", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Test-MacOsIcon {
     param([Parameter(Mandatory = $true)][string]$IconFilePath)
 
@@ -280,9 +347,30 @@ function Test-AvaloniaProject {
 
     [xml]$project = Get-Content -LiteralPath $ProjectPath -Raw
 
-    $targetFramework = Get-ProjectProperty -Project $project -Name "TargetFramework"
-    Assert-True -Condition ($targetFramework -eq "net10.0") -Message "Avalonia app TargetFramework must be net10.0, but was '$targetFramework'."
-    Assert-True -Condition ($targetFramework.IndexOf("-windows", [System.StringComparison]::OrdinalIgnoreCase) -lt 0) -Message "Avalonia app TargetFramework must not be Windows-specific."
+    $targetFrameworkNodes = @(Get-ProjectPropertyNodes -Project $project -Name "TargetFramework")
+    Assert-True -Condition ($targetFrameworkNodes.Count -gt 0) -Message "Avalonia app TargetFramework must be net10.0."
+
+    $targetFrameworkValues = @($targetFrameworkNodes | ForEach-Object { [string]$_.InnerText } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    Assert-True -Condition ($targetFrameworkValues -contains "net10.0") -Message "Avalonia app TargetFramework must be net10.0, but was '$($targetFrameworkValues -join ';')'."
+    foreach ($targetFrameworkValue in $targetFrameworkValues) {
+        Assert-True -Condition ($targetFrameworkValue.IndexOf("-windows", [System.StringComparison]::OrdinalIgnoreCase) -lt 0) -Message "Avalonia app TargetFramework must not be Windows-specific."
+    }
+
+    $targetFrameworksNodes = @(Get-ProjectPropertyNodes -Project $project -Name "TargetFrameworks")
+    Assert-True -Condition ($targetFrameworksNodes.Count -eq 1) -Message "Avalonia app TargetFrameworks must have a single opt-in macOS TFM property."
+    $macOsTargetFrameworksCondition = Get-ProjectNodeCondition $targetFrameworksNodes[0]
+    Assert-True -Condition ($macOsTargetFrameworksCondition -eq "'`$(EnableMacOsTargetFramework)' == 'true'") -Message "Avalonia app TargetFrameworks must be guarded by EnableMacOsTargetFramework."
+    $macOsTargetFrameworks = @([string]$targetFrameworksNodes[0].InnerText -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    Assert-ExactSet -Actual $macOsTargetFrameworks -Expected @("net10.0", "net10.0-macos") -Label "Avalonia app opt-in TargetFrameworks"
+
+    $defaultFrameworkNodes = @($targetFrameworkNodes | Where-Object { [string]$_.InnerText -eq "net10.0" })
+    Assert-True -Condition ($defaultFrameworkNodes.Count -eq 1) -Message "Avalonia app must keep exactly one default net10.0 TargetFramework."
+    Assert-True -Condition ((Get-ProjectNodeCondition $defaultFrameworkNodes[0]) -eq "'`$(EnableMacOsTargetFramework)' != 'true'") -Message "Avalonia app default TargetFramework must be used when EnableMacOsTargetFramework is not true."
+
+    $supportedOsVersionNodes = @(Get-ProjectPropertyNodes -Project $project -Name "SupportedOSPlatformVersion")
+    Assert-True -Condition ($supportedOsVersionNodes.Count -eq 1) -Message "Avalonia app must declare SupportedOSPlatformVersion for net10.0-macos."
+    Assert-True -Condition ([string]$supportedOsVersionNodes[0].InnerText -eq "12.0") -Message "Avalonia app SupportedOSPlatformVersion must be 12.0."
+    Assert-True -Condition ((Get-ProjectNodeCondition $supportedOsVersionNodes[0]) -eq "'`$(TargetFramework)' == 'net10.0-macos'") -Message "Avalonia app SupportedOSPlatformVersion must be scoped to net10.0-macos."
 
     $outputType = Get-ProjectProperty -Project $project -Name "OutputType"
     Assert-True -Condition ($outputType -eq "Exe") -Message "Avalonia app OutputType must be Exe."
@@ -307,6 +395,14 @@ function Test-AvaloniaProject {
 
     $contentItems = @(Get-ProjectItems -Project $project -Name "Content" | ForEach-Object { [string]$_.Include })
     Assert-True -Condition ($contentItems -contains "Packaging\macos\FreeX.icns") -Message "Avalonia app project must include the macOS app icon as content."
+
+    $macOsSourceRemoves = @(Get-ProjectItemNodes -Project $project -Name "Compile" | Where-Object { $_.GetAttribute("Remove") -eq "MacOs\**\*.cs" })
+    Assert-True -Condition ($macOsSourceRemoves.Count -eq 1) -Message "Avalonia app project must exclude MacOs source from non-macOS target frameworks."
+    Assert-True -Condition ((Get-ProjectNodeCondition $macOsSourceRemoves[0]) -eq "'`$(TargetFramework)' != 'net10.0-macos'") -Message "Avalonia app MacOs source exclusion must apply outside net10.0-macos."
+
+    $macOsDefineConstants = @(Get-ProjectPropertyNodes -Project $project -Name "DefineConstants" | Where-Object { [string]$_.InnerText -match "(^|;)FREEX_MACOS_SHARE_SHEET(;|$)" })
+    Assert-True -Condition ($macOsDefineConstants.Count -eq 1) -Message "Avalonia app project must define FREEX_MACOS_SHARE_SHEET for the native macOS share sheet."
+    Assert-True -Condition ((Get-ProjectNodeCondition $macOsDefineConstants[0]) -eq "'`$(TargetFramework)' == 'net10.0-macos'") -Message "Avalonia app FREEX_MACOS_SHARE_SHEET constant must be scoped to net10.0-macos."
 
     $allowedProjectReferences = @(
         "FreeX.App.Services",
@@ -415,6 +511,7 @@ function Test-MacOsWorkflow {
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests",
@@ -477,7 +574,7 @@ function Test-MacOsWorkflow {
         "if-no-files-found: warn",
         "publish-distribution-candidate:",
         "Publish macOS distribution candidate",
-        "needs: macos-app",
+        "needs: [macos-app, macos-preview-readiness]",
         "if: `${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}",
         "permissions:",
         "actions: read",
@@ -618,6 +715,20 @@ function Test-MacOsWorkflow {
         "live_command_key_smoke_required=false",
         "live_command_key_smoke=not_required",
         "external_image_clipboard_paste_required=false",
+        "macos_accessibility_smoke=passed",
+        "a11y_formula_box_name=true",
+        "a11y_formula_box_help=true",
+        "a11y_formula_box_id=true",
+        "a11y_status_text_name=true",
+        "a11y_status_text_help=true",
+        "a11y_status_text_id=true",
+        "a11y_status_text_value=true",
+        "a11y_cell_address_name=true",
+        "a11y_cell_address_help=true",
+        "a11y_cell_address_id=true",
+        "a11y_selection_stats_name=true",
+        "a11y_selection_stats_help=true",
+        "a11y_selection_stats_id=true",
         "new_sheet_button=true",
         "toolbar_format_painter_button=true",
         "toolbar_autosum_button=true",
@@ -654,6 +765,7 @@ function Test-MacOsWorkflow {
         "native_open_recent_menu_item=true",
         "native_open_recent_item_count=[1-9]",
         "native_export_pdf_menu_item=true",
+        "native_share_workbook_menu_item=true",
         'grep -q "macos_launch_smoke=passed" "$open_with_report"',
         'grep -q "window_shown=true" "$open_with_report"',
         'grep -q "opened_source_path=.*freex-$runtime-open-with.csv" "$open_with_report"',
@@ -868,6 +980,16 @@ function Test-MacOsWorkflow {
         Assert-ContainsText -Text $workflow -Needle $marker -Message "macOS workflow is missing required readiness marker: $marker"
     }
 
+    $releasePublicationJobMatch = [System.Text.RegularExpressions.Regex]::Match(
+        $workflow,
+        "(?ms)^  publish-distribution-candidate:\s*(?:#.*)?\r?\n(?<block>.*?)(?=^  [A-Za-z0-9_-]+:\s*(?:#.*)?$|\z)")
+    Assert-True -Condition $releasePublicationJobMatch.Success -Message "macOS workflow must define the publish-distribution-candidate job."
+    $releasePublicationJobBlock = $releasePublicationJobMatch.Value
+    Assert-ContainsText `
+        -Text $releasePublicationJobBlock `
+        -Needle "needs: [macos-app, macos-preview-readiness]" `
+        -Message "macOS distribution-candidate publication must depend on aggregate preview readiness."
+
     $boundedLaunchSmokeCount = ([regex]::Matches($workflow, 'run_bounded_launchservices_smoke "')).Count
     Assert-True -Condition ($boundedLaunchSmokeCount -eq 3) -Message "macOS workflow must route all three hosted LaunchServices launch smoke paths through run_bounded_launchservices_smoke."
     Assert-TextBefore -Text $workflow -First "run_bounded_launchservices_smoke() {" -Second 'run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report"' -Message "macOS workflow must define the bounded LaunchServices smoke helper before the bundle-id launch smoke."
@@ -956,6 +1078,39 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
+            Path = "src\FreeX.App.Services\AppDiagnosticsFileStore.cs"
+            Markers = @(
+                "AllowedPropertyNames",
+                '"grantKind"',
+                '"payloadRedacted"'
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Avalonia\WorkbookFileAccessService.cs"
+            Markers = @(
+                "Create(AvaloniaAppDiagnostics? diagnostics = null)",
+                "new AvaloniaWorkbookFileAccessService(diagnostics)",
+                "AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null)",
+                "MacOsSecurityScopedBookmarkKind = `"macos-security-scoped-bookmark`"",
+                "storageItem is { CanBookmark: true }",
+                "StorageItemMatchesPath(storageItem, path)",
+                "storageItem.SaveBookmarkAsync()",
+                "storageProvider.OpenFileBookmarkAsync(bookmark)",
+                "PlatformPathIdentityComparer.Current.Equals(identity.LocalPath, resolvedPath)",
+                "WorkbookFileAccessScope.FromDisposable(",
+                "RecordIdentityEvent(`"bookmark_created`", grantKind: MacOsSecurityScopedBookmarkKind);",
+                "RecordScopeEvent(`"scope_started`", grantKind: MacOsSecurityScopedBookmarkKind);",
+                "RecordScopeEvent(`"scope_ended`", grantKind: MacOsSecurityScopedBookmarkKind)",
+                "RecordFileAccessEvent(`"workbook_file_access_identity`", status, grantKind)",
+                "RecordFileAccessEvent(`"workbook_file_access_scope`", status, grantKind)",
+                '["scope"] = "workbook_file_access"',
+                '["grantKind"] = string.IsNullOrWhiteSpace(grantKind) ? null : grantKind',
+                '["payloadRedacted"] = string.IsNullOrWhiteSpace(grantKind) ? null : "true"'
+            )
+            OrderedPairs = @()
+        },
+        @{
             Path = "src\FreeX.App.Avalonia\MainWindow.cs"
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
@@ -974,6 +1129,7 @@ function Test-SourceWiring {
                 "WorkbookViewportScrollPlanner.CalculateViewportOrigin(",
                 "_session.SetViewportOrigin(topRow, leftCol)",
                 "public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)",
+                "WorkbookFileAccessServiceFactory.Create(App.Diagnostics)",
                 "CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true)",
                 "_formatPainterButton.Content = `"Format Painter`";",
                 "AutomationProperties.SetAutomationId(_formatPainterButton, `"HomeFormatPainterButton`");",
@@ -1217,6 +1373,31 @@ function Test-SourceWiring {
                 "private void UnmergeSelectedRange()",
                 "_session.UnmergeSelectedRange()",
                 "HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == `"Merge & Center`"",
+                "AutomationProperties.SetAutomationId(_formulaBox, `"FormulaBox`");",
+                "AutomationProperties.SetName(_formulaBox, `"Formula bar`");",
+                "AutomationProperties.SetHelpText(_formulaBox, `"Edit the active cell value or formula.`");",
+                "AutomationProperties.SetAutomationId(_statusText, `"StatusText`");",
+                "AutomationProperties.SetName(_statusText, `"Status`");",
+                "AutomationProperties.SetHelpText(_statusText, `"Shows the current workbook status.`");",
+                "AutomationProperties.SetAutomationId(_cellAddressText, `"CellAddressText`");",
+                "AutomationProperties.SetName(_cellAddressText, `"Cell address`");",
+                "AutomationProperties.SetHelpText(_cellAddressText, `"Shows the active cell address.`");",
+                "AutomationProperties.SetAutomationId(_selectionStatsText, `"SelectionStatsText`");",
+                "AutomationProperties.SetName(_selectionStatsText, `"Selection statistics`");",
+                "AutomationProperties.SetHelpText(_selectionStatsText, `"Shows statistics for the current selection.`");",
+                "HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), `"Formula bar`", StringComparison.Ordinal)",
+                "HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), `"Edit the active cell value or formula.`", StringComparison.Ordinal)",
+                "HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), `"FormulaBox`", StringComparison.Ordinal)",
+                "HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), `"Status`", StringComparison.Ordinal)",
+                "HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), `"Shows the current workbook status.`", StringComparison.Ordinal)",
+                "HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), `"StatusText`", StringComparison.Ordinal)",
+                "HasStatusTextValue: !string.IsNullOrWhiteSpace(_statusText.Text)",
+                "HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), `"Cell address`", StringComparison.Ordinal)",
+                "HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), `"Shows the active cell address.`", StringComparison.Ordinal)",
+                "HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), `"CellAddressText`", StringComparison.Ordinal)",
+                "HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), `"Selection statistics`", StringComparison.Ordinal)",
+                "HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), `"Shows statistics for the current selection.`", StringComparison.Ordinal)",
+                "HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), `"SelectionStatsText`", StringComparison.Ordinal)",
                 "HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, `"Merge & Center`", requireGesture: false)",
                 "HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, `"Unmerge Cells`", requireGesture: false)",
                 "CreateNativePasteSpecialMenu()",
@@ -1617,13 +1798,17 @@ function Test-SourceWiring {
                 "path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null",
                 "plan.ItemCount == 0",
                 "foreach (var entry in plan.Items)",
+                "var fileAccessIdentity = entry.FileAccessIdentity;",
                 "Header = entry.Header",
-                "private async Task OpenRecentWorkbookAsync(string path)",
-                "await OpenWorkbookPathAsync(target.Path);",
+                "private async Task OpenRecentWorkbookAsync(",
+                "WorkbookFileAccessIdentity? fileAccessIdentity = null",
+                "if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)",
+                "await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);",
                 "private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)",
-                "private void RecordRecentWorkbook(string path)",
-                "_recentFiles.AddOrUpdate(target.Path);",
-                "RecordRecentWorkbook(target.Path);",
+                "private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)",
+                "_recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);",
+                "RecordRecentWorkbook(target.Path, target.FileAccessIdentity);",
+                "RecordRecentWorkbook(target.Path, fileAccessIdentity);",
                 "_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();",
                 "fileMenu.Items.Add(_newWorkbookMenuItem);",
                 "fileMenu.Items.Add(_closeWorkbookMenuItem);",
@@ -2000,6 +2185,20 @@ function Test-SourceWiring {
                 "HasBordersButton &&",
                 "HasWrapTextButton &&",
                 "HasMergeAndCenterButton &&",
+                "HasAccessibilitySmokeEvidence &&",
+                "HasFormulaBoxAutomationName &&",
+                "HasFormulaBoxAutomationHelp &&",
+                "HasFormulaBoxAutomationId &&",
+                "HasStatusTextAutomationName &&",
+                "HasStatusTextAutomationHelp &&",
+                "HasStatusTextAutomationId &&",
+                "HasStatusTextValue &&",
+                "HasCellAddressAutomationName &&",
+                "HasCellAddressAutomationHelp &&",
+                "HasCellAddressAutomationId &&",
+                "HasSelectionStatsAutomationName &&",
+                "HasSelectionStatsAutomationHelp &&",
+                "HasSelectionStatsAutomationId",
                 "HasFocusableSheetTab &&",
                 "HasFocusableActiveSheetTab &&",
                 "HasShellFocusCycleTargets &&",
@@ -2066,6 +2265,7 @@ function Test-SourceWiring {
                 "HasNativeMergeAndCenterMenuItem &&",
                 "HasNativeUnmergeCellsMenuItem &&",
                 "HasNativeExportPdfMenuItem &&",
+                "HasNativeShareWorkbookMenuItem &&",
                 "HasNativeWorkbookStatisticsMenuItem &&",
                 "native_new_workbook_menu_item=",
                 "cmd_find_direct_route_source_guard=",
@@ -2087,9 +2287,24 @@ function Test-SourceWiring {
                 "external_image_clipboard_paste=",
                 "external_image_clipboard_picture_count=",
                 "external_image_clipboard_picture_png_bytes=",
+                "macos_accessibility_smoke=",
+                "a11y_formula_box_name=",
+                "a11y_formula_box_help=",
+                "a11y_formula_box_id=",
+                "a11y_status_text_name=",
+                "a11y_status_text_help=",
+                "a11y_status_text_id=",
+                "a11y_status_text_value=",
+                "a11y_cell_address_name=",
+                "a11y_cell_address_help=",
+                "a11y_cell_address_id=",
+                "a11y_selection_stats_name=",
+                "a11y_selection_stats_help=",
+                "a11y_selection_stats_id=",
                 "native_open_recent_menu_item=",
                 "native_open_recent_item_count=",
                 "native_export_pdf_menu_item=",
+                "native_share_workbook_menu_item=",
                 "native_close_workbook_menu_item=",
                 "native_workbook_statistics_menu_item=",
                 "new_sheet_button=",
@@ -2771,7 +2986,7 @@ function Test-SourceWiring {
 function Test-PortableSourceHygiene {
     param([Parameter(Mandatory = $true)][string[]]$SourceRoots)
 
-    $forbiddenTokens = @(
+    $alwaysForbiddenTokens = @(
         "System.Windows",
         "Microsoft.Win32",
         "Windows.ApplicationModel",
@@ -2784,7 +2999,9 @@ function Test-PortableSourceHygiene {
         "SharpVectors.Wpf",
         "UseWPF",
         "FreeX.App.Host",
-        "FreeX.App.UI",
+        "FreeX.App.UI"
+    )
+    $nativeMacOsTokens = @(
         "AppKit",
         "Foundation",
         "ObjCRuntime",
@@ -2813,9 +3030,19 @@ function Test-PortableSourceHygiene {
 
     foreach ($file in $sourceFiles) {
         $content = Get-Content -LiteralPath $file.FullName -Raw
-        foreach ($token in $forbiddenTokens) {
+        foreach ($token in $alwaysForbiddenTokens) {
             if ($content.IndexOf($token, [System.StringComparison]::Ordinal) -ge 0) {
                 throw "Portable macOS source contains forbidden token '$token' in $(Get-RepoRelativePath $file.FullName)."
+            }
+        }
+
+        if (Test-IsMacOsConditionalSourcePath $file.FullName) {
+            continue
+        }
+
+        foreach ($token in $nativeMacOsTokens) {
+            if ($content.IndexOf($token, [System.StringComparison]::Ordinal) -ge 0) {
+                throw "Portable macOS source contains native macOS token '$token' outside src/FreeX.App.Avalonia/MacOs in $(Get-RepoRelativePath $file.FullName)."
             }
         }
     }

@@ -302,6 +302,7 @@ public sealed class MainWindow : Window
     private readonly WorkbookOpenService _openService = new();
     private readonly WorkbookSaveService _saveService = new();
     private readonly IWorkbookShareSheetService _workbookShareSheetService;
+    private readonly IWorkbookFileAccessService _workbookFileAccessService;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
     private readonly ContentControl _sheetTabsHost = new();
@@ -514,17 +515,23 @@ public sealed class MainWindow : Window
     private Guid? _selectedDrawingObjectId;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
-        : this(startupArguments, new UnavailableWorkbookShareSheetService(WorkbookShareSheetLabel))
+        : this(
+            startupArguments,
+            WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
+            WorkbookFileAccessServiceFactory.Create(App.Diagnostics))
     {
     }
 
     internal MainWindow(
         IReadOnlyList<string> startupArguments,
-        IWorkbookShareSheetService workbookShareSheetService)
+        IWorkbookShareSheetService workbookShareSheetService,
+        IWorkbookFileAccessService workbookFileAccessService)
     {
         ArgumentNullException.ThrowIfNull(workbookShareSheetService);
+        ArgumentNullException.ThrowIfNull(workbookFileAccessService);
 
         _workbookShareSheetService = workbookShareSheetService;
+        _workbookFileAccessService = workbookFileAccessService;
         var source = new StartupWorkbookLoader().Load(startupArguments);
         _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
 
@@ -1316,12 +1323,18 @@ public sealed class MainWindow : Window
         _statusText.MaxWidth = 180;
         _statusText.TextTrimming = TextTrimming.CharacterEllipsis;
         _statusText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        AutomationProperties.SetAutomationId(_statusText, "StatusText");
+        AutomationProperties.SetName(_statusText, "Status");
+        AutomationProperties.SetHelpText(_statusText, "Shows the current workbook status.");
 
         _selectionStatsText.FontSize = 12;
         _selectionStatsText.Foreground = Brush(73, 80, 93);
         _selectionStatsText.MaxWidth = 420;
         _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
         _selectionStatsText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        AutomationProperties.SetAutomationId(_selectionStatsText, "SelectionStatsText");
+        AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
+        AutomationProperties.SetHelpText(_selectionStatsText, "Shows statistics for the current selection.");
 
         _zoomText.FontSize = 12;
         _zoomText.FontWeight = FontWeight.SemiBold;
@@ -1645,6 +1658,9 @@ public sealed class MainWindow : Window
         _cellAddressText.Foreground = Brush(28, 38, 48);
         _cellAddressText.TextAlignment = TextAlignment.Center;
         _cellAddressText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        AutomationProperties.SetAutomationId(_cellAddressText, "CellAddressText");
+        AutomationProperties.SetName(_cellAddressText, "Cell address");
+        AutomationProperties.SetHelpText(_cellAddressText, "Shows the active cell address.");
 
         _formulaBox.MinWidth = 320;
         _formulaBox.FontSize = 12;
@@ -1652,6 +1668,9 @@ public sealed class MainWindow : Window
         _formulaBox.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _formulaBox.GotFocus += FormulaBox_GotFocus;
         _formulaBox.KeyDown += FormulaBox_KeyDown;
+        AutomationProperties.SetAutomationId(_formulaBox, "FormulaBox");
+        AutomationProperties.SetName(_formulaBox, "Formula bar");
+        AutomationProperties.SetHelpText(_formulaBox, "Edit the active cell value or formula.");
 
         return new Border
         {
@@ -11705,25 +11724,27 @@ public sealed class MainWindow : Window
     private async void MainWindow_Drop(object? sender, DragEventArgs e)
     {
         e.Handled = true;
-        if (!TrySelectDroppedWorkbookPath(e, out var path, out var message))
+        if (!TrySelectDroppedWorkbookPath(e, out var path, out var storageItem, out var message))
         {
             ShowOpenIssue(message);
             return;
         }
 
         e.DragEffects = DragDropEffects.Copy;
-        await OpenWorkbookPathAsync(path!);
+        var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path!, storageItem);
+        await OpenWorkbookPathAsync(path!, fileAccessIdentity);
     }
 
     public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)
     {
-        if (!TrySelectOpenableLocalWorkbookPath(files, out var path, out var message))
+        if (!TrySelectOpenableLocalWorkbookPath(files, out var path, out var storageItem, out var message))
         {
             ShowOpenIssue(message);
             return;
         }
 
-        await OpenWorkbookPathAsync(path!);
+        var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path!, storageItem);
+        await OpenWorkbookPathAsync(path!, fileAccessIdentity);
     }
 
     internal async Task<MacOsLaunchSmokeDialogSnapshot> CaptureLaunchSmokeDialogEvidenceAsync()
@@ -12193,6 +12214,19 @@ public sealed class MainWindow : Window
             HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == "Merge & Center" &&
                 string.Equals(AutomationProperties.GetAutomationId(_mergeAndCenterButton), "HomeMergeAndCenterButton", StringComparison.Ordinal) &&
                 string.Equals(AutomationProperties.GetHelpText(_mergeAndCenterButton), "Merge and center the selected cells.", StringComparison.Ordinal),
+            HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), "Formula bar", StringComparison.Ordinal),
+            HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), "Edit the active cell value or formula.", StringComparison.Ordinal),
+            HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), "FormulaBox", StringComparison.Ordinal),
+            HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), "Status", StringComparison.Ordinal),
+            HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal),
+            HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal),
+            HasStatusTextValue: !string.IsNullOrWhiteSpace(_statusText.Text),
+            HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal),
+            HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal),
+            HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal),
+            HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), "Selection statistics", StringComparison.Ordinal),
+            HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), "Shows statistics for the current selection.", StringComparison.Ordinal),
+            HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), "SelectionStatsText", StringComparison.Ordinal),
             HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable),
             HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true,
             HasShellFocusCycleTargets: _sheetGridHost.Focusable &&
@@ -12223,6 +12257,7 @@ public sealed class MainWindow : Window
             HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
             HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, "Export to PDF...", requireGesture: false),
+            HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, "Share Workbook...", requireGesture: false),
             HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, "Workbook Statistics..."),
             HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, "Close Workbook"),
             HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, "New Sheet"),
@@ -12370,6 +12405,10 @@ public sealed class MainWindow : Window
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
         (!requireGesture || item.Gesture is not null);
 
+    private static bool HasEnabledNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
+        item.IsEnabled &&
+        HasNativeMenuItem(item, expectedHeader, requireGesture);
+
     private bool HasSheetTabButton(Func<Button, bool> predicate) =>
         _sheetTabsHost.Content is StackPanel panel &&
         panel.Children
@@ -12442,23 +12481,25 @@ public sealed class MainWindow : Window
         foreach (var entry in plan.Items)
         {
             var path = entry.Path;
+            var fileAccessIdentity = entry.FileAccessIdentity;
             var item = new NativeMenuItem
             {
                 Header = entry.Header,
                 IsEnabled = isIdle,
             };
-            item.Click += async (_, _) => await OpenRecentWorkbookAsync(path);
+            item.Click += async (_, _) => await OpenRecentWorkbookAsync(path, fileAccessIdentity);
             menu.Items.Add(item);
         }
 
         return menu;
     }
 
-    private async Task OpenRecentWorkbookAsync(string path)
+    private async Task OpenRecentWorkbookAsync(
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
-        if (!_session.TryResolveOpenTarget(path, out var target, out _) ||
-            target is null ||
-            !File.Exists(target.Path))
+        if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _) ||
+            target is null)
         {
             _recentFiles.Remove(path);
             RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
@@ -12466,23 +12507,34 @@ public sealed class MainWindow : Window
             return;
         }
 
-        await OpenWorkbookPathAsync(target.Path);
+        using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(
+            StorageProvider,
+            target.FileAccessIdentity);
+        if (!File.Exists(target.Path))
+        {
+            _recentFiles.Remove(path);
+            RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
+            ShowOpenIssue($"Recent workbook no longer exists: {path}");
+            return;
+        }
+
+        await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);
     }
 
     private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)
     {
         if (!source.IsFallback && !string.IsNullOrWhiteSpace(source.SourcePath))
-            RecordRecentWorkbook(source.SourcePath);
+            RecordRecentWorkbook(source.SourcePath, source.SourceFileAccessIdentity);
     }
 
-    private void RecordRecentWorkbook(string path)
+    private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         if (!_session.TryResolveOpenTarget(path, out var target, out _) ||
             target is null ||
             !File.Exists(target.Path))
             return;
 
-        _recentFiles.AddOrUpdate(target.Path);
+        _recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);
         RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
     }
 
@@ -13148,11 +13200,14 @@ public sealed class MainWindow : Window
                 return;
             }
 
-            await OpenWorkbookPathAsync(path);
+            var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
+            await OpenWorkbookPathAsync(path, fileAccessIdentity);
         }
     }
 
-    private async Task OpenWorkbookPathAsync(string path)
+    private async Task OpenWorkbookPathAsync(
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         if (_isOpening || _isSaving)
             return;
@@ -13166,7 +13221,7 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (!_session.TryResolveOpenTarget(path, out var target, out var message))
+        if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out var message))
         {
             ShowOpenIssue(message);
             return;
@@ -13175,22 +13230,38 @@ public sealed class MainWindow : Window
         await OpenWorkbookFromTargetAsync(target!);
     }
 
-    private bool TrySelectDroppedWorkbookPath(DragEventArgs e, out string? path, out string message)
+    private bool TrySelectDroppedWorkbookPath(DragEventArgs e, out string? path, out string message) =>
+        TrySelectDroppedWorkbookPath(e, out path, out _, out message);
+
+    private bool TrySelectDroppedWorkbookPath(
+        DragEventArgs e,
+        out string? path,
+        out IStorageItem? storageItem,
+        out string message)
     {
         var files = e.DataTransfer.TryGetFiles();
         if (files is null)
         {
             path = null;
+            storageItem = null;
             message = "Drop a supported local workbook file.";
             return false;
         }
 
-        return TrySelectOpenableLocalWorkbookPath(files, out path, out message);
+        return TrySelectOpenableLocalWorkbookPath(files, out path, out storageItem, out message);
     }
 
-    private bool TrySelectOpenableLocalWorkbookPath(IEnumerable<IStorageItem> files, out string? path, out string message)
+    private bool TrySelectOpenableLocalWorkbookPath(IEnumerable<IStorageItem> files, out string? path, out string message) =>
+        TrySelectOpenableLocalWorkbookPath(files, out path, out _, out message);
+
+    private bool TrySelectOpenableLocalWorkbookPath(
+        IEnumerable<IStorageItem> files,
+        out string? path,
+        out IStorageItem? storageItem,
+        out string message)
     {
         path = null;
+        storageItem = null;
         if (_isOpening || _isSaving)
         {
             message = "Open is busy.";
@@ -13228,6 +13299,7 @@ public sealed class MainWindow : Window
             if (_session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage))
             {
                 path = target!.Path;
+                storageItem = file;
                 message = "";
                 return true;
             }
@@ -13256,6 +13328,9 @@ public sealed class MainWindow : Window
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
+            using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(
+                StorageProvider,
+                target.FileAccessIdentity);
             var result = await _openService.LoadAsync(
                 target.Path,
                 target.Adapter,
@@ -13265,7 +13340,7 @@ public sealed class MainWindow : Window
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
             _session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);
             RefreshViewportSizeForZoom();
-            RecordRecentWorkbook(target.Path);
+            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
             ClearSelectedDrawingObject();
             RefreshShell(_session.StartupStatus);
         }
@@ -13402,7 +13477,7 @@ public sealed class MainWindow : Window
         ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(refreshedPlan), isWarning: false);
         try
         {
-            var result = await _workbookShareSheetService.ShowShareSheetAsync(filePath);
+            var result = await _workbookShareSheetService.ShowShareSheetAsync(this, filePath);
             if (result.WasShown)
             {
                 ShowShareStatus(
@@ -13527,7 +13602,8 @@ public sealed class MainWindow : Window
                 return;
             }
 
-            await SaveWorkbookToTargetAsync(target!);
+            var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
+            await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);
         }
     }
 
@@ -13739,7 +13815,9 @@ public sealed class MainWindow : Window
         return workbookName + ".pdf";
     }
 
-    private async Task SaveWorkbookToTargetAsync(FileSaveTarget target)
+    private async Task SaveWorkbookToTargetAsync(
+        FileSaveTarget target,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         try
         {
@@ -13754,9 +13832,13 @@ public sealed class MainWindow : Window
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
+            fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(
+                target.Path,
+                existingIdentity: _session.CurrentFileAccessIdentity);
+            using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(StorageProvider, fileAccessIdentity);
             await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
-            _session.MarkSaved(target.Path);
-            RecordRecentWorkbook(target.Path);
+            _session.MarkSaved(target.Path, fileAccessIdentity);
+            RecordRecentWorkbook(target.Path, fileAccessIdentity);
             RefreshShell($"Saved {Path.GetFileName(target.Path)}");
         }
         catch (Exception ex)

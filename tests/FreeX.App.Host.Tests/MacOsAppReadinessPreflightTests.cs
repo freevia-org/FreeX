@@ -11,6 +11,11 @@ public sealed class MacOsAppReadinessPreflightTests
         var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1"));
 
         script.Should().Contain("Avalonia app TargetFramework must be net10.0");
+        script.Should().Contain("EnableMacOsTargetFramework");
+        script.Should().Contain("net10.0-macos");
+        script.Should().Contain("SupportedOSPlatformVersion");
+        script.Should().Contain("MacOs\\**\\*.cs");
+        script.Should().Contain("FREEX_MACOS_SHARE_SHEET");
         script.Should().Contain("Avalonia app RuntimeIdentifiers");
         script.Should().Contain("ApplicationTitle");
         script.Should().Contain("CFBundleName");
@@ -50,6 +55,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests");
@@ -767,7 +773,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_session.FillSelectedRange(direction)");
         script.Should().Contain("private void SelectCurrentRegionOrAll()");
         script.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
-        script.Should().Contain("private void RecordRecentWorkbook(string path)");
+        script.Should().Contain("private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)");
+        script.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics)");
+        script.Should().Contain("RecordFileAccessEvent(`\"workbook_file_access_identity`\", status, grantKind)");
+        script.Should().Contain("RecordFileAccessEvent(`\"workbook_file_access_scope`\", status, grantKind)");
+        script.Should().Contain("[\"payloadRedacted\"] = string.IsNullOrWhiteSpace(grantKind) ? null : \"true\"");
         script.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();");
         script.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
         script.Should().Contain("RefreshViewportSizeForZoom();");
@@ -978,6 +988,84 @@ public sealed class MacOsAppReadinessPreflightTests
     }
 
     [Fact]
+    public void MacOsAppReadinessPreflight_FailsForNativeMacOsTokenOutsideMacOsSourceBoundary()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(
+            temp.Path,
+            extraAvaloniaSource: """
+            using AppKit;
+
+            namespace FreeX.App.Avalonia;
+
+            internal static class NativeLeak
+            {
+                private static readonly object PickerType = typeof(NSSharingServicePicker);
+            }
+            """);
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        var combinedOutput = result.Output + result.Error;
+        combinedOutput.Should().Contain("Portable macOS source contains native macOS token 'AppKit' outside src/FreeX.App.Avalonia/MacOs");
+        combinedOutput.Should().Contain("src/FreeX.App.Avalonia/WindowsOnlyLeak.cs");
+    }
+
+    [Fact]
+    public void MacOsAppReadinessPreflight_FailsForWindowsTokenInsideMacOsSourceBoundary()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(
+            temp.Path,
+            extraAvaloniaSourcePath: "src/FreeX.App.Avalonia/MacOs/NativeWorkbookShareSheetService.cs",
+            extraAvaloniaSource: """
+            namespace FreeX.App.Avalonia;
+
+            internal static class NativeWorkbookShareSheetService
+            {
+                private const string Token = "System.Windows";
+            }
+            """);
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        var combinedOutput = result.Output + result.Error;
+        combinedOutput.Should().Contain("Portable macOS source contains forbidden token 'System.Windows'");
+        combinedOutput.Should().Contain("src/FreeX.App.Avalonia/MacOs/NativeWorkbookShareSheetService.cs");
+    }
+
+    [Fact]
+    public void MacOsAppReadinessPreflight_AllowsNativeMacOsTokensInsideMacOsSourceBoundary()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(
+            temp.Path,
+            extraAvaloniaSourcePath: "src/FreeX.App.Avalonia/MacOs/NativeWorkbookShareSheetService.cs",
+            extraAvaloniaSource: """
+            using AppKit;
+            using Foundation;
+
+            namespace FreeX.App.Avalonia;
+
+            internal static class NativeWorkbookShareSheetService
+            {
+                private static readonly object PickerType = typeof(NSSharingServicePicker);
+                private static readonly object UrlType = typeof(NSUrl);
+            }
+            """);
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().Be(0, result.Output + result.Error);
+        (result.Output + result.Error).Should().Contain("macOS app readiness preflight passed.");
+    }
+
+    [Fact]
     public void MacOsAppReadinessPreflight_FailsForMalformedMacOsIcon()
     {
         using var temp = new TestTemporaryDirectory();
@@ -1005,6 +1093,7 @@ public sealed class MacOsAppReadinessPreflightTests
         string workflowExtraRuntime = "",
         string workflowArm64Runner = "macos-15",
         string workflowX64Runner = "macos-15-intel",
+        string extraAvaloniaSourcePath = "src/FreeX.App.Avalonia/WindowsOnlyLeak.cs",
         string extraAvaloniaSource = "")
     {
         WriteFile(
@@ -1028,12 +1117,20 @@ public sealed class MacOsAppReadinessPreflightTests
               <ItemGroup>
                 <Content Include="Packaging\macos\FreeX.icns" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
               </ItemGroup>
+              <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-macos'">
+                <Compile Remove="MacOs\**\*.cs" />
+              </ItemGroup>
               <PropertyGroup>
                 <AssemblyName>FreeX</AssemblyName>
                 <ApplicationTitle>FreeX</ApplicationTitle>
                 <OutputType>Exe</OutputType>
                 <RuntimeIdentifiers>osx-arm64;osx-x64</RuntimeIdentifiers>
-                <TargetFramework>{{TargetFramework}}</TargetFramework>
+                <SupportedOSPlatformVersion Condition="'$(TargetFramework)' == 'net10.0-macos'">12.0</SupportedOSPlatformVersion>
+                <TargetFramework Condition="'$(EnableMacOsTargetFramework)' != 'true'">{{TargetFramework}}</TargetFramework>
+                <TargetFrameworks Condition="'$(EnableMacOsTargetFramework)' == 'true'">net10.0;net10.0-macos</TargetFrameworks>
+              </PropertyGroup>
+              <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-macos'">
+                <DefineConstants>$(DefineConstants);FREEX_MACOS_SHARE_SHEET</DefineConstants>
               </PropertyGroup>
             </Project>
             """.Replace("{{TargetFramework}}", targetFramework));
@@ -1135,7 +1232,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     run: |
                       dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \
                         --configuration Release \
-                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
+                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
                         --logger "trx;LogFileName=freex-${"{{"} matrix.runtime {"}}"}-portable-pdf-exporter-tests.trx" \
                         --results-directory artifacts
                       dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj \
@@ -1368,6 +1465,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_open_recent_item_count=[1-9]" "$artifact_root/launch.txt"
                       grep -q "native_workbook_statistics_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_export_pdf_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_share_workbook_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_edit_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_close_workbook_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_data_menu=true" "$artifact_root/launch.txt"
@@ -1612,7 +1710,7 @@ public sealed class MacOsAppReadinessPreflightTests
                         artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-app-diagnostics/**
               publish-distribution-candidate:
                 name: Publish macOS distribution candidate
-                needs: macos-app
+                needs: [macos-app, macos-preview-readiness]
                 if: ${"{{"} github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true {"}}"}
                 runs-on: ubuntu-latest
                 timeout-minutes: 30
@@ -1747,6 +1845,82 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
+            "src/FreeX.App.Services/AppDiagnosticsFileStore.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public sealed class AppDiagnosticsFileStore
+            {
+                private static readonly HashSet<string> AllowedPropertyNames = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    "grantKind",
+                    "payloadRedacted"
+                };
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Avalonia/WorkbookFileAccessService.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            internal interface IWorkbookFileAccessService { }
+
+            internal sealed class WorkbookFileAccessScope
+            {
+                public static WorkbookFileAccessScope FromDisposable(IDisposable disposable, Action? onDispose = null) => new();
+            }
+
+            internal static class WorkbookFileAccessServiceFactory
+            {
+                public static IWorkbookFileAccessService Create(AvaloniaAppDiagnostics? diagnostics = null) =>
+                    new AvaloniaWorkbookFileAccessService(diagnostics);
+            }
+
+            internal sealed class AvaloniaWorkbookFileAccessService : IWorkbookFileAccessService
+            {
+                internal const string MacOsSecurityScopedBookmarkKind = "macos-security-scoped-bookmark";
+
+                public AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null) { }
+
+                private async Task BeginAsync(IStorageItem storageItem, IStorageProvider storageProvider, WorkbookFileAccessIdentity identity, string path)
+                {
+                    if (storageItem is { CanBookmark: true } && StorageItemMatchesPath(storageItem, path))
+                    {
+                        var bookmark = await storageItem.SaveBookmarkAsync();
+                        RecordIdentityEvent("bookmark_created", grantKind: MacOsSecurityScopedBookmarkKind);
+                        var storageFile = await storageProvider.OpenFileBookmarkAsync(bookmark);
+                        PlatformPathIdentityComparer.Current.Equals(identity.LocalPath, resolvedPath);
+                        RecordScopeEvent("scope_started", grantKind: MacOsSecurityScopedBookmarkKind);
+                        WorkbookFileAccessScope.FromDisposable(
+                            storageFile,
+                            () => RecordScopeEvent("scope_ended", grantKind: MacOsSecurityScopedBookmarkKind));
+                    }
+                }
+
+                private static bool StorageItemMatchesPath(IStorageItem storageItem, string path) => true;
+
+                private void RecordIdentityEvent(string status, string? grantKind = null) =>
+                    RecordFileAccessEvent("workbook_file_access_identity", status, grantKind);
+
+                private void RecordScopeEvent(string status, string? grantKind = null) =>
+                    RecordFileAccessEvent("workbook_file_access_scope", status, grantKind);
+
+                private void RecordFileAccessEvent(string eventName, string status, string? grantKind)
+                {
+                    _diagnostics?.RecordEvent(eventName, new Dictionary<string, string?>
+                    {
+                        ["scope"] = "workbook_file_access",
+                        ["grantKind"] = string.IsNullOrWhiteSpace(grantKind) ? null : grantKind,
+                        ["payloadRedacted"] = string.IsNullOrWhiteSpace(grantKind) ? null : "true"
+                    });
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
             "src/FreeX.App.Avalonia/MainWindow.cs",
             """
             using FreeX.Core.Calc;
@@ -1781,6 +1955,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 _session.SetViewportOrigin(topRow, leftCol)
                 */
                 public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files) => await Task.CompletedTask;
+                private IWorkbookFileAccessService _fileAccess = WorkbookFileAccessServiceFactory.Create(App.Diagnostics);
                 private static void RenderCell(CellStyle? style)
                 {
                     CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
@@ -2276,10 +2451,13 @@ public sealed class MacOsAppReadinessPreflightTests
                     path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null
                     plan.ItemCount == 0
                     foreach (var entry in plan.Items)
+                    var fileAccessIdentity = entry.FileAccessIdentity;
                     Header = entry.Header
-                    await OpenWorkbookPathAsync(target.Path);
-                    _recentFiles.AddOrUpdate(target.Path);
-                    RecordRecentWorkbook(target.Path);
+                    if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)
+                    await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);
+                    _recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);
+                    RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
+                    RecordRecentWorkbook(target.Path, fileAccessIdentity);
                     _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
                     fileMenu.Items.Add(_newWorkbookMenuItem);
                     fileMenu.Items.Add(_closeWorkbookMenuItem);
@@ -2662,9 +2840,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 {
                     var range = _session.SelectCurrentRegionOrAll();
                 }
-                private async Task OpenRecentWorkbookAsync(string path) => await Task.CompletedTask;
+                private async Task OpenRecentWorkbookAsync(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null) => await Task.CompletedTask;
                 private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source) { }
-                private void RecordRecentWorkbook(string path) { }
+                private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null) { }
                 private void CreateNewWorkbook() { }
                 private async Task CloseWorkbookAsync() => await Task.CompletedTask;
                 private void ResetToNewWorkbook(string status) { }
@@ -2845,6 +3023,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeOpenRecentMenuItem &&
                     NativeOpenRecentItemCount > 0 &&
                     HasNativeExportPdfMenuItem &&
+                    HasNativeShareWorkbookMenuItem &&
                     HasNativeWorkbookStatisticsMenuItem &&
                     HasNativeSelectAllMenuItem &&
                     HasNativeFindMenuItem &&
@@ -2988,6 +3167,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeOpenRecentMenuItem { get; }
                 private int NativeOpenRecentItemCount { get; }
                 private bool HasNativeExportPdfMenuItem { get; }
+                private bool HasNativeShareWorkbookMenuItem { get; }
                 private bool HasNativeWorkbookStatisticsMenuItem { get; }
                 private bool HasNativeSelectAllMenuItem { get; }
                 private bool HasNativeFindMenuItem { get; }
@@ -3107,7 +3287,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public int NativeCellStylesPresetCount { get; }
                 public string DialogReport => "macos_dialog_smoke= macos_dialog_smoke_attempted= macos_dialog_smoke_status= macos_dialog_activation_completed= find_dialog= find_dialog_text_box= find_dialog_action_buttons= find_dialog_options= find_dialog_format_controls= find_dialog_compact_layout= find_dialog_result_closed_without_accept= replace_dialog= replace_dialog_text_boxes= replace_dialog_action_buttons= replace_dialog_options= replace_dialog_format_controls= replace_dialog_compact_layout= replace_dialog_result_closed_without_accept= go_to_dialog= go_to_dialog_reference_controls= go_to_dialog_compact_layout= go_to_dialog_result_closed_without_accept= go_to_special_dialog= go_to_special_dialog_kind_controls= go_to_special_dialog_value_type_controls= go_to_special_dialog_compact_layout= go_to_special_dialog_result_closed_without_accept= format_cells_dialog= format_cells_dialog_tab_strip= format_cells_dialog_default_number_tab= format_cells_dialog_number_controls= format_cells_dialog_action_buttons= format_cells_dialog_compact_layout= format_cells_dialog_result_closed_without_accept= sort_dialog= sort_dialog_sort_on_controls= sort_dialog_color_controls= sort_dialog_action_buttons= sort_dialog_compact_layout= sort_dialog_result_closed_without_accept= data_validation_dropdown_control= data_validation_dropdown_items= data_validation_dialog= data_validation_dialog_criteria_controls= data_validation_dialog_message_controls= data_validation_dialog_action_buttons= data_validation_dialog_compact_layout= data_validation_dialog_result_closed_without_accept=";
                 public string NewRouteReport => "native_flash_fill_menu_item= native_review_menu= native_advanced_filter_menu_item= native_remove_duplicates_menu_item= native_subtotal_menu_item= native_data_validation_preview_menu_item= native_data_validation_menu_item= native_what_if_analysis_menu_item= native_goal_seek_menu_item= native_data_table_menu_item= native_scenario_manager_menu_item= native_forecast_sheet_menu_item= native_review_summary_menu_item= native_check_accessibility_menu_item= native_next_note_menu_item= native_previous_note_menu_item= native_next_comment_menu_item= native_previous_comment_menu_item=";
-                public string Report => "live_command_key_smoke_required= live_command_key_smoke= live_command_key_smoke_attempted= live_command_key_smoke_ready= cmd_find_direct_route_source_guard= cmd_page_up_direct_route_source_guard= cmd_page_down_direct_route_source_guard= live_cmd_select_all_received= live_cmd_select_all_state_changed= live_cmd_bold_received= live_cmd_bold_state_changed= live_cmd_italic_received= live_cmd_italic_state_changed= live_cmd_underline_received= live_cmd_underline_state_changed= external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_export_pdf_menu_item= native_workbook_statistics_menu_item= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_autosum_button= toolbar_autosum_sum_menu_item= toolbar_autosum_average_menu_item= toolbar_autosum_count_numbers_menu_item= toolbar_autosum_count_all_menu_item= toolbar_autosum_max_menu_item= toolbar_autosum_min_menu_item= toolbar_fill_cells_button= toolbar_fill_down_menu_item= toolbar_fill_right_menu_item= toolbar_fill_up_menu_item= toolbar_fill_left_menu_item= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_wrap_text_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_data_menu= native_flash_fill_menu_item= native_remove_duplicates_menu_item= native_subtotal_menu_item= native_data_validation_preview_menu_item= native_view_menu= native_sheet_menu= native_window_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_find_menu_item= native_find_next_menu_item= native_replace_menu_item= native_go_to_menu_item= native_go_to_special_menu_item= native_sort_ascending_menu_item= native_sort_descending_menu_item= native_format_cells_menu_item= native_autosum_menu_item= native_autosum_sum_menu_item= native_autosum_average_menu_item= native_autosum_count_numbers_menu_item= native_autosum_count_all_menu_item= native_autosum_max_menu_item= native_autosum_min_menu_item= native_fill_cells_menu_item= native_fill_down_menu_item= native_fill_right_menu_item= native_fill_up_menu_item= native_fill_left_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_minimize_window_menu_item= native_zoom_window_menu_item= native_bring_all_to_front_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "live_command_key_smoke_required= live_command_key_smoke= live_command_key_smoke_attempted= live_command_key_smoke_ready= cmd_find_direct_route_source_guard= cmd_page_up_direct_route_source_guard= cmd_page_down_direct_route_source_guard= live_cmd_select_all_received= live_cmd_select_all_state_changed= live_cmd_bold_received= live_cmd_bold_state_changed= live_cmd_italic_received= live_cmd_italic_state_changed= live_cmd_underline_received= live_cmd_underline_state_changed= external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_export_pdf_menu_item= native_share_workbook_menu_item= native_workbook_statistics_menu_item= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_autosum_button= toolbar_autosum_sum_menu_item= toolbar_autosum_average_menu_item= toolbar_autosum_count_numbers_menu_item= toolbar_autosum_count_all_menu_item= toolbar_autosum_max_menu_item= toolbar_autosum_min_menu_item= toolbar_fill_cells_button= toolbar_fill_down_menu_item= toolbar_fill_right_menu_item= toolbar_fill_up_menu_item= toolbar_fill_left_menu_item= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_wrap_text_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_data_menu= native_flash_fill_menu_item= native_remove_duplicates_menu_item= native_subtotal_menu_item= native_data_validation_preview_menu_item= native_view_menu= native_sheet_menu= native_window_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_find_menu_item= native_find_next_menu_item= native_replace_menu_item= native_go_to_menu_item= native_go_to_special_menu_item= native_sort_ascending_menu_item= native_sort_descending_menu_item= native_format_cells_menu_item= native_autosum_menu_item= native_autosum_sum_menu_item= native_autosum_average_menu_item= native_autosum_count_numbers_menu_item= native_autosum_count_all_menu_item= native_autosum_max_menu_item= native_autosum_min_menu_item= native_fill_cells_menu_item= native_fill_down_menu_item= native_fill_right_menu_item= native_fill_up_menu_item= native_fill_left_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_minimize_window_menu_item= native_zoom_window_menu_item= native_bring_all_to_front_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
 
             internal sealed class MacOsLaunchSmokeCommandKeySnapshot
@@ -3221,7 +3401,19 @@ public sealed class MacOsAppReadinessPreflightTests
             """
             namespace FreeX.App.Services;
 
-            public sealed class RecentFileEntry { }
+            public sealed class RecentFileEntry
+            {
+                public WorkbookFileAccessIdentity? FileAccessIdentity { get; set; }
+            }
+
+            public sealed class WorkbookFileAccessIdentity
+            {
+                public bool TryWithLocalPath(string path, out WorkbookFileAccessIdentity? identity)
+                {
+                    identity = this;
+                    return true;
+                }
+            }
 
             public sealed class RecentFilesStore
             {
@@ -3710,7 +3902,8 @@ public sealed class MacOsAppReadinessPreflightTests
             public sealed record OpenRecentWorkbookMenuItemPlan(
                 string Path,
                 string Header,
-                DateTimeOffset LastOpened);
+                DateTimeOffset LastOpened,
+                WorkbookFileAccessIdentity? FileAccessIdentity = null);
 
             public sealed record OpenRecentWorkbookMenuPlan(IReadOnlyList<OpenRecentWorkbookMenuItemPlan> Items)
             {
@@ -3755,7 +3948,8 @@ public sealed class MacOsAppReadinessPreflightTests
                             .Select(item => new OpenRecentWorkbookMenuItemPlan(
                                 item.Path!,
                                 FormatHeader(item.Path!),
-                                item.Entry.LastOpened))
+                                item.Entry.LastOpened,
+                                ResolveIdentityForPath(item.Entry.FileAccessIdentity, item.Path!)))
                             .ToList());
                 }
 
@@ -3765,6 +3959,13 @@ public sealed class MacOsAppReadinessPreflightTests
                     Path.GetDirectoryName(path);
                     return path;
                 }
+
+                private static WorkbookFileAccessIdentity? ResolveIdentityForPath(
+                    WorkbookFileAccessIdentity? identity,
+                    string path) =>
+                    identity is not null && identity.TryWithLocalPath(path, out var resolvedIdentity)
+                        ? resolvedIdentity
+                        : null;
             }
             """);
 
@@ -3951,7 +4152,7 @@ public sealed class MacOsAppReadinessPreflightTests
 
         if (!string.IsNullOrWhiteSpace(extraAvaloniaSource))
         {
-            WriteFile(root, "src/FreeX.App.Avalonia/WindowsOnlyLeak.cs", extraAvaloniaSource);
+            WriteFile(root, extraAvaloniaSourcePath, extraAvaloniaSource);
         }
     }
 

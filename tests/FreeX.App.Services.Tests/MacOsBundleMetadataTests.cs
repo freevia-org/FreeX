@@ -234,6 +234,13 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"external_image_clipboard_paste_required=false\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"live_command_key_smoke_required=false\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"live_command_key_smoke=not_required\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"macos_accessibility_smoke=passed\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_formula_box_name=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_formula_box_help=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_status_text_name=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_status_text_value=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_cell_address_name=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_selection_stats_name=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"new_sheet_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"toolbar_format_painter_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"toolbar_fill_cells_button=true\" \"$launch_smoke_report\"");
@@ -265,6 +272,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_save_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_save_as_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_export_pdf_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_share_workbook_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_workbook_statistics_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_close_workbook_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_data_menu=true\" \"$launch_smoke_report\"");
@@ -432,6 +440,22 @@ public sealed class MacOsBundleMetadataTests
     }
 
     [Fact]
+    public void MacOsWorkflow_DistributionCandidatePublicationWaitsForAggregateReadiness()
+    {
+        var workflow = File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml"));
+        var aggregateJob = ExtractWorkflowJobBlock(workflow, "macos-preview-readiness");
+        var releaseJob = ExtractWorkflowJobBlock(workflow, "publish-distribution-candidate");
+
+        releaseJob.Should().Contain("needs: [macos-app, macos-preview-readiness]");
+        releaseJob.Should().Contain("if: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}");
+        releaseJob.Should().Contain("- name: Download macOS app artifacts");
+        releaseJob.Should().Contain("pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-macos-app");
+        workflow.IndexOf(aggregateJob, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(workflow.IndexOf(releaseJob, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Program_RunsPackagingSmokeBeforeAvaloniaLifetime()
     {
         var program = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Program.cs"));
@@ -537,6 +561,19 @@ public sealed class MacOsBundleMetadataTests
             next = workflow.Length;
 
         return workflow[start..next];
+    }
+
+    private static string ExtractWorkflowJobBlock(string workflow, string jobName)
+    {
+        var marker = $"  {jobName}:";
+        var start = workflow.IndexOf(marker, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, $"workflow should contain the {jobName} job");
+        var nextMatch = Regex.Match(workflow[(start + marker.Length)..], @"(?m)^  [A-Za-z0-9_-]+:\s*$");
+        var end = nextMatch.Success
+            ? start + marker.Length + nextMatch.Index
+            : workflow.Length;
+
+        return workflow[start..end];
     }
 
     private static IReadOnlyList<string> WorkflowRuntimeRunnerPairs(string workflow) =>

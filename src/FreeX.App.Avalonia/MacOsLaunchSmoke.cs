@@ -419,6 +419,19 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasBordersButton,
     bool HasWrapTextButton,
     bool HasMergeAndCenterButton,
+    bool HasFormulaBoxAutomationName,
+    bool HasFormulaBoxAutomationHelp,
+    bool HasFormulaBoxAutomationId,
+    bool HasStatusTextAutomationName,
+    bool HasStatusTextAutomationHelp,
+    bool HasStatusTextAutomationId,
+    bool HasStatusTextValue,
+    bool HasCellAddressAutomationName,
+    bool HasCellAddressAutomationHelp,
+    bool HasCellAddressAutomationId,
+    bool HasSelectionStatsAutomationName,
+    bool HasSelectionStatsAutomationHelp,
+    bool HasSelectionStatsAutomationId,
     bool HasFocusableSheetTab,
     bool HasFocusableActiveSheetTab,
     bool HasShellFocusCycleTargets,
@@ -444,6 +457,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeSaveMenuItem,
     bool HasNativeSaveAsMenuItem,
     bool HasNativeExportPdfMenuItem,
+    bool HasNativeShareWorkbookMenuItem,
     bool HasNativeWorkbookStatisticsMenuItem,
     bool HasNativeCloseWorkbookMenuItem,
     bool HasNativeNewSheetMenuItem,
@@ -583,6 +597,21 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeQuitMenuItem,
     bool HasNativeFormatCellsMenuItem = false)
 {
+    public bool HasAccessibilitySmokeEvidence =>
+        HasFormulaBoxAutomationName &&
+        HasFormulaBoxAutomationHelp &&
+        HasFormulaBoxAutomationId &&
+        HasStatusTextAutomationName &&
+        HasStatusTextAutomationHelp &&
+        HasStatusTextAutomationId &&
+        HasStatusTextValue &&
+        HasCellAddressAutomationName &&
+        HasCellAddressAutomationHelp &&
+        HasCellAddressAutomationId &&
+        HasSelectionStatsAutomationName &&
+        HasSelectionStatsAutomationHelp &&
+        HasSelectionStatsAutomationId;
+
     public bool HasShellEvidence =>
         WindowShown &&
         !IsOpening &&
@@ -613,6 +642,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasBordersButton &&
         HasWrapTextButton &&
         HasMergeAndCenterButton &&
+        HasAccessibilitySmokeEvidence &&
         HasFocusableSheetTab &&
         HasFocusableActiveSheetTab &&
         HasShellFocusCycleTargets &&
@@ -638,6 +668,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeSaveMenuItem &&
         HasNativeSaveAsMenuItem &&
         HasNativeExportPdfMenuItem &&
+        HasNativeShareWorkbookMenuItem &&
         HasNativeWorkbookStatisticsMenuItem &&
         HasNativeCloseWorkbookMenuItem &&
         HasNativeNewSheetMenuItem &&
@@ -1036,6 +1067,20 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"sheet_tab_count={snapshot.SheetTabCount}",
                 $"viewport_rows={snapshot.ViewportRowCount}",
                 $"viewport_columns={snapshot.ViewportColumnCount}",
+                $"macos_accessibility_smoke={(snapshot.HasAccessibilitySmokeEvidence ? "passed" : "failed")}",
+                $"a11y_formula_box_name={FormatBool(snapshot.HasFormulaBoxAutomationName)}",
+                $"a11y_formula_box_help={FormatBool(snapshot.HasFormulaBoxAutomationHelp)}",
+                $"a11y_formula_box_id={FormatBool(snapshot.HasFormulaBoxAutomationId)}",
+                $"a11y_status_text_name={FormatBool(snapshot.HasStatusTextAutomationName)}",
+                $"a11y_status_text_help={FormatBool(snapshot.HasStatusTextAutomationHelp)}",
+                $"a11y_status_text_id={FormatBool(snapshot.HasStatusTextAutomationId)}",
+                $"a11y_status_text_value={FormatBool(snapshot.HasStatusTextValue)}",
+                $"a11y_cell_address_name={FormatBool(snapshot.HasCellAddressAutomationName)}",
+                $"a11y_cell_address_help={FormatBool(snapshot.HasCellAddressAutomationHelp)}",
+                $"a11y_cell_address_id={FormatBool(snapshot.HasCellAddressAutomationId)}",
+                $"a11y_selection_stats_name={FormatBool(snapshot.HasSelectionStatsAutomationName)}",
+                $"a11y_selection_stats_help={FormatBool(snapshot.HasSelectionStatsAutomationHelp)}",
+                $"a11y_selection_stats_id={FormatBool(snapshot.HasSelectionStatsAutomationId)}",
                 $"command_key_smoke={(commandKeyEvidence.IsPassed ? "passed" : "failed")}",
                 $"command_key_smoke_attempted={FormatBool(attemptedCommandKeyEvidence)}",
                 $"cmd_new_workbook_menu_gesture={FormatBool(commandKeyEvidence.HasNewWorkbookMenuGesture)}",
@@ -1166,6 +1211,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_save_menu_item={FormatBool(snapshot.HasNativeSaveMenuItem)}",
                 $"native_save_as_menu_item={FormatBool(snapshot.HasNativeSaveAsMenuItem)}",
                 $"native_export_pdf_menu_item={FormatBool(snapshot.HasNativeExportPdfMenuItem)}",
+                $"native_share_workbook_menu_item={FormatBool(snapshot.HasNativeShareWorkbookMenuItem)}",
                 $"native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}",
                 $"native_close_workbook_menu_item={FormatBool(snapshot.HasNativeCloseWorkbookMenuItem)}",
                 $"native_new_sheet_menu_item={FormatBool(snapshot.HasNativeNewSheetMenuItem)}",

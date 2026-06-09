@@ -1,3 +1,5 @@
+using Avalonia.Controls;
+
 namespace FreeX.App.Avalonia;
 
 internal sealed record WorkbookShareSheetCapability(
@@ -26,7 +28,22 @@ internal interface IWorkbookShareSheetService
 {
     WorkbookShareSheetCapability Capability { get; }
 
-    Task<WorkbookShareSheetResult> ShowShareSheetAsync(string filePath);
+    Task<WorkbookShareSheetResult> ShowShareSheetAsync(Window owner, string filePath);
+}
+
+internal static class WorkbookShareSheetServiceFactory
+{
+    public static IWorkbookShareSheetService Create(string shareSheetLabel) =>
+        CreatePlatformService(shareSheetLabel);
+
+    private static IWorkbookShareSheetService CreatePlatformService(string shareSheetLabel)
+    {
+#if FREEX_MACOS_SHARE_SHEET
+        return new MacOsWorkbookShareSheetService(shareSheetLabel);
+#else
+        return new UnavailableWorkbookShareSheetService(shareSheetLabel);
+#endif
+    }
 }
 
 internal sealed class UnavailableWorkbookShareSheetService : IWorkbookShareSheetService
@@ -41,8 +58,9 @@ internal sealed class UnavailableWorkbookShareSheetService : IWorkbookShareSheet
 
     public WorkbookShareSheetCapability Capability { get; }
 
-    public Task<WorkbookShareSheetResult> ShowShareSheetAsync(string filePath)
+    public Task<WorkbookShareSheetResult> ShowShareSheetAsync(Window owner, string filePath)
     {
+        ArgumentNullException.ThrowIfNull(owner);
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
         return Task.FromResult(WorkbookShareSheetResult.Unavailable(_unavailableMessage));

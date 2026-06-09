@@ -8,6 +8,11 @@ on:
         required: false
         type: boolean
         default: false
+      validate_macos_tfm:
+        description: Compile the opt-in net10.0-macos target with the hosted macOS workload; evidence only, no app artifact.
+        required: false
+        type: boolean
+        default: false
   pull_request:
     branches:
       - main
@@ -82,7 +87,7 @@ jobs:
 
           dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \
             --configuration Release \
-            --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
+            --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
             --logger "trx;LogFileName=freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx" \
             --results-directory artifacts
 
@@ -589,6 +594,20 @@ jobs:
             grep -q "opened_source_path=.*freex-$runtime-launch.csv" "$launch_smoke_report"
             grep -q "viewport_rows=[1-9]" "$launch_smoke_report"
             grep -q "viewport_columns=[1-9]" "$launch_smoke_report"
+            grep -q "macos_accessibility_smoke=passed" "$launch_smoke_report"
+            grep -q "a11y_formula_box_name=true" "$launch_smoke_report"
+            grep -q "a11y_formula_box_help=true" "$launch_smoke_report"
+            grep -q "a11y_formula_box_id=true" "$launch_smoke_report"
+            grep -q "a11y_status_text_name=true" "$launch_smoke_report"
+            grep -q "a11y_status_text_help=true" "$launch_smoke_report"
+            grep -q "a11y_status_text_id=true" "$launch_smoke_report"
+            grep -q "a11y_status_text_value=true" "$launch_smoke_report"
+            grep -q "a11y_cell_address_name=true" "$launch_smoke_report"
+            grep -q "a11y_cell_address_help=true" "$launch_smoke_report"
+            grep -q "a11y_cell_address_id=true" "$launch_smoke_report"
+            grep -q "a11y_selection_stats_name=true" "$launch_smoke_report"
+            grep -q "a11y_selection_stats_help=true" "$launch_smoke_report"
+            grep -q "a11y_selection_stats_id=true" "$launch_smoke_report"
             grep -q "command_key_smoke=passed" "$launch_smoke_report"
             grep -q "command_key_smoke_attempted=true" "$launch_smoke_report"
             grep -q "cmd_new_workbook_menu_gesture=true" "$launch_smoke_report"
@@ -647,6 +666,7 @@ jobs:
             grep -q "native_save_menu_item=true" "$launch_smoke_report"
             grep -q "native_save_as_menu_item=true" "$launch_smoke_report"
             grep -q "native_export_pdf_menu_item=true" "$launch_smoke_report"
+            grep -q "native_share_workbook_menu_item=true" "$launch_smoke_report"
             grep -q "native_workbook_statistics_menu_item=true" "$launch_smoke_report"
             grep -q "native_close_workbook_menu_item=true" "$launch_smoke_report"
             grep -q "native_edit_menu=true" "$launch_smoke_report"
@@ -1043,6 +1063,141 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  macos-tfm-build:
+    name: macOS TFM compile validation (${{ matrix.runtime }})
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_macos_tfm == true }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: osx-arm64
+            arch: arm64
+            runner: macos-26
+          - runtime: osx-x64
+            arch: x64
+            runner: macos-26-intel
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300.3
+      FREEX_MACOS_ARCH: ${{ matrix.arch }}
+      FREEX_MACOS_TFM: net10.0-macos
+      FREEX_MACOS_TFM_EVIDENCE: artifacts/freex-${{ matrix.arch }}-macos-tfm-build-evidence.txt
+      FREEX_RUNTIME: ${{ matrix.runtime }}
+      FREEX_XCODE_PATH: /Applications/Xcode_26.5.app/Contents/Developer
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.300
+
+      - name: Capture macOS TFM toolchain evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -d "$FREEX_XCODE_PATH"
+          sudo xcode-select -s "$FREEX_XCODE_PATH"
+
+          mkdir -p "$(dirname "$FREEX_MACOS_TFM_EVIDENCE")"
+          {
+            echo "runtime=$FREEX_RUNTIME"
+            echo "arch=$FREEX_MACOS_ARCH"
+            echo "macos_tfm=$FREEX_MACOS_TFM"
+            echo "dotnet_workload_set_version=$FREEX_DOTNET_WORKLOAD_SET_VERSION"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+            echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "runner_label=${{ matrix.runner }}"
+            echo "runner_os=${RUNNER_OS:-unknown}"
+            echo "runner_arch=${RUNNER_ARCH:-unknown}"
+            echo "image_os=${ImageOS:-unknown}"
+            echo "image_version=${ImageVersion:-unknown}"
+            echo "xcode_path=$FREEX_XCODE_PATH"
+            echo "[sw_vers]"
+            sw_vers
+            echo "[uname -m]"
+            uname -m
+            echo "[dotnet --version]"
+            dotnet --version
+            echo "[dotnet --info]"
+            dotnet --info
+            echo "[xcodebuild -version]"
+            xcodebuild -version
+            echo "[dotnet workload search macos]"
+            dotnet workload search macos
+            echo "[dotnet workload list before install]"
+            dotnet workload list || true
+          } | tee "$FREEX_MACOS_TFM_EVIDENCE"
+
+      - name: Install macOS workload
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo ""
+            echo "[dotnet workload install macos]"
+            dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION" --skip-manifest-update
+            echo "[dotnet workload --info]"
+            dotnet workload --info
+            echo "[dotnet workload list after install]"
+            dotnet workload list
+            echo "macos_tfm_workload=installed"
+          } | tee -a "$FREEX_MACOS_TFM_EVIDENCE"
+
+      - name: Build opt-in macOS TFM
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          compile_items_path="artifacts/freex-${FREEX_MACOS_ARCH}-macos-tfm-compile-items-evidence.txt"
+
+          dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
+            --configuration Release \
+            --framework "$FREEX_MACOS_TFM" \
+            --runtime "$FREEX_RUNTIME" \
+            -p:EnableMacOsTargetFramework=true
+
+          dotnet msbuild src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
+            -p:Configuration=Release \
+            -p:EnableMacOsTargetFramework=true \
+            -p:TargetFramework="$FREEX_MACOS_TFM" \
+            -p:RuntimeIdentifier="$FREEX_RUNTIME" \
+            -getItem:Compile \
+            > "$compile_items_path"
+
+          grep -q "MacOsWorkbookShareSheetService.cs" "$compile_items_path"
+
+          {
+            echo "macos_tfm_build=passed"
+            echo "macos_tfm=$FREEX_MACOS_TFM"
+            echo "runtime=$FREEX_RUNTIME"
+            echo "macos_tfm_source_boundary=src/FreeX.App.Avalonia/MacOs"
+            echo "macos_tfm_native_share_sheet_source=src/FreeX.App.Avalonia/MacOs/MacOsWorkbookShareSheetService.cs"
+            echo "macos_tfm_native_source_compiled=true"
+            echo "macos_tfm_compile_items_artifact=freex-${FREEX_MACOS_ARCH}-macos-tfm-compile-items-evidence.txt"
+            echo "macos_tfm_artifact_channel=evidence-only"
+          } | tee -a "$FREEX_MACOS_TFM_EVIDENCE"
+
+      - name: Upload macOS TFM build evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-tfm-build-${{ matrix.arch }}-evidence
+          path: artifacts/freex-${{ matrix.arch }}-macos-tfm-*-evidence.txt
+          if-no-files-found: error
+          retention-days: 14
+
   macos-preview-readiness:
     name: Aggregate macOS preview evidence
     needs: macos-app
@@ -1288,7 +1443,7 @@ jobs:
 
   publish-distribution-candidate:
     name: Publish macOS distribution candidate
-    needs: macos-app
+    needs: [macos-app, macos-preview-readiness]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
