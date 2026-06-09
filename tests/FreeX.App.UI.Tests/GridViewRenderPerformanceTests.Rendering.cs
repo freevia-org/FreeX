@@ -213,6 +213,45 @@ public sealed partial class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderHeaders_SkipsRowNumberTextForPartiallyClippedBottomRows()
+    {
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Headers.cs");
+        var cacheKey = source[
+            source.IndexOf("private readonly record struct HeaderBaseLayerCacheKey", StringComparison.Ordinal)..
+            source.IndexOf("private readonly record struct HeaderTextDrawingKey", StringComparison.Ordinal)];
+        var renderHeaders = source[
+            source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderHeaderBaseLayer", StringComparison.Ordinal)];
+        var drawRowHeader = source[
+            source.IndexOf("private void DrawRowHeader", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawHeaderText", StringComparison.Ordinal)];
+
+        cacheKey.Should().Contain("double VisibleBottom");
+        renderHeaders.Should().Contain("var visibleBottom = GetRenderVisibleBottom();");
+        drawRowHeader.Should().Contain("if (!ShouldDrawRowHeaderText(rect, visibleBottom))");
+        drawRowHeader.Should().Contain("return;");
+        source.Should().Contain("internal static bool ShouldDrawRowHeaderText(Rect rowHeaderRect, double visibleBottom)");
+        source.Should().Contain("rowHeaderRect.Bottom <= visibleBottom");
+
+        GridView.ShouldDrawRowHeaderText(new Rect(0, 18, 30, 20), visibleBottom: 38).Should().BeTrue();
+        GridView.ShouldDrawRowHeaderText(new Rect(0, 18, 30, 20), visibleBottom: 37.5).Should().BeFalse();
+    }
+
+    [Fact]
+    public void LiveResizeContinuation_DoesNotDrawTextForPartialTrailingRowHeaders()
+    {
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
+        var continuation = source[
+            source.IndexOf("private void RenderLiveResizeRowContinuation", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawLiveResizeHorizontalGridLines", StringComparison.Ordinal)];
+
+        continuation.Should().Contain("var height = Math.Min(rowHeight, ActualHeight - y);");
+        continuation.Should().Contain("lastRow++;");
+        continuation.Should().Contain("if (height >= rowHeight)");
+        continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatRowHeader(lastRow), headerRect, pixelsPerDip);");
+    }
+
+    [Fact]
     public void RenderHeaders_WalksSelectionIntervalsInsteadOfScanningRangesPerHeader()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Headers.cs");

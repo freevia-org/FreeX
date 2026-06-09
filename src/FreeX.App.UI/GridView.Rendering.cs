@@ -131,7 +131,13 @@ public partial class GridView
             {
                 var headerRect = new Rect(0, y, ActualRowHeaderWidth, height);
                 dc.DrawRectangle(HeaderBackgroundBrush, GridPen, headerRect);
-                DrawLiveResizeHeaderText(dc, FormatRowHeader(++lastRow), headerRect, pixelsPerDip);
+                lastRow++;
+                if (height >= rowHeight)
+                    DrawLiveResizeHeaderText(dc, FormatRowHeader(lastRow), headerRect, pixelsPerDip);
+            }
+            else
+            {
+                lastRow++;
             }
 
             if (width > 0)
