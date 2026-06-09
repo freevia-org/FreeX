@@ -433,7 +433,7 @@ public sealed partial class AutoFilterDialog
             AutoFilterSortDirection.None,
             _allItems,
             _searchBox.Text,
-            _criteriaBox.Text,
+            GetCommittedCriteriaText(),
             colorFilter,
             _addCurrentSelectionToFilterBox.IsChecked == true));
     }

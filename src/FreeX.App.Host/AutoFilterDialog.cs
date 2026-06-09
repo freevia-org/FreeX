@@ -190,7 +190,7 @@ public sealed partial class AutoFilterDialog : Window
                 AutoFilterSortDirection.None,
                 _allItems,
                 _searchBox.Text,
-                _criteriaBox.Text,
+                GetCommittedCriteriaText(),
                 _selectedColorFilter,
                 _addCurrentSelectionToFilterBox.IsChecked == true));
         };
