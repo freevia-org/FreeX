@@ -1364,6 +1364,62 @@ function Test-LaunchSmoke {
         Assert-KeyEquals -Map $launch -Key $key -ExpectedValue "true" -Label "$Runtime command key smoke"
     }
 
+    foreach ($key in @(
+            "macos_dialog_smoke",
+            "macos_dialog_smoke_status")) {
+        Assert-KeyEquals -Map $launch -Key $key -ExpectedValue "passed" -Label "$Runtime dialog smoke"
+    }
+
+    foreach ($key in @(
+            "macos_dialog_smoke_attempted",
+            "macos_dialog_activation_completed",
+            "find_dialog",
+            "find_dialog_text_box",
+            "find_dialog_action_buttons",
+            "find_dialog_options",
+            "find_dialog_format_controls",
+            "find_dialog_compact_layout",
+            "find_dialog_result_closed_without_accept",
+            "replace_dialog",
+            "replace_dialog_text_boxes",
+            "replace_dialog_action_buttons",
+            "replace_dialog_options",
+            "replace_dialog_format_controls",
+            "replace_dialog_compact_layout",
+            "replace_dialog_result_closed_without_accept",
+            "go_to_dialog",
+            "go_to_dialog_reference_controls",
+            "go_to_dialog_compact_layout",
+            "go_to_dialog_result_closed_without_accept",
+            "go_to_special_dialog",
+            "go_to_special_dialog_kind_controls",
+            "go_to_special_dialog_value_type_controls",
+            "go_to_special_dialog_compact_layout",
+            "go_to_special_dialog_result_closed_without_accept",
+            "format_cells_dialog",
+            "format_cells_dialog_tab_strip",
+            "format_cells_dialog_default_number_tab",
+            "format_cells_dialog_number_controls",
+            "format_cells_dialog_action_buttons",
+            "format_cells_dialog_compact_layout",
+            "format_cells_dialog_result_closed_without_accept",
+            "sort_dialog",
+            "sort_dialog_sort_on_controls",
+            "sort_dialog_color_controls",
+            "sort_dialog_action_buttons",
+            "sort_dialog_compact_layout",
+            "sort_dialog_result_closed_without_accept",
+            "data_validation_dropdown_control",
+            "data_validation_dropdown_items",
+            "data_validation_dialog",
+            "data_validation_dialog_criteria_controls",
+            "data_validation_dialog_message_controls",
+            "data_validation_dialog_action_buttons",
+            "data_validation_dialog_compact_layout",
+            "data_validation_dialog_result_closed_without_accept")) {
+        Assert-KeyEquals -Map $launch -Key $key -ExpectedValue "true" -Label "$Runtime dialog smoke"
+    }
+
     Assert-KeyPresent -Map $launch -Key "live_command_key_smoke_required" -Label "$Runtime command key smoke"
     $liveCommandKeyRequiredValues = @(Get-KeyValues -Map $launch -Key "live_command_key_smoke_required")
     Assert-KeyHasNoConflictingDuplicateValues -Values $liveCommandKeyRequiredValues -Key "live_command_key_smoke_required" -Label "$Runtime command key smoke" -ExpectedDescription "Expected 'live_command_key_smoke_required=true' or 'live_command_key_smoke_required=false'." | Out-Null
