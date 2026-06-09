@@ -230,6 +230,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorkbookFileRecoveryProperties_DoesNotMarkFreeXAuthoredWorkbookAsRepairLoaded()
+    {
+        using var saved = Save(CreateAuthoredWorkbookFileRecoveryRepairLoadSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var fileRecoveryPr = ReadWorkbookChildElement(saved, "fileRecoveryPr");
+        fileRecoveryPr.Attribute("autoRecover")!.Value.Should().Be("1");
+        fileRecoveryPr.Attribute("repairLoad").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.FileRecoveryProperties.Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new WorkbookFileRecoveryPropertiesModel
+            {
+                AutoRecover = true
+            });
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithWorkbookFileRecoveryProperties_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateWorkbookFileRecoveryPropertiesSourceWorkbook());
@@ -891,6 +909,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookFullSave_ClampsWorkbookViewIndexesAfterSheetRemovalForExcelOpenability()
+    {
+        using var source = Save(CreateWorkbookViewSheetRemovalSourceWorkbook());
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        workbook.FirstVisibleSheetIndex.Should().Be(2);
+        workbook.ActiveSheetIndex.Should().Be(2);
+        workbook.RemoveSheet(workbook.GetSheet("Archive")!.Id).Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorkbookViewIndexesWithinSheetCount(saved);
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.Sheets.Should().HaveCount(2);
+        reloaded.FirstVisibleSheetIndex.Should().BeLessThan(reloaded.Sheets.Count);
+        reloaded.ActiveSheetIndex.Should().BeLessThan(reloaded.Sheets.Count);
+    }
+
+    [Fact]
     public void WorkbookAdditionalViews_ProducesSchemaValidWorkbook()
     {
         SchemaErrors(CreateWorkbookAdditionalViewsSourceWorkbook()).Should().BeEmpty();
@@ -1098,6 +1140,33 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         workbook.ActiveSheetIndex.Should().Be(1);
     }
 
+    private static void AssertWorkbookViewIndexesWithinSheetCount(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
+        var sheetCount = workbookXml.Root!
+            .Element(workbookNs + "sheets")!
+            .Elements(workbookNs + "sheet")
+            .Count();
+        sheetCount.Should().Be(2);
+
+        var workbookView = workbookXml.Root!
+            .Element(workbookNs + "bookViews")!
+            .Element(workbookNs + "workbookView")!;
+
+        foreach (var attributeName in new[] { "firstSheet", "activeTab" })
+        {
+            var attribute = workbookView.Attribute(attributeName);
+            if (attribute is null)
+                continue;
+
+            var index = int.Parse(attribute.Value, System.Globalization.CultureInfo.InvariantCulture);
+            index.Should().BeInRange(0, sheetCount - 1);
+        }
+    }
+
     private static void AssertWorkbookAdditionalViewsModel(Workbook workbook)
     {
         workbook.ShowSheetTabs.Should().BeFalse();
@@ -1204,6 +1273,20 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         });
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recovery"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        return workbook;
+    }
+
+    private static Workbook CreateAuthoredWorkbookFileRecoveryRepairLoadSourceWorkbook()
+    {
+        var workbook = new Workbook("WorkbookFileRecoveryAuthoredRepairLoad");
+        workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel
+        {
+            AutoRecover = true,
+            RepairLoad = true
+        });
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("repair marker"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         return workbook;
     }
@@ -1409,6 +1492,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         firstSheet.SetCell(new CellAddress(firstSheet.Id, 1, 1), new TextValue("view"));
         firstSheet.SetCell(new CellAddress(firstSheet.Id, 2, 2), new NumberValue(24));
         secondSheet.SetCell(new CellAddress(secondSheet.Id, 1, 1), new TextValue("active"));
+        return workbook;
+    }
+
+    private static Workbook CreateWorkbookViewSheetRemovalSourceWorkbook()
+    {
+        var workbook = new Workbook("WorkbookViewSheetRemoval")
+        {
+            ShowSheetTabs = true,
+            SheetTabRatio = 700,
+            FirstVisibleSheetIndex = 2,
+            ActiveSheetIndex = 2
+        };
+        var data = workbook.AddSheet("Data");
+        var report = workbook.AddSheet("Report");
+        var archive = workbook.AddSheet("Archive");
+        data.SetCell(new CellAddress(data.Id, 1, 1), new TextValue("data"));
+        report.SetCell(new CellAddress(report.Id, 1, 1), new TextValue("report"));
+        archive.SetCell(new CellAddress(archive.Id, 1, 1), new TextValue("archive"));
         return workbook;
     }
 

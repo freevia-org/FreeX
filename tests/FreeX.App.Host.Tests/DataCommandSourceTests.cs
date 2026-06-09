@@ -54,6 +54,27 @@ public sealed class DataCommandSourceTests
     }
 
     [Fact]
+    public void DataRibbonFilterButton_TogglesAutoFilterWithoutOpeningColumnDropdown()
+    {
+        var filterButton = ReadMainWindowXaml()
+            .ExtractButtonElementByInvariantCommandName("Filter", "Click=\"FilterButton_Click\"");
+        var filterSource = ReadHostSourceFile("MainWindow.DataFilterCommands.cs");
+        var editingDropdownSource = ReadHostSourceFile("MainWindow.EditingDropdowns.cs");
+        var viewportSource = ReadHostSourceFile("MainWindow.Viewport.cs");
+
+        filterButton.Should().Contain("Click=\"FilterButton_Click\"");
+        filterButton.Should().NotContain("ContextMenu");
+        SourceMethodExtractor
+            .ExtractMethodSource(filterSource, "private void FilterButton_Click(")
+            .Should()
+            .Contain("new ToggleWorksheetAutoFilterCommand")
+            .And.NotContain("AutoFilterDialog");
+        viewportSource.Should().Contain("SheetGrid.AutoFilterRange = sheet is not null &&");
+        viewportSource.Should().Contain("AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)");
+        editingDropdownSource.Should().Contain("private AutoFilterDialog? CreateAutoFilterFlyoutDialog");
+    }
+
+    [Fact]
     public void DataQueriesAndConnectionsUnsupportedCommand_IsNotSurfacedAsDisabledRibbonButton()
     {
         var xaml = ReadMainWindowXaml();

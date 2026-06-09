@@ -13,10 +13,9 @@ public partial class GridView
         if (Viewport == null) return;
 
         RebuildMergeLookup();
-        var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
         var isLiveResizing = IsLiveResizing;
         var skipHeavyLayers = isLiveResizing || _resizeTarget != ResizeTarget.None;
-        dc.PushClip(GetRenderClipGeometry(new Rect(0, 0, ActualWidth / zoom, ActualHeight / zoom)));
+        dc.PushClip(GetRenderClipGeometry(new Rect(0, 0, GetLogicalViewportWidth(), GetLogicalViewportHeight())));
 
         RenderHeaders(dc);
         RenderPreSelectionLayersWithCache(dc, skipHeavyLayers, isLiveResizing);
@@ -41,6 +40,18 @@ public partial class GridView
         return geometry;
     }
 
+    private double GetLogicalViewportWidth()
+    {
+        var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
+        return Math.Max(0, ActualWidth / zoom);
+    }
+
+    private double GetLogicalViewportHeight()
+    {
+        var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
+        return Math.Max(0, ActualHeight / zoom);
+    }
+
     private void RenderPreSelectionLayers(DrawingContext dc, bool skipHeavyLayers, bool isLiveResizing)
     {
         if (!skipHeavyLayers)
@@ -49,8 +60,7 @@ public partial class GridView
         RenderCells(dc);
         RenderSplitPaneCells(dc);
         RenderAutoFilterButtons(dc);
-        if (isLiveResizing)
-            RenderLiveResizeContinuation(dc);
+        RenderViewportContinuation(dc);
         if (!skipHeavyLayers)
         {
             RenderWorksheetViewOverlay(dc);

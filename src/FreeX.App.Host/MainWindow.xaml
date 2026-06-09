@@ -413,7 +413,7 @@
                                         </TextBlock>
                                     </ToggleButton>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
-                                    <Button Width="30" Height="22" Style="{StaticResource RibbonIconButton}"
+                                    <Button x:Name="BordersMenuButton" Width="30" Height="22" Style="{StaticResource RibbonIconButton}"
                                             Click="BorderPickerBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Borders}"
                                             local:RibbonTooltip.KeyTip="B"
@@ -4587,7 +4587,7 @@
                 <ScrollBar x:Name="HorizontalScroll" Grid.Column="5"
                            Orientation="Horizontal" Minimum="1" Maximum="16384" Value="1"
                            SmallChange="1" VerticalAlignment="Center" Margin="0"
-                           MinWidth="180"
+                           MinWidth="0"
                            AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_HorizontalWorksheetScrollBar}"
                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_ScrollWorksheetColumns}"/>
             </Grid>

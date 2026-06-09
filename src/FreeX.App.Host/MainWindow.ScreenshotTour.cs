@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -25,6 +26,13 @@ public partial class MainWindow
     private const string RibbonScreenshotTourManifestFileName = "ribbon_screenshot_tour_manifest.json";
     private const string AutoFilterFlyoutTourManifestFileName = "autofilter_flyout_tour_manifest.json";
     private const string AutoFilterFlyoutTourCaptureFileName = "freex_table_autofilter_dropdown";
+    private const string HomeNumberFormatDropdownTourManifestFileName = "home_number_format_dropdown_tour_manifest.json";
+    private const string HomeNumberFormatDropdownTourCaptureFileName = "freex_dropdown_home_number_format_opened";
+    private const string HomeBordersDropdownTourManifestFileName = "home_borders_dropdown_tour_manifest.json";
+    private const string HomeBordersDropdownTourCaptureFileName = "freex_dropdown_home_borders_opened";
+    private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
+    private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
+    private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
 
     [DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
@@ -39,7 +47,10 @@ public partial class MainWindow
         var ribbonTour = ribbonBurstTour || Environment.GetEnvironmentVariable("FREEX_SS_TOUR") == "1";
         var backstageTour = Environment.GetEnvironmentVariable("FREEX_BACKSTAGE_TOUR") == "1";
         var autoFilterFlyoutTour = Environment.GetEnvironmentVariable("FREEX_AUTOFILTER_FLYOUT_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour)
+        var homeNumberFormatDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR") == "1";
+        var homeBordersDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_BORDERS_DROPDOWN_TOUR") == "1";
+        var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -53,14 +64,17 @@ public partial class MainWindow
         var outputDir = Path.GetFullPath(
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots"));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour);
     }
 
     private async Task RunScreenshotTourAsync(
         string outputDir,
         RibbonScreenshotTourPlan? ribbonPlan,
         bool backstageTour,
-        bool autoFilterFlyoutTour)
+        bool autoFilterFlyoutTour,
+        bool homeNumberFormatDropdownTour,
+        bool homeBordersDropdownTour,
+        bool worksheetContextMenuTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -70,6 +84,15 @@ public partial class MainWindow
 
         if (autoFilterFlyoutTour)
             await CaptureAutoFilterFlyoutTourAsync(Path.Combine(outputDir, "autofilter-flyout-tour"));
+
+        if (homeNumberFormatDropdownTour)
+            await CaptureHomeNumberFormatDropdownTourAsync(Path.Combine(outputDir, "home-number-format-dropdown-tour"));
+
+        if (homeBordersDropdownTour)
+            await CaptureHomeBordersDropdownTourAsync(Path.Combine(outputDir, "home-borders-dropdown-tour"));
+
+        if (worksheetContextMenuTour)
+            await CaptureWorksheetContextMenuTourAsync(Path.Combine(outputDir, "worksheet-context-menu-tour"));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -226,6 +249,235 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, $"{AutoFilterFlyoutTourCaptureFileName}.png");
         if (!File.Exists(path))
             throw new InvalidOperationException("AutoFilter flyout tour did not create the planned FreeX dropdown capture.");
+    }
+
+    private async Task CaptureHomeNumberFormatDropdownTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteHomeNumberFormatDropdownTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1100;
+        Height = 768;
+        await Task.Delay(700);
+
+        var homeTab = RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home");
+        SelectRibbonTourTab(homeTab);
+        NumberFormatBox.SelectedIndex = HomeNumberFormatDropdownPlanner.DefaultSelectionIndex;
+        NumberFormatBox.Focus();
+        NumberFormatBox.ApplyTemplate();
+        NumberFormatBox.IsDropDownOpen = true;
+        NumberFormatBox.UpdateLayout();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(350);
+        NumberFormatBox.UpdateLayout();
+
+        try
+        {
+            var popupChild = FindOpenPopupChild(NumberFormatBox)
+                ?? throw new InvalidOperationException("Home number format dropdown tour could not locate the open ComboBox popup.");
+
+            await CaptureElementAsync(popupChild, outputDir, HomeNumberFormatDropdownTourCaptureFileName);
+            ValidateHomeNumberFormatDropdownTourEvidence(outputDir);
+            await WriteHomeNumberFormatDropdownTourManifestAsync(outputDir, popupChild);
+        }
+        catch
+        {
+            DeleteHomeNumberFormatDropdownTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            NumberFormatBox.IsDropDownOpen = false;
+        }
+    }
+
+    private static FrameworkElement? FindOpenPopupChild(DependencyObject root)
+    {
+        if (root is Popup { IsOpen: true, Child: FrameworkElement child })
+            return child;
+
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < childCount; i++)
+        {
+            var candidate = VisualTreeHelper.GetChild(root, i);
+            var match = FindOpenPopupChild(candidate);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
+    }
+
+    private static void DeleteHomeNumberFormatDropdownTourEvidence(string outputDir)
+    {
+        foreach (var fileName in new[]
+        {
+            $"{HomeNumberFormatDropdownTourCaptureFileName}.png",
+            HomeNumberFormatDropdownTourManifestFileName
+        })
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static void ValidateHomeNumberFormatDropdownTourEvidence(string outputDir)
+    {
+        var path = Path.Combine(outputDir, $"{HomeNumberFormatDropdownTourCaptureFileName}.png");
+        if (!File.Exists(path))
+            throw new InvalidOperationException("Home number format dropdown tour did not create the planned FreeX dropdown capture.");
+    }
+
+    private async Task CaptureHomeBordersDropdownTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteHomeBordersDropdownTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1100;
+        Height = 768;
+        await Task.Delay(700);
+
+        var homeTab = RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home");
+        SelectRibbonTourTab(homeTab);
+        BordersMenuButton.Focus();
+        BordersMenuButton.UpdateLayout();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+
+        var menu = BordersMenuButton.ContextMenu
+            ?? throw new InvalidOperationException("Home Borders dropdown tour could not locate the Borders context menu.");
+
+        try
+        {
+            menu.PlacementTarget = BordersMenuButton;
+            menu.Placement = PlacementMode.Bottom;
+            menu.IsOpen = true;
+            menu.UpdateLayout();
+            await Task.Delay(350);
+            menu.UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+
+            await CaptureElementAsync(menu, outputDir, HomeBordersDropdownTourCaptureFileName);
+            ValidateHomeBordersDropdownTourEvidence(outputDir);
+            await WriteHomeBordersDropdownTourManifestAsync(outputDir, menu);
+        }
+        catch
+        {
+            DeleteHomeBordersDropdownTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            menu.IsOpen = false;
+        }
+    }
+
+    private static void DeleteHomeBordersDropdownTourEvidence(string outputDir)
+    {
+        foreach (var fileName in new[]
+        {
+            $"{HomeBordersDropdownTourCaptureFileName}.png",
+            HomeBordersDropdownTourManifestFileName
+        })
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static void ValidateHomeBordersDropdownTourEvidence(string outputDir)
+    {
+        var path = Path.Combine(outputDir, $"{HomeBordersDropdownTourCaptureFileName}.png");
+        if (!File.Exists(path))
+            throw new InvalidOperationException("Home Borders dropdown tour did not create the planned FreeX dropdown capture.");
+    }
+
+    private async Task CaptureWorksheetContextMenuTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteWorksheetContextMenuTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1100;
+        Height = 768;
+        await Task.Delay(700);
+
+        var address = EnsureWorksheetContextMenuTourContext();
+        UpdateViewport();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+
+        ContextMenu? menu = null;
+        try
+        {
+            OnGridContextMenuRequested(address, GetKeyboardContextMenuGridPoint(address));
+            await Task.Delay(350);
+            menu = SheetGrid.ContextMenu
+                ?? throw new InvalidOperationException("Worksheet context menu tour could not locate the open context menu.");
+            menu.UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+
+            await CaptureElementAsync(menu, outputDir, WorksheetContextMenuTourCaptureFileName);
+            ValidateWorksheetContextMenuTourEvidence(outputDir);
+            await WriteWorksheetContextMenuTourManifestAsync(outputDir, menu, address);
+        }
+        catch
+        {
+            DeleteWorksheetContextMenuTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (menu is not null)
+                menu.IsOpen = false;
+        }
+    }
+
+    private CellAddress EnsureWorksheetContextMenuTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Worksheet context menu tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new TextValue("Worksheet context menu"));
+        sheet.ClearCell(new CellAddress(sheet.Id, 1, 2));
+        SetActiveCell(address);
+        if (SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = new GridRange(address, address);
+            SheetGrid.SelectedRanges = null;
+        }
+
+        return address;
+    }
+
+    private static void DeleteWorksheetContextMenuTourEvidence(string outputDir)
+    {
+        foreach (var fileName in new[]
+        {
+            $"{WorksheetContextMenuTourCaptureFileName}.png",
+            WorksheetContextMenuTourManifestFileName
+        })
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static void ValidateWorksheetContextMenuTourEvidence(string outputDir)
+    {
+        var path = Path.Combine(outputDir, $"{WorksheetContextMenuTourCaptureFileName}.png");
+        if (!File.Exists(path))
+            throw new InvalidOperationException("Worksheet context menu tour did not create the planned FreeX context menu capture.");
     }
 
     private async Task CaptureRibbonTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
@@ -602,6 +854,12 @@ public partial class MainWindow
 
     private async Task EnsureWindowForegroundForScreenshotTourAsync(string operation)
     {
+        if (IsScreenshotTourBackgroundRenderAllowed())
+        {
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            return;
+        }
+
         Activate();
         Focus();
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
@@ -610,6 +868,9 @@ public partial class MainWindow
 
     private void AssertWindowForegroundForScreenshotTour(string operation)
     {
+        if (IsScreenshotTourBackgroundRenderAllowed())
+            return;
+
         var expectedWindowHandle = new WindowInteropHelper(this).Handle;
         var foregroundWindowHandle = GetForegroundWindow();
         if (expectedWindowHandle == IntPtr.Zero ||
@@ -621,6 +882,9 @@ public partial class MainWindow
                 $"foreground handle 0x{foregroundWindowHandle.ToInt64():X}, expected 0x{expectedWindowHandle.ToInt64():X}.");
         }
     }
+
+    private static bool IsScreenshotTourBackgroundRenderAllowed() =>
+        Environment.GetEnvironmentVariable(ScreenshotTourAllowBackgroundRenderEnvVar) == "1";
 
     private static async Task WriteRibbonScreenshotTourManifestAsync(string outputDir, RibbonScreenshotTourPlan plan)
     {
@@ -645,8 +909,10 @@ public partial class MainWindow
                 "screenshot_excel.ps1",
                 "excel_<WidthLabel>_<RibbonTab>.png"),
             FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
-                Required: true,
-                Policy: "Abort and clear current PNG/manifest evidence unless the FreeX main window owns foreground focus immediately before render and file write."),
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture without OS foreground ownership; no global mouse, keyboard, or screen capture input is used."
+                    : "Abort and clear current PNG/manifest evidence unless the FreeX main window owns foreground focus immediately before render and file write."),
             Tabs: plan.Tabs.Select(tab => tab.Header).ToArray(),
             Widths: plan.Widths
                 .Select(width => new RibbonScreenshotTourManifestWidth(
@@ -674,7 +940,9 @@ public partial class MainWindow
                 "Ribbon captures cover the top window band only.",
                 "Transient popups, dropdowns, native dialogs, and context menus require separate guarded captures.",
                 "This in-app tour deletes only the currently requested plan's expected PNG files before capture.",
-                "The in-app tour aborts before file write unless the FreeX main window owns foreground focus."
+                IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 was used for in-process rendering; pair with foreground-guarded screen captures when validating OS compositing or input focus."
+                    : "The in-app tour aborts before file write unless the FreeX main window owns foreground focus."
             ]);
 
         var path = Path.Combine(outputDir, RibbonScreenshotTourManifestFileName);
@@ -729,6 +997,155 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, AutoFilterFlyoutTourManifestFileName);
         await using var stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.AutoFilterFlyoutTourManifest);
+    }
+
+    private static async Task WriteHomeNumberFormatDropdownTourManifestAsync(string outputDir, FrameworkElement popupChild)
+    {
+        var capture = new HomeNumberFormatDropdownTourManifestCapture(
+            CaptureKey: "interactive:home-number-format:opened",
+            PairKey: "interactive:home-number-format:opened",
+            ScenarioId: "dropdown:home-number-format",
+            State: "opened",
+            FileName: HomeNumberFormatDropdownTourCaptureFileName,
+            OutputFileName: $"{HomeNumberFormatDropdownTourCaptureFileName}.png",
+            CounterpartFileName: "interactive_home_number_format_opened.png",
+            CaptureLogicalWidth: popupChild.ActualWidth,
+            CaptureLogicalHeight: popupChild.ActualHeight);
+
+        var manifest = new HomeNumberFormatDropdownTourManifest(
+            Tool: "FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR",
+            EvidenceFamily: "dropdown",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "dropdown:home-number-format",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_dropdown_home_number_format_opened.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            SelectedCell: "A1",
+            SelectedFormat: HomeNumberFormatDropdownPlanner.Options[HomeNumberFormatDropdownPlanner.DefaultSelectionIndex].Label,
+            OptionLabels: HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label).ToArray(),
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-combobox-popup-child",
+            Pairing: new HomeNumberFormatDropdownTourManifestPairing(
+                "interactive:home-number-format:<State>",
+                "excel",
+                "screenshot_excel.ps1",
+                "interactive_home_number_format_opened.png"),
+            Captures: [capture],
+            Limitations:
+            [
+                "This in-app tour opens the production Home Number Format ComboBox and captures the open WPF popup child without global mouse or keyboard input.",
+                "The paired Microsoft Excel transient capture is declared by tools/screenshot_excel.ps1 and remains a separate foreground-guarded capture.",
+                "The scenario captures the opened dropdown with the default General format selected."
+            ]);
+
+        var path = Path.Combine(outputDir, HomeNumberFormatDropdownTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeNumberFormatDropdownTourManifest);
+    }
+
+    private static async Task WriteWorksheetContextMenuTourManifestAsync(
+        string outputDir,
+        ContextMenu menu,
+        CellAddress address)
+    {
+        var menuHeaders = menu.Items
+            .OfType<MenuItem>()
+            .Select(item => item.Header?.ToString() ?? string.Empty)
+            .Where(header => !string.IsNullOrWhiteSpace(header))
+            .ToArray();
+
+        var capture = new WorksheetContextMenuTourManifestCapture(
+            CaptureKey: "interactive:worksheet-cell-context-menu:opened",
+            PairKey: "interactive:worksheet-cell-context-menu:opened",
+            ScenarioId: "context-menu:worksheet-cell",
+            State: "opened",
+            FileName: WorksheetContextMenuTourCaptureFileName,
+            OutputFileName: $"{WorksheetContextMenuTourCaptureFileName}.png",
+            CounterpartFileName: "interactive_worksheet_cell_context_menu_opened.png",
+            CaptureLogicalWidth: menu.ActualWidth,
+            CaptureLogicalHeight: menu.ActualHeight);
+
+        var manifest = new WorksheetContextMenuTourManifest(
+            Tool: "FREEX_WORKSHEET_CONTEXT_MENU_TOUR",
+            EvidenceFamily: "context-menu",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "context-menu:worksheet-cell",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_context_menu_worksheet_cell_opened.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            SelectedCell: address.ToA1(),
+            EntryPath: "keyboard-context-menu-point",
+            MenuHeaders: menuHeaders,
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-worksheet-context-menu",
+            Pairing: new WorksheetContextMenuTourManifestPairing(
+                "interactive:worksheet-cell-context-menu:<State>",
+                "excel",
+                "screenshot_excel.ps1",
+                "interactive_worksheet_cell_context_menu_opened.png"),
+            Captures: [capture],
+            Limitations:
+            [
+                "This in-app tour opens the production worksheet-cell ContextMenu and captures the live WPF menu without global mouse or keyboard input.",
+                "The paired Microsoft Excel transient capture remains a separate foreground-guarded capture.",
+                "The scenario captures the default worksheet-cell context menu for A1."
+            ]);
+
+        var path = Path.Combine(outputDir, WorksheetContextMenuTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.WorksheetContextMenuTourManifest);
+    }
+
+    private static async Task WriteHomeBordersDropdownTourManifestAsync(string outputDir, ContextMenu menu)
+    {
+        var menuHeaders = menu.Items
+            .OfType<MenuItem>()
+            .Select(item => item.Header?.ToString() ?? string.Empty)
+            .Where(header => !string.IsNullOrWhiteSpace(header))
+            .ToArray();
+
+        var capture = new HomeBordersDropdownTourManifestCapture(
+            CaptureKey: "interactive:home-borders:opened",
+            PairKey: "interactive:home-borders:opened",
+            ScenarioId: "dropdown:home-borders",
+            State: "opened",
+            FileName: HomeBordersDropdownTourCaptureFileName,
+            OutputFileName: $"{HomeBordersDropdownTourCaptureFileName}.png",
+            CounterpartFileName: "interactive_home_borders_opened.png",
+            CaptureLogicalWidth: menu.ActualWidth,
+            CaptureLogicalHeight: menu.ActualHeight);
+
+        var manifest = new HomeBordersDropdownTourManifest(
+            Tool: "FREEX_HOME_BORDERS_DROPDOWN_TOUR",
+            EvidenceFamily: "dropdown",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "dropdown:home-borders",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_dropdown_home_borders_opened.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            EntryPath: "Home > Borders",
+            MenuHeaders: menuHeaders,
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-context-menu",
+            Pairing: new HomeBordersDropdownTourManifestPairing(
+                "interactive:home-borders:<State>",
+                "excel",
+                "screenshot_excel.ps1",
+                "interactive_home_borders_opened.png"),
+            Captures: [capture],
+            Limitations:
+            [
+                "This in-app tour opens the production Home Borders menu and captures the live WPF ContextMenu without global mouse or keyboard input.",
+                "The paired Microsoft Excel transient capture remains a separate foreground-guarded capture.",
+                "The scenario captures the top-level Borders menu; nested Line Color and Line Style submenus are separate future captures."
+            ]);
+
+        var path = Path.Combine(outputDir, HomeBordersDropdownTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeBordersDropdownTourManifest);
     }
 
     private sealed record RibbonScreenshotTourManifest(
@@ -813,9 +1230,116 @@ public partial class MainWindow
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
 
+    private sealed record HomeNumberFormatDropdownTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string SelectedCell,
+        string SelectedFormat,
+        IReadOnlyList<string> OptionLabels,
+        string CaptureStatus,
+        string CaptureMethod,
+        HomeNumberFormatDropdownTourManifestPairing Pairing,
+        IReadOnlyList<HomeNumberFormatDropdownTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record HomeNumberFormatDropdownTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record HomeNumberFormatDropdownTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string FileName,
+        string OutputFileName,
+        string CounterpartFileName,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
+
+    private sealed record HomeBordersDropdownTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string EntryPath,
+        IReadOnlyList<string> MenuHeaders,
+        string CaptureStatus,
+        string CaptureMethod,
+        HomeBordersDropdownTourManifestPairing Pairing,
+        IReadOnlyList<HomeBordersDropdownTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record HomeBordersDropdownTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record HomeBordersDropdownTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string FileName,
+        string OutputFileName,
+        string CounterpartFileName,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
+
+    private sealed record WorksheetContextMenuTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string SelectedCell,
+        string EntryPath,
+        IReadOnlyList<string> MenuHeaders,
+        string CaptureStatus,
+        string CaptureMethod,
+        WorksheetContextMenuTourManifestPairing Pairing,
+        IReadOnlyList<WorksheetContextMenuTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record WorksheetContextMenuTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record WorksheetContextMenuTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string FileName,
+        string OutputFileName,
+        string CounterpartFileName,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
+    [JsonSerializable(typeof(HomeNumberFormatDropdownTourManifest))]
+    [JsonSerializable(typeof(HomeBordersDropdownTourManifest))]
+    [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.

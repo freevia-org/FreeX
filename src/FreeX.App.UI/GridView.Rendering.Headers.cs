@@ -24,6 +24,7 @@ public partial class GridView
         ViewportModel Viewport,
         double RowHeaderWidth,
         double ColumnHeaderHeight,
+        double VisibleBottom,
         bool UseR1C1ReferenceStyle,
         string CultureName,
         double PixelsPerDip);
@@ -44,6 +45,7 @@ public partial class GridView
         GridRange? SelectedRange,
         double RowHeaderWidth,
         double ColumnHeaderHeight,
+        double VisibleBottom,
         bool UseR1C1ReferenceStyle,
         string CultureName,
         double PixelsPerDip);
@@ -88,9 +90,10 @@ public partial class GridView
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var rowHeaderWidth = ActualRowHeaderWidth;
         var columnHeaderHeight = EffectiveColHeaderHeight;
+        var visibleBottom = GetRenderVisibleBottom();
 
-        RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
-        RenderSelectedHeaderLayer(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
+        RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
+        RenderSelectedHeaderLayer(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
     }
 
     private void RenderHeaderBaseLayer(
@@ -98,12 +101,14 @@ public partial class GridView
         ViewportModel viewport,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double visibleBottom,
         double pixelsPerDip)
     {
         var key = new HeaderBaseLayerCacheKey(
             viewport,
             rowHeaderWidth,
             columnHeaderHeight,
+            visibleBottom,
             UseR1C1ReferenceStyle,
             CultureInfo.CurrentCulture.Name,
             pixelsPerDip);
@@ -113,7 +118,7 @@ public partial class GridView
             return;
         }
 
-        var rebuilt = BuildHeaderBaseLayerCache(viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
+        var rebuilt = BuildHeaderBaseLayerCache(viewport, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
         _headerBaseLayerCache = rebuilt;
         _headerBaseLayerCacheKey = key;
         dc.DrawDrawing(rebuilt);
@@ -123,11 +128,12 @@ public partial class GridView
         ViewportModel viewport,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double visibleBottom,
         double pixelsPerDip)
     {
         var group = new DrawingGroup();
         using (var groupContext = group.Open())
-            RenderHeaderBase(groupContext, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
+            RenderHeaderBase(groupContext, viewport, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
 
         if (group.CanFreeze)
             group.Freeze();
@@ -142,6 +148,7 @@ public partial class GridView
         GridRange? selRange,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double visibleBottom,
         double pixelsPerDip)
     {
         if (selectedRanges is not { Count: > 0 } && selRange is null)
@@ -156,6 +163,7 @@ public partial class GridView
             selRange,
             rowHeaderWidth,
             columnHeaderHeight,
+            visibleBottom,
             pixelsPerDip);
         if (_selectedHeaderLayerCache is { } cached && _selectedHeaderLayerCacheKey == key)
         {
@@ -174,6 +182,7 @@ public partial class GridView
                 selRange,
                 rowHeaderWidth,
                 columnHeaderHeight,
+                visibleBottom,
                 pixelsPerDip);
             _selectedHeaderLayerCache = rebuilt;
             _selectedHeaderLayerCacheKey = key;
@@ -182,7 +191,7 @@ public partial class GridView
             return;
         }
 
-        RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
+        RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
         RememberSelectedHeaderLayerRenderKey(key);
     }
 
@@ -192,6 +201,7 @@ public partial class GridView
         GridRange? selRange,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double visibleBottom,
         double pixelsPerDip) =>
         new(
             viewport,
@@ -201,6 +211,7 @@ public partial class GridView
             selRange,
             rowHeaderWidth,
             columnHeaderHeight,
+            visibleBottom,
             UseR1C1ReferenceStyle,
             CultureInfo.CurrentCulture.Name,
             pixelsPerDip);
@@ -220,11 +231,12 @@ public partial class GridView
         GridRange? selRange,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double visibleBottom,
         double pixelsPerDip)
     {
         var group = new DrawingGroup();
         using (var groupContext = group.Open())
-            RenderSelectedHeaders(groupContext, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
+            RenderSelectedHeaders(groupContext, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
 
         if (group.CanFreeze)
             group.Freeze();
@@ -260,13 +272,14 @@ public partial class GridView
         ViewportModel viewport,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double visibleBottom,
         double pixelsPerDip)
     {
         foreach (var col in viewport.ColMetrics)
             DrawColumnHeader(dc, col, rowHeaderWidth, columnHeaderHeight, HeaderBackgroundBrush, pixelsPerDip);
 
         foreach (var row in viewport.RowMetrics)
-            DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, HeaderBackgroundBrush, pixelsPerDip);
+            DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, visibleBottom, HeaderBackgroundBrush, pixelsPerDip);
 
         dc.DrawRectangle(HeaderBackgroundBrush, GridPen,
             new Rect(0, 0, rowHeaderWidth, columnHeaderHeight));
@@ -279,12 +292,13 @@ public partial class GridView
         GridRange? selRange,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double visibleBottom,
         double pixelsPerDip)
     {
         if (selectedRanges is not { Count: > 0 } && selRange is null)
             return;
 
-        if (TryRenderSingleCellSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip))
+        if (TryRenderSingleCellSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip))
             return;
 
         var columnIntervals = BuildColumnHeaderSelectionIntervals(selectedRanges, selRange);
@@ -301,7 +315,7 @@ public partial class GridView
         foreach (var row in viewport.RowMetrics)
         {
             if (IsHeaderSelected(row.Row, rowIntervals, ref rowIntervalIndex))
-                DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, HeaderHighlightBrush, pixelsPerDip);
+                DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, visibleBottom, HeaderHighlightBrush, pixelsPerDip);
         }
     }
 
@@ -312,6 +326,7 @@ public partial class GridView
         GridRange? selectedRange,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double visibleBottom,
         double pixelsPerDip)
     {
         if (!TryGetSingleCellSelectedHeaderRange(selectedRanges, selectedRange, out var range))
@@ -321,7 +336,7 @@ public partial class GridView
         if (lookups.Columns.TryGetValue(range.Start.Col, out var column))
             DrawColumnHeader(dc, column, rowHeaderWidth, columnHeaderHeight, HeaderHighlightBrush, pixelsPerDip);
         if (lookups.Rows.TryGetValue(range.Start.Row, out var row))
-            DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, HeaderHighlightBrush, pixelsPerDip);
+            DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, visibleBottom, HeaderHighlightBrush, pixelsPerDip);
 
         return true;
     }
@@ -365,11 +380,14 @@ public partial class GridView
         RowMetric row,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double visibleBottom,
         Brush background,
         double pixelsPerDip)
     {
         var rect = new Rect(0, row.TopOffset + columnHeaderHeight, rowHeaderWidth, row.Height);
         dc.DrawRectangle(background, GridPen, rect);
+        if (!ShouldDrawRowHeaderText(rect, visibleBottom))
+            return;
 
         var textValue = FormatRowHeader(row.Row);
         var text = GetDefaultFormattedText(textValue, 11, pixelsPerDip);
@@ -377,6 +395,15 @@ public partial class GridView
         DrawHeaderText(dc, textValue, text, 11, pixelsPerDip, new Point(
             rect.Left + (rect.Width - text.Width) / 2,
             rect.Top + (rect.Height - text.Height) / 2));
+    }
+
+    internal static bool ShouldDrawRowHeaderText(Rect rowHeaderRect, double visibleBottom) =>
+        rowHeaderRect.Bottom <= visibleBottom;
+
+    private double GetRenderVisibleBottom()
+    {
+        var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
+        return ActualHeight / zoom;
     }
 
     private void DrawHeaderText(

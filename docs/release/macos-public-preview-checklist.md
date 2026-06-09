@@ -76,7 +76,7 @@ xcrun stapler validate FreeX.app
 | Notarization | `notarization_status=accepted` |  | Pass / Fail |  |
 | Stapling | `stapler_validated=true`; `xcrun stapler validate` succeeds |  | Pass / Fail |  |
 | Gatekeeper assessment | `spctl` accepts `FreeX.app` as Developer ID software |  | Pass / Fail |  |
-| Hosted launch smoke | Evidence contains `smoke_status=passed`, and the launch, Open-With, and default-open smoke reports each contain `macos_launch_smoke=passed`; older historical runs may show an incompatible-architecture skip, but current CI blocks app artifact upload/readiness for that case |  | Pass / Fail |  |
+| Hosted launch smoke | Native runtime reports `macos_launch_smoke=passed`; evidence contains `smoke_status=passed`, and the launch, Open-With, and default-open smoke reports each contain `macos_launch_smoke=passed`; older historical runs may show an incompatible-architecture skip, but current CI blocks app artifact upload/readiness for that case |  | Pass / Fail |  |
 | LaunchServices/Open-With smoke | Evidence contains the hosted LaunchServices and Open-With smoke pass markers |  | Pass / Fail |  |
 | Command-key smoke | Evidence contains `command_key_smoke=passed` and required `cmd_*_menu_gesture=true` markers |  | Pass / Fail |  |
 | Diagnostics artifact | Matching `macos-diagnostics` artifact is present and retained |  | Pass / Fail |  |

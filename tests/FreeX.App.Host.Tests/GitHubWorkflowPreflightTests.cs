@@ -1165,7 +1165,7 @@ public sealed class GitHubWorkflowPreflightTests
                     uses: actions/upload-artifact@v7
                     with:
                       name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-tfm-build-${{ matrix.arch }}-evidence
-                      path: artifacts/freex-${{ matrix.arch }}-macos-tfm-build-evidence.txt
+                      path: artifacts/freex-${{ matrix.arch }}-macos-tfm-*-evidence.txt
                       if-no-files-found: error
                       retention-days: 14
             """;

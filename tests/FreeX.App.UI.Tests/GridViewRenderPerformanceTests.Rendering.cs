@@ -119,8 +119,8 @@ public sealed partial class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void RenderCellBackgroundBase", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("var visibleRight = ActualWidth;");
-        renderCells.Should().Contain("var visibleBottom = ActualHeight;");
+        renderCells.Should().Contain("var visibleRight = GetLogicalViewportWidth();");
+        renderCells.Should().Contain("var visibleBottom = GetLogicalViewportHeight();");
         source.Should().Contain("private static bool IntersectsVisibleGrid");
         renderCells.Should().Contain("var cellTop = rowMetric.TopOffset + columnHeaderHeight;");
         renderCells.Should().Contain("if (cellTop >= visibleBottom) continue;");
@@ -210,6 +210,45 @@ public sealed partial class GridViewRenderPerformanceTests
         drawHeaderText.Should().Contain("_headerTextDrawingCache.TryGetValue(key");
         drawHeaderText.Should().Contain("groupContext.DrawText(formattedText, origin);");
         drawHeaderText.Should().Contain("dc.DrawDrawing(drawing);");
+    }
+
+    [Fact]
+    public void RenderHeaders_SkipsRowNumberTextForPartiallyClippedBottomRows()
+    {
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Headers.cs");
+        var cacheKey = source[
+            source.IndexOf("private readonly record struct HeaderBaseLayerCacheKey", StringComparison.Ordinal)..
+            source.IndexOf("private readonly record struct HeaderTextDrawingKey", StringComparison.Ordinal)];
+        var renderHeaders = source[
+            source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderHeaderBaseLayer", StringComparison.Ordinal)];
+        var drawRowHeader = source[
+            source.IndexOf("private void DrawRowHeader", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawHeaderText", StringComparison.Ordinal)];
+
+        cacheKey.Should().Contain("double VisibleBottom");
+        renderHeaders.Should().Contain("var visibleBottom = GetRenderVisibleBottom();");
+        drawRowHeader.Should().Contain("if (!ShouldDrawRowHeaderText(rect, visibleBottom))");
+        drawRowHeader.Should().Contain("return;");
+        source.Should().Contain("internal static bool ShouldDrawRowHeaderText(Rect rowHeaderRect, double visibleBottom)");
+        source.Should().Contain("rowHeaderRect.Bottom <= visibleBottom");
+
+        GridView.ShouldDrawRowHeaderText(new Rect(0, 18, 30, 20), visibleBottom: 38).Should().BeTrue();
+        GridView.ShouldDrawRowHeaderText(new Rect(0, 18, 30, 20), visibleBottom: 37.5).Should().BeFalse();
+    }
+
+    [Fact]
+    public void LiveResizeContinuation_DoesNotDrawTextForPartialTrailingRowHeaders()
+    {
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
+        var continuation = source[
+            source.IndexOf("private void RenderLiveResizeRowContinuation", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawLiveResizeHorizontalGridLines", StringComparison.Ordinal)];
+
+        continuation.Should().Contain("var height = Math.Min(rowHeight, ActualHeight - y);");
+        continuation.Should().Contain("lastRow++;");
+        continuation.Should().Contain("if (height >= rowHeight)");
+        continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatRowHeader(lastRow), headerRect, pixelsPerDip);");
     }
 
     [Fact]
@@ -371,7 +410,7 @@ public sealed partial class GridViewRenderPerformanceTests
         onRender.Should().Contain("var isLiveResizing = IsLiveResizing;");
         onRender.Should().Contain("var skipHeavyLayers = isLiveResizing || _resizeTarget != ResizeTarget.None;");
         onRender.Should().Contain("if (!skipHeavyLayers)");
-        onRender.Should().Contain("RenderLiveResizeContinuation(dc);");
+        onRender.Should().Contain("RenderViewportContinuation(dc);");
         onRender.Should().Contain("RenderCells(dc);");
         onRender.Should().Contain("RenderSelection(dc);");
 
@@ -384,39 +423,59 @@ public sealed partial class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void LiveResizeContinuation_PaintsExpandedGridWithoutViewportRefresh()
+    public void ViewportContinuation_PaintsExpandedGridWithoutViewportRefresh()
     {
         var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var continuation = rendering[
-            rendering.IndexOf("private void RenderLiveResizeContinuation", StringComparison.Ordinal)..
+            rendering.IndexOf("private void RenderViewportContinuation", StringComparison.Ordinal)..
             rendering.IndexOf("private void RenderSplitPaneCells", StringComparison.Ordinal)];
 
-        continuation.Should().Contain("ActualWidth > gridRight");
-        continuation.Should().Contain("ActualHeight > gridBottom");
-        continuation.Should().Contain("RenderLiveResizeColumnContinuation");
-        continuation.Should().Contain("RenderLiveResizeRowContinuation");
-        continuation.Should().Contain("DrawLiveResizeHorizontalGridLines");
-        continuation.Should().Contain("DrawLiveResizeVerticalGridLines");
+        continuation.Should().Contain("var viewportWidth = GetLogicalViewportWidth();");
+        continuation.Should().Contain("var viewportHeight = GetLogicalViewportHeight();");
+        continuation.Should().Contain("viewportWidth > gridRight");
+        continuation.Should().Contain("viewportHeight > gridBottom");
+        continuation.Should().Contain("RenderViewportColumnContinuation");
+        continuation.Should().Contain("RenderViewportRowContinuation");
+        continuation.Should().Contain("DrawViewportContinuationHorizontalGridLines");
+        continuation.Should().Contain("DrawViewportContinuationVerticalGridLines");
         continuation.Should().Contain("dc.DrawRectangle(Brushes.White, null");
         continuation.Should().NotContain("UpdateViewport");
         continuation.Should().NotContain("Viewport =");
     }
 
     [Fact]
-    public void LiveResizeContinuation_ReusesPixelsPerDipForSyntheticHeaders()
+    public void ViewportContinuation_ReusesPixelsPerDipForSyntheticHeaders()
     {
         var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var continuation = rendering[
-            rendering.IndexOf("private void RenderLiveResizeContinuation", StringComparison.Ordinal)..
+            rendering.IndexOf("private void RenderViewportContinuation", StringComparison.Ordinal)..
             rendering.IndexOf("private void RenderSplitPaneCells", StringComparison.Ordinal)];
 
         continuation.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
-        continuation.Should().Contain("RenderLiveResizeColumnContinuation(dc, gridRight, gridTop, pixelsPerDip);");
-        continuation.Should().Contain("RenderLiveResizeRowContinuation(dc, gridLeft, gridRight, gridBottom, pixelsPerDip);");
+        continuation.Should().Contain("RenderViewportColumnContinuation(dc, gridRight, gridTop, viewportWidth, viewportHeight, pixelsPerDip);");
+        continuation.Should().Contain("RenderViewportRowContinuation(dc, gridLeft, gridRight, gridBottom, viewportHeight, pixelsPerDip);");
         continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatColumnHeader(++lastColumn, UseR1C1ReferenceStyle), headerRect, pixelsPerDip);");
         continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatRowHeader(++lastRow), headerRect, pixelsPerDip);");
         continuation.Should().NotContain("(++lastRow).ToString");
         continuation.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip);");
+    }
+
+    [Fact]
+    public void ZoomedOutViewport_UsesLogicalExtentForPaintBounds()
+    {
+        var dispatch = AppUiSourceTestSupport.ReadAppUiSources("GridView.RenderDispatch.cs");
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
+
+        dispatch.Should().Contain("GetLogicalViewportWidth()");
+        dispatch.Should().Contain("GetLogicalViewportHeight()");
+        dispatch.Should().Contain("ActualWidth / zoom");
+        dispatch.Should().Contain("ActualHeight / zoom");
+        dispatch.Should().NotContain("ActualWidth / zoom, ActualHeight / zoom");
+
+        rendering.Should().Contain("var visibleRight = GetLogicalViewportWidth();");
+        rendering.Should().Contain("var visibleBottom = GetLogicalViewportHeight();");
+        rendering.Should().Contain("var visibleRight = Math.Min(right, GetLogicalViewportWidth());");
+        rendering.Should().Contain("var visibleBottom = Math.Min(bottom, GetLogicalViewportHeight());");
     }
 
     [Fact]
@@ -626,8 +685,8 @@ public sealed partial class GridViewRenderPerformanceTests
         surfacePass.Should().Contain("styleLookup.TryGetValue((merge.Start.Row, merge.Start.Col), out var bg)");
         surfacePass.Should().NotContain("foreach (var rowMetric in viewport.RowMetrics)");
         surfacePass.Should().NotContain("foreach (var colMetric in viewport.ColMetrics)");
-        backgroundBase.Should().Contain("var visibleRight = Math.Min(right, ActualWidth);");
-        backgroundBase.Should().Contain("var visibleBottom = Math.Min(bottom, ActualHeight);");
+        backgroundBase.Should().Contain("var visibleRight = Math.Min(right, GetLogicalViewportWidth());");
+        backgroundBase.Should().Contain("var visibleBottom = Math.Min(bottom, GetLogicalViewportHeight());");
         backgroundBase.Should().Contain("dc.DrawRectangle(Brushes.White, null, rect);");
         backgroundBase.Should().Contain("foreach (var row in Viewport.RowMetrics)");
         backgroundBase.Should().Contain("if (y > visibleBottom)");
