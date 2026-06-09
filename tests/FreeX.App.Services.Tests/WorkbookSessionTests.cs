@@ -5966,6 +5966,51 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeBorderPreset_NoBorderRemovesExistingBordersPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var existingBorder = new CellBorder(BorderStyle.Thin, CellColor.Black);
+        sheet.SetCell(a1, new TextValue("value"));
+        var borderedStyle = CellStyle.Default.Clone();
+        borderedStyle.BorderTop = existingBorder;
+        borderedStyle.BorderRight = existingBorder;
+        borderedStyle.BorderBottom = existingBorder;
+        borderedStyle.BorderLeft = existingBorder;
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(borderedStyle);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b2));
+
+        var result = session.SetSelectedRangeBorderPreset(CellBorderPreset.NoBorder);
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b2));
+        var clearedStyle = GetStyle(workbook, sheet, a1);
+        clearedStyle.BorderTop.Should().Be(new CellBorder());
+        clearedStyle.BorderRight.Should().Be(new CellBorder());
+        clearedStyle.BorderBottom.Should().Be(new CellBorder());
+        clearedStyle.BorderLeft.Should().Be(new CellBorder());
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        var restoredStyle = GetStyle(workbook, sheet, a1);
+        restoredStyle.BorderTop.Should().Be(existingBorder);
+        restoredStyle.BorderRight.Should().Be(existingBorder);
+        restoredStyle.BorderBottom.Should().Be(existingBorder);
+        restoredStyle.BorderLeft.Should().Be(existingBorder);
+    }
+
+    [Fact]
     public void SetSelectedRangeBorderPreset_RejectsProtectedSheetWithoutMarkingDirty()
     {
         var workbook = CreateWorkbook();
