@@ -26,6 +26,16 @@ public sealed class ExcelOpenSmokeReportSchemaTests
     }
 
     [Fact]
+    public void SaveReopenValidation_AllowsExcelWorkbookViewRevisionUid()
+    {
+        var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
+
+        programSource.Should().Contain("SpreadsheetRevision2Ns");
+        programSource.Should().Contain("IsKnownNamespacedWorkbookViewAttribute(attribute.Name)");
+        programSource.Should().Contain("name == SpreadsheetRevision2Ns + \"uid\"");
+    }
+
+    [Fact]
     public void PublicCorpusWarningTolerance_DoesNotAllowSupportedThreadedCommentsWarnings()
     {
         var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
