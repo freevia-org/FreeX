@@ -6094,6 +6094,48 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void MergeAndCenterSelectedRange_ConcatenateAllCellsCombinesContentRowMajorAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var range = new GridRange(a1, b2);
+        sheet.SetCell(a1, new TextValue("first"));
+        sheet.SetCell(b1, new NumberValue(42));
+        sheet.SetCell(b2, new TextValue("last"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(range);
+
+        var result = session.MergeAndCenterSelectedRange(MergeCellContentResolution.ConcatenateAllCells);
+
+        result.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().Contain(range);
+        sheet.GetValue(a1).Should().Be(new TextValue("first 42 last"));
+        sheet.GetValue(b1).Should().Be(BlankValue.Instance);
+        sheet.GetValue(a2).Should().Be(BlankValue.Instance);
+        sheet.GetValue(b2).Should().Be(BlankValue.Instance);
+        GetStyle(workbook, sheet, a1).HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        session.CanUndo.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().NotContain(range);
+        sheet.GetValue(a1).Should().Be(new TextValue("first"));
+        sheet.GetValue(b1).Should().Be(new NumberValue(42));
+        sheet.GetValue(a2).Should().Be(BlankValue.Instance);
+        sheet.GetValue(b2).Should().Be(new TextValue("last"));
+        GetStyle(workbook, sheet, a1).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
+    }
+
+    [Fact]
     public void MergeAndCenterSelectedRange_SingleCellCentersWithoutMergedRegion()
     {
         var workbook = CreateWorkbook();
