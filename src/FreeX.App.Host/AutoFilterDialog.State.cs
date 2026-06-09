@@ -67,6 +67,9 @@ public sealed partial class AutoFilterDialog
 
     private bool ValidateTypedCriteriaInputs()
     {
+        if (_customFilterGroup.Visibility != Visibility.Visible)
+            return true;
+
         if (_criteriaOperatorBox.SelectedItem is not AutoFilterCriteriaOption option)
             return true;
 
@@ -97,6 +100,11 @@ public sealed partial class AutoFilterDialog
 
         return true;
     }
+
+    private string GetCommittedCriteriaText() =>
+        _customFilterGroup.Visibility == Visibility.Visible
+            ? _criteriaBox.Text
+            : string.Empty;
 
     private bool ShowInvalidCriteriaWarning(string message, TextBox target)
     {
