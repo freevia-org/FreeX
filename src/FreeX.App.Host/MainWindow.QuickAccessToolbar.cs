@@ -364,6 +364,12 @@ public partial class MainWindow
 
     private void OpenQuickAccessHistoryMenu(string commandId, ButtonBase placementTarget)
     {
+        var menu = CreateQuickAccessHistoryMenu(commandId, placementTarget);
+        menu.IsOpen = true;
+    }
+
+    private ContextMenu CreateQuickAccessHistoryMenu(string commandId, ButtonBase placementTarget)
+    {
         var entries = GetQuickAccessHistoryEntries(commandId);
         var menu = new ContextMenu
         {
@@ -396,7 +402,7 @@ public partial class MainWindow
             }
         }
 
-        menu.IsOpen = true;
+        return menu;
     }
 
     private void ExecuteQuickAccessHistory(string commandId, int actionCount)
