@@ -16,21 +16,26 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_TABS\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_WIDTHS\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_AUTOFILTER_FLYOUT_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PRINT_PREVIEW_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
         source.Should().Contain("EnsureTableDesignScreenshotTourContext");
         source.Should().Contain("EnsurePivotTableScreenshotTourContext");
         source.Should().Contain("CaptureAutoFilterFlyoutTourAsync");
+        source.Should().Contain("CapturePrintPreviewTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
         source.Should().Contain("DeleteRibbonScreenshotTourEvidence");
         source.Should().Contain("ValidateRibbonScreenshotTourCaptures");
         source.Should().Contain("DeleteAutoFilterFlyoutTourEvidence");
+        source.Should().Contain("DeletePrintPreviewTourEvidence");
         source.Should().Contain("WriteRibbonScreenshotTourManifestAsync");
         source.Should().Contain("WriteAutoFilterFlyoutTourManifestAsync");
+        source.Should().Contain("WritePrintPreviewTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
+        source.Should().Contain("print_preview_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
@@ -99,5 +104,33 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         editingSource.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan)");
         editingSource.Should().Contain("dialog.ConfigureAsModelessFlyout();");
         editingSource.Should().Contain("PositionAutoFilterFlyout(dialog, headerCell, anchorPoint);");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesRealPrintPreviewEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_PRINT_PREVIEW_TOUR");
+        source.Should().Contain("OpenPrintBackstage();");
+        source.Should().Contain("freex_print_backstage_file_print_entry");
+        source.Should().Contain("freex_print_preview_ctrlp_entry_opened");
+        source.Should().Contain("freex_print_preview_toolbar_first_page");
+        source.Should().Contain("freex_print_preview_toolbar_last_page");
+        source.Should().Contain("freex_print_preview_zoom_settings_summary");
+        source.Should().Contain("freex_print_preview_closed_focus_return");
+        source.Should().Contain("CreatePrintPreviewTourDialog");
+        source.Should().Contain("new PrintPreviewDialog(");
+        source.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
+        source.Should().Contain("FindDescendantByAutomationId<TextBox>(dialog, \"PrintPreviewPageNumberBox\")");
+        source.Should().Contain("NavigationCommands.GoToPage.Execute(null, pageNumberBox)");
+        source.Should().Contain("FindDescendantByAutomationId<ComboBox>(dialog, \"PrintPreviewZoomBox\")");
+        source.Should().Contain("ClosePrintPreviewTourDialogWithEscape");
+        source.Should().Contain("PrintPreviewCloseButton");
+        source.Should().Contain("SsPrintPreviewButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(SsPrintPreviewButton);");
+        source.Should().Contain("PrintPreviewTourManifest");
+        source.Should().Contain("RenderTargetBitmap-print-preview-dialog-and-main-window");
+        source.Should().Contain("The native Windows print dialog is not opened during this tour");
     }
 }

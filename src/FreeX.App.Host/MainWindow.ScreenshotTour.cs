@@ -7,9 +7,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Interop;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -32,6 +35,7 @@ public partial class MainWindow
     private const string HomeBordersDropdownTourCaptureFileName = "freex_dropdown_home_borders_opened";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
+    private const string PrintPreviewTourManifestFileName = "print_preview_tour_manifest.json";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
 
     [DllImport("user32.dll")]
@@ -50,7 +54,8 @@ public partial class MainWindow
         var homeNumberFormatDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR") == "1";
         var homeBordersDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_BORDERS_DROPDOWN_TOUR") == "1";
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour)
+        var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !printPreviewTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -64,7 +69,7 @@ public partial class MainWindow
         var outputDir = Path.GetFullPath(
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots"));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, printPreviewTour);
     }
 
     private async Task RunScreenshotTourAsync(
@@ -74,7 +79,8 @@ public partial class MainWindow
         bool autoFilterFlyoutTour,
         bool homeNumberFormatDropdownTour,
         bool homeBordersDropdownTour,
-        bool worksheetContextMenuTour)
+        bool worksheetContextMenuTour,
+        bool printPreviewTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -93,6 +99,9 @@ public partial class MainWindow
 
         if (worksheetContextMenuTour)
             await CaptureWorksheetContextMenuTourAsync(Path.Combine(outputDir, "worksheet-context-menu-tour"));
+
+        if (printPreviewTour)
+            await CapturePrintPreviewTourAsync(Path.Combine(outputDir, "print-preview-tour"));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -478,6 +487,222 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, $"{WorksheetContextMenuTourCaptureFileName}.png");
         if (!File.Exists(path))
             throw new InvalidOperationException("Worksheet context menu tour did not create the planned FreeX context menu capture.");
+    }
+
+    private async Task CapturePrintPreviewTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeletePrintPreviewTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 768;
+        await Task.Delay(700);
+
+        var sheet = EnsurePrintPreviewTourContext();
+        UpdateViewport();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+
+        OpenPrintBackstage();
+        UpdateLayout();
+        await Task.Delay(350);
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, "freex_print_backstage_file_print_entry", 760);
+
+        var totalPages = Math.Max(1, PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService).Pages.Count);
+        var initialPreview = CreatePrintPreviewTourDialog();
+        try
+        {
+            initialPreview.Show();
+            initialPreview.Activate();
+            initialPreview.UpdateLayout();
+            await Task.Delay(550);
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await CaptureWindowElementForScreenshotTourAsync(initialPreview, outputDir, "freex_print_preview_ctrlp_entry_opened");
+        }
+        finally
+        {
+            initialPreview.Close();
+        }
+
+        var dialog = CreatePrintPreviewTourDialog();
+        var closedViaEscape = false;
+        var focusReturned = false;
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            dialog.UpdateLayout();
+            await Task.Delay(550);
+            await WaitForRibbonScreenshotRenderPassAsync();
+
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_print_preview_toolbar_first_page");
+
+            var pageNumberBox = FindDescendantByAutomationId<TextBox>(dialog, "PrintPreviewPageNumberBox");
+            if (pageNumberBox is not null && totalPages > 1)
+            {
+                pageNumberBox.Text = totalPages.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                pageNumberBox.Focus();
+                Keyboard.Focus(pageNumberBox);
+                NavigationCommands.GoToPage.Execute(null, pageNumberBox);
+                await Task.Delay(350);
+                await WaitForRibbonScreenshotRenderPassAsync();
+                await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_print_preview_toolbar_last_page");
+            }
+
+            var zoomBox = FindDescendantByAutomationId<ComboBox>(dialog, "PrintPreviewZoomBox");
+            if (zoomBox is not null)
+            {
+                zoomBox.SelectedItem = UiText.Get("PrintPreview_ZoomPageWidth");
+                await Task.Delay(350);
+                await WaitForRibbonScreenshotRenderPassAsync();
+                await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_print_preview_zoom_settings_summary");
+            }
+
+            closedViaEscape = ClosePrintPreviewTourDialogWithEscape(dialog);
+            await Task.Delay(350);
+            Activate();
+            SsPrintPreviewButton.Focus();
+            Keyboard.Focus(SsPrintPreviewButton);
+            focusReturned = IsActive && Keyboard.FocusedElement == SsPrintPreviewButton;
+            await CaptureCurrentWindowAsync(outputDir, "freex_print_preview_closed_focus_return", 760);
+        }
+        finally
+        {
+            if (dialog.IsVisible)
+                dialog.Close();
+        }
+
+        ValidatePrintPreviewTourEvidence(outputDir, totalPages);
+        await WritePrintPreviewTourManifestAsync(outputDir, sheet, totalPages, closedViaEscape, focusReturned);
+    }
+
+    private PrintPreviewDialog CreatePrintPreviewTourDialog()
+    {
+        var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var settings = sheet is null
+            ? new PrintSettingsPlan([UiText.Get("MainWindowPrintSettings_ActiveSheet")])
+            : PrintSettingsPlanner.Build(sheet);
+        return new PrintPreviewDialog(
+            _workbook.Name,
+            doc,
+            settings,
+            showMargins: () => PageMarginsBtn_Click(this, new RoutedEventArgs()),
+            showPageSetup: () => PageSetupDialogBtn_Click(this, new RoutedEventArgs()),
+            refreshPreviewWithSettings: BuildActiveSheetPrintPreview,
+            sheetId: _currentSheetId,
+            sheet: sheet,
+            executeCommand: cmd => TryExecuteCommand(cmd, "Print Settings"))
+        {
+            Owner = this,
+            Width = 2600,
+            Height = 820,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+    }
+
+    private Sheet EnsurePrintPreviewTourContext()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId) ?? _workbook.Sheets.FirstOrDefault();
+        if (sheet is null)
+            throw new InvalidOperationException("Print Preview tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PaperSize = WorksheetPaperSize.Letter;
+        sheet.PrintGridlines = true;
+        sheet.PrintHeadings = true;
+        sheet.ScaleToFit = new WorksheetScaleToFit(100, 1, 0);
+
+        for (uint row = 1; row <= 140; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue(row == 1 ? "Print Preview Tour" : $"Line {row - 1:000}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(row == 1 ? "State" : $"Toolbar navigation sample {row - 1:000}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(row));
+        }
+
+        var activeCell = new CellAddress(sheet.Id, 1, 1);
+        SetActiveCell(activeCell);
+        if (SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = new GridRange(activeCell, activeCell);
+            SheetGrid.SelectedRanges = null;
+        }
+
+        return sheet;
+    }
+
+    private static void DeletePrintPreviewTourEvidence(string outputDir)
+    {
+        foreach (var fileName in PrintPreviewTourExpectedFileNames(includeLastPage: true).Append(PrintPreviewTourManifestFileName))
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static void ValidatePrintPreviewTourEvidence(string outputDir, int totalPages)
+    {
+        var missing = PrintPreviewTourExpectedFileNames(totalPages > 1)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+        if (missing.Length > 0)
+            throw new InvalidOperationException($"Print Preview tour did not capture expected evidence: {string.Join(", ", missing)}.");
+    }
+
+    private static IReadOnlyList<string> PrintPreviewTourExpectedFileNames(bool includeLastPage)
+    {
+        var files = new List<string>
+        {
+            "freex_print_backstage_file_print_entry.png",
+            "freex_print_preview_ctrlp_entry_opened.png",
+            "freex_print_preview_toolbar_first_page.png",
+            "freex_print_preview_zoom_settings_summary.png",
+            "freex_print_preview_closed_focus_return.png"
+        };
+        if (includeLastPage)
+            files.Insert(3, "freex_print_preview_toolbar_last_page.png");
+
+        return files;
+    }
+
+    private async Task CaptureWindowElementForScreenshotTourAsync(Window window, string outputDir, string fileName)
+    {
+        await EnsureWindowForegroundForScreenshotTourAsync(window, $"capturing {fileName}.png");
+        await CaptureElementAsync(window, outputDir, fileName);
+        AssertWindowForegroundForScreenshotTour(window, $"saved {fileName}.png");
+    }
+
+    private static bool ClosePrintPreviewTourDialogWithEscape(PrintPreviewDialog dialog)
+    {
+        var closeButton = FindDescendantByAutomationId<Button>(dialog, "PrintPreviewCloseButton");
+        if (closeButton?.IsCancel != true)
+            return false;
+
+        closeButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        return !dialog.IsVisible;
+    }
+
+    private static T? FindDescendantByAutomationId<T>(DependencyObject root, string automationId)
+        where T : FrameworkElement
+    {
+        if (root is T element && AutomationProperties.GetAutomationId(element) == automationId)
+            return element;
+
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            var match = FindDescendantByAutomationId<T>(child, automationId);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
     }
 
     private async Task CaptureRibbonTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
@@ -866,6 +1091,20 @@ public partial class MainWindow
         AssertWindowForegroundForScreenshotTour(operation);
     }
 
+    private async Task EnsureWindowForegroundForScreenshotTourAsync(Window window, string operation)
+    {
+        if (IsScreenshotTourBackgroundRenderAllowed())
+        {
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            return;
+        }
+
+        window.Activate();
+        window.Focus();
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        AssertWindowForegroundForScreenshotTour(window, operation);
+    }
+
     private void AssertWindowForegroundForScreenshotTour(string operation)
     {
         if (IsScreenshotTourBackgroundRenderAllowed())
@@ -879,6 +1118,23 @@ public partial class MainWindow
         {
             throw new InvalidOperationException(
                 $"Screenshot tour blocked: FreeX main window must own foreground focus before {operation}; " +
+                $"foreground handle 0x{foregroundWindowHandle.ToInt64():X}, expected 0x{expectedWindowHandle.ToInt64():X}.");
+        }
+    }
+
+    private static void AssertWindowForegroundForScreenshotTour(Window window, string operation)
+    {
+        if (IsScreenshotTourBackgroundRenderAllowed())
+            return;
+
+        var expectedWindowHandle = new WindowInteropHelper(window).Handle;
+        var foregroundWindowHandle = GetForegroundWindow();
+        if (expectedWindowHandle == IntPtr.Zero ||
+            foregroundWindowHandle != expectedWindowHandle ||
+            !window.IsActive)
+        {
+            throw new InvalidOperationException(
+                $"Screenshot tour blocked: FreeX window '{window.Title}' must own foreground focus before {operation}; " +
                 $"foreground handle 0x{foregroundWindowHandle.ToInt64():X}, expected 0x{expectedWindowHandle.ToInt64():X}.");
         }
     }
@@ -997,6 +1253,116 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, AutoFilterFlyoutTourManifestFileName);
         await using var stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.AutoFilterFlyoutTourManifest);
+    }
+
+    private static async Task WritePrintPreviewTourManifestAsync(
+        string outputDir,
+        Sheet sheet,
+        int totalPages,
+        bool closedViaEscapeEquivalent,
+        bool focusReturned)
+    {
+        var includeLastPage = totalPages > 1;
+        var captures = new List<PrintPreviewTourManifestCapture>
+        {
+            new(
+                CaptureKey: "print-preview:file-print-entry:opened",
+                PairKey: "interactive:print-preview:file-print-entry:opened",
+                ScenarioId: "print-preview:file-print-entry",
+                State: "opened",
+                EntryPath: "File > Print",
+                FileName: "freex_print_backstage_file_print_entry",
+                OutputFileName: "freex_print_backstage_file_print_entry.png",
+                EvidenceSummary: "Backstage Print view shows the Print Preview command and active sheet settings summary."),
+            new(
+                CaptureKey: "print-preview:ctrl-p-entry:opened",
+                PairKey: "interactive:print-preview:ctrl-p-entry:opened",
+                ScenarioId: "print-preview:ctrl-p-entry",
+                State: "opened",
+                EntryPath: "Ctrl+P routed to File > Print, then Print Preview",
+                FileName: "freex_print_preview_ctrlp_entry_opened",
+                OutputFileName: "freex_print_preview_ctrlp_entry_opened.png",
+                EvidenceSummary: "Print Preview dialog opens with the production toolbar, preview surface, settings panel, and Print as the initial keyboard target."),
+            new(
+                CaptureKey: "print-preview:toolbar:first-page",
+                PairKey: "interactive:print-preview:toolbar:first-page",
+                ScenarioId: "print-preview:toolbar-navigation",
+                State: "first-page",
+                EntryPath: "File > Print > Print Preview",
+                FileName: "freex_print_preview_toolbar_first_page",
+                OutputFileName: "freex_print_preview_toolbar_first_page.png",
+                EvidenceSummary: "Toolbar shows first-page navigation state, page count label, print controls, zoom, margins, page setup, close, and settings summary.")
+        };
+
+        if (includeLastPage)
+        {
+            captures.Add(new PrintPreviewTourManifestCapture(
+                CaptureKey: "print-preview:toolbar:last-page",
+                PairKey: "interactive:print-preview:toolbar:last-page",
+                ScenarioId: "print-preview:toolbar-navigation",
+                State: "last-page",
+                EntryPath: "File > Print > Print Preview, page number box to final page",
+                FileName: "freex_print_preview_toolbar_last_page",
+                OutputFileName: "freex_print_preview_toolbar_last_page.png",
+                EvidenceSummary: "Toolbar shows the final-page page-count label after keyboard-equivalent page-number navigation."));
+        }
+
+        captures.AddRange(
+        [
+            new PrintPreviewTourManifestCapture(
+                CaptureKey: "print-preview:zoom-settings-summary:page-width",
+                PairKey: "interactive:print-preview:zoom-settings-summary:page-width",
+                ScenarioId: "print-preview:zoom-settings-summary",
+                State: "page-width-zoom",
+                EntryPath: "Print Preview > Zoom > Page Width",
+                FileName: "freex_print_preview_zoom_settings_summary",
+                OutputFileName: "freex_print_preview_zoom_settings_summary.png",
+                EvidenceSummary: "Zoom combo is changed to Page Width while the print settings summary remains visible."),
+            new PrintPreviewTourManifestCapture(
+                CaptureKey: "print-preview:closed:focus-return",
+                PairKey: "interactive:print-preview:closed:focus-return",
+                ScenarioId: "print-preview:close-focus-return",
+                State: "closed-focus-return",
+                EntryPath: "Print Preview close via IsCancel Close button route",
+                FileName: "freex_print_preview_closed_focus_return",
+                OutputFileName: "freex_print_preview_closed_focus_return.png",
+                EvidenceSummary: "Preview is closed and the workbook window is visible again with focus explicitly returned to the backstage Print Preview command.")
+        ]);
+
+        var manifest = new PrintPreviewTourManifest(
+            Tool: "FREEX_PRINT_PREVIEW_TOUR",
+            EvidenceFamily: "print-preview",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "print-preview:foreground-focus-return",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_print_preview_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            EntryPaths: ["Ctrl+P", "File > Print > Print Preview"],
+            SheetName: sheet.Name,
+            TotalPages: totalPages,
+            SettingsSummary: PrintSettingsPlanner.Build(sheet).Summary,
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-print-preview-dialog-and-main-window",
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no global mouse, keyboard, or screen capture input was used."
+                    : "Abort before file write unless the expected FreeX main window or Print Preview dialog owns foreground focus for each capture."),
+            ClosedViaEscapeEquivalent: closedViaEscapeEquivalent,
+            FocusReturnedToBackstagePrintPreviewCommand: focusReturned,
+            Captures: captures,
+            Limitations:
+            [
+                "This in-app tour renders real FreeX WPF windows using RenderTargetBitmap rather than OS CopyFromScreen.",
+                "The Ctrl+P route is represented by FreeX's existing source-proven Ctrl+P-to-File-Print path plus a live Print Preview dialog opened from that backstage entry point; no global Ctrl+P keystroke is synthesized.",
+                "The close capture uses the PrintPreviewCloseButton IsCancel route as the Escape-equivalent path, then explicitly returns focus to the backstage Print Preview command before the final screenshot.",
+                "The native Windows print dialog is not opened during this tour to avoid sending output to a real printer or blocking on system print UI."
+            ]);
+
+        var path = Path.Combine(outputDir, PrintPreviewTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.PrintPreviewTourManifest);
     }
 
     private static async Task WriteHomeNumberFormatDropdownTourManifestAsync(string outputDir, FrameworkElement popupChild)
@@ -1230,6 +1596,37 @@ public partial class MainWindow
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
 
+    private sealed record PrintPreviewTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> EntryPaths,
+        string SheetName,
+        int TotalPages,
+        string SettingsSummary,
+        string CaptureStatus,
+        string CaptureMethod,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        bool ClosedViaEscapeEquivalent,
+        bool FocusReturnedToBackstagePrintPreviewCommand,
+        IReadOnlyList<PrintPreviewTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record PrintPreviewTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string EntryPath,
+        string FileName,
+        string OutputFileName,
+        string EvidenceSummary);
+
     private sealed record HomeNumberFormatDropdownTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -1337,6 +1734,7 @@ public partial class MainWindow
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
+    [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(HomeNumberFormatDropdownTourManifest))]
     [JsonSerializable(typeof(HomeBordersDropdownTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
