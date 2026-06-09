@@ -3525,9 +3525,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 new ClearCommentsCommand(sheetId, sheetRange)
                 new ClearHyperlinksCommand(sheetId, sheetRange)
                 public WorkbookCellEditResult InsertAutoSumFormula(string functionName)
-                AutoSumFormulaPlanner.BuildFormula(ActiveSheet, functionName, target)
-                CreateEditCellsCommand([(target, Cell.FromFormula(formula))])
-                SelectCell(GetNextAutoSumCell(target));
+                AutoSumFormulaPlanner.TryCreatePlan(ActiveSheet, functionName, SelectedRange, out var plan)
+                CreateEditCellsCommand([(plan.Target, Cell.FromFormula(plan.Formula))])
+                SelectCell(GetNextAutoSumCell(plan.Target));
                 public bool CanFillSelectedRange(FillCellsDirection direction)
                 public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)
                 new FillCellsCommand(sheetId, sheetRange, direction)
