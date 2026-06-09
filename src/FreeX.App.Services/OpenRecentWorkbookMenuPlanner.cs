@@ -3,7 +3,8 @@ namespace FreeX.App.Services;
 public sealed record OpenRecentWorkbookMenuItemPlan(
     string Path,
     string Header,
-    DateTimeOffset LastOpened);
+    DateTimeOffset LastOpened,
+    WorkbookFileAccessIdentity? FileAccessIdentity = null);
 
 public sealed record OpenRecentWorkbookMenuPlan(IReadOnlyList<OpenRecentWorkbookMenuItemPlan> Items)
 {
@@ -53,7 +54,8 @@ public static class OpenRecentWorkbookMenuPlanner
             .Select(item => new OpenRecentWorkbookMenuItemPlan(
                 item.Path!,
                 FormatHeader(item.Path!),
-                item.Entry.LastOpened))
+                item.Entry.LastOpened,
+                ResolveIdentityForPath(item.Entry.FileAccessIdentity, item.Path!)))
             .ToList();
 
         return new OpenRecentWorkbookMenuPlan(items);
@@ -70,4 +72,11 @@ public static class OpenRecentWorkbookMenuPlanner
             ? fileName
             : $"{fileName} - {directory}";
     }
+
+    private static WorkbookFileAccessIdentity? ResolveIdentityForPath(
+        WorkbookFileAccessIdentity? identity,
+        string path) =>
+        identity is not null && identity.TryWithLocalPath(path, out var resolvedIdentity)
+            ? resolvedIdentity
+            : null;
 }

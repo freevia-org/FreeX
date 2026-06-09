@@ -848,9 +848,14 @@ if ($null -ne $workbook) {
         "Create a new workbook",
         "Enter values and formulas",
         "Save and Save As",
+        "Open picker creates bookmark identity",
+        "Bookmark scope wraps open, save, and recent-file I/O",
+        "Bookmark payload stays out of diagnostics and release evidence",
         "Close dirty workbook",
         "Reopen saved workbook",
-        "Recent files"
+        "Recent files",
+        "On-device file grant persistence",
+        "File-access grant diagnostics review"
     )
     Test-StatusTable -Table $workbook -LabelColumn "Step" -StatusColumn "Status" -EvidenceColumns @("Actual result", "Evidence")
 }

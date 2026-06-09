@@ -46,7 +46,7 @@ Quick retrieval checklist:
 
 1. Pick `osx-arm64` for Apple Silicon Macs or `osx-x64` for Intel Macs.
 2. Download the matching Actions artifact wrapper from the completed workflow run.
-3. Preserve each `freex-<run-id>-<run-attempt>-<runtime>-macos-app`, `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics`, and `freex-<run-id>-<run-attempt>-macos-preview-readiness` wrapper directory under the artifact root. For distribution candidates, also preserve `freex-<run-id>-<run-attempt>-macos-release-assets`, then unzip the wrapper contents there so stale or mixed-run downloads can be detected.
+3. Preserve each `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory under the artifact root. Also preserve the matching `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics` and `freex-<run-id>-<run-attempt>-macos-preview-readiness` wrapper directories there. For distribution candidates, also preserve `freex-<run-id>-<run-attempt>-macos-release-assets`, then unzip the wrapper contents there so stale or mixed-run downloads can be detected.
 4. Keep `freex-<runtime>-macos-evidence.txt` and the smoke/notarization logs with any tester report.
 
 With the GitHub CLI, the same artifacts can be retrieved with:
@@ -94,7 +94,7 @@ After the human macOS pass is recorded for both runtimes, place the completed ch
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewPromotion.ps1 -ArtifactRoot artifacts/macos-preview -ChecklistRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt>
 ```
 
-`-ExpectedRunId` and `-ExpectedRunAttempt` are optional, but use them when validating artifacts from a specific GitHub Actions run. `tools/Test-MacOsPublicPreviewReadiness.ps1` validates both `osx-arm64` and `osx-x64` bundles without macOS by checking the downloaded evidence files, smoke logs, tester instructions, app ZIP, and `.zip.sha256` checksum. It requires artifact channel/readiness keys, `zip_sha256`, signing and notarization status, stapler status for distribution candidates, startup smoke, LaunchServices launch smoke, Open-With smoke, default-open smoke, `format_cells_style_roundtrip=true` with a count of at least two, command key smoke, checksum files, diagnostics artifact file sets, the aggregate readiness manifest/summary from the same `freex-<run-id>-<run-attempt>-macos-preview-readiness` wrapper when `-RequireAggregateReadinessArtifact` is passed, release publication manifest/instructions from the same `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper when `-RequireReleasePublicationArtifact` is passed, and tester instructions.
+`-ExpectedRunId` and `-ExpectedRunAttempt` are optional, but use them when validating artifacts from a specific GitHub Actions run. `tools/Test-MacOsPublicPreviewReadiness.ps1` validates both `osx-arm64` and `osx-x64` bundles without macOS by checking the downloaded evidence files, smoke logs, tester instructions, app ZIP, and `.zip.sha256` checksum. It requires artifact channel/readiness keys, `zip_sha256`, signing and notarization status, stapler status for distribution candidates, startup smoke, LaunchServices launch smoke, Open-With smoke, default-open smoke, `format_cells_style_roundtrip=true` with a count of at least two, command key smoke, hosted dialog smoke, checksum files, diagnostics artifact file sets, the aggregate readiness manifest/summary from the same `freex-<run-id>-<run-attempt>-macos-preview-readiness` wrapper when `-RequireAggregateReadinessArtifact` is passed, release publication manifest/instructions from the same `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper when `-RequireReleasePublicationArtifact` is passed, and tester instructions.
 
 ## Required Apple Inputs
 
@@ -147,7 +147,7 @@ Paste the base64 output into `MACOS_CODESIGN_CERTIFICATE_P12` exactly as generat
    - `stapler_validated=true`
    - `zip_sha256=<hash>`
 6. Verify `freex-<runtime>-macos-notarization.log` reports an accepted notary submission.
-7. Verify `freex-<runtime>-macos-launch-smoke.txt` contains `macos_launch_smoke=passed` for the native runner architecture, or records `smoke_status=skipped_host_arch_mismatch` only for the cross-architecture runtime.
+7. Verify `freex-<runtime>-macos-evidence.txt` contains `smoke_status=passed` and the launch, Open-With, and default-open smoke reports each contain `macos_launch_smoke=passed`. Older historical runs may record `skipped_host_arch_mismatch` when the hosted runner architecture was incompatible, but current CI blocks app artifact upload/readiness for that case.
 8. Run the checksum from the artifact directory:
 
 ```bash

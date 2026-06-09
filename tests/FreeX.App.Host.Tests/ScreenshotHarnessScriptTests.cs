@@ -260,6 +260,61 @@ public sealed class ScreenshotHarnessScriptTests
     }
 
     [Fact]
+    public void FreeXScreenshotScript_ProvidesOptInOpenWorkbookDialogTour()
+    {
+        var script = ReadScript("screenshot_ribbon.ps1");
+
+        script.Should().Contain("[string]$OpenWorkbookDialogTour = $env:FREEX_OPEN_WORKBOOK_DIALOG_TOUR");
+        script.Should().Contain("if ($OpenWorkbookDialogTour -eq \"1\")");
+        script.Should().Contain("function Invoke-FreeXOpenWorkbookDialogTour");
+        script.Should().Contain("function Find-FreeXOpenWorkbookDialogWindow");
+        script.Should().Contain("function Capture-ScreenRectangle");
+        script.Should().Contain("GetDpiForWindow");
+        script.Should().Contain("Join-Path $outDir \"open-workbook-dialog-tour\"");
+        script.Should().Contain("freex_open_workbook_dialog_tour_manifest.json");
+        script.Should().Contain("freex_open_workbook_dialog_opened.png");
+        script.Should().Contain("Tool = \"FREEX_OPEN_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"native-dialog\"");
+        script.Should().Contain("ScenarioId = \"native-dialog:open-workbook\"");
+        script.Should().Contain("DialogClassName = \"#32770\"");
+        script.Should().Contain("EntryPath = \"Ctrl+O\"");
+        script.Should().Contain("CaptureScale = $dialogScale");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"^o\")");
+        script.Should().Contain("Find-FreeXOpenWorkbookDialogWindow $expectedPid $ownerWindowHandle");
+        script.Should().Contain("PairKey = \"interactive:open-workbook-dialog:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_EXCEL_OPEN_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"interactive_open_workbook_dialog_opened.png\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $expectedPid $expectedTitle \"FreeX native Open dialog keyboard input\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $expectedPid \"FreeX native Open dialog screen capture\"");
+    }
+
+    [Fact]
+    public void FreeXScreenshotScript_ProvidesOptInSaveAsWorkbookDialogTour()
+    {
+        var script = ReadScript("screenshot_ribbon.ps1");
+
+        script.Should().Contain("[string]$SaveAsWorkbookDialogTour = $env:FREEX_SAVE_AS_WORKBOOK_DIALOG_TOUR");
+        script.Should().Contain("if ($SaveAsWorkbookDialogTour -eq \"1\")");
+        script.Should().Contain("function Invoke-FreeXSaveAsWorkbookDialogTour");
+        script.Should().Contain("function Find-FreeXSaveAsWorkbookDialogWindow");
+        script.Should().Contain("Join-Path $outDir \"save-as-workbook-dialog-tour\"");
+        script.Should().Contain("freex_save_as_workbook_dialog_tour_manifest.json");
+        script.Should().Contain("freex_save_as_workbook_dialog_opened.png");
+        script.Should().Contain("Tool = \"FREEX_SAVE_AS_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"native-dialog\"");
+        script.Should().Contain("ScenarioId = \"native-dialog:save-as-workbook\"");
+        script.Should().Contain("DialogClassName = \"#32770\"");
+        script.Should().Contain("EntryPath = \"F12\"");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"{F12}\")");
+        script.Should().Contain("Find-FreeXSaveAsWorkbookDialogWindow $expectedPid $ownerWindowHandle");
+        script.Should().Contain("PairKey = \"interactive:save-as-workbook-dialog:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_EXCEL_SAVE_AS_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"interactive_save_as_workbook_dialog_opened.png\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $expectedPid $expectedTitle \"FreeX native Save As dialog keyboard input\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $expectedPid \"FreeX native Save As dialog screen capture\"");
+    }
+
+    [Fact]
     public void ExcelScreenshotScript_FailsFastWhenExcelIsMissing()
     {
         var script = ReadScript("screenshot_excel.ps1");
@@ -267,6 +322,198 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("Test-Path -LiteralPath $exe");
         script.Should().Contain("Excel executable was not found at $exe. Install Microsoft Excel or update tools\\screenshot_excel.ps1 before running this capture.");
         script.Should().Contain("Start-Process -FilePath $exe -ArgumentList \"/e\"");
+    }
+
+    [Fact]
+    public void ExcelScreenshotScript_ProvidesOptInAutoFilterFlyoutTour()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("[string]$AutoFilterFlyoutTour = $env:FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR");
+        script.Should().Contain("if ($AutoFilterFlyoutTour -eq \"1\")");
+        script.Should().Contain("function Invoke-ExcelAutoFilterFlyoutTour");
+        script.Should().Contain("function New-ExcelAutoFilterSampleWorkbook");
+        script.Should().Contain("Join-Path $outDir \"autofilter-flyout-tour\"");
+        script.Should().Contain("excel_autofilter_flyout_tour_manifest.json");
+        script.Should().Contain("interactive_table_autofilter_dropdown_opened.png");
+        script.Should().Contain("Tool = \"FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"popup\"");
+        script.Should().Contain("EvidenceSubject = \"excel\"");
+        script.Should().Contain("EvidenceApp = \"Microsoft Excel\"");
+        script.Should().Contain("OutputNaming = \"interactive_table_autofilter_dropdown_opened.png\"");
+        script.Should().Contain("CatalogEvidenceTarget = \"docs/testing/ui-test-catalog.md\"");
+        script.Should().Contain("HeaderCell = \"A1\"");
+        script.Should().Contain("HeaderText = \"score\"");
+        script.Should().Contain("AutoFilterRange = \"A1:D6\"");
+        script.Should().Contain("FilterColumnOffset = 0");
+        script.Should().Contain("CaptureStatus = \"complete\"");
+        script.Should().Contain("State = \"opened\"");
+        script.Should().Contain("function Click-ExcelAutoFilterHeaderDropdown");
+        script.Should().Contain("[Win32e]::SetProcessDPIAware() | Out-Null");
+        script.Should().Contain("[Win32e]::SetCursorPos($clickX, $clickY) | Out-Null");
+        script.Should().Contain("$pointToScreenScale = 2.0");
+        script.Should().Contain("$clickX = [int]($left + ($header.Width * $pointToScreenScale) - 12)");
+        script.Should().Contain("function Set-ExcelForegroundWindow");
+        script.Should().Contain("New-Object -ComObject WScript.Shell");
+        script.Should().Contain("[Win32e]::SetWindowPos($excelHwnd, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null");
+        script.Should().Contain("Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle \"Excel AutoFilter flyout setup\"");
+        script.Should().Contain("PairKey = \"interactive:table-autofilter-dropdown:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_AUTOFILTER_FLYOUT_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"freex_table_autofilter_dropdown.png\"");
+        script.Should().Contain("SampleRange = \"A1:D6\"");
+        script.Should().Contain("SampleValues = @(\"1\", \"2\", \"3\", \"4\", \"(Blanks)\")");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel AutoFilter flyout setup\"");
+        script.Should().Contain("Click-ExcelAutoFilterHeaderDropdown $excelApp $worksheet \"A1\" $excelPid $excelTitle");
+        script.Should().Contain("Excel AutoFilter flyout tour did not detect a foreground Excel popup window");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel AutoFilter flyout screen capture\"");
+        script.Should().Contain("Find-ExcelAutoFilterPopupWindow $excelPid $excelHwnd");
+    }
+
+    [Fact]
+    public void ExcelScreenshotScript_ProvidesOptInHomeNumberFormatDropdownTour()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("[string]$NumberFormatDropdownTour = $env:FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR");
+        script.Should().Contain("if ($NumberFormatDropdownTour -eq \"1\")");
+        script.Should().Contain("function Invoke-ExcelNumberFormatDropdownTour");
+        script.Should().Contain("function New-ExcelNumberFormatSampleWorkbook");
+        script.Should().Contain("function Expand-ExcelNumberFormatDropdown");
+        script.Should().Contain("Join-Path $outDir \"home-number-format-dropdown-tour\"");
+        script.Should().Contain("excel_home_number_format_dropdown_tour_manifest.json");
+        script.Should().Contain("interactive_home_number_format_opened.png");
+        script.Should().Contain("Tool = \"FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"dropdown\"");
+        script.Should().Contain("EvidenceSubject = \"excel\"");
+        script.Should().Contain("EvidenceApp = \"Microsoft Excel\"");
+        script.Should().Contain("OutputNaming = \"interactive_home_number_format_opened.png\"");
+        script.Should().Contain("CatalogEvidenceTarget = \"docs/testing/ui-test-catalog.md\"");
+        script.Should().Contain("SelectedCell = \"A1\"");
+        script.Should().Contain("SelectedFormat = \"General\"");
+        script.Should().Contain("CaptureStatus = \"complete\"");
+        script.Should().Contain("State = \"opened\"");
+        script.Should().Contain("NumberFormatGallery");
+        script.Should().Contain("[System.Windows.Automation.ExpandCollapsePattern]::Pattern");
+        script.Should().Contain("$pattern.Expand()");
+        script.Should().Contain("Find-ExcelPopupWindow $excelPid $excelHwnd 120 120");
+        script.Should().Contain("Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle \"Excel Number Format dropdown setup\"");
+        script.Should().Contain("PairKey = \"interactive:home-number-format:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"freex_dropdown_home_number_format_opened.png\"");
+        script.Should().Contain("SampleValue = \"1234.56\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel Number Format dropdown setup\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel Number Format dropdown screen capture\"");
+    }
+
+    [Fact]
+    public void ExcelScreenshotScript_ProvidesOptInHomeBordersDropdownTour()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("[string]$HomeBordersDropdownTour = $env:FREEX_EXCEL_HOME_BORDERS_DROPDOWN_TOUR");
+        script.Should().Contain("if ($HomeBordersDropdownTour -eq \"1\")");
+        script.Should().Contain("function Invoke-ExcelHomeBordersDropdownTour");
+        script.Should().Contain("function Open-ExcelHomeBordersDropdown");
+        script.Should().Contain("Join-Path $outDir \"home-borders-dropdown-tour\"");
+        script.Should().Contain("excel_home_borders_dropdown_tour_manifest.json");
+        script.Should().Contain("interactive_home_borders_opened.png");
+        script.Should().Contain("Tool = \"FREEX_EXCEL_HOME_BORDERS_DROPDOWN_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"dropdown\"");
+        script.Should().Contain("ScenarioId = \"dropdown:home-borders\"");
+        script.Should().Contain("EntryPath = \"Alt,H,B\"");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"%h\")");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"b\")");
+        script.Should().Contain("Find-ExcelPopupWindow $excelPid $excelHwnd 120 160");
+        script.Should().Contain("detected an oversized candidate window");
+        script.Should().Contain("PairKey = \"interactive:home-borders:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_HOME_BORDERS_DROPDOWN_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"freex_dropdown_home_borders_opened.png\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel Home Borders dropdown setup\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel Home Borders dropdown screen capture\"");
+    }
+
+    [Fact]
+    public void ExcelScreenshotScript_ProvidesOptInWorksheetContextMenuTour()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("[string]$WorksheetContextMenuTour = $env:FREEX_EXCEL_WORKSHEET_CONTEXT_MENU_TOUR");
+        script.Should().Contain("if ($WorksheetContextMenuTour -eq \"1\")");
+        script.Should().Contain("function Invoke-ExcelWorksheetContextMenuTour");
+        script.Should().Contain("function New-ExcelWorksheetContextMenuSampleWorkbook");
+        script.Should().Contain("function Open-ExcelWorksheetContextMenu");
+        script.Should().Contain("Join-Path $outDir \"worksheet-context-menu-tour\"");
+        script.Should().Contain("excel_worksheet_context_menu_tour_manifest.json");
+        script.Should().Contain("interactive_worksheet_cell_context_menu_opened.png");
+        script.Should().Contain("Tool = \"FREEX_EXCEL_WORKSHEET_CONTEXT_MENU_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"context-menu\"");
+        script.Should().Contain("ScenarioId = \"context-menu:worksheet-cell\"");
+        script.Should().Contain("SelectedCell = \"B2\"");
+        script.Should().Contain("EntryPath = \"Shift+F10\"");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"+{F10}\")");
+        script.Should().Contain("Find-ExcelPopupWindow $excelPid $excelHwnd 120 120");
+        script.Should().Contain("PairKey = \"interactive:worksheet-cell-context-menu:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_WORKSHEET_CONTEXT_MENU_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"freex_context_menu_worksheet_cell_opened.png\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel worksheet context menu setup\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel worksheet context menu screen capture\"");
+    }
+
+    [Fact]
+    public void ExcelScreenshotScript_ProvidesOptInOpenWorkbookDialogTour()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("[string]$OpenWorkbookDialogTour = $env:FREEX_EXCEL_OPEN_WORKBOOK_DIALOG_TOUR");
+        script.Should().Contain("if ($OpenWorkbookDialogTour -eq \"1\")");
+        script.Should().Contain("function Invoke-ExcelOpenWorkbookDialogTour");
+        script.Should().Contain("function Find-ExcelOpenWorkbookDialogWindow");
+        script.Should().Contain("function Open-ExcelNativeOpenDialog");
+        script.Should().Contain("Join-Path $outDir \"open-workbook-dialog-tour\"");
+        script.Should().Contain("excel_open_workbook_dialog_tour_manifest.json");
+        script.Should().Contain("interactive_open_workbook_dialog_opened.png");
+        script.Should().Contain("Tool = \"FREEX_EXCEL_OPEN_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"native-dialog\"");
+        script.Should().Contain("ScenarioId = \"native-dialog:open-workbook\"");
+        script.Should().Contain("DialogTitle = \"Open\"");
+        script.Should().Contain("DialogClassName = \"#32770\"");
+        script.Should().Contain("EntryPath = \"Ctrl+F12\"");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"^{F12}\")");
+        script.Should().Contain("Find-ExcelOpenWorkbookDialogWindow $excelPid $excelHwnd");
+        script.Should().Contain("PairKey = \"interactive:open-workbook-dialog:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_OPEN_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"freex_open_workbook_dialog_opened.png\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel native Open dialog setup\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel native Open dialog screen capture\"");
+    }
+
+    [Fact]
+    public void ExcelScreenshotScript_ProvidesOptInSaveAsWorkbookDialogTour()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("[string]$SaveAsWorkbookDialogTour = $env:FREEX_EXCEL_SAVE_AS_WORKBOOK_DIALOG_TOUR");
+        script.Should().Contain("if ($SaveAsWorkbookDialogTour -eq \"1\")");
+        script.Should().Contain("function Invoke-ExcelSaveAsWorkbookDialogTour");
+        script.Should().Contain("function Find-ExcelSaveAsWorkbookDialogWindow");
+        script.Should().Contain("function Open-ExcelNativeSaveAsDialog");
+        script.Should().Contain("Join-Path $outDir \"save-as-workbook-dialog-tour\"");
+        script.Should().Contain("excel_save_as_workbook_dialog_tour_manifest.json");
+        script.Should().Contain("interactive_save_as_workbook_dialog_opened.png");
+        script.Should().Contain("Tool = \"FREEX_EXCEL_SAVE_AS_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"native-dialog\"");
+        script.Should().Contain("ScenarioId = \"native-dialog:save-as-workbook\"");
+        script.Should().Contain("($_.ClassName -eq \"NUIDialog\" -or ($_.ClassName -eq \"#32770\" -and $_.Title -eq \"Save As\"))");
+        script.Should().Contain("DialogTitle = $dialog.Title");
+        script.Should().Contain("DialogClassName = $dialog.ClassName");
+        script.Should().Contain("EntryPath = \"F12\"");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"{F12}\")");
+        script.Should().Contain("Find-ExcelSaveAsWorkbookDialogWindow $excelPid $excelHwnd");
+        script.Should().Contain("PairKey = \"interactive:save-as-workbook-dialog:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_SAVE_AS_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"freex_save_as_workbook_dialog_opened.png\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel native Save As dialog setup\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel native Save As dialog screen capture\"");
     }
 
     private static string ReadScript(string scriptName) =>

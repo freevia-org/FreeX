@@ -63,7 +63,8 @@ public sealed class StartupWorkbookLoader
                 SourcePath: filePath,
                 OpenedAsTemplate: result.OpenedAsTemplate,
                 FeatureReport: result.FeatureReport,
-                LoadWarnings: result.LoadWarnings);
+                LoadWarnings: result.LoadWarnings,
+                SourceFileAccessIdentity: WorkbookFileAccessIdentity.FromLocalPath(filePath));
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
         {

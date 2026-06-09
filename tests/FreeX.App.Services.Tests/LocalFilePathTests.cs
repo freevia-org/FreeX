@@ -31,6 +31,26 @@ public sealed class LocalFilePathTests
         normalized.Should().Be("/Users/quinn/Work/Budget 2026.xlsx");
     }
 
+    [Theory]
+    [InlineData("C:\\Temp\\Budget.xlsx")]
+    [InlineData("C:/Temp/Budget.xlsx")]
+    public void TryNormalize_RejectsWindowsDriveRootedPathOutsideWindows(string candidate)
+    {
+        LocalFilePath.TryNormalize(candidate, isWindows: false, out var normalized).Should().BeFalse();
+
+        normalized.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TryNormalize_RejectsWindowsDriveFileUriOutsideWindows()
+    {
+        LocalFilePath.TryNormalize("file:///C:/Temp/Budget%202026.xlsx", isWindows: false, out var normalized)
+            .Should()
+            .BeFalse();
+
+        normalized.Should().BeEmpty();
+    }
+
     [Fact]
     public void TryNormalize_RejectsNonFileUri()
     {

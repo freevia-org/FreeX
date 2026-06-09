@@ -177,6 +177,7 @@ public sealed class WorkbookSession
 
         Workbook = source.Workbook;
         CurrentFilePath = source.OpenedAsTemplate ? null : source.SourcePath;
+        CurrentFileAccessIdentity = ResolveCurrentFileAccessIdentity(source);
         CurrentXlsxFeatureReport = source.FeatureReport;
         OpenFormats = BuildFormats(adapters, static format => format.CanOpen);
         SaveFormats = BuildFormats(adapters, static format => format.CanSave);
@@ -239,6 +240,8 @@ public sealed class WorkbookSession
         Workbook.Sheets.Any(sheet => sheet.Id != ActiveSheet.Id && !sheet.IsHidden && !sheet.IsVeryHidden);
 
     public string? CurrentFilePath { get; private set; }
+
+    public WorkbookFileAccessIdentity? CurrentFileAccessIdentity { get; private set; }
 
     public XlsxFeatureReport? CurrentXlsxFeatureReport { get; private set; }
 
@@ -417,23 +420,26 @@ public sealed class WorkbookSession
     }
 
     public bool CanOpenSelectedHyperlink =>
-        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, out _);
+        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _);
 
     public bool TryGetSelectedHyperlinkPlan(out HyperlinkNavigationPlan? plan) =>
-        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, out plan);
+        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out plan);
 
     public WorkbookNavigationResult OpenSelectedHyperlink() =>
         OpenHyperlink(SelectedRange.Start);
 
     public WorkbookNavigationResult OpenHyperlink(CellAddress address)
     {
-        if (!HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, address, out var plan) || plan is null)
+        if (!HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, address, CurrentFilePath, out var plan) || plan is null)
             return WorkbookNavigationResult.Failed("Hyperlink target was not found.");
 
-        if (plan.Kind != HyperlinkNavigationKind.WorksheetCell)
-            return WorkbookNavigationResult.Failed("External hyperlinks are not supported on this platform.");
-
-        return GoToReference(plan.Target);
+        return plan.Kind switch
+        {
+            HyperlinkNavigationKind.WorksheetCell => GoToReference(plan.Target),
+            HyperlinkNavigationKind.LocalFile =>
+                WorkbookNavigationResult.Failed("Local file hyperlinks require a platform file-opening route."),
+            _ => WorkbookNavigationResult.Failed("External hyperlinks are not supported on this platform.")
+        };
     }
 
     public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
@@ -2278,7 +2284,14 @@ public sealed class WorkbookSession
         return TryResolveSaveTarget(CurrentFilePath, out target, out _);
     }
 
-    public bool TryResolveOpenTarget(string path, out WorkbookOpenTarget? target, out string message)
+    public bool TryResolveOpenTarget(string path, out WorkbookOpenTarget? target, out string message) =>
+        TryResolveOpenTarget(path, fileAccessIdentity: null, out target, out message);
+
+    public bool TryResolveOpenTarget(
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity,
+        out WorkbookOpenTarget? target,
+        out string message)
     {
         target = null;
         if (!LocalFilePath.TryNormalize(path, out var openPath))
@@ -2300,7 +2313,12 @@ public sealed class WorkbookSession
             return false;
         }
 
-        target = new WorkbookOpenTarget(openPath, adapter, extension, format);
+        target = new WorkbookOpenTarget(
+            openPath,
+            adapter,
+            extension,
+            format,
+            ResolveOpenFileAccessIdentity(openPath, fileAccessIdentity));
         message = "";
         return true;
     }
@@ -2323,12 +2341,14 @@ public sealed class WorkbookSession
         return true;
     }
 
-    public void MarkSaved(string path)
+    public void MarkSaved(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
+        var resolvedIdentity = ResolveSavedFileAccessIdentity(path, fileAccessIdentity);
         IsDirty = false;
         CurrentFilePath = path;
+        CurrentFileAccessIdentity = resolvedIdentity;
         CurrentXlsxFeatureReport = null;
         Workbook.Name = Path.GetFileName(path);
     }
@@ -4073,6 +4093,52 @@ public sealed class WorkbookSession
             status += $" {warnings.Count} load warning{(warnings.Count == 1 ? "" : "s")}.";
 
         return status;
+    }
+
+    private static WorkbookFileAccessIdentity? ResolveCurrentFileAccessIdentity(StartupWorkbookLoadResult source)
+    {
+        if (source.OpenedAsTemplate)
+            return null;
+
+        if (source.SourceFileAccessIdentity is not null)
+            return source.SourceFileAccessIdentity;
+
+        return string.IsNullOrWhiteSpace(source.SourcePath)
+            ? null
+            : WorkbookFileAccessIdentity.FromLocalPath(source.SourcePath);
+    }
+
+    private static WorkbookFileAccessIdentity ResolveOpenFileAccessIdentity(
+        string openPath,
+        WorkbookFileAccessIdentity? fileAccessIdentity)
+    {
+        if (fileAccessIdentity is not null &&
+            fileAccessIdentity.TryWithLocalPath(openPath, out var resolvedIdentity) &&
+            resolvedIdentity is not null)
+        {
+            return resolvedIdentity;
+        }
+
+        return WorkbookFileAccessIdentity.FromLocalPath(openPath);
+    }
+
+    private WorkbookFileAccessIdentity ResolveSavedFileAccessIdentity(
+        string savedPath,
+        WorkbookFileAccessIdentity? fileAccessIdentity)
+    {
+        if (fileAccessIdentity is not null)
+            return ResolveOpenFileAccessIdentity(savedPath, fileAccessIdentity);
+
+        if (CurrentFileAccessIdentity is not null &&
+            CurrentFilePath is not null &&
+            PlatformPathIdentityComparer.Current.Equals(CurrentFilePath, savedPath) &&
+            CurrentFileAccessIdentity.TryWithLocalPath(savedPath, out var retainedIdentity) &&
+            retainedIdentity is not null)
+        {
+            return retainedIdentity;
+        }
+
+        return WorkbookFileAccessIdentity.FromLocalPath(savedPath);
     }
 }
 

@@ -670,6 +670,88 @@ function Get-Sha256FileHash {
     return [System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLowerInvariant()
 }
 
+function ConvertTo-NormalizedZipEntryPath {
+    param([string]$Path)
+
+    if ($null -eq $Path) {
+        return ""
+    }
+
+    $normalized = $Path.Replace("\", "/").Trim()
+    while ($normalized.StartsWith("./", [System.StringComparison]::Ordinal)) {
+        $normalized = $normalized.Substring(2)
+    }
+
+    return $normalized.TrimStart([char[]]@('/'))
+}
+
+function Test-MacOsAppZipBundleLayout {
+    param(
+        [Parameter(Mandatory = $true)][string]$ZipPath,
+        [Parameter(Mandatory = $true)][string]$Runtime,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $archive = $null
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+        $resolvedPath = (Resolve-Path -LiteralPath $ZipPath).ProviderPath
+        $archive = [System.IO.Compression.ZipFile]::OpenRead($resolvedPath)
+        $entryPaths = @($archive.Entries | ForEach-Object {
+                ConvertTo-NormalizedZipEntryPath -Path $_.FullName
+            } | Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and -not $_.EndsWith("/", [System.StringComparison]::Ordinal)
+            })
+
+        $bundleRoots = New-Object System.Collections.Generic.List[string]
+        $bundleMarker = "FreeX.app/Contents/"
+        foreach ($entryPath in $entryPaths) {
+            $markerIndex = $entryPath.IndexOf($bundleMarker, [System.StringComparison]::Ordinal)
+            if ($markerIndex -lt 0) {
+                continue
+            }
+
+            if ($markerIndex -gt 0 -and $entryPath.Substring($markerIndex - 1, 1) -ne "/") {
+                continue
+            }
+
+            $bundleRoot = $entryPath.Substring(0, $markerIndex + "FreeX.app".Length)
+            if (-not $bundleRoots.Contains($bundleRoot)) {
+                $bundleRoots.Add($bundleRoot)
+            }
+        }
+
+        $requiredEntries = @(
+            "Contents/Info.plist",
+            "Contents/MacOS/FreeX",
+            "Contents/MacOS/FreeX.dll",
+            "Contents/Resources/FreeX.icns")
+
+        foreach ($bundleRoot in $bundleRoots) {
+            $missingEntries = @($requiredEntries | Where-Object { $entryPaths -cnotcontains "$bundleRoot/$_" })
+            if ($missingEntries.Count -eq 0) {
+                return
+            }
+        }
+
+        $requiredEntryDescription = @($requiredEntries | ForEach-Object { "FreeX.app/$_" }) -join ', '
+        if ($bundleRoots.Count -eq 0) {
+            Add-ValidationError "$Label must contain a FreeX.app bundle layout with required entries: $requiredEntryDescription."
+            return
+        }
+
+        Add-ValidationError "$Label must contain a plausible FreeX.app bundle layout under one bundle root. Required entries: $requiredEntryDescription."
+    }
+    catch {
+        Add-ValidationError "$Label must be a readable ZIP archive with a FreeX.app bundle layout: $ZipPath. $($_.Exception.Message)"
+    }
+    finally {
+        if ($null -ne $archive) {
+            $archive.Dispose()
+        }
+    }
+}
+
 function Test-ChecksumEvidence {
     param(
         [Parameter(Mandatory = $true)][string]$BundleDirectory,
@@ -695,6 +777,8 @@ function Test-ChecksumEvidence {
     if (-not [string]::IsNullOrWhiteSpace($checksumHash)) {
         Assert-True -Condition ($checksumHash -eq $actualHash) -Message "$Runtime checksum file hash must match $($names.Zip)."
     }
+
+    Test-MacOsAppZipBundleLayout -ZipPath $zipPath -Runtime $Runtime -Label "$Runtime app ZIP"
 
     Assert-KeyEquals -Map $Evidence -Key "zip_name" -ExpectedValue $names.Zip -Label "$Runtime evidence"
     Assert-KeyEquals -Map $Evidence -Key "zip_sha256" -ExpectedValue $actualHash -Label "$Runtime evidence"
@@ -1015,6 +1099,10 @@ function Test-ReleasePublicationArtifact {
             }
         }
 
+        if ($stableZipExists) {
+            Test-MacOsAppZipBundleLayout -ZipPath $stableZipPath -Runtime $runtime -Label "$runtime release publication stable ZIP $stableZipFileName"
+        }
+
         $releaseEvidenceName = [string](Get-JsonPropertyValue -Object $asset -PropertyName "evidence")
         $releaseEvidencePath = Join-Path $releaseDirectory $releaseEvidenceName
         if (Test-Path -LiteralPath $releaseEvidencePath -PathType Leaf) {
@@ -1274,6 +1362,62 @@ function Test-LaunchSmoke {
             "cmd_italic_menu_gesture",
             "cmd_underline_menu_gesture")) {
         Assert-KeyEquals -Map $launch -Key $key -ExpectedValue "true" -Label "$Runtime command key smoke"
+    }
+
+    foreach ($key in @(
+            "macos_dialog_smoke",
+            "macos_dialog_smoke_status")) {
+        Assert-KeyEquals -Map $launch -Key $key -ExpectedValue "passed" -Label "$Runtime dialog smoke"
+    }
+
+    foreach ($key in @(
+            "macos_dialog_smoke_attempted",
+            "macos_dialog_activation_completed",
+            "find_dialog",
+            "find_dialog_text_box",
+            "find_dialog_action_buttons",
+            "find_dialog_options",
+            "find_dialog_format_controls",
+            "find_dialog_compact_layout",
+            "find_dialog_result_closed_without_accept",
+            "replace_dialog",
+            "replace_dialog_text_boxes",
+            "replace_dialog_action_buttons",
+            "replace_dialog_options",
+            "replace_dialog_format_controls",
+            "replace_dialog_compact_layout",
+            "replace_dialog_result_closed_without_accept",
+            "go_to_dialog",
+            "go_to_dialog_reference_controls",
+            "go_to_dialog_compact_layout",
+            "go_to_dialog_result_closed_without_accept",
+            "go_to_special_dialog",
+            "go_to_special_dialog_kind_controls",
+            "go_to_special_dialog_value_type_controls",
+            "go_to_special_dialog_compact_layout",
+            "go_to_special_dialog_result_closed_without_accept",
+            "format_cells_dialog",
+            "format_cells_dialog_tab_strip",
+            "format_cells_dialog_default_number_tab",
+            "format_cells_dialog_number_controls",
+            "format_cells_dialog_action_buttons",
+            "format_cells_dialog_compact_layout",
+            "format_cells_dialog_result_closed_without_accept",
+            "sort_dialog",
+            "sort_dialog_sort_on_controls",
+            "sort_dialog_color_controls",
+            "sort_dialog_action_buttons",
+            "sort_dialog_compact_layout",
+            "sort_dialog_result_closed_without_accept",
+            "data_validation_dropdown_control",
+            "data_validation_dropdown_items",
+            "data_validation_dialog",
+            "data_validation_dialog_criteria_controls",
+            "data_validation_dialog_message_controls",
+            "data_validation_dialog_action_buttons",
+            "data_validation_dialog_compact_layout",
+            "data_validation_dialog_result_closed_without_accept")) {
+        Assert-KeyEquals -Map $launch -Key $key -ExpectedValue "true" -Label "$Runtime dialog smoke"
     }
 
     Assert-KeyPresent -Map $launch -Key "live_command_key_smoke_required" -Label "$Runtime command key smoke"

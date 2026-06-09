@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace FreeX.App.Services;
 
@@ -7,6 +8,9 @@ public sealed class RecentFileEntry
     public string Path { get; set; } = "";
     public DateTimeOffset LastOpened { get; set; }
     public bool IsPinned { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkbookFileAccessIdentity? FileAccessIdentity { get; set; }
 }
 
 public sealed class RecentFilesStore
@@ -95,15 +99,23 @@ public sealed class RecentFilesStore
             "recent.json");
     }
 
-    public void AddOrUpdate(string path)
+    public void AddOrUpdate(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         if (string.IsNullOrWhiteSpace(path))
             return;
 
         var existing = FindEntryByPath(path);
         var wasPinned = existing?.IsPinned ?? false;
+        var identity = TryPreparePersistentIdentity(fileAccessIdentity, path) ??
+            TryPreparePersistentIdentity(existing?.FileAccessIdentity, path);
         RemoveEntriesByPath(path);
-        Entries.Insert(0, new RecentFileEntry { Path = path, LastOpened = _clock(), IsPinned = wasPinned });
+        Entries.Insert(0, new RecentFileEntry
+        {
+            Path = path,
+            LastOpened = _clock(),
+            IsPinned = wasPinned,
+            FileAccessIdentity = identity,
+        });
         Entries = LimitForPersistence(Entries);
 
         Save();
@@ -181,6 +193,16 @@ public sealed class RecentFilesStore
 
     private bool PathsMatch(string existingPath, string candidatePath) =>
         _pathIdentityComparer.Equals(existingPath, candidatePath);
+
+    private static WorkbookFileAccessIdentity? TryPreparePersistentIdentity(
+        WorkbookFileAccessIdentity? identity,
+        string path) =>
+        identity is not null &&
+        identity.HasBookmark &&
+        identity.TryWithLocalPath(path, out var movedIdentity) &&
+        movedIdentity?.HasBookmark == true
+            ? movedIdentity
+            : null;
 
     private void Save()
     {

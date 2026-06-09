@@ -165,6 +165,7 @@ Write-Host "Running macOS public-preview hosted evidence validation..."
     -ExpectedRunAttempt $ExpectedRunAttempt `
     -DistributionCandidate `
     -RequireSeparateDiagnosticsArtifact `
+    -RequireAggregateReadinessArtifact `
     -RequireReleasePublicationArtifact
 
 if ($PrepareHumanValidationHandoff) {
