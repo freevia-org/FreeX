@@ -17,6 +17,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using FreeX.Core.Commands;
+using FreeX.Core.IO;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -39,6 +40,9 @@ public partial class MainWindow
     private const string PrintPreviewTourManifestFileName = "print_preview_tour_manifest.json";
     private const string QatUndoRedoTourManifestFileName = "qat_undo_redo_tour_manifest.json";
     private const string QatUndoRedoTourOutputDirectoryName = "qat-undo-redo-tour";
+    private const string TitlebarWindowChromeTourManifestFileName = "titlebar_window_chrome_tour_manifest.json";
+    private const string TitlebarWindowChromeTourOutputDirectoryName = "titlebar-window-chrome-tour";
+    private const string TitlebarWindowChromeTourSavedWorkbookFileName = "freex_titlebar_renamed_workbook.xlsx";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -61,7 +65,8 @@ public partial class MainWindow
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
         var qatUndoRedoTour = Environment.GetEnvironmentVariable("FREEX_QAT_UNDO_REDO_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !qatUndoRedoTour)
+        var titlebarWindowChromeTour = Environment.GetEnvironmentVariable("FREEX_TITLEBAR_WINDOW_CHROME_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !qatUndoRedoTour && !titlebarWindowChromeTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -78,7 +83,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, qatUndoRedoTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, qatUndoRedoTour, titlebarWindowChromeTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -110,7 +115,8 @@ public partial class MainWindow
         bool worksheetContextMenuTour,
         bool keyTipOverlayTour,
         bool printPreviewTour,
-        bool qatUndoRedoTour)
+        bool qatUndoRedoTour,
+        bool titlebarWindowChromeTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -138,6 +144,9 @@ public partial class MainWindow
 
         if (qatUndoRedoTour)
             await CaptureQatUndoRedoTourAsync(Path.Combine(outputDir, QatUndoRedoTourOutputDirectoryName));
+
+        if (titlebarWindowChromeTour)
+            await CaptureTitlebarWindowChromeTourAsync(Path.Combine(outputDir, TitlebarWindowChromeTourOutputDirectoryName));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -990,6 +999,221 @@ public partial class MainWindow
             var path = Path.Combine(outputDir, capture.OutputFileName);
             if (!File.Exists(path))
                 throw new InvalidOperationException($"QAT undo/redo tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
+    private async Task CaptureTitlebarWindowChromeTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteTitlebarWindowChromeTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1100;
+        Height = 768;
+        await Task.Delay(700);
+
+        var address = EnsureTitlebarWindowChromeTourContext();
+        var captures = new List<TitlebarWindowChromeTourManifestCapture>();
+        var savedWorkbookPath = Path.Combine(outputDir, TitlebarWindowChromeTourSavedWorkbookFileName);
+
+        try
+        {
+            UpdateTitleBar();
+            captures.Add(await CaptureTitlebarWindowChromeStateAsync(
+                outputDir,
+                "unsaved-restored",
+                "freex_titlebar_unsaved_restored",
+                "Fresh workbook titlebar shows Book1, QAT Save/Undo/Redo, and custom minimize/maximize/close buttons in restored state."));
+
+            ExecuteTitlebarWindowChromeTourDirtyMutation(address);
+            captures.Add(await CaptureTitlebarWindowChromeStateAsync(
+                outputDir,
+                "dirty-marker-restored",
+                "freex_titlebar_dirty_marker_restored",
+                "Dirty marker appears in the workbook title after a command-stack edit."));
+
+            await SaveTitlebarWindowChromeTourWorkbookAsync(savedWorkbookPath);
+            captures.Add(await CaptureTitlebarWindowChromeStateAsync(
+                outputDir,
+                "saved-renamed-restored",
+                "freex_titlebar_saved_renamed_restored",
+                "Real save-to-XLSX path renames the title and clears the dirty marker in restored state."));
+
+            WindowState = WindowState.Maximized;
+            UpdateMaxRestoreButtonState();
+            UpdateLayout();
+            await Task.Delay(450);
+            captures.Add(await CaptureTitlebarWindowChromeStateAsync(
+                outputDir,
+                "saved-renamed-maximized",
+                "freex_titlebar_saved_renamed_maximized",
+                "Maximized window state shows the saved title and restore-down system-button state."));
+
+            WindowState = WindowState.Normal;
+            Width = 1100;
+            Height = 768;
+            UpdateMaxRestoreButtonState();
+            UpdateLayout();
+            await Task.Delay(450);
+            captures.Add(await CaptureTitlebarWindowChromeStateAsync(
+                outputDir,
+                "saved-renamed-restored-after-maximize",
+                "freex_titlebar_saved_renamed_restored_after_maximize",
+                "Restored-after-maximize state shows the saved title and maximize system-button state."));
+
+            ValidateTitlebarWindowChromeTourEvidence(outputDir, captures);
+            await WriteTitlebarWindowChromeTourManifestAsync(outputDir, captures, savedWorkbookPath);
+        }
+        catch
+        {
+            DeleteTitlebarWindowChromeTourEvidence(outputDir);
+            throw;
+        }
+    }
+
+    private CellAddress EnsureTitlebarWindowChromeTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Titlebar/window chrome tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.ClearCell(address);
+        SetActiveCell(address);
+        _workbook.Name = "Book1";
+        _currentFilePath = null;
+        MarkWorkbookSaved();
+        if (SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = new GridRange(address, address);
+            SheetGrid.SelectedRanges = null;
+            SheetGrid.Focus();
+        }
+
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        return address;
+    }
+
+    private void ExecuteTitlebarWindowChromeTourDirtyMutation(CellAddress address)
+    {
+        var edit = (address, Cell.FromValue(new TextValue("Titlebar dirty marker proof")));
+        if (!TryExecuteEditCells([edit], "Edit Cell", out var outcome))
+            throw new InvalidOperationException(outcome.ErrorMessage ?? "Titlebar/window chrome tour cell edit failed.");
+
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private async Task SaveTitlebarWindowChromeTourWorkbookAsync(string savedWorkbookPath)
+    {
+        if (File.Exists(savedWorkbookPath))
+            File.Delete(savedWorkbookPath);
+
+        var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
+            ?? throw new InvalidOperationException("Titlebar/window chrome tour could not find an XLSX save adapter.");
+
+        var saved = await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter));
+        if (!saved)
+            throw new InvalidOperationException("Titlebar/window chrome tour could not save the renamed workbook.");
+
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+    }
+
+    private async Task<TitlebarWindowChromeTourManifestCapture> CaptureTitlebarWindowChromeStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string evidenceSummary)
+    {
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateMaxRestoreButtonState();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 220);
+        return CreateTitlebarWindowChromeTourCapture(state, fileName, evidenceSummary);
+    }
+
+    private TitlebarWindowChromeTourManifestCapture CreateTitlebarWindowChromeTourCapture(
+        string state,
+        string fileName,
+        string evidenceSummary)
+    {
+        return new TitlebarWindowChromeTourManifestCapture(
+            CaptureKey: $"window-chrome:titlebar:{state}",
+            PairKey: $"interactive:titlebar-window-chrome:{state}",
+            ScenarioId: "window-chrome:titlebar",
+            State: state,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: "RenderTargetBitmap-window-top-band",
+            CaptureLogicalWidth: ActualWidth,
+            CaptureLogicalHeight: Math.Min(ActualHeight, 220),
+            EvidenceSummary: evidenceSummary,
+            WindowState: WindowState.ToString(),
+            WindowTitle: Title,
+            WorkbookNameText: WorkbookNameText.Text,
+            WorkbookName: _workbook.Name,
+            WorkbookDirty: _workbookDirty,
+            CurrentFileName: string.IsNullOrWhiteSpace(_currentFilePath) ? null : Path.GetFileName(_currentFilePath),
+            TitleBarQatVisible: TitleBarQatPanel.Visibility == Visibility.Visible,
+            TitleBarQatCommandIds: GetTitlebarWindowChromeVisibleQatCommandIds(),
+            MinimizeButton: CreateTitlebarWindowChromeButtonState(MinimizeBtn),
+            MaxRestoreButton: CreateTitlebarWindowChromeButtonState(MaxRestoreBtn),
+            CloseButton: CreateTitlebarWindowChromeButtonState(CloseSysBtn),
+            MaxRestoreIconKind: MaxRestoreIcon.Kind.ToString());
+    }
+
+    private IReadOnlyList<string> GetTitlebarWindowChromeVisibleQatCommandIds()
+    {
+        var result = new List<string>();
+        foreach (var command in QuickAccessToolbarCatalog.Commands)
+        {
+            var button = GetQuickAccessToolbarButton(command.Id);
+            if (button is { Visibility: Visibility.Visible })
+                result.Add(command.Id);
+        }
+
+        return result;
+    }
+
+    private static TitlebarWindowChromeTourManifestButtonState CreateTitlebarWindowChromeButtonState(ButtonBase button)
+    {
+        return new TitlebarWindowChromeTourManifestButtonState(
+            AutomationId: AutomationProperties.GetAutomationId(button),
+            AutomationName: AutomationProperties.GetName(button),
+            HelpText: AutomationProperties.GetHelpText(button),
+            IsVisible: button.Visibility == Visibility.Visible,
+            IsEnabled: button.IsEnabled,
+            ActualWidth: button.ActualWidth,
+            ActualHeight: button.ActualHeight);
+    }
+
+    private static void DeleteTitlebarWindowChromeTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_titlebar_*.png"))
+            File.Delete(file);
+
+        var savedWorkbookPath = Path.Combine(outputDir, TitlebarWindowChromeTourSavedWorkbookFileName);
+        if (File.Exists(savedWorkbookPath))
+            File.Delete(savedWorkbookPath);
+
+        var manifestPath = Path.Combine(outputDir, TitlebarWindowChromeTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateTitlebarWindowChromeTourEvidence(string outputDir, IReadOnlyList<TitlebarWindowChromeTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Titlebar/window chrome tour did not create planned capture '{capture.OutputFileName}'.");
         }
     }
 
@@ -1925,6 +2149,51 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.QatUndoRedoTourManifest);
     }
 
+    private static async Task WriteTitlebarWindowChromeTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<TitlebarWindowChromeTourManifestCapture> captures,
+        string savedWorkbookPath)
+    {
+        var manifest = new TitlebarWindowChromeTourManifest(
+            Tool: "FREEX_TITLEBAR_WINDOW_CHROME_TOUR",
+            EvidenceFamily: "window-chrome",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "window-chrome:titlebar",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_titlebar_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            PlannedCaptureCount: 5,
+            ActualCaptureCount: captures.Count,
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-window-top-band",
+            SavedWorkbookOutputFileName: Path.GetFileName(savedWorkbookPath),
+            SavedWorkbookRetained: File.Exists(savedWorkbookPath),
+            Pairing: new TitlebarWindowChromeTourManifestPairing(
+                "interactive:titlebar-window-chrome:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no global mouse, keyboard, close, minimize, or drag input was used."
+                    : "Abort and clear titlebar/window-chrome tour evidence unless the FreeX main window owns foreground focus immediately before render and file write."),
+            Captures: captures,
+            Limitations:
+            [
+                "This tour captures real FreeX WPF titlebar/window chrome visuals and changes WindowState directly instead of using global mouse input.",
+                "Minimize and Close are not clicked; evidence is limited to visible button/UIA state so the tour cannot lose unsaved work.",
+                "Alt+Space/system menu, native titlebar drag, hover styling, and live mouse clicks remain foreground-runner gaps.",
+                "The saved/renamed title state is produced through SaveWorkbookToTargetAsync against an XLSX target without opening the native Save As dialog.",
+                "No Microsoft Excel counterpart capture is produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, TitlebarWindowChromeTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.TitlebarWindowChromeTourManifest);
+    }
+
     private static async Task WritePrintPreviewTourManifestAsync(
         string outputDir,
         Sheet sheet,
@@ -2385,6 +2654,65 @@ public partial class MainWindow
         IReadOnlyList<string> RedoHistoryLabels,
         IReadOnlyList<string> MenuHeaders);
 
+    private sealed record TitlebarWindowChromeTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        string CaptureStatus,
+        string CaptureMethod,
+        string SavedWorkbookOutputFileName,
+        bool SavedWorkbookRetained,
+        TitlebarWindowChromeTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<TitlebarWindowChromeTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record TitlebarWindowChromeTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record TitlebarWindowChromeTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string EvidenceSummary,
+        string WindowState,
+        string WindowTitle,
+        string WorkbookNameText,
+        string WorkbookName,
+        bool WorkbookDirty,
+        string? CurrentFileName,
+        bool TitleBarQatVisible,
+        IReadOnlyList<string> TitleBarQatCommandIds,
+        TitlebarWindowChromeTourManifestButtonState MinimizeButton,
+        TitlebarWindowChromeTourManifestButtonState MaxRestoreButton,
+        TitlebarWindowChromeTourManifestButtonState CloseButton,
+        string MaxRestoreIconKind);
+
+    private sealed record TitlebarWindowChromeTourManifestButtonState(
+        string AutomationId,
+        string AutomationName,
+        string HelpText,
+        bool IsVisible,
+        bool IsEnabled,
+        double ActualWidth,
+        double ActualHeight);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
@@ -2394,6 +2722,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(KeyTipOverlayTourManifest))]
     [JsonSerializable(typeof(QatUndoRedoTourManifest))]
+    [JsonSerializable(typeof(TitlebarWindowChromeTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.

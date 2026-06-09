@@ -20,6 +20,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_AUTOFILTER_FLYOUT_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PRINT_PREVIEW_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_QAT_UNDO_REDO_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_TITLEBAR_WINDOW_CHROME_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
@@ -28,6 +29,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureAutoFilterFlyoutTourAsync");
         source.Should().Contain("CapturePrintPreviewTourAsync");
         source.Should().Contain("CaptureQatUndoRedoTourAsync");
+        source.Should().Contain("CaptureTitlebarWindowChromeTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
@@ -39,10 +41,12 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WriteAutoFilterFlyoutTourManifestAsync");
         source.Should().Contain("WritePrintPreviewTourManifestAsync");
         source.Should().Contain("WriteQatUndoRedoTourManifestAsync");
+        source.Should().Contain("WriteTitlebarWindowChromeTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
         source.Should().Contain("print_preview_tour_manifest.json");
         source.Should().Contain("qat_undo_redo_tour_manifest.json");
+        source.Should().Contain("titlebar_window_chrome_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
@@ -182,5 +186,40 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("PrintPreviewTourManifest");
         source.Should().Contain("RenderTargetBitmap-print-preview-dialog-and-main-window");
         source.Should().Contain("The native Windows print dialog is not opened during this tour");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesTitlebarWindowChromeStates()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+
+        source.Should().Contain("FREEX_TITLEBAR_WINDOW_CHROME_TOUR");
+        source.Should().Contain("titlebar-window-chrome-tour");
+        source.Should().Contain("freex_titlebar_unsaved_restored");
+        source.Should().Contain("freex_titlebar_dirty_marker_restored");
+        source.Should().Contain("freex_titlebar_saved_renamed_restored");
+        source.Should().Contain("freex_titlebar_saved_renamed_maximized");
+        source.Should().Contain("freex_titlebar_saved_renamed_restored_after_maximize");
+        source.Should().Contain("ExecuteTitlebarWindowChromeTourDirtyMutation");
+        source.Should().Contain("TryExecuteEditCells([edit], \"Edit Cell\", out var outcome)");
+        source.Should().Contain("SaveTitlebarWindowChromeTourWorkbookAsync");
+        source.Should().Contain("SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter))");
+        source.Should().Contain("WindowState = WindowState.Maximized");
+        source.Should().Contain("WindowState = WindowState.Normal");
+        source.Should().Contain("CreateTitlebarWindowChromeButtonState(MinimizeBtn)");
+        source.Should().Contain("CreateTitlebarWindowChromeButtonState(MaxRestoreBtn)");
+        source.Should().Contain("CreateTitlebarWindowChromeButtonState(CloseSysBtn)");
+        source.Should().Contain("TitleBarQatCommandIds");
+        source.Should().Contain("MaxRestoreIcon.Kind.ToString()");
+        source.Should().Contain("interactive:titlebar-window-chrome:<State>");
+        source.Should().Contain("Alt+Space/system menu, native titlebar drag, hover styling, and live mouse clicks remain foreground-runner gaps.");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.TitlebarWindowChromeTourManifest");
+
+        xaml.Should().Contain("x:Name=\"WorkbookNameText\"");
+        xaml.Should().Contain("x:Name=\"TitleBarQatPanel\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"MinimizeBtn\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"MaxRestoreBtn\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"CloseSysBtn\"");
     }
 }
