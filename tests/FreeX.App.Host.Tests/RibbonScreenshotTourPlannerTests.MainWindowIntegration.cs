@@ -20,6 +20,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_AUTOFILTER_FLYOUT_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PRINT_PREVIEW_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_QAT_UNDO_REDO_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_BAR_NAME_BOX_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_STATUS_FOOTER_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
@@ -29,6 +30,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureAutoFilterFlyoutTourAsync");
         source.Should().Contain("CapturePrintPreviewTourAsync");
         source.Should().Contain("CaptureQatUndoRedoTourAsync");
+        source.Should().Contain("CaptureFormulaBarNameBoxTourAsync");
         source.Should().Contain("CaptureStatusFooterTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
@@ -41,11 +43,13 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WriteAutoFilterFlyoutTourManifestAsync");
         source.Should().Contain("WritePrintPreviewTourManifestAsync");
         source.Should().Contain("WriteQatUndoRedoTourManifestAsync");
+        source.Should().Contain("WriteFormulaBarNameBoxTourManifestAsync");
         source.Should().Contain("WriteStatusFooterTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
         source.Should().Contain("print_preview_tour_manifest.json");
         source.Should().Contain("qat_undo_redo_tour_manifest.json");
+        source.Should().Contain("formula_bar_name_box_tour_manifest.json");
         source.Should().Contain("status_footer_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
@@ -158,6 +162,36 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         qatSource.Should().Contain("private ContextMenu CreateQuickAccessHistoryMenu");
         qatSource.Should().Contain("OpenQuickAccessHistoryMenu(string commandId, ButtonBase placementTarget)");
         qatSource.Should().Contain("var menu = CreateQuickAccessHistoryMenu(commandId, placementTarget);");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesFormulaBarNameBoxEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_FORMULA_BAR_NAME_BOX_TOUR");
+        source.Should().Contain("formula-bar-name-box-tour");
+        source.Should().Contain("EnsureFormulaBarNameBoxTourContext");
+        source.Should().Contain("_workbook.DefineNamedRange(\"Sales\", namedRange);");
+        source.Should().Contain("CellAddressBox.IsDropDownOpen = true;");
+        source.Should().Contain("CellAddressBox.SelectedItem = \"Sales\";");
+        source.Should().Contain("BeginFormulaBarFormulaEdit(\"=SUM(B2:C3)\");");
+        source.Should().Contain("FormulaBarCancelButton_Click(FormulaBarCancelButton");
+        source.Should().Contain("FormulaBarEnterButton_Click(FormulaBarEnterButton");
+        source.Should().Contain("FormulaBarFxButton.Focus();");
+        source.Should().Contain("new InsertFunctionDialog");
+        source.Should().Contain("FormulaBarExpandBtn_Click(FormulaBarExpandBtn");
+        source.Should().Contain("EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);");
+        source.Should().Contain("freex_formula_name_box_named_range_selected");
+        source.Should().Contain("freex_formula_name_box_dropdown_opened");
+        source.Should().Contain("freex_formula_bar_edit_mode_cancel_focused");
+        source.Should().Contain("freex_formula_bar_edit_mode_enter_focused");
+        source.Should().Contain("freex_formula_bar_fx_insert_function_dialog");
+        source.Should().Contain("freex_formula_bar_expanded");
+        source.Should().Contain("freex_formula_keytips_from_name_box_focus");
+        source.Should().Contain("FormulaBarNameBoxTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.FormulaBarNameBoxTourManifest");
+        source.Should().Contain("The Insert Function dialog capture uses the production InsertFunctionDialog shown by the tour");
     }
 
     [Fact]
