@@ -114,6 +114,7 @@ public sealed class FindReplaceDialogXamlTests
         AssertComboBoxContainsExactly(document, presentation, xaml, "WithinCombo", ["Sheet", "Workbook"]);
         AssertComboBoxContainsExactly(document, presentation, xaml, "SearchCombo", ["By Rows", "By Columns"]);
         AssertComboBoxContainsExactly(document, presentation, xaml, "LookInCombo", ["Formulas", "Values", "Notes", "Comments"]);
+        AssertNamedElementHasAttribute(document, presentation, xaml, "ComboBox", "LookInCombo", "SelectedIndex", "1");
         document.Descendants(presentation + "ComboBoxItem")
             .Select(element => element.Attribute("IsEnabled")?.Value)
             .Should()
@@ -239,6 +240,122 @@ public sealed class FindReplaceDialogXamlTests
         replaced.Should().BeTrue();
         sheet.GetCell(a1)!.Value.Should().Be(new TextValue("foo one"));
         sheet.GetCell(a2)!.Value.Should().Be(new TextValue("bar two"));
+    }
+
+    [Fact]
+    public void ReplaceSingleMatch_CanReplaceFormulaTextWhenLookInFormulas()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetFormula(a1, "SUM(B1:B5)");
+
+        var replaced = FindReplaceDialogPlanner.ReplaceSingleMatch(
+            workbook,
+            commandBus,
+            new FindResult(a1, "SUM(B1:B5)"),
+            "SUM",
+            "MAX",
+            matchCase: false,
+            matchEntireCell: false,
+            lookIn: FindLookIn.Formulas);
+
+        replaced.Should().BeTrue();
+        sheet.GetCell(a1)!.FormulaText.Should().Be("MAX(B1:B5)");
+        commandBus.Undo(workbook.Id).Success.Should().BeTrue();
+        sheet.GetCell(a1)!.FormulaText.Should().Be("SUM(B1:B5)");
+    }
+
+    [Fact]
+    public void DialogReplaceAll_UpdatesWorkbookRefreshesResultsAndNotifiesHost()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            var b1 = new CellAddress(sheet.Id, 1, 2);
+            sheet.SetCell(a1, new TextValue("foo one"));
+            sheet.SetCell(b1, new TextValue("foo two"));
+            var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
+            var refreshCount = 0;
+            var dialog = new FindReplaceDialog(
+                () => workbook,
+                commandBus,
+                _ => { },
+                replaceMode: true,
+                getCurrentSheetId: () => sheet.Id,
+                onWorkbookChanged: () => refreshCount++);
+            dialog.Show();
+            try
+            {
+                GetPrivateControl<TextBox>(dialog, "ReplaceFindBox").Text = "foo";
+                GetPrivateControl<TextBox>(dialog, "ReplaceBox").Text = "bar";
+
+                InvokePrivate(dialog, "FindAll_Click");
+                GetPrivateControl<DataGrid>(dialog, "FindResultsGrid").Items.Count.Should().Be(2);
+
+                InvokePrivate(dialog, "ReplaceAll_Click");
+
+                refreshCount.Should().Be(1);
+                sheet.GetCell(a1)!.Value.Should().Be(new TextValue("bar one"));
+                sheet.GetCell(b1)!.Value.Should().Be(new TextValue("bar two"));
+                GetPrivateControl<DataGrid>(dialog, "FindResultsGrid").Items.Count.Should().Be(0);
+                GetPrivateControl<TextBlock>(dialog, "StatusLabel").Text.Should().Be("Replaced 2 cell(s).");
+                commandBus.Undo(workbook.Id).Success.Should().BeTrue();
+                sheet.GetCell(a1)!.Value.Should().Be(new TextValue("foo one"));
+                sheet.GetCell(b1)!.Value.Should().Be(new TextValue("foo two"));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void DialogReplaceOne_UpdatesCurrentMatchRefreshesResultsAndAdvances()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            var b1 = new CellAddress(sheet.Id, 1, 2);
+            sheet.SetCell(a1, new TextValue("foo one"));
+            sheet.SetCell(b1, new TextValue("foo two"));
+            var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
+            var navigated = new List<CellAddress>();
+            var refreshCount = 0;
+            var dialog = new FindReplaceDialog(
+                () => workbook,
+                commandBus,
+                navigated.Add,
+                replaceMode: true,
+                getCurrentSheetId: () => sheet.Id,
+                onWorkbookChanged: () => refreshCount++);
+            dialog.Show();
+            try
+            {
+                GetPrivateControl<TextBox>(dialog, "ReplaceFindBox").Text = "foo";
+                GetPrivateControl<TextBox>(dialog, "ReplaceBox").Text = "bar";
+
+                InvokePrivate(dialog, "FindNext_Click");
+                InvokePrivate(dialog, "Replace_Click");
+
+                refreshCount.Should().Be(1);
+                sheet.GetCell(a1)!.Value.Should().Be(new TextValue("bar one"));
+                sheet.GetCell(b1)!.Value.Should().Be(new TextValue("foo two"));
+                GetPrivateControl<DataGrid>(dialog, "FindResultsGrid").Items.Count.Should().Be(1);
+                navigated.Should().ContainInOrder(a1, b1);
+                GetPrivateControl<TextBlock>(dialog, "StatusLabel").Text.Should().Be("Match 1 of 1");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
