@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -32,6 +33,7 @@ public partial class MainWindow
     private const string HomeBordersDropdownTourCaptureFileName = "freex_dropdown_home_borders_opened";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
+    private const string KeyTipOverlayTourManifestFileName = "keytip_overlay_tour_manifest.json";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
 
     [DllImport("user32.dll")]
@@ -50,8 +52,17 @@ public partial class MainWindow
         var homeNumberFormatDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR") == "1";
         var homeBordersDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_BORDERS_DROPDOWN_TOUR") == "1";
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour)
+        var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
+        if (!ribbonTour &&
+            !backstageTour &&
+            !autoFilterFlyoutTour &&
+            !homeNumberFormatDropdownTour &&
+            !homeBordersDropdownTour &&
+            !worksheetContextMenuTour &&
+            !keyTipOverlayTour)
+        {
             return;
+        }
 
         var ribbonPlan = ribbonTour
             ? RibbonScreenshotTourPlanner.CreatePlan(
@@ -64,7 +75,7 @@ public partial class MainWindow
         var outputDir = Path.GetFullPath(
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots"));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour);
     }
 
     private async Task RunScreenshotTourAsync(
@@ -74,7 +85,8 @@ public partial class MainWindow
         bool autoFilterFlyoutTour,
         bool homeNumberFormatDropdownTour,
         bool homeBordersDropdownTour,
-        bool worksheetContextMenuTour)
+        bool worksheetContextMenuTour,
+        bool keyTipOverlayTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -93,6 +105,9 @@ public partial class MainWindow
 
         if (worksheetContextMenuTour)
             await CaptureWorksheetContextMenuTourAsync(Path.Combine(outputDir, "worksheet-context-menu-tour"));
+
+        if (keyTipOverlayTour)
+            await CaptureKeyTipOverlayTourAsync(Path.Combine(outputDir, "keytip-overlay-tour"));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -478,6 +493,203 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, $"{WorksheetContextMenuTourCaptureFileName}.png");
         if (!File.Exists(path))
             throw new InvalidOperationException("Worksheet context menu tour did not create the planned FreeX context menu capture.");
+    }
+
+    private async Task CaptureKeyTipOverlayTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteKeyTipOverlayTourEvidence(outputDir);
+
+        var captures = new List<KeyTipOverlayTourManifestCapture>();
+
+        try
+        {
+            await ApplyScreenshotTourWidthAsync(new RibbonScreenshotTourWidth("1100", 1100));
+            await CaptureKeyTipOverlayWindowStateAsync(
+                outputDir,
+                captures,
+                "top-level-tabs-qat",
+                "top-level",
+                "Top-level Alt/F10 mode with top-level tab and QAT badges.",
+                () => EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel));
+
+            await CaptureKeyTipOverlayWindowStateAsync(
+                outputDir,
+                captures,
+                "home-visible-commands",
+                "commands",
+                "Home command scope with visible command badges, including combo box and dropdown-command placements.",
+                () =>
+                {
+                    SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home"));
+                    EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+                });
+
+            await CaptureKeyTipOverlayMenuStateAsync(outputDir, captures);
+
+            await ApplyScreenshotTourWidthAsync(new RibbonScreenshotTourWidth("750", 750));
+            await CaptureKeyTipOverlayWindowStateAsync(
+                outputDir,
+                captures,
+                "narrow-home-collapsed-commands",
+                "commands",
+                "Narrow Home command scope with generated collapsed-group keytip badges.",
+                () =>
+                {
+                    SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home"));
+                    EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+                },
+                requireCollapsedGroupBadges: true);
+
+            ValidateKeyTipOverlayTourEvidence(outputDir, captures);
+            await WriteKeyTipOverlayTourManifestAsync(outputDir, captures);
+        }
+        catch
+        {
+            DeleteKeyTipOverlayTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            ExitRibbonKeyTipMode();
+        }
+    }
+
+    private async Task CaptureKeyTipOverlayWindowStateAsync(
+        string outputDir,
+        List<KeyTipOverlayTourManifestCapture> captures,
+        string fileName,
+        string scope,
+        string stateDescription,
+        Action prepareState,
+        bool requireCollapsedGroupBadges = false)
+    {
+        ExitRibbonKeyTipMode();
+        prepareState();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(350);
+        UpdateLayout();
+
+        var badgeCount = KeyTipOverlay.Children.OfType<Border>().Count();
+        var collapsedBadgeCount = string.Equals(scope, "commands", StringComparison.Ordinal)
+            ? GetVisibleKeyTipElements(RibbonKeyTipScope.Commands).Count(RibbonMetadata.IsCollapsedGroupButton)
+            : 0;
+        if (badgeCount == 0)
+            throw new InvalidOperationException($"Keytip overlay tour state '{fileName}' produced no badges.");
+        if (requireCollapsedGroupBadges && collapsedBadgeCount == 0)
+            throw new InvalidOperationException($"Keytip overlay tour state '{fileName}' did not expose any collapsed-group badges.");
+
+        await CaptureCurrentWindowAsync(outputDir, fileName, ScreenshotTourCaptureHeight);
+        captures.Add(new KeyTipOverlayTourManifestCapture(
+            CaptureKey: $"keytip-overlay:{scope}:{fileName}",
+            State: fileName,
+            Scope: scope,
+            Description: stateDescription,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: "RenderTargetBitmap-window-top-band",
+            CaptureLogicalWidth: ActualWidth,
+            CaptureLogicalHeight: ScreenshotTourCaptureHeight,
+            BadgeCount: badgeCount,
+            CollapsedGroupBadgeCount: collapsedBadgeCount,
+            MenuItemKeyTipCount: 0,
+            IsInProcess: true,
+            IsForegroundGuarded: !IsScreenshotTourBackgroundRenderAllowed()));
+    }
+
+    private async Task CaptureKeyTipOverlayMenuStateAsync(
+        string outputDir,
+        List<KeyTipOverlayTourManifestCapture> captures)
+    {
+        ExitRibbonKeyTipMode();
+        await ApplyScreenshotTourWidthAsync(new RibbonScreenshotTourWidth("1100", 1100));
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home"));
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);
+        HandleActiveRibbonKeyTip(Key.H);
+        HandleActiveRibbonKeyTip(Key.B);
+        await Task.Delay(350);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        var menu = _activeRibbonKeyTipMenu
+            ?? throw new InvalidOperationException("Keytip overlay tour could not open Home > Borders menu with Alt,H,B.");
+        menu.UpdateLayout();
+        var menuKeyTipCount = GetEnabledMenuItems(menu)
+            .Count(item => !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item)));
+
+        await CaptureElementAsync(menu, outputDir, "home-borders-menu-scope");
+        captures.Add(new KeyTipOverlayTourManifestCapture(
+            CaptureKey: "keytip-overlay:menu:home-borders-menu-scope",
+            State: "home-borders-menu-scope",
+            Scope: "menu",
+            Description: "Home Borders dropdown opened through keytip routing; menu item keytips are rendered as scoped input gesture text.",
+            FileName: "home-borders-menu-scope",
+            OutputFileName: "home-borders-menu-scope.png",
+            CaptureMethod: "RenderTargetBitmap-context-menu",
+            CaptureLogicalWidth: menu.ActualWidth,
+            CaptureLogicalHeight: menu.ActualHeight,
+            BadgeCount: 0,
+            CollapsedGroupBadgeCount: 0,
+            MenuItemKeyTipCount: menuKeyTipCount,
+            IsInProcess: true,
+            IsForegroundGuarded: false));
+
+        HandleActiveRibbonKeyTip(Key.C);
+        await Task.Delay(350);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        var submenuChild = FindOpenPopupChild(menu)
+            ?? throw new InvalidOperationException("Keytip overlay tour could not locate the open Borders > Line Color submenu popup.");
+        var activeItemsControl = _activeRibbonKeyTipItemsControl
+            ?? throw new InvalidOperationException("Keytip overlay tour did not retain the nested menu keytip scope.");
+        var nestedKeyTipCount = GetEnabledMenuItems(activeItemsControl)
+            .Count(item => !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item)));
+
+        await CaptureElementAsync(submenuChild, outputDir, "home-borders-line-color-submenu-scope");
+        captures.Add(new KeyTipOverlayTourManifestCapture(
+            CaptureKey: "keytip-overlay:menu:home-borders-line-color-submenu-scope",
+            State: "home-borders-line-color-submenu-scope",
+            Scope: "nested-menu",
+            Description: "Home Borders > Line Color submenu opened through keytip routing after Alt,H,B,C.",
+            FileName: "home-borders-line-color-submenu-scope",
+            OutputFileName: "home-borders-line-color-submenu-scope.png",
+            CaptureMethod: "RenderTargetBitmap-menu-popup-child",
+            CaptureLogicalWidth: submenuChild.ActualWidth,
+            CaptureLogicalHeight: submenuChild.ActualHeight,
+            BadgeCount: 0,
+            CollapsedGroupBadgeCount: 0,
+            MenuItemKeyTipCount: nestedKeyTipCount,
+            IsInProcess: true,
+            IsForegroundGuarded: false));
+    }
+
+    private static void DeleteKeyTipOverlayTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, KeyTipOverlayTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateKeyTipOverlayTourEvidence(
+        string outputDir,
+        IReadOnlyList<KeyTipOverlayTourManifestCapture> captures)
+    {
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Keytip overlay tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
     }
 
     private async Task CaptureRibbonTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
@@ -1148,6 +1360,53 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeBordersDropdownTourManifest);
     }
 
+    private static async Task WriteKeyTipOverlayTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<KeyTipOverlayTourManifestCapture> captures)
+    {
+        var manifest = new KeyTipOverlayTourManifest(
+            Tool: "FREEX_KEYTIP_OVERLAY_TOUR",
+            EvidenceFamily: "keytip-overlay",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "ribbon-keytip-overlay-pixel-placement",
+            OutputDirectory: outputDir,
+            OutputNaming: "<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "in-process-background-render-allowed"
+                : "foreground-guarded-in-process-render",
+            FocusGuard: new KeyTipOverlayTourManifestFocusGuard(
+                RequiredForWindowCaptures: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, or screen capture input is used."
+                    : "Window-band captures abort unless the FreeX main window owns foreground focus immediately before render and file write. Popup element captures are in-process element renders."),
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Captures: captures,
+            CoveredStates:
+            [
+                "Top-level Alt/F10 tab badges",
+                "QAT badges in top-level keytip mode",
+                "Home visible command-scope badges",
+                "Home Borders dropdown menu keytip scope",
+                "Home Borders > Line Color nested submenu keytip scope",
+                "Narrow Home command-scope collapsed-group badges"
+            ],
+            Limitations:
+            [
+                "Window-band captures cover the top 300 logical pixels of the FreeX window.",
+                "Top-level, QAT, visible command, and narrow collapsed cases capture the production KeyTipOverlay badges.",
+                "Dropdown and nested submenu states are captured as live WPF popup elements; their scoped keytips are rendered as menu input gesture text rather than overlay badges because the production keytip mode intentionally clears the owner-window badge overlay while menu scope is active.",
+                "This evidence proves FreeX pixel placement for the captured states only; broader Excel pair captures remain separate foreground-guarded work."
+            ]);
+
+        var path = Path.Combine(outputDir, KeyTipOverlayTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.KeyTipOverlayTourManifest);
+    }
+
     private sealed record RibbonScreenshotTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -1334,12 +1593,51 @@ public partial class MainWindow
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
 
+    private sealed record KeyTipOverlayTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string CaptureStatus,
+        string CaptureMode,
+        KeyTipOverlayTourManifestFocusGuard FocusGuard,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        IReadOnlyList<KeyTipOverlayTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record KeyTipOverlayTourManifestFocusGuard(
+        bool RequiredForWindowCaptures,
+        string Policy);
+
+    private sealed record KeyTipOverlayTourManifestCapture(
+        string CaptureKey,
+        string State,
+        string Scope,
+        string Description,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        int BadgeCount,
+        int CollapsedGroupBadgeCount,
+        int MenuItemKeyTipCount,
+        bool IsInProcess,
+        bool IsForegroundGuarded);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
     [JsonSerializable(typeof(HomeNumberFormatDropdownTourManifest))]
     [JsonSerializable(typeof(HomeBordersDropdownTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
+    [JsonSerializable(typeof(KeyTipOverlayTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.
