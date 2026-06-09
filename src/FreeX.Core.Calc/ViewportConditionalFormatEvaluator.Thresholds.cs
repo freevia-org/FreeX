@@ -26,6 +26,13 @@ internal static partial class ViewportConditionalFormatEvaluator
                 continue;
             }
 
+            if (cf.RuleType == CfRuleType.DataBar)
+            {
+                TryAddThresholdFormulaCache(ref result, cf, CfThresholdFormulaSlot.DataBarMin, -1, cf.DataBarMinThresholdType, cf.DataBarMinThresholdValue);
+                TryAddThresholdFormulaCache(ref result, cf, CfThresholdFormulaSlot.DataBarMax, -1, cf.DataBarMaxThresholdType, cf.DataBarMaxThresholdValue);
+                continue;
+            }
+
             if (cf.RuleType != CfRuleType.IconSet)
                 continue;
 
@@ -132,7 +139,8 @@ internal static partial class ViewportConditionalFormatEvaluator
                 continue;
 
             var thresholdCount = GetIconSetCount(cf.IconSetStyle) - 1;
-            if (cf.IconSetThresholds.Count < thresholdCount)
+            var thresholdStartIndex = GetIconSetThresholdStartIndex(cf, GetIconSetCount(cf.IconSetStyle));
+            if (cf.IconSetThresholds.Count - thresholdStartIndex < thresholdCount)
                 continue;
 
             var values = new double[thresholdCount];
@@ -140,11 +148,12 @@ internal static partial class ViewportConditionalFormatEvaluator
             var resolved = true;
             for (var i = 0; i < thresholdCount; i++)
             {
-                var threshold = cf.IconSetThresholds[i];
+                var sourceIndex = thresholdStartIndex + i;
+                var threshold = cf.IconSetThresholds[sourceIndex];
                 if (threshold.Type == CfThresholdType.Formula)
                 {
                     if (!staticThresholdFormulaValues.TryGetValue(
-                            new CfThresholdFormulaKey(cf, CfThresholdFormulaSlot.IconSet, i),
+                            new CfThresholdFormulaKey(cf, CfThresholdFormulaSlot.IconSet, sourceIndex),
                             out values[i]) ||
                         !double.IsFinite(values[i]))
                     {
@@ -338,6 +347,9 @@ internal static partial class ViewportConditionalFormatEvaluator
             ? Math.Clamp(style[0] - '0', 3, 5)
             : 3;
 
+    internal static int GetIconSetThresholdStartIndex(ConditionalFormat cf, int iconCount) =>
+        cf.IconSetThresholds.Count >= iconCount ? 1 : 0;
+
     private static CellStyle? ComputeColorScaleStyle(
         ConditionalFormat cf,
         ScalarValue value,
@@ -417,6 +429,75 @@ internal static partial class ViewportConditionalFormatEvaluator
 
     private static CellStyle GetColorScaleStyle(CfEvaluationContext cfContext, CellColor fillColor) =>
         cfContext.ColorScaleStyles?.Get(fillColor) ?? new CellStyle { FillColor = fillColor };
+
+    internal static ConditionalFormatDataBar? EvaluateDataBar(
+        Sheet sheet,
+        CellAddress addr,
+        ScalarValue value,
+        Workbook workbook,
+        CfEvaluationContext cfContext)
+    {
+        for (var i = 0; i < cfContext.RulesByPriority.Count; i++)
+        {
+            var cf = cfContext.RulesByPriority[i];
+            if (cf.RuleType != CfRuleType.DataBar || !cf.AppliesTo.Contains(addr))
+                continue;
+
+            if (!TryGetDouble(value, out var cellValue) ||
+                !double.IsFinite(cellValue) ||
+                !cfContext.Aggregates.TryGetValue(cf, out var cache))
+            {
+                continue;
+            }
+
+            if (!TryResolveThreshold(
+                    cf.DataBarMinThresholdType,
+                    cf.DataBarMinThresholdValue,
+                    cache,
+                    sheet,
+                    workbook,
+                    addr,
+                    cf.AppliesTo.Start,
+                    GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.DataBarMin),
+                    GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.DataBarMin),
+                    out var min) ||
+                !TryResolveThreshold(
+                    cf.DataBarMaxThresholdType,
+                    cf.DataBarMaxThresholdValue,
+                    cache,
+                    sheet,
+                    workbook,
+                    addr,
+                    cf.AppliesTo.Start,
+                    GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.DataBarMax),
+                    GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.DataBarMax),
+                    out var max) ||
+                max <= min)
+            {
+                continue;
+            }
+
+            var minLength = Math.Clamp(cf.DataBarMinLength ?? 0, 0, 100) / 100d;
+            var maxLength = Math.Clamp(cf.DataBarMaxLength ?? 100, 0, 100) / 100d;
+            if (maxLength < minLength)
+                (minLength, maxLength) = (maxLength, minLength);
+
+            var fraction = Math.Clamp((cellValue - min) / (max - min), 0d, 1d);
+            var length = minLength + (maxLength - minLength) * fraction;
+            if (length <= 0)
+                continue;
+
+            return new ConditionalFormatDataBar(
+                0d,
+                Math.Clamp(length, 0d, 1d),
+                cf.DataBarColor,
+                cf.DataBarGradient,
+                cf.DataBarBorder,
+                cf.DataBarShowValue);
+        }
+
+        return null;
+    }
 
     internal static bool TryResolveThreshold(
         CfThresholdType type,

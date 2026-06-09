@@ -126,6 +126,8 @@ internal enum CfThresholdFormulaSlot
     ColorScaleMin,
     ColorScaleMid,
     ColorScaleMax,
+    DataBarMin,
+    DataBarMax,
     IconSet
 }
 
@@ -207,7 +209,7 @@ internal static partial class ViewportConditionalFormatEvaluator
 
     private static bool CanProduceConditionalStyle(ConditionalFormat rule) =>
         rule.RuleType != CfRuleType.IconSet &&
-        (rule.RuleType is CfRuleType.ColorScale or CfRuleType.DataBar || rule.FormatIfTrue is not null);
+        (rule.RuleType == CfRuleType.ColorScale || rule.FormatIfTrue is not null);
 
     private static ConditionalFormat[] CopyRulesByPriority(IReadOnlyList<ConditionalFormat> rules)
     {
@@ -282,14 +284,6 @@ internal static partial class ViewportConditionalFormatEvaluator
                 conditionMet = colorScaleStyle is not null;
                 if (colorScaleStyle is not null)
                     matchedStyle = new CfStyleResult(colorScaleStyle, CanUseAsDefaultMergedStyle: true);
-            }
-            else if (cf.RuleType == CfRuleType.DataBar)
-            {
-                conditionMet = TryGetDouble(value, out _);
-                if (conditionMet)
-                    matchedStyle = new CfStyleResult(
-                        new CellStyle { FillColor = cf.DataBarColor.ToCellColor() },
-                        CanUseAsDefaultMergedStyle: true);
             }
             else
             {

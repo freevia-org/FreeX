@@ -23,4 +23,12 @@ public sealed partial class ViewportService
 
     private static bool TryParseDouble(string? text, out double result) =>
         ViewportConditionalFormatEvaluator.TryParseDouble(text, out result);
+
+    private static ConditionalFormatDataBar? EvaluateConditionalDataBar(
+        Sheet sheet,
+        CellAddress addr,
+        ScalarValue value,
+        Workbook workbook,
+        CfEvaluationContext cfContext) =>
+        ViewportConditionalFormatEvaluator.EvaluateDataBar(sheet, addr, value, workbook, cfContext);
 }

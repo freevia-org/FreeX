@@ -69,19 +69,11 @@ public static class ConditionalFormatIconSetPlanner
     public static IReadOnlyList<CfThresholdModel> CreateThresholds(string? style)
     {
         var iconCount = GetIconCount(style);
-        if (iconCount <= 3)
-        {
-            return
-            [
-                new CfThresholdModel(CfThresholdType.Percent, "0"),
-                new CfThresholdModel(CfThresholdType.Percent, "33"),
-                new CfThresholdModel(CfThresholdType.Percent, "67")
-            ];
-        }
-
         var step = 100 / iconCount;
         return Enumerable.Range(0, iconCount)
-            .Select(index => new CfThresholdModel(CfThresholdType.Percent, (index * step).ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            .Select(index => new CfThresholdModel(
+                CfThresholdType.Percent,
+                (index * step).ToString(System.Globalization.CultureInfo.InvariantCulture)))
             .ToList();
     }
 

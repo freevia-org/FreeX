@@ -11,12 +11,21 @@ public readonly record struct DisplayCell(
     CellError? Error,
     CellStyle? Style = null,
     ConditionalFormatIcon? ConditionalIcon = null,
-    bool HasComment = false);
+    bool HasComment = false,
+    ConditionalFormatDataBar? ConditionalDataBar = null);
 
 public readonly record struct ConditionalFormatIcon(
     string Style,
     int IconIndex,
     int IconCount,
+    bool ShowValue);
+
+public readonly record struct ConditionalFormatDataBar(
+    double StartFraction,
+    double EndFraction,
+    RgbColor FillColor,
+    bool Gradient,
+    bool Border,
     bool ShowValue);
 
 /// <summary>Represents a cell-level error for display purposes.</summary>

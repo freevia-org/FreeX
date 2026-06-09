@@ -108,6 +108,35 @@ public partial class ConditionalFormatTests
     }
 
     [Fact]
+    public void IconSet_SkipsExcelStyleBaselineThresholdWhenResolvingBands()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(0)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(50)));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromValue(new NumberValue(100)));
+
+        var rule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "3Arrows"
+        };
+        rule.IconSetThresholds.AddRange([
+            new CfThresholdModel(CfThresholdType.Percent, "0"),
+            new CfThresholdModel(CfThresholdType.Percent, "33"),
+            new CfThresholdModel(CfThresholdType.Percent, "66")
+        ]);
+        sheet.ConditionalFormats.Add(rule);
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 1, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3Arrows", 0, 3, true));
+        GetCell(vp, 2, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3Arrows", 1, 3, true));
+        GetCell(vp, 3, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3Arrows", 2, 3, true));
+    }
+
+    [Fact]
     public void IconSet_WithPerThresholdOverrides_AppliesCustomIconForEachBucket()
     {
         var (wb, sheet) = MakeWorkbook();

@@ -31,7 +31,7 @@ public partial class GridView
         if (editingCell is { } address && address.Row == cell.Row && address.Col == cell.Col)
             return false;
 
-        return !string.IsNullOrEmpty(cell.DisplayText) || cell.ConditionalIcon is not null;
+        return !string.IsNullOrEmpty(cell.DisplayText) || cell.ConditionalIcon is not null || cell.ConditionalDataBar is not null;
     }
 
     public static bool IsOverflowOccupied(DisplayCell cell, CellAddress? editingCell)
@@ -41,6 +41,7 @@ public partial class GridView
 
         return !string.IsNullOrEmpty(cell.DisplayText) ||
                cell.ConditionalIcon is not null ||
+               cell.ConditionalDataBar is not null ||
                cell.Formula is not null ||
                cell.RawValue is not null and not BlankValue;
     }

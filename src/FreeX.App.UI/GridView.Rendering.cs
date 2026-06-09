@@ -244,6 +244,8 @@ public partial class GridView
         if (fill is not null || gridPen is not null)
             dc.DrawRectangle(fill, gridPen, rect);
         DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
+        if (cell.ConditionalDataBar is { } splitDataBar)
+            DrawConditionalDataBar(dc, splitDataBar, rect, _brushCache);
 
         if (style is not null && HasVisibleCellBorder(style))
         {
@@ -549,6 +551,8 @@ public partial class GridView
             }
 
             double renderWidth = w;
+            if (cell.ConditionalDataBar is { } dataBar)
+                DrawConditionalDataBar(dc, dataBar, rect, _brushCache);
 
             if (cell.ConditionalIcon is { } icon)
             {

@@ -124,9 +124,14 @@ public sealed partial class ViewportService
         if (rule.IconSetThresholds.Count < iconCount - 1)
             return false;
 
+        var thresholdStartIndex = ViewportConditionalFormatEvaluator.GetIconSetThresholdStartIndex(rule, iconCount);
+        if (rule.IconSetThresholds.Count - thresholdStartIndex < iconCount - 1)
+            return false;
+
         for (var i = 0; i < iconCount - 1; i++)
         {
-            var threshold = rule.IconSetThresholds[i];
+            var sourceIndex = thresholdStartIndex + i;
+            var threshold = rule.IconSetThresholds[sourceIndex];
             if (!ViewportConditionalFormatEvaluator.TryResolveThreshold(
                     threshold.Type,
                     threshold.Value,
@@ -139,12 +144,12 @@ public sealed partial class ViewportService
                         cfContext,
                         rule,
                         CfThresholdFormulaSlot.IconSet,
-                        i),
+                        sourceIndex),
                     ViewportConditionalFormatEvaluator.GetThresholdFormula(
                         cfContext,
                         rule,
                         CfThresholdFormulaSlot.IconSet,
-                        i),
+                        sourceIndex),
                     out var value))
                 return false;
 

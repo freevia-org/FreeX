@@ -97,6 +97,30 @@ public sealed partial class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCells_DrawsConditionalDataBarsBeforeIconsAndText()
+    {
+        var source = AppUiSourceTestSupport.ReadAppUiSources(
+            "GridView.Rendering.cs",
+            "GridView.ConditionalDataBars.cs",
+            "GridView.ConditionalIcons.cs");
+        var renderCells = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderStyledAndMergedCellSurfaces", StringComparison.Ordinal)];
+        var splitPaneCell = source[
+            source.IndexOf("private void RenderSplitPaneCell(", StringComparison.Ordinal)..
+            source.IndexOf("private readonly struct SplitPaneCellRenderConsumer", StringComparison.Ordinal)];
+
+        source.Should().Contain("private static void DrawConditionalDataBar");
+        source.Should().Contain("cell.ConditionalDataBar is not null");
+        renderCells.IndexOf("DrawConditionalDataBar(dc, dataBar, rect, _brushCache)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderCells.IndexOf("if (cell.ConditionalIcon is { } icon)", StringComparison.Ordinal));
+        splitPaneCell.IndexOf("DrawConditionalDataBar(dc, splitDataBar, rect, _brushCache)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(splitPaneCell.IndexOf("if (cell.ConditionalIcon is { } splitIcon)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void RenderCells_ClipsTextOnlyWhenLaidOutBoundsOverflow()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
