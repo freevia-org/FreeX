@@ -3139,7 +3139,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(_mergeAndCenterButton, \"HomeMergeAndCenterButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_mergeAndCenterButton, \"Merge and center the selected cells.\");");
         source.Should().Contain("_mergeAndCenterMenuItem.Header = \"Merge & Center\";");
-        source.Should().Contain("_mergeAndCenterMenuItem.Click += (_, _) => MergeAndCenterSelectedRange();");
+        source.Should().Contain("_mergeAndCenterMenuItem.Click += async (_, _) => await MergeAndCenterSelectedRangeAsync();");
         source.Should().Contain("_unmergeCellsMenuItem.Header = \"Unmerge Cells\";");
         source.Should().Contain("_unmergeCellsMenuItem.Click += (_, _) => UnmergeSelectedRange();");
         source.Should().Contain("formatMenu.Items.Add(_mergeAndCenterMenuItem);");
@@ -3148,9 +3148,16 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_mergeAndCenterMenuItem.IsEnabled = _mergeAndCenterButton.IsEnabled;");
         source.Should().Contain("_unmergeCellsMenuItem.IsEnabled = isIdle && _session.IsSelectedRangeMerged;");
         source.Should().Contain("_mergeAndCenterButton,");
-        source.Should().Contain("private void MergeAndCenterButton_Click(object? sender, RoutedEventArgs e)");
-        source.Should().Contain("private void MergeAndCenterSelectedRange()");
-        source.Should().Contain("var result = _session.MergeAndCenterSelectedRange();");
+        source.Should().Contain("private async void MergeAndCenterButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private async Task MergeAndCenterSelectedRangeAsync()");
+        source.Should().Contain("CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range)");
+        source.Should().Contain("await ShowMergeCellsContentWarningDialogAsync(contentPlan)");
+        source.Should().Contain("var result = _session.MergeAndCenterSelectedRange(contentResolution);");
+        source.Should().Contain("private async Task<MergeCellsWarningChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"MergeCellsContentWarningDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(keepFirstButton, \"MergeCellsKeepFirstButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(concatenateButton, \"MergeCellsConcatenateButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"MergeCellsCancelButton\");");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Merge & Center failed.\");");
         source.Should().Contain("RefreshShell($\"Merged and centered {rangeReference}\");");
         source.Should().Contain("private void UnmergeSelectedRange()");
@@ -3528,6 +3535,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)");
         source.Should().Contain("FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
         source.Should().Contain("selection.Request.MergeCells");
+        source.Should().Contain("var mergeContentResolution = MergeCellContentResolution.KeepFirstCell;");
+        source.Should().Contain("if (selection.Request.MergeCells == true)");
+        source.Should().Contain("CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range)");
+        source.Should().Contain("await ShowMergeCellsContentWarningDialogAsync(contentPlan)");
         source.Should().Contain("selection.BorderStyle");
         source.Should().Contain("selection.BorderColor");
 
@@ -3535,9 +3546,11 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("BorderStyle borderStyle = BorderStyle.Thin");
         sessionSource.Should().Contain("CellColor? borderColor = null");
         sessionSource.Should().Contain("bool? mergeCells = null");
+        sessionSource.Should().Contain("MergeCellContentResolution mergeContentResolution = MergeCellContentResolution.KeepFirstCell");
         sessionSource.Should().Contain("CreateBorderPresetCommand(range, preset, borderStyle, borderColor)");
-        sessionSource.Should().Contain("CreateFormatCellsMergeCommands(range, shouldMerge)");
+        sessionSource.Should().Contain("CreateFormatCellsMergeCommands(range, shouldMerge, mergeContentResolution)");
         sessionSource.Should().Contain("CellMergePlanner.CreateMergeCommands(");
+        sessionSource.Should().Contain("CellMergePlanner.CreateMergeAndCenterCommands(");
         sessionSource.Should().Contain("CellBorderPresetPlanner.Plan(preset, range, address, borderStyle, borderColor)");
         plannerSource.Should().Contain("bool? MergeCells = null");
         plannerSource.Should().Contain("bool? DoubleUnderline = null");

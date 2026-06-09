@@ -2138,7 +2138,8 @@ public sealed class WorkbookSession
         CellBorderPreset? borderPreset,
         BorderStyle borderStyle = BorderStyle.Thin,
         CellColor? borderColor = null,
-        bool? mergeCells = null)
+        bool? mergeCells = null,
+        MergeCellContentResolution mergeContentResolution = MergeCellContentResolution.KeepFirstCell)
     {
         ArgumentNullException.ThrowIfNull(diff);
 
@@ -2156,7 +2157,7 @@ public sealed class WorkbookSession
             commands.Add(CreateSetFontSizeCommand(range, fontSize, GetFittingRowHeight(fontSize)));
 
         if (mergeCells is { } shouldMerge)
-            commands.AddRange(CreateFormatCellsMergeCommands(range, shouldMerge));
+            commands.AddRange(CreateFormatCellsMergeCommands(range, shouldMerge, mergeContentResolution));
 
         if (commands.Count == 0)
             return new WorkbookCellEditResult(true, null, [], RecalcReport: null);
@@ -2187,12 +2188,13 @@ public sealed class WorkbookSession
         return result;
     }
 
-    public WorkbookCellEditResult MergeAndCenterSelectedRange()
+    public WorkbookCellEditResult MergeAndCenterSelectedRange(
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
     {
         var range = SelectedRange;
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            CreateMergeAndCenterCommand(range));
+            CreateMergeAndCenterCommand(range, contentResolution));
         if (!result.Success)
             return result;
 
@@ -2604,20 +2606,30 @@ public sealed class WorkbookSession
         return ToCommand(CellBorderPresetPlanner.GetDisplayName(preset), commands);
     }
 
-    private IWorkbookCommand CreateMergeAndCenterCommand(GridRange range)
+    private IWorkbookCommand CreateMergeAndCenterCommand(
+        GridRange range,
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
         var commands = new List<IWorkbookCommand>(targetSheetIds.Count * 2);
         foreach (var sheetId in targetSheetIds)
         {
+            var sheet = Workbook.GetSheet(sheetId);
             var sheetRange = RemapRangeToSheet(range, sheetId);
-            commands.AddRange(CellMergePlanner.CreateMergeAndCenterCommands(sheetId, sheetRange));
+            commands.AddRange(CellMergePlanner.CreateMergeAndCenterCommands(
+                sheet,
+                sheetId,
+                sheetRange,
+                contentResolution));
         }
 
         return ToCommand("Merge & Center", commands);
     }
 
-    private IReadOnlyList<IWorkbookCommand> CreateFormatCellsMergeCommands(GridRange range, bool mergeCells)
+    private IReadOnlyList<IWorkbookCommand> CreateFormatCellsMergeCommands(
+        GridRange range,
+        bool mergeCells,
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
         var commands = new List<IWorkbookCommand>();
@@ -2627,11 +2639,18 @@ public sealed class WorkbookSession
             if (sheet is null)
                 continue;
 
-            commands.AddRange(CellMergePlanner.CreateMergeCommands(
-                sheet,
-                sheetId,
-                RemapRangeToSheet(range, sheetId),
-                mergeCells));
+            var sheetRange = RemapRangeToSheet(range, sheetId);
+            commands.AddRange(mergeCells && contentResolution == MergeCellContentResolution.ConcatenateAllCells
+                ? CellMergePlanner.CreateMergeAndCenterCommands(
+                    sheet,
+                    sheetId,
+                    sheetRange,
+                    contentResolution).Where(command => command is not ApplyStyleCommand)
+                : CellMergePlanner.CreateMergeCommands(
+                    sheet,
+                    sheetId,
+                    sheetRange,
+                    mergeCells));
         }
 
         return commands;

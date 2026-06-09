@@ -441,6 +441,7 @@
 
         <!-- ComboBox: keep background white to match Excel toolbar -->
         <Style TargetType="ComboBox">
+            <Setter Property="local:ComboBoxDropDownWheelBehavior.IsEnabled" Value="True"/>
             <Setter Property="Background" Value="White"/>
             <Setter Property="Foreground" Value="#111"/>
             <Setter Property="BorderBrush" Value="#A6A6A6"/>
@@ -543,21 +544,87 @@
             <Setter Property="Background" Value="White"/>
             <Setter Property="Foreground" Value="#111"/>
             <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBoxItem">
                         <Border x:Name="ItemBorder"
                                 Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#E6F6FA"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#EAF4FF"/>
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#8CB8E8"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#CCEAF2"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#D9ECFF"/>
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#2B73D2"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <DataTemplate x:Key="FontNameComboBoxItemTemplate">
+            <TextBlock Text="{Binding}"
+                       FontFamily="{Binding}"
+                       FontSize="13"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding}"/>
+        </DataTemplate>
+
+        <Style x:Key="FontNameComboBoxItemStyle" TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#111"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="ItemBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                SnapsToDevicePixels="True">
+                            <Grid MinHeight="24">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border x:Name="SelectionMarker"
+                                        Grid.Column="0"
+                                        Background="Transparent"/>
+                                <ContentPresenter Grid.Column="1"
+                                                  Margin="6,3,10,3"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Stretch"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#EAF4FF"/>
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#8CB8E8"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#D9ECFF"/>
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#2B73D2"/>
+                                <Setter TargetName="SelectionMarker" Property="Background" Value="#2B73D2"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsSelected" Value="True"/>
+                                    <Condition Property="IsHighlighted" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#C7E4FF"/>
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#1F5FAE"/>
+                            </MultiTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
