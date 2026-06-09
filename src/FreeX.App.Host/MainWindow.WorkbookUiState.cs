@@ -294,7 +294,8 @@ public partial class MainWindow
             NavigateToCell,
             replaceMode: false,
             () => _currentSheetId,
-            () => SheetGrid.SelectedRange?.Start)
+            () => SheetGrid.SelectedRange?.Start,
+            RefreshAfterFindReplaceEdit)
         {
             Owner = this
         };
@@ -309,7 +310,8 @@ public partial class MainWindow
             NavigateToCell,
             replaceMode: true,
             () => _currentSheetId,
-            () => SheetGrid.SelectedRange?.Start)
+            () => SheetGrid.SelectedRange?.Start,
+            RefreshAfterFindReplaceEdit)
         {
             Owner = this
         };
@@ -322,6 +324,17 @@ public partial class MainWindow
         SetActiveCell(addr);
         EnsureCellVisible(addr);
         UpdateViewport();
+    }
+
+    private void RefreshAfterFindReplaceEdit()
+    {
+        MarkWorkbookDirty();
+        InvalidateNavigationCaches();
+        RecalculateWorkbook();
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        NotifyOtherWindowsOfWorkbookChange();
     }
 
     private void RefreshSheetProtectionUi()
