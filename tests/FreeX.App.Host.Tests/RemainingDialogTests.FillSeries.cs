@@ -67,6 +67,15 @@ public sealed partial class RemainingDialogTests
     }
 
     [Fact]
+    public void FillSeriesStepDialog_ActionButtonsAreSeparatedFromStopValueField()
+    {
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+
+        source.Should().Contain("Height = 356;");
+        source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72, rowMargin: new Thickness(0, 16, 0, 0))");
+    }
+
+    [Fact]
     public void FillSeriesStepDialogOpenedFromKeyboard_FocusesSelectedSeriesDirection()
     {
         var source = ReadRemainingDialogSources();

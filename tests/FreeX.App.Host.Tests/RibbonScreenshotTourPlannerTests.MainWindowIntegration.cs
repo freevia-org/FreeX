@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -21,6 +21,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PRINT_PREVIEW_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_QAT_UNDO_REDO_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_TITLEBAR_WINDOW_CHROME_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_BAR_NAME_BOX_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_STATUS_FOOTER_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
@@ -30,6 +32,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CapturePrintPreviewTourAsync");
         source.Should().Contain("CaptureQatUndoRedoTourAsync");
         source.Should().Contain("CaptureTitlebarWindowChromeTourAsync");
+        source.Should().Contain("CaptureFormulaBarNameBoxTourAsync");
+        source.Should().Contain("CaptureStatusFooterTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
@@ -42,11 +46,15 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WritePrintPreviewTourManifestAsync");
         source.Should().Contain("WriteQatUndoRedoTourManifestAsync");
         source.Should().Contain("WriteTitlebarWindowChromeTourManifestAsync");
+        source.Should().Contain("WriteFormulaBarNameBoxTourManifestAsync");
+        source.Should().Contain("WriteStatusFooterTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
         source.Should().Contain("print_preview_tour_manifest.json");
         source.Should().Contain("qat_undo_redo_tour_manifest.json");
         source.Should().Contain("titlebar_window_chrome_tour_manifest.json");
+        source.Should().Contain("formula_bar_name_box_tour_manifest.json");
+        source.Should().Contain("status_footer_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
@@ -161,6 +169,36 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void MainWindowScreenshotTour_CapturesFormulaBarNameBoxEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_FORMULA_BAR_NAME_BOX_TOUR");
+        source.Should().Contain("formula-bar-name-box-tour");
+        source.Should().Contain("EnsureFormulaBarNameBoxTourContext");
+        source.Should().Contain("_workbook.DefineNamedRange(\"Sales\", namedRange);");
+        source.Should().Contain("CellAddressBox.IsDropDownOpen = true;");
+        source.Should().Contain("CellAddressBox.SelectedItem = \"Sales\";");
+        source.Should().Contain("BeginFormulaBarFormulaEdit(\"=SUM(B2:C3)\");");
+        source.Should().Contain("FormulaBarCancelButton_Click(FormulaBarCancelButton");
+        source.Should().Contain("FormulaBarEnterButton_Click(FormulaBarEnterButton");
+        source.Should().Contain("FormulaBarFxButton.Focus();");
+        source.Should().Contain("new InsertFunctionDialog");
+        source.Should().Contain("FormulaBarExpandBtn_Click(FormulaBarExpandBtn");
+        source.Should().Contain("EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);");
+        source.Should().Contain("freex_formula_name_box_named_range_selected");
+        source.Should().Contain("freex_formula_name_box_dropdown_opened");
+        source.Should().Contain("freex_formula_bar_edit_mode_cancel_focused");
+        source.Should().Contain("freex_formula_bar_edit_mode_enter_focused");
+        source.Should().Contain("freex_formula_bar_fx_insert_function_dialog");
+        source.Should().Contain("freex_formula_bar_expanded");
+        source.Should().Contain("freex_formula_keytips_from_name_box_focus");
+        source.Should().Contain("FormulaBarNameBoxTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.FormulaBarNameBoxTourManifest");
+        source.Should().Contain("The Insert Function dialog capture uses the production InsertFunctionDialog shown by the tour");
+    }
+
+    [Fact]
     public void MainWindowScreenshotTour_CapturesRealPrintPreviewEvidence()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
@@ -221,5 +259,35 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         xaml.Should().Contain("AutomationProperties.AutomationId=\"MinimizeBtn\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"MaxRestoreBtn\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"CloseSysBtn\"");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesStatusFooterVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_STATUS_FOOTER_TOUR");
+        source.Should().Contain("status-footer-tour");
+        source.Should().Contain("EnsureStatusFooterTourContext");
+        source.Should().Contain("StatusBarShowAverage = true");
+        source.Should().Contain("StatusBarShowNumericalCount = true");
+        source.Should().Contain("CaptureElementAsync(StatusBarRoot, outputDir, fileName)");
+        source.Should().Contain("RenderTargetBitmap-status-footer-element");
+        source.Should().Contain("freex_status_footer_ready_baseline");
+        source.Should().Contain("freex_status_footer_selection_stats_numeric_mixed");
+        source.Should().Contain("freex_status_footer_formula_edit_mode");
+        source.Should().Contain("freex_status_footer_view_shortcut_page_layout");
+        source.Should().Contain("freex_status_footer_zoom_min_10");
+        source.Should().Contain("freex_status_footer_zoom_baseline_100");
+        source.Should().Contain("freex_status_footer_zoom_max_400");
+        source.Should().Contain("interactive:status-footer:<State>");
+        source.Should().Contain("StatusModeText");
+        source.Should().Contain("NumericalCountText");
+        source.Should().Contain("ZoomSliderValue");
+        source.Should().Contain("NormalViewChecked");
+        source.Should().Contain("PageLayoutViewChecked");
+        source.Should().Contain("PageBreakPreviewChecked");
+        source.Should().Contain("FormulaBarText");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest");
     }
 }

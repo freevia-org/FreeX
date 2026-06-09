@@ -70,7 +70,8 @@ public sealed class HomeEditingCommandSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeEditing.cs");
 
-        source.Should().Contain("AutoSumFormulaPlanner.BuildFormula(_workbook.GetSheet(_currentSheetId), func, addr)");
+        source.Should().Contain("AutoSumFormulaPlanner.TryCreatePlan(_workbook.GetSheet(_currentSheetId), func, currentRange, out var plan)");
+        source.Should().Contain("(plan.Target, Cell.FromFormula(plan.Formula))");
         var autoSumButtonHandler = SourceMethodExtractor.ExtractMethodSource(source, "private void AutoSumPickerBtn_Click(");
         autoSumButtonHandler.Should().Contain("InsertAutoSumFormula(\"SUM\");");
         autoSumButtonHandler.Should().NotContain("OpenRibbonContextMenu");
