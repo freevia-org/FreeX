@@ -82,7 +82,10 @@ internal static class DialogSourceTestSupport
         }
 
         method.Should().NotBeNull();
-        method!.Invoke(instance, [sender, new RoutedEventArgs()]);
+        object[] parameters = method!.GetParameters().Length == 0
+            ? []
+            : [sender, new RoutedEventArgs()];
+        method.Invoke(instance, parameters);
     }
 
     public static void InvokePrivateHandlerAllowingNonModalDialogResult(object instance, string methodName)

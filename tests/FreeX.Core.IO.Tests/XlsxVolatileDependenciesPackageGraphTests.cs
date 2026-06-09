@@ -80,6 +80,9 @@ public sealed class XlsxVolatileDependenciesPackageGraphTests
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         AssertVolatileDependenciesPackageGraph(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved).GetSheetAt(0).GetValue(1, 2).Should().Be(new TextValue("edited"));
     }
 
     [Fact]
@@ -113,6 +116,9 @@ public sealed class XlsxVolatileDependenciesPackageGraphTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         adapter.LastSaveDiagnostics.InvalidatesCalcChain.Should().BeTrue();
         AssertCalculationDependencyPackageGraphPruned(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved).GetSheetAt(0).GetValue(1, 1).Should().Be(new NumberValue(3));
     }
 
     [Fact]
@@ -134,6 +140,9 @@ public sealed class XlsxVolatileDependenciesPackageGraphTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
         AssertCalculationDependencyPackageGraphPruned(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved).GetSheetAt(0).GetValue(1, 1).Should().Be(BlankValue.Instance);
     }
 
     private static MemoryStream CreateWorkbookWithVolatileDependenciesPackageGraph()

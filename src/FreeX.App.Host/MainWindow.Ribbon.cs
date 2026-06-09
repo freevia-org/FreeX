@@ -731,9 +731,16 @@ public partial class MainWindow
             if (stack.Orientation != Orientation.Horizontal || stack.Children.Count < 2)
                 continue;
 
-            var label = stack.Children
-                .OfType<TextBlock>()
-                .FirstOrDefault(RibbonMetadata.IsCommandLabel);
+            TextBlock? label = null;
+            foreach (var child in stack.Children)
+            {
+                if (child is not TextBlock textBlock || !RibbonMetadata.IsCommandLabel(textBlock))
+                    continue;
+
+                label = textBlock;
+                break;
+            }
+
             if (label is null)
                 continue;
 

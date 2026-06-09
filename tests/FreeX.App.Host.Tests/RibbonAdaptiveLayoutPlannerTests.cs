@@ -399,6 +399,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [InlineData("Proofing|Accessibility|Comments|Notes|Protect", "Review")]
     [InlineData("Workbook Views|Show|Zoom|Window", "View")]
     [InlineData("Arrange|Format", "Draw")]
+    [InlineData("PivotTable|Active Field|Group|Filter|Data|Actions|Calculations|Tools|Show", "PivotTable Analyze")]
     [InlineData("Help", "Tiny")]
     public void Profiles_ResolveKnownRibbonTabGroupSets(string groupNameList, string expectedProfile)
     {
@@ -435,6 +436,21 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
         states[Array.IndexOf(groupNames, "Tables")].Should().Be(RibbonAdaptiveGroupState.SmallWithLabels);
         states[Array.IndexOf(groupNames, "Charts")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Links")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Fact]
+    public void ApplyBreakpointOverrides_CollapsesPivotAnalyzeAtScreenshotTourWidth()
+    {
+        var groupNames = new[] { "PivotTable", "Active Field", "Group", "Filter", "Data", "Actions", "Calculations", "Tools", "Show" };
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
+            750,
+            groupNames,
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray(),
+            selectedTabHeader: "PivotTableAnalyzeTab");
+
+        states.Should().OnlyContain(state => state == RibbonAdaptiveGroupState.Collapsed);
+        RibbonAdaptiveTabProfiles.DisablesPriorityExpansion(groupNames, selectedTabHeader: "PivotTableAnalyzeTab")
+            .Should().BeTrue("contextual PivotTable Analyze should prefer no-scroll fit over reopening wide groups at screenshot-tour widths");
     }
 
     [Fact]

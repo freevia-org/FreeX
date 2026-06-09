@@ -54,13 +54,21 @@ public static partial class NumberFormatter
         if (!hasConditions)
             return parsedSections[0];
 
-        var selectedIndex = Array.FindIndex(parsedSections, section =>
-            section.Condition is not null && section.Condition.Matches(value));
-        if (selectedIndex >= 0)
-            return parsedSections[selectedIndex];
+        for (var i = 0; i < parsedSections.Length; i++)
+        {
+            var section = parsedSections[i];
+            if (section.Condition is not null && section.Condition.Matches(value))
+                return section;
+        }
 
-        selectedIndex = Array.FindIndex(parsedSections, section => section.Condition is null);
-        return selectedIndex >= 0 ? parsedSections[selectedIndex] : parsedSections[0];
+        for (var i = 0; i < parsedSections.Length; i++)
+        {
+            var section = parsedSections[i];
+            if (section.Condition is null)
+                return section;
+        }
+
+        return parsedSections[0];
     }
 
     private static string FormatDateTime(double oaDate, string format)

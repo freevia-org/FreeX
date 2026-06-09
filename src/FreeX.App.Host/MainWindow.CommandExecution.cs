@@ -235,8 +235,7 @@ public partial class MainWindow
     {
         IWorkbookCommand CreateCommand()
         {
-            var sheet = _workbook.GetSheet(_currentSheetId);
-            var chart = sheet?.Charts.FirstOrDefault();
+            var chart = GetFirstChartOnCurrentSheet();
             if (chart is null)
                 return new FailedWorkbookCommand(missingMessage);
             if (canApply is not null && !canApply(chart))
@@ -257,10 +256,21 @@ public partial class MainWindow
         return false;
     }
 
-    private bool TryGetFirstChartForDialog(string caption, string missingMessage, out ChartModel chart)
+    private ChartModel? GetFirstChartOnCurrentSheet()
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        chart = sheet?.Charts.FirstOrDefault()!;
+        if (sheet is null)
+            return null;
+
+        foreach (var chart in sheet.Charts)
+            return chart;
+
+        return null;
+    }
+
+    private bool TryGetFirstChartForDialog(string caption, string missingMessage, out ChartModel chart)
+    {
+        chart = GetFirstChartOnCurrentSheet()!;
         if (chart is not null)
             return true;
 
@@ -294,10 +304,12 @@ public partial class MainWindow
         Func<SheetId, IWorkbookCommand> createCommand) =>
         TryExecuteGroupedSheetCommand(title, createCommand, out _);
 
-    private void ExecuteUndo()
+    private bool ExecuteUndo()
     {
         var outcome = _commandBus.Undo(_workbook.Id);
-        if (!outcome.Success) return;
+        if (!outcome.Success)
+            return false;
+
         MarkWorkbookDirty();
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
@@ -305,12 +317,15 @@ public partial class MainWindow
         RefreshToolbar();
         RefreshStatusBar();
         NotifyOtherWindowsOfWorkbookChange();
+        return true;
     }
 
-    private void ExecuteRedo()
+    private bool ExecuteRedo()
     {
         var outcome = _commandBus.Redo(_workbook.Id);
-        if (!outcome.Success) return;
+        if (!outcome.Success)
+            return false;
+
         MarkWorkbookDirty();
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
@@ -318,6 +333,7 @@ public partial class MainWindow
         RefreshToolbar();
         RefreshStatusBar();
         NotifyOtherWindowsOfWorkbookChange();
+        return true;
     }
 
     private void ExecuteRepeatLast()

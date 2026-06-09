@@ -13,14 +13,13 @@ public sealed partial class ScenarioManagerDialogTests
         source.Should().Contain("UiText.Get(\"ScenarioManager_Add\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_Edit\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_Delete\")");
-        source.Should().Contain("UiText.Get(\"ScenarioManager_List\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_Show\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_Summary\")");
         source.Should().Contain("UpdateSelectionState");
         source.Should().Contain("ScenarioManagerAction.Delete");
-        source.Should().Contain("ScenarioManagerAction.List");
         source.Should().NotContain("Merge...");
-        source.Should().NotContain("ScenarioManagerAction.List, isEnabled: false");
+        source.Should().NotContain("AddActionButton(sideButtons, UiText.Get(\"ScenarioManager_List\"), ScenarioManagerAction.List");
+        source.Should().NotContain("ScenarioManagerListButton");
     }
 
     [Fact]
@@ -34,11 +33,11 @@ public sealed partial class ScenarioManagerDialogTests
         source.Should().Contain("UiText.Get(\"ScenarioManager_ResultCells\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_Comment\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_PreventChanges\")");
+        source.Should().Contain("IsChecked = true");
         source.Should().Contain("UiText.Get(\"ScenarioManager_Hide\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_Add\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_Edit\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_Delete\")");
-        source.Should().Contain("UiText.Get(\"ScenarioManager_List\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_Show\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_Summary\")");
         source.Should().Contain("Content = UiText.Get(\"ScenarioManager_Close\")");

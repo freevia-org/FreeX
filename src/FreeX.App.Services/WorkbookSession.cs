@@ -177,6 +177,7 @@ public sealed class WorkbookSession
 
         Workbook = source.Workbook;
         CurrentFilePath = source.OpenedAsTemplate ? null : source.SourcePath;
+        CurrentFileAccessIdentity = ResolveCurrentFileAccessIdentity(source);
         CurrentXlsxFeatureReport = source.FeatureReport;
         OpenFormats = BuildFormats(adapters, static format => format.CanOpen);
         SaveFormats = BuildFormats(adapters, static format => format.CanSave);
@@ -239,6 +240,8 @@ public sealed class WorkbookSession
         Workbook.Sheets.Any(sheet => sheet.Id != ActiveSheet.Id && !sheet.IsHidden && !sheet.IsVeryHidden);
 
     public string? CurrentFilePath { get; private set; }
+
+    public WorkbookFileAccessIdentity? CurrentFileAccessIdentity { get; private set; }
 
     public XlsxFeatureReport? CurrentXlsxFeatureReport { get; private set; }
 
@@ -414,6 +417,29 @@ public sealed class WorkbookSession
             return WorkbookNavigationResult.Failed("Reference is not valid.");
 
         return GoToRange(range);
+    }
+
+    public bool CanOpenSelectedHyperlink =>
+        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _);
+
+    public bool TryGetSelectedHyperlinkPlan(out HyperlinkNavigationPlan? plan) =>
+        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out plan);
+
+    public WorkbookNavigationResult OpenSelectedHyperlink() =>
+        OpenHyperlink(SelectedRange.Start);
+
+    public WorkbookNavigationResult OpenHyperlink(CellAddress address)
+    {
+        if (!HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, address, CurrentFilePath, out var plan) || plan is null)
+            return WorkbookNavigationResult.Failed("Hyperlink target was not found.");
+
+        return plan.Kind switch
+        {
+            HyperlinkNavigationKind.WorksheetCell => GoToReference(plan.Target),
+            HyperlinkNavigationKind.LocalFile =>
+                WorkbookNavigationResult.Failed("Local file hyperlinks require a platform file-opening route."),
+            _ => WorkbookNavigationResult.Failed("External hyperlinks are not supported on this platform.")
+        };
     }
 
     public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
@@ -677,7 +703,7 @@ public sealed class WorkbookSession
         if (!result.Success)
             return result;
 
-        ApplySuccessfulEditResult(result, plan.AffectedCells.FirstOrDefault(ActiveCell));
+        ApplySuccessfulEditResult(result, FirstAffectedCellOrDefault(plan.AffectedCells, ActiveCell));
         return result;
     }
 
@@ -1080,7 +1106,7 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult DuplicateActiveSheet()
     {
         var sourceSheetId = ActiveSheet.Id;
-        var sourceIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sourceSheetId);
+        var sourceIndex = FindSheetIndex(sourceSheetId, notFoundIndex: -1);
         if (sourceIndex < 0)
         {
             return new WorkbookCellEditResult(
@@ -1227,7 +1253,7 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult HideActiveSheet()
     {
         var sheetId = ActiveSheet.Id;
-        var sheetIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sheetId);
+        var sheetIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
         if (sheetIndex < 0)
         {
             return new WorkbookCellEditResult(
@@ -1291,7 +1317,7 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult DeleteActiveSheet()
     {
         var sheetId = ActiveSheet.Id;
-        var sheetIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sheetId);
+        var sheetIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
         if (sheetIndex < 0)
         {
             return new WorkbookCellEditResult(
@@ -1337,7 +1363,7 @@ public sealed class WorkbookSession
     private WorkbookCellEditResult MoveActiveSheetBy(int offset)
     {
         var sheetId = ActiveSheet.Id;
-        var fromIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sheetId);
+        var fromIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
         if (fromIndex < 0)
         {
             return new WorkbookCellEditResult(
@@ -1872,6 +1898,25 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public HyperlinkDialogPrefill GetSelectedRangeHyperlinkDialogPrefill() =>
+        HyperlinkDialogPrefill.FromCell(ActiveSheet, SelectedRange.Start);
+
+    public WorkbookCellEditResult SetSelectedRangeHyperlink(HyperlinkDialogPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var range = SelectedRange;
+        var metadata = new HyperlinkMetadata(plan.LinkType, plan.ScreenTip, plan.Bookmark);
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateSetHyperlinkCommand(range, plan.Target, plan.DisplayText, metadata));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public bool CanFillSelectedRange(FillCellsDirection direction) =>
         direction switch
         {
@@ -2239,16 +2284,22 @@ public sealed class WorkbookSession
         return TryResolveSaveTarget(CurrentFilePath, out target, out _);
     }
 
-    public bool TryResolveOpenTarget(string path, out WorkbookOpenTarget? target, out string message)
+    public bool TryResolveOpenTarget(string path, out WorkbookOpenTarget? target, out string message) =>
+        TryResolveOpenTarget(path, fileAccessIdentity: null, out target, out message);
+
+    public bool TryResolveOpenTarget(
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity,
+        out WorkbookOpenTarget? target,
+        out string message)
     {
         target = null;
-        if (string.IsNullOrWhiteSpace(path))
+        if (!LocalFilePath.TryNormalize(path, out var openPath))
         {
             message = "Open requires a local file path.";
             return false;
         }
 
-        var openPath = path.Trim();
         if (!TryGetExtension(openPath, out var extension))
         {
             message = "Unsupported file type.";
@@ -2262,7 +2313,12 @@ public sealed class WorkbookSession
             return false;
         }
 
-        target = new WorkbookOpenTarget(openPath, adapter, extension, format);
+        target = new WorkbookOpenTarget(
+            openPath,
+            adapter,
+            extension,
+            format,
+            ResolveOpenFileAccessIdentity(openPath, fileAccessIdentity));
         message = "";
         return true;
     }
@@ -2285,12 +2341,14 @@ public sealed class WorkbookSession
         return true;
     }
 
-    public void MarkSaved(string path)
+    public void MarkSaved(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
+        var resolvedIdentity = ResolveSavedFileAccessIdentity(path, fileAccessIdentity);
         IsDirty = false;
         CurrentFilePath = path;
+        CurrentFileAccessIdentity = resolvedIdentity;
         CurrentXlsxFeatureReport = null;
         Workbook.Name = Path.GetFileName(path);
     }
@@ -2618,6 +2676,31 @@ public sealed class WorkbookSession
         return ToCommand("Clear All", commands);
     }
 
+    private IWorkbookCommand CreateSetHyperlinkCommand(
+        GridRange range,
+        string target,
+        string displayText,
+        HyperlinkMetadata metadata)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = new List<IWorkbookCommand>();
+        foreach (var sheetId in targetSheetIds)
+        {
+            var sheetRange = RemapRangeToSheet(range, sheetId);
+            foreach (var address in sheetRange.AllCells())
+            {
+                commands.Add(new SetHyperlinkCommand(
+                    sheetId,
+                    address,
+                    target,
+                    displayText,
+                    metadata));
+            }
+        }
+
+        return ToCommand("Insert Hyperlink", commands);
+    }
+
     private IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(GridRange range)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
@@ -2870,19 +2953,44 @@ public sealed class WorkbookSession
 
     private static bool WouldSetDataValidationMutate(Sheet sheet, DataValidation rule)
     {
-        var existing = sheet.DataValidations.FirstOrDefault(candidate =>
-            candidate.Id == rule.Id || candidate.AppliesTo == rule.AppliesTo);
+        var existing = FindMatchingDataValidationRule(sheet, rule);
         return existing is null || !DataValidationRulesEqual(existing, rule);
     }
 
-    private static bool HasDataValidationOverlapping(Sheet sheet, GridRange range) =>
-        sheet.DataValidations.Any(rule => DataValidationRanges(rule).Any(ruleRange => ruleRange.Overlaps(range)));
-
-    private static IEnumerable<GridRange> DataValidationRanges(DataValidation rule)
+    private static DataValidation? FindMatchingDataValidationRule(Sheet sheet, DataValidation rule)
     {
-        yield return rule.AppliesTo;
-        foreach (var range in rule.AdditionalRanges)
-            yield return range;
+        foreach (var candidate in sheet.DataValidations)
+        {
+            if (candidate.Id == rule.Id || candidate.AppliesTo == rule.AppliesTo)
+                return candidate;
+        }
+
+        return null;
+    }
+
+    private static bool HasDataValidationOverlapping(Sheet sheet, GridRange range)
+    {
+        foreach (var rule in sheet.DataValidations)
+        {
+            if (DataValidationOverlaps(rule, range))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool DataValidationOverlaps(DataValidation rule, GridRange range)
+    {
+        if (rule.AppliesTo.Overlaps(range))
+            return true;
+
+        foreach (var ruleRange in rule.AdditionalRanges)
+        {
+            if (ruleRange.Overlaps(range))
+                return true;
+        }
+
+        return false;
     }
 
     private static DataValidation CloneDataValidationForRanges(
@@ -3090,9 +3198,14 @@ public sealed class WorkbookSession
         EnsureActiveCellVisible();
     }
 
+    private static CellAddress FirstAffectedCellOrDefault(
+        IReadOnlyList<CellAddress> affectedCells,
+        CellAddress fallbackAddress) =>
+        affectedCells.Count == 0 ? fallbackAddress : affectedCells[0];
+
     private void ApplySuccessfulEditResult(WorkbookCellEditResult result, CellAddress fallbackAddress)
     {
-        var address = result.AffectedCells.FirstOrDefault(fallbackAddress);
+        var address = FirstAffectedCellOrDefault(result.AffectedCells, fallbackAddress);
         if (!ActiveSheet.Id.Equals(address.Sheet))
         {
             var selection = _sheetSelectionService.SelectSheet(Workbook, address.Sheet, _groupedSheetIds);
@@ -3232,13 +3345,25 @@ public sealed class WorkbookSession
 
     private string FindNameForAddress(CellAddress address)
     {
-        var namedRange = Workbook.NamedRanges
-            .Where(pair => pair.Value.Contains(address))
-            .OrderBy(pair => pair.Value.CellCount)
-            .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
+        string? bestName = null;
+        var bestCellCount = 0L;
+        foreach (var (name, range) in Workbook.NamedRanges)
+        {
+            if (!range.Contains(address))
+                continue;
 
-        return string.IsNullOrEmpty(namedRange.Key) ? "" : namedRange.Key;
+            var cellCount = range.CellCount;
+            if (bestName is null ||
+                cellCount < bestCellCount ||
+                (cellCount == bestCellCount &&
+                 string.Compare(name, bestName, StringComparison.OrdinalIgnoreCase) < 0))
+            {
+                bestName = name;
+                bestCellCount = cellCount;
+            }
+        }
+
+        return bestName ?? "";
     }
 
     private int FindFirstResultAfterActiveCell(IReadOnlyList<FindResult> results, FindSearchOrder searchOrder)
@@ -3326,7 +3451,7 @@ public sealed class WorkbookSession
         return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
     }
 
-    private int FindSheetIndex(SheetId sheetId)
+    private int FindSheetIndex(SheetId sheetId, int notFoundIndex = int.MaxValue)
     {
         for (var index = 0; index < Workbook.Sheets.Count; index++)
         {
@@ -3334,7 +3459,7 @@ public sealed class WorkbookSession
                 return index;
         }
 
-        return int.MaxValue;
+        return notFoundIndex;
     }
 
     private static bool TryCreateReplacementCommand(
@@ -3507,8 +3632,7 @@ public sealed class WorkbookSession
     };
 
     private SheetId? ResolveSheetIdByName(string sheetName) =>
-        Workbook.Sheets.FirstOrDefault(sheet =>
-            string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id;
+        Workbook.GetSheet(sheetName)?.Id;
 
     private WorkbookNavigationResult GoToReviewNavigationPlan(ReviewNavigationPlan plan) =>
         plan is { Success: true, Target: { } target }
@@ -3969,6 +4093,52 @@ public sealed class WorkbookSession
             status += $" {warnings.Count} load warning{(warnings.Count == 1 ? "" : "s")}.";
 
         return status;
+    }
+
+    private static WorkbookFileAccessIdentity? ResolveCurrentFileAccessIdentity(StartupWorkbookLoadResult source)
+    {
+        if (source.OpenedAsTemplate)
+            return null;
+
+        if (source.SourceFileAccessIdentity is not null)
+            return source.SourceFileAccessIdentity;
+
+        return string.IsNullOrWhiteSpace(source.SourcePath)
+            ? null
+            : WorkbookFileAccessIdentity.FromLocalPath(source.SourcePath);
+    }
+
+    private static WorkbookFileAccessIdentity ResolveOpenFileAccessIdentity(
+        string openPath,
+        WorkbookFileAccessIdentity? fileAccessIdentity)
+    {
+        if (fileAccessIdentity is not null &&
+            fileAccessIdentity.TryWithLocalPath(openPath, out var resolvedIdentity) &&
+            resolvedIdentity is not null)
+        {
+            return resolvedIdentity;
+        }
+
+        return WorkbookFileAccessIdentity.FromLocalPath(openPath);
+    }
+
+    private WorkbookFileAccessIdentity ResolveSavedFileAccessIdentity(
+        string savedPath,
+        WorkbookFileAccessIdentity? fileAccessIdentity)
+    {
+        if (fileAccessIdentity is not null)
+            return ResolveOpenFileAccessIdentity(savedPath, fileAccessIdentity);
+
+        if (CurrentFileAccessIdentity is not null &&
+            CurrentFilePath is not null &&
+            PlatformPathIdentityComparer.Current.Equals(CurrentFilePath, savedPath) &&
+            CurrentFileAccessIdentity.TryWithLocalPath(savedPath, out var retainedIdentity) &&
+            retainedIdentity is not null)
+        {
+            return retainedIdentity;
+        }
+
+        return WorkbookFileAccessIdentity.FromLocalPath(savedPath);
     }
 }
 

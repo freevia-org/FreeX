@@ -13,7 +13,7 @@ public static class GetPivotDataFormulaPlanner
         Sheet pivotSheet,
         CellAddress selectedCell)
     {
-        var pivotTable = pivotSheet.PivotTables.FirstOrDefault(pivot => pivot.TargetRange.Contains(selectedCell));
+        var pivotTable = FindPivotTable(pivotSheet, selectedCell);
         if (pivotTable is null)
             return null;
 
@@ -51,6 +51,17 @@ public static class GetPivotDataFormulaPlanner
 
         var functionCall = $"GETPIVOTDATA({string.Join(",", arguments)})";
         return new GetPivotDataFormulaPlan(functionCall, "=" + functionCall);
+    }
+
+    private static PivotTableModel? FindPivotTable(Sheet pivotSheet, CellAddress selectedCell)
+    {
+        foreach (var pivot in pivotSheet.PivotTables)
+        {
+            if (pivot.TargetRange.Contains(selectedCell))
+                return pivot;
+        }
+
+        return null;
     }
 
     private static void AddRowFilters(

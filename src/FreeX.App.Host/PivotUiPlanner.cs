@@ -37,7 +37,7 @@ public static class PivotUiPlanner
         if (string.IsNullOrWhiteSpace(caption))
             return null;
 
-        return FindDataFieldIndexBy(pivotTable, field => DataFieldCaptionEquals(field, caption));
+        return FindDataFieldIndexByCaption(pivotTable, caption);
     }
 
     public static int? FindFieldSourceIndex(IReadOnlyList<string> headers, PivotTableModel pivotTable, string caption)
@@ -46,7 +46,7 @@ public static class PivotUiPlanner
         if (sourceIndex is not null)
             return sourceIndex;
 
-        return FindDataFieldByCaptionCore(pivotTable, caption)?.SourceFieldIndex;
+        return FindDataFieldByCaption(pivotTable, caption)?.SourceFieldIndex;
     }
 
     public static PivotTableModel? FindPivotTableForSelection(Sheet sheet, GridRange? selectedRange)
@@ -63,8 +63,7 @@ public static class PivotUiPlanner
         if (selectedRange is not { } range)
             return null;
 
-        return FindFirstPivotTable(sheet, pivot =>
-            pivot.TargetRange.Contains(range.Start) || pivot.TargetRange.Overlaps(range));
+        return FindPivotTableIntersectingSelection(sheet, range);
     }
 
     public static PivotShowDetailsTarget? ResolveShowDetailsTarget(Sheet? sheet, GridRange? selectedRange)
@@ -72,7 +71,7 @@ public static class PivotUiPlanner
         if (sheet is null || selectedRange is not { } range)
             return null;
 
-        var pivotTable = FindFirstPivotTable(sheet, pivot => pivot.TargetRange.Contains(range.Start));
+        var pivotTable = FindPivotTableContainingCell(sheet, range.Start);
         return pivotTable is null
             ? null
             : new PivotShowDetailsTarget(pivotTable.Name, range.Start);
@@ -318,7 +317,7 @@ public static class PivotUiPlanner
         int sourceFieldIndex,
         IReadOnlyList<string>? selectedItems) =>
         fields
-            .Select(field => field.SourceFieldIndex == sourceFieldIndex
+            .Select(field => SourceFieldIndexEquals(field, sourceFieldIndex)
                 ? field with
                 {
                     SelectedItem = selectedItems is { Count: 1 } ? selectedItems[0] : null,
@@ -362,6 +361,9 @@ public static class PivotUiPlanner
     private static bool DataFieldCaptionEquals(PivotDataFieldModel field, string caption) =>
         CaptionEquals(field.Name, caption);
 
+    private static int? FindDataFieldIndexByCaption(PivotTableModel pivotTable, string caption) =>
+        FindDataFieldIndexBy(pivotTable, field => DataFieldCaptionEquals(field, caption));
+
     private static int? FindDataFieldIndexBy(
         PivotTableModel pivotTable,
         Func<PivotDataFieldModel, bool> predicate)
@@ -375,16 +377,36 @@ public static class PivotUiPlanner
         return null;
     }
 
-    private static PivotDataFieldModel? FindDataFieldByCaptionCore(PivotTableModel pivotTable, string caption) =>
-        pivotTable.DataFields.FirstOrDefault(field => DataFieldCaptionEquals(field, caption));
+    private static PivotDataFieldModel? FindDataFieldByCaption(PivotTableModel pivotTable, string caption) =>
+        FindFirstDataField(pivotTable, field => DataFieldCaptionEquals(field, caption));
 
     private static PivotTableModel? FindFirstPivotTable(Sheet sheet) =>
-        sheet.PivotTables.FirstOrDefault();
+        sheet.PivotTables.Count == 0 ? null : sheet.PivotTables[0];
 
     private static PivotTableModel? FindFirstPivotTable(
         Sheet sheet,
-        Func<PivotTableModel, bool> predicate) =>
-        sheet.PivotTables.FirstOrDefault(predicate);
+        Func<PivotTableModel, bool> predicate)
+    {
+        foreach (var pivotTable in sheet.PivotTables)
+        {
+            if (predicate(pivotTable))
+                return pivotTable;
+        }
+
+        return null;
+    }
+
+    private static PivotTableModel? FindPivotTableIntersectingSelection(Sheet sheet, GridRange range) =>
+        FindFirstPivotTable(sheet, pivotTable => PivotTableIntersectsSelection(pivotTable, range));
+
+    private static PivotTableModel? FindPivotTableContainingCell(Sheet sheet, CellAddress cell) =>
+        FindFirstPivotTable(sheet, pivotTable => PivotTableContainsCell(pivotTable, cell));
+
+    private static bool PivotTableIntersectsSelection(PivotTableModel pivotTable, GridRange range) =>
+        PivotTableContainsCell(pivotTable, range.Start) || pivotTable.TargetRange.Overlaps(range);
+
+    private static bool PivotTableContainsCell(PivotTableModel pivotTable, CellAddress cell) =>
+        pivotTable.TargetRange.Contains(cell);
 
     private static bool PivotTableNameEquals(PivotTableModel pivotTable, string name) =>
         string.Equals(pivotTable.Name, name, StringComparison.OrdinalIgnoreCase);
@@ -393,20 +415,53 @@ public static class PivotUiPlanner
         string.Equals(fieldButton, caption, StringComparison.OrdinalIgnoreCase);
 
     private static PivotDataFieldModel? FindFirstDataField(PivotTableModel pivotTable) =>
-        pivotTable.DataFields.FirstOrDefault();
+        pivotTable.DataFields.Count == 0 ? null : pivotTable.DataFields[0];
+
+    private static PivotDataFieldModel? FindFirstDataField(
+        PivotTableModel pivotTable,
+        Func<PivotDataFieldModel, bool> predicate)
+    {
+        foreach (var field in pivotTable.DataFields)
+        {
+            if (predicate(field))
+                return field;
+        }
+
+        return null;
+    }
 
     private static PivotFieldModel? FindFirstPageField(PivotTableModel pivotTable) =>
-        pivotTable.PageFields.FirstOrDefault();
+        pivotTable.PageFields.Count == 0 ? null : pivotTable.PageFields[0];
 
-    private static PivotFieldModel? FindFirstAxisField(PivotTableModel pivotTable) =>
-        pivotTable.RowFields.Concat(pivotTable.ColumnFields).FirstOrDefault();
+    private static PivotFieldModel? FindFirstAxisField(PivotTableModel pivotTable)
+    {
+        if (pivotTable.RowFields.Count > 0)
+            return pivotTable.RowFields[0];
+
+        return pivotTable.ColumnFields.Count == 0 ? null : pivotTable.ColumnFields[0];
+    }
 
     private static string FieldCaption(IReadOnlyList<string> headers, PivotFieldModel field) =>
         FieldCaption(headers, field.SourceFieldIndex);
 
     private static PivotFieldModel? FindFirstLayoutField(PivotTableModel pivotTable, int sourceFieldIndex) =>
-        LayoutFields(pivotTable).FirstOrDefault(field => field.SourceFieldIndex == sourceFieldIndex);
+        FindFirstLayoutField(pivotTable.RowFields, sourceFieldIndex) ??
+        FindFirstLayoutField(pivotTable.ColumnFields, sourceFieldIndex) ??
+        FindFirstLayoutField(pivotTable.PageFields, sourceFieldIndex);
 
-    private static IEnumerable<PivotFieldModel> LayoutFields(PivotTableModel pivotTable) =>
-        pivotTable.RowFields.Concat(pivotTable.ColumnFields).Concat(pivotTable.PageFields);
+    private static PivotFieldModel? FindFirstLayoutField(
+        IReadOnlyList<PivotFieldModel> fields,
+        int sourceFieldIndex)
+    {
+        foreach (var field in fields)
+        {
+            if (SourceFieldIndexEquals(field, sourceFieldIndex))
+                return field;
+        }
+
+        return null;
+    }
+
+    private static bool SourceFieldIndexEquals(PivotFieldModel field, int sourceFieldIndex) =>
+        field.SourceFieldIndex == sourceFieldIndex;
 }

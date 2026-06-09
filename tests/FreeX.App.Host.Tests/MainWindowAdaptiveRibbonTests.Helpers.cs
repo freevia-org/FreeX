@@ -242,7 +242,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .Concat(HomeRibbonChildren.OfType<DependencyObject>().SelectMany(WpfTestTree.FindLogicalDescendants<DependencyObject>))
                 .OfType<Button>()
                 .Distinct()
-                .FirstOrDefault(button => string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal));
+                .FirstOrDefault(button =>
+                    string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal) ||
+                    string.Equals(GetButtonLabel(button), title, StringComparison.Ordinal));
 
         public bool VisibleRibbonButtonHasDropdownChevron(string title) =>
             VisibleOrCollapsedRibbonButton(title) is { } button &&
@@ -332,7 +334,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(SelectedRibbonContentRoot))
                 .OfType<Button>()
                 .Distinct()
-                .FirstOrDefault(button => string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal));
+                .FirstOrDefault(button =>
+                    string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal) ||
+                    string.Equals(GetButtonLabel(button), title, StringComparison.Ordinal));
 
         private static int DropdownChevronCount(ButtonBase button) =>
             WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
@@ -384,7 +388,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 ? []
                 : WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                     .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(SelectedRibbonContentRoot))
-                    .OfType<Button>()
+                    .OfType<ButtonBase>()
                     .Distinct()
                     .Where(IsEffectivelyVisible)
                     .Select(GetButtonLabel)
@@ -396,7 +400,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 ? []
                 : WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                     .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(SelectedRibbonContentRoot))
-                    .OfType<Button>()
+                    .OfType<ButtonBase>()
                     .Distinct()
                     .Where(IsEffectivelyVisible)
                     .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
@@ -451,7 +455,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .Min();
 
             var maxCommandBottom = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(group)
-                .OfType<Button>()
+                .OfType<ButtonBase>()
                 .Where(IsEffectivelyVisible)
                 .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
                 .Select(button =>
@@ -702,6 +706,17 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             PumpDispatcher();
         }
 
+        public void ShowChartContextualTabs()
+        {
+            if (_window.FindName("ChartDesignTab") is TabItem designTab)
+                designTab.Visibility = Visibility.Visible;
+            if (_window.FindName("ChartFormatTab") is TabItem formatTab)
+                formatTab.Visibility = Visibility.Visible;
+
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
         public void ShowTableDesignContextualTab()
         {
             if (_window.FindName("TableDesignTab") is TabItem tableTab)
@@ -715,7 +730,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         {
             var button = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                 .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(SelectedRibbonContentRoot))
-                .OfType<Button>()
+                .OfType<ButtonBase>()
                 .Distinct()
                 .FirstOrDefault(button => string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal));
 
@@ -780,6 +795,10 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 findSelect.IsEnabled = true;
             if (_window.FindName("TableDesignTab") is TabItem tableDesignTab)
                 tableDesignTab.Visibility = Visibility.Collapsed;
+            if (_window.FindName("ChartDesignTab") is TabItem chartDesignTab)
+                chartDesignTab.Visibility = Visibility.Collapsed;
+            if (_window.FindName("ChartFormatTab") is TabItem chartFormatTab)
+                chartFormatTab.Visibility = Visibility.Collapsed;
             if (_window.FindName("PivotTableAnalyzeTab") is TabItem pivotAnalyzeTab)
                 pivotAnalyzeTab.Visibility = Visibility.Collapsed;
             if (_window.FindName("PivotTableDesignTab") is TabItem pivotDesignTab)
@@ -941,7 +960,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .Any(textBlock => RibbonMetadata.IsCommandLabel(textBlock) &&
                                   IsEffectivelyVisible(textBlock));
 
-        private static bool IsTallLargeRibbonCommand(Button button) =>
+        private static bool IsTallLargeRibbonCommand(ButtonBase button) =>
             button.Content is StackPanel { Orientation: Orientation.Vertical } content &&
             RibbonMetadata.TryGetCommandContentLayout(content, out var layout) &&
             layout == RibbonCommandContentLayout.Large &&

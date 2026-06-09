@@ -1,6 +1,12 @@
 # macOS Public Preview Human Validation Checklist
 
-Use this checklist for each `macOS App Preview` public-preview candidate after hosted evidence has been downloaded and the Windows-runnable public-preview preflight has passed. It complements [test-distribution.md](test-distribution.md), [macos-signing-notarization.md](macos-signing-notarization.md), and [../planning/macos-accessibility-evidence.md](../planning/macos-accessibility-evidence.md).
+Use this checklist for each `macOS App Preview` public-preview candidate after hosted evidence has been downloaded and the Windows-runnable public-preview preflight has passed. It complements [test-distribution.md](test-distribution.md), [macos-hosted-app-production.md](macos-hosted-app-production.md), [macos-signing-notarization.md](macos-signing-notarization.md), and [../planning/macos-accessibility-evidence.md](../planning/macos-accessibility-evidence.md).
+
+Before handing work to Mac testers, use the hosted production runbook to download the app, diagnostics, aggregate readiness, and release-assets wrappers under one artifact root. Then generate the run-specific handoff from Windows. This validates hosted evidence and prints the exact runtime checklist paths, expected artifact wrapper names, checklist validation commands, and final promotion command without requiring completed checklist files yet:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewPromotion.ps1 -ArtifactRoot artifacts/macos-preview -ChecklistRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt> -PrepareHumanValidationHandoff
+```
 
 After filling a release-specific copy, validate it from Windows before promotion. Name the completed runtime-specific copies beside the downloaded hosted artifacts as `completed-macos-public-preview-checklist-osx-arm64.md` and `completed-macos-public-preview-checklist-osx-x64.md`:
 
@@ -42,9 +48,10 @@ Do not mark a macOS artifact public-preview eligible unless every required secti
 ## Prerequisites
 
 - Download the GitHub Actions artifact wrapper in a browser when Gatekeeper behavior is in scope, and do not clear quarantine attributes before the first Finder launch.
-- Unzip the artifact wrapper into a clean folder, then verify the inner app ZIP with its checksum file before unzipping `FreeX.app`.
+- Unzip the artifact wrapper into a clean folder, then verify the inner app ZIP with its checksum file before extracting `FreeX.app` with Finder/Archive Utility or `ditto -x -k freex-<runtime>-macos-app.zip .`.
 - Keep the original artifact wrapper, inner ZIP, checksum, evidence file, packaging smoke log, launch smoke file, notarization log, tester instructions, and diagnostics artifact with the release record.
 - Use a real macOS user session. Hosted smoke logs are supporting evidence, not a replacement for Finder, Gatekeeper, keyboard-only, or VoiceOver observations.
+- Treat workbook file-access diagnostics as instrumentation/readiness evidence only. They may help confirm redacted event emission, but real security-scoped access still needs on-device open, save, Save As, and reopen validation.
 - Record screenshots or exact prompt text for Gatekeeper prompts, default-handler changes, failed opens, accessibility issues, and crash dialogs.
 - Review diagnostics files for private information before attaching them to an issue or release record.
 
@@ -69,10 +76,11 @@ xcrun stapler validate FreeX.app
 | Notarization | `notarization_status=accepted` |  | Pass / Fail |  |
 | Stapling | `stapler_validated=true`; `xcrun stapler validate` succeeds |  | Pass / Fail |  |
 | Gatekeeper assessment | `spctl` accepts `FreeX.app` as Developer ID software |  | Pass / Fail |  |
-| Hosted launch smoke | Native runtime reports `macos_launch_smoke=passed` or documented architecture skip only for the opposite runtime |  | Pass / Fail |  |
+| Hosted launch smoke | Native runtime reports `macos_launch_smoke=passed`; evidence contains `smoke_status=passed`, and the launch, Open-With, and default-open smoke reports each contain `macos_launch_smoke=passed`; older historical runs may show an incompatible-architecture skip, but current CI blocks app artifact upload/readiness for that case |  | Pass / Fail |  |
 | LaunchServices/Open-With smoke | Evidence contains the hosted LaunchServices and Open-With smoke pass markers |  | Pass / Fail |  |
 | Command-key smoke | Evidence contains `command_key_smoke=passed` and required `cmd_*_menu_gesture=true` markers |  | Pass / Fail |  |
 | Diagnostics artifact | Matching `macos-diagnostics` artifact is present and retained |  | Pass / Fail |  |
+| File-access grant diagnostics | If present, `workbook_file_access_identity` and `workbook_file_access_scope` contain only redacted lifecycle metadata with `grantKind` and `payloadRedacted`; no file paths, filenames, workbook contents, formulas, or bookmark payloads are present. This is instrumentation/readiness evidence, not proof of real security-scoped access. |  | Pass / Fail / N/A |  |
 
 ## Gatekeeper First Launch
 
@@ -99,7 +107,9 @@ Use a representative `.fxl` workbook with recognizable cell contents or sheet na
 | Double-click `.fxl` in Finder | FreeX launches or activates and opens the selected workbook, not a blank replacement workbook |  | Pass / Fail |  |
 | Confirm workbook identity | Window title, visible sheet, cell value, or recent-file entry matches the double-clicked `.fxl` file |  | Pass / Fail |  |
 | Right-click `.fxl` > Open With > FreeX | FreeX opens the file when it is not already running |  | Pass / Fail |  |
+| Drag supported `.fxl`/`.xlsx` workbook onto `FreeX.app` or Dock icon | FreeX launches or activates and opens the dropped workbook, not a blank replacement workbook |  | Pass / Fail |  |
 | Repeat while FreeX is already running | The selected file opens in the existing app session without losing unsaved work |  | Pass / Fail |  |
+| Drag supported workbook from Finder onto already-running FreeX window | The already-running FreeX window accepts the Finder drop and opens the workbook without losing unsaved work |  | Pass / Fail |  |
 | Optional spreadsheet file Open With | Representative `.xlsx` or `.csv` opens through Open With when included in the candidate scope |  | Pass / Fail / N/A |  |
 
 ## Workbook Smoke
@@ -109,9 +119,28 @@ Use a representative `.fxl` workbook with recognizable cell contents or sheet na
 | Create a new workbook | Blank workbook appears and accepts keyboard focus |  | Pass / Fail |  |
 | Enter values and formulas | Typed values and a simple formula commit correctly |  | Pass / Fail |  |
 | Save and Save As | Native menu save routes create or update the expected file |  | Pass / Fail |  |
+| Open picker creates bookmark identity | Opening a workbook through the native picker succeeds, and local diagnostics show only redacted file-access grant metadata if grant diagnostics are enabled |  | Pass / Fail |  |
+| Bookmark scope wraps open, save, and recent-file I/O | Open, Save, Save As, and Open Recent continue to work after relaunch for files outside the app sandbox, without requiring the tester to reselect the same file unnecessarily |  | Pass / Fail |  |
+| Bookmark payload stays out of diagnostics and release evidence | Diagnostics and release evidence contain no workbook paths, file names, formulas, workbook contents, raw storage identifiers, or bookmark payloads |  | Pass / Fail |  |
 | Close dirty workbook | Close prompt offers Save, Discard, and Cancel with clear labels |  | Pass / Fail |  |
 | Reopen saved workbook | Saved values, formulas, sheet names, and simple formatting survive reopen |  | Pass / Fail |  |
 | Recent files | Opened or saved workbook appears in the recent-file route when expected |  | Pass / Fail |  |
+| On-device file grant persistence | Open a workbook through the picker, save or Save As, quit, relaunch, and reopen the workbook from Recent or Open With; hosted CI evidence is not sufficient for this row |  | Pass / Fail |  |
+| File-access grant diagnostics review | If `workbook_file_access_identity` or `workbook_file_access_scope` appears in local diagnostics, only `grantKind` and `payloadRedacted` are present; no file paths, filenames, workbook contents, formulas, or bookmark payloads appear |  | Pass / Fail / N/A |  |
+
+## Future Native Share Sheet Readiness
+
+The current macOS public-preview candidate uses the existing share fallback; a native AppKit share sheet is not implemented yet. Do not claim native share-sheet parity until a build that implements the native sheet passes every row in this section. For builds before that implementation, record `Not implemented` for every row with evidence pointing to the release note or implementation decision.
+
+| Gate | Expected result when native AppKit share sheet is implemented | Actual result | Status | Evidence |
+| --- | --- | --- | --- | --- |
+| Native AppKit share sheet implementation status | Candidate contains a native AppKit share-sheet route; current public-preview builds record `Not implemented` because it is not implemented yet |  | Not implemented / Pass / Fail |  |
+| Saved workbook opens native share sheet | From a saved workbook, Share opens the native macOS share sheet for that workbook file, not only the fallback route |  | Not implemented / Pass / Fail |  |
+| Cancel leaves workbook and file unchanged | Cancel closes the sheet without changing workbook contents, saved file path, dirty state, or the saved workbook bytes |  | Not implemented / Pass / Fail |  |
+| Share target receives workbook file | At least one share target receives the saved workbook file with the expected file name and readable workbook contents |  | Not implemented / Pass / Fail |  |
+| Existing share fallback still works | The existing share fallback remains usable when the native share sheet is unavailable, canceled, or unsupported |  | Not implemented / Pass / Fail |  |
+| Keyboard focus after open and cancel | Keyboard focus lands predictably in the sheet and returns to a usable FreeX focus target after Cancel or completion |  | Not implemented / Pass / Fail |  |
+| VoiceOver announcement and navigation | VoiceOver identifies the sheet, target controls, Cancel action, and completion or cancel return state clearly enough to navigate safely |  | Not implemented / Pass / Fail |  |
 
 ## Command-Key Menu Behavior
 
@@ -163,7 +192,15 @@ Turn on VoiceOver in the tester session and capture the spoken text when practic
 | Drawing objects, if present | Object names/status are announced enough to identify the selected object |  | Pass / Fail / N/A |  |
 | Dialog titles and buttons | Find, Replace, Go To, Format Cells, warnings, About, and Legal Notices announce titles, fields, default buttons, and destructive actions |  | Pass / Fail |  |
 | Gatekeeper or accessibility prompts | System prompts are understandable and do not leave FreeX in a confusing state |  | Pass / Fail / N/A |  |
-| Known issues review | Every confusing announcement or missing name has severity, workaround, owner, and public-preview blocking decision |  | Pass / Fail |  |
+| Known issues review | `Accessibility Known Issues` is complete; every confusing announcement or missing name has severity, workaround, owner, and public-preview blocking decision |  | Pass / Fail |  |
+
+## Accessibility Known Issues
+
+Use this section to record every accessibility issue found during keyboard-only or VoiceOver validation. If no issues are known for this runtime, keep exactly one explicit `None` row. If any issue is listed, remove the `None` row and fill every field for each issue. The VoiceOver `Known issues review` row and the Public-Preview Decision known-issues row must both reflect this table.
+
+| Issue ID | Affected workflow | Severity | User impact / evidence | Workaround | Owner | Public-preview blocking | Decision / rationale |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| None | None | None | No keyboard-only or VoiceOver known issues found during this runtime validation | None | Release owner | No | No known accessibility issues; public preview may proceed |
 
 ## Log And Artifact Collection
 
@@ -173,6 +210,8 @@ Turn on VoiceOver in the tester session and capture the spoken text when practic
 | GitHub Actions app artifact wrapper | Yes |  |  |
 | Inner app ZIP and `.sha256` file | Yes |  |  |
 | `freex-<runtime>-macos-evidence.txt` | Yes |  |  |
+| macOS release-assets wrapper | Yes |  | Retain `freex-<run-id>-<run-attempt>-macos-release-assets` with the stable public-preview assets for both runtimes. |
+| `FreeX-latest-macos-distribution-candidate-manifest.json` | Yes |  | Retain from the macOS release-assets wrapper and compare to the release record. |
 | Packaging smoke log | Yes |  |  |
 | Launch smoke file | Yes |  |  |
 | Notarization log | Yes |  |  |
@@ -205,6 +244,7 @@ Signing/notarization/stapler evidence:
 Finder .fxl default double-click:
 Gatekeeper first launch:
 Command-key menu behavior:
+Native share-sheet readiness:
 Keyboard-only accessibility:
 VoiceOver smoke:
 Diagnostics/log attachments:

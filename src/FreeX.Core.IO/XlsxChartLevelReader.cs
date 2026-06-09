@@ -18,10 +18,7 @@ internal static class XlsxChartLevelReader
                 .Element(ChartExNs + "chart")?
                 .Element(ChartExNs + "title");
 
-        return title?
-            .Descendants(DrawingNs + "t")
-            .Select(element => element.Value)
-            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+        return FirstNonBlankText(title);
     }
 
     public static void ApplyChartLevelProperties(XDocument chartXml, ChartModel chart)
@@ -143,9 +140,7 @@ internal static class XlsxChartLevelReader
 
     private static void ApplyDataTableTextProperties(XElement? textPropertiesRoot, ChartDataTableModel dataTable)
     {
-        var textProperties = textPropertiesRoot?
-            .Descendants(DrawingNs + "defRPr")
-            .FirstOrDefault();
+        var textProperties = FirstDefaultRunProperties(textPropertiesRoot);
         if (textProperties is null)
             return;
 
@@ -230,10 +225,7 @@ internal static class XlsxChartLevelReader
             }
         }
 
-        var textProperties = legend
-            .Element(chartNs + "txPr")?
-            .Descendants(DrawingNs + "defRPr")
-            .FirstOrDefault();
+        var textProperties = FirstDefaultRunProperties(legend.Element(chartNs + "txPr"));
         if (textProperties is null)
             return;
 
@@ -251,5 +243,31 @@ internal static class XlsxChartLevelReader
             chart.LegendTextColor = textColor;
             chart.LegendTextThemeColor = null;
         }
+    }
+
+    private static string? FirstNonBlankText(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        foreach (var text in element.Descendants(DrawingNs + "t"))
+        {
+            var value = text.Value;
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+
+        return null;
+    }
+
+    private static XElement? FirstDefaultRunProperties(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        foreach (var defaultRunProperties in element.Descendants(DrawingNs + "defRPr"))
+            return defaultRunProperties;
+
+        return null;
     }
 }

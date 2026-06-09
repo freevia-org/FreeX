@@ -135,7 +135,7 @@ public partial class FormatCellsDialog
     private CellFillPatternStyle SelectedFillPatternStyle()
     {
         if (DlgFillPatternStyleBox?.SelectedItem is string label
-            && FillPatternOptions.FirstOrDefault(option => option.Label == label) is { } option)
+            && FindFillPatternOptionByLabel(label) is { } option)
         {
             return option.Style;
         }
@@ -143,7 +143,29 @@ public partial class FormatCellsDialog
         return CellFillPatternStyle.None;
     }
 
+    private static FillPatternOption? FindFillPatternOptionByLabel(string label)
+    {
+        foreach (var option in FillPatternOptions)
+        {
+            if (option.Label == label)
+                return option;
+        }
+
+        return null;
+    }
+
+    private static FillPatternOption? FindFillPatternOptionByStyle(CellFillPatternStyle style)
+    {
+        foreach (var option in FillPatternOptions)
+        {
+            if (option.Style == style)
+                return option;
+        }
+
+        return null;
+    }
+
     private static string FillPatternLabel(CellFillPatternStyle style) =>
-        FillPatternOptions.FirstOrDefault(option => option.Style == style)?.Label
+        FindFillPatternOptionByStyle(style)?.Label
             ?? UiText.Get("FormatCells_FillPatternNone");
 }

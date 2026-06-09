@@ -123,7 +123,13 @@ public sealed partial class XlsxFileAdapter
         {
             foreach (var ext in extLst.Elements().Where(e => e.Name.LocalName == "ext"))
             {
-                var x14Id = ext.Elements(x14Ns + "id").FirstOrDefault();
+                XElement? x14Id = null;
+                foreach (var candidate in ext.Elements(x14Ns + "id"))
+                {
+                    x14Id = candidate;
+                    break;
+                }
+
                 if (x14Id is not null)
                 {
                     var val = x14Id.Value?.Trim();

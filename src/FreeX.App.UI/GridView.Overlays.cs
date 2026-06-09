@@ -91,6 +91,46 @@ public partial class GridView
         Point pos) =>
         FormulaTraceLayoutPlanner.HitTestMarker(viewport, arrows, sheetId, pos);
 
+    private void RenderValidationCircles(DrawingContext dc)
+    {
+        var viewport = Viewport;
+        var cells = ValidationCircleCells;
+        if (viewport is null || cells is not { Count: > 0 })
+            return;
+
+        var lookups = GetRenderMetricLookups(viewport);
+        foreach (var cell in cells)
+        {
+            if (!TryCreateValidationCircleRect(lookups, cell, out var rect))
+                continue;
+
+            var radiusX = Math.Max(2.0, rect.Width * 0.38);
+            var radiusY = Math.Max(2.0, rect.Height * 0.32);
+            var center = new Point(rect.Left + rect.Width / 2.0, rect.Top + rect.Height / 2.0);
+            dc.DrawEllipse(null, ValidationCirclePen, center, radiusX, radiusY);
+        }
+    }
+
+    private bool TryCreateValidationCircleRect(
+        RenderMetricLookupCache lookups,
+        CellAddress cell,
+        out Rect rect)
+    {
+        if (!lookups.Rows.TryGetValue(cell.Row, out var row) ||
+            !lookups.Columns.TryGetValue(cell.Col, out var column))
+        {
+            rect = Rect.Empty;
+            return false;
+        }
+
+        rect = new Rect(
+            ActualRowHeaderWidth + column.LeftOffset,
+            EffectiveColHeaderHeight + row.TopOffset,
+            column.Width,
+            row.Height);
+        return rect.Width > 0 && rect.Height > 0;
+    }
+
     private readonly struct FormulaTraceArrowDrawingConsumer(GridView grid, DrawingContext dc) : IFormulaTraceArrowLayoutConsumer
     {
         public void AcceptLayout(

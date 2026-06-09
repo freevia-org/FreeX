@@ -115,6 +115,8 @@ public sealed partial class MainWindowSourceHygieneTests
         saveButtonMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
         saveButtonMethod.Should().Contain("await SaveWorkbookToTargetAsync(target!)");
         saveButtonMethod.Should().Contain("await SaveWorkbookWithDialogAsync();");
+        saveButtonMethod.Should().Contain("if (saved && IsStartScreenVisible())");
+        saveButtonMethod.Should().Contain("HideStartScreen();");
 
         var saveAsMethod = ExtractMethodSource(backstageSource, "private async void SaveAsButton_Click(");
         saveAsMethod.Should().Contain("await SaveWorkbookWithDialogAsync()");
@@ -248,7 +250,9 @@ public sealed partial class MainWindowSourceHygieneTests
 
         backstageSource.Should().Contain("menu.Opened += BackstageContextMenu_Opened;");
         backstageSource.Should().Contain("private static void BackstageContextMenu_Opened(object sender, RoutedEventArgs e)");
-        backstageSource.Should().Contain("menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)");
+        backstageSource.Should().Contain("foreach (var item in menu.Items)");
+        backstageSource.Should().Contain("if (item is not MenuItem menuItem || !menuItem.IsEnabled)");
+        backstageSource.Should().Contain("firstEnabledItem = menuItem;");
         backstageSource.Should().Contain("Keyboard.Focus(firstEnabledItem);");
     }
 
@@ -458,10 +462,14 @@ public sealed partial class MainWindowSourceHygieneTests
 
         backstageSource.Should().Contain("private void OpenPrintBackstage()");
         backstageSource.Should().Contain("SsPrintNavBtn.Focus();");
-        backstageSource.Should().Contain("PrintButton_Click(SsPrintNavBtn, new RoutedEventArgs())");
+        backstageSource.Should().Contain("ShowPrintView();");
+        backstageSource.Should().NotContain("PrintButton_Click(SsPrintNavBtn, new RoutedEventArgs())");
         keyboardSource.Should().Contain("KeyboardCommandShortcut.OpenPrintPreview, (_, _) => OpenPrintBackstage()");
         keyboardSource.Should().NotContain("KeyboardCommandShortcut.OpenPrintPreview, PrintButton_Click");
         xaml.Should().Contain("x:Name=\"SsPrintNavBtn\"");
+        xaml.Should().Contain("Click=\"SsPrintNavBtn_Click\"");
+        xaml.Should().Contain("x:Name=\"SsPrintPreviewButton\"");
+        xaml.Should().Contain("Click=\"PrintButton_Click\"");
         xaml.ShouldContainLocalizedAttribute("local:RibbonTooltip.Description", "Open the print preview and native print dialog for the rendered worksheet.");
     }
 

@@ -88,10 +88,15 @@ public sealed class InsertCommandSourceTests
     {
         var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
         var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
+        var homeFormattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         var pivotSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotCommands.cs");
 
         insertSource.Should().Contain("private void TableBtn_Click(object sender, RoutedEventArgs e) => ApplyTableFormat(0);");
-        insertSource.Should().Contain("private void RecommendedPivotTablesMenuItem_Click(object sender, RoutedEventArgs e) => PivotTableBtn_Click(sender, e);");
+        insertSource.Should().Contain("private void RecommendedPivotTablesMenuItem_Click(object sender, RoutedEventArgs e)");
+        insertSource.Should().Contain("new RecommendedPivotTablesDialog { Owner = this }");
+        insertSource.Should().Contain("dialog.Result != RecommendedPivotTablesDialogResult.BlankPivotTable");
+        insertSource.Should().Contain("PivotTableBtn_Click(sender, e);");
+        homeFormattingSource.Should().Contain("CreateTableSourceRangePlanner.PlanSourceRange(sheet, range)");
         insertSource.Should().Contain("private void SparklineLineBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"line\");");
         insertSource.Should().Contain("private void SparklineColumnBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"column\");");
         insertSource.Should().Contain("private void SparklineWinLossBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"winloss\");");
@@ -99,7 +104,7 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind)");
 
         drawingSource.Should().Contain("private void InsertPictureBtn_Click(object sender, RoutedEventArgs e)");
-        drawingSource.Should().Contain("new InsertPictureCommand(");
+        drawingSource.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
         drawingSource.Should().Contain("DrawRectBtn_Click(object sender, RoutedEventArgs e)");
         drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Rectangle)");
         drawingSource.Should().Contain("DrawEllipseBtn_Click(object sender, RoutedEventArgs e)");
@@ -108,6 +113,8 @@ public sealed class InsertCommandSourceTests
         drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Line)");
 
         pivotSource.Should().Contain("private void PivotTableBtn_Click(object sender, RoutedEventArgs e)");
+        pivotSource.Should().Contain("PivotTableSourceRangePlanner.CreatePlan(sheet, SheetGrid.SelectedRange)");
+        pivotSource.Should().Contain("ShowPivotTableSourceRangeError(sourcePlan.Error)");
         pivotSource.Should().Contain("new PivotTableDialog(");
         pivotSource.Should().Contain("new AddPivotTableCommand(");
         pivotSource.Should().Contain("new AddPivotTableToNewWorksheetCommand(");

@@ -68,9 +68,16 @@ public static partial class XlsxChartPartReader
 
     private static void ApplyPieExplosion(XElement series, ChartModel chart)
     {
-        var explodedPoint = series
-            .Elements(ChartNs + "dPt")
-            .FirstOrDefault(point => int.TryParse(point.Element(ChartNs + "explosion")?.Attribute("val")?.Value, out var value) && value > 0);
+        XElement? explodedPoint = null;
+        foreach (var point in series.Elements(ChartNs + "dPt"))
+        {
+            if (!int.TryParse(point.Element(ChartNs + "explosion")?.Attribute("val")?.Value, out var value) || value <= 0)
+                continue;
+
+            explodedPoint = point;
+            break;
+        }
+
         if (explodedPoint is null)
             return;
 

@@ -9,6 +9,9 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class EuLocalizationResourceTests
 {
+    private const string DataImportHelpTextResourceKey =
+        "MainWindow_TooltipDescription_ImportDataFromALocalCSVFileDatabaseWebAndPowerQueryConnectorsAreExcluded";
+
     private static readonly string[] ExpectedOfficeSatelliteCultures =
     [
         "bg-BG",
@@ -66,8 +69,21 @@ public sealed partial class EuLocalizationResourceTests
         "en-ZA",
     ];
 
+    private static readonly string[] PivotTableFieldHeaderAndPlusMinusKeys =
+    [
+        "MainWindow_Content_FieldHeaders",
+        "MainWindow_Content_PlusMinusButtons",
+        "MainWindow_TooltipDescription_ShowOrHideExpandCollapseButtonsForTheSelectedPivotTable",
+        "MainWindow_TooltipDescription_ShowOrHideFieldCaptionsAndFilterDropDownsForTheSelectedPivotTable",
+        "MainWindow_TooltipTitle_FieldHeaders",
+        "MainWindow_TooltipTitle_PlusMinusButtons",
+    ];
+
     public static IEnumerable<object[]> ExpectedEuOfficeSatelliteCultureData() =>
         ExpectedOfficeSatelliteCultures.Select(culture => new object[] { culture });
+
+    public static IEnumerable<object[]> EnglishVariantCultureData() =>
+        EnglishVariantCultures.Select(culture => new object[] { culture });
 
     [Fact]
     public void Resources_IncludeEveryEuOfficeSatelliteCulture()
@@ -89,6 +105,19 @@ public sealed partial class EuLocalizationResourceTests
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         availableCultures.Should().Contain(ExpectedOfficeSatelliteCultures);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExpectedEuOfficeSatelliteCultureData))]
+    public void SatelliteResx_ContainsPivotTableFieldHeaderAndPlusMinusKeys(string cultureName)
+    {
+        var localized = ReadResxValues($"Strings.{cultureName}.resx");
+
+        localized.Keys.Should().Contain(PivotTableFieldHeaderAndPlusMinusKeys);
+        localized
+            .Where(entry => PivotTableFieldHeaderAndPlusMinusKeys.Contains(entry.Key, StringComparer.Ordinal))
+            .Should()
+            .OnlyContain(entry => !string.IsNullOrWhiteSpace(entry.Value));
     }
 
     [Theory]
@@ -127,6 +156,19 @@ public sealed partial class EuLocalizationResourceTests
 
             translatedValueCount.Should().BeGreaterThan(1500);
         }
+    }
+
+    [Theory]
+    [MemberData(nameof(EnglishVariantCultureData))]
+    public void EnglishVariantSatelliteResx_DataImportHelpTextMatchesNeutralSupportedFormats(string cultureName)
+    {
+        var neutral = ReadResxValues("Strings.resx");
+        var localized = ReadResxValues($"Strings.{cultureName}.resx");
+
+        localized[DataImportHelpTextResourceKey].Should().Be(neutral[DataImportHelpTextResourceKey]);
+        localized[DataImportHelpTextResourceKey]
+            .Should()
+            .ContainAll("local CSV file", "text/TSV/TAB", "SpreadsheetML XML", "Power Query connectors are excluded");
     }
 
     [Theory]

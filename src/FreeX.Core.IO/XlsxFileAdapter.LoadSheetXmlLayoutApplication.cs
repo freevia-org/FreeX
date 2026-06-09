@@ -237,8 +237,16 @@ public sealed partial class XlsxFileAdapter
                 continue;
             }
 
-            var existingIndex = workbook.Scenarios.FindIndex(existing =>
-                string.Equals(existing.Name, remappedScenario.Name, StringComparison.OrdinalIgnoreCase));
+            var existingIndex = -1;
+            for (var index = 0; index < workbook.Scenarios.Count; index++)
+            {
+                if (!string.Equals(workbook.Scenarios[index].Name, remappedScenario.Name, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                existingIndex = index;
+                break;
+            }
+
             if (existingIndex >= 0)
             {
                 workbook.Scenarios[existingIndex] = workbook.Scenarios[existingIndex] with

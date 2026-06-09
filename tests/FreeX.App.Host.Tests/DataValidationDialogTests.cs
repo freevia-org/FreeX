@@ -25,4 +25,19 @@ public sealed partial class DataValidationDialogTests
 
     private static string? SelectedTag(ComboBox comboBox) =>
         (comboBox.SelectedItem as ComboBoxItem)?.Tag as string;
+
+    private static void AssertUniqueAccessKeys(params string[] resourceKeys)
+    {
+        var labels = resourceKeys.Select(UiText.Get).ToArray();
+        labels.Select(ExtractAccessKey).Should().OnlyHaveUniqueItems();
+    }
+
+    private static char ExtractAccessKey(string label)
+    {
+        var index = label.IndexOf('_');
+        index.Should().BeGreaterThanOrEqualTo(0, $"'{label}' should expose an access key");
+        (index + 1).Should().BeLessThan(label.Length, $"'{label}' should not end with an access-key marker");
+
+        return char.ToUpperInvariant(label[index + 1]);
+    }
 }

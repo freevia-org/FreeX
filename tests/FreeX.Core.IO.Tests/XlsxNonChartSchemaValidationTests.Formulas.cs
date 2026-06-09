@@ -20,6 +20,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         SchemaErrors(saved).Should().BeEmpty();
         AssertDynamicSpillFormula(saved, "A3", "A3:C3", "A1:C1*2");
+
+        saved.Position = 0;
+        var reloadedCell = new XlsxFileAdapter().Load(saved).GetSheetAt(0).GetCell(3, 1)!;
+        reloadedCell.FormulaText.Should().Be("A1:C1*2");
+        reloadedCell.ArrayMode.Should().Be(FormulaArrayMode.Dynamic);
+        reloadedCell.Value.Should().Be(new NumberValue(2));
     }
 
     [Fact]
@@ -83,6 +89,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         formula.Attribute("t")!.Value.Should().Be(expectedFormulaType);
         formula.Attribute("ref")!.Value.Should().Be(expectedFormulaReference);
         formula.Attribute(expectedMetadataAttribute)!.Value.Should().Be(expectedMetadataValue);
+
+        saved.Position = 0;
+        AssertReloadedFormulaCell(adapter.Load(saved).GetSheetAt(0), 1, 1, "1+1", new NumberValue(cachedValue));
     }
 
     [Fact]
@@ -110,6 +119,40 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertFormulaCachedCell(saved, "B1", "str", "fresh text", "CONCAT(\"o\",\"ld\")");
         AssertFormulaCachedCell(saved, "C1", "b", "0", "1=1");
         AssertFormulaCachedCell(saved, "D1", "e", "#VALUE!", "1/0");
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        AssertReloadedFormulaCell(reloadedSheet, 1, 1, "1+1", new NumberValue(3.5));
+        AssertReloadedFormulaCell(reloadedSheet, 1, 2, "CONCAT(\"o\",\"ld\")", new TextValue("fresh text"));
+        AssertReloadedFormulaCell(reloadedSheet, 1, 3, "1=1", new BoolValue(false));
+        AssertReloadedFormulaCell(reloadedSheet, 1, 4, "1/0", ErrorValue.Value);
+    }
+
+    [Fact]
+    public void FormulaTextEdit_RemovesStaleCalcChainForExcelOpenability()
+    {
+        using var source = CreateAttributedFormulaWorkbook("""<f>1+1</f>""");
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should().BeTrue(blockReason);
+
+        var cell = workbook.GetSheetAt(0).GetCell(1, 1)!;
+        cell.FormulaText.Should().Be("1+1");
+        cell.FormulaText = "2+2";
+        cell.Value = new NumberValue(4);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+
+        ReadFormulaElement(saved, "A1").Value.Should().Be("2+2");
+        AssertCalcChainRemoved(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved).GetSheetAt(0).GetCell(1, 1)!.FormulaText.Should().Be("2+2");
     }
 
     [Fact]
@@ -134,6 +177,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         AssertFormulaCachedCell(saved, "A1", "str", "fresh formula cache", "1+1");
         AssertCellChildren(saved, "A1", "f", "v", "extLst");
+
+        saved.Position = 0;
+        AssertReloadedFormulaCell(adapter.Load(saved).GetSheetAt(0), 1, 1, "1+1", new TextValue("fresh formula cache"));
     }
 
     private static Workbook CreateDynamicSpillWorkbook(string name)
@@ -463,6 +509,54 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         cell.Element(worksheetNs + "f")!.Value.Should().Be(expectedFormulaText);
         cell.Element(worksheetNs + "v")!.Value.Should().Be(expectedCachedValue);
         cell.Element(worksheetNs + "is").Should().BeNull();
+    }
+
+    private static void AssertCalcChainRemoved(MemoryStream saved)
+    {
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace packageRelationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        archive.GetEntry("xl/calcChain.xml").Should().BeNull();
+
+        var contentTypes = LoadPackageXml(archive, "[Content_Types].xml");
+        contentTypes.Root!
+            .Elements(contentTypeNs + "Override")
+            .Any(element => string.Equals(
+                element.Attribute("PartName")?.Value,
+                "/xl/calcChain.xml",
+                StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .BeFalse();
+
+        var workbookRelationships = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+        workbookRelationships.Root!
+            .Elements(packageRelationshipNs + "Relationship")
+            .Any(element =>
+                string.Equals(
+                    element.Attribute("Type")?.Value,
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    element.Attribute("Target")?.Value,
+                    "calcChain.xml",
+                    StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .BeFalse();
+    }
+
+    private static void AssertReloadedFormulaCell(
+        Sheet sheet,
+        uint row,
+        uint column,
+        string expectedFormulaText,
+        ScalarValue expectedValue)
+    {
+        var cell = sheet.GetCell(row, column);
+        cell.Should().NotBeNull();
+        cell!.FormulaText.Should().Be(expectedFormulaText);
+        cell.Value.Should().Be(expectedValue);
     }
 
     private static void AssertCellChildren(MemoryStream saved, string reference, params string[] expectedChildNames)

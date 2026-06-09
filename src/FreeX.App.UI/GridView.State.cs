@@ -40,6 +40,7 @@ public partial class GridView
     private double _resizeDragStart;
     private double _resizeSizeStart;
     private double _resizeLinePos;
+    private bool _resizeCollapsedBoundary;
     private bool _autofillDragging;
     private GridRange? _autofillSourceRange;
     private CellAddress? _autofillTarget;
@@ -52,6 +53,17 @@ public partial class GridView
     private bool _splitPaneScrollbarDragging;
     private SplitPaneScrollbar? _splitPaneScrollbarDragSource;
     private double _splitPaneScrollbarDragPointerOffset;
+    private DrawingShapeKind? _pendingShapePlacementKind;
+    private DrawingShapeKind _shapePlacementKind;
+    private bool _shapePlacementDragging;
+    private CellAddress _shapePlacementStartAnchor;
+    private Point _shapePlacementStartPos;
+    private Rect _shapePlacementPreviewRect;
+    private bool _pendingTextBoxPlacement;
+    private bool _textBoxPlacementDragging;
+    private CellAddress _textBoxPlacementStartAnchor;
+    private Point _textBoxPlacementStartPos;
+    private Rect _textBoxPlacementPreviewRect;
 
     private void RebuildMergeLookup()
     {

@@ -33,6 +33,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
         SchemaErrors(saved).Should().BeEmpty();
+        saved.Position = 0;
+        XlsxPackageHealthValidator.Validate(saved).Should().BeEmpty();
         AssertSlicerTimelinePackageGraph(saved);
 
         saved.Position = 0;

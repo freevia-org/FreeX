@@ -51,8 +51,8 @@ public sealed class HelpCommandSourceTests
         source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, UiText.Get(\"MainWindowMessage_HelpOnlineTitle\"))");
         source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, UiText.Get(\"MainWindowMessage_CheckForUpdatesTitle\"))");
         source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), UiText.Get(\"MainWindowMessage_FeedbackTitle\"))");
-        source.Should().Contain("AppInfo.AboutText");
-        source.Should().Contain("UiText.Get(\"MainWindowMessage_AboutFreeXTitle\")");
+        source.Should().Contain("var dialog = new AboutDialog();");
+        source.Should().Contain("ShowOwnedDialog(dialog);");
         source.Should().Contain("var dialog = new LegalNoticesDialog();");
         source.Should().Contain("ShowOwnedDialog(dialog);");
         source.Should().Contain("AppIssueReporter.CreateDiagnosticsText(context)");

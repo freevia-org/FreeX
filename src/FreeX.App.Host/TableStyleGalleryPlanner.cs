@@ -48,8 +48,15 @@ public static class TableStyleGalleryPlanner
         if (string.IsNullOrWhiteSpace(styleName))
             return false;
 
-        option = GetOptions(theme).FirstOrDefault(candidate =>
-            string.Equals(candidate.StyleName, styleName, StringComparison.OrdinalIgnoreCase))!;
+        foreach (var candidate in GetOptions(theme))
+        {
+            if (!string.Equals(candidate.StyleName, styleName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            option = candidate;
+            break;
+        }
+
         return option is not null;
     }
 

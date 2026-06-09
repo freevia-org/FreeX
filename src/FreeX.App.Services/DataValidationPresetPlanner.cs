@@ -53,7 +53,7 @@ public static class DataValidationPresetPlanner
         RuleTypeMetadata;
 
     public static string GetDisplayName(DvType type) =>
-        RuleTypeMetadata.FirstOrDefault(item => item.Type == type)?.DisplayName ?? type.ToString();
+        FindRuleTypeMetadata(type)?.DisplayName ?? type.ToString();
 
     public static bool RequiresSecondFormula(DvType type, DvOperator op) =>
         type is not DvType.Any and not DvType.List and not DvType.Custom &&
@@ -93,9 +93,7 @@ public static class DataValidationPresetPlanner
         if (maxCellsToScan <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxCellsToScan), maxCellsToScan, "Scan limit must be positive.");
 
-        var activeRule = activeCell.Sheet == sheet.Id
-            ? DataValidationService.GetApplicable(sheet, activeCell).FirstOrDefault()
-            : null;
+        var activeRule = activeCell.Sheet == sheet.Id ? GetFirstApplicableRule(sheet, activeCell) : null;
         var activeRuleClone = activeRule is null ? null : CloneRule(activeRule);
         var activeCellReference = FormatCellReference(activeCell);
         var selectionReference = FormatRangeReference(selectedRange);
@@ -135,7 +133,7 @@ public static class DataValidationPresetPlanner
         foreach (var address in selectedRange.AllCells())
         {
             scannedCellCount++;
-            var rule = DataValidationService.GetApplicable(sheet, address).FirstOrDefault();
+            var rule = GetFirstApplicableRule(sheet, address);
             if (rule is null)
                 continue;
 
@@ -171,6 +169,25 @@ public static class DataValidationPresetPlanner
         return cellsWithRule == scannedCellCount
             ? DataValidationSelectionState.Uniform
             : DataValidationSelectionState.Partial;
+    }
+
+    private static DataValidationRuleTypeMetadata? FindRuleTypeMetadata(DvType type)
+    {
+        foreach (var item in RuleTypeMetadata)
+        {
+            if (item.Type == type)
+                return item;
+        }
+
+        return null;
+    }
+
+    private static DataValidation? GetFirstApplicableRule(Sheet sheet, CellAddress address)
+    {
+        foreach (var rule in DataValidationService.GetApplicable(sheet, address))
+            return rule;
+
+        return null;
     }
 
     private static string CreateSummaryText(

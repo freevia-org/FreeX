@@ -47,6 +47,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .Be(sourceCustomProperties.ToString(SaveOptions.DisableFormatting));
         AssertDocumentPropertiesRootRelationships(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheetAt(0)
+            .GetValue(3, 3)
+            .Should()
+            .Be(new NumberValue(42));
     }
 
     private static MemoryStream CreateDocumentPropertiesSourcePackage()

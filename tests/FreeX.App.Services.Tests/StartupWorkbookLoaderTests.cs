@@ -12,6 +12,7 @@ public sealed class StartupWorkbookLoaderTests
         var result = new StartupWorkbookLoader().Load(["missing.xlsx"]);
 
         result.IsFallback.Should().BeFalse();
+        result.SourceFileAccessIdentity.Should().BeNull();
         result.DisplayName.Should().Be("macOS Preview Workbook");
         result.Workbook.Sheets.Single().Name.Should().Be("Port Plan");
     }
@@ -27,11 +28,50 @@ public sealed class StartupWorkbookLoaderTests
 
         result.IsFallback.Should().BeFalse();
         result.SourcePath.Should().Be(path);
+        result.SourceFileAccessIdentity.Should().NotBeNull();
+        result.SourceFileAccessIdentity!.LocalPath.Should().Be(path);
+        result.SourceFileAccessIdentity.HasBookmark.Should().BeFalse();
         result.DisplayName.Should().Be(Path.GetFileName(path));
         result.Workbook.Sheets.Single().Name.Should().Be("Very Long Sales _Draft_ Import");
         result.OpenedAsTemplate.Should().BeFalse();
         result.FeatureReport.Should().BeNull();
         result.LoadWarnings.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Load_WithLocalFileUri_OpensWorkbookThroughSharedAdapters()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "Open With.csv");
+        await File.WriteAllTextAsync(path, "Name,Amount\r\nFreeX,42\r\n");
+
+        var result = new StartupWorkbookLoader().Load([new Uri(path).AbsoluteUri]);
+
+        result.IsFallback.Should().BeFalse();
+        result.SourcePath.Should().Be(Path.GetFullPath(path));
+        result.SourceFileAccessIdentity.Should().NotBeNull();
+        result.SourceFileAccessIdentity!.LocalPath.Should().Be(Path.GetFullPath(path));
+        result.DisplayName.Should().Be(Path.GetFileName(path));
+        result.Workbook.Sheets.Single().Name.Should().Be("Open With");
+    }
+
+    [Fact]
+    public async Task Load_WithUnsupportedPathBeforeSupportedWorkbook_OpensSupportedWorkbook()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var notesPath = Path.Combine(temp.Path, "launch-notes.unsupported");
+        var workbookPath = Path.Combine(temp.Path, "OpenWith.csv");
+        await File.WriteAllTextAsync(notesPath, "not a workbook");
+        await File.WriteAllTextAsync(workbookPath, "Name,Amount\r\nFreeX,42\r\n");
+
+        var result = new StartupWorkbookLoader().Load([notesPath, workbookPath]);
+
+        result.IsFallback.Should().BeFalse();
+        result.SourcePath.Should().Be(workbookPath);
+        result.SourceFileAccessIdentity.Should().NotBeNull();
+        result.SourceFileAccessIdentity!.LocalPath.Should().Be(workbookPath);
+        result.DisplayName.Should().Be(Path.GetFileName(workbookPath));
+        result.Workbook.Sheets.Single().Name.Should().Be("OpenWith");
     }
 
     [Fact]
@@ -65,6 +105,8 @@ public sealed class StartupWorkbookLoaderTests
 
         result.IsFallback.Should().BeFalse();
         result.SourcePath.Should().Be(path);
+        result.SourceFileAccessIdentity.Should().NotBeNull();
+        result.SourceFileAccessIdentity!.LocalPath.Should().Be(path);
         result.OpenedAsTemplate.Should().BeTrue();
         result.FeatureReport.Should().BeSameAs(featureReport);
         result.LoadWarnings.Should().BeEmpty();
@@ -80,6 +122,24 @@ public sealed class StartupWorkbookLoaderTests
         var result = new StartupWorkbookLoader().Load([path]);
 
         result.IsFallback.Should().BeTrue();
+        result.SourceFileAccessIdentity.Should().BeNull();
+        result.Status.Should().Contain("Unsupported file type: .unsupported");
+        result.Workbook.Sheets.Single().Name.Should().Be("Port Plan");
+    }
+
+    [Fact]
+    public async Task Load_WithOnlyUnsupportedExistingPaths_ReturnsFirstUnsupportedPreviewFallback()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var firstPath = Path.Combine(temp.Path, "notes.unsupported");
+        var secondPath = Path.Combine(temp.Path, "other.unknown");
+        await File.WriteAllTextAsync(firstPath, "not a workbook");
+        await File.WriteAllTextAsync(secondPath, "also not a workbook");
+
+        var result = new StartupWorkbookLoader().Load([firstPath, secondPath]);
+
+        result.IsFallback.Should().BeTrue();
+        result.SourceFileAccessIdentity.Should().BeNull();
         result.Status.Should().Contain("Unsupported file type: .unsupported");
         result.Workbook.Sheets.Single().Name.Should().Be("Port Plan");
     }

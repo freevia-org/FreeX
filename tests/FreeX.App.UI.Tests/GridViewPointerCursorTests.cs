@@ -17,7 +17,7 @@ public sealed class GridViewPointerCursorTests
         hoverCursorBlock.Should().Contain("if (selectedObjectDragKind != ObjectDragKind.None)");
         hoverCursorBlock.Should().Contain("Cursor = ObjectDragCursor(selectedObjectDragKind);");
         hoverCursorBlock.IndexOf("if (selectedObjectDragKind != ObjectDragKind.None)", StringComparison.Ordinal)
-            .Should().BeLessThan(hoverCursorBlock.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal));
+            .Should().BeLessThan(hoverCursorBlock.IndexOf("var (target, _, _, _) = HitTestResize(pos);", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public sealed class GridViewPointerCursorTests
         hoverCursorBlock.Should().Contain("if (hoveringObjectBody)");
         hoverCursorBlock.Should().Contain("Cursor = Cursors.SizeAll;");
         hoverCursorBlock.IndexOf("if (hoveringObjectBody)", StringComparison.Ordinal)
-            .Should().BeLessThan(hoverCursorBlock.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal));
+            .Should().BeLessThan(hoverCursorBlock.IndexOf("var (target, _, _, _) = HitTestResize(pos);", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -327,7 +327,7 @@ public sealed class GridViewPointerCursorTests
         hoverCursorBlock.Should().Contain("splitHandle == SplitDividerHandle.Vertical ? Cursors.SizeWE");
         hoverCursorBlock.Should().Contain(": Cursors.SizeNS;");
         hoverCursorBlock.IndexOf("if (splitHandle != SplitDividerHandle.None)", StringComparison.Ordinal)
-            .Should().BeLessThan(hoverCursorBlock.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal));
+            .Should().BeLessThan(hoverCursorBlock.IndexOf("var (target, _, _, _) = HitTestResize(pos);", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -335,7 +335,7 @@ public sealed class GridViewPointerCursorTests
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
         var hoverCursorBlock = source[
-            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
+            source.IndexOf("var (target, _, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
             source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
 
         hoverCursorBlock.Should().Contain("if (target == ResizeTarget.Column)");
@@ -450,7 +450,7 @@ public sealed class GridViewPointerCursorTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
         var resizeBlock = source[
             source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal)..
-            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)];
+            source.IndexOf("var (target, _, _, _) = HitTestResize(pos);", StringComparison.Ordinal)];
 
         resizeBlock.Should().Contain("Cursor = Cursors.SizeWE;");
         resizeBlock.Should().Contain("Cursor = Cursors.SizeNS;");
@@ -464,7 +464,7 @@ public sealed class GridViewPointerCursorTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
         var resizeBlock = source[
             source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal)..
-            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)];
+            source.IndexOf("var (target, _, _, _) = HitTestResize(pos);", StringComparison.Ordinal)];
 
         resizeBlock.Should().Contain("if (col is null)");
         resizeBlock.Should().Contain("Cursor = Cursors.SizeWE;");
@@ -479,7 +479,7 @@ public sealed class GridViewPointerCursorTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
         var resizeBlock = source[
             source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal)..
-            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)];
+            source.IndexOf("var (target, _, _, _) = HitTestResize(pos);", StringComparison.Ordinal)];
 
         resizeBlock.Should().Contain("if (Viewport is null)");
         resizeBlock.Should().Contain("Cursor = Cursors.SizeWE;");

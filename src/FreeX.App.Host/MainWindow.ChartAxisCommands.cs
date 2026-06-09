@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Windows;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -322,7 +321,7 @@ public partial class MainWindow
         IWorkbookCommand CreateCommand()
         {
             var sheet = _workbook.GetSheet(_currentSheetId);
-            var chart = sheet?.Charts.FirstOrDefault();
+            var chart = FindFirstChart(sheet);
             if (sheet is null || chart is null)
                 return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartAxisScaleRequiresChart"));
 
@@ -366,7 +365,7 @@ public partial class MainWindow
         IWorkbookCommand CreateCommand()
         {
             var sheet = _workbook.GetSheet(_currentSheetId);
-            var chart = sheet?.Charts.FirstOrDefault();
+            var chart = FindFirstChart(sheet);
             if (sheet is null || chart is null)
                 return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresChart"));
 
@@ -411,5 +410,18 @@ public partial class MainWindow
 
         _repeatPostAction = null;
         UpdateViewport();
+    }
+
+    private static ChartModel? FindFirstChart(Sheet? sheet)
+    {
+        if (sheet is null)
+            return null;
+
+        var charts = sheet.Charts;
+        var index = 0;
+        while (index < charts.Count)
+            return charts[index];
+
+        return null;
     }
 }

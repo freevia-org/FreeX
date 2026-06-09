@@ -54,19 +54,40 @@ public sealed partial class XlsxFileAdapter
         chart.UserShapes.TargetMode = relationship.Attribute("TargetMode")?.Value;
     }
 
-    private static Sheet? FindChartSourceSheet(Workbook workbook, string sheetName) =>
-        workbook.Sheets.FirstOrDefault(sheet =>
-            string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase));
+    private static Sheet? FindChartSourceSheet(Workbook workbook, string sheetName)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))
+                return sheet;
+        }
 
-    private static PivotTableModel? FindChartPivotTable(Sheet sheet, string? pivotTableName) =>
-        sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
+        return null;
+    }
 
-    private static XElement? FindChartRelationship(XElement? relationshipsRoot, XNamespace packageRelNs, string relationshipId) =>
-        relationshipsRoot?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(element => string.Equals(
-                element.Attribute("Id")?.Value,
-                relationshipId,
-                StringComparison.Ordinal));
+    private static PivotTableModel? FindChartPivotTable(Sheet sheet, string? pivotTableName)
+    {
+        foreach (var pivot in sheet.PivotTables)
+        {
+            if (string.Equals(pivot.Name, pivotTableName, StringComparison.OrdinalIgnoreCase))
+                return pivot;
+        }
+
+        return null;
+    }
+
+    private static XElement? FindChartRelationship(XElement? relationshipsRoot, XNamespace packageRelNs, string relationshipId)
+    {
+        if (relationshipsRoot is null)
+            return null;
+
+        var relationshipName = packageRelNs + "Relationship";
+        foreach (var element in relationshipsRoot.Elements(relationshipName))
+        {
+            if (string.Equals(element.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal))
+                return element;
+        }
+
+        return null;
+    }
 }

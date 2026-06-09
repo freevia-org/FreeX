@@ -25,7 +25,13 @@ internal static class XlsxNamedRangeMapper
                 if (IsExcelReservedDefinedName(namedRange.Name))
                     continue;
 
-                var xlRange = namedRange.Ranges.FirstOrDefault();
+                IXLRange? xlRange = null;
+                foreach (var candidateRange in namedRange.Ranges)
+                {
+                    xlRange = candidateRange;
+                    break;
+                }
+
                 if (xlRange is null)
                     continue;
 

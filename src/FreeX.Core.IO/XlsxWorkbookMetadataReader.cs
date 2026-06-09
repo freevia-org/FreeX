@@ -200,15 +200,7 @@ internal static class XlsxWorkbookMetadataReader
 
             var workbookXml = LoadXml(workbookEntry);
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var primaryView = workbookXml.Root?
-                .Element(workbookNs + "bookViews")?
-                .Elements(workbookNs + "workbookView")
-                .FirstOrDefault(view =>
-                    XlsxXmlAttributeReader.ReadIntAttribute(view, "firstSheet") is null or 0 &&
-                    XlsxXmlAttributeReader.ReadIntAttribute(view, "activeTab") is null or 0);
-            primaryView ??= workbookXml.Root?
-                .Element(workbookNs + "bookViews")?
-                .Element(workbookNs + "workbookView");
+            var primaryView = FindPrimaryWorkbookView(workbookXml, workbookNs);
 
             if (primaryView is null)
                 return WorkbookViewProperties.Empty;
@@ -476,15 +468,7 @@ internal static class XlsxWorkbookMetadataReader
 
     private static WorkbookViewProperties LoadWorkbookViewProperties(XDocument workbookXml)
     {
-        var primaryView = workbookXml.Root?
-            .Element(WorkbookNs + "bookViews")?
-            .Elements(WorkbookNs + "workbookView")
-            .FirstOrDefault(view =>
-                XlsxXmlAttributeReader.ReadIntAttribute(view, "firstSheet") is null or 0 &&
-                XlsxXmlAttributeReader.ReadIntAttribute(view, "activeTab") is null or 0);
-        primaryView ??= workbookXml.Root?
-            .Element(WorkbookNs + "bookViews")?
-            .Element(WorkbookNs + "workbookView");
+        var primaryView = FindPrimaryWorkbookView(workbookXml, WorkbookNs);
 
         if (primaryView is null)
             return WorkbookViewProperties.Empty;
@@ -494,6 +478,26 @@ internal static class XlsxWorkbookMetadataReader
             XlsxXmlAttributeReader.ReadIntAttribute(primaryView, "tabRatio"),
             XlsxXmlAttributeReader.ReadIntAttribute(primaryView, "firstSheet"),
             XlsxXmlAttributeReader.ReadIntAttribute(primaryView, "activeTab"));
+    }
+
+    private static XElement? FindPrimaryWorkbookView(XDocument workbookXml, XNamespace workbookNs)
+    {
+        var bookViews = workbookXml.Root?.Element(workbookNs + "bookViews");
+        if (bookViews is null)
+            return null;
+
+        XElement? fallbackView = null;
+        foreach (var view in bookViews.Elements(workbookNs + "workbookView"))
+        {
+            fallbackView ??= view;
+            if (XlsxXmlAttributeReader.ReadIntAttribute(view, "firstSheet") is null or 0 &&
+                XlsxXmlAttributeReader.ReadIntAttribute(view, "activeTab") is null or 0)
+            {
+                return view;
+            }
+        }
+
+        return fallbackView;
     }
 
     private static WorkbookFileSharingModel? LoadFileSharing(XDocument workbookXml)

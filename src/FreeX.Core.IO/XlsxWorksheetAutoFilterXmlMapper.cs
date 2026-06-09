@@ -551,10 +551,17 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
             "extLst"
         ];
 
-        var insertionPoint = root.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == worksheetNs &&
-                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        XElement? insertionPoint = null;
+        foreach (var element in root.Elements())
+        {
+            if (element.Name.Namespace == worksheetNs &&
+                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
+            {
+                insertionPoint = element;
+                break;
+            }
+        }
+
         if (insertionPoint is not null)
             insertionPoint.AddBeforeSelf(autoFilter);
         else

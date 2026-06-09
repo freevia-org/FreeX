@@ -49,11 +49,17 @@ public static class FileFormatResolver
         var normalizedExtension = NormalizeExtension(extension);
         foreach (var adapter in adapters)
         {
-            format = adapter.Formats.FirstOrDefault(candidate =>
-                predicate(candidate) &&
-                string.Equals(NormalizeExtension(candidate.Extension), normalizedExtension, StringComparison.OrdinalIgnoreCase));
-            if (format is not null)
+            foreach (var candidate in adapter.Formats)
+            {
+                if (!predicate(candidate) ||
+                    !string.Equals(NormalizeExtension(candidate.Extension), normalizedExtension, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                format = candidate;
                 return adapter;
+            }
         }
 
         format = null;

@@ -43,6 +43,58 @@ public sealed class WorkbookShareReadinessPlannerTests
     }
 
     [Fact]
+    public void CreatePlan_AcceptsLocalFileUriForMacOsShare()
+    {
+        var surface = new WorkbookShareSurface("macOS Share");
+        var expectedPath = Path.GetFullPath("Budget.xlsx");
+
+        var plan = WorkbookShareReadinessPlanner.CreatePlan(
+            new Uri(expectedPath).AbsoluteUri,
+            surface,
+            path => path == expectedPath);
+
+        plan.Kind.Should().Be(WorkbookShareReadinessPlanKind.ShareExistingFile);
+        plan.Path.Should().Be(expectedPath);
+        plan.SaveAsReason.Should().Be(WorkbookShareReadinessSaveAsReason.None);
+    }
+
+    [Fact]
+    public void CreatePlan_RejectsNonFileUriBeforeFileProbe()
+    {
+        var surface = new WorkbookShareSurface("macOS Share");
+
+        var plan = WorkbookShareReadinessPlanner.CreatePlan(
+            "https://example.test/Budget.xlsx",
+            surface,
+            _ => throw new InvalidOperationException("non-file URIs must not probe the file system"));
+
+        plan.Kind.Should().Be(WorkbookShareReadinessPlanKind.SaveAsBeforeShare);
+        plan.Path.Should().BeNull();
+        plan.SaveAsReason.Should().Be(WorkbookShareReadinessSaveAsReason.InvalidPath);
+        plan.CandidatePath.Should().Be("https://example.test/Budget.xlsx");
+        WorkbookShareReadinessPlanner.FormatStatus(plan)
+            .Should()
+            .Be("Save As is required before macOS Share can send the workbook because cloud or web links are not supported; save the workbook to a local file first.");
+    }
+
+    [Fact]
+    public void FormatStatus_PreservesInvalidLocalPathWording()
+    {
+        var surface = new WorkbookShareSurface("macOS Share");
+
+        var plan = new WorkbookShareReadinessPlan(
+            WorkbookShareReadinessPlanKind.SaveAsBeforeShare,
+            null,
+            WorkbookShareReadinessSaveAsReason.InvalidPath,
+            "bad\0path.xlsx",
+            surface);
+
+        WorkbookShareReadinessPlanner.FormatStatus(plan)
+            .Should()
+            .Be("Save As is required before macOS Share can send the workbook because the saved path is not a valid local file path.");
+    }
+
+    [Fact]
     public void CreatePlan_HonorsInjectedSurfaceCapabilityBeforeFileProbe()
     {
         var surface = new WorkbookShareSurface("macOS Share", CanShareLocalFiles: false);

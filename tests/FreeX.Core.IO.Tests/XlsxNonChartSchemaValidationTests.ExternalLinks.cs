@@ -28,6 +28,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var sourceWorkbookRelationships = ReadPackageRootElement(source, "xl/_rels/workbook.xml.rels");
         var sourceExternalLink = ReadPackageRootElement(source, "xl/externalLinks/externalLink1.xml");
         var sourceExternalLinkRelationships = ReadPackageRootElement(source, "xl/externalLinks/_rels/externalLink1.xml.rels");
+        AssertExternalLinkGraph(source);
         source.Position = 0;
 
         var adapter = new XlsxFileAdapter();
@@ -50,6 +51,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
         SchemaErrors(saved).Should().BeEmpty();
         AssertExternalLinkPackage(saved);
+        AssertExternalLinkGraph(saved);
         ReadWorkbookChildElement(saved, "externalReferences")
             .ToString(SaveOptions.DisableFormatting)
             .Should()
@@ -66,6 +68,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceExternalLinkRelationships.ToString(SaveOptions.DisableFormatting));
+        AssertReloadedExternalLinkModel(adapter, saved);
     }
 
     [Fact]
@@ -90,6 +93,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
         SchemaErrors(saved).Should().BeEmpty();
         AssertExternalLinkPackage(saved);
+        AssertExternalLinkGraph(saved);
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -105,6 +109,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         externalReference.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXExternalLink");
         externalReference.Attribute("customExternalReferenceFlag").Should().BeNull();
         externalReference.Elements().Should().BeEmpty();
+        AssertReloadedExternalLinkModel(adapter, saved);
     }
 
     [Fact]
@@ -129,6 +134,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
         SchemaErrors(saved).Should().BeEmpty();
         AssertExternalLinkPackage(saved);
+        AssertExternalLinkGraph(saved);
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -160,6 +166,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         definedName.Attribute("sheetId")!.Value.Should().Be("0");
         definedName.Attribute("customDefinedNameFlag").Should().BeNull();
         definedName.Elements().Should().BeEmpty();
+        AssertReloadedExternalLinkModel(adapter, saved);
     }
 
     private static MemoryStream CreateExternalLinkSourcePackage()
@@ -301,6 +308,59 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 relationship.Attribute("TargetMode")?.Value == "External")
             .Should()
             .ContainSingle();
+    }
+
+    private static void AssertExternalLinkGraph(Stream stream)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var externalReferenceId = ReadWorkbookChildElement(stream, "externalReferences")
+            .Elements(workbookNs + "externalReference")
+            .Should()
+            .ContainSingle()
+            .Subject
+            .Attribute(relNs + "id")!
+            .Value;
+
+        var workbookRelationship = ReadPackageRootElement(stream, "xl/_rels/workbook.xml.rels")
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == externalReferenceId &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        workbookRelationship.Attribute("Target")!.Value.Should().Be("externalLinks/externalLink1.xml");
+
+        var externalLinkPart = "xl/" + workbookRelationship.Attribute("Target")!.Value;
+        var externalBookRelationshipId = ReadPackageRootElement(stream, externalLinkPart)
+            .Element(workbookNs + "externalBook")!
+            .Attribute(relNs + "id")!
+            .Value;
+
+        ReadPackageRootElement(stream, "xl/externalLinks/_rels/externalLink1.xml.rels")
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == externalBookRelationshipId &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath" &&
+                relationship.Attribute("Target")?.Value == "linked-workbook.xlsx" &&
+                relationship.Attribute("TargetMode")?.Value == "External")
+            .Should()
+            .ContainSingle();
+    }
+
+    private static void AssertReloadedExternalLinkModel(XlsxFileAdapter adapter, Stream stream)
+    {
+        stream.Position = 0;
+        var reloaded = adapter.Load(stream);
+
+        reloaded.GetSheetAt(0).GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
+        reloaded.ExternalLinks.Should().ContainSingle(link =>
+            link.PackagePart == "xl/externalLinks/externalLink1.xml" &&
+            link.TargetUri == "linked-workbook.xlsx" &&
+            link.TargetMode == "External");
     }
 
     private static void SetWorkbookExternalReferencesInvalidAttributes(MemoryStream stream)

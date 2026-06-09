@@ -163,9 +163,37 @@ public sealed class MainWindow : Window
     {
         public override string ToString() => Label;
     }
+    private sealed record SortDialogSmokeProbe(
+        Window Dialog,
+        CheckBox HeadersCheckBox,
+        StackPanel LevelsPanel,
+        ComboBox SortOnBox,
+        ComboBox ColorBox,
+        Button AddLevelButton,
+        Button OkButton,
+        Button CancelButton);
     private sealed record DataValidationDialogResult(
         DataValidationDialogAction Action,
         DataValidation? Rule);
+    private sealed record DataValidationDialogSmokeProbe(
+        Window Dialog,
+        TextBlock SummaryText,
+        ComboBox TypeBox,
+        ComboBox OperatorBox,
+        TextBox Formula1Box,
+        TextBox Formula2Box,
+        CheckBox AllowBlankBox,
+        CheckBox ShowDropdownBox,
+        CheckBox ShowInputMessageBox,
+        TextBox PromptTitleBox,
+        TextBox PromptMessageBox,
+        CheckBox ShowErrorMessageBox,
+        ComboBox AlertStyleBox,
+        TextBox ErrorTitleBox,
+        TextBox ErrorMessageBox,
+        Button ApplyButton,
+        Button ClearButton,
+        Button CancelButton);
     private sealed record SubtotalDialogResult(
         SubtotalDialogAction Action,
         SubtotalInputOptions? Options);
@@ -274,6 +302,7 @@ public sealed class MainWindow : Window
     private readonly WorkbookOpenService _openService = new();
     private readonly WorkbookSaveService _saveService = new();
     private readonly IWorkbookShareSheetService _workbookShareSheetService;
+    private readonly IWorkbookFileAccessService _workbookFileAccessService;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
     private readonly ContentControl _sheetTabsHost = new();
@@ -376,6 +405,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _replaceMenuItem = new();
     private readonly NativeMenuItem _goToMenuItem = new();
     private readonly NativeMenuItem _goToSpecialMenuItem = new();
+    private readonly NativeMenuItem _openHyperlinkMenuItem = new();
+    private readonly NativeMenuItem _insertHyperlinkMenuItem = new();
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
@@ -473,6 +504,7 @@ public sealed class MainWindow : Window
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
+    private ComboBox? _activeDataValidationDropdown;
     private string? _formulaBoxEditOriginalText;
     private bool _isOpening;
     private bool _isSaving;
@@ -483,17 +515,23 @@ public sealed class MainWindow : Window
     private Guid? _selectedDrawingObjectId;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
-        : this(startupArguments, new UnavailableWorkbookShareSheetService(WorkbookShareSheetLabel))
+        : this(
+            startupArguments,
+            WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
+            WorkbookFileAccessServiceFactory.Create(App.Diagnostics))
     {
     }
 
     internal MainWindow(
         IReadOnlyList<string> startupArguments,
-        IWorkbookShareSheetService workbookShareSheetService)
+        IWorkbookShareSheetService workbookShareSheetService,
+        IWorkbookFileAccessService workbookFileAccessService)
     {
         ArgumentNullException.ThrowIfNull(workbookShareSheetService);
+        ArgumentNullException.ThrowIfNull(workbookFileAccessService);
 
         _workbookShareSheetService = workbookShareSheetService;
+        _workbookFileAccessService = workbookFileAccessService;
         var source = new StartupWorkbookLoader().Load(startupArguments);
         _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
 
@@ -741,6 +779,12 @@ public sealed class MainWindow : Window
 
         _goToSpecialMenuItem.Header = "Go To Special...";
         _goToSpecialMenuItem.Click += async (_, _) => await ShowGoToSpecialDialogAsync();
+
+        _openHyperlinkMenuItem.Header = "Open Hyperlink";
+        _openHyperlinkMenuItem.Click += async (_, _) => await OpenSelectedHyperlinkAsync();
+
+        _insertHyperlinkMenuItem.Header = "Hyperlink...";
+        _insertHyperlinkMenuItem.Click += async (_, _) => await ShowInsertHyperlinkDialogAsync();
 
         _sortAscendingMenuItem.Header = "Sort A to Z";
         _sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);
@@ -1085,6 +1129,8 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_replaceMenuItem);
         editMenu.Items.Add(_goToMenuItem);
         editMenu.Items.Add(_goToSpecialMenuItem);
+        editMenu.Items.Add(_openHyperlinkMenuItem);
+        editMenu.Items.Add(_insertHyperlinkMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_autoSumMenuItem);
         editMenu.Items.Add(_fillCellsMenuItem);
@@ -1277,12 +1323,18 @@ public sealed class MainWindow : Window
         _statusText.MaxWidth = 180;
         _statusText.TextTrimming = TextTrimming.CharacterEllipsis;
         _statusText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        AutomationProperties.SetAutomationId(_statusText, "StatusText");
+        AutomationProperties.SetName(_statusText, "Status");
+        AutomationProperties.SetHelpText(_statusText, "Shows the current workbook status.");
 
         _selectionStatsText.FontSize = 12;
         _selectionStatsText.Foreground = Brush(73, 80, 93);
         _selectionStatsText.MaxWidth = 420;
         _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
         _selectionStatsText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        AutomationProperties.SetAutomationId(_selectionStatsText, "SelectionStatsText");
+        AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
+        AutomationProperties.SetHelpText(_selectionStatsText, "Shows statistics for the current selection.");
 
         _zoomText.FontSize = 12;
         _zoomText.FontWeight = FontWeight.SemiBold;
@@ -1606,6 +1658,9 @@ public sealed class MainWindow : Window
         _cellAddressText.Foreground = Brush(28, 38, 48);
         _cellAddressText.TextAlignment = TextAlignment.Center;
         _cellAddressText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        AutomationProperties.SetAutomationId(_cellAddressText, "CellAddressText");
+        AutomationProperties.SetName(_cellAddressText, "Cell address");
+        AutomationProperties.SetHelpText(_cellAddressText, "Shows the active cell address.");
 
         _formulaBox.MinWidth = 320;
         _formulaBox.FontSize = 12;
@@ -1613,6 +1668,9 @@ public sealed class MainWindow : Window
         _formulaBox.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _formulaBox.GotFocus += FormulaBox_GotFocus;
         _formulaBox.KeyDown += FormulaBox_KeyDown;
+        AutomationProperties.SetAutomationId(_formulaBox, "FormulaBox");
+        AutomationProperties.SetName(_formulaBox, "Formula bar");
+        AutomationProperties.SetHelpText(_formulaBox, "Edit the active cell value or formula.");
 
         return new Border
         {
@@ -1852,6 +1910,8 @@ public sealed class MainWindow : Window
         _replaceMenuItem.IsEnabled = isIdle;
         _goToMenuItem.IsEnabled = isIdle;
         _goToSpecialMenuItem.IsEnabled = isIdle;
+        _openHyperlinkMenuItem.IsEnabled = isIdle && _session.CanOpenSelectedHyperlink;
+        _insertHyperlinkMenuItem.IsEnabled = isIdle;
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
@@ -2131,6 +2191,7 @@ public sealed class MainWindow : Window
 
     private Control BuildSheetGrid()
     {
+        _activeDataValidationDropdown = null;
         var viewport = _session.Viewport;
         var showHeadings = _session.ActiveSheet.ShowHeadings;
         var zoomFactor = GetActiveZoomFactor();
@@ -2184,6 +2245,7 @@ public sealed class MainWindow : Window
         }
 
         var overlay = BuildDrawingObjectOverlay(viewport);
+        AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
         if (overlay.Children.Count == 0)
             return grid;
 
@@ -2236,6 +2298,69 @@ public sealed class MainWindow : Window
         }
 
         return overlay;
+    }
+
+    private void AddDataValidationDropdownOverlay(
+        Canvas overlay,
+        ViewportModel viewport,
+        bool showHeadings,
+        double zoomFactor)
+    {
+        if (_session.FormulaEditAddress is not null)
+            return;
+
+        if (!TryGetDisplayedCellBounds(
+                viewport,
+                _session.ActiveCell,
+                showHeadings,
+                zoomFactor,
+                out var left,
+                out var top,
+                out var width,
+                out var height))
+        {
+            return;
+        }
+
+        if (!DataValidationDropdownPlanner.TryPlan(
+                _session.Workbook,
+                _session.ActiveSheet,
+                _session.ActiveCell,
+                new DataValidationDropdownCellBounds(left, top, width, height),
+                out var plan))
+        {
+            return;
+        }
+
+        var dropdown = CreateDataValidationDropdown(plan);
+        Canvas.SetLeft(dropdown, plan.Bounds.Left);
+        Canvas.SetTop(dropdown, plan.Bounds.Top);
+        overlay.Children.Add(dropdown);
+        _activeDataValidationDropdown = dropdown;
+    }
+
+    private ComboBox CreateDataValidationDropdown(DataValidationDropdownPlan plan)
+    {
+        var dropdown = new ComboBox
+        {
+            ItemsSource = plan.Items,
+            SelectedItem = plan.SelectedItem,
+            Width = plan.Bounds.Width,
+            Height = plan.Bounds.Height,
+            MinWidth = DataValidationDropdownPlanner.MinimumWidth,
+            MinHeight = DataValidationDropdownPlanner.MinimumHeight,
+            MaxDropDownHeight = 220,
+            Padding = new Thickness(0),
+            FontSize = 12,
+            Cursor = new Cursor(StandardCursorType.Hand)
+        };
+
+        ToolTip.SetTip(dropdown, "Pick from list");
+        AutomationProperties.SetAutomationId(dropdown, "WorksheetDataValidationDropdown");
+        AutomationProperties.SetName(dropdown, "Data validation list");
+        AutomationProperties.SetHelpText(dropdown, "Pick a permitted value for the active cell.");
+        dropdown.SelectionChanged += DataValidationDropdown_SelectionChanged;
+        return dropdown;
     }
 
     private Control CreateSelectableDrawingObjectVisual(
@@ -2641,6 +2766,36 @@ public sealed class MainWindow : Window
         top = (showHeadings ? HeaderRowHeight * zoomFactor : 0) + rowTop;
         width = Math.Max(1, drawingObject.Width * zoomFactor);
         height = Math.Max(1, drawingObject.Height * zoomFactor);
+        return true;
+    }
+
+    private static bool TryGetDisplayedCellBounds(
+        ViewportModel viewport,
+        CellAddress address,
+        bool showHeadings,
+        double zoomFactor,
+        out double left,
+        out double top,
+        out double width,
+        out double height)
+    {
+        left = 0;
+        top = 0;
+        width = 0;
+        height = 0;
+
+        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, address.Col, zoomFactor, out var columnLeft) ||
+            !TryGetDisplayedRowTop(viewport.RowMetrics, address.Row, zoomFactor, out var rowTop))
+        {
+            return false;
+        }
+
+        var columnMetric = viewport.ColMetrics.First(metric => metric.Col == address.Col);
+        var rowMetric = viewport.RowMetrics.First(metric => metric.Row == address.Row);
+        left = (showHeadings ? HeaderColumnWidth * zoomFactor : 0) + columnLeft;
+        top = (showHeadings ? HeaderRowHeight * zoomFactor : 0) + rowTop;
+        width = GetDisplayedColumnWidth(columnMetric, zoomFactor);
+        height = GetDisplayedRowHeight(rowMetric, zoomFactor);
         return true;
     }
 
@@ -3767,18 +3922,38 @@ public sealed class MainWindow : Window
             return;
         }
 
-        items
-            .OfType<MenuItem>()
-            .FirstOrDefault(item => item.IsEnabled)?
-            .Focus();
+        FocusFirstEnabledSheetTabMenuItem(items);
     }
 
-    private Button? FindSheetTabButton(SheetId sheetId) =>
-        _sheetTabsHost.Content is StackPanel panel
-            ? panel.Children
-                .OfType<Button>()
-                .FirstOrDefault(button => button.Tag is SheetId tag && tag == sheetId)
-            : null;
+    private static void FocusFirstEnabledSheetTabMenuItem(IEnumerable<Control> items)
+    {
+        foreach (var item in items)
+        {
+            if (item is MenuItem { IsEnabled: true } menuItem)
+            {
+                menuItem.Focus();
+                return;
+            }
+        }
+    }
+
+    private Button? FindSheetTabButton(SheetId sheetId)
+    {
+        if (_sheetTabsHost.Content is not StackPanel panel)
+            return null;
+
+        foreach (var child in panel.Children)
+        {
+            if (child is Button button &&
+                button.Tag is SheetId tag &&
+                tag == sheetId)
+            {
+                return button;
+            }
+        }
+
+        return null;
+    }
 
     private void SelectSheet(SheetId sheetId, bool selectRange, bool toggle)
     {
@@ -4868,6 +5043,79 @@ public sealed class MainWindow : Window
         RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
     }
 
+    private async Task OpenSelectedHyperlinkAsync()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        if (!_session.TryGetSelectedHyperlinkPlan(out var plan) || plan is null)
+        {
+            ShowEditIssue("Hyperlink target was not found.");
+            return;
+        }
+
+        if (plan.Kind == HyperlinkNavigationKind.External)
+        {
+            await OpenExternalHyperlinkAsync(plan.Target);
+            return;
+        }
+
+        if (plan.Kind == HyperlinkNavigationKind.LocalFile)
+        {
+            await OpenLocalFileHyperlinkAsync(plan);
+            return;
+        }
+
+        var result = _session.OpenSelectedHyperlink();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Open Hyperlink failed.");
+            return;
+        }
+
+        RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
+    }
+
+    private async Task OpenLocalFileHyperlinkAsync(HyperlinkNavigationPlan plan)
+    {
+        if (string.IsNullOrWhiteSpace(plan.LocalPath))
+        {
+            ShowEditIssue("Open Hyperlink requires a local file path.");
+            return;
+        }
+
+        if (!_session.TryResolveOpenTarget(plan.LocalPath, out var target, out var message) ||
+            target is null)
+        {
+            ShowEditIssue(string.IsNullOrWhiteSpace(message)
+                ? "Open Hyperlink requires a supported workbook file."
+                : message);
+            return;
+        }
+
+        await OpenWorkbookPathAsync(target.Path);
+    }
+
+    private async Task OpenExternalHyperlinkAsync(string target)
+    {
+        var result = await OpenExternalUriAsync(target);
+        switch (result)
+        {
+            case ExternalUriLaunchResult.Launched:
+                return;
+            case ExternalUriLaunchResult.BlockedScheme:
+                ShowEditIssue("Open Hyperlink blocked this link because its scheme is not supported.");
+                return;
+            case ExternalUriLaunchResult.LauncherUnavailable:
+                ShowEditIssue("Open Hyperlink cannot open external links on this platform.");
+                return;
+            case ExternalUriLaunchResult.LaunchFailed:
+            default:
+                ShowEditIssue("Open Hyperlink could not open the link.");
+                return;
+        }
+    }
+
     private async Task ShowGoToSpecialDialogAsync()
     {
         if (!TryCommitPendingFormulaEdit())
@@ -5092,6 +5340,250 @@ public sealed class MainWindow : Window
         RefreshShell($"Selected {selectedText}");
         return true;
     }
+
+    private async Task ShowInsertHyperlinkDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var plan = await ShowInsertHyperlinkInputDialogAsync();
+        if (plan is null)
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeHyperlink(plan);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Insert Hyperlink failed.");
+            return;
+        }
+
+        RefreshShell($"Inserted hyperlink for {rangeReference}");
+    }
+
+    private async Task<HyperlinkDialogPlan?> ShowInsertHyperlinkInputDialogAsync()
+    {
+        HyperlinkDialogPlan? result = null;
+        var prefill = _session.GetSelectedRangeHyperlinkDialogPrefill();
+        var linkTypeChoices = CreateHyperlinkTypeChoices();
+        var selectedLinkType = linkTypeChoices[0];
+        foreach (var choice in linkTypeChoices)
+        {
+            if (choice.Value != prefill.LinkType)
+                continue;
+
+            selectedLinkType = choice;
+            break;
+        }
+
+        var dialog = new Window
+        {
+            Title = "Insert Hyperlink",
+            Width = 460,
+            Height = 420,
+            MinWidth = 400,
+            MinHeight = 380,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "HyperlinkCompactDialog");
+
+        var linkTypeBox = new ComboBox
+        {
+            ItemsSource = linkTypeChoices,
+            SelectedItem = selectedLinkType,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetName(linkTypeBox, "Link type");
+        AutomationProperties.SetAutomationId(linkTypeBox, "HyperlinkLinkTypeBox");
+
+        var displayBox = new TextBox
+        {
+            Text = prefill.DisplayText,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetName(displayBox, "Text to display");
+        AutomationProperties.SetAutomationId(displayBox, "HyperlinkDisplayTextBox");
+
+        var targetLabel = new TextBlock();
+        var targetBox = new TextBox
+        {
+            Text = prefill.Target,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetAutomationId(targetBox, "HyperlinkTargetTextBox");
+
+        var screenTipBox = new TextBox
+        {
+            Text = prefill.ScreenTip,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetName(screenTipBox, "Screen tip");
+        AutomationProperties.SetAutomationId(screenTipBox, "HyperlinkScreenTipTextBox");
+
+        var bookmarkBox = new TextBox
+        {
+            Text = prefill.Bookmark,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetName(bookmarkBox, "Bookmark");
+        AutomationProperties.SetAutomationId(bookmarkBox, "HyperlinkBookmarkTextBox");
+
+        var validationText = new TextBlock
+        {
+            MinHeight = 20,
+            Foreground = Brush(143, 74, 18),
+        };
+        AutomationProperties.SetAutomationId(validationText, "HyperlinkValidationText");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(okButton, "HyperlinkOkButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "HyperlinkCancelButton");
+
+        HyperlinkTargetKind CurrentLinkType() =>
+            linkTypeBox.SelectedItem is SortDialogComboItem<HyperlinkTargetKind> choice
+                ? choice.Value
+                : HyperlinkTargetKind.ExistingFileOrWebPage;
+
+        void RefreshTargetField()
+        {
+            var linkType = CurrentLinkType();
+            targetLabel.Text = GetHyperlinkTargetLabel(linkType);
+            AutomationProperties.SetName(targetBox, targetLabel.Text);
+            AutomationProperties.SetHelpText(targetBox, GetHyperlinkTargetHelpText(linkType));
+        }
+
+        void Accept()
+        {
+            if (!HyperlinkDialogPlanner.TryPlan(
+                    targetBox.Text,
+                    displayBox.Text,
+                    CurrentLinkType(),
+                    screenTipBox.Text,
+                    bookmarkBox.Text,
+                    out var plan,
+                    out var validationError))
+            {
+                validationText.Text = GetHyperlinkValidationErrorText(validationError);
+                targetBox.Focus();
+                targetBox.SelectAll();
+                return;
+            }
+
+            result = plan;
+            dialog.Close();
+        }
+
+        linkTypeBox.SelectionChanged += (_, _) => RefreshTargetField();
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                Accept();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                cancelButton,
+                okButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Link type" },
+                linkTypeBox,
+                new TextBlock { Text = "Text to display" },
+                displayBox,
+                targetLabel,
+                targetBox,
+                new TextBlock { Text = "Screen tip" },
+                screenTipBox,
+                new TextBlock { Text = "Bookmark" },
+                bookmarkBox,
+                validationText,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            RefreshTargetField();
+            targetBox.Focus();
+            targetBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
+    private static SortDialogComboItem<HyperlinkTargetKind>[] CreateHyperlinkTypeChoices() =>
+    [
+        new("Existing File or Web Page", HyperlinkTargetKind.ExistingFileOrWebPage),
+        new("Place in This Document", HyperlinkTargetKind.PlaceInThisDocument),
+        new("Create New Document", HyperlinkTargetKind.CreateNewDocument),
+        new("Email Address", HyperlinkTargetKind.EmailAddress),
+    ];
+
+    private static string GetHyperlinkTargetLabel(HyperlinkTargetKind linkType) =>
+        linkType switch
+        {
+            HyperlinkTargetKind.PlaceInThisDocument => "Cell reference or defined name",
+            HyperlinkTargetKind.CreateNewDocument => "New document name",
+            HyperlinkTargetKind.EmailAddress => "Email address",
+            _ => "Address"
+        };
+
+    private static string GetHyperlinkTargetHelpText(HyperlinkTargetKind linkType) =>
+        linkType switch
+        {
+            HyperlinkTargetKind.PlaceInThisDocument => "Enter a workbook location such as Sheet1!A1.",
+            HyperlinkTargetKind.CreateNewDocument => "Enter the document name to store with this hyperlink.",
+            HyperlinkTargetKind.EmailAddress => "Enter an email address or mailto link.",
+            _ => "Enter a web page or file address."
+        };
+
+    private static string GetHyperlinkValidationErrorText(HyperlinkDialogValidationError error) =>
+        error switch
+        {
+            HyperlinkDialogValidationError.MissingDocumentLocation => "Enter a cell reference or defined name.",
+            HyperlinkDialogValidationError.MissingEmailAddress => "Enter an email address.",
+            HyperlinkDialogValidationError.MissingNewDocumentName => "Enter a new document name.",
+            HyperlinkDialogValidationError.InvalidEmailAddress => "Enter a valid email address.",
+            _ => "Enter an address."
+        };
 
     private async Task ShowWorkbookStatisticsDialogAsync()
     {
@@ -5518,8 +6010,8 @@ public sealed class MainWindow : Window
         AutomationProperties.SetAutomationId(dialog, "FormatCellsCompactDialog");
 
         var numberChoices = CreateFormatCellsNumberFormatChoices(currentNumberFormat);
-        var currentNumberChoice = numberChoices.FirstOrDefault(choice =>
-            string.Equals(choice.FormatCode, currentNumberFormat, StringComparison.Ordinal)) ?? numberChoices[0];
+        var currentNumberChoice =
+            FindFormatCellsNumberFormatChoice(numberChoices, currentNumberFormat) ?? numberChoices[0];
         var numberCategoryList = new ListBox
         {
             ItemsSource = numberChoices.Select(choice => choice.Category).Distinct().ToArray(),
@@ -5549,14 +6041,12 @@ public sealed class MainWindow : Window
         void RefreshNumberChoices()
         {
             var category = numberCategoryList.SelectedItem?.ToString() ?? currentNumberChoice.Category;
-            var filteredChoices = numberChoices
-                .Where(choice => string.Equals(choice.Category, category, StringComparison.Ordinal))
-                .ToArray();
+            var filteredChoices = FilterFormatCellsNumberFormatChoices(numberChoices, category);
             numberFormatBox.ItemsSource = filteredChoices;
             if (numberFormatBox.SelectedItem is not FormatCellsNumberFormatChoice selected ||
-                !filteredChoices.Contains(selected))
+                !ContainsFormatCellsNumberFormatChoice(filteredChoices, selected))
             {
-                numberFormatBox.SelectedItem = filteredChoices.FirstOrDefault() ?? currentNumberChoice;
+                numberFormatBox.SelectedItem = filteredChoices.Count > 0 ? filteredChoices[0] : currentNumberChoice;
             }
         }
 
@@ -6025,9 +6515,17 @@ public sealed class MainWindow : Window
         T currentValue)
         where T : struct
     {
-        var selected = choices.FirstOrDefault(choice =>
-            choice.Value.HasValue &&
-            EqualityComparer<T>.Default.Equals(choice.Value.Value, currentValue)) ?? choices[0];
+        var selected = choices[0];
+        foreach (var choice in choices)
+        {
+            if (choice.Value.HasValue &&
+                EqualityComparer<T>.Default.Equals(choice.Value.Value, currentValue))
+            {
+                selected = choice;
+                break;
+            }
+        }
+
         var comboBox = new ComboBox
         {
             ItemsSource = choices,
@@ -6064,10 +6562,50 @@ public sealed class MainWindow : Window
             new("Date", "m/d/yyyy", "1/1/2026"),
             new("Time", "h:mm AM/PM", "9:30 AM"),
         };
-        if (!choices.Any(choice => string.Equals(choice.FormatCode, currentNumberFormat, StringComparison.Ordinal)))
+        if (FindFormatCellsNumberFormatChoice(choices, currentNumberFormat) is null)
             choices.Add(new FormatCellsNumberFormatChoice("Custom", currentNumberFormat, "Custom"));
 
         return choices;
+    }
+
+    private static FormatCellsNumberFormatChoice? FindFormatCellsNumberFormatChoice(
+        IEnumerable<FormatCellsNumberFormatChoice> choices,
+        string formatCode)
+    {
+        foreach (var choice in choices)
+        {
+            if (string.Equals(choice.FormatCode, formatCode, StringComparison.Ordinal))
+                return choice;
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<FormatCellsNumberFormatChoice> FilterFormatCellsNumberFormatChoices(
+        IEnumerable<FormatCellsNumberFormatChoice> choices,
+        string category)
+    {
+        var matchingChoices = new List<FormatCellsNumberFormatChoice>();
+        foreach (var choice in choices)
+        {
+            if (string.Equals(choice.Category, category, StringComparison.Ordinal))
+                matchingChoices.Add(choice);
+        }
+
+        return matchingChoices;
+    }
+
+    private static bool ContainsFormatCellsNumberFormatChoice(
+        IEnumerable<FormatCellsNumberFormatChoice> choices,
+        FormatCellsNumberFormatChoice selected)
+    {
+        foreach (var choice in choices)
+        {
+            if (EqualityComparer<FormatCellsNumberFormatChoice>.Default.Equals(choice, selected))
+                return true;
+        }
+
+        return false;
     }
 
     private static IReadOnlyList<FormatCellsNullableChoice<CellHAlign>> CreateFormatCellsHorizontalAlignmentChoices() =>
@@ -6155,7 +6693,14 @@ public sealed class MainWindow : Window
         if (comboBox.ItemsSource is not IEnumerable<FormatCellsColorChoice> choices)
             return;
 
-        comboBox.SelectedItem = choices.FirstOrDefault(choice => choice.Color == color) ?? comboBox.SelectedItem;
+        foreach (var choice in choices)
+        {
+            if (choice.Color == color)
+            {
+                comboBox.SelectedItem = choice;
+                return;
+            }
+        }
     }
 
     private static T? ReadChangedFormatCellsValue<T>(T currentValue, ComboBox comboBox)
@@ -6778,16 +7323,28 @@ public sealed class MainWindow : Window
 
     private async Task<SortDialogResult?> ShowSortInputDialogAsync()
     {
+        return await ShowSortInputDialogAsync(null);
+    }
+
+    private async Task<SortDialogResult?> ShowSortInputDialogAsync(Action<SortDialogSmokeProbe>? launchSmokeProbe)
+    {
         SortDialogResult? result = null;
         var range = _session.SelectedRange;
         var levels = SortDialogPlanner.NormalizeLevels(null).ToList();
-        var orderChoices = SortDialogPlanner.BuildOrderChoices(SortDialogPlannerText.Default.SortOnCellValues);
+        var sortOnChoices = new[]
+        {
+            new SortOnChoice(SortDialogPlannerText.Default.SortOnCellValues),
+            new SortOnChoice(SortDialogPlannerText.Default.SortOnCellColor),
+            new SortOnChoice(SortDialogPlannerText.Default.SortOnFontColor),
+        };
+        var cellColorChoices = SortDialogPlanner.BuildColorChoices(_session.Workbook, _session.ActiveSheet, range, SortOn.CellColor);
+        var fontColorChoices = SortDialogPlanner.BuildColorChoices(_session.Workbook, _session.ActiveSheet, range, SortOn.FontColor);
         var dialog = new Window
         {
             Title = "Sort",
-            Width = 560,
+            Width = 760,
             Height = 430,
-            MinWidth = 500,
+            MinWidth = 700,
             MinHeight = 360,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -6795,7 +7352,7 @@ public sealed class MainWindow : Window
         AutomationProperties.SetAutomationId(dialog, "SortCompactDialog");
         AutomationProperties.SetHelpText(
             dialog,
-            "macOS preview custom sort supports cell values by column; color, custom-list, case-sensitive, and left-to-right options remain WPF-only.");
+            "macOS preview custom sort supports cell values, cell color, and font color by column; custom-list, case-sensitive, and left-to-right options remain WPF-only.");
 
         var headersCheck = new CheckBox
         {
@@ -6834,6 +7391,9 @@ public sealed class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(cancelButton, "SortCancelButton");
 
+        ComboBox? firstSortOnBox = null;
+        ComboBox? firstColorBox = null;
+
         IReadOnlyList<SortColumnChoice> CurrentColumnChoices()
         {
             var hasHeaders = headersCheck.IsChecked == true;
@@ -6847,22 +7407,91 @@ public sealed class MainWindow : Window
                 .Select(choice => new SortDialogComboItem<SortColumnChoice>(choice.Label, choice))
                 .ToList();
 
-        IReadOnlyList<SortDialogComboItem<SortDirectionChoice>> CreateOrderItems() =>
-            orderChoices
+        IReadOnlyList<SortDialogComboItem<SortOnChoice>> CreateSortOnItems() =>
+            sortOnChoices
+                .Select(choice => new SortDialogComboItem<SortOnChoice>(choice.Label, choice))
+                .ToList();
+
+        IReadOnlyList<SortDialogComboItem<SortDirectionChoice>> CreateOrderItems(SortDialogLevel level) =>
+            level.OrderChoices
                 .Select(choice => new SortDialogComboItem<SortDirectionChoice>(choice.Label, choice))
+                .ToList();
+
+        IReadOnlyList<SortDialogComboItem<SortColorChoice>> CreateColorItems(SortDialogLevel level) =>
+            level.ColorChoices
+                .Select(choice => new SortDialogComboItem<SortColorChoice>(string.IsNullOrWhiteSpace(choice.Label) ? "None" : choice.Label, choice))
                 .ToList();
 
         void SelectColumn(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortColumnChoice>> choices, SortDialogLevel level)
         {
-            comboBox.SelectedItem = choices.FirstOrDefault(choice => choice.Value.ColumnOffset == level.ColumnOffset) ??
-                choices.FirstOrDefault();
+            var selected = choices.Count > 0 ? choices[0] : null;
+            foreach (var choice in choices)
+            {
+                if (choice.Value.ColumnOffset == level.ColumnOffset)
+                {
+                    selected = choice;
+                    break;
+                }
+            }
+
+            comboBox.SelectedItem = selected;
+        }
+
+        void SelectSortOn(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortOnChoice>> choices, SortDialogLevel level)
+        {
+            var selected = choices.Count > 0 ? choices[0] : null;
+            foreach (var choice in choices)
+            {
+                if (string.Equals(choice.Value.Label, level.SortOn, StringComparison.Ordinal))
+                {
+                    selected = choice;
+                    break;
+                }
+            }
+
+            comboBox.SelectedItem = selected;
         }
 
         void SelectOrder(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortDirectionChoice>> choices, SortDialogLevel level)
         {
-            comboBox.SelectedItem = choices.FirstOrDefault(choice => choice.Value.Ascending == level.Ascending) ??
-                choices.FirstOrDefault();
+            var selected = choices.Count > 0 ? choices[0] : null;
+            foreach (var choice in choices)
+            {
+                if (choice.Value.Ascending == level.Ascending)
+                {
+                    selected = choice;
+                    break;
+                }
+            }
+
+            comboBox.SelectedItem = selected;
         }
+
+        void SelectColor(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortColorChoice>> choices, SortDialogLevel level)
+        {
+            var selected = choices.Count > 0 ? choices[0] : null;
+            foreach (var choice in choices)
+            {
+                if (string.Equals(choice.Value.Label, level.TargetColor, StringComparison.OrdinalIgnoreCase))
+                {
+                    selected = choice;
+                    break;
+                }
+            }
+
+            comboBox.SelectedItem = selected;
+        }
+
+        void ApplyColorChoices(SortDialogLevel level)
+        {
+            level.SetColorChoices(SortDialogPlanner.BuildColorChoicesForSortOn(
+                level.SortOn,
+                cellColorChoices,
+                fontColorChoices));
+        }
+
+        static bool IsColorSort(SortDialogLevel level) =>
+            SortDialogPlanner.SortOnFromLabel(level.SortOn) is SortOn.CellColor or SortOn.FontColor;
 
         StackPanel CreateSortField(string label, Control control, double width) =>
             new()
@@ -6880,16 +7509,21 @@ public sealed class MainWindow : Window
         {
             levels = SortDialogPlanner.NormalizeLevels(levels).ToList();
             levelsPanel.Children.Clear();
+            firstSortOnBox = null;
+            firstColorBox = null;
             var columnChoices = CreateColumnItems();
-            var directionChoices = CreateOrderItems();
+            var sortOnItems = CreateSortOnItems();
             for (var index = 0; index < levels.Count; index++)
             {
                 var levelIndex = index;
                 var level = levels[index];
+                ApplyColorChoices(level);
+                var directionChoices = CreateOrderItems(level);
+                var colorChoices = CreateColorItems(level);
                 var columnBox = new ComboBox
                 {
                     ItemsSource = columnChoices,
-                    MinWidth = 210,
+                    MinWidth = 150,
                 };
                 AutomationProperties.SetName(columnBox, "Sort by");
                 AutomationProperties.SetAutomationId(columnBox, $"SortLevel{levelIndex + 1}ColumnBox");
@@ -6897,21 +7531,77 @@ public sealed class MainWindow : Window
                 columnBox.SelectionChanged += (_, _) =>
                 {
                     if (columnBox.SelectedItem is SortDialogComboItem<SortColumnChoice> columnChoice)
-                        levels = SortDialogPlanner.UpdateLevel(levels, levelIndex, columnChoice.Value.ColumnOffset, levels[levelIndex].Ascending).ToList();
+                        levels[levelIndex].ColumnOffset = columnChoice.Value.ColumnOffset;
                 };
+
+                var sortOnBox = new ComboBox
+                {
+                    ItemsSource = sortOnItems,
+                    MinWidth = 120,
+                };
+                AutomationProperties.SetName(sortOnBox, "Sort On");
+                AutomationProperties.SetAutomationId(sortOnBox, $"SortLevel{levelIndex + 1}SortOnBox");
+                SelectSortOn(sortOnBox, sortOnItems, level);
 
                 var orderBox = new ComboBox
                 {
                     ItemsSource = directionChoices,
-                    MinWidth = 120,
+                    MinWidth = 105,
                 };
                 AutomationProperties.SetName(orderBox, "Order");
                 AutomationProperties.SetAutomationId(orderBox, $"SortLevel{levelIndex + 1}OrderBox");
                 SelectOrder(orderBox, directionChoices, level);
+
+                var colorBox = new ComboBox
+                {
+                    ItemsSource = colorChoices,
+                    MinWidth = 105,
+                    IsEnabled = IsColorSort(level),
+                };
+                AutomationProperties.SetName(colorBox, "Color");
+                AutomationProperties.SetAutomationId(colorBox, $"SortLevel{levelIndex + 1}ColorBox");
+                SelectColor(colorBox, colorChoices, level);
+
+                if (levelIndex == 0)
+                {
+                    firstSortOnBox = sortOnBox;
+                    firstColorBox = colorBox;
+                }
+
+                void RefreshSortOnDependentControls()
+                {
+                    var currentLevel = levels[levelIndex];
+                    ApplyColorChoices(currentLevel);
+
+                    var currentDirectionChoices = CreateOrderItems(currentLevel);
+                    orderBox.ItemsSource = currentDirectionChoices;
+                    SelectOrder(orderBox, currentDirectionChoices, currentLevel);
+
+                    var currentColorChoices = CreateColorItems(currentLevel);
+                    colorBox.ItemsSource = currentColorChoices;
+                    colorBox.IsEnabled = IsColorSort(currentLevel);
+                    SelectColor(colorBox, currentColorChoices, currentLevel);
+                }
+
+                sortOnBox.SelectionChanged += (_, _) =>
+                {
+                    if (sortOnBox.SelectedItem is not SortDialogComboItem<SortOnChoice> sortOnChoice)
+                        return;
+
+                    levels[levelIndex].SortOn = sortOnChoice.Value.Label;
+                    RefreshSortOnDependentControls();
+                };
+
                 orderBox.SelectionChanged += (_, _) =>
                 {
                     if (orderBox.SelectedItem is SortDialogComboItem<SortDirectionChoice> directionChoice)
-                        levels = SortDialogPlanner.UpdateLevel(levels, levelIndex, levels[levelIndex].ColumnOffset, directionChoice.Value.Ascending).ToList();
+                        levels[levelIndex].Ascending = directionChoice.Value.Ascending;
+                };
+
+                colorBox.SelectionChanged += (_, _) =>
+                {
+                    if (colorBox.SelectedItem is SortDialogComboItem<SortColorChoice> colorChoice)
+                        levels[levelIndex].TargetColor = colorChoice.Value.Label;
                 };
 
                 var removeButton = new Button
@@ -6936,8 +7626,10 @@ public sealed class MainWindow : Window
                     Spacing = 8,
                     Children =
                     {
-                        CreateSortField("Sort by", columnBox, 250),
-                        CreateSortField("Order", orderBox, 140),
+                        CreateSortField("Sort by", columnBox, 190),
+                        CreateSortField("Sort On", sortOnBox, 130),
+                        CreateSortField("Order", orderBox, 115),
+                        CreateSortField("Color", colorBox, 120),
                         removeButton,
                     },
                 };
@@ -7015,6 +7707,23 @@ public sealed class MainWindow : Window
                 },
             },
         };
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new SortDialogSmokeProbe(
+                        dialog,
+                        headersCheck,
+                        levelsPanel,
+                        firstSortOnBox!,
+                        firstColorBox!,
+                        addLevelButton,
+                        okButton,
+                        cancelButton)));
+            };
+        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -7101,7 +7810,9 @@ public sealed class MainWindow : Window
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(errorText, "Goal Seek validation");
         AutomationProperties.SetAutomationId(errorText, "GoalSeekErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Goal Seek input validation messages.");
 
         var okButton = new Button
         {
@@ -7109,7 +7820,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "GoalSeekOkButton");
+        AutomationProperties.SetHelpText(okButton, "Run Goal Seek with these inputs.");
 
         var cancelButton = new Button
         {
@@ -7117,7 +7830,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "GoalSeekCancelButton");
+        AutomationProperties.SetHelpText(cancelButton, "Close Goal Seek without running.");
 
         void Accept()
         {
@@ -7221,6 +7936,7 @@ public sealed class MainWindow : Window
         };
         AutomationProperties.SetName(summaryBlock, "Goal Seek Status");
         AutomationProperties.SetAutomationId(summaryBlock, "GoalSeekStatusText");
+        AutomationProperties.SetHelpText(summaryBlock, "Shows the Goal Seek result status.");
 
         var buttonRow = new StackPanel
         {
@@ -7240,6 +7956,7 @@ public sealed class MainWindow : Window
                 MinWidth = 150,
                 Padding = new Thickness(10, 4),
             };
+            AutomationProperties.SetName(restoreButton, "Restore Original Values");
             AutomationProperties.SetAutomationId(restoreButton, "GoalSeekRestoreOriginalValuesButton");
             AutomationProperties.SetHelpText(restoreButton, "Undo the Goal Seek result and restore the original changing cell value.");
 
@@ -7249,6 +7966,7 @@ public sealed class MainWindow : Window
                 MinWidth = 104,
                 Padding = new Thickness(10, 4),
             };
+            AutomationProperties.SetName(keepButton, "Keep Result");
             AutomationProperties.SetAutomationId(keepButton, "GoalSeekKeepResultButton");
             AutomationProperties.SetHelpText(keepButton, "Keep the applied Goal Seek result in the workbook.");
 
@@ -7274,7 +7992,9 @@ public sealed class MainWindow : Window
                 MinWidth = 84,
                 Padding = new Thickness(10, 4),
             };
+            AutomationProperties.SetName(okButton, "OK");
             AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
+            AutomationProperties.SetHelpText(okButton, "Close the Goal Seek status dialog.");
             okButton.Click += (_, _) =>
             {
                 choice = GoalSeekStatusDialogChoice.Dismiss;
@@ -7447,14 +8167,18 @@ public sealed class MainWindow : Window
             GroupName = "AdvancedFilterOutputMode",
             IsChecked = true,
         };
+        AutomationProperties.SetName(inPlaceButton, "Filter in-place");
         AutomationProperties.SetAutomationId(inPlaceButton, "AdvancedFilterInPlaceButton");
+        AutomationProperties.SetHelpText(inPlaceButton, "Filter the list range without copying results.");
 
         var copyToAnotherLocationButton = new RadioButton
         {
             Content = "Copy to another location",
             GroupName = "AdvancedFilterOutputMode",
         };
+        AutomationProperties.SetName(copyToAnotherLocationButton, "Copy to another location");
         AutomationProperties.SetAutomationId(copyToAnotherLocationButton, "AdvancedFilterCopyToAnotherLocationButton");
+        AutomationProperties.SetHelpText(copyToAnotherLocationButton, "Copy filtered rows to the Copy to range.");
 
         var copyToBox = new TextBox
         {
@@ -7469,14 +8193,18 @@ public sealed class MainWindow : Window
         {
             Content = "Unique records only",
         };
+        AutomationProperties.SetName(uniqueBox, "Unique records only");
         AutomationProperties.SetAutomationId(uniqueBox, "AdvancedFilterUniqueRecordsOnlyBox");
+        AutomationProperties.SetHelpText(uniqueBox, "Return only unique matching records.");
 
         var errorText = new TextBlock
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(errorText, "Advanced Filter validation");
         AutomationProperties.SetAutomationId(errorText, "AdvancedFilterErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Advanced Filter readiness and validation messages.");
 
         var okButton = new Button
         {
@@ -7484,7 +8212,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "AdvancedFilterOkButton");
+        AutomationProperties.SetHelpText(okButton, "Run Advanced Filter.");
 
         var cancelButton = new Button
         {
@@ -7492,7 +8222,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "AdvancedFilterCancelButton");
+        AutomationProperties.SetHelpText(cancelButton, "Close Advanced Filter without running.");
 
         AdvancedFilterPlanResult CreatePlan()
         {
@@ -7741,7 +8473,9 @@ public sealed class MainWindow : Window
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(rangeText, "Subtotal range");
         AutomationProperties.SetAutomationId(rangeText, "SubtotalRangeSummaryText");
+        AutomationProperties.SetHelpText(rangeText, "Shows the selected range for subtotaling.");
 
         var groupColumnBox = new ComboBox
         {
@@ -7749,7 +8483,9 @@ public sealed class MainWindow : Window
             SelectedIndex = 0,
             MinWidth = 240,
         };
+        AutomationProperties.SetName(groupColumnBox, "At each change in");
         AutomationProperties.SetAutomationId(groupColumnBox, "SubtotalGroupColumnBox");
+        AutomationProperties.SetHelpText(groupColumnBox, "Choose the column used to group subtotal rows.");
 
         var functionBox = new ComboBox
         {
@@ -7757,13 +8493,17 @@ public sealed class MainWindow : Window
             SelectedIndex = 0,
             MinWidth = 240,
         };
+        AutomationProperties.SetName(functionBox, "Use function");
         AutomationProperties.SetAutomationId(functionBox, "SubtotalFunctionBox");
+        AutomationProperties.SetHelpText(functionBox, "Choose the subtotal calculation function.");
 
         var columnsPanel = new StackPanel
         {
             Spacing = 4,
         };
+        AutomationProperties.SetName(columnsPanel, "Add subtotal to");
         AutomationProperties.SetAutomationId(columnsPanel, "SubtotalColumnsPanel");
+        AutomationProperties.SetHelpText(columnsPanel, "Columns that receive subtotal calculations.");
 
         var columnBoxes = new List<CheckBox>();
         foreach (var column in columns)
@@ -7785,28 +8525,36 @@ public sealed class MainWindow : Window
             Content = "Replace current subtotals",
             IsChecked = true,
         };
+        AutomationProperties.SetName(replaceBox, "Replace current subtotals");
         AutomationProperties.SetAutomationId(replaceBox, "SubtotalReplaceCurrentBox");
+        AutomationProperties.SetHelpText(replaceBox, "Replace existing subtotals before applying new ones.");
 
         var pageBreakBox = new CheckBox
         {
             Content = "Page break between groups",
             IsChecked = false,
         };
+        AutomationProperties.SetName(pageBreakBox, "Page break between groups");
         AutomationProperties.SetAutomationId(pageBreakBox, "SubtotalPageBreakBox");
+        AutomationProperties.SetHelpText(pageBreakBox, "Insert a page break after each subtotal group.");
 
         var summaryBelowBox = new CheckBox
         {
             Content = "Summary below data",
             IsChecked = true,
         };
+        AutomationProperties.SetName(summaryBelowBox, "Summary below data");
         AutomationProperties.SetAutomationId(summaryBelowBox, "SubtotalSummaryBelowBox");
+        AutomationProperties.SetHelpText(summaryBelowBox, "Place summary rows below the grouped data.");
 
         var errorText = new TextBlock
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(errorText, "Subtotal validation");
         AutomationProperties.SetAutomationId(errorText, "SubtotalErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Subtotal validation messages.");
 
         var okButton = new Button
         {
@@ -7814,7 +8562,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "SubtotalOkButton");
+        AutomationProperties.SetHelpText(okButton, "Apply subtotal options.");
 
         var removeAllButton = new Button
         {
@@ -7822,7 +8572,9 @@ public sealed class MainWindow : Window
             MinWidth = 96,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(removeAllButton, "Remove All");
         AutomationProperties.SetAutomationId(removeAllButton, "SubtotalRemoveAllButton");
+        AutomationProperties.SetHelpText(removeAllButton, "Remove subtotals from the selected range.");
 
         var cancelButton = new Button
         {
@@ -7830,7 +8582,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "SubtotalCancelButton");
+        AutomationProperties.SetHelpText(cancelButton, "Close Subtotal without applying changes.");
 
         void Accept()
         {
@@ -7850,7 +8604,14 @@ public sealed class MainWindow : Window
             if (selectedOffsets.Length == 0)
             {
                 errorText.Text = "Select at least one subtotal column.";
-                (columnBoxes.FirstOrDefault() as Control ?? okButton).Focus();
+                Control focusTarget = okButton;
+                foreach (var columnBox in columnBoxes)
+                {
+                    focusTarget = columnBox;
+                    break;
+                }
+
+                focusTarget.Focus();
                 return;
             }
 
@@ -8034,20 +8795,26 @@ public sealed class MainWindow : Window
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(rangeText, "Remove Duplicates range");
         AutomationProperties.SetAutomationId(rangeText, "RemoveDuplicatesRangeSummaryText");
+        AutomationProperties.SetHelpText(rangeText, "Shows the selected range checked for duplicates.");
 
         var hasHeadersBox = new CheckBox
         {
             Content = "My data has headers",
             IsChecked = hasHeaders,
         };
+        AutomationProperties.SetName(hasHeadersBox, "My data has headers");
         AutomationProperties.SetAutomationId(hasHeadersBox, "RemoveDuplicatesHasHeadersBox");
+        AutomationProperties.SetHelpText(hasHeadersBox, "Treat the first row as headers when comparing duplicates.");
 
         var columnsPanel = new StackPanel
         {
             Spacing = 4,
         };
+        AutomationProperties.SetName(columnsPanel, "Columns");
         AutomationProperties.SetAutomationId(columnsPanel, "RemoveDuplicatesColumnsPanel");
+        AutomationProperties.SetHelpText(columnsPanel, "Columns used to identify duplicate rows.");
 
         var columnBoxes = new List<CheckBox>();
 
@@ -8083,7 +8850,9 @@ public sealed class MainWindow : Window
             MinWidth = 92,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(selectAllButton, "Select All");
         AutomationProperties.SetAutomationId(selectAllButton, "RemoveDuplicatesSelectAllButton");
+        AutomationProperties.SetHelpText(selectAllButton, "Select all columns for duplicate comparison.");
 
         var unselectAllButton = new Button
         {
@@ -8091,14 +8860,18 @@ public sealed class MainWindow : Window
             MinWidth = 92,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(unselectAllButton, "Unselect All");
         AutomationProperties.SetAutomationId(unselectAllButton, "RemoveDuplicatesUnselectAllButton");
+        AutomationProperties.SetHelpText(unselectAllButton, "Clear all selected duplicate comparison columns.");
 
         var errorText = new TextBlock
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(errorText, "Remove Duplicates validation");
         AutomationProperties.SetAutomationId(errorText, "RemoveDuplicatesErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Remove Duplicates validation messages.");
 
         var okButton = new Button
         {
@@ -8106,7 +8879,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "RemoveDuplicatesOkButton");
+        AutomationProperties.SetHelpText(okButton, "Remove duplicate rows using the selected columns.");
 
         var cancelButton = new Button
         {
@@ -8114,7 +8889,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "RemoveDuplicatesCancelButton");
+        AutomationProperties.SetHelpText(cancelButton, "Close Remove Duplicates without changes.");
 
         void RebuildColumnsForHeaderState()
         {
@@ -8140,7 +8917,14 @@ public sealed class MainWindow : Window
             if (!planResult.IsReady || planResult.Plan is null)
             {
                 errorText.Text = planResult.StatusText;
-                (columnBoxes.FirstOrDefault() as Control ?? selectAllButton).Focus();
+                Control focusTarget = selectAllButton;
+                foreach (var columnBox in columnBoxes)
+                {
+                    focusTarget = columnBox;
+                    break;
+                }
+
+                focusTarget.Focus();
                 return;
             }
 
@@ -8285,12 +9069,16 @@ public sealed class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Foreground = HeaderForeground,
         };
+        AutomationProperties.SetName(statusText, "Scenario Manager status");
+        AutomationProperties.SetHelpText(statusText, "Shows Scenario Manager availability and status.");
 
         var selectionText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             Foreground = HeaderForeground,
         };
+        AutomationProperties.SetName(selectionText, "Scenario Manager selection");
+        AutomationProperties.SetHelpText(selectionText, "Shows the current selection saved into new scenarios.");
 
         var scenarioList = new ListBox
         {
@@ -8299,6 +9087,7 @@ public sealed class MainWindow : Window
         };
         AutomationProperties.SetName(scenarioList, "Scenarios");
         AutomationProperties.SetAutomationId(scenarioList, "ScenarioManagerScenarioList");
+        AutomationProperties.SetHelpText(scenarioList, "Select a saved scenario.");
 
         var scenarioDetailsText = new TextBlock
         {
@@ -8306,6 +9095,8 @@ public sealed class MainWindow : Window
             LineHeight = 20,
             MinHeight = 58,
         };
+        AutomationProperties.SetName(scenarioDetailsText, "Scenario details");
+        AutomationProperties.SetHelpText(scenarioDetailsText, "Shows details for the selected scenario.");
 
         var nameBox = new TextBox
         {
@@ -8329,7 +9120,9 @@ public sealed class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 22,
         };
+        AutomationProperties.SetName(errorText, "Scenario Manager validation");
         AutomationProperties.SetAutomationId(errorText, "ScenarioManagerErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Scenario Manager validation and error messages.");
 
         var saveButton = new Button
         {
@@ -8337,7 +9130,9 @@ public sealed class MainWindow : Window
             MinWidth = 92,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(saveButton, "Save/Add");
         AutomationProperties.SetAutomationId(saveButton, "ScenarioManagerSaveButton");
+        AutomationProperties.SetHelpText(saveButton, "Save the selected cells as a new or updated scenario.");
 
         var showButton = new Button
         {
@@ -8345,7 +9140,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(showButton, "Show");
         AutomationProperties.SetAutomationId(showButton, "ScenarioManagerShowButton");
+        AutomationProperties.SetHelpText(showButton, "Apply the selected scenario values to the workbook.");
 
         var deleteButton = new Button
         {
@@ -8353,7 +9150,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(deleteButton, "Delete");
         AutomationProperties.SetAutomationId(deleteButton, "ScenarioManagerDeleteButton");
+        AutomationProperties.SetHelpText(deleteButton, "Delete the selected scenario.");
 
         var summaryButton = new Button
         {
@@ -8361,7 +9160,9 @@ public sealed class MainWindow : Window
             MinWidth = 128,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(summaryButton, "Summary Report");
         AutomationProperties.SetAutomationId(summaryButton, "ScenarioManagerSummaryButton");
+        AutomationProperties.SetHelpText(summaryButton, "Create a scenario summary report sheet.");
 
         var closeButton = new Button
         {
@@ -8369,7 +9170,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(closeButton, "Close");
         AutomationProperties.SetAutomationId(closeButton, "ScenarioManagerCloseButton");
+        AutomationProperties.SetHelpText(closeButton, "Close Scenario Manager.");
 
         string? CurrentScenarioName() =>
             scenarioList.SelectedItem is ScenarioManagerDialogScenarioItem item
@@ -8394,7 +9197,17 @@ public sealed class MainWindow : Window
                 .Select(choice => new ScenarioManagerDialogScenarioItem(choice))
                 .ToArray();
             scenarioList.ItemsSource = items;
-            scenarioList.SelectedItem = items.FirstOrDefault(item => item.Choice.IsSelected);
+            ScenarioManagerDialogScenarioItem? selectedItem = null;
+            foreach (var item in items)
+            {
+                if (item.Choice.IsSelected)
+                {
+                    selectedItem = item;
+                    break;
+                }
+            }
+
+            scenarioList.SelectedItem = selectedItem;
             statusText.Text = plan.StatusText;
             selectionText.Text = FormatScenarioManagerSelectionSummary(_session.SelectedRange);
             summaryButton.IsEnabled = items.Length > 0;
@@ -8671,7 +9484,9 @@ public sealed class MainWindow : Window
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(rangeText, "Data Table range");
         AutomationProperties.SetAutomationId(rangeText, "DataTableRangeSummaryText");
+        AutomationProperties.SetHelpText(rangeText, "Shows the selected range used for the Data Table.");
 
         var rowInputBox = new TextBox
         {
@@ -8694,7 +9509,9 @@ public sealed class MainWindow : Window
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(errorText, "Data Table validation");
         AutomationProperties.SetAutomationId(errorText, "DataTableErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Data Table readiness and validation messages.");
 
         var okButton = new Button
         {
@@ -8702,7 +9519,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "DataTableOkButton");
+        AutomationProperties.SetHelpText(okButton, "Create the Data Table.");
 
         var cancelButton = new Button
         {
@@ -8710,7 +9529,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "DataTableCancelButton");
+        AutomationProperties.SetHelpText(cancelButton, "Close Data Table without creating it.");
 
         DataTablePlanResult CreatePlan() =>
             DataTablePlanner.CreatePlan(
@@ -8890,7 +9711,9 @@ public sealed class MainWindow : Window
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(sourceRangeText, "Forecast source range");
         AutomationProperties.SetAutomationId(sourceRangeText, "ForecastSheetSourceRangeSummaryText");
+        AutomationProperties.SetHelpText(sourceRangeText, "Shows the selected source range for the forecast.");
 
         var periodsBox = new TextBox
         {
@@ -8906,7 +9729,9 @@ public sealed class MainWindow : Window
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(errorText, "Forecast Sheet validation");
         AutomationProperties.SetAutomationId(errorText, "ForecastSheetErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Forecast Sheet readiness and validation messages.");
 
         var createButton = new Button
         {
@@ -8914,7 +9739,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(createButton, "Create");
         AutomationProperties.SetAutomationId(createButton, "ForecastSheetCreateButton");
+        AutomationProperties.SetHelpText(createButton, "Create the Forecast Sheet.");
 
         var cancelButton = new Button
         {
@@ -8922,7 +9749,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "ForecastSheetCancelButton");
+        AutomationProperties.SetHelpText(cancelButton, "Close Forecast Sheet without creating it.");
 
         ForecastSheetPlan CreatePlan() =>
             ForecastSheetPlanner.CreatePlan(
@@ -9087,6 +9916,11 @@ public sealed class MainWindow : Window
 
     private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync()
     {
+        return await ShowDataValidationInputDialogAsync(null);
+    }
+
+    private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync(Action<DataValidationDialogSmokeProbe>? launchSmokeProbe)
+    {
         DataValidationDialogResult? result = null;
         var summary = DataValidationPresetPlanner.CreateSelectionSummary(
             _session.Workbook,
@@ -9109,10 +9943,11 @@ public sealed class MainWindow : Window
         var operatorChoices = CreateDataValidationOperatorChoices();
         var alertStyleChoices = CreateDataValidationAlertStyleChoices();
         var activeRule = summary.ActiveCellRule;
-        var initialType = activeRule is not null && typeChoices.Any(choice => choice.Type == activeRule.Type)
-            ? activeRule.Type
-            : DvType.WholeNumber;
-        var initialRule = activeRule is not null && typeChoices.Any(choice => choice.Type == activeRule.Type)
+        var activeTypeChoice = activeRule is null
+            ? null
+            : FindDataValidationTypeChoice(typeChoices, activeRule.Type);
+        var initialType = activeTypeChoice?.Type ?? DvType.WholeNumber;
+        var initialRule = activeRule is not null && activeTypeChoice is not null
             ? activeRule
             : CreateDefaultDataValidationRule(initialType, _session.SelectedRange);
 
@@ -9273,13 +10108,12 @@ public sealed class MainWindow : Window
 
         void SelectOperator(DvOperator op)
         {
-            operatorBox.SelectedItem = operatorChoices.FirstOrDefault(choice => choice.Operator == op) ??
-                operatorChoices[0];
+            operatorBox.SelectedItem = FindDataValidationOperatorChoice(operatorChoices, op);
         }
 
         void LoadRule(DataValidation rule)
         {
-            typeBox.SelectedItem = typeChoices.FirstOrDefault(choice => choice.Type == rule.Type) ?? typeChoices[0];
+            typeBox.SelectedItem = FindDataValidationTypeChoice(typeChoices, rule.Type) ?? typeChoices[0];
             SelectOperator(rule.Operator);
             formula1Box.Text = rule.Formula1 ?? "";
             formula2Box.Text = rule.Formula2 ?? "";
@@ -9287,8 +10121,7 @@ public sealed class MainWindow : Window
             showDropdownBox.IsChecked = rule.ShowDropdown;
             showInputMessageBox.IsChecked = rule.ShowInputMessage;
             showErrorMessageBox.IsChecked = rule.ShowErrorMessage;
-            alertStyleBox.SelectedItem = alertStyleChoices.FirstOrDefault(choice => choice.AlertStyle == rule.AlertStyle) ??
-                alertStyleChoices[0];
+            alertStyleBox.SelectedItem = FindDataValidationAlertStyleChoice(alertStyleChoices, rule.AlertStyle);
             promptTitleBox.Text = rule.PromptTitle ?? "";
             promptMessageBox.Text = rule.PromptMessage ?? "";
             errorTitleBox.Text = rule.ErrorTitle ?? "";
@@ -9307,6 +10140,14 @@ public sealed class MainWindow : Window
                 : showSecondFormula
                     ? "Minimum"
                     : "Value";
+            AutomationProperties.SetName(formula1Box, formula1Label.Text);
+            AutomationProperties.SetHelpText(
+                formula1Box,
+                isList
+                    ? "List source range or comma-separated values."
+                    : showSecondFormula
+                        ? "Minimum value for the validation rule."
+                        : "Value for the validation rule.");
             formula2Label.Text = "Maximum";
             operatorField.IsVisible = !isList;
             formula2Field.IsVisible = showSecondFormula;
@@ -9468,6 +10309,33 @@ public sealed class MainWindow : Window
             },
         };
         dialog.Opened += (_, _) => typeBox.Focus();
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new DataValidationDialogSmokeProbe(
+                        dialog,
+                        summaryText,
+                        typeBox,
+                        operatorBox,
+                        formula1Box,
+                        formula2Box,
+                        allowBlankBox,
+                        showDropdownBox,
+                        showInputMessageBox,
+                        promptTitleBox,
+                        promptMessageBox,
+                        showErrorMessageBox,
+                        alertStyleBox,
+                        errorTitleBox,
+                        errorMessageBox,
+                        applyButton,
+                        clearButton,
+                        cancelButton)));
+            };
+        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -9497,6 +10365,45 @@ public sealed class MainWindow : Window
         new(DvAlertStyle.Warning, "Warning"),
         new(DvAlertStyle.Information, "Information"),
     ];
+
+    private static DataValidationTypeChoice? FindDataValidationTypeChoice(
+        IReadOnlyList<DataValidationTypeChoice> choices,
+        DvType type)
+    {
+        foreach (var choice in choices)
+        {
+            if (choice.Type == type)
+                return choice;
+        }
+
+        return null;
+    }
+
+    private static DataValidationOperatorChoice FindDataValidationOperatorChoice(
+        IReadOnlyList<DataValidationOperatorChoice> choices,
+        DvOperator op)
+    {
+        foreach (var choice in choices)
+        {
+            if (choice.Operator == op)
+                return choice;
+        }
+
+        return choices[0];
+    }
+
+    private static DataValidationAlertStyleChoice FindDataValidationAlertStyleChoice(
+        IReadOnlyList<DataValidationAlertStyleChoice> choices,
+        DvAlertStyle alertStyle)
+    {
+        foreach (var choice in choices)
+        {
+            if (choice.AlertStyle == alertStyle)
+                return choice;
+        }
+
+        return choices[0];
+    }
 
     private static DataValidation CreateDefaultDataValidationRule(DvType type, GridRange selectedRange)
     {
@@ -10817,25 +11724,27 @@ public sealed class MainWindow : Window
     private async void MainWindow_Drop(object? sender, DragEventArgs e)
     {
         e.Handled = true;
-        if (!TrySelectDroppedWorkbookPath(e, out var path, out var message))
+        if (!TrySelectDroppedWorkbookPath(e, out var path, out var storageItem, out var message))
         {
             ShowOpenIssue(message);
             return;
         }
 
         e.DragEffects = DragDropEffects.Copy;
-        await OpenWorkbookPathAsync(path!);
+        var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path!, storageItem);
+        await OpenWorkbookPathAsync(path!, fileAccessIdentity);
     }
 
     public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)
     {
-        if (!TrySelectOpenableLocalWorkbookPath(files, out var path, out var message))
+        if (!TrySelectOpenableLocalWorkbookPath(files, out var path, out var storageItem, out var message))
         {
             ShowOpenIssue(message);
             return;
         }
 
-        await OpenWorkbookPathAsync(path!);
+        var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path!, storageItem);
+        await OpenWorkbookPathAsync(path!, fileAccessIdentity);
     }
 
     internal async Task<MacOsLaunchSmokeDialogSnapshot> CaptureLaunchSmokeDialogEvidenceAsync()
@@ -10964,6 +11873,87 @@ public sealed class MainWindow : Window
             hasFormatCellsDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 560, height: 560, minWidth: 480, minHeight: 500);
         });
 
+        var hasSortDialog = false;
+        var hasSortDialogSortOnControls = false;
+        var hasSortDialogColorControls = false;
+        var hasSortDialogActionButtons = false;
+        var hasSortDialogCompactLayout = false;
+        var sortDialogResult = await ShowSortInputDialogAsync(probe =>
+        {
+            hasSortDialog = HasLaunchSmokeDialog(probe.Dialog, "Sort");
+            hasSortDialogSortOnControls =
+                HasLaunchSmokeComboBox(probe.SortOnBox, "SortLevel1SortOnBox", "Sort On") &&
+                probe.SortOnBox.MinWidth >= 120 &&
+                string.Equals(probe.SortOnBox.SelectedItem?.ToString(), SortDialogPlannerText.Default.SortOnCellValues, StringComparison.Ordinal);
+            hasSortDialogColorControls =
+                HasLaunchSmokeComboBox(probe.ColorBox, "SortLevel1ColorBox", "Color") &&
+                probe.ColorBox.MinWidth >= 105 &&
+                !probe.ColorBox.IsEnabled &&
+                string.Equals(probe.ColorBox.SelectedItem?.ToString(), "None", StringComparison.Ordinal);
+            hasSortDialogActionButtons =
+                HasLaunchSmokeCheckBox(probe.HeadersCheckBox, "SortHeadersCheckBox", "My data has headers") &&
+                HasLaunchSmokeAutomationId(probe.LevelsPanel, "SortLevelsPanel") &&
+                HasLaunchSmokeButton(probe.AddLevelButton, "SortAddLevelButton", "Add Level") &&
+                HasLaunchSmokeButton(probe.OkButton, "SortOkButton", "OK") &&
+                HasLaunchSmokeButton(probe.CancelButton, "SortCancelButton", "Cancel");
+            hasSortDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 760, height: 430, minWidth: 700, minHeight: 360);
+        });
+
+        var dropdown = CreateDataValidationDropdown(new DataValidationDropdownPlan(
+            ["Yes", "No"],
+            "Yes",
+            new DataValidationDropdownBounds(12, 16, 48, 18)));
+        var hasDataValidationDropdownControl =
+            HasLaunchSmokeComboBox(dropdown, "WorksheetDataValidationDropdown", "Data validation list") &&
+            string.Equals(
+                AutomationProperties.GetHelpText(dropdown),
+                "Pick a permitted value for the active cell.",
+                StringComparison.Ordinal) &&
+            dropdown.Width == 48 &&
+            dropdown.Height == 18 &&
+            dropdown.MinWidth == DataValidationDropdownPlanner.MinimumWidth &&
+            dropdown.MinHeight == DataValidationDropdownPlanner.MinimumHeight;
+        var hasDataValidationDropdownItems =
+            dropdown.ItemsSource is IEnumerable<string> dropdownItems &&
+            dropdownItems.SequenceEqual(["Yes", "No"], StringComparer.Ordinal) &&
+            string.Equals(dropdown.SelectedItem?.ToString(), "Yes", StringComparison.Ordinal);
+
+        var hasDataValidationDialog = false;
+        var hasDataValidationDialogCriteriaControls = false;
+        var hasDataValidationDialogMessageControls = false;
+        var hasDataValidationDialogActionButtons = false;
+        var hasDataValidationDialogCompactLayout = false;
+        var dataValidationDialogResult = await ShowDataValidationInputDialogAsync(probe =>
+        {
+            hasDataValidationDialog = HasLaunchSmokeDialog(probe.Dialog, "Data Validation");
+            hasDataValidationDialogCriteriaControls =
+                HasLaunchSmokeAutomationId(probe.SummaryText, "DataValidationSelectionSummaryText") &&
+                HasLaunchSmokeComboBox(probe.TypeBox, "DataValidationTypeBox", "Allow") &&
+                HasLaunchSmokeComboBox(probe.OperatorBox, "DataValidationOperatorBox", "Data") &&
+                HasLaunchSmokeAutomationId(probe.Formula1Box, "DataValidationFormula1Box") &&
+                HasLaunchSmokeAutomationId(probe.Formula2Box, "DataValidationFormula2Box") &&
+                HasLaunchSmokeCheckBox(probe.AllowBlankBox, "DataValidationAllowBlankBox", "Allow blank") &&
+                HasLaunchSmokeCheckBox(probe.ShowDropdownBox, "DataValidationShowDropdownBox", "In-cell dropdown") &&
+                !probe.ShowDropdownBox.IsVisible &&
+                string.Equals(probe.TypeBox.SelectedItem?.ToString(), "Whole number", StringComparison.Ordinal) &&
+                string.Equals(probe.Formula1Box.Text, "1", StringComparison.Ordinal) &&
+                string.Equals(probe.Formula2Box.Text, "100", StringComparison.Ordinal);
+            hasDataValidationDialogMessageControls =
+                HasLaunchSmokeCheckBox(probe.ShowInputMessageBox, "DataValidationShowInputMessageBox", "Show input message") &&
+                HasLaunchSmokeAutomationId(probe.PromptTitleBox, "DataValidationPromptTitleBox") &&
+                HasLaunchSmokeAutomationId(probe.PromptMessageBox, "DataValidationPromptMessageBox") &&
+                HasLaunchSmokeCheckBox(probe.ShowErrorMessageBox, "DataValidationShowErrorMessageBox", "Show error alert") &&
+                HasLaunchSmokeComboBox(probe.AlertStyleBox, "DataValidationAlertStyleBox", "Style") &&
+                HasLaunchSmokeAutomationId(probe.ErrorTitleBox, "DataValidationErrorTitleBox") &&
+                HasLaunchSmokeAutomationId(probe.ErrorMessageBox, "DataValidationErrorMessageBox") &&
+                string.Equals(probe.AlertStyleBox.SelectedItem?.ToString(), "Stop", StringComparison.Ordinal);
+            hasDataValidationDialogActionButtons =
+                HasLaunchSmokeButton(probe.ApplyButton, "DataValidationApplyButton", "Apply") &&
+                HasLaunchSmokeButton(probe.ClearButton, "DataValidationClearButton", "Clear Validation") &&
+                HasLaunchSmokeButton(probe.CancelButton, "DataValidationCancelButton", "Cancel");
+            hasDataValidationDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 540, height: 560, minWidth: 460, minHeight: 440);
+        });
+
         _launchSmokeDialogEvidence = new MacOsLaunchSmokeDialogSnapshot(
             hasFindDialog,
             hasFindDialogTextBox,
@@ -10994,7 +11984,21 @@ public sealed class MainWindow : Window
             hasFormatCellsDialogNumberControls,
             hasFormatCellsDialogActionButtons,
             hasFormatCellsDialogCompactLayout,
-            formatCellsDialogResult is null);
+            formatCellsDialogResult is null,
+            hasSortDialog,
+            hasSortDialogSortOnControls,
+            hasSortDialogColorControls,
+            hasSortDialogActionButtons,
+            hasSortDialogCompactLayout,
+            sortDialogResult is null,
+            hasDataValidationDropdownControl,
+            hasDataValidationDropdownItems,
+            hasDataValidationDialog,
+            hasDataValidationDialogCriteriaControls,
+            hasDataValidationDialogMessageControls,
+            hasDataValidationDialogActionButtons,
+            hasDataValidationDialogCompactLayout,
+            dataValidationDialogResult is null);
         return _launchSmokeDialogEvidence;
     }
 
@@ -11032,6 +12036,10 @@ public sealed class MainWindow : Window
     private static bool HasLaunchSmokeCheckBox(CheckBox checkBox, string automationId, string content) =>
         HasLaunchSmokeAutomationId(checkBox, automationId) &&
         string.Equals(checkBox.Content?.ToString(), content, StringComparison.Ordinal);
+
+    private static bool HasLaunchSmokeComboBox(ComboBox comboBox, string automationId, string name) =>
+        HasLaunchSmokeAutomationId(comboBox, automationId) &&
+        string.Equals(AutomationProperties.GetName(comboBox), name, StringComparison.Ordinal);
 
     private static bool HasLaunchSmokeAutomationId(Control control, string automationId) =>
         string.Equals(AutomationProperties.GetAutomationId(control), automationId, StringComparison.Ordinal);
@@ -11206,6 +12214,19 @@ public sealed class MainWindow : Window
             HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == "Merge & Center" &&
                 string.Equals(AutomationProperties.GetAutomationId(_mergeAndCenterButton), "HomeMergeAndCenterButton", StringComparison.Ordinal) &&
                 string.Equals(AutomationProperties.GetHelpText(_mergeAndCenterButton), "Merge and center the selected cells.", StringComparison.Ordinal),
+            HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), "Formula bar", StringComparison.Ordinal),
+            HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), "Edit the active cell value or formula.", StringComparison.Ordinal),
+            HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), "FormulaBox", StringComparison.Ordinal),
+            HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), "Status", StringComparison.Ordinal),
+            HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal),
+            HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal),
+            HasStatusTextValue: !string.IsNullOrWhiteSpace(_statusText.Text),
+            HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal),
+            HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal),
+            HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal),
+            HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), "Selection statistics", StringComparison.Ordinal),
+            HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), "Shows statistics for the current selection.", StringComparison.Ordinal),
+            HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), "SelectionStatsText", StringComparison.Ordinal),
             HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable),
             HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true,
             HasShellFocusCycleTargets: _sheetGridHost.Focusable &&
@@ -11236,6 +12257,7 @@ public sealed class MainWindow : Window
             HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
             HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, "Export to PDF...", requireGesture: false),
+            HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, "Share Workbook...", requireGesture: false),
             HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, "Workbook Statistics..."),
             HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, "Close Workbook"),
             HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, "New Sheet"),
@@ -11383,6 +12405,10 @@ public sealed class MainWindow : Window
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
         (!requireGesture || item.Gesture is not null);
 
+    private static bool HasEnabledNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
+        item.IsEnabled &&
+        HasNativeMenuItem(item, expectedHeader, requireGesture);
+
     private bool HasSheetTabButton(Func<Button, bool> predicate) =>
         _sheetTabsHost.Content is StackPanel panel &&
         panel.Children
@@ -11438,8 +12464,11 @@ public sealed class MainWindow : Window
     private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)
     {
         var menu = new NativeMenu();
-        var entries = GetOpenableRecentWorkbookEntries();
-        if (entries.Count == 0)
+        var plan = OpenRecentWorkbookMenuPlanner.Create(
+            _recentFiles.Entries,
+            File.Exists,
+            path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null);
+        if (plan.ItemCount == 0)
         {
             menu.Items.Add(new NativeMenuItem
             {
@@ -11449,58 +12478,28 @@ public sealed class MainWindow : Window
             return menu;
         }
 
-        foreach (var entry in entries)
+        foreach (var entry in plan.Items)
         {
             var path = entry.Path;
+            var fileAccessIdentity = entry.FileAccessIdentity;
             var item = new NativeMenuItem
             {
-                Header = FormatRecentWorkbookMenuHeader(entry),
+                Header = entry.Header,
                 IsEnabled = isIdle,
             };
-            item.Click += async (_, _) => await OpenRecentWorkbookAsync(path);
+            item.Click += async (_, _) => await OpenRecentWorkbookAsync(path, fileAccessIdentity);
             menu.Items.Add(item);
         }
 
         return menu;
     }
 
-    private List<RecentFileEntry> GetOpenableRecentWorkbookEntries()
+    private async Task OpenRecentWorkbookAsync(
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
-        var entries = new List<RecentFileEntry>();
-        foreach (var entry in _recentFiles.Entries)
-        {
-            if (string.IsNullOrWhiteSpace(entry.Path) ||
-                !File.Exists(entry.Path) ||
-                !_session.TryResolveOpenTarget(entry.Path, out _, out _))
-            {
-                continue;
-            }
-
-            entries.Add(entry);
-        }
-
-        entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));
-        if (entries.Count > 10)
-            entries.RemoveRange(10, entries.Count - 10);
-
-        return entries;
-    }
-
-    private static string FormatRecentWorkbookMenuHeader(RecentFileEntry entry)
-    {
-        var fileName = Path.GetFileName(entry.Path);
-        if (string.IsNullOrWhiteSpace(fileName))
-            return entry.Path;
-
-        var directory = Path.GetDirectoryName(entry.Path);
-        return string.IsNullOrWhiteSpace(directory)
-            ? fileName
-            : $"{fileName} - {directory}";
-    }
-
-    private async Task OpenRecentWorkbookAsync(string path)
-    {
-        if (!File.Exists(path))
+        if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _) ||
+            target is null)
         {
             _recentFiles.Remove(path);
             RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
@@ -11508,21 +12507,34 @@ public sealed class MainWindow : Window
             return;
         }
 
-        await OpenWorkbookPathAsync(path);
+        using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(
+            StorageProvider,
+            target.FileAccessIdentity);
+        if (!File.Exists(target.Path))
+        {
+            _recentFiles.Remove(path);
+            RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
+            ShowOpenIssue($"Recent workbook no longer exists: {path}");
+            return;
+        }
+
+        await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);
     }
 
     private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)
     {
         if (!source.IsFallback && !string.IsNullOrWhiteSpace(source.SourcePath))
-            RecordRecentWorkbook(source.SourcePath);
+            RecordRecentWorkbook(source.SourcePath, source.SourceFileAccessIdentity);
     }
 
-    private void RecordRecentWorkbook(string path)
+    private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        if (!_session.TryResolveOpenTarget(path, out var target, out _) ||
+            target is null ||
+            !File.Exists(target.Path))
             return;
 
-        _recentFiles.AddOrUpdate(path);
+        _recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);
         RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
     }
 
@@ -11554,12 +12566,25 @@ public sealed class MainWindow : Window
     private static bool IsSelectVisibleCellsOnlyShortcut(KeyEventArgs args) =>
         args.Key == Key.Oem1 && args.KeyModifiers == KeyModifiers.Alt;
 
+    private static bool IsOpenActiveDropdownShortcut(KeyEventArgs args) =>
+        args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;
+
     private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
         if (IsShellFocusCycleKey(e))
         {
             e.Handled = true;
             CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);
+            return;
+        }
+
+        if (IsOpenActiveDropdownShortcut(e))
+        {
+            if (!_formulaBox.IsFocused)
+            {
+                e.Handled = OpenActiveDataValidationDropdown();
+            }
+
             return;
         }
 
@@ -11776,6 +12801,53 @@ public sealed class MainWindow : Window
             e.Handled = true;
             await OpenWorkbookAsync();
         }
+    }
+
+    private bool OpenActiveDataValidationDropdown()
+    {
+        if (_isOpening || _isSaving)
+            return true;
+
+        if (!TryCommitPendingFormulaEdit())
+            return true;
+
+        RefreshShell("Ready");
+        if (_activeDataValidationDropdown is null)
+            return false;
+
+        _activeDataValidationDropdown.Focus();
+        _activeDataValidationDropdown.IsDropDownOpen = true;
+        return true;
+    }
+
+    private void DataValidationDropdown_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox { SelectedItem: string selected })
+            return;
+
+        CommitDataValidationDropdownSelection(selected);
+    }
+
+    private void CommitDataValidationDropdownSelection(string selected)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var address = _session.ActiveCell;
+        _session.BeginFormulaEdit(address);
+        var result = _session.CommitCellText(selected);
+        if (!result.Success)
+        {
+            _session.CancelFormulaEdit();
+            _formulaBoxEditOriginalText = null;
+            ShowEditIssue(result.ErrorMessage ?? "Data validation dropdown failed.");
+            return;
+        }
+
+        RefreshShell($"Picked {selected} for {FormatCellReference(address)}");
     }
 
     private void CycleShellFocus(bool reverse)
@@ -12109,7 +13181,13 @@ public sealed class MainWindow : Window
             FileTypeFilter = fileTypes,
         });
 
-        var storageFile = storageFiles.FirstOrDefault();
+        IStorageFile? storageFile = null;
+        foreach (var file in storageFiles)
+        {
+            storageFile = file;
+            break;
+        }
+
         if (storageFile is null)
             return;
 
@@ -12122,11 +13200,14 @@ public sealed class MainWindow : Window
                 return;
             }
 
-            await OpenWorkbookPathAsync(path);
+            var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
+            await OpenWorkbookPathAsync(path, fileAccessIdentity);
         }
     }
 
-    private async Task OpenWorkbookPathAsync(string path)
+    private async Task OpenWorkbookPathAsync(
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         if (_isOpening || _isSaving)
             return;
@@ -12140,7 +13221,7 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (!_session.TryResolveOpenTarget(path, out var target, out var message))
+        if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out var message))
         {
             ShowOpenIssue(message);
             return;
@@ -12149,22 +13230,38 @@ public sealed class MainWindow : Window
         await OpenWorkbookFromTargetAsync(target!);
     }
 
-    private bool TrySelectDroppedWorkbookPath(DragEventArgs e, out string? path, out string message)
+    private bool TrySelectDroppedWorkbookPath(DragEventArgs e, out string? path, out string message) =>
+        TrySelectDroppedWorkbookPath(e, out path, out _, out message);
+
+    private bool TrySelectDroppedWorkbookPath(
+        DragEventArgs e,
+        out string? path,
+        out IStorageItem? storageItem,
+        out string message)
     {
         var files = e.DataTransfer.TryGetFiles();
         if (files is null)
         {
             path = null;
+            storageItem = null;
             message = "Drop a supported local workbook file.";
             return false;
         }
 
-        return TrySelectOpenableLocalWorkbookPath(files, out path, out message);
+        return TrySelectOpenableLocalWorkbookPath(files, out path, out storageItem, out message);
     }
 
-    private bool TrySelectOpenableLocalWorkbookPath(IEnumerable<IStorageItem> files, out string? path, out string message)
+    private bool TrySelectOpenableLocalWorkbookPath(IEnumerable<IStorageItem> files, out string? path, out string message) =>
+        TrySelectOpenableLocalWorkbookPath(files, out path, out _, out message);
+
+    private bool TrySelectOpenableLocalWorkbookPath(
+        IEnumerable<IStorageItem> files,
+        out string? path,
+        out IStorageItem? storageItem,
+        out string message)
     {
         path = null;
+        storageItem = null;
         if (_isOpening || _isSaving)
         {
             message = "Open is busy.";
@@ -12189,19 +13286,20 @@ public sealed class MainWindow : Window
         foreach (var file in files)
         {
             var candidate = file.TryGetLocalPath();
-            if (string.IsNullOrWhiteSpace(candidate))
+            if (!LocalFilePath.TryNormalize(candidate, out var normalizedCandidate))
                 continue;
 
             sawLocalPath = true;
-            if (Directory.Exists(candidate))
+            if (Directory.Exists(normalizedCandidate))
                 continue;
-            if (!File.Exists(candidate))
+            if (!File.Exists(normalizedCandidate))
                 continue;
 
             sawFileCandidate = true;
-            if (_session.TryResolveOpenTarget(candidate, out _, out unsupportedMessage))
+            if (_session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage))
             {
-                path = candidate;
+                path = target!.Path;
+                storageItem = file;
                 message = "";
                 return true;
             }
@@ -12230,6 +13328,9 @@ public sealed class MainWindow : Window
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
+            using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(
+                StorageProvider,
+                target.FileAccessIdentity);
             var result = await _openService.LoadAsync(
                 target.Path,
                 target.Adapter,
@@ -12239,7 +13340,7 @@ public sealed class MainWindow : Window
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
             _session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);
             RefreshViewportSizeForZoom();
-            RecordRecentWorkbook(target.Path);
+            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
             ClearSelectedDrawingObject();
             RefreshShell(_session.StartupStatus);
         }
@@ -12376,7 +13477,7 @@ public sealed class MainWindow : Window
         ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(refreshedPlan), isWarning: false);
         try
         {
-            var result = await _workbookShareSheetService.ShowShareSheetAsync(filePath);
+            var result = await _workbookShareSheetService.ShowShareSheetAsync(this, filePath);
             if (result.WasShown)
             {
                 ShowShareStatus(
@@ -12501,7 +13602,8 @@ public sealed class MainWindow : Window
                 return;
             }
 
-            await SaveWorkbookToTargetAsync(target!);
+            var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
+            await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);
         }
     }
 
@@ -12713,7 +13815,9 @@ public sealed class MainWindow : Window
         return workbookName + ".pdf";
     }
 
-    private async Task SaveWorkbookToTargetAsync(FileSaveTarget target)
+    private async Task SaveWorkbookToTargetAsync(
+        FileSaveTarget target,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         try
         {
@@ -12728,9 +13832,13 @@ public sealed class MainWindow : Window
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
+            fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(
+                target.Path,
+                existingIdentity: _session.CurrentFileAccessIdentity);
+            using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(StorageProvider, fileAccessIdentity);
             await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
-            _session.MarkSaved(target.Path);
-            RecordRecentWorkbook(target.Path);
+            _session.MarkSaved(target.Path, fileAccessIdentity);
+            RecordRecentWorkbook(target.Path, fileAccessIdentity);
             RefreshShell($"Saved {Path.GetFileName(target.Path)}");
         }
         catch (Exception ex)
@@ -12949,29 +14057,49 @@ public sealed class MainWindow : Window
 
     private async Task OpenExternalHelpLinkAsync(string url, string title)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        if (!IsHttpOrHttpsHelpUrl(url))
         {
             ShowHelpIssue($"{title} link is blocked.");
             return;
         }
 
-        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
-        if (launcher is null)
+        var result = await OpenExternalUriAsync(url);
+        switch (result)
         {
-            ShowHelpIssue($"{title} link cannot be opened on this platform.");
-            return;
+            case ExternalUriLaunchResult.Launched:
+                return;
+            case ExternalUriLaunchResult.BlockedScheme:
+                ShowHelpIssue($"{title} link is blocked.");
+                return;
+            case ExternalUriLaunchResult.LauncherUnavailable:
+                ShowHelpIssue($"{title} link cannot be opened on this platform.");
+                return;
+            case ExternalUriLaunchResult.LaunchFailed:
+            default:
+                ShowHelpIssue($"{title} link could not be opened.");
+                return;
+        }
+    }
+
+    private static bool IsHttpOrHttpsHelpUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url) ||
+            !Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri))
+        {
+            return false;
         }
 
-        try
-        {
-            if (!await launcher.LaunchUriAsync(uri))
-                ShowHelpIssue($"{title} link could not be opened.");
-        }
-        catch (Exception ex)
-        {
-            ShowHelpIssue($"{title} link could not be opened: {ex.Message}");
-        }
+        return string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)
+    {
+        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
+        Func<Uri, Task<bool>>? launchAsync = launcher is null
+            ? null
+            : async uri => await launcher.LaunchUriAsync(uri);
+        return await ExternalUriLauncher.OpenAsync(target, launchAsync);
     }
 
     private async Task ShowAboutDialogAsync()
@@ -13014,6 +14142,8 @@ public sealed class MainWindow : Window
             Padding = new Thickness(10, 4),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
+        AutomationProperties.SetName(closeButton, "Close");
+        AutomationProperties.SetHelpText(closeButton, $"Close {title}.");
         closeButton.Click += (_, _) => dialog.Close();
 
         var textBox = new TextBox
@@ -13026,6 +14156,8 @@ public sealed class MainWindow : Window
             Padding = new Thickness(8),
             MinHeight = 240,
         };
+        AutomationProperties.SetName(textBox, title);
+        AutomationProperties.SetHelpText(textBox, $"Read-only {title} text.");
 
         var root = new DockPanel
         {

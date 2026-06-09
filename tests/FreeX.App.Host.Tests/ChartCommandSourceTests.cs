@@ -70,13 +70,16 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("private void InsertChartOfType(ChartType type)");
         source.Should().Contain("ChartAuthoringPlanner.CanAuthor(type)");
         source.Should().Contain("ShowDeferredChartFamilyMessage();");
-        source.Should().Contain("new AddChartCommand(_currentSheetId, currentRange, type, \"Chart\")");
+        source.Should().Contain("ChartDataSourcePlanner.ResolveInsertionRange(sheet, currentRange)");
+        source.Should().Contain("new AddChartCommand(");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferred\")");
         source.Should().Contain("private void ChangeChartTypeBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new ChangeChartTypeDialog(chart.Type)");
         source.Should().Contain("new ChangeChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType)");
         source.Should().Contain("private void SelectChartDataSourceBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new SelectDataSourceDialog(");
+        source.Should().Contain("resolveSheetId: ResolveSheetIdByName");
+        source.Should().Contain("ChartInputParser.TryParseDataRange(dialog.Result.SourceRangeText, _currentSheetId, ResolveSheetIdByName, out var dataRange)");
         source.Should().Contain("new ChangeChartSourceCommand(");
         source.Should().Contain("private void MoveChartBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new MoveChartDialog(currentSheet.Name)");

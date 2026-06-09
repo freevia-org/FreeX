@@ -13,20 +13,24 @@ public sealed record AllowEditRangeSelectionRequest(
 public enum AllowEditRangeDialogAction
 {
     Add,
+    Modify,
     Remove,
     Clear
 }
 
-public sealed record AllowEditRangeDialogResult(AllowEditRangeDialogAction Action, GridRange? Range);
+public sealed record AllowEditRangeDialogResult(AllowEditRangeDialogAction Action, GridRange? Range, GridRange? PreviousRange = null);
 
 public sealed class AllowEditRangeDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _rangeBox = new();
     private readonly ListBox _existingRangesBox = new();
-    private readonly Button _deleteRangeButton = new() { Content = UiText.Get("AllowEditRange_DeleteButton"), Width = 76, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _clearRangesButton = new() { Content = UiText.Get("AllowEditRange_ClearAllButton"), Width = 76 };
+    private readonly Button _newRangeButton = new() { Content = UiText.Get("AllowEditRange_NewButton"), Width = 82, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _modifyRangeButton = new() { Content = UiText.Get("AllowEditRange_ModifyButton"), Width = 82, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _deleteRangeButton = new() { Content = UiText.Get("AllowEditRange_DeleteButton"), Width = 82, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _permissionsButton = new() { Content = UiText.Get("AllowEditRange_PermissionsButton"), Width = 104 };
     private readonly Action<AllowEditRangeSelectionRequest>? _requestRangeSelection;
+    private GridRange? _rangeBeingModified;
 
     public GridRange Range { get; private set; }
     public AllowEditRangeDialogResult Result { get; private set; } = CreateClearResult();
@@ -71,7 +75,7 @@ public sealed class AllowEditRangeDialog : Window
         AutomationProperties.SetHelpText(_existingRangesBox, UiText.Get("AllowEditRange_ExistingRangesHelpText"));
         _existingRangesBox.MinHeight = 80;
         _existingRangesBox.SelectionMode = SelectionMode.Single;
-        _existingRangesBox.SelectionChanged += (_, _) => UpdateRangeButtons();
+        _existingRangesBox.SelectionChanged += ExistingRangesBox_SelectionChanged;
         _existingRangesBox.MouseDoubleClick += ExistingRangesBox_MouseDoubleClick;
         var existingRangesLabel = new Label { Content = UiText.Get("AllowEditRange_ExistingRangesLabel"), Target = _existingRangesBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
         DockPanel.SetDock(existingRangesLabel, Dock.Top);
@@ -83,16 +87,26 @@ public sealed class AllowEditRangeDialog : Window
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
             Margin = new Thickness(0, 8, 0, 0)
         };
+        _newRangeButton.Click += NewRange_Click;
+        _modifyRangeButton.Click += ModifySelectedRange_Click;
         _deleteRangeButton.Click += DeleteSelectedRange_Click;
-        _clearRangesButton.Click += ClearAllRanges_Click;
+        _permissionsButton.IsEnabled = false;
+        AutomationProperties.SetName(_newRangeButton, UiText.Get("AllowEditRange_NewAutomationName"));
+        AutomationProperties.SetAutomationId(_newRangeButton, "AllowEditRangeNewButton");
+        AutomationProperties.SetHelpText(_newRangeButton, UiText.Get("AllowEditRange_NewHelpText"));
+        AutomationProperties.SetName(_modifyRangeButton, UiText.Get("AllowEditRange_ModifyAutomationName"));
+        AutomationProperties.SetAutomationId(_modifyRangeButton, "AllowEditRangeModifyButton");
+        AutomationProperties.SetHelpText(_modifyRangeButton, UiText.Get("AllowEditRange_ModifyHelpText"));
         AutomationProperties.SetName(_deleteRangeButton, UiText.Get("AllowEditRange_DeleteAutomationName"));
         AutomationProperties.SetAutomationId(_deleteRangeButton, "AllowEditRangeDeleteButton");
         AutomationProperties.SetHelpText(_deleteRangeButton, UiText.Get("AllowEditRange_DeleteHelpText"));
-        AutomationProperties.SetName(_clearRangesButton, UiText.Get("AllowEditRange_ClearAllAutomationName"));
-        AutomationProperties.SetAutomationId(_clearRangesButton, "AllowEditRangeClearAllButton");
-        AutomationProperties.SetHelpText(_clearRangesButton, UiText.Get("AllowEditRange_ClearAllHelpText"));
+        AutomationProperties.SetName(_permissionsButton, UiText.Get("AllowEditRange_PermissionsAutomationName"));
+        AutomationProperties.SetAutomationId(_permissionsButton, "AllowEditRangePermissionsButton");
+        AutomationProperties.SetHelpText(_permissionsButton, UiText.Get("AllowEditRange_PermissionsHelpText"));
+        rangeButtons.Children.Add(_newRangeButton);
+        rangeButtons.Children.Add(_modifyRangeButton);
         rangeButtons.Children.Add(_deleteRangeButton);
-        rangeButtons.Children.Add(_clearRangesButton);
+        rangeButtons.Children.Add(_permissionsButton);
         DockPanel.SetDock(rangeButtons, Dock.Bottom);
         existingPanel.Children.Add(rangeButtons);
         existingGroup.Content = existingPanel;
@@ -155,6 +169,9 @@ public sealed class AllowEditRangeDialog : Window
     public static AllowEditRangeDialogResult CreateAddResult(GridRange range) =>
         AllowEditRangeDialogPlanner.CreateAddResult(range);
 
+    public static AllowEditRangeDialogResult CreateModifyResult(GridRange originalRange, GridRange updatedRange) =>
+        AllowEditRangeDialogPlanner.CreateModifyResult(originalRange, updatedRange);
+
     public static AllowEditRangeDialogResult CreateRemoveResult(GridRange range) =>
         AllowEditRangeDialogPlanner.CreateRemoveResult(range);
 
@@ -171,12 +188,36 @@ public sealed class AllowEditRangeDialog : Window
         }
 
         Range = range;
-        Result = CreateAddResult(range);
+        Result = _rangeBeingModified is { } originalRange
+            ? CreateModifyResult(originalRange, range)
+            : CreateAddResult(range);
         DialogResult = true;
     }
 
+    private void NewRange_Click(object sender, RoutedEventArgs e)
+    {
+        _rangeBeingModified = null;
+        _existingRangesBox.SelectedItem = null;
+        FocusRangeInput();
+    }
+
+    private void ModifySelectedRange_Click(object sender, RoutedEventArgs e)
+        => TryLoadSelectedRangeForModification();
+
     private void DeleteSelectedRange_Click(object sender, RoutedEventArgs e)
         => TryDeleteSelectedRange();
+
+    private bool TryLoadSelectedRangeForModification()
+    {
+        if (_existingRangesBox.SelectedItem is not string selected ||
+            !ProtectionDialogPlanner.TryParseAllowEditRange(selected, _sheetId, out var range))
+            return false;
+
+        _rangeBeingModified = range;
+        _rangeBox.Text = selected;
+        FocusRangeInput();
+        return true;
+    }
 
     private bool TryDeleteSelectedRange()
     {
@@ -192,14 +233,21 @@ public sealed class AllowEditRangeDialog : Window
 
     private void ExistingRangesBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (TryDeleteSelectedRange())
+        if (TryLoadSelectedRangeForModification())
             e.Handled = true;
     }
 
-    private void ClearAllRanges_Click(object sender, RoutedEventArgs e)
+    private void ExistingRangesBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        Result = CreateClearResult();
-        DialogResult = true;
+        if (_rangeBeingModified is not null &&
+            (_existingRangesBox.SelectedItem is not string selected ||
+             !ProtectionDialogPlanner.TryParseAllowEditRange(selected, _sheetId, out var selectedRange) ||
+             selectedRange != _rangeBeingModified))
+        {
+            _rangeBeingModified = null;
+        }
+
+        UpdateRangeButtons();
     }
 
     private void UpdateRangeButtons()
@@ -207,8 +255,9 @@ public sealed class AllowEditRangeDialog : Window
         var state = AllowEditRangeDialogPlanner.BuildButtonState(
             _existingRangesBox.Items.Count,
             _existingRangesBox.SelectedItem is not null);
+        _modifyRangeButton.IsEnabled = state.CanModifySelectedRange;
         _deleteRangeButton.IsEnabled = state.CanDeleteSelectedRange;
-        _clearRangesButton.IsEnabled = state.CanClearRanges;
+        _permissionsButton.IsEnabled = state.CanUsePermissions;
     }
 
     private void FocusInitialKeyboardTarget()

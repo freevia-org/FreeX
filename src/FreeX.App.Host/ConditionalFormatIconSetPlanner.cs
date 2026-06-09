@@ -46,11 +46,11 @@ public static class ConditionalFormatIconSetPlanner
     public static IReadOnlyList<string> Styles => Options.Select(option => option.Style).ToList();
 
     public static int GetIconCount(string? style) =>
-        Options.FirstOrDefault(option => string.Equals(option.Style, style, StringComparison.Ordinal))?.IconCount ?? 3;
+        FindOption(style)?.IconCount ?? 3;
 
     public static ConditionalFormat? CreateRule(string? style, GridRange range)
     {
-        var option = Options.FirstOrDefault(option => string.Equals(option.Style, style, StringComparison.Ordinal));
+        var option = FindOption(style);
         if (option is null)
             return null;
 
@@ -83,5 +83,16 @@ public static class ConditionalFormatIconSetPlanner
         return Enumerable.Range(0, iconCount)
             .Select(index => new CfThresholdModel(CfThresholdType.Percent, (index * step).ToString(System.Globalization.CultureInfo.InvariantCulture)))
             .ToList();
+    }
+
+    private static ConditionalFormatIconSetOption? FindOption(string? style)
+    {
+        foreach (var option in Options)
+        {
+            if (string.Equals(option.Style, style, StringComparison.Ordinal))
+                return option;
+        }
+
+        return null;
     }
 }

@@ -25,6 +25,8 @@ public static class ClipboardPastePlanner
         hasImage &&
         string.IsNullOrWhiteSpace(clipboardText);
 
+    public static bool ShouldPreserveClipboardVisualAfterPaste(bool isCut) => !isCut;
+
     public static bool ShouldClearCutSourceAfterPaste(
         bool isCut,
         GridRange sourceRange,

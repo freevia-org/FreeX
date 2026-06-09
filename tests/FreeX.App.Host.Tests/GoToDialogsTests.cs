@@ -210,7 +210,7 @@ public sealed class GoToDialogsTests
         source.Should().Contain("SelectGoToSpecialMatches(specialKind, dialog.SelectedSpecialOptions, showEmptyMessage: true)");
         source.Should().Contain("dialog.SelectedRange is { } selectedRange");
         source.Should().Contain("SheetGrid.SelectedRange = selectedRange");
-        source.Should().Contain("CellAddressBox.Text = FormatRangeReference(selectedRange.Start, selectedRange.End)");
+        source.Should().Contain("CellAddressBox.Text = FormatNameBoxSelectionText(selectedRange)");
     }
 
     [Fact]
@@ -331,8 +331,9 @@ public sealed class GoToDialogsTests
         source.Should().Contain("var firstButton = FirstButton();");
         source.Should().Contain("firstButton?.Focus();");
         source.Should().Contain("Keyboard.Focus(firstButton);");
-        source.Should().Contain("private RadioButton? FirstButton() =>");
-        source.Should().Contain("_buttons.FirstOrDefault();");
+        source.Should().Contain("private RadioButton? FirstButton()");
+        source.Should().Contain("foreach (var button in _buttons)");
+        source.Should().Contain("return button;");
     }
 
     [Fact]

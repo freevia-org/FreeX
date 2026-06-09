@@ -4,9 +4,16 @@ namespace FreeX.Core.Commands;
 
 file static class PivotTableTimelineCommandLookups
 {
-    public static TimelineModel? FindTimeline(Workbook workbook, string? timelineName) =>
-        workbook.Timelines.FirstOrDefault(timeline =>
-            string.Equals(timeline.Name, timelineName, StringComparison.OrdinalIgnoreCase));
+    public static TimelineModel? FindTimeline(Workbook workbook, string? timelineName)
+    {
+        foreach (var timeline in workbook.Timelines)
+        {
+            if (string.Equals(timeline.Name, timelineName, StringComparison.OrdinalIgnoreCase))
+                return timeline;
+        }
+
+        return null;
+    }
 
     public static int FindSourceFieldIndex(IReadOnlyList<string> headers, string? sourceFieldName, StringComparison comparison)
     {
@@ -48,8 +55,12 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             return new CommandOutcome(false, "Timeline is not connected to a PivotTable field.");
         }
 
-        var startDate = PivotTimelineSelectionPlanner.ParseTimelineDate(_selectedStartDate, DateOnly.MinValue);
-        var endDate = PivotTimelineSelectionPlanner.ParseTimelineDate(_selectedEndDate, DateOnly.MaxValue);
+        if (!PivotTimelineSelectionPlanner.TryParseTimelineDate(_selectedStartDate, DateOnly.MinValue, out var startDate) ||
+            !PivotTimelineSelectionPlanner.TryParseTimelineDate(_selectedEndDate, DateOnly.MaxValue, out var endDate))
+        {
+            return new CommandOutcome(false, "Timeline dates must use yyyy-MM-dd.");
+        }
+
         if (startDate > endDate)
             return new CommandOutcome(false, "Timeline start date must be on or before the end date.");
 
@@ -73,8 +84,8 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
         _snapshot = TimelineRangeSnapshot.Capture(timeline, pivotTable);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
 
-        timeline.SelectedStartDate = _selectedStartDate;
-        timeline.SelectedEndDate = _selectedEndDate;
+        timeline.SelectedStartDate = NormalizeSelectedDate(_selectedStartDate);
+        timeline.SelectedEndDate = NormalizeSelectedDate(_selectedEndDate);
         var selectedItems = PivotTimelineSelectionPlanner.ReadSelectedItems(sourceSheet, pivotTable, sourceFieldIndex, startDate, endDate);
         PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.RowFields, sourceFieldIndex, selectedItems);
         PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, selectedItems);
@@ -97,6 +108,9 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
         _snapshot = null;
         _targetSnapshot = null;
     }
+
+    private static string? NormalizeSelectedDate(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private sealed record TimelineRangeSnapshot(
         string? SelectedStartDate,

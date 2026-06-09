@@ -110,6 +110,11 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         var worksheetRels = LoadXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         worksheetRels.ToString(SaveOptions.DisableFormatting).Should().Contain("printerSettings/printerSettings1.bin");
         worksheetRels.ToString(SaveOptions.DisableFormatting).Should().Contain("/printerSettings");
+        AssertInternalRelationshipTargetWasRetained(
+            archive,
+            "xl/worksheets/_rels/sheet1.xml.rels",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings",
+            "../printerSettings/printerSettings1.bin");
         worksheetXml.Root.Element(MainNs + "pageSetup")!.Attribute(RelNs + "id").Should().NotBeNull();
         ReadEntryBytes(archive, "xl/printerSettings/printerSettings1.bin").Should().Equal(0x46, 0x58, 0x50, 0x52, 0x4E);
     }
@@ -151,6 +156,29 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         archive.Entries.Should().Contain(entry =>
             entry.FullName.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) &&
             entry.FullName.EndsWith(".vml", StringComparison.OrdinalIgnoreCase));
-        worksheetXml.ToString(SaveOptions.DisableFormatting).Should().Contain("legacyDrawing");
+        var legacyDrawing = worksheetXml.Root!.Element(MainNs + "legacyDrawing");
+        legacyDrawing.Should().NotBeNull();
+
+        var legacyDrawingRelationshipId = legacyDrawing!.Attribute(RelNs + "id")!.Value;
+        var legacyDrawingRelationship = LoadXml(archive, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Root!
+            .Elements(PackageRelNs + "Relationship")
+            .Single(relationship => string.Equals(
+                relationship.Attribute("Id")?.Value,
+                legacyDrawingRelationshipId,
+                StringComparison.Ordinal));
+        legacyDrawingRelationship.Attribute("Type")!.Value.Should().Be(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing");
+        legacyDrawingRelationship.Attribute("TargetMode")?.Value.Should().NotBe("External");
+
+        var legacyDrawingTarget = legacyDrawingRelationship.Attribute("Target")!.Value;
+        legacyDrawingTarget.Should().EndWith(".vml");
+        var legacyDrawingPart = legacyDrawingTarget.StartsWith("/", StringComparison.Ordinal)
+            ? legacyDrawingTarget.TrimStart('/')
+            : "xl/" + legacyDrawingTarget["../".Length..];
+        legacyDrawingPart.Should().StartWith("xl/drawings/", "worksheet legacy drawing should target a retained drawing part");
+        archive.GetEntry(legacyDrawingPart)
+            .Should()
+            .NotBeNull("worksheet legacy drawing relationship should resolve to the retained VML part");
     }
 }

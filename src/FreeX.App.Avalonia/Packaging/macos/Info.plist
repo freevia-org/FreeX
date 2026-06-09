@@ -60,6 +60,10 @@
       <array>
         <string>fxl</string>
       </array>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>io.github.tony-xmelon.freex.workbook</string>
+      </array>
       <key>CFBundleTypeName</key>
       <string>FreeX Workbook</string>
       <key>CFBundleTypeRole</key>
@@ -105,6 +109,28 @@
   <string>0.1.0</string>
   <key>CFBundleVersion</key>
   <string>1</string>
+  <key>UTExportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>io.github.tony-xmelon.freex.workbook</string>
+      <key>UTTypeDescription</key>
+      <string>FreeX Workbook</string>
+      <key>UTTypeConformsTo</key>
+      <array>
+        <string>public.json</string>
+      </array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array>
+          <string>fxl</string>
+        </array>
+        <key>public.mime-type</key>
+        <string>application/vnd.freex.workbook+json</string>
+      </dict>
+    </dict>
+  </array>
   <key>LSMinimumSystemVersion</key>
   <string>12.0</string>
   <key>NSHighResolutionCapable</key>

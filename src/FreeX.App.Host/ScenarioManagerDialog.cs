@@ -21,7 +21,7 @@ public sealed partial class ScenarioManagerDialog : Window
     private readonly TextBox _changingCellsBox = new();
     private readonly TextBox _resultCellsBox = new();
     private readonly TextBox _commentBox = new();
-    private readonly CheckBox _lockedBox = new() { Content = UiText.Get("ScenarioManager_PreventChanges"), Margin = new Thickness(0, 0, 0, 6) };
+    private readonly CheckBox _lockedBox = new() { Content = UiText.Get("ScenarioManager_PreventChanges"), IsChecked = true, Margin = new Thickness(0, 0, 0, 6) };
     private readonly CheckBox _hiddenBox = new() { Content = UiText.Get("ScenarioManager_Hide"), Margin = new Thickness(0, 0, 0, 8) };
     private readonly string _defaultScenarioName;
     private readonly SheetId? _currentSheetId;
@@ -132,7 +132,6 @@ public sealed partial class ScenarioManagerDialog : Window
         _addButton = AddActionButton(sideButtons, UiText.Get("ScenarioManager_Add"), ScenarioManagerAction.Add, isDefault: _scenarioList.Items.Count == 0);
         _editButton = AddActionButton(sideButtons, UiText.Get("ScenarioManager_Edit"), ScenarioManagerAction.Edit, isEnabled: false);
         _deleteButton = AddActionButton(sideButtons, UiText.Get("ScenarioManager_Delete"), ScenarioManagerAction.Delete, isEnabled: false);
-        AddActionButton(sideButtons, UiText.Get("ScenarioManager_List"), ScenarioManagerAction.List);
         _showButton = AddActionButton(sideButtons, UiText.Get("ScenarioManager_Show"), ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null, isDefault: _scenarioList.SelectedItem is not null);
         AddActionButton(sideButtons, UiText.Get("ScenarioManager_Summary"), ScenarioManagerAction.Report);
         UpdateSelectionState();
@@ -199,7 +198,6 @@ public sealed partial class ScenarioManagerDialog : Window
             ScenarioManagerAction.Add => UiText.Get("ScenarioManager_AddScenarioAutomationName"),
             ScenarioManagerAction.Edit => UiText.Get("ScenarioManager_EditScenarioAutomationName"),
             ScenarioManagerAction.Delete => UiText.Get("ScenarioManager_DeleteScenarioAutomationName"),
-            ScenarioManagerAction.List => UiText.Get("ScenarioManager_ListScenariosAutomationName"),
             ScenarioManagerAction.Show => UiText.Get("ScenarioManager_ShowScenarioAutomationName"),
             ScenarioManagerAction.Report => UiText.Get("ScenarioManager_ScenarioSummaryAutomationName"),
             _ => UiText.Get("ScenarioManager_SaveScenarioAutomationName")
@@ -211,7 +209,6 @@ public sealed partial class ScenarioManagerDialog : Window
             ScenarioManagerAction.Add => UiText.Get("ScenarioManager_AddAScenarioUsingTheScenarioFields"),
             ScenarioManagerAction.Edit => UiText.Get("ScenarioManager_EditTheSelectedScenarioUsingTheScenarioFields"),
             ScenarioManagerAction.Delete => UiText.Get("ScenarioManager_DeleteTheSelectedScenario"),
-            ScenarioManagerAction.List => UiText.Get("ScenarioManager_ShowTheListOfWorkbookScenarios"),
             ScenarioManagerAction.Show => UiText.Get("ScenarioManager_ApplyTheSelectedScenarioToTheWorkbook"),
             ScenarioManagerAction.Report => UiText.Get("ScenarioManager_CreateAScenarioSummaryReport"),
             _ => UiText.Get("ScenarioManager_SaveTheScenarioUsingTheScenarioFields")

@@ -27,9 +27,7 @@ internal static class XlsxWorksheetBackgroundReaderWriter
             return null;
 
         var relsXml = LoadXml(relsEntry);
-        var relationship = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, relId, StringComparison.Ordinal));
+        var relationship = FindRelationshipById(relsXml, packageRelNs, relId);
         var target = relationship?.Attribute("Target")?.Value;
         if (string.IsNullOrWhiteSpace(target))
             return null;
@@ -160,15 +158,47 @@ internal static class XlsxWorksheetBackgroundReaderWriter
             "extLst"
         ];
 
-        var insertionPoint = worksheetRoot.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == worksheetNs &&
-                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        var insertionPoint = FindFirstLaterWorksheetElement(worksheetRoot, worksheetNs, laterWorksheetElements);
 
         if (insertionPoint is null)
             worksheetRoot.Add(picture);
         else
             insertionPoint.AddBeforeSelf(picture);
+    }
+
+    private static XElement? FindRelationshipById(XDocument relsXml, XNamespace packageRelNs, string relId)
+    {
+        var root = relsXml.Root;
+        if (root is null)
+            return null;
+
+        foreach (var relationship in root.Elements(packageRelNs + "Relationship"))
+        {
+            if (string.Equals(relationship.Attribute("Id")?.Value, relId, StringComparison.Ordinal))
+                return relationship;
+        }
+
+        return null;
+    }
+
+    private static XElement? FindFirstLaterWorksheetElement(
+        XElement worksheetRoot,
+        XNamespace worksheetNs,
+        string[] laterWorksheetElements)
+    {
+        foreach (var element in worksheetRoot.Elements())
+        {
+            if (element.Name.Namespace != worksheetNs)
+                continue;
+
+            foreach (var laterWorksheetElement in laterWorksheetElements)
+            {
+                if (string.Equals(element.Name.LocalName, laterWorksheetElement, StringComparison.Ordinal))
+                    return element;
+            }
+        }
+
+        return null;
     }
 
     private static XDocument LoadXml(ZipArchiveEntry entry)

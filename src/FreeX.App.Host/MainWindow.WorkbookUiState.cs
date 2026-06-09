@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,6 +24,7 @@ public partial class MainWindow
                 FormulaBarBorder.Visibility = _options.ShowFormulaBar ? Visibility.Visible : Visibility.Collapsed;
             _formulaBarExpanded = _options.FormulaBarExpanded;
             ApplyFormulaBarExpansion();
+            ApplyStatusBarInteractiveDisplayState();
         }
         finally
         {
@@ -31,7 +33,7 @@ public partial class MainWindow
 
         if (SheetGrid.SelectedRange is { } range)
         {
-            CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
+            CellAddressBox.Text = FormatNameBoxSelectionText(range);
             var sheet = _workbook.GetSheet(_currentSheetId);
             FormulaBar.Text = FormatFormulaBarText(sheet?.GetCell(range.Start), range.Start);
         }
@@ -142,6 +144,21 @@ public partial class MainWindow
 
     private string FormatRangeReference(CellAddress start, CellAddress end) =>
         SpreadsheetDisplayFormatter.FormatRangeReference(start, end, _options.UseR1C1ReferenceStyle);
+
+    private string FormatNameBoxSelectionText(GridRange range)
+    {
+        string? bestName = null;
+        foreach (var (name, namedRange) in _workbook.NamedRanges)
+        {
+            if (namedRange != range)
+                continue;
+
+            if (bestName is null || string.Compare(name, bestName, StringComparison.OrdinalIgnoreCase) < 0)
+                bestName = name;
+        }
+
+        return bestName ?? FormatRangeReference(range.Start, range.End);
+    }
 
     private string FormatFormulaBarText(Cell? cell, CellAddress address) =>
         SpreadsheetDisplayFormatter.FormatFormulaBarText(cell, address, _options.UseR1C1ReferenceStyle);

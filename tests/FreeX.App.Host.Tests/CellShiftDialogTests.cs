@@ -67,7 +67,10 @@ public sealed class CellShiftDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_buttons.FirstOrDefault()?.Focus();");
+        source.Should().Contain("var firstButton = FindFirstButton();");
+        source.Should().Contain("firstButton?.Focus();");
+        source.Should().Contain("private RadioButton? FindFirstButton()");
+        source.Should().Contain("_buttons.Count > 0 ? _buttons[0] : null");
         source.Should().Contain("Keyboard.Focus(firstButton);");
     }
 

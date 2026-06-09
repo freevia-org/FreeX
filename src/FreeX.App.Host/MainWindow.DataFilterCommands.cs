@@ -71,22 +71,29 @@ public partial class MainWindow
 
     private void FilterButton_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        ApplyFilterPrompt(range, filterColOffset: 0);
-    }
-
-    private void ApplyFilterPrompt(GridRange range, uint filterColOffset)
-    {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var dialog = sheet is null
-            ? new AutoFilterDialog(Array.Empty<AutoFilterChecklistItem>())
-            : new AutoFilterDialog(AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, new AutoFilterDropdownPlan(range, filterColOffset)));
-        dialog.Owner = this;
-        dialog.Title = UiText.Get("MainWindowDialog_FilterTitle");
-        if (dialog.ShowDialog() != true) return;
-
-        if (!ApplyAutoFilterDialogResult(range, filterColOffset, dialog.Result, "Filter"))
+        if (SheetGrid.SelectedRange is not { } selectedRange ||
+            _workbook.GetSheet(_currentSheetId) is not { } sheet)
+        {
             return;
+        }
+
+        var range = AutoFilterToggleRangePlanner.Create(sheet, selectedRange);
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Filter",
+                range,
+                currentRange =>
+                {
+                    var currentSheet = _workbook.GetSheet(_currentSheetId);
+                    var plannedRange = currentSheet is null
+                        ? currentRange
+                        : AutoFilterToggleRangePlanner.Create(currentSheet, currentRange);
+                    return new ToggleWorksheetAutoFilterCommand(_currentSheetId, plannedRange);
+                }))
+        {
+            return;
+        }
+
+        ClearRememberedAutoFilterCommand();
         UpdateViewport();
     }
 
@@ -206,9 +213,9 @@ public partial class MainWindow
             return false;
         }
 
-        var allowedValues = FilterInputParser.ParseAllowedValues(value);
-        if (allowedValues.Count == 0)
-            allowedValues = result.SelectedValues;
+        var allowedValues = result.SelectedValues.Count > 0
+            ? result.SelectedValues
+            : FilterInputParser.ParseAllowedValues(value);
 
         if (!TryExecuteRememberedAutoFilterCommand(
                 "Filter",
@@ -259,9 +266,16 @@ public partial class MainWindow
         }
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var existingRule = sheet is null
-            ? null
-            : DataValidationService.GetApplicable(sheet, range.Start).FirstOrDefault();
+        DataValidation? existingRule = null;
+        if (sheet is not null)
+        {
+            foreach (var rule in DataValidationService.GetApplicable(sheet, range.Start))
+            {
+                existingRule = rule;
+                break;
+            }
+        }
+
         DataValidationDialog? dlg = null;
         dlg = new DataValidationDialog(existingRule, request => ApplyDataValidationRangeSelection(dlg, request))
         {
@@ -399,11 +413,24 @@ public partial class MainWindow
 
     private void ClearFilterButton_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
+        if (SheetGrid.SelectedRange is not { } selectedRange ||
+            _workbook.GetSheet(_currentSheetId) is not { } sheet)
+        {
+            return;
+        }
+
+        var range = ClearFilterRangePlanner.Create(sheet, selectedRange);
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Filter",
                 range,
-                currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset: 0, allowedValues: [])))
+                currentRange =>
+                {
+                    var currentSheet = _workbook.GetSheet(_currentSheetId);
+                    var plannedRange = currentSheet is null
+                        ? currentRange
+                        : ClearFilterRangePlanner.Create(currentSheet, currentRange);
+                    return new FilterCommand(_currentSheetId, plannedRange, filterColOffset: 0, allowedValues: []);
+                }))
             return;
         ClearRememberedAutoFilterCommand();
         UpdateViewport();

@@ -51,6 +51,78 @@ public sealed class RecentFilesStoreTests
     }
 
     [Fact]
+    public void AddOrUpdate_PersistsBookmarkedFileAccessIdentityAndPreservesPinnedState()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var storePath = Path.Combine(temp.Path, "recent.json");
+        var workbookPath = Path.Combine(temp.Path, "Budget.fxl");
+        var now = new DateTimeOffset(2026, 6, 8, 8, 30, 0, TimeSpan.Zero);
+        var clockTicks = 0;
+        var store = RecentFilesStore.Load(storePath, () => now.AddMinutes(clockTicks++));
+        var firstIdentity = new WorkbookFileAccessIdentity(
+            workbookPath,
+            "macos-security-scoped-bookmark",
+            "first-token");
+        var newestIdentity = new WorkbookFileAccessIdentity(
+            workbookPath,
+            "macos-security-scoped-bookmark",
+            "newest-token");
+
+        store.AddOrUpdate(workbookPath, firstIdentity);
+        store.Pin(workbookPath);
+        store.AddOrUpdate(workbookPath, newestIdentity);
+
+        var reloaded = RecentFilesStore.Load(storePath);
+        reloaded.Entries.Should().ContainSingle();
+        reloaded.Entries[0].Path.Should().Be(workbookPath);
+        reloaded.Entries[0].IsPinned.Should().BeTrue();
+        reloaded.Entries[0].LastOpened.Should().Be(now.AddMinutes(1));
+        var reloadedIdentity = reloaded.Entries[0].FileAccessIdentity;
+        reloadedIdentity.Should().NotBeNull();
+        reloadedIdentity!.LocalPath.Should().Be(workbookPath);
+        reloadedIdentity.BookmarkKind.Should().Be("macos-security-scoped-bookmark");
+        reloadedIdentity.BookmarkPayload.Should().Be("newest-token");
+    }
+
+    [Fact]
+    public void AddOrUpdate_PreservesExistingBookmarkedIdentityWhenIdentityIsNotProvided()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var storePath = Path.Combine(temp.Path, "recent.json");
+        var workbookPath = Path.Combine(temp.Path, "Budget.fxl");
+        var store = RecentFilesStore.Load(storePath);
+        var identity = new WorkbookFileAccessIdentity(
+            workbookPath,
+            "macos-security-scoped-bookmark",
+            "persisted-token");
+
+        store.AddOrUpdate(workbookPath, identity);
+        store.AddOrUpdate(workbookPath);
+
+        var reloaded = RecentFilesStore.Load(storePath);
+        reloaded.Entries.Should().ContainSingle();
+        var reloadedIdentity = reloaded.Entries[0].FileAccessIdentity;
+        reloadedIdentity.Should().NotBeNull();
+        reloadedIdentity!.LocalPath.Should().Be(workbookPath);
+        reloadedIdentity.BookmarkPayload.Should().Be("persisted-token");
+    }
+
+    [Fact]
+    public void AddOrUpdate_OmitsPathOnlyIdentityFromRecentJson()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var storePath = Path.Combine(temp.Path, "recent.json");
+        var workbookPath = Path.Combine(temp.Path, "Budget.fxl");
+        var store = RecentFilesStore.Load(storePath);
+
+        store.AddOrUpdate(workbookPath, WorkbookFileAccessIdentity.FromLocalPath(workbookPath));
+
+        File.ReadAllText(storePath).Should().NotContain("FileAccessIdentity");
+        RecentFilesStore.Load(storePath).Entries.Should().ContainSingle()
+            .Which.FileAccessIdentity.Should().BeNull();
+    }
+
+    [Fact]
     public void AddOrUpdate_WithWindowsPathIdentityKeepsCaseInsensitiveBehavior()
     {
         using var temp = new TestTemporaryDirectory();
@@ -177,6 +249,34 @@ public sealed class RecentFilesStoreTests
         var json = JsonSerializer.Serialize(entry);
 
         json.Should().Contain(@"""LastOpened"":""2026-05-28T12:34:56+00:00""");
+    }
+
+    [Fact]
+    public void Load_WithLegacyRecentJsonWithoutFileAccessIdentity_RemainsValid()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var storePath = Path.Combine(temp.Path, "recent.json");
+        var workbookPath = Path.Combine(temp.Path, "Legacy.fxl");
+        var lastOpened = new DateTimeOffset(2026, 6, 8, 9, 15, 0, TimeSpan.Zero);
+        File.WriteAllText(
+            storePath,
+            JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    Path = workbookPath,
+                    LastOpened = lastOpened,
+                    IsPinned = true,
+                }
+            }));
+
+        var store = RecentFilesStore.Load(storePath);
+
+        store.Entries.Should().ContainSingle();
+        store.Entries[0].Path.Should().Be(workbookPath);
+        store.Entries[0].LastOpened.Should().Be(lastOpened);
+        store.Entries[0].IsPinned.Should().BeTrue();
+        store.Entries[0].FileAccessIdentity.Should().BeNull();
     }
 
     private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider

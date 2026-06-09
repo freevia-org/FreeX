@@ -257,8 +257,16 @@ public sealed class PivotTableDialog : Window
         return true;
     }
 
-    private SheetId? ResolveSheetIdByName(string sheetName) =>
-        _workbook.Sheets.FirstOrDefault(sheet => string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id;
+    private SheetId? ResolveSheetIdByName(string sheetName)
+    {
+        foreach (var sheet in _workbook.Sheets)
+        {
+            if (string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))
+                return sheet.Id;
+        }
+
+        return null;
+    }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {

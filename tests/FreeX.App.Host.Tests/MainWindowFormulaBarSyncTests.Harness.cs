@@ -32,7 +32,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _executeClearSelection;
         private readonly MethodInfo _formulaBarKeyDown;
         private readonly MethodInfo _cellAddressBoxKeyDown;
-        private readonly MethodInfo _insertFormulaFunction;
+        private readonly MethodInfo _insertRawFormulaFunction;
         private readonly MethodInfo _insertDefinedNameIntoFormula;
         private readonly MethodInfo _formulaBarExpandButtonClick;
         private readonly MethodInfo _editActiveCellInFormulaBar;
@@ -80,9 +80,9 @@ public sealed partial class MainWindowFormulaBarSyncTests
             _cellAddressBoxKeyDown = typeof(MainWindow)
                 .GetMethod("CellAddressBox_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "CellAddressBox_KeyDown");
-            _insertFormulaFunction = typeof(MainWindow)
-                .GetMethod("InsertFormulaFunction", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "InsertFormulaFunction");
+            _insertRawFormulaFunction = typeof(MainWindow)
+                .GetMethod("InsertRawFormulaFunction", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "InsertRawFormulaFunction");
             _insertDefinedNameIntoFormula = typeof(MainWindow)
                 .GetMethod("InsertDefinedNameIntoFormula", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "InsertDefinedNameIntoFormula");
@@ -96,7 +96,19 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
 
-        public string CellAddressBoxText => ((TextBox)_window.FindName("CellAddressBox")).Text;
+        public string CellAddressBoxText => CellAddressBox.Text;
+
+        private ComboBox CellAddressBox => (ComboBox)_window.FindName("CellAddressBox");
+
+        private TextBox CellAddressBoxEditableTextBox
+        {
+            get
+            {
+                var comboBox = CellAddressBox;
+                comboBox.ApplyTemplate();
+                return (TextBox)comboBox.Template.FindName("PART_EditableTextBox", comboBox);
+            }
+        }
 
         public SheetId CurrentSheetId => (SheetId)_currentSheetIdField.GetValue(_window)!;
 
@@ -110,9 +122,9 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public bool FormulaBarFocused => IsFocused((TextBox)_window.FindName("FormulaBar"));
 
-        public bool CellAddressBoxFocused => IsFocused((TextBox)_window.FindName("CellAddressBox"));
+        public bool CellAddressBoxFocused => IsFocused(CellAddressBox) || IsFocused(CellAddressBoxEditableTextBox);
 
-        public int CellAddressBoxSelectionLength => ((TextBox)_window.FindName("CellAddressBox")).SelectionLength;
+        public int CellAddressBoxSelectionLength => CellAddressBoxEditableTextBox.SelectionLength;
 
         public bool SheetGridFocused => IsFocused((SheetGridView)_window.FindName("SheetGrid"));
 
@@ -222,7 +234,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public void InsertFormulaFunction(string functionName)
         {
-            _insertFormulaFunction.Invoke(_window, [functionName]);
+            _insertRawFormulaFunction.Invoke(_window, [functionName]);
             PumpDispatcher();
         }
 
@@ -267,7 +279,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public void SetCellAddressBoxText(string text)
         {
-            ((TextBox)_window.FindName("CellAddressBox")).Text = text;
+            CellAddressBox.Text = text;
             PumpDispatcher();
         }
 
@@ -279,7 +291,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
             {
                 RoutedEvent = Keyboard.KeyDownEvent
             };
-            _cellAddressBoxKeyDown.Invoke(_window, [((TextBox)_window.FindName("CellAddressBox")), args]);
+            _cellAddressBoxKeyDown.Invoke(_window, [CellAddressBox, args]);
             PumpDispatcher();
             return args.Handled;
         }

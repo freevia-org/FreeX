@@ -92,9 +92,7 @@ internal static class AutoFilterDialogCriteriaPlanner
                 selectedValues.Add(item.Value);
         }
 
-        var normalizedCriteria = string.IsNullOrWhiteSpace(criteriaText)
-            ? string.Join(", ", selectedValues)
-            : criteriaText.Trim();
+        var normalizedCriteria = criteriaText?.Trim() ?? string.Empty;
 
         return new AutoFilterDialogResult(
             sortDirection,

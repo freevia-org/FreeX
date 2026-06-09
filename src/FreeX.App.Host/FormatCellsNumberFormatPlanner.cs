@@ -214,9 +214,14 @@ internal static class FormatCellsNumberFormatPlanner
             return null;
 
         var trimmedText = text.Trim();
-        return Options.FirstOrDefault(option =>
-            string.Equals(option.Label, trimmedText, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(option.Code, trimmedText, StringComparison.OrdinalIgnoreCase));
+        foreach (var option in Options)
+        {
+            if (string.Equals(option.Label, trimmedText, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(option.Code, trimmedText, StringComparison.OrdinalIgnoreCase))
+                return option;
+        }
+
+        return null;
     }
 
     private static int? ParseDecimalPlaces(string? text)

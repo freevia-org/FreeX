@@ -288,6 +288,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertStandardConditionalFormatsModel(workbook.GetSheetAt(0));
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 8, 8), new NumberValue(42));
@@ -302,6 +303,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Select(element => element.ToString(SaveOptions.DisableFormatting))
             .Should()
             .Equal(sourceConditionalFormattings);
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertStandardConditionalFormatsModel(reloaded.GetSheetAt(0));
     }
 
     [Fact]
@@ -327,6 +332,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         var conditionalFormatting = ReadWorksheetChildElements(saved, "conditionalFormatting").First();
         AssertConditionalFormatInvalidNativeMetadataSanitized(conditionalFormatting);
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        reloaded.GetSheetAt(0).GetCell(8, 8)!.Value.Should().Be(new NumberValue(42));
+        AssertStandardConditionalFormatsModel(reloaded.GetSheetAt(0));
     }
 
     [Fact]
@@ -351,6 +361,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertConditionalFormatPayloadExtensionListsRemoved(saved);
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        reloaded.GetSheetAt(0).GetCell(8, 8)!.Value.Should().Be(new NumberValue(42));
+        AssertStandardConditionalFormatsModel(reloaded.GetSheetAt(0));
     }
 
 
@@ -467,6 +482,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertX14DataBarConditionalFormatModel(workbook.GetSheetAt(0));
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
@@ -485,6 +501,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceExtensionList.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertX14DataBarConditionalFormatModel(reloaded.GetSheetAt(0));
     }
 
     private static Workbook CreateX14DataBarConditionalFormatSourceWorkbook()
@@ -593,6 +613,81 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         });
 
         return workbook;
+    }
+
+    private static void AssertStandardConditionalFormatsModel(Sheet sheet)
+    {
+        var formats = sheet.ConditionalFormats.ToArray();
+        formats.Should().HaveCount(6);
+
+        var colorScale = ConditionalFormatForRange(formats, "A2:A5");
+        colorScale.RuleType.Should().Be(CfRuleType.ColorScale);
+        colorScale.UseThreeColorScale.Should().BeTrue();
+        colorScale.MinThresholdType.Should().Be(CfThresholdType.Min);
+        colorScale.MidThresholdType.Should().Be(CfThresholdType.Percentile);
+        colorScale.MidThresholdValue.Should().Be("50");
+        colorScale.MaxThresholdType.Should().Be(CfThresholdType.Max);
+
+        var dataBar = ConditionalFormatForRange(formats, "B2:B5");
+        dataBar.RuleType.Should().Be(CfRuleType.DataBar);
+        dataBar.DataBarShowValue.Should().BeFalse();
+        dataBar.DataBarMinLength.Should().Be(5);
+        dataBar.DataBarMaxLength.Should().Be(95);
+        dataBar.DataBarColor.Should().Be(new RgbColor(91, 155, 213));
+
+        var iconSet = ConditionalFormatForRange(formats, "C2:C5");
+        iconSet.RuleType.Should().Be(CfRuleType.IconSet);
+        iconSet.IconSetStyle.Should().Be("4Arrows");
+        iconSet.IconSetShowValue.Should().BeFalse();
+        iconSet.IconSetReverse.Should().BeTrue();
+        iconSet.IconSetThresholds.Should().Equal(
+            new CfThresholdModel(CfThresholdType.Percent, "0"),
+            new CfThresholdModel(CfThresholdType.Percent, "25"),
+            new CfThresholdModel(CfThresholdType.Percent, "50"),
+            new CfThresholdModel(CfThresholdType.Percent, "75"));
+
+        var cellValue = ConditionalFormatForRange(formats, "D2:D5");
+        cellValue.RuleType.Should().Be(CfRuleType.CellValue);
+        cellValue.Operator.Should().Be(CfOperator.Between);
+        cellValue.Value1.Should().Be("10");
+        cellValue.Value2.Should().Be("50");
+        cellValue.StopIfTrue.Should().BeTrue();
+        cellValue.FormatIfTrue.Should().NotBeNull();
+        cellValue.FormatIfTrue!.Bold.Should().BeTrue();
+        cellValue.FormatIfTrue!.FillColor.Should().Be(new CellColor(255, 242, 204));
+
+        var formula = ConditionalFormatForRange(formats, "E2:E5");
+        formula.RuleType.Should().Be(CfRuleType.Formula);
+        formula.FormulaText.Should().Be("E2>20");
+        formula.FormatIfTrue.Should().NotBeNull();
+        formula.FormatIfTrue!.Italic.Should().BeTrue();
+        formula.FormatIfTrue!.FontColor.Should().Be(new CellColor(192, 0, 0));
+
+        var top10 = ConditionalFormatForRange(formats, "F2:F5");
+        top10.RuleType.Should().Be(CfRuleType.Top10);
+        top10.TopBottomRank.Should().Be(2);
+        top10.FormatIfTrue.Should().NotBeNull();
+        top10.FormatIfTrue!.FillColor.Should().Be(new CellColor(198, 239, 206));
+    }
+
+    private static ConditionalFormat ConditionalFormatForRange(
+        IReadOnlyCollection<ConditionalFormat> formats,
+        string range) =>
+        formats.Should().ContainSingle(format => format.AppliesTo.ToString() == range).Subject;
+
+    private static void AssertX14DataBarConditionalFormatModel(Sheet sheet)
+    {
+        var format = sheet.ConditionalFormats.Should().ContainSingle().Subject;
+        format.RuleType.Should().Be(CfRuleType.DataBar);
+        format.AppliesTo.ToString().Should().Be("A2:A5");
+        format.Priority.Should().Be(1);
+        format.DataBarShowValue.Should().BeTrue();
+        format.DataBarGradient.Should().BeFalse();
+        format.DataBarBorder.Should().BeTrue();
+        format.DataBarAxisPosition.Should().Be("middle");
+        format.DataBarAxisColor.Should().Be(new RgbColor(0, 0, 0));
+        format.DataBarNegativeFillColor.Should().Be(new RgbColor(255, 0, 0));
+        format.DataBarNegativeBorderColor.Should().Be(new RgbColor(255, 0, 0));
     }
 
     private static void SetConditionalFormatInvalidNativeMetadata(MemoryStream stream)

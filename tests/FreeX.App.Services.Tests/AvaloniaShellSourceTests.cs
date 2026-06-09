@@ -24,10 +24,10 @@ public sealed class AvaloniaShellSourceTests
 
         windowSource.Should().Contain("public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)");
         windowSource.Should().Contain("private bool TrySelectOpenableLocalWorkbookPath(IEnumerable<IStorageItem> files, out string? path, out string message)");
-        windowSource.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out var path, out var message)");
+        windowSource.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out var path, out var storageItem, out var message)");
         windowSource.Should().Contain("file.TryGetLocalPath()");
         windowSource.Should().Contain("ShowOpenIssue(message);");
-        windowSource.Should().Contain("await OpenWorkbookPathAsync(path!)");
+        windowSource.Should().Contain("await OpenWorkbookPathAsync(path!, fileAccessIdentity)");
     }
 
     [Fact]
@@ -40,18 +40,94 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("DragDrop.AddDragOverHandler(this, MainWindow_DragOver);");
         source.Should().Contain("DragDrop.AddDropHandler(this, MainWindow_Drop);");
         source.Should().Contain("e.DataTransfer.TryGetFiles()");
-        source.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out path, out message)");
+        source.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out path, out storageItem, out message)");
         source.Should().Contain("file.TryGetLocalPath()");
         source.Should().Contain("_isOpening || _isSaving");
         source.Should().Contain("_session.IsDirty");
-        source.Should().Contain("Directory.Exists(candidate)");
-        source.Should().Contain("File.Exists(candidate)");
-        source.Should().Contain("_session.TryResolveOpenTarget(candidate, out _, out unsupportedMessage)");
+        source.Should().Contain("LocalFilePath.TryNormalize(candidate, out var normalizedCandidate)");
+        source.Should().Contain("Directory.Exists(normalizedCandidate)");
+        source.Should().Contain("File.Exists(normalizedCandidate)");
+        source.Should().Contain("_session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage)");
+        source.Should().Contain("path = target!.Path;");
+        source.Should().Contain("storageItem = file;");
         source.Should().Contain("ShowOpenIssue(message)");
-        source.Should().Contain("await OpenWorkbookPathAsync(path!)");
+        source.Should().Contain("await OpenWorkbookPathAsync(path!, fileAccessIdentity)");
         source.Should().Contain("await OpenWorkbookFromTargetAsync(target!)");
         source.Should().Contain("DragDropEffects.Copy");
         source.Should().Contain("DragDropEffects.None");
+    }
+
+    [Fact]
+    public void MainWindow_WiresWorkbookFileAccessServiceToAvaloniaBookmarks()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var serviceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "WorkbookFileAccessService.cs"));
+
+        source.Should().Contain("private readonly IWorkbookFileAccessService _workbookFileAccessService;");
+        source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics)");
+        source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookFileAccessService);");
+        source.Should().Contain("_workbookFileAccessService = workbookFileAccessService;");
+        source.Should().Contain("_workbookFileAccessService.CreateIdentityAsync(path, storageFile)");
+        source.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out var path, out var storageItem, out var message)");
+        source.Should().Contain("TrySelectDroppedWorkbookPath(e, out var path, out var storageItem, out var message)");
+        source.Should().Contain("storageItem = file;");
+        source.Should().Contain("await _workbookFileAccessService.BeginAccessAsync(");
+        source.Should().Contain("StorageProvider,");
+        source.Should().Contain("target.FileAccessIdentity");
+        source.Should().Contain("fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(");
+        source.Should().Contain("_session.MarkSaved(target.Path, fileAccessIdentity);");
+        source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
+
+        var recentBlock = ExtractSourceBlock(
+            source,
+            "private async Task OpenRecentWorkbookAsync(",
+            "await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);");
+        recentBlock.Should().Contain("await _workbookFileAccessService.BeginAccessAsync(");
+        recentBlock.Should().Contain("!File.Exists(target.Path)");
+
+        serviceSource.Should().Contain("internal interface IWorkbookFileAccessService");
+        serviceSource.Should().Contain("internal static class WorkbookFileAccessServiceFactory");
+        serviceSource.Should().Contain("internal sealed class AvaloniaWorkbookFileAccessService : IWorkbookFileAccessService");
+        serviceSource.Should().Contain("MacOsSecurityScopedBookmarkKind = \"macos-security-scoped-bookmark\"");
+        serviceSource.Should().Contain("IStorageItem? storageItem = null");
+        serviceSource.Should().Contain("OperatingSystem.IsMacOS()");
+        serviceSource.Should().Contain("StorageItemMatchesPath(storageItem, path)");
+        serviceSource.Should().Contain("storageItem.SaveBookmarkAsync()");
+        serviceSource.Should().Contain("storageProvider.OpenFileBookmarkAsync(bookmark)");
+        serviceSource.Should().Contain("WorkbookFileAccessScope.FromDisposable(");
+        serviceSource.Should().Contain("PlatformPathIdentityComparer.Current.Equals(identity.LocalPath, resolvedPath)");
+        serviceSource.Should().Contain("Create(AvaloniaAppDiagnostics? diagnostics = null)");
+        serviceSource.Should().Contain("new AvaloniaWorkbookFileAccessService(diagnostics)");
+        serviceSource.Should().Contain("AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null)");
+        serviceSource.Should().Contain("_diagnostics?.RecordEvent(eventName");
+        serviceSource.Should().Contain("RecordIdentityEvent(\"bookmark_created\", grantKind: MacOsSecurityScopedBookmarkKind);");
+        serviceSource.Should().Contain("RecordScopeEvent(\"scope_started\", grantKind: MacOsSecurityScopedBookmarkKind);");
+        serviceSource.Should().Contain("RecordScopeEvent(\"scope_ended\", grantKind: MacOsSecurityScopedBookmarkKind)");
+        serviceSource.Should().Contain("workbook_file_access_identity");
+        serviceSource.Should().Contain("workbook_file_access_scope");
+        serviceSource.Should().Contain("[\"grantKind\"]");
+        serviceSource.Should().Contain("[\"payloadRedacted\"] = string.IsNullOrWhiteSpace(grantKind) ? null : \"true\"");
+        var diagnosticEventBlock = ExtractSourceBlock(
+            serviceSource,
+            "private void RecordFileAccessEvent(string eventName, string status, string? grantKind)",
+            "});");
+        diagnosticEventBlock.Should().NotContain("[\"path\"]");
+        diagnosticEventBlock.Should().NotContain("[\"fileName\"]");
+        diagnosticEventBlock.Should().NotContain("[\"filename\"]");
+        diagnosticEventBlock.Should().NotContain("[\"localPath\"]");
+        diagnosticEventBlock.Should().NotContain("[\"workbookPath\"]");
+        diagnosticEventBlock.Should().NotContain("[\"formula\"]");
+        diagnosticEventBlock.Should().NotContain("[\"bookmarkPayload\"]");
+        diagnosticEventBlock.Should().NotContain("[\"storageIdentifier\"]");
+        diagnosticEventBlock.Should().NotContain("[\"rawStorageIdentifier\"]");
+        serviceSource.Should().NotContain("AppKit");
+        serviceSource.Should().NotContain("Foundation");
+        serviceSource.Should().NotContain("ObjCRuntime");
+        serviceSource.Should().NotContain("NSUrl");
+        serviceSource.Should().NotContain("NSData");
+        serviceSource.Should().NotContain("NSError");
+        serviceSource.Should().NotContain("NSOpenPanel");
+        serviceSource.Should().NotContain("NSSavePanel");
     }
 
     [Fact]
@@ -59,16 +135,20 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var serviceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "WorkbookShareSheetService.cs"));
+        var macOsServiceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOs", "MacOsWorkbookShareSheetService.cs"));
 
         source.Should().Contain("private const string WorkbookShareSheetLabel = \"macOS Share Sheet\";");
         source.Should().Contain("private readonly IWorkbookShareSheetService _workbookShareSheetService;");
-        source.Should().Contain(": this(startupArguments, new UnavailableWorkbookShareSheetService(WorkbookShareSheetLabel))");
+        source.Should().Contain("WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),");
+        source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics))");
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookShareSheetService);");
         source.Should().Contain("private readonly NativeMenuItem _shareWorkbookMenuItem = new();");
         source.Should().Contain("_shareWorkbookMenuItem.Header = \"Share Workbook...\";");
         source.Should().Contain("_shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();");
         source.Should().Contain("fileMenu.Items.Add(_shareWorkbookMenuItem);");
         source.Should().Contain("_shareWorkbookMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, \"Share Workbook...\", requireGesture: false)");
+        source.Should().Contain("private static bool HasEnabledNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true)");
         source.Should().Contain("private async Task ShareWorkbookAsync()");
         source.Should().Contain("WorkbookShareActionPlanner.CreatePlan(");
         source.Should().Contain("_session.CurrentFilePath");
@@ -94,7 +174,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await ShowWorkbookShareSheetAsync(plan);");
         source.Should().Contain("private async Task ShowWorkbookShareSheetAsync(WorkbookShareActionPlan plan)");
         source.Should().Contain("if (refreshedPlan.Kind != WorkbookShareActionPlanKind.ShareSheet)");
-        source.Should().Contain("await _workbookShareSheetService.ShowShareSheetAsync(filePath)");
+        source.Should().Contain("await _workbookShareSheetService.ShowShareSheetAsync(this, filePath)");
         source.Should().Contain("await FallbackToOpenContainingFolderAfterShareSheetFailureAsync(refreshedPlan);");
         source.Should().Contain("with { CanShowShareSheet = false }");
         source.Should().Contain("await OpenWorkbookContainingFolderAsync(fallbackPlan);");
@@ -106,10 +186,21 @@ public sealed class AvaloniaShellSourceTests
 
         serviceSource.Should().Contain("internal sealed record WorkbookShareSheetCapability(");
         serviceSource.Should().Contain("internal interface IWorkbookShareSheetService");
-        serviceSource.Should().Contain("Task<WorkbookShareSheetResult> ShowShareSheetAsync(string filePath);");
+        serviceSource.Should().Contain("Task<WorkbookShareSheetResult> ShowShareSheetAsync(Window owner, string filePath);");
+        serviceSource.Should().Contain("internal static class WorkbookShareSheetServiceFactory");
+        serviceSource.Should().Contain("#if FREEX_MACOS_SHARE_SHEET");
+        serviceSource.Should().Contain("return new MacOsWorkbookShareSheetService(shareSheetLabel);");
         serviceSource.Should().Contain("internal sealed class UnavailableWorkbookShareSheetService : IWorkbookShareSheetService");
         serviceSource.Should().Contain("Capability = new WorkbookShareSheetCapability(shareSheetLabel, CanShowShareSheet: false);");
         serviceSource.Should().Contain("WorkbookShareSheetResult.Unavailable(_unavailableMessage)");
+        macOsServiceSource.Should().Contain("internal sealed class MacOsWorkbookShareSheetService : IWorkbookShareSheetService");
+        macOsServiceSource.Should().Contain("Capability = new WorkbookShareSheetCapability(shareSheetLabel, CanShowShareSheet: true);");
+        macOsServiceSource.Should().Contain("NSSharingServicePicker");
+        macOsServiceSource.Should().Contain("NSUrl.FromFilename(filePath)");
+        macOsServiceSource.Should().Contain("owner.TryGetPlatformHandle()");
+        macOsServiceSource.Should().Contain("platformHandle?.HandleDescriptor != \"NSWindow\"");
+        macOsServiceSource.Should().Contain("Runtime.GetNSObject<NSWindow>(platformHandle.Handle)");
+        macOsServiceSource.Should().Contain("ShowRelativeToRect(anchorView.Bounds, anchorView, NSRectEdge.MinYEdge)");
 
         source.Should().NotContain("DataTransferManager");
         source.Should().NotContain("WindowInteropHelper");
@@ -117,12 +208,20 @@ public sealed class AvaloniaShellSourceTests
         source.Should().NotContain("ProcessStartInfo");
         source.Should().NotContain("System.Windows");
         serviceSource.Should().NotContain("AppKit");
+        serviceSource.Should().NotContain("Foundation");
+        serviceSource.Should().NotContain("ObjCRuntime");
         serviceSource.Should().NotContain("NSSharingService");
+        serviceSource.Should().NotContain("NSSharingServicePicker");
         serviceSource.Should().NotContain("DataTransferManager");
         serviceSource.Should().NotContain("WindowInteropHelper");
         serviceSource.Should().NotContain("Microsoft.Win32");
         serviceSource.Should().NotContain("ProcessStartInfo");
         serviceSource.Should().NotContain("System.Windows");
+        macOsServiceSource.Should().NotContain("DataTransferManager");
+        macOsServiceSource.Should().NotContain("WindowInteropHelper");
+        macOsServiceSource.Should().NotContain("Microsoft.Win32");
+        macOsServiceSource.Should().NotContain("ProcessStartInfo");
+        macOsServiceSource.Should().NotContain("System.Windows");
     }
 
     [Fact]
@@ -601,16 +700,25 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RecordStartupRecentWorkbook(source);");
         source.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
         source.Should().Contain("Header = \"(No Recent Workbooks)\"");
-        source.Should().Contain("private List<RecentFileEntry> GetOpenableRecentWorkbookEntries()");
-        source.Should().Contain("entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));");
-        source.Should().Contain("private async Task OpenRecentWorkbookAsync(string path)");
+        source.Should().Contain("OpenRecentWorkbookMenuPlanner.Create(");
+        source.Should().Contain("_recentFiles.Entries");
+        source.Should().Contain("File.Exists");
+        source.Should().Contain("path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null");
+        source.Should().Contain("plan.ItemCount == 0");
+        source.Should().Contain("foreach (var entry in plan.Items)");
+        source.Should().Contain("var fileAccessIdentity = entry.FileAccessIdentity;");
+        source.Should().Contain("Header = entry.Header");
+        source.Should().Contain("private async Task OpenRecentWorkbookAsync(");
+        source.Should().Contain("WorkbookFileAccessIdentity? fileAccessIdentity = null");
+        source.Should().Contain("if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)");
         source.Should().Contain("_recentFiles.Remove(path);");
-        source.Should().Contain("await OpenWorkbookPathAsync(path);");
+        source.Should().Contain("await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);");
         source.Should().Contain("private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)");
-        source.Should().Contain("private void RecordRecentWorkbook(string path)");
-        source.Should().Contain("_recentFiles.AddOrUpdate(path);");
-        source.Should().Contain("RecordRecentWorkbook(target.Path);");
-        normalizedSource.Should().Contain("_session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);\n            RefreshViewportSizeForZoom();\n            RecordRecentWorkbook(target.Path);");
+        source.Should().Contain("private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)");
+        source.Should().Contain("_recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);");
+        source.Should().Contain("RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
+        source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
+        normalizedSource.Should().Contain("_session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);\n            RefreshViewportSizeForZoom();\n            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
         source.Should().Contain("Closing += MainWindow_Closing;");
         source.Should().Contain("private async Task CloseWorkbookAsync()");
         source.Should().Contain("ConfirmDirtyWorkbookCloseAsync(\"Close Workbook\", \"Discard and Close\")");
@@ -647,6 +755,33 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_KeepsHelpLinksHttpOnlyBeforeSharedExternalLauncher()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        var helpLinkSource = ExtractSourceBlock(
+            source,
+            "private async Task OpenExternalHelpLinkAsync(string url, string title)",
+            "private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)");
+        var workbookHyperlinkSource = ExtractSourceBlock(
+            source,
+            "private async Task OpenExternalHyperlinkAsync(string target)",
+            "private async Task ShowGoToSpecialDialogAsync()");
+
+        helpLinkSource.Should().Contain("if (!IsHttpOrHttpsHelpUrl(url))");
+        helpLinkSource.Should().Contain("ShowHelpIssue($\"{title} link is blocked.\");");
+        helpLinkSource.Should().Contain("private static bool IsHttpOrHttpsHelpUrl(string url)");
+        helpLinkSource.Should().Contain("Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)");
+        helpLinkSource.Should().Contain("string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)");
+        helpLinkSource.Should().Contain("string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)");
+        helpLinkSource.IndexOf("if (!IsHttpOrHttpsHelpUrl(url))", StringComparison.Ordinal)
+            .Should().BeLessThan(helpLinkSource.IndexOf("var result = await OpenExternalUriAsync(url);", StringComparison.Ordinal));
+
+        workbookHyperlinkSource.Should().Contain("var result = await OpenExternalUriAsync(target);");
+        workbookHyperlinkSource.Should().NotContain("IsHttpOrHttpsHelpUrl");
+    }
+
+    [Fact]
     public void MainWindow_BuildsAvaloniaFilePickerTypesFromCoreIoDescriptors()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
@@ -669,19 +804,30 @@ public sealed class AvaloniaShellSourceTests
         programSource.Should().Contain("MacOsLaunchSmokeOptions.TryParse(");
         programSource.Should().Contain("out var launchSmokeOptions");
         programSource.Should().Contain("out var startupArguments");
+        programSource.Should().Contain("AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory)");
+        programSource.Should().Contain("diagnostics.RecordEvent(\"app_start\"");
+        programSource.Should().Contain("diagnostics.RecordEvent(\"app_exit\"");
+        programSource.Should().Contain("diagnostics.RecordCrash(ex, \"avalonia_startup\")");
         programSource.Should().Contain("App.LaunchSmokeOptions = launchSmokeOptions;");
+        programSource.Should().Contain("App.Diagnostics = diagnostics;");
         programSource.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
         appSource.Should().Contain("internal static MacOsLaunchSmokeOptions? LaunchSmokeOptions { get; set; }");
+        appSource.Should().Contain("internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }");
+        appSource.Should().Contain("Diagnostics?.RecordEvent(\"app_ready\"");
         appSource.Should().Contain("if (LaunchSmokeOptions is { } launchSmokeOptions)");
-        appSource.Should().Contain("MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions);");
+        appSource.Should().Contain("MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);");
         smokeSource.Should().Contain("public const string Argument = \"--macos-launch-smoke\";");
+        smokeSource.Should().Contain("public const string DiagnosticsDirectoryArgument = \"--macos-launch-smoke-diagnostics-dir\";");
         smokeSource.Should().Contain("public const string VerifyImageClipboardPasteArgument = \"--macos-launch-smoke-verify-image-clipboard\";");
         smokeSource.Should().Contain("public const string VerifyLiveCommandKeysArgument = \"--macos-launch-smoke-verify-live-command-keys\";");
         smokeSource.Should().Contain("startupArguments = filteredArguments.ToArray();");
         smokeSource.Should().Contain("verifyImageClipboardPaste = true;");
         smokeSource.Should().Contain("verifyLiveCommandKeys = true;");
-        smokeSource.Should().Contain("new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste, verifyLiveCommandKeys)");
-        smokeSource.Should().Contain("mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options);");
+        smokeSource.Should().Contain("diagnosticsDirectory = args[++index];");
+        smokeSource.Should().Contain("diagnosticsDirectory);");
+        smokeSource.Should().Contain("mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options, diagnostics);");
+        smokeSource.Should().Contain("diagnostics?.RecordEvent(\"macos_launch_smoke\"");
+        smokeSource.Should().Contain("diagnostics?.RecordCrash(ex, \"macos_launch_smoke\")");
         smokeSource.Should().Contain("mainWindow.CreateLaunchSmokeSnapshot()");
         smokeSource.Should().Contain("commandKeyEvidence = CaptureCommandKeyEvidence(mainWindow);");
         smokeSource.Should().Contain("liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();");
@@ -690,6 +836,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("IsPassed(snapshot, options, initialExternalImageClipboardPictureCount)");
         smokeSource.Should().Contain("IsPassedWithCommandKeyEvidence(");
         smokeSource.Should().Contain("HasExternalImageClipboardPasteEvidence(");
+        smokeSource.Should().Contain("app_diagnostics_directory_configured={FormatBool(appDiagnosticsConfigured)}");
         smokeSource.Should().Contain("liveCommandKeyEvidence.IsPassed");
         smokeSource.Should().Contain("macos_launch_smoke={(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence, liveCommandKeyEvidence) ? \"passed\" : \"failed\")}");
         smokeSource.Should().Contain("command_key_smoke={(commandKeyEvidence.IsPassed ? \"passed\" : \"failed\")}");
@@ -711,6 +858,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("external_image_clipboard_paste={FormatBool(imageClipboardPasteVerified)}");
         smokeSource.Should().Contain("external_image_clipboard_picture_count={snapshot.ExternalImageClipboardPictureCount}");
         smokeSource.Should().Contain("external_image_clipboard_picture_png_bytes={snapshot.ExternalImageClipboardPicturePngByteCount}");
+        smokeSource.Should().Contain("bool HasNativeShareWorkbookMenuItem,");
+        smokeSource.Should().Contain("HasNativeShareWorkbookMenuItem &&");
         smokeSource.Should().Contain("bool HasNativeWorkbookStatisticsMenuItem,");
         smokeSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialCommentsMenuItem &&");
@@ -765,6 +914,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_new_workbook_menu_item={FormatBool(snapshot.HasNativeNewWorkbookMenuItem)}");
         smokeSource.Should().Contain("native_open_recent_menu_item={FormatBool(snapshot.HasNativeOpenRecentMenuItem)}");
         smokeSource.Should().Contain("native_open_recent_item_count={snapshot.NativeOpenRecentItemCount}");
+        smokeSource.Should().Contain("native_share_workbook_menu_item={FormatBool(snapshot.HasNativeShareWorkbookMenuItem)}");
         smokeSource.Should().Contain("native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}");
         smokeSource.Should().Contain("native_close_workbook_menu_item={FormatBool(snapshot.HasNativeCloseWorkbookMenuItem)}");
         smokeSource.Should().Contain("native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}");
@@ -1460,11 +1610,22 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"SortOkButton\");");
         source.Should().Contain("SortDialogPlanner.BuildColumnChoices(_session.ActiveSheet, range, hasHeaders: true)");
         source.Should().Contain("SortDialogPlanner.BuildColumnChoices(_session.ActiveSheet, range, hasHeaders: false)");
-        source.Should().Contain("SortDialogPlanner.BuildOrderChoices(SortDialogPlannerText.Default.SortOnCellValues)");
+        source.Should().Contain("new SortOnChoice(SortDialogPlannerText.Default.SortOnCellValues)");
+        source.Should().Contain("new SortOnChoice(SortDialogPlannerText.Default.SortOnCellColor)");
+        source.Should().Contain("new SortOnChoice(SortDialogPlannerText.Default.SortOnFontColor)");
+        source.Should().Contain("SortDialogPlanner.BuildColorChoices(_session.Workbook, _session.ActiveSheet, range, SortOn.CellColor)");
+        source.Should().Contain("SortDialogPlanner.BuildColorChoices(_session.Workbook, _session.ActiveSheet, range, SortOn.FontColor)");
+        source.Should().Contain("SortDialogPlanner.BuildColorChoicesForSortOn(");
+        source.Should().Contain("SortDialogPlanner.SortOnFromLabel(level.SortOn) is SortOn.CellColor or SortOn.FontColor");
+        source.Should().Contain("AutomationProperties.SetAutomationId(sortOnBox, $\"SortLevel{levelIndex + 1}SortOnBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(colorBox, $\"SortLevel{levelIndex + 1}ColorBox\");");
         source.Should().Contain("levels = SortDialogPlanner.AddLevel(levels).ToList();");
         source.Should().Contain("levels = SortDialogPlanner.RemoveLevel(levels, removeIndex).ToList();");
-        source.Should().Contain("SortDialogPlanner.UpdateLevel(levels, levelIndex, columnChoice.Value.ColumnOffset, levels[levelIndex].Ascending)");
-        source.Should().Contain("macOS preview custom sort supports cell values by column; color, custom-list, case-sensitive, and left-to-right options remain WPF-only.");
+        source.Should().Contain("levels[levelIndex].ColumnOffset = columnChoice.Value.ColumnOffset;");
+        source.Should().Contain("levels[levelIndex].SortOn = sortOnChoice.Value.Label;");
+        source.Should().Contain("levels[levelIndex].Ascending = directionChoice.Value.Ascending;");
+        source.Should().Contain("levels[levelIndex].TargetColor = colorChoice.Value.Label;");
+        source.Should().Contain("macOS preview custom sort supports cell values, cell color, and font color by column; custom-list, case-sensitive, and left-to-right options remain WPF-only.");
         source.Should().Contain("HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, \"Sort A to Z\", requireGesture: false)");
         source.Should().Contain("HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, \"Sort Z to A\", requireGesture: false)");
         smokeSource.Should().Contain("HasNativeDataMenu &&");
@@ -1650,6 +1811,64 @@ public sealed class AvaloniaShellSourceTests
         handlerSource.Should().NotContain("WindowInteropHelper");
         handlerSource.Should().NotContain("Microsoft.Win32");
         handlerSource.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
+    public void MainWindow_WiresNativeDataValidationDropdownThroughSharedPlannerAndKeyboardRoute()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataValidationDropdownPlanner.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("private ComboBox? _activeDataValidationDropdown;");
+        source.Should().Contain("_activeDataValidationDropdown = null;");
+        source.Should().Contain("AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);");
+        source.Should().Contain("private void AddDataValidationDropdownOverlay(");
+        source.Should().Contain("DataValidationDropdownPlanner.TryPlan(");
+        source.Should().Contain("new DataValidationDropdownCellBounds(left, top, width, height)");
+        source.Should().Contain("private ComboBox CreateDataValidationDropdown(DataValidationDropdownPlan plan)");
+        source.Should().Contain("ItemsSource = plan.Items");
+        source.Should().Contain("SelectedItem = plan.SelectedItem");
+        source.Should().Contain("MinWidth = DataValidationDropdownPlanner.MinimumWidth");
+        source.Should().Contain("MinHeight = DataValidationDropdownPlanner.MinimumHeight");
+        source.Should().Contain("ToolTip.SetTip(dropdown, \"Pick from list\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dropdown, \"WorksheetDataValidationDropdown\");");
+        source.Should().Contain("AutomationProperties.SetName(dropdown, \"Data validation list\");");
+        source.Should().Contain("dropdown.SelectionChanged += DataValidationDropdown_SelectionChanged;");
+        source.Should().Contain("private static bool IsOpenActiveDropdownShortcut(KeyEventArgs args)");
+        source.Should().Contain("args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;");
+        source.Should().Contain("e.Handled = OpenActiveDataValidationDropdown();");
+        source.Should().Contain("_activeDataValidationDropdown.IsDropDownOpen = true;");
+        source.Should().Contain("private void DataValidationDropdown_SelectionChanged(object? sender, SelectionChangedEventArgs e)");
+        source.Should().Contain("CommitDataValidationDropdownSelection(selected);");
+        source.Should().Contain("_session.CommitCellText(selected)");
+        source.Should().Contain("_session.CancelFormulaEdit();");
+        source.Should().Contain("_formulaBoxEditOriginalText = null;");
+        source.Should().Contain("RefreshShell($\"Picked {selected} for {FormatCellReference(address)}\");");
+
+        plannerSource.Should().Contain("DataValidationService.GetApplicable(sheet, activeCell)");
+        plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, workbook)");
+        plannerSource.Should().Contain("rule.Type == DvType.List && rule.ShowDropdown");
+
+        var overlayIndex = normalizedSource.IndexOf("private void AddDataValidationDropdownOverlay(", StringComparison.Ordinal);
+        overlayIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextOverlayMethodIndex = normalizedSource.IndexOf("\n    private Control CreateSelectableDrawingObjectVisual(", overlayIndex, StringComparison.Ordinal);
+        nextOverlayMethodIndex.Should().BeGreaterThan(overlayIndex);
+        var overlaySource = normalizedSource[overlayIndex..nextOverlayMethodIndex];
+
+        var keyboardIndex = normalizedSource.IndexOf("private bool OpenActiveDataValidationDropdown()", StringComparison.Ordinal);
+        keyboardIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextKeyboardMethodIndex = normalizedSource.IndexOf("\n    private void CycleShellFocus(", keyboardIndex, StringComparison.Ordinal);
+        nextKeyboardMethodIndex.Should().BeGreaterThan(keyboardIndex);
+        var keyboardRouteSource = normalizedSource[keyboardIndex..nextKeyboardMethodIndex];
+
+        overlaySource.Should().NotContain("System.Windows");
+        overlaySource.Should().NotContain("WindowInteropHelper");
+        overlaySource.Should().NotContain("Microsoft.Win32");
+        keyboardRouteSource.Should().NotContain("System.Windows");
+        keyboardRouteSource.Should().NotContain("WindowInteropHelper");
+        keyboardRouteSource.Should().NotContain("Microsoft.Win32");
+        keyboardRouteSource.Should().NotContain("DataTransferManager");
     }
 
     [Fact]
@@ -2166,6 +2385,92 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_SetsCompactDialogVoiceOverNamesAndHelpText()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var markers = new[]
+        {
+            "AutomationProperties.SetName(rangeText, \"Subtotal range\");",
+            "AutomationProperties.SetHelpText(rangeText, \"Shows the selected range for subtotaling.\");",
+            "AutomationProperties.SetName(groupColumnBox, \"At each change in\");",
+            "AutomationProperties.SetHelpText(groupColumnBox, \"Choose the column used to group subtotal rows.\");",
+            "AutomationProperties.SetName(functionBox, \"Use function\");",
+            "AutomationProperties.SetHelpText(functionBox, \"Choose the subtotal calculation function.\");",
+            "AutomationProperties.SetName(columnsPanel, \"Add subtotal to\");",
+            "AutomationProperties.SetHelpText(columnsPanel, \"Columns that receive subtotal calculations.\");",
+            "AutomationProperties.SetName(replaceBox, \"Replace current subtotals\");",
+            "AutomationProperties.SetHelpText(replaceBox, \"Replace existing subtotals before applying new ones.\");",
+            "AutomationProperties.SetName(pageBreakBox, \"Page break between groups\");",
+            "AutomationProperties.SetHelpText(pageBreakBox, \"Insert a page break after each subtotal group.\");",
+            "AutomationProperties.SetName(summaryBelowBox, \"Summary below data\");",
+            "AutomationProperties.SetHelpText(summaryBelowBox, \"Place summary rows below the grouped data.\");",
+            "AutomationProperties.SetName(errorText, \"Subtotal validation\");",
+            "AutomationProperties.SetHelpText(errorText, \"Shows Subtotal validation messages.\");",
+            "AutomationProperties.SetName(rangeText, \"Remove Duplicates range\");",
+            "AutomationProperties.SetHelpText(rangeText, \"Shows the selected range checked for duplicates.\");",
+            "AutomationProperties.SetName(hasHeadersBox, \"My data has headers\");",
+            "AutomationProperties.SetHelpText(hasHeadersBox, \"Treat the first row as headers when comparing duplicates.\");",
+            "AutomationProperties.SetName(columnsPanel, \"Columns\");",
+            "AutomationProperties.SetHelpText(columnsPanel, \"Columns used to identify duplicate rows.\");",
+            "AutomationProperties.SetName(selectAllButton, \"Select All\");",
+            "AutomationProperties.SetHelpText(selectAllButton, \"Select all columns for duplicate comparison.\");",
+            "AutomationProperties.SetName(unselectAllButton, \"Unselect All\");",
+            "AutomationProperties.SetHelpText(unselectAllButton, \"Clear all selected duplicate comparison columns.\");",
+            "AutomationProperties.SetName(errorText, \"Remove Duplicates validation\");",
+            "AutomationProperties.SetHelpText(errorText, \"Shows Remove Duplicates validation messages.\");",
+            "AutomationProperties.SetName(inPlaceButton, \"Filter in-place\");",
+            "AutomationProperties.SetHelpText(inPlaceButton, \"Filter the list range without copying results.\");",
+            "AutomationProperties.SetName(copyToAnotherLocationButton, \"Copy to another location\");",
+            "AutomationProperties.SetHelpText(copyToAnotherLocationButton, \"Copy filtered rows to the Copy to range.\");",
+            "AutomationProperties.SetName(uniqueBox, \"Unique records only\");",
+            "AutomationProperties.SetHelpText(uniqueBox, \"Return only unique matching records.\");",
+            "AutomationProperties.SetName(errorText, \"Advanced Filter validation\");",
+            "AutomationProperties.SetHelpText(errorText, \"Shows Advanced Filter readiness and validation messages.\");",
+            "AutomationProperties.SetName(errorText, \"Goal Seek validation\");",
+            "AutomationProperties.SetHelpText(errorText, \"Shows Goal Seek input validation messages.\");",
+            "AutomationProperties.SetHelpText(summaryBlock, \"Shows the Goal Seek result status.\");",
+            "AutomationProperties.SetName(restoreButton, \"Restore Original Values\");",
+            "AutomationProperties.SetHelpText(restoreButton, \"Undo the Goal Seek result and restore the original changing cell value.\");",
+            "AutomationProperties.SetName(keepButton, \"Keep Result\");",
+            "AutomationProperties.SetHelpText(keepButton, \"Keep the applied Goal Seek result in the workbook.\");",
+            "AutomationProperties.SetName(statusText, \"Scenario Manager status\");",
+            "AutomationProperties.SetHelpText(statusText, \"Shows Scenario Manager availability and status.\");",
+            "AutomationProperties.SetName(selectionText, \"Scenario Manager selection\");",
+            "AutomationProperties.SetHelpText(selectionText, \"Shows the current selection saved into new scenarios.\");",
+            "AutomationProperties.SetHelpText(scenarioList, \"Select a saved scenario.\");",
+            "AutomationProperties.SetName(scenarioDetailsText, \"Scenario details\");",
+            "AutomationProperties.SetHelpText(scenarioDetailsText, \"Shows details for the selected scenario.\");",
+            "AutomationProperties.SetName(saveButton, \"Save/Add\");",
+            "AutomationProperties.SetHelpText(saveButton, \"Save the selected cells as a new or updated scenario.\");",
+            "AutomationProperties.SetName(showButton, \"Show\");",
+            "AutomationProperties.SetHelpText(showButton, \"Apply the selected scenario values to the workbook.\");",
+            "AutomationProperties.SetName(deleteButton, \"Delete\");",
+            "AutomationProperties.SetHelpText(deleteButton, \"Delete the selected scenario.\");",
+            "AutomationProperties.SetName(summaryButton, \"Summary Report\");",
+            "AutomationProperties.SetHelpText(summaryButton, \"Create a scenario summary report sheet.\");",
+            "AutomationProperties.SetHelpText(closeButton, \"Close Scenario Manager.\");",
+            "AutomationProperties.SetName(rangeText, \"Data Table range\");",
+            "AutomationProperties.SetHelpText(rangeText, \"Shows the selected range used for the Data Table.\");",
+            "AutomationProperties.SetName(errorText, \"Data Table validation\");",
+            "AutomationProperties.SetHelpText(errorText, \"Shows Data Table readiness and validation messages.\");",
+            "AutomationProperties.SetName(sourceRangeText, \"Forecast source range\");",
+            "AutomationProperties.SetHelpText(sourceRangeText, \"Shows the selected source range for the forecast.\");",
+            "AutomationProperties.SetName(errorText, \"Forecast Sheet validation\");",
+            "AutomationProperties.SetHelpText(errorText, \"Shows Forecast Sheet readiness and validation messages.\");",
+            "AutomationProperties.SetName(formula1Box, formula1Label.Text);",
+            "\"List source range or comma-separated values.\"",
+            "\"Minimum value for the validation rule.\"",
+            "\"Value for the validation rule.\"",
+            "AutomationProperties.SetName(textBox, title);",
+            "AutomationProperties.SetHelpText(textBox, $\"Read-only {title} text.\");",
+            "AutomationProperties.SetHelpText(closeButton, $\"Close {title}.\");",
+        };
+
+        foreach (var marker in markers)
+            source.Should().Contain(marker);
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeReviewMenuThroughSharedWorkflowPlanAndNavigation()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
@@ -2473,6 +2778,93 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("bool HasNativeClearHyperlinksMenuItem,");
         smokeSource.Should().Contain("toolbar_clear_button={FormatBool(snapshot.HasClearButton)}");
         smokeSource.Should().Contain("native_clear_menu_item={FormatBool(snapshot.HasNativeClearMenuItem)}");
+    }
+
+    [Fact]
+    public void MainWindow_WiresCompactHyperlinkRouteThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkDialogPlanner.cs"));
+
+        plannerSource.Should().Contain("public sealed record HyperlinkDialogPrefill(");
+        sessionSource.Should().Contain("public HyperlinkDialogPrefill GetSelectedRangeHyperlinkDialogPrefill()");
+        sessionSource.Should().Contain("public WorkbookCellEditResult SetSelectedRangeHyperlink(HyperlinkDialogPlan plan)");
+        sessionSource.Should().Contain("new HyperlinkMetadata(plan.LinkType, plan.ScreenTip, plan.Bookmark)");
+        sessionSource.Should().Contain("new SetHyperlinkCommand(");
+        sessionSource.Should().Contain("return ToCommand(\"Insert Hyperlink\", commands);");
+
+        source.Should().Contain("private readonly NativeMenuItem _insertHyperlinkMenuItem = new();");
+        source.Should().Contain("_insertHyperlinkMenuItem.Header = \"Hyperlink...\";");
+        source.Should().Contain("_insertHyperlinkMenuItem.Click += async (_, _) => await ShowInsertHyperlinkDialogAsync();");
+        source.Should().Contain("editMenu.Items.Add(_insertHyperlinkMenuItem);");
+        source.Should().Contain("_insertHyperlinkMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("private async Task ShowInsertHyperlinkDialogAsync()");
+        source.Should().Contain("private async Task<HyperlinkDialogPlan?> ShowInsertHyperlinkInputDialogAsync()");
+        source.Should().Contain("var prefill = _session.GetSelectedRangeHyperlinkDialogPrefill();");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"HyperlinkCompactDialog\");");
+        source.Should().Contain("HyperlinkDialogPlanner.TryPlan(");
+        source.Should().Contain("var result = _session.SetSelectedRangeHyperlink(plan);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Insert Hyperlink failed.\");");
+    }
+
+    [Fact]
+    public void MainWindow_WiresOpenHyperlinkRouteThroughWorkbookSessionAndExternalLauncher()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkNavigationPlanner.cs"));
+        var launcherSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ExternalUriLauncher.cs"));
+
+        plannerSource.Should().Contain("public enum HyperlinkNavigationKind");
+        plannerSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument");
+        plannerSource.Should().Contain("HyperlinkNavigationKind.LocalFile");
+        plannerSource.Should().Contain("HyperlinkNavigationKind.External");
+        plannerSource.Should().Contain("\"http\", \"https\", \"mailto\", \"ftp\"");
+        launcherSource.Should().Contain("public static class ExternalUriLauncher");
+        launcherSource.Should().Contain("Func<Uri, Task<bool>>? launchAsync");
+        launcherSource.Should().Contain("HyperlinkNavigationPlanner.IsAllowedScheme(normalizedTarget)");
+
+        sessionSource.Should().Contain("public bool CanOpenSelectedHyperlink");
+        sessionSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _)");
+        sessionSource.Should().Contain("public bool TryGetSelectedHyperlinkPlan(out HyperlinkNavigationPlan? plan)");
+        sessionSource.Should().Contain("public WorkbookNavigationResult OpenSelectedHyperlink()");
+        sessionSource.Should().Contain("HyperlinkNavigationKind.WorksheetCell => GoToReference(plan.Target)");
+        sessionSource.Should().Contain("Local file hyperlinks require a platform file-opening route.");
+        sessionSource.Should().Contain("External hyperlinks are not supported on this platform.");
+
+        source.Should().Contain("private readonly NativeMenuItem _openHyperlinkMenuItem = new();");
+        source.Should().Contain("_openHyperlinkMenuItem.Header = \"Open Hyperlink\";");
+        source.Should().Contain("_openHyperlinkMenuItem.Click += async (_, _) => await OpenSelectedHyperlinkAsync();");
+        source.Should().Contain("editMenu.Items.Add(_openHyperlinkMenuItem);");
+        source.Should().Contain("_openHyperlinkMenuItem.IsEnabled = isIdle && _session.CanOpenSelectedHyperlink;");
+        source.Should().Contain("private async Task OpenSelectedHyperlinkAsync()");
+        source.Should().Contain("if (!_session.TryGetSelectedHyperlinkPlan(out var plan) || plan is null)");
+        source.Should().Contain("await OpenExternalHyperlinkAsync(plan.Target);");
+        source.Should().Contain("await OpenLocalFileHyperlinkAsync(plan);");
+        source.Should().Contain("var result = _session.OpenSelectedHyperlink();");
+        source.Should().Contain("private async Task OpenLocalFileHyperlinkAsync(HyperlinkNavigationPlan plan)");
+        source.Should().Contain("private async Task OpenExternalHyperlinkAsync(string target)");
+        source.Should().Contain("private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)");
+        source.Should().Contain("ExternalUriLauncher.OpenAsync(target, launchAsync)");
+
+        var openHyperlinkSource = ExtractSourceBlock(
+            source,
+            "private async Task OpenSelectedHyperlinkAsync()",
+            "private async Task OpenExternalHyperlinkAsync(string target)");
+        openHyperlinkSource.Should().Contain("await OpenExternalHyperlinkAsync(plan.Target);");
+        openHyperlinkSource.Should().Contain("await OpenLocalFileHyperlinkAsync(plan);");
+        openHyperlinkSource.Should().NotContain("Process.Start");
+
+        var localFileHyperlinkSource = ExtractSourceBlock(
+            source,
+            "private async Task OpenLocalFileHyperlinkAsync(HyperlinkNavigationPlan plan)",
+            "private async Task OpenExternalHyperlinkAsync(string target)");
+        localFileHyperlinkSource.Should().Contain("_session.TryResolveOpenTarget(plan.LocalPath, out var target, out var message)");
+        localFileHyperlinkSource.Should().Contain("await OpenWorkbookPathAsync(target.Path);");
+        localFileHyperlinkSource.Should().NotContain("OpenExternalUriAsync");
+        localFileHyperlinkSource.Should().NotContain("LaunchFile");
+        localFileHyperlinkSource.Should().NotContain("LaunchUriAsync");
     }
 
     [Fact]
@@ -3323,10 +3715,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private bool FocusActiveSheetTab()");
         source.Should().Contain("private bool FocusSheetTab(SheetId sheetId)");
         source.Should().Contain("private static void SheetTabContextMenu_Opened(object? sender, RoutedEventArgs args)");
-        source.Should().Contain("FirstOrDefault(item => item.IsEnabled)?");
-        source.Should().Contain(".Focus();");
+        source.Should().Contain("FocusFirstEnabledSheetTabMenuItem(items);");
+        source.Should().Contain("private static void FocusFirstEnabledSheetTabMenuItem(IEnumerable<Control> items)");
+        source.Should().Contain("foreach (var item in items)");
+        source.Should().Contain("item is MenuItem { IsEnabled: true } menuItem");
+        source.Should().Contain("menuItem.Focus();");
         source.Should().Contain("private Button? FindSheetTabButton(SheetId sheetId)");
-        source.Should().Contain("button.Tag is SheetId tag && tag == sheetId");
+        source.Should().Contain("button.Tag is SheetId tag &&");
+        source.Should().Contain("tag == sheetId");
         source.Should().Contain("button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);");
         source.Should().Contain("private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args)");
         source.Should().Contain("if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed)");
@@ -3501,6 +3897,49 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_selectionStatsText.Text = _session.SelectionStatsText;");
         source.Should().Contain("_session.SelectRange(new GridRange(_session.ActiveCell, address));");
         source.Should().Contain("RefreshShell(\"Ready\");");
+    }
+
+    [Fact]
+    public void MainWindow_ExposesFormulaAndStatusAccessibilityMetadataToLaunchSmoke()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        source.Should().Contain("AutomationProperties.SetAutomationId(_formulaBox, \"FormulaBox\");");
+        source.Should().Contain("AutomationProperties.SetName(_formulaBox, \"Formula bar\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_formulaBox, \"Edit the active cell value or formula.\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_statusText, \"StatusText\");");
+        source.Should().Contain("AutomationProperties.SetName(_statusText, \"Status\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_statusText, \"Shows the current workbook status.\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_cellAddressText, \"CellAddressText\");");
+        source.Should().Contain("AutomationProperties.SetName(_cellAddressText, \"Cell address\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_cellAddressText, \"Shows the active cell address.\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_selectionStatsText, \"SelectionStatsText\");");
+        source.Should().Contain("AutomationProperties.SetName(_selectionStatsText, \"Selection statistics\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_selectionStatsText, \"Shows statistics for the current selection.\");");
+        source.Should().Contain("HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), \"Formula bar\", StringComparison.Ordinal)");
+        source.Should().Contain("HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), \"Edit the active cell value or formula.\", StringComparison.Ordinal)");
+        source.Should().Contain("HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), \"FormulaBox\", StringComparison.Ordinal)");
+        source.Should().Contain("HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), \"Status\", StringComparison.Ordinal)");
+        source.Should().Contain("HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), \"Shows the current workbook status.\", StringComparison.Ordinal)");
+        source.Should().Contain("HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), \"StatusText\", StringComparison.Ordinal)");
+        source.Should().Contain("HasStatusTextValue: !string.IsNullOrWhiteSpace(_statusText.Text)");
+        source.Should().Contain("HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), \"Cell address\", StringComparison.Ordinal)");
+        source.Should().Contain("HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), \"Shows the active cell address.\", StringComparison.Ordinal)");
+        source.Should().Contain("HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), \"CellAddressText\", StringComparison.Ordinal)");
+        source.Should().Contain("HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), \"Selection statistics\", StringComparison.Ordinal)");
+        source.Should().Contain("HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), \"Shows statistics for the current selection.\", StringComparison.Ordinal)");
+        source.Should().Contain("HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), \"SelectionStatsText\", StringComparison.Ordinal)");
+
+        smokeSource.Should().Contain("public bool HasAccessibilitySmokeEvidence =>");
+        smokeSource.Should().Contain("HasAccessibilitySmokeEvidence &&");
+        smokeSource.Should().Contain("macos_accessibility_smoke={(snapshot.HasAccessibilitySmokeEvidence ? \"passed\" : \"failed\")}");
+        smokeSource.Should().Contain("a11y_formula_box_name={FormatBool(snapshot.HasFormulaBoxAutomationName)}");
+        smokeSource.Should().Contain("a11y_formula_box_help={FormatBool(snapshot.HasFormulaBoxAutomationHelp)}");
+        smokeSource.Should().Contain("a11y_status_text_name={FormatBool(snapshot.HasStatusTextAutomationName)}");
+        smokeSource.Should().Contain("a11y_status_text_value={FormatBool(snapshot.HasStatusTextValue)}");
+        smokeSource.Should().Contain("a11y_cell_address_name={FormatBool(snapshot.HasCellAddressAutomationName)}");
+        smokeSource.Should().Contain("a11y_selection_stats_name={FormatBool(snapshot.HasSelectionStatsAutomationName)}");
     }
 
     [Fact]

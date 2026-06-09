@@ -73,13 +73,13 @@ public sealed class MainWindowUiaPropertiesTests
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         var nameBox = document
-            .Descendants(presentation + "TextBox")
+            .Descendants(presentation + "ComboBox")
             .Single(element => element.Attribute(x + "Name")?.Value == "CellAddressBox");
 
-        nameBox.Attribute("AutomationProperties.Name")?.Value
+        LocalizedXamlTestSupport.ResolveLocalizedValue(nameBox.Attribute("AutomationProperties.Name")?.Value)
             .Should().Be(UiText.Get("MainWindow_AutomationName_NameBox"), "the name box needs a stable UIA name for screen readers");
 
-        nameBox.Attribute("AutomationProperties.HelpText")?.Value
+        LocalizedXamlTestSupport.ResolveLocalizedValue(nameBox.Attribute("AutomationProperties.HelpText")?.Value)
             .Should().NotBeNullOrWhiteSpace("the name box needs help text for Narrator guidance");
 
         nameBox.Attribute("AutomationProperties.AutomationId")?.Value

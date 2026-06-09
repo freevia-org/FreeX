@@ -42,7 +42,7 @@ internal static class XlsxWorkbookMetadataWriter
             if (model.FileSharing is not null)
                 ApplyFileSharing(root, model);
             if (model.FileRecoveryProperties.Count > 0)
-                ApplyFileRecoveryProperties(root, model);
+                ApplyFileRecoveryProperties(root, model, preserveRepairLoad: false);
             if (model.IsStructureProtected || model.ProtectionMetadata is not null)
                 ApplyProtection(root, model);
 
@@ -64,7 +64,7 @@ internal static class XlsxWorkbookMetadataWriter
             if (model.FileSharing is not null)
                 changed |= ApplyFileSharing(root, model);
             if (model.FileRecoveryProperties.Count > 0)
-                changed |= ApplyFileRecoveryProperties(root, model);
+                changed |= ApplyFileRecoveryProperties(root, model, preserveRepairLoad: true);
 
             return changed;
         });
@@ -138,8 +138,7 @@ internal static class XlsxWorkbookMetadataWriter
                 root.Add(bookViews);
         }
 
-        var primaryView = bookViews.Elements(WorkbookNs + "workbookView").FirstOrDefault()
-            ?? new XElement(WorkbookNs + "workbookView");
+        var primaryView = FindFirstWorkbookView(bookViews) ?? new XElement(WorkbookNs + "workbookView");
         if (primaryView.Parent is null)
             bookViews.AddFirst(primaryView);
 
@@ -190,10 +189,10 @@ internal static class XlsxWorkbookMetadataWriter
 
     public static void SaveFileRecoveryProperties(Stream xlsxStream, Workbook workbook)
     {
-        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyFileRecoveryProperties(root, model));
+        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyFileRecoveryProperties(root, model, preserveRepairLoad: false));
     }
 
-    private static bool ApplyFileRecoveryProperties(XElement root, Workbook workbook)
+    private static bool ApplyFileRecoveryProperties(XElement root, Workbook workbook, bool preserveRepairLoad)
     {
         root.Elements(WorkbookNs + "fileRecoveryPr").Remove();
         if (workbook.FileRecoveryProperties.Count == 0)
@@ -209,13 +208,17 @@ internal static class XlsxWorkbookMetadataWriter
                 item.NativeAttributes,
                 "autoRecover",
                 "crashSave",
-                "dataExtractLoad",
-                "repairLoad");
+                "dataExtractLoad");
+            if (preserveRepairLoad)
+                XlsxWorkbookMetadataXmlHelper.ApplyNativeAttributes(element, item.NativeAttributes, "repairLoad");
 
             SetBooleanAttribute(element, "autoRecover", item.AutoRecover);
             SetBooleanAttribute(element, "crashSave", item.CrashSave);
             SetBooleanAttribute(element, "dataExtractLoad", item.DataExtractLoad);
-            SetBooleanAttribute(element, "repairLoad", item.RepairLoad);
+            SetBooleanAttribute(
+                element,
+                "repairLoad",
+                preserveRepairLoad || item.RepairLoad != true ? item.RepairLoad : null);
             XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(element);
             return element;
         }).ToArray();
@@ -411,10 +414,7 @@ internal static class XlsxWorkbookMetadataWriter
             "sheets"
         ];
 
-        var insertionPoint = root.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == WorkbookNs &&
-                laterWorkbookElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        var insertionPoint = FindFirstWorkbookChild(root, laterWorkbookElements);
         if (insertionPoint is null)
             root.Add(fileSharing);
         else
@@ -429,14 +429,36 @@ internal static class XlsxWorkbookMetadataWriter
             "sheets"
         ];
 
-        var insertionPoint = root.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == WorkbookNs &&
-                laterWorkbookElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        var insertionPoint = FindFirstWorkbookChild(root, laterWorkbookElements);
         if (insertionPoint is null)
             root.Add(protection);
         else
             insertionPoint.AddBeforeSelf(protection);
+    }
+
+    private static XElement? FindFirstWorkbookView(XElement bookViews)
+    {
+        foreach (var element in bookViews.Elements(WorkbookNs + "workbookView"))
+            return element;
+
+        return null;
+    }
+
+    private static XElement? FindFirstWorkbookChild(XElement root, string[] localNames)
+    {
+        foreach (var element in root.Elements())
+        {
+            if (element.Name.Namespace != WorkbookNs)
+                continue;
+
+            foreach (var localName in localNames)
+            {
+                if (string.Equals(element.Name.LocalName, localName, StringComparison.Ordinal))
+                    return element;
+            }
+        }
+
+        return null;
     }
 
     public static void SaveCalculationProperties(Stream xlsxStream, Workbook workbook)

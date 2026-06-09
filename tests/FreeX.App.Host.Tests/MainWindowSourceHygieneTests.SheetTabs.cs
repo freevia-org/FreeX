@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -102,7 +103,7 @@ public sealed partial class MainWindowSourceHygieneTests
         dropdownSource.Should().Contain("private void RefreshValidationDropdown(");
         dropdownSource.Should().Contain("private void OpenActiveDropdown(");
         dropdownSource.Should().Contain("AutoFilterDropdownPlanner");
-        dropdownSource.Should().Contain("DataValidationService");
+        dropdownSource.Should().Contain("DataValidationDropdownPlanner");
     }
 
     [Fact]
@@ -366,7 +367,11 @@ public sealed partial class MainWindowSourceHygieneTests
 
         source.Should().Contain("menu.Opened += WorksheetContextMenu_Opened;");
         source.Should().Contain("private static void WorksheetContextMenu_Opened(object sender, RoutedEventArgs e)");
-        source.Should().Contain("menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)");
+        source.Should().Contain("private static void FocusFirstWorksheetContextMenuItem(ContextMenu menu)");
+        source.Should().Contain("foreach (var item in menu.Items)");
+        source.Should().Contain("if (item is not MenuItem menuItem || !menuItem.IsEnabled)");
+        source.Should().Contain("firstEnabledItem = menuItem;");
+        source.Should().Contain("FocusManager.SetFocusedElement(menu, firstEnabledItem);");
         source.Should().Contain("Keyboard.Focus(firstEnabledItem);");
     }
 
@@ -394,7 +399,10 @@ public sealed partial class MainWindowSourceHygieneTests
 
         sheetTabsSource.Should().Contain("contextMenu.Opened += SheetTabContextMenu_Opened;");
         sheetTabsSource.Should().Contain("private static void SheetTabContextMenu_Opened(object sender, RoutedEventArgs e)");
-        sheetTabsSource.Should().Contain("contextMenu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)");
+        sheetTabsSource.Should().Contain("private static MenuItem? FindFirstEnabledMenuItem(ContextMenu contextMenu)");
+        sheetTabsSource.Should().Contain("foreach (var item in contextMenu.Items)");
+        sheetTabsSource.Should().Contain("item is MenuItem { IsEnabled: true } menuItem");
+        sheetTabsSource.Should().Contain("var firstEnabledItem = FindFirstEnabledMenuItem(contextMenu);");
         sheetTabsSource.Should().Contain("Keyboard.Focus(firstEnabledItem);");
     }
 
@@ -585,7 +593,8 @@ public sealed partial class MainWindowSourceHygieneTests
 
         source.Should().Contain("GetWorksheetContextMenuTargetKind(actualAddr)");
         source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
-        source.Should().Contain("DrawingTargetResolver.GetTargetPicture(sheet, address)");
+        source.Should().Contain("GetSelectedWorksheetContextMenuTargetKind(sheet, address)");
+        source.Should().Contain("DrawingTargetResolver.GetTargetPicture(sheet, address, allowFallback: false)");
         source.Should().Contain("WorksheetContextMenuTargetKind.Picture");
         source.Should().Contain("case WorksheetContextMenuAction.FormatPicture:");
         source.Should().Contain("PictureSizeBtn_Click(this, new RoutedEventArgs());");
@@ -676,13 +685,14 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
-        source.Should().Contain("CommentNavigationPlanner.FormatThreadedCommentList(sheet.ThreadedComments)");
+        source.Should().Contain("CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments)");
+        source.Should().Contain("ShowOrRefreshCommentListWindow(");
         source.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(sheet.ThreadedComments)");
         source.Should().Contain("sheet.ThreadedComments.Count == 0");
         source.Should().Contain("private void ReviewPrevNoteBtn_Click(");
         source.Should().Contain("private void ReviewNextNoteBtn_Click(");
         source.Should().Contain("private void ReviewShowNotesBtn_Click(");
-        source.Should().Contain("CommentNavigationPlanner.FormatNoteList(sheet.Comments)");
+        source.Should().Contain("CommentListWindow.CreateNoteItems(sheet.Comments)");
         source.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(sheet.Comments)");
         source.Should().Contain("sheet.Comments.Count == 0");
         source.Should().NotContain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
@@ -705,15 +715,21 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
+    public void AutoFilterKeyboardDropdown_UsesModelessFlyoutAnchoredToHeaderCell()
     {
         var source = ReadEditingSource();
+        var dialog = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialog.cs"));
 
-        source.Should().Contain("PositionAutoFilterDialogAtActiveCell(dialog, activeCell);");
-        source.Should().Contain("private void PositionAutoFilterDialogAtActiveCell");
-        source.Should().Contain("TryGetCellOverlayRect(activeCell)");
+        source.Should().Contain("PositionAutoFilterFlyout(dialog, headerCell, anchorPoint);");
+        source.Should().Contain("private void PositionAutoFilterFlyout(Window dialog, CellAddress headerCell, System.Windows.Point? anchorPoint)");
+        source.Should().Contain("TryGetCellOverlayRect(headerCell)");
         source.Should().Contain("SheetGrid.PointToScreen");
-        source.Should().Contain("WindowStartupLocation.Manual");
+        source.Should().Contain("dialog.ConfigureAsModelessFlyout();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().NotContain("dialog.ShowDialog() != true");
+        dialog.Should().Contain("public void ConfigureAsModelessFlyout()");
+        dialog.Should().Contain("WindowStartupLocation = WindowStartupLocation.Manual;");
+        dialog.Should().Contain("ShowInTaskbar = false;");
     }
 
     [Fact]
@@ -722,10 +738,24 @@ public sealed partial class MainWindowSourceHygieneTests
         var editingSource = ReadEditingSource();
         var dataFilterSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
 
-        editingSource.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
+        editingSource.Should().Contain("dialog.ResultCommitted += (_, result) =>");
+        editingSource.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, result, \"AutoFilter\")");
         dataFilterSource.Should().Contain("private bool ApplyAutoFilterDialogResult(");
         dataFilterSource.Should().Contain("FilterPromptPlanner.TryPlan");
         dataFilterSource.Should().Contain("FilterInputParser.ParseAllowedValues");
+    }
+
+    [Fact]
+    public void GridRenderedAutoFilterButtons_AreWiredToHostFlyoutRoute()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var editingSource = ReadEditingSource();
+
+        mainSource.Should().Contain("SheetGrid.AutoFilterDropdownRequested += OnAutoFilterDropdownRequested;");
+        editingSource.Should().Contain("private void OnAutoFilterDropdownRequested(CellAddress headerCell, System.Windows.Point position)");
+        editingSource.Should().Contain("ShowAutoFilterDropdownForHeaderCell(sheet, headerCell, position);");
+        editingSource.Should().Contain("AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)");
     }
 
     [Fact]

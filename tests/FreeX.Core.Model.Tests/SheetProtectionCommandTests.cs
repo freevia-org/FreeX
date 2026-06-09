@@ -1,3 +1,4 @@
+using System;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -76,7 +77,7 @@ public class SheetProtectionCommandTests
         sheet.IsProtected = true;
         sheet.ProtectionPassword = "secret";
 
-        var cmd = new UnprotectSheetCommand(sheet.Id);
+        var cmd = new UnprotectSheetCommand(sheet.Id, "secret");
         var outcome = cmd.Apply(ctx);
 
         outcome.Success.Should().BeTrue();
@@ -87,6 +88,35 @@ public class SheetProtectionCommandTests
 
         sheet.IsProtected.Should().BeTrue();
         sheet.ProtectionPassword.Should().Be("secret");
+    }
+
+    [Fact]
+    public void UnprotectSheetCommand_RejectsWrongPassword()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPassword = "secret";
+
+        var outcome = new UnprotectSheetCommand(sheet.Id, "wrong").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("password");
+        sheet.IsProtected.Should().BeTrue();
+        sheet.ProtectionPassword.Should().Be("secret");
+    }
+
+    [Fact]
+    public void UnprotectSheetCommand_AcceptsHashedPassword()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPassword = ProtectionPasswordHelper.HashNativePassword("secret");
+
+        var outcome = new UnprotectSheetCommand(sheet.Id, "secret").Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.IsProtected.Should().BeFalse();
+        sheet.ProtectionPassword.Should().BeNull();
     }
 
     [Fact]
@@ -314,6 +344,36 @@ public class SheetProtectionCommandTests
         outcome.ErrorMessage.Should().Contain("protected");
     }
 
+    [Theory]
+    [InlineData(ProtectedRowColumnCommand.InsertColumns)]
+    [InlineData(ProtectedRowColumnCommand.DeleteRows)]
+    [InlineData(ProtectedRowColumnCommand.DeleteColumns)]
+    [InlineData(ProtectedRowColumnCommand.SetRowHeight)]
+    [InlineData(ProtectedRowColumnCommand.SetColumnsHidden)]
+    [InlineData(ProtectedRowColumnCommand.SetRowsHidden)]
+    public void RowColumnCommands_RejectProtectedSheetWithoutMatchingPermission(ProtectedRowColumnCommand commandKind)
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("before"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("keep-row"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("keep-column"));
+        sheet.IsProtected = true;
+
+        var command = CreateProtectedRowColumnCommand(sheet.Id, commandKind);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GetValue(1, 1).Should().Be(new TextValue("before"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("keep-row"));
+        sheet.GetValue(1, 2).Should().Be(new TextValue("keep-column"));
+        sheet.RowHeights.Should().BeEmpty();
+        sheet.ColumnWidths.Should().BeEmpty();
+        sheet.HiddenRows.Should().BeEmpty();
+        sheet.HiddenCols.Should().BeEmpty();
+    }
+
     [Fact]
     public void InsertRowsCommand_AllowsProtectedSheetWithInsertRowsPermission()
     {
@@ -439,6 +499,30 @@ public class SheetProtectionCommandTests
 
         outcome.Success.Should().BeTrue();
         sheet.HiddenRows.Should().Contain(1);
+    }
+
+    private static IWorkbookCommand CreateProtectedRowColumnCommand(
+        SheetId sheetId,
+        ProtectedRowColumnCommand commandKind) =>
+        commandKind switch
+        {
+            ProtectedRowColumnCommand.InsertColumns => new InsertColumnsCommand(sheetId, beforeCol: 1),
+            ProtectedRowColumnCommand.DeleteRows => new DeleteRowsCommand(sheetId, startRow: 1),
+            ProtectedRowColumnCommand.DeleteColumns => new DeleteColumnsCommand(sheetId, startCol: 1),
+            ProtectedRowColumnCommand.SetRowHeight => new SetRowHeightCommand(sheetId, 1, 1, 30),
+            ProtectedRowColumnCommand.SetColumnsHidden => new SetColumnsHiddenCommand(sheetId, 1, 1, hidden: true),
+            ProtectedRowColumnCommand.SetRowsHidden => new SetRowsHiddenCommand(sheetId, 1, 1, hidden: true),
+            _ => throw new ArgumentOutOfRangeException(nameof(commandKind), commandKind, null)
+        };
+
+    public enum ProtectedRowColumnCommand
+    {
+        InsertColumns,
+        DeleteRows,
+        DeleteColumns,
+        SetRowHeight,
+        SetColumnsHidden,
+        SetRowsHidden
     }
 
 }

@@ -34,12 +34,20 @@ public sealed partial class MainWindowRibbonKeyTipTests
             harness.HandleKeyTip(Key.G);
 
             harness.SelectedRibbonTabHeader.Should().Be("Data");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemGestureText("Group").Should().Be("G");
+            harness.HandleKeyTip(Key.G);
+
             harness.KeyTipScope.Should().Be("None");
             harness.RowOutlineLevel(2).Should().Be(1);
             harness.RowOutlineLevel(3).Should().Be(1);
             harness.RowOutlineLevel(4).Should().Be(1);
 
             harness.HandleDirectTopLevelKeyTip(Key.A).Should().BeTrue();
+            harness.HandleKeyTip(Key.U);
+
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemGestureText("Ungroup").Should().Be("U");
             harness.HandleKeyTip(Key.U);
 
             harness.KeyTipScope.Should().Be("None");

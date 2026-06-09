@@ -5,14 +5,23 @@ namespace FreeX.Core.Commands;
 internal static class PivotTimelineSelectionPlanner
 {
     public static DateOnly ParseTimelineDate(string? value, DateOnly fallback) =>
-        DateOnly.TryParseExact(
-            value,
+        TryParseTimelineDate(value, fallback, out var parsed) ? parsed : fallback;
+
+    public static bool TryParseTimelineDate(string? value, DateOnly fallback, out DateOnly parsed)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            parsed = fallback;
+            return true;
+        }
+
+        return DateOnly.TryParseExact(
+            value.Trim(),
             "yyyy-MM-dd",
             System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.None,
-            out var parsed)
-            ? parsed
-            : fallback;
+            out parsed);
+    }
 
     public static IReadOnlyList<string> ReadSelectedItems(
         Sheet sheet,
@@ -23,11 +32,7 @@ internal static class PivotTimelineSelectionPlanner
     {
         var selectedItems = new List<string>();
         var sourceColumn = pivotTable.SourceRange.Start.Col + (uint)sourceFieldIndex;
-        var field = pivotTable.RowFields
-            .Concat(pivotTable.ColumnFields)
-            .Concat(pivotTable.PageFields)
-            .FirstOrDefault(item => item.SourceFieldIndex == sourceFieldIndex)
-            ?? new PivotFieldModel(sourceFieldIndex);
+        var field = FindPivotField(pivotTable, sourceFieldIndex) ?? new PivotFieldModel(sourceFieldIndex);
 
         for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
         {
@@ -75,6 +80,29 @@ internal static class PivotTimelineSelectionPlanner
             PivotFieldGrouping.Day => date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
             _ => date.ToShortDateString()
         };
+    }
+
+    private static PivotFieldModel? FindPivotField(PivotTableModel pivotTable, int sourceFieldIndex)
+    {
+        foreach (var item in pivotTable.RowFields)
+        {
+            if (item.SourceFieldIndex == sourceFieldIndex)
+                return item;
+        }
+
+        foreach (var item in pivotTable.ColumnFields)
+        {
+            if (item.SourceFieldIndex == sourceFieldIndex)
+                return item;
+        }
+
+        foreach (var item in pivotTable.PageFields)
+        {
+            if (item.SourceFieldIndex == sourceFieldIndex)
+                return item;
+        }
+
+        return null;
     }
 
 }

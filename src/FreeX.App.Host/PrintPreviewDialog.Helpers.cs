@@ -127,12 +127,22 @@ public sealed partial class PrintPreviewDialog
             if (printerBox.Items.Count > 0)
             {
                 printerBox.DisplayMemberPath = nameof(PrintQueue.FullName);
-                printerBox.SelectedItem = printerBox.Items
-                    .OfType<PrintQueue>()
-                    .FirstOrDefault(queue => string.Equals(
+                printerBox.SelectedItem = null;
+                foreach (var item in printerBox.Items)
+                {
+                    if (item is not PrintQueue queue)
+                        continue;
+
+                    if (string.Equals(
                         queue.FullName,
                         server.DefaultPrintQueue.FullName,
-                        StringComparison.OrdinalIgnoreCase));
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        printerBox.SelectedItem = queue;
+                        break;
+                    }
+                }
+
                 if (printerBox.SelectedItem is null)
                     printerBox.SelectedIndex = 0;
 

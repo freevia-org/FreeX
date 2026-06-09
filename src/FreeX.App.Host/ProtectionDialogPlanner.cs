@@ -37,7 +37,7 @@ public static class ProtectionDialogPlanner
         string? password,
         IReadOnlyList<string> selectedSheetPermissions) =>
         sheet.IsProtected
-            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, null, [])
+            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, password, [])
             : new ProtectionDialogResult(ProtectionDialogMode.Protect, password, selectedSheetPermissions);
 
     public static ProtectionDialogResult CreateSheetResult(Sheet sheet, string? password, string? confirmation) =>
@@ -47,7 +47,7 @@ public static class ProtectionDialogPlanner
 
     public static ProtectionDialogResult CreateWorkbookResult(Workbook workbook, string? password) =>
         workbook.IsStructureProtected
-            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, null, [])
+            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, password, [])
             : new ProtectionDialogResult(ProtectionDialogMode.Protect, password, []);
 
     public static IReadOnlyList<string> GetDefaultSheetPermissions() =>
@@ -63,9 +63,16 @@ public static class ProtectionDialogPlanner
             .Distinct()
             .ToList();
 
-    public static string FormatSheetPermission(SheetProtectionPermission permission) =>
-        SheetPermissionChoices.FirstOrDefault(choice => choice.Permission == permission).Label
-        ?? permission.ToString();
+    public static string FormatSheetPermission(SheetProtectionPermission permission)
+    {
+        foreach (var choice in SheetPermissionChoices)
+        {
+            if (choice.Permission == permission)
+                return choice.Label ?? permission.ToString();
+        }
+
+        return permission.ToString();
+    }
 
     public static bool PasswordsMatch(string? password, string? confirmation) =>
         string.Equals(password ?? "", confirmation ?? "", StringComparison.Ordinal);

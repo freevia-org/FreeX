@@ -20,6 +20,46 @@ public sealed class FilterProtectionCommandTests
     }
 
     [Fact]
+    public void FilterVariants_RejectProtectedSheetWithoutUseAutoFilterPermission()
+    {
+        var (_, sheet, ctx, range) = SetupFilterRange();
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = range,
+            HasAutoFilter = true
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Region"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(0, ["West"]));
+        sheet.StructuredTables.Add(table);
+        sheet.IsProtected = true;
+
+        IWorkbookCommand[] commands =
+        [
+            new FilterConditionCommand(sheet.Id, range, 1, new NumberGreaterThanFilterCriterion(7)),
+            new AverageFilterCommand(sheet.Id, range, 1, above: true),
+            new TopBottomFilterCommand(sheet.Id, range, 1, count: 1, top: true),
+            new CellFillColorFilterCommand(sheet.Id, range, 0, new CellColor(255, 0, 0)),
+            new CellNoFillColorFilterCommand(sheet.Id, range, 0),
+            new CellFontColorFilterCommand(sheet.Id, range, 0, new CellColor(0, 0, 255)),
+            new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id)
+        ];
+
+        foreach (var command in commands)
+        {
+            var outcome = command.Apply(ctx);
+
+            outcome.Success.Should().BeFalse();
+            outcome.ErrorMessage.Should().Contain("protected");
+        }
+
+        sheet.FilterHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
     public void FilterCommand_AllowsProtectedSheetWithUseAutoFilterPermission()
     {
         var (_, sheet, ctx, range) = SetupFilterRange();
@@ -31,6 +71,61 @@ public sealed class FilterProtectionCommandTests
         outcome.Success.Should().BeTrue();
         sheet.FilterHiddenRows.Should().Contain(3);
         sheet.FilterHiddenRows.Should().NotContain(2);
+    }
+
+    [Fact]
+    public void ToggleWorksheetAutoFilterCommand_CreatesAutoFilterMetadata()
+    {
+        var (_, sheet, ctx, range) = SetupFilterRange();
+
+        var command = new ToggleWorksheetAutoFilterCommand(sheet.Id, range);
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.AutoFilter.Should().NotBeNull();
+        sheet.AutoFilter!.Reference.Should().Be(range.ToString());
+
+        command.Revert(ctx);
+
+        sheet.AutoFilter.Should().BeNull();
+    }
+
+    [Fact]
+    public void ToggleWorksheetAutoFilterCommand_RemovesAutoFilterAndRestoresOnUndo()
+    {
+        var (_, sheet, ctx, range) = SetupFilterRange();
+        new ToggleWorksheetAutoFilterCommand(sheet.Id, range).Apply(ctx).Success.Should().BeTrue();
+        sheet.FilterHiddenRows.UnionWith([3u, 20u]);
+
+        var command = new ToggleWorksheetAutoFilterCommand(sheet.Id, range);
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.AutoFilter.Should().BeNull();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([20u]);
+
+        command.Revert(ctx);
+
+        sheet.AutoFilter.Should().NotBeNull();
+        sheet.AutoFilter!.Reference.Should().Be(range.ToString());
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 20u]);
+    }
+
+    [Fact]
+    public void ToggleWorksheetAutoFilterCommand_UsesUseAutoFilterProtectionPermission()
+    {
+        var (_, sheet, ctx, range) = SetupFilterRange();
+        sheet.IsProtected = true;
+
+        new ToggleWorksheetAutoFilterCommand(sheet.Id, range).Apply(ctx)
+            .Success.Should().BeFalse();
+
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UseAutoFilter);
+
+        var outcome = new ToggleWorksheetAutoFilterCommand(sheet.Id, range).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.AutoFilter.Should().NotBeNull();
     }
 
     [Fact]

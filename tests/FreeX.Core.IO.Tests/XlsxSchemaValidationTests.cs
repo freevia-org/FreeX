@@ -69,6 +69,37 @@ public sealed class XlsxSchemaValidationTests
         SchemaErrors(workbook).Should().BeEmpty();
     }
 
+    [Fact]
+    public void XlsxAdapter_Save_ProducesSchemaValidFeatureDenseNonChartWorkbook()
+    {
+        using var saved = XlsxPackageTestHelper.SaveWorkbook(CreateFeatureDenseNonChartWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheet = LoadPackageXml(archive, "xl/worksheets/sheet1.xml").Root!;
+
+        worksheet.Elements().Select(element => element.Name.LocalName)
+            .Should()
+            .ContainInOrder(
+                "sheetViews",
+                "sheetData",
+                "mergeCells",
+                "conditionalFormatting",
+                "dataValidations",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "tableParts");
+
+        worksheet.Element(worksheetNs + "tableParts")!
+            .Attribute("count")!.Value.Should().Be("1");
+    }
+
     [Theory]
     // Classic (c:) charts — a schema-valid title/axis text body (a:bodyPr) is required for Excel to open them.
     [InlineData(ChartType.Column)]
@@ -179,6 +210,11 @@ public sealed class XlsxSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         ReadPackageEntryBytes(saved, "xl/charts/chart1.xml").Should().Equal(sourceChartPart);
         ReadPackageEntryBytes(saved, "xl/drawings/drawing1.xml").Should().Equal(sourceDrawingPart);
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(6, 4).Should().Be(new TextValue("outside chart source"));
+        reloadedSheet.Charts.Should().ContainSingle().Which.Type.Should().Be(ChartType.Column);
     }
 
     [Fact]
@@ -220,6 +256,11 @@ public sealed class XlsxSchemaValidationTests
         using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
         var drawing = FindDrawingForChartExPart(savedArchive, chartPart);
         AssertChartExAlternateContent(drawing.Xml, drawing.RelId);
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(6, 4).Should().Be(new TextValue("outside chartEx source"));
+        reloadedSheet.Charts.Should().ContainSingle().Which.Type.Should().Be(ChartType.Histogram);
     }
 
     [Fact]
@@ -258,6 +299,12 @@ public sealed class XlsxSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         foreach (var part in sourceParts)
             ReadPackageEntryBytes(saved, part).Should().Equal(sourcePartBytes[part]);
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(4, 4).Should().Be(new TextValue("outside pivot chart source"));
+        reloadedSheet.PivotTables.Should().ContainSingle();
+        reloadedSheet.Charts.Should().ContainSingle().Which.IsPivotChart.Should().BeTrue();
     }
 
     private static Workbook CreateWorkbookWithChart(ChartType chartType)
@@ -438,6 +485,73 @@ public sealed class XlsxSchemaValidationTests
 
         return workbook;
     }
+
+    private static Workbook CreateFeatureDenseNonChartWorkbook()
+    {
+        var workbook = new Workbook("FeatureDenseSchema");
+        var sheet = workbook.AddSheet("Data");
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1250));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new TextValue("Open"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(875));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new TextValue("Closed"));
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 1), new TextValue("Merged note"));
+
+        sheet.FrozenRows = 1;
+        sheet.FrozenCols = 1;
+        sheet.AddMergedRegion(Range(sheet, 6, 1, 6, 3));
+        sheet.Comments[new CellAddress(sheet.Id, 1, 1)] = "FreeX-authored note";
+        sheet.PrintArea = Range(sheet, 1, 1, 6, 3);
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PageHeader = new WorksheetHeaderFooter("Left", "Center", "Right");
+        sheet.PageFooter = new WorksheetHeaderFooter("", "Page &[Page]", "");
+        sheet.RowPageBreaks.Add(5);
+        sheet.ColumnPageBreaks.Add(3);
+
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = Range(sheet, 2, 3, 5, 3),
+            Type = DvType.List,
+            Formula1 = "Open,Closed"
+        });
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 2, 5, 2),
+            Priority = 1,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "1000",
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(198, 239, 206) }
+        });
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "SalesTable",
+            DisplayName = "SalesTable",
+            Range = Range(sheet, 1, 1, 3, 3),
+            HasAutoFilter = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+            PackagePart = "xl/tables/table1.xml"
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Name"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Value"));
+        table.Columns.Add(new StructuredTableColumnModel(3, "Status"));
+        sheet.StructuredTables.Add(table);
+
+        workbook.DefineNamedRange("DenseData", Range(sheet, 1, 1, 3, 3));
+        return workbook;
+    }
+
+    private static GridRange Range(Sheet sheet, uint startRow, uint startColumn, uint endRow, uint endColumn) =>
+        new(new CellAddress(sheet.Id, startRow, startColumn), new CellAddress(sheet.Id, endRow, endColumn));
 
     private static System.Collections.Generic.List<string> SchemaErrors(Workbook workbook)
     {

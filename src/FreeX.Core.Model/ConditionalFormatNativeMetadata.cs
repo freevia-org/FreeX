@@ -22,11 +22,22 @@ public static class ConditionalFormatNativeMetadata
 
             try
             {
-                var idExtensions = element
-                    .Descendants(x14Ns + "id")
-                    .Select(id => id.AncestorsAndSelf().FirstOrDefault(e => e.Name.LocalName == "ext") ?? id)
-                    .Distinct()
-                    .ToList();
+                var idExtensions = new List<XElement>();
+                foreach (var id in element.Descendants(x14Ns + "id"))
+                {
+                    var idExtension = id;
+                    foreach (var ancestor in id.AncestorsAndSelf())
+                    {
+                        if (ancestor.Name.LocalName != "ext")
+                            continue;
+
+                        idExtension = ancestor;
+                        break;
+                    }
+
+                    if (!idExtensions.Contains(idExtension))
+                        idExtensions.Add(idExtension);
+                }
 
                 if (idExtensions.Contains(element))
                     continue;

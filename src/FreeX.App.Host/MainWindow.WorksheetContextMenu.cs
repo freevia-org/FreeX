@@ -84,17 +84,23 @@ public partial class MainWindow
     private void ToggleWaterfallTotalPoint(Guid chartId, int pointIndex)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault(item => item.Id == chartId);
-        if (chart is null)
+        if (sheet is null)
             return;
 
-        var setAsTotal = !WaterfallChartContextMenuPlanner.IsPointTotal(chart, pointIndex);
-        if (!TryExecuteCommand(
-                new SetWaterfallTotalPointCommand(_currentSheetId, chart.Id, pointIndex, setAsTotal),
-                "Set as Total"))
-            return;
+        foreach (var chart in sheet.Charts)
+        {
+            if (chart.Id != chartId)
+                continue;
 
-        UpdateViewport();
+            var setAsTotal = !WaterfallChartContextMenuPlanner.IsPointTotal(chart, pointIndex);
+            if (!TryExecuteCommand(
+                    new SetWaterfallTotalPointCommand(_currentSheetId, chart.Id, pointIndex, setAsTotal),
+                    "Set as Total"))
+                return;
+
+            UpdateViewport();
+            return;
+        }
     }
 
     private void OnGridHeaderContextMenuRequested(GridHeaderContextMenuTarget target, uint index, System.Windows.Point gridPos)
@@ -143,7 +149,16 @@ public partial class MainWindow
 
     private static void FocusFirstWorksheetContextMenuItem(ContextMenu menu)
     {
-        var firstEnabledItem = menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
+        MenuItem? firstEnabledItem = null;
+        foreach (var item in menu.Items)
+        {
+            if (item is not MenuItem menuItem || !menuItem.IsEnabled)
+                continue;
+
+            firstEnabledItem = menuItem;
+            break;
+        }
+
         if (firstEnabledItem is null)
             return;
 
@@ -408,14 +423,51 @@ public partial class MainWindow
         }
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (DrawingTargetResolver.GetTargetPicture(sheet, address) is not null)
+        if (GetSelectedWorksheetContextMenuTargetKind(sheet, address) is { } selectedObjectKind)
+            return selectedObjectKind;
+
+        if (DrawingTargetResolver.GetTargetPicture(sheet, address, allowFallback: false) is not null)
             return WorksheetContextMenuTargetKind.Picture;
 
-        return DrawingTargetResolver.GetTargetDrawingObject(sheet, address)?.Kind switch
+        return DrawingTargetResolver.GetTargetDrawingObject(
+            sheet,
+            address,
+            allowFallback: false)?.Kind switch
         {
             DrawingObjectTargetKind.Shape => WorksheetContextMenuTargetKind.Shape,
             DrawingObjectTargetKind.TextBox => WorksheetContextMenuTargetKind.TextBox,
             _ => WorksheetContextMenuTargetKind.Worksheet
+        };
+    }
+
+    private WorksheetContextMenuTargetKind? GetSelectedWorksheetContextMenuTargetKind(Sheet? sheet, CellAddress address)
+    {
+        if (SheetGrid.SelectedObjectId == Guid.Empty ||
+            GetSelectedDrawingObjectTargetKind() is not { } selectedKind)
+        {
+            return null;
+        }
+
+        var target = DrawingTargetResolver.GetTargetDrawingObject(
+            sheet,
+            address,
+            selectedKind,
+            SheetGrid.SelectedObjectId,
+            includePictures: true,
+            allowFallback: false);
+        if (target is null ||
+            target.Anchor.Row != address.Row ||
+            target.Anchor.Col != address.Col)
+        {
+            return null;
+        }
+
+        return target.Kind switch
+        {
+            DrawingObjectTargetKind.Picture => WorksheetContextMenuTargetKind.Picture,
+            DrawingObjectTargetKind.Shape => WorksheetContextMenuTargetKind.Shape,
+            DrawingObjectTargetKind.TextBox => WorksheetContextMenuTargetKind.TextBox,
+            _ => null
         };
     }
 

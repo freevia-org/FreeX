@@ -58,7 +58,7 @@ public sealed partial class MainWindowSourceHygieneTests
         drawingSource.Should().Contain("if (dialog.ShowDialog(this) != true) return;");
         drawingSource.Should().Contain("System.IO.File.ReadAllBytes(dialog.FileName)");
         drawingSource.Should().Contain("DrawingInputParser.GetImageContentType(dialog.FileName)");
-        drawingSource.Should().Contain("new InsertPictureCommand(");
+        drawingSource.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
         drawingSource.Should().Contain("UiText.Format(\"MainWindowMessage_InsertPictureReadFailed\", ex.Message)");
         drawingSource.Should().Contain("SetActiveCell(range.Start);");
         drawingSource.Should().Contain("UpdateViewport();");
@@ -265,8 +265,11 @@ public sealed partial class MainWindowSourceHygieneTests
 
         scenarioSource.Should().Contain("_commandBus.ExecuteRepeatable(_workbook.Id, () => new ApplyScenarioCommand(name))");
         scenarioSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
-        scenarioSource.Should().Contain("SetActiveCell(first);");
-        scenarioSource.Should().Contain("EnsureCellVisible(first);");
+        scenarioSource.Should().Contain("CellAddress? first = null;");
+        scenarioSource.Should().Contain("foreach (var cell in outcome.AffectedCells)");
+        scenarioSource.Should().Contain("if (first is { } firstCell)");
+        scenarioSource.Should().Contain("SetActiveCell(firstCell);");
+        scenarioSource.Should().Contain("EnsureCellVisible(firstCell);");
     }
 
     [Fact]
@@ -380,7 +383,10 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.Should().NotContain("Cycle grand totals");
         xaml.Should().NotContain("Cycle subtotals");
         xaml.Should().NotContain("Cycle PivotTable style gallery choices.");
-        source.Should().Contain("_workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId)");
+        source.Should().Contain("PivotCacheModel? cache = null;");
+        source.Should().Contain("foreach (var item in _workbook.PivotCaches)");
+        source.Should().Contain("if (item.CacheId != pivotTable.CacheId)");
+        source.Should().Contain("cache = item;");
         source.Should().Contain("new PivotTableOptionsDialog(pivotTable, cache)");
         source.Should().Contain("ApplyPivotOptions(pivotTable, dialog.Result)");
         source.Should().NotContain("var reportLayout = pivotTable.ReportLayout switch");

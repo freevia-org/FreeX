@@ -3,7 +3,11 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed record SlicerPaneItem(string Name, string FieldName, IReadOnlyList<SlicerTileItem> Tiles);
+public sealed record SlicerPaneItem(
+    string Name,
+    string FieldName,
+    IReadOnlyList<SlicerTileItem> Tiles,
+    bool HasActiveFilter);
 
 public sealed record SlicerTileItem(string SlicerName, string Caption, bool IsSelected);
 
@@ -13,6 +17,7 @@ public sealed class TimelinePaneItem
     public string FieldName { get; init; } = "";
     public string SelectedStartDate { get; set; } = "";
     public string SelectedEndDate { get; set; } = "";
+    public bool HasActiveFilter { get; init; }
 }
 
 public sealed record NativeVisualFilters(
@@ -63,13 +68,21 @@ public static class SlicerTimelinePlanner
         return selected.ToList();
     }
 
+    public static bool HasActiveSlicerFilter(SlicerModel slicer) =>
+        slicer.SelectedItems.Count > 0;
+
+    public static bool HasActiveTimelineFilter(TimelineModel timeline) =>
+        !string.IsNullOrWhiteSpace(timeline.SelectedStartDate) ||
+        !string.IsNullOrWhiteSpace(timeline.SelectedEndDate);
+
     public static TimelinePaneItem BuildTimelineItem(TimelineModel timeline) =>
         new()
         {
             Name = timeline.Name,
             FieldName = timeline.SourceFieldName ?? timeline.CacheName,
             SelectedStartDate = timeline.SelectedStartDate ?? timeline.StartDate ?? "",
-            SelectedEndDate = timeline.SelectedEndDate ?? timeline.EndDate ?? ""
+            SelectedEndDate = timeline.SelectedEndDate ?? timeline.EndDate ?? "",
+            HasActiveFilter = HasActiveTimelineFilter(timeline)
         };
 
     public static string? NormalizeTimelineDateInput(string? value) =>

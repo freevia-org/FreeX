@@ -33,6 +33,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetPictureModel(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -54,6 +55,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .Be(sourceDrawingRelationships.ToString(SaveOptions.DisableFormatting));
         ReadWorksheetPictureImageBytes(saved).Should().Equal(sourceImageBytes);
+
+        saved.Position = 0;
+        AssertWorksheetPictureModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     [Fact]
@@ -116,6 +120,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         relationshipsById[pictureRelId].Attribute("Type")!.Value.Should().Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/image");
         relationshipsById[pictureRelId].Attribute("Target")!.Value.Should().Be("https://example.invalid/background.png");
         relationshipsById[pictureRelId].Attribute("TargetMode")!.Value.Should().Be("External");
+
+        archive.Dispose();
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        var reloadedPicture = reloadedSheet.Pictures.Should().ContainSingle().Subject;
+        reloadedPicture.Name.Should().Be("Authored picture");
+        reloadedPicture.Anchor.Should().Be(new CellAddress(reloadedSheet.Id, 2, 2));
+        reloadedPicture.Kind.Should().Be(PictureKind.Image);
+        reloadedPicture.ImageBytes.Should().Equal(MinimalPngBytes());
+        reloadedPicture.ContentType.Should().Be("image/png");
+        reloadedPicture.Width.Should().Be(96);
+        reloadedPicture.Height.Should().Be(64);
+        reloadedPicture.AltText.Should().Be("Authored picture");
     }
 
     private static Workbook CreateWorksheetPictureSourceWorkbook()
@@ -135,6 +152,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             AltText = "Authored picture"
         });
         return workbook;
+    }
+
+    private static void AssertWorksheetPictureModel(Sheet sheet)
+    {
+        var picture = sheet.Pictures.Should().ContainSingle().Subject;
+        picture.Name.Should().Be("Product Photo");
+        picture.Anchor.Should().Be(new CellAddress(sheet.Id, 2, 3));
+        picture.Kind.Should().Be(PictureKind.Image);
+        picture.ImageBytes.Should().Equal(MinimalPngBytes());
+        picture.ContentType.Should().Be("image/png");
+        picture.Width.Should().Be(120);
+        picture.Height.Should().Be(80);
+        picture.AltText.Should().Be("Authored picture");
     }
 
     private static void AddExternalWorksheetPictureReference(MemoryStream packageStream, string relationshipId)

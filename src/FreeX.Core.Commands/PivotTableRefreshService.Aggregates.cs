@@ -254,12 +254,24 @@ public static partial class PivotTableRefreshService
         return BlankValue.Instance;
     }
 
-    private static string? FirstBaseFieldItem(IEnumerable<IReadOnlyList<ScalarValue>> rows, int baseFieldIndex) =>
-        rows.Select(row => KeyText(row[baseFieldIndex])).FirstOrDefault();
+    private static string? FirstBaseFieldItem(IEnumerable<IReadOnlyList<ScalarValue>> rows, int baseFieldIndex)
+    {
+        foreach (var row in rows)
+            return KeyText(row[baseFieldIndex]);
 
-    private static PivotCalculatedFieldModel? FindCalculatedField(PivotTableModel pivotTable, string fieldName) =>
-        pivotTable.CalculatedFields.FirstOrDefault(field =>
-            string.Equals(field.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+        return null;
+    }
+
+    private static PivotCalculatedFieldModel? FindCalculatedField(PivotTableModel pivotTable, string fieldName)
+    {
+        foreach (var field in pivotTable.CalculatedFields)
+        {
+            if (string.Equals(field.Name, fieldName, StringComparison.OrdinalIgnoreCase))
+                return field;
+        }
+
+        return null;
+    }
 
     private static double EvaluateCalculatedField(
         string formula,
@@ -322,8 +334,17 @@ public static partial class PivotTableRefreshService
 
     private static IGrouping<PivotKey, IReadOnlyList<ScalarValue>>? FindCalculatedItemGroup(
         IReadOnlyList<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> groups,
-        string itemName) =>
-        groups.FirstOrDefault(candidate =>
-            candidate.Key.Values.Count > 0 &&
-            string.Equals(candidate.Key.Values[0], itemName, StringComparison.CurrentCultureIgnoreCase));
+        string itemName)
+    {
+        foreach (var candidate in groups)
+        {
+            if (candidate.Key.Values.Count > 0 &&
+                string.Equals(candidate.Key.Values[0], itemName, StringComparison.CurrentCultureIgnoreCase))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
 }

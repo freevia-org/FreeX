@@ -365,8 +365,17 @@ public sealed class PivotCalculatedItemDialog : Window
         int sourceFieldIndex)
     {
         var normalizedIndex = Math.Max(0, sourceFieldIndex);
-        return fields.FirstOrDefault(field => field.Index == normalizedIndex)
-            ?? fields.FirstOrDefault();
+        PivotCalculatedItemSourceFieldOption? firstField = null;
+        for (var fieldIndex = 0; fieldIndex < fields.Count; fieldIndex++)
+        {
+            var field = fields[fieldIndex];
+            if (fieldIndex == 0)
+                firstField = field;
+            if (field.Index == normalizedIndex)
+                return field;
+        }
+
+        return firstField;
     }
 
     private static IReadOnlyDictionary<int, IReadOnlyList<string>> CreateItemOptions(

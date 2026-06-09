@@ -61,6 +61,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceWorksheetRelationships.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = new XlsxFileAdapter().Load(saved).GetSheetAt(0);
+        var reloadedAddress = new CellAddress(reloadedSheet.Id, 2, 3);
+        reloadedSheet.ThreadedComments.Should().ContainKey(reloadedAddress);
+        var reloadedComment = reloadedSheet.ThreadedComments[reloadedAddress];
+        reloadedComment.Text.Should().Be("Please review total");
+        reloadedComment.Author.Should().Be("Quinn");
+        reloadedComment.CreatedAtUtc.Should().Be(new DateTimeOffset(2026, 6, 2, 10, 0, 0, TimeSpan.Zero));
+        reloadedComment.ModifiedAtUtc.Should().Be(new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero));
+        reloadedComment.IsResolved.Should().BeTrue();
+        reloadedComment.Replies.Should().Equal(new CommentReply("Adjusted after audit", "Codex")
+        {
+            CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
+            ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero)
+        });
     }
 
     [Fact]
@@ -110,6 +126,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
         SchemaErrors(saved).Should().BeEmpty();
         AssertThreadedCommentPackageGraph(saved);
+        AssertReloadedThreadedCommentModel(adapter, saved);
         ReadPackageEntryNames(saved)
             .Should()
             .Contain("xl/threadedComments/threadedComment1.xml")
@@ -162,6 +179,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
         SchemaErrors(saved).Should().BeEmpty();
         AssertThreadedCommentPackageGraph(saved);
+        AssertReloadedThreadedCommentModel(adapter, saved);
     }
 
     [Fact]
@@ -188,6 +206,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         AssertThreadedCommentPackageGraph(saved);
         AssertModernCommentMetadataSidecarPackageGraph(saved);
+        AssertReloadedThreadedCommentModel(adapter, saved);
     }
 
     private static Workbook CreateThreadedCommentSourceWorkbook()
@@ -262,6 +281,31 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Select(element => element.Attribute("displayName")?.Value)
             .Should()
             .BeEquivalentTo("Quinn", "Codex");
+    }
+
+    private static void AssertReloadedThreadedCommentModel(XlsxFileAdapter adapter, Stream stream)
+    {
+        stream.Position = 0;
+        var reloaded = adapter.Load(stream);
+        var sheet = reloaded.GetSheetAt(0);
+        sheet.GetValue(4, 4).Should().Be(new NumberValue(42));
+
+        var address = new CellAddress(sheet.Id, 2, 3);
+        sheet.ThreadedComments.Should().ContainKey(address);
+        sheet.ThreadedComments[address].Should().BeEquivalentTo(new ThreadedComment("Please review total", "Quinn")
+        {
+            CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 0, 0, TimeSpan.Zero),
+            ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
+            IsResolved = true,
+            Replies =
+            [
+                new CommentReply("Adjusted after audit", "Codex")
+                {
+                    CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
+                    ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero)
+                }
+            ]
+        });
     }
 
     private static IReadOnlyList<string> ReadPackageEntryNames(Stream stream)

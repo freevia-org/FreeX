@@ -7,7 +7,7 @@ public sealed class FormulaCommandSourceTests
     [Theory]
     [InlineData("Insert Function", "F", "InsertFunctionBtn_Click")]
     [InlineData("AutoSum", "U", "FormulasAutoSumPickerBtn_Click")]
-    [InlineData("Recently Used", "RU", "InsertFunctionBtn_Click")]
+    [InlineData("Recently Used", "RU", "FormulaRecentlyUsedBtn_Click")]
     [InlineData("Financial", "Y", "FormulaFinancialBtn_Click")]
     [InlineData("Logical Functions", "L", "FormulaLogicalBtn_Click")]
     [InlineData("Text Functions", "TF", "FormulaTextBtn_Click")]
@@ -69,6 +69,45 @@ public sealed class FormulaCommandSourceTests
         item.Should().Contain($"Click=\"{handler}\"");
     }
 
+    [Theory]
+    [InlineData("Trace Precedents", "TP", "TracePrecedentsBtn_Click")]
+    [InlineData("Trace Dependents", "TD", "TraceDependentsBtn_Click")]
+    [InlineData("Remove Arrows", "RA", "RemoveArrowsBtn_Click")]
+    [InlineData("Show Formulas", "SF", "ShowFormulasBtn_Click")]
+    [InlineData("Error Checking", "EC", "ErrorCheckBtn_Click")]
+    [InlineData("Evaluate Formula", "V", "EvaluateFormulaBtn_Click")]
+    [InlineData("Watch Window", "W", "WatchWindowBtn_Click")]
+    public void FormulaAuditingCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
+        string title,
+        string keyTip,
+        string handler)
+    {
+        var elementName = title == "Show Formulas" ? "ToggleButton" : "Button";
+        var button = ReadFormulasTabXaml()
+            .ExtractElementByInvariantCommandName(elementName, title, $"Click=\"{handler}\"");
+
+        button.ShouldContainInvariantCommandName(title);
+        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
+        button.Should().Contain($"Click=\"{handler}\"");
+    }
+
+    [Theory]
+    [InlineData("Calculate Now", "CN", "CalcNowBtn_Click")]
+    [InlineData("Calculate Sheet", "SC", "CalcSheetBtn_Click")]
+    [InlineData("Calculation Options", "O", "CalcOptionsBtn_Click")]
+    public void FormulaCalculationCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
+        string title,
+        string keyTip,
+        string handler)
+    {
+        var button = ReadFormulasTabXaml()
+            .ExtractButtonElementByInvariantCommandName(title, $"Click=\"{handler}\"");
+
+        button.ShouldContainInvariantCommandName(title);
+        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
+        button.Should().Contain($"Click=\"{handler}\"");
+    }
+
     [Fact]
     public void FormulaCommandHandlers_RouteThroughExpectedDialogsMenusAndServices()
     {
@@ -82,8 +121,20 @@ public sealed class FormulaCommandSourceTests
         source.Should().Contain("FormulaInsertionService.InsertDefinedName(");
         source.Should().Contain("BeginFormulaBarFormulaEdit(result.Text, result.CaretIndex);");
         source.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>())");
+        source.Should().Contain("OpenRibbonContextMenu(btn, cm);");
+        source.Should().Contain("FormulaTraceArrowPlanner.GetNextPrecedentTraceArrows");
+        source.Should().Contain("FormulaTraceArrowPlanner.GetNextDependentTraceArrows");
+        source.Should().Contain("_formulaTraceArrows.AddRange(arrows);");
+        source.Should().Contain("RemoveTraceArrows(FormulaTraceArrowKind.Precedent, \"Remove Precedent Arrows\");");
+        source.Should().Contain("RemoveTraceArrows(FormulaTraceArrowKind.Dependent, \"Remove Dependent Arrows\");");
+        source.Should().Contain("_formulaTraceArrows.RemoveAll(arrow => arrow.Kind == kind.Value)");
         source.Should().Contain("FormulaFinancialBtn_Click(object sender, RoutedEventArgs e) => OpenFormulaFunctionMenu(sender, [\"PMT\", \"NPV\", \"IRR\", \"RATE\", \"PV\", \"FV\"]);");
         source.Should().Contain("FormulaMoreBtn_Click(object sender, RoutedEventArgs e)    => InsertFunctionBtn_Click(sender, e);");
+        source.Should().Contain("InsertFunctionCatalogPlanner.BuildCatalog()");
+        source.Should().Contain("new FunctionArgumentsDialog(function) { Owner = this }");
+        source.Should().Contain("ShowOwnedDialog(argumentsDialog)");
+        source.Should().Contain("BeginFormulaBarFormulaEdit(\"=\" + argumentsDialog.ResultFormula);");
+        source.Should().Contain("InsertRawFormulaFunction(normalizedName);");
         source.Should().Contain("BeginFormulaBarFormulaEdit($\"={funcName}(\");");
         source.Should().Contain("private void BeginFormulaBarFormulaEdit(string text, int? caretIndex = null)");
     }

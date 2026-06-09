@@ -9,9 +9,11 @@ namespace FreeX.App.Avalonia;
 internal sealed record MacOsLaunchSmokeOptions(
     string ReportPath,
     bool VerifyImageClipboardPaste,
-    bool VerifyLiveCommandKeys)
+    bool VerifyLiveCommandKeys,
+    string? DiagnosticsDirectory)
 {
     public const string Argument = "--macos-launch-smoke";
+    public const string DiagnosticsDirectoryArgument = "--macos-launch-smoke-diagnostics-dir";
     public const string VerifyImageClipboardPasteArgument = "--macos-launch-smoke-verify-image-clipboard";
     public const string VerifyLiveCommandKeysArgument = "--macos-launch-smoke-verify-live-command-keys";
 
@@ -27,11 +29,39 @@ internal sealed record MacOsLaunchSmokeOptions(
         error = "";
         var filteredArguments = new List<string>();
         string? reportPath = null;
+        string? diagnosticsDirectory = null;
         var verifyImageClipboardPaste = false;
         var verifyLiveCommandKeys = false;
         for (var index = 0; index < args.Count; index++)
         {
             var argument = args[index];
+            if (string.Equals(argument, DiagnosticsDirectoryArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                if (diagnosticsDirectory is not null)
+                {
+                    startupArguments = [];
+                    error = $"{DiagnosticsDirectoryArgument} was specified more than once.";
+                    return false;
+                }
+
+                if (index + 1 >= args.Count)
+                {
+                    startupArguments = [];
+                    error = $"{DiagnosticsDirectoryArgument} requires a directory path.";
+                    return false;
+                }
+
+                diagnosticsDirectory = args[++index];
+                if (string.IsNullOrWhiteSpace(diagnosticsDirectory))
+                {
+                    startupArguments = [];
+                    error = $"{DiagnosticsDirectoryArgument} requires a non-empty directory path.";
+                    return false;
+                }
+
+                continue;
+            }
+
             if (string.Equals(argument, VerifyImageClipboardPasteArgument, StringComparison.OrdinalIgnoreCase))
             {
                 verifyImageClipboardPaste = true;
@@ -73,8 +103,19 @@ internal sealed record MacOsLaunchSmokeOptions(
             }
         }
 
+        if (diagnosticsDirectory is not null && reportPath is null)
+        {
+            startupArguments = [];
+            error = $"{DiagnosticsDirectoryArgument} requires {Argument}.";
+            return false;
+        }
+
         if (reportPath is not null)
-            options = new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste, verifyLiveCommandKeys);
+            options = new MacOsLaunchSmokeOptions(
+                reportPath,
+                verifyImageClipboardPaste,
+                verifyLiveCommandKeys,
+                diagnosticsDirectory);
 
         startupArguments = filteredArguments.ToArray();
         return true;
@@ -111,7 +152,21 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
     bool HasFormatCellsDialogNumberControls = false,
     bool HasFormatCellsDialogActionButtons = false,
     bool HasFormatCellsDialogCompactLayout = false,
-    bool HasFormatCellsDialogClosedWithoutAccept = false)
+    bool HasFormatCellsDialogClosedWithoutAccept = false,
+    bool HasSortDialog = false,
+    bool HasSortDialogSortOnControls = false,
+    bool HasSortDialogColorControls = false,
+    bool HasSortDialogActionButtons = false,
+    bool HasSortDialogCompactLayout = false,
+    bool HasSortDialogClosedWithoutAccept = false,
+    bool HasDataValidationDropdownControl = false,
+    bool HasDataValidationDropdownItems = false,
+    bool HasDataValidationDialog = false,
+    bool HasDataValidationDialogCriteriaControls = false,
+    bool HasDataValidationDialogMessageControls = false,
+    bool HasDataValidationDialogActionButtons = false,
+    bool HasDataValidationDialogCompactLayout = false,
+    bool HasDataValidationDialogClosedWithoutAccept = false)
 {
     public static MacOsLaunchSmokeDialogSnapshot Empty { get; } = new(
         HasFindDialog: false,
@@ -143,7 +198,21 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasFormatCellsDialogNumberControls: false,
         HasFormatCellsDialogActionButtons: false,
         HasFormatCellsDialogCompactLayout: false,
-        HasFormatCellsDialogClosedWithoutAccept: false);
+        HasFormatCellsDialogClosedWithoutAccept: false,
+        HasSortDialog: false,
+        HasSortDialogSortOnControls: false,
+        HasSortDialogColorControls: false,
+        HasSortDialogActionButtons: false,
+        HasSortDialogCompactLayout: false,
+        HasSortDialogClosedWithoutAccept: false,
+        HasDataValidationDropdownControl: false,
+        HasDataValidationDropdownItems: false,
+        HasDataValidationDialog: false,
+        HasDataValidationDialogCriteriaControls: false,
+        HasDataValidationDialogMessageControls: false,
+        HasDataValidationDialogActionButtons: false,
+        HasDataValidationDialogCompactLayout: false,
+        HasDataValidationDialogClosedWithoutAccept: false);
 
     public bool IsPassed =>
         HasFindDialog &&
@@ -171,11 +240,25 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasFormatCellsDialogNumberControls &&
         HasFormatCellsDialogActionButtons &&
         HasFormatCellsDialogCompactLayout &&
+        HasSortDialog &&
+        HasSortDialogSortOnControls &&
+        HasSortDialogColorControls &&
+        HasSortDialogActionButtons &&
+        HasSortDialogCompactLayout &&
+        HasDataValidationDropdownControl &&
+        HasDataValidationDropdownItems &&
+        HasDataValidationDialog &&
+        HasDataValidationDialogCriteriaControls &&
+        HasDataValidationDialogMessageControls &&
+        HasDataValidationDialogActionButtons &&
+        HasDataValidationDialogCompactLayout &&
         HasFindDialogClosedWithoutAccept &&
         HasReplaceDialogClosedWithoutAccept &&
         HasGoToDialogClosedWithoutAccept &&
         HasGoToSpecialDialogClosedWithoutAccept &&
-        HasFormatCellsDialogClosedWithoutAccept;
+        HasFormatCellsDialogClosedWithoutAccept &&
+        HasSortDialogClosedWithoutAccept &&
+        HasDataValidationDialogClosedWithoutAccept;
 }
 
 internal sealed record MacOsLaunchSmokeCommandKeySnapshot(
@@ -336,6 +419,19 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasBordersButton,
     bool HasWrapTextButton,
     bool HasMergeAndCenterButton,
+    bool HasFormulaBoxAutomationName,
+    bool HasFormulaBoxAutomationHelp,
+    bool HasFormulaBoxAutomationId,
+    bool HasStatusTextAutomationName,
+    bool HasStatusTextAutomationHelp,
+    bool HasStatusTextAutomationId,
+    bool HasStatusTextValue,
+    bool HasCellAddressAutomationName,
+    bool HasCellAddressAutomationHelp,
+    bool HasCellAddressAutomationId,
+    bool HasSelectionStatsAutomationName,
+    bool HasSelectionStatsAutomationHelp,
+    bool HasSelectionStatsAutomationId,
     bool HasFocusableSheetTab,
     bool HasFocusableActiveSheetTab,
     bool HasShellFocusCycleTargets,
@@ -361,6 +457,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeSaveMenuItem,
     bool HasNativeSaveAsMenuItem,
     bool HasNativeExportPdfMenuItem,
+    bool HasNativeShareWorkbookMenuItem,
     bool HasNativeWorkbookStatisticsMenuItem,
     bool HasNativeCloseWorkbookMenuItem,
     bool HasNativeNewSheetMenuItem,
@@ -500,6 +597,21 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeQuitMenuItem,
     bool HasNativeFormatCellsMenuItem = false)
 {
+    public bool HasAccessibilitySmokeEvidence =>
+        HasFormulaBoxAutomationName &&
+        HasFormulaBoxAutomationHelp &&
+        HasFormulaBoxAutomationId &&
+        HasStatusTextAutomationName &&
+        HasStatusTextAutomationHelp &&
+        HasStatusTextAutomationId &&
+        HasStatusTextValue &&
+        HasCellAddressAutomationName &&
+        HasCellAddressAutomationHelp &&
+        HasCellAddressAutomationId &&
+        HasSelectionStatsAutomationName &&
+        HasSelectionStatsAutomationHelp &&
+        HasSelectionStatsAutomationId;
+
     public bool HasShellEvidence =>
         WindowShown &&
         !IsOpening &&
@@ -530,6 +642,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasBordersButton &&
         HasWrapTextButton &&
         HasMergeAndCenterButton &&
+        HasAccessibilitySmokeEvidence &&
         HasFocusableSheetTab &&
         HasFocusableActiveSheetTab &&
         HasShellFocusCycleTargets &&
@@ -555,6 +668,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeSaveMenuItem &&
         HasNativeSaveAsMenuItem &&
         HasNativeExportPdfMenuItem &&
+        HasNativeShareWorkbookMenuItem &&
         HasNativeWorkbookStatisticsMenuItem &&
         HasNativeCloseWorkbookMenuItem &&
         HasNativeNewSheetMenuItem &&
@@ -703,15 +817,21 @@ internal static class MacOsLaunchSmokeCoordinator
     private const int LiveCommandKeyWaitMilliseconds = 30000;
     private const int PollDelayMilliseconds = 250;
 
-    public static void Start(MainWindow mainWindow, MacOsLaunchSmokeOptions options)
+    public static void Start(
+        MainWindow mainWindow,
+        MacOsLaunchSmokeOptions options,
+        AvaloniaAppDiagnostics? diagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(mainWindow);
         ArgumentNullException.ThrowIfNull(options);
 
-        mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options);
+        mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options, diagnostics);
     }
 
-    private static async Task RunAsync(MainWindow mainWindow, MacOsLaunchSmokeOptions options)
+    private static async Task RunAsync(
+        MainWindow mainWindow,
+        MacOsLaunchSmokeOptions options,
+        AvaloniaAppDiagnostics? diagnostics)
     {
         var deadline = DateTimeOffset.UtcNow.AddMilliseconds(
             MaxWaitMilliseconds + (options.VerifyLiveCommandKeys ? LiveCommandKeyWaitMilliseconds : 0));
@@ -722,6 +842,12 @@ internal static class MacOsLaunchSmokeCoordinator
         var attemptedCommandKeyEvidence = false;
         var attemptedImageClipboardPaste = false;
         var attemptedDialogEvidence = false;
+        diagnostics?.RecordEvent("macos_launch_smoke", new Dictionary<string, string?>
+        {
+            ["source"] = "macos_launch_smoke",
+            ["scope"] = "launch",
+            ["status"] = "starting"
+        });
         try
         {
             while (!IsPassedWithCommandKeyEvidence(
@@ -799,15 +925,23 @@ internal static class MacOsLaunchSmokeCoordinator
                 attemptedCommandKeyEvidence,
                 attemptedDialogEvidence,
                 finalReport: true);
-            Shutdown(IsPassedWithCommandKeyEvidence(
+            var isPassed = IsPassedWithCommandKeyEvidence(
                 snapshot,
                 options,
                 initialExternalImageClipboardPictureCount,
                 commandKeyEvidence,
-                liveCommandKeyEvidence) ? 0 : 1);
+                liveCommandKeyEvidence);
+            diagnostics?.RecordEvent("macos_launch_smoke", new Dictionary<string, string?>
+            {
+                ["source"] = "macos_launch_smoke",
+                ["scope"] = "launch",
+                ["status"] = isPassed ? "passed" : "failed"
+            });
+            Shutdown(isPassed ? 0 : 1);
         }
         catch (Exception ex)
         {
+            diagnostics?.RecordCrash(ex, "macos_launch_smoke");
             WriteFailureReport(
                 options.ReportPath,
                 snapshot,
@@ -919,11 +1053,13 @@ internal static class MacOsLaunchSmokeCoordinator
             initialExternalImageClipboardPictureCount);
         var dialogSmokeStatus = GetDialogSmokeStatus(snapshot, attemptedDialogEvidence);
         var liveCommandKeySmokeStatus = GetLiveCommandKeySmokeStatus(options, liveCommandKeyEvidence, finalReport);
+        var appDiagnosticsConfigured = !string.IsNullOrWhiteSpace(options.DiagnosticsDirectory);
 
         File.WriteAllLines(
             reportPath,
             [
                 $"macos_launch_smoke={(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence, liveCommandKeyEvidence) ? "passed" : "failed")}",
+                $"app_diagnostics_directory_configured={FormatBool(appDiagnosticsConfigured)}",
                 $"window_shown={FormatBool(snapshot.WindowShown)}",
                 $"window_title={snapshot.WindowTitle}",
                 $"display_name={snapshot.DisplayName}",
@@ -931,6 +1067,20 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"sheet_tab_count={snapshot.SheetTabCount}",
                 $"viewport_rows={snapshot.ViewportRowCount}",
                 $"viewport_columns={snapshot.ViewportColumnCount}",
+                $"macos_accessibility_smoke={(snapshot.HasAccessibilitySmokeEvidence ? "passed" : "failed")}",
+                $"a11y_formula_box_name={FormatBool(snapshot.HasFormulaBoxAutomationName)}",
+                $"a11y_formula_box_help={FormatBool(snapshot.HasFormulaBoxAutomationHelp)}",
+                $"a11y_formula_box_id={FormatBool(snapshot.HasFormulaBoxAutomationId)}",
+                $"a11y_status_text_name={FormatBool(snapshot.HasStatusTextAutomationName)}",
+                $"a11y_status_text_help={FormatBool(snapshot.HasStatusTextAutomationHelp)}",
+                $"a11y_status_text_id={FormatBool(snapshot.HasStatusTextAutomationId)}",
+                $"a11y_status_text_value={FormatBool(snapshot.HasStatusTextValue)}",
+                $"a11y_cell_address_name={FormatBool(snapshot.HasCellAddressAutomationName)}",
+                $"a11y_cell_address_help={FormatBool(snapshot.HasCellAddressAutomationHelp)}",
+                $"a11y_cell_address_id={FormatBool(snapshot.HasCellAddressAutomationId)}",
+                $"a11y_selection_stats_name={FormatBool(snapshot.HasSelectionStatsAutomationName)}",
+                $"a11y_selection_stats_help={FormatBool(snapshot.HasSelectionStatsAutomationHelp)}",
+                $"a11y_selection_stats_id={FormatBool(snapshot.HasSelectionStatsAutomationId)}",
                 $"command_key_smoke={(commandKeyEvidence.IsPassed ? "passed" : "failed")}",
                 $"command_key_smoke_attempted={FormatBool(attemptedCommandKeyEvidence)}",
                 $"cmd_new_workbook_menu_gesture={FormatBool(commandKeyEvidence.HasNewWorkbookMenuGesture)}",
@@ -997,6 +1147,20 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"format_cells_dialog_action_buttons={FormatBool(snapshot.DialogEvidence.HasFormatCellsDialogActionButtons)}",
                 $"format_cells_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasFormatCellsDialogCompactLayout)}",
                 $"format_cells_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasFormatCellsDialogClosedWithoutAccept)}",
+                $"sort_dialog={FormatBool(snapshot.DialogEvidence.HasSortDialog)}",
+                $"sort_dialog_sort_on_controls={FormatBool(snapshot.DialogEvidence.HasSortDialogSortOnControls)}",
+                $"sort_dialog_color_controls={FormatBool(snapshot.DialogEvidence.HasSortDialogColorControls)}",
+                $"sort_dialog_action_buttons={FormatBool(snapshot.DialogEvidence.HasSortDialogActionButtons)}",
+                $"sort_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasSortDialogCompactLayout)}",
+                $"sort_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasSortDialogClosedWithoutAccept)}",
+                $"data_validation_dropdown_control={FormatBool(snapshot.DialogEvidence.HasDataValidationDropdownControl)}",
+                $"data_validation_dropdown_items={FormatBool(snapshot.DialogEvidence.HasDataValidationDropdownItems)}",
+                $"data_validation_dialog={FormatBool(snapshot.DialogEvidence.HasDataValidationDialog)}",
+                $"data_validation_dialog_criteria_controls={FormatBool(snapshot.DialogEvidence.HasDataValidationDialogCriteriaControls)}",
+                $"data_validation_dialog_message_controls={FormatBool(snapshot.DialogEvidence.HasDataValidationDialogMessageControls)}",
+                $"data_validation_dialog_action_buttons={FormatBool(snapshot.DialogEvidence.HasDataValidationDialogActionButtons)}",
+                $"data_validation_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasDataValidationDialogCompactLayout)}",
+                $"data_validation_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasDataValidationDialogClosedWithoutAccept)}",
                 $"opened_source_path={snapshot.OpenedSourcePath ?? ""}",
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
@@ -1047,6 +1211,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_save_menu_item={FormatBool(snapshot.HasNativeSaveMenuItem)}",
                 $"native_save_as_menu_item={FormatBool(snapshot.HasNativeSaveAsMenuItem)}",
                 $"native_export_pdf_menu_item={FormatBool(snapshot.HasNativeExportPdfMenuItem)}",
+                $"native_share_workbook_menu_item={FormatBool(snapshot.HasNativeShareWorkbookMenuItem)}",
                 $"native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}",
                 $"native_close_workbook_menu_item={FormatBool(snapshot.HasNativeCloseWorkbookMenuItem)}",
                 $"native_new_sheet_menu_item={FormatBool(snapshot.HasNativeNewSheetMenuItem)}",

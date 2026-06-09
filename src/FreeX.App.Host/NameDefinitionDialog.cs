@@ -47,8 +47,7 @@ internal sealed class NameDefinitionDialog : Window
         AutomationProperties.SetName(_nameBox, UiText.Get("NameDefinition_NameAutomationName"));
         foreach (var scope in _scopeOptions)
             _scopeBox.Items.Add(scope);
-        _scopeBox.SelectedItem = _scopeOptions.FirstOrDefault(scope =>
-            string.Equals(scope, initial.Scope, StringComparison.OrdinalIgnoreCase)) ?? _scopeOptions[0];
+        _scopeBox.SelectedItem = FindScopeOption(initial.Scope) ?? _scopeOptions[0];
         AutomationProperties.SetName(_scopeBox, UiText.Get("NameDefinition_ScopeAutomationName"));
         _commentBox.Text = initial.Comment;
         AutomationProperties.SetName(_commentBox, UiText.Get("NameDefinition_CommentAutomationName"));
@@ -70,6 +69,17 @@ internal sealed class NameDefinitionDialog : Window
 
         Content = CreateContent();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private string? FindScopeOption(string scopeName)
+    {
+        foreach (var scope in _scopeOptions)
+        {
+            if (string.Equals(scope, scopeName, StringComparison.OrdinalIgnoreCase))
+                return scope;
+        }
+
+        return null;
     }
 
     private Grid CreateContent()

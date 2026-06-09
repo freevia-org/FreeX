@@ -158,11 +158,12 @@ public static partial class NumberFormatter
 
         if (hasConditions)
         {
-            int selectedIndex = Array.FindIndex(parsedSections, section =>
-                section.Condition is not null && section.Condition.Matches(value));
+            var selectedIndex = FindParsedSectionIndex(
+                parsedSections,
+                section => section.Condition is not null && section.Condition.Matches(value));
             if (selectedIndex < 0)
             {
-                selectedIndex = Array.FindIndex(parsedSections, section => section.Condition is null);
+                selectedIndex = FindParsedSectionIndex(parsedSections, section => section.Condition is null);
                 if (selectedIndex < 0)
                     selectedIndex = 0;
             }
@@ -179,6 +180,19 @@ public static partial class NumberFormatter
             : ApplyNumericFormat(displayValue, section.Format);
         text = ApplyAccountingTargetWidth(text, section.Format, targetWidthCharacters);
         return new FormatResult(text, section.ColorHex);
+    }
+
+    private static int FindParsedSectionIndex(
+        IReadOnlyList<ParsedSection> sections,
+        Func<ParsedSection, bool> predicate)
+    {
+        for (var index = 0; index < sections.Count; index++)
+        {
+            if (predicate(sections[index]))
+                return index;
+        }
+
+        return -1;
     }
 
     private static bool TryFormatPlainNumericSection(double value, string format, out string text)

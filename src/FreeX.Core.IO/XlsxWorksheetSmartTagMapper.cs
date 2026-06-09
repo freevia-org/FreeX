@@ -73,10 +73,19 @@ internal static class XlsxWorksheetSmartTagMapper
             "extLst"
         ];
 
-        var insertionPoint = root.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == WorksheetNs &&
-                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        XElement? insertionPoint = null;
+        foreach (var element in root.Elements())
+        {
+            if (element.Name.Namespace != WorksheetNs ||
+                !laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            insertionPoint = element;
+            break;
+        }
+
         if (insertionPoint is not null)
             insertionPoint.AddBeforeSelf(smartTags);
         else

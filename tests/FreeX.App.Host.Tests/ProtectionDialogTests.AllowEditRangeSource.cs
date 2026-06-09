@@ -21,10 +21,16 @@ public sealed partial class ProtectionDialogTests
         source.Should().Contain("private readonly ListBox _existingRangesBox");
         source.Should().Contain("new Label { Content = UiText.Get(\"AllowEditRange_ExistingRangesLabel\"), Target = _existingRangesBox");
         source.Should().NotContain("Header = \"Ranges unlocked by password\"");
+        source.Should().Contain("Content = UiText.Get(\"AllowEditRange_NewButton\")");
+        source.Should().Contain("Content = UiText.Get(\"AllowEditRange_ModifyButton\")");
         source.Should().Contain("Content = UiText.Get(\"AllowEditRange_DeleteButton\")");
-        source.Should().Contain("Content = UiText.Get(\"AllowEditRange_ClearAllButton\")");
+        source.Should().Contain("Content = UiText.Get(\"AllowEditRange_PermissionsButton\")");
+        source.Should().Contain("_permissionsButton.IsEnabled = false");
+        source.Should().Contain("private void NewRange_Click");
+        source.Should().Contain("private void ModifySelectedRange_Click");
         source.Should().Contain("private void DeleteSelectedRange_Click");
-        source.Should().Contain("private void ClearAllRanges_Click");
+        source.Should().Contain("TryLoadSelectedRangeForModification");
+        source.Should().Contain("CreateModifyResult");
         source.Should().Contain("CreateRemoveResult");
         source.Should().Contain("CreateClearResult");
     }
@@ -56,12 +62,18 @@ public sealed partial class ProtectionDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("AllowEditRangeDialog.cs");
 
+        source.Should().Contain("AutomationProperties.SetName(_newRangeButton, UiText.Get(\"AllowEditRange_NewAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_newRangeButton, \"AllowEditRangeNewButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_newRangeButton, UiText.Get(\"AllowEditRange_NewHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_modifyRangeButton, UiText.Get(\"AllowEditRange_ModifyAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_modifyRangeButton, \"AllowEditRangeModifyButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_modifyRangeButton, UiText.Get(\"AllowEditRange_ModifyHelpText\"));");
         source.Should().Contain("AutomationProperties.SetName(_deleteRangeButton, UiText.Get(\"AllowEditRange_DeleteAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_deleteRangeButton, \"AllowEditRangeDeleteButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_deleteRangeButton, UiText.Get(\"AllowEditRange_DeleteHelpText\"));");
-        source.Should().Contain("AutomationProperties.SetName(_clearRangesButton, UiText.Get(\"AllowEditRange_ClearAllAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(_clearRangesButton, \"AllowEditRangeClearAllButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_clearRangesButton, UiText.Get(\"AllowEditRange_ClearAllHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_permissionsButton, UiText.Get(\"AllowEditRange_PermissionsAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_permissionsButton, \"AllowEditRangePermissionsButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_permissionsButton, UiText.Get(\"AllowEditRange_PermissionsHelpText\"));");
         source.Should().Contain("AutomationProperties.SetName(rangePicker, UiText.Get(\"AllowEditRange_PickerAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(rangePicker, \"AllowEditRangePickerButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(");
@@ -76,6 +88,10 @@ public sealed partial class ProtectionDialogTests
         source.Should().Contain("new AllowEditRangeDialog(");
         source.Should().Contain("AllowEditRangeDialogAction.Add");
         source.Should().Contain("new AllowEditRangeCommand(_currentSheetId, range)");
+        source.Should().Contain("AllowEditRangeDialogAction.Modify");
+        source.Should().Contain("new CompositeWorkbookCommand(");
+        source.Should().Contain("new RemoveAllowEditRangeCommand(_currentSheetId, previousRange)");
+        source.Should().Contain("UiText.Format(\"MainWindowMessage_AllowEditRangeModified\", range)");
         source.Should().Contain("AllowEditRangeDialogAction.Remove");
         source.Should().Contain("new RemoveAllowEditRangeCommand(_currentSheetId, range)");
         source.Should().Contain("AllowEditRangeDialogAction.Clear");

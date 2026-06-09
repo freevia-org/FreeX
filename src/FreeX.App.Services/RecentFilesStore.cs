@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace FreeX.App.Services;
 
@@ -7,15 +8,25 @@ public sealed class RecentFileEntry
     public string Path { get; set; } = "";
     public DateTimeOffset LastOpened { get; set; }
     public bool IsPinned { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkbookFileAccessIdentity? FileAccessIdentity { get; set; }
 }
 
 public sealed class RecentFilesStore
 {
-    private const int MaxEntries = 25;
+    public const int MaxRecentEntries = 25;
 
     private readonly Func<DateTimeOffset> _clock;
     private readonly PlatformPathIdentityComparer _pathIdentityComparer;
     private readonly string _storePath;
+
+    public RecentFilesStore(
+        string storePath,
+        Func<DateTimeOffset>? clock = null)
+        : this(storePath, clock, pathIdentityComparer: null)
+    {
+    }
 
     private RecentFilesStore(
         string storePath,
@@ -67,7 +78,7 @@ public sealed class RecentFilesStore
             if (File.Exists(storePath))
             {
                 var json = File.ReadAllText(storePath);
-                store.Entries = JsonSerializer.Deserialize<List<RecentFileEntry>>(json) ?? [];
+                store.Entries = LimitForPersistence(JsonSerializer.Deserialize<List<RecentFileEntry>>(json) ?? []);
             }
         }
         catch (Exception ex)
@@ -88,24 +99,58 @@ public sealed class RecentFilesStore
             "recent.json");
     }
 
-    public void AddOrUpdate(string path)
+    public void AddOrUpdate(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         if (string.IsNullOrWhiteSpace(path))
             return;
 
-        var existing = Entries.FirstOrDefault(entry => PathsMatch(entry.Path, path));
+        var existing = FindEntryByPath(path);
         var wasPinned = existing?.IsPinned ?? false;
-        Entries.RemoveAll(entry => PathsMatch(entry.Path, path));
-        Entries.Insert(0, new RecentFileEntry { Path = path, LastOpened = _clock(), IsPinned = wasPinned });
-        if (Entries.Count > MaxEntries)
-            Entries.RemoveRange(MaxEntries, Entries.Count - MaxEntries);
+        var identity = TryPreparePersistentIdentity(fileAccessIdentity, path) ??
+            TryPreparePersistentIdentity(existing?.FileAccessIdentity, path);
+        RemoveEntriesByPath(path);
+        Entries.Insert(0, new RecentFileEntry
+        {
+            Path = path,
+            LastOpened = _clock(),
+            IsPinned = wasPinned,
+            FileAccessIdentity = identity,
+        });
+        Entries = LimitForPersistence(Entries);
 
         Save();
     }
 
+    public static List<RecentFileEntry> LimitForPersistence(
+        IEnumerable<RecentFileEntry> entries,
+        int maxRecentEntries = MaxRecentEntries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentOutOfRangeException.ThrowIfNegative(maxRecentEntries);
+
+        var limited = new List<RecentFileEntry>();
+        var unpinnedCount = 0;
+        foreach (var entry in entries)
+        {
+            if (entry.IsPinned)
+            {
+                limited.Add(entry);
+                continue;
+            }
+
+            if (unpinnedCount >= maxRecentEntries)
+                continue;
+
+            limited.Add(entry);
+            unpinnedCount++;
+        }
+
+        return limited;
+    }
+
     public void Pin(string path)
     {
-        var entry = Entries.FirstOrDefault(entry => PathsMatch(entry.Path, path));
+        var entry = FindEntryByPath(path);
         if (entry is null)
             return;
 
@@ -115,7 +160,7 @@ public sealed class RecentFilesStore
 
     public void Unpin(string path)
     {
-        var entry = Entries.FirstOrDefault(entry => PathsMatch(entry.Path, path));
+        var entry = FindEntryByPath(path);
         if (entry is null)
             return;
 
@@ -125,12 +170,39 @@ public sealed class RecentFilesStore
 
     public void Remove(string path)
     {
-        Entries.RemoveAll(entry => PathsMatch(entry.Path, path));
+        RemoveEntriesByPath(path);
         Save();
     }
 
+    private RecentFileEntry? FindEntryByPath(string path)
+    {
+        foreach (var entry in Entries)
+        {
+            if (PathsMatch(entry, path))
+                return entry;
+        }
+
+        return null;
+    }
+
+    private void RemoveEntriesByPath(string path) =>
+        Entries.RemoveAll(entry => PathsMatch(entry, path));
+
+    private bool PathsMatch(RecentFileEntry existingEntry, string candidatePath) =>
+        PathsMatch(existingEntry.Path, candidatePath);
+
     private bool PathsMatch(string existingPath, string candidatePath) =>
         _pathIdentityComparer.Equals(existingPath, candidatePath);
+
+    private static WorkbookFileAccessIdentity? TryPreparePersistentIdentity(
+        WorkbookFileAccessIdentity? identity,
+        string path) =>
+        identity is not null &&
+        identity.HasBookmark &&
+        identity.TryWithLocalPath(path, out var movedIdentity) &&
+        movedIdentity?.HasBookmark == true
+            ? movedIdentity
+            : null;
 
     private void Save()
     {

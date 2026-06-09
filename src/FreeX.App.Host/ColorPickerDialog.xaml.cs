@@ -244,11 +244,7 @@ public partial class ColorPickerDialog : Window
 
     private void UpdateSwatchSelection(CellColor color)
     {
-        var matchingButton = ThemeColorsPanel.Children
-            .OfType<Button>()
-            .Concat(StandardColorsPanel.Children.OfType<Button>())
-            .Concat(CustomSpectrumPanel.Children.OfType<Button>())
-            .FirstOrDefault(button => button.Tag is CellColor swatchColor && swatchColor == color);
+        var matchingButton = FindSwatchButton(color);
 
         if (matchingButton is null)
         {
@@ -257,6 +253,29 @@ public partial class ColorPickerDialog : Window
         }
 
         MarkSelectedSwatch(matchingButton);
+    }
+
+    private Button? FindSwatchButton(CellColor color)
+    {
+        foreach (var child in ThemeColorsPanel.Children)
+        {
+            if (child is Button button && button.Tag is CellColor swatchColor && swatchColor == color)
+                return button;
+        }
+
+        foreach (var child in StandardColorsPanel.Children)
+        {
+            if (child is Button button && button.Tag is CellColor swatchColor && swatchColor == color)
+                return button;
+        }
+
+        foreach (var child in CustomSpectrumPanel.Children)
+        {
+            if (child is Button button && button.Tag is CellColor swatchColor && swatchColor == color)
+                return button;
+        }
+
+        return null;
     }
 
     private void SelectColor(CellColor color, bool updateSpectrumBase = true, bool updateSwatchSelection = true)

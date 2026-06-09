@@ -34,13 +34,24 @@ internal static class FindReplaceDialogPlanner
 
     private static string FindNameForAddress(Workbook workbook, CellAddress address)
     {
-        var namedRange = workbook.NamedRanges
-            .Where(pair => pair.Value.Contains(address))
-            .OrderBy(pair => pair.Value.CellCount)
-            .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
+        string? namedRangeName = null;
+        long namedRangeCellCount = 0;
+        foreach (var pair in workbook.NamedRanges)
+        {
+            if (!pair.Value.Contains(address))
+                continue;
 
-        return string.IsNullOrEmpty(namedRange.Key) ? "" : namedRange.Key;
+            if (namedRangeName is null
+                || pair.Value.CellCount < namedRangeCellCount
+                || (pair.Value.CellCount == namedRangeCellCount
+                    && string.Compare(pair.Key, namedRangeName, StringComparison.OrdinalIgnoreCase) < 0))
+            {
+                namedRangeName = pair.Key;
+                namedRangeCellCount = pair.Value.CellCount;
+            }
+        }
+
+        return string.IsNullOrEmpty(namedRangeName) ? "" : namedRangeName;
     }
 
     public static bool ReplaceSingleMatch(

@@ -82,12 +82,56 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReadPackageEntryText(saved, "xl/embeddings/oleObject1.bin").Should().Be(sourceOleObjectText);
 
         saved.Position = 0;
-        new XlsxFileAdapter()
-            .Load(saved)
-            .GetSheetAt(0)
-            .GetValue(3, 3)
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(reloaded, out var reloadBlockReason)
             .Should()
-            .Be(new NumberValue(42));
+            .BeTrue(reloadBlockReason);
+
+        reloadedSheet.SetCell(new CellAddress(reloadedSheet.Id, 4, 4), new NumberValue(84));
+
+        using var resaved = new MemoryStream();
+        adapter.Save(reloaded, resaved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(resaved).Should().BeEmpty();
+        AssertWorksheetNativeMetadataPackage(resaved);
+        resaved.Position = 0;
+        adapter.Load(resaved).GetSheetAt(0).GetCell(4, 4)!.Value.Should().Be(new NumberValue(84));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSaveReload_RetainsWorksheetPrintOptionsNativeMetadata()
+    {
+        using var source = CreateWorksheetNativeMetadataSourcePackage();
+        AddWorksheetPrintOptionsNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.PrintGridlines.Should().BeTrue();
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.PrintGridlines.Should().BeTrue();
+        var printOptionsMetadata = reloadedSheet.PrintOptionsMetadata;
+        printOptionsMetadata.Should().NotBeNull();
+        var printOptionsNativeXml = XElement.Parse(printOptionsMetadata!.Get("printOptions")!);
+        printOptionsNativeXml.Attribute("gridLinesSet")!.Value.Should().Be("1");
     }
 
     [Fact]
@@ -109,6 +153,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetWebPublishItemsSanitized(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved, expectEditedCell: true);
     }
 
     [Fact]
@@ -133,6 +178,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetWebPublishItemsSanitized(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheetAt(0)
+            .GetCell(3, 3)!
+            .Value
+            .Should()
+            .Be(new NumberValue(42));
     }
 
     [Theory]
@@ -164,6 +217,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetWebPublishItemsPackageMetadata(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved, expectEditedCell: true);
     }
 
     [Fact]
@@ -185,6 +239,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetOleControlsSanitized(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved, expectEditedCell: true);
     }
 
     [Fact]
@@ -209,6 +264,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetOleControlsSanitized(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheetAt(0)
+            .GetCell(3, 3)!
+            .Value
+            .Should()
+            .Be(new NumberValue(42));
     }
 
     [Fact]
@@ -226,6 +289,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetControlPropertiesRelationshipRebound(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved);
     }
 
     [Fact]
@@ -243,6 +307,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetOleObjectRelationshipRebound(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved);
     }
 
     [Fact]
@@ -260,6 +325,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetControlPropertiesDanglingControlPrRebound(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved);
     }
 
     [Fact]
@@ -277,6 +343,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetOleControlSidecarsPruned(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved);
+    }
+
+    private static void AssertWorksheetNativeMetadataWorkbookReloads(Stream stream, bool expectEditedCell = false)
+    {
+        stream.Position = 0;
+        var workbook = new XlsxFileAdapter().Load(stream);
+        var sheet = workbook.GetSheetAt(0);
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(24));
+        if (expectEditedCell)
+            sheet.GetValue(new CellAddress(sheet.Id, 3, 3)).Should().Be(new NumberValue(42));
     }
 
     private static MemoryStream CreateWorksheetNativeMetadataSourcePackage()
@@ -390,6 +469,20 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 new XAttribute("objectType", "Button"),
                 new XAttribute("checked", "Unchecked"))));
         WritePackageEntry(archive, "xl/embeddings/oleObject1.bin", "FreeX generated OLE placeholder");
+    }
+
+    private static void AddWorksheetPrintOptionsNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        ReplaceWorksheetChildInOrder(worksheetXml.Root!, new XElement(
+            worksheetNs + "printOptions",
+            new XAttribute("gridLines", "1"),
+            new XAttribute("gridLinesSet", "1")));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
     private static void AddWorksheetNativeRelationship(

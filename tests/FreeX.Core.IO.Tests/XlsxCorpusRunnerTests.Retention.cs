@@ -189,6 +189,40 @@ public partial class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedDigitalSignaturesKnownGapRow_RemovesInvalidatedSignatureGraphAfterModelEdit()
+    {
+        var row = ReadManifestRows().Single(row => row.Id == "generated-digital-signatures-001");
+        row.ExpectedStatus.Should().Be("supported-known-gap");
+        row.ExpectedWarnings.Should().Contain("unsupported digital signature disclosed");
+
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(row.Id);
+        AssertDigitalSignaturePackageGraph(source, "generated-digital-signatures-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 11, 1), new TextValue("freex-digital-signature-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("package_guard_digital_signatures");
+
+        saved.Position = 0;
+        AssertPackageHealth(saved, row.Id);
+        AssertDigitalSignaturePackageGraphRemoved(saved, "generated-digital-signatures-001 saved");
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheetAt(0)
+            .GetCell(11, 1)!
+            .Value
+            .Should()
+            .Be(new TextValue("freex-digital-signature-edit"));
+    }
+
+    [Fact]
     public void GeneratedThreadedCommentsRetentionPackage_LinksWorksheetAndPersonsParts()
     {
         using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-threaded-comments-001");
@@ -517,7 +551,7 @@ public partial class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(55, "the generated metadata-pass manifest currently declares fifty-five deterministic package-retention rows");
+        rows.Should().HaveCount(56, "the generated metadata-pass manifest currently declares fifty-six deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -1300,13 +1334,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-print-options-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetPrintOptionsModel(sheet, "generated-worksheet-print-options-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-print-options-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-print-options-001");
         AssertWorksheetPrintOptions(saved, "generated-worksheet-print-options-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetPrintOptionsModel(
+            reloaded.GetSheetAt(0),
+            "worksheet print options model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1318,13 +1360,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-page-setup-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetPageSetupNativeModel(sheet, "generated-worksheet-page-setup-native-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-page-setup-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-page-setup-native-001");
         AssertWorksheetPageSetupNative(saved, "generated-worksheet-page-setup-native-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetPageSetupNativeModel(
+            reloaded.GetSheetAt(0),
+            "worksheet page setup model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1336,13 +1386,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-header-footer-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetHeaderFooterNativeModel(sheet, "generated-worksheet-header-footer-native-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-header-footer-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-header-footer-native-001");
         AssertWorksheetHeaderFooterNative(saved, "generated-worksheet-header-footer-native-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetHeaderFooterNativeModel(
+            reloaded.GetSheetAt(0),
+            "worksheet header/footer model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1372,13 +1430,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-sheet-properties-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetSheetPropertiesModel(sheet, "generated-worksheet-sheet-properties-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-sheet-properties-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-sheet-properties-001");
         AssertWorksheetSheetProperties(saved, "generated-worksheet-sheet-properties-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetSheetPropertiesModel(
+            reloaded.GetSheetAt(0),
+            "worksheet sheet properties model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -2157,6 +2223,12 @@ public partial class XlsxCorpusRunnerTests
         printOptions.HasElements.Should().BeFalse(because);
     }
 
+    private static void AssertWorksheetPrintOptionsModel(Sheet sheet, string because)
+    {
+        sheet.PrintOptionsMetadata.Should().NotBeNull(because);
+        BagAttr(sheet.PrintOptionsMetadata, "printOptions", "gridLinesSet").Should().Be("1", because);
+    }
+
     private static void AssertWorksheetPageSetupNative(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -2171,6 +2243,12 @@ public partial class XlsxCorpusRunnerTests
         pageSetup.HasElements.Should().BeFalse(because);
     }
 
+    private static void AssertWorksheetPageSetupNativeModel(Sheet sheet, string because)
+    {
+        sheet.UsePrinterDefaults.Should().BeTrue(because);
+        sheet.PrintCopies.Should().Be(3, because);
+    }
+
     private static void AssertWorksheetHeaderFooterNative(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -2182,6 +2260,11 @@ public partial class XlsxCorpusRunnerTests
         headerFooter!.Attribute("nativeHeaderFooterAttr").Should().BeNull(because);
         headerFooter.Element(worksheetNs + "oddHeader")!.Value.Should().Contain("Center", because);
         headerFooter.Element(worksheetNs + "nativeHeaderFooterChild").Should().BeNull(because);
+    }
+
+    private static void AssertWorksheetHeaderFooterNativeModel(Sheet sheet, string because)
+    {
+        sheet.PageHeader.Center.Should().Contain("Center", because);
     }
 
     private static void AssertWorksheetDimensionNative(Stream package, string because, string expectedRef)
@@ -2212,6 +2295,15 @@ public partial class XlsxCorpusRunnerTests
         sheetPr.Elements().Where(element => element.Name.NamespaceName == "urn:freex:test")
             .Should()
             .BeEmpty(because);
+    }
+
+    private static void AssertWorksheetSheetPropertiesModel(Sheet sheet, string because)
+    {
+        sheet.FitToPage.Should().BeTrue(because);
+        sheet.AutoPageBreaks.Should().BeFalse(because);
+        sheet.SheetPropertiesMetadata.Should().NotBeNull(because);
+        BagAttr(sheet.SheetPropertiesMetadata, "sheetPr", "filterMode").Should().Be("1", because);
+        BagChildren(sheet.SheetPropertiesMetadata, "sheetPr").Should().BeEmpty(because);
     }
 
     private static void AssertWorksheetProtectionNative(Stream package, string because)
@@ -2987,6 +3079,32 @@ public partial class XlsxCorpusRunnerTests
             .ContainSingle(because);
     }
 
+    private static void AssertDigitalSignaturePackageGraph(Stream package, string because)
+    {
+        var summary = CapturePackageSummary(package);
+        summary.CriticalParts.Should().Contain("_xmlsignatures/origin.sigs", because);
+        summary.CriticalParts.Should().Contain("_xmlsignatures/sig1.xml", because);
+        summary.CriticalContentTypeOverrides.Should().Contain(
+            "/_xmlsignatures/origin.sigs=>application/vnd.openxmlformats-package.digital-signature-origin",
+            because);
+        summary.CriticalContentTypeOverrides.Should().Contain(
+            "/_xmlsignatures/sig1.xml=>application/vnd.openxmlformats-package.digital-signature-xmlsignature+xml",
+            because);
+    }
+
+    private static void AssertDigitalSignaturePackageGraphRemoved(Stream package, string because)
+    {
+        var summary = CapturePackageSummary(package);
+        summary.CriticalParts.Should().NotContain("_xmlsignatures/origin.sigs", because);
+        summary.CriticalParts.Should().NotContain("_xmlsignatures/sig1.xml", because);
+        summary.CriticalContentTypeOverrides.Should().NotContain(
+            "/_xmlsignatures/origin.sigs=>application/vnd.openxmlformats-package.digital-signature-origin",
+            because);
+        summary.CriticalContentTypeOverrides.Should().NotContain(
+            "/_xmlsignatures/sig1.xml=>application/vnd.openxmlformats-package.digital-signature-xmlsignature+xml",
+            because);
+    }
+
     private static void AssertCustomDocumentProperties(Stream package, string because)
     {
         XNamespace customPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
@@ -2999,8 +3117,9 @@ public partial class XlsxCorpusRunnerTests
             .ToDictionary(property => property.Attribute("name")?.Value ?? "", StringComparer.OrdinalIgnoreCase);
         propertiesByName.Should().ContainKey("Department", because);
         propertiesByName["Department"].Value.Should().Be("Compliance", because);
-        propertiesByName.Should().ContainKey("MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled", because);
-        propertiesByName["MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled"].Value.Should().Be("true", because);
+        propertiesByName.Keys.Should().NotContain(
+            key => key.StartsWith("MSIP_Label_", StringComparison.OrdinalIgnoreCase),
+            because);
 
         var packageRelsXml = LoadPackageXml(archive, "_rels/.rels");
         packageRelsXml.Root!

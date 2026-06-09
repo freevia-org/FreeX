@@ -59,8 +59,21 @@ public sealed class MacOsPublicPreviewHumanChecklistTests
         source.Should().Contain("| Set default `.fxl` handler, if permitted | Finder Get Info > Open with > FreeX > Change All succeeds |");
         source.Should().Contain("| Double-click `.fxl` in Finder | FreeX launches or activates and opens the selected workbook");
         source.Should().Contain("| Right-click `.fxl` > Open With > FreeX | FreeX opens the file when it is not already running |");
+        source.Should().Contain("| Drag supported `.fxl`/`.xlsx` workbook onto `FreeX.app` or Dock icon | FreeX launches or activates and opens the dropped workbook");
         source.Should().Contain("| Repeat while FreeX is already running | The selected file opens in the existing app session without losing unsaved work |");
+        source.Should().Contain("| Drag supported workbook from Finder onto already-running FreeX window | The already-running FreeX window accepts the Finder drop and opens the workbook");
         source.Should().Contain("missing default-handler proof blocks promotion");
+
+        source.Should().Contain("## Future Native Share Sheet Readiness");
+        source.Should().Contain("The current macOS public-preview candidate uses the existing share fallback; a native AppKit share sheet is not implemented yet.");
+        source.Should().Contain("Do not claim native share-sheet parity until a build that implements the native sheet passes every row in this section.");
+        source.Should().Contain("| Native AppKit share sheet implementation status | Candidate contains a native AppKit share-sheet route; current public-preview builds record `Not implemented` because it is not implemented yet |");
+        source.Should().Contain("| Saved workbook opens native share sheet | From a saved workbook, Share opens the native macOS share sheet for that workbook file, not only the fallback route |");
+        source.Should().Contain("| Cancel leaves workbook and file unchanged | Cancel closes the sheet without changing workbook contents, saved file path, dirty state, or the saved workbook bytes |");
+        source.Should().Contain("| Share target receives workbook file | At least one share target receives the saved workbook file with the expected file name and readable workbook contents |");
+        source.Should().Contain("| Existing share fallback still works | The existing share fallback remains usable when the native share sheet is unavailable, canceled, or unsupported |");
+        source.Should().Contain("| Keyboard focus after open and cancel | Keyboard focus lands predictably in the sheet and returns to a usable FreeX focus target after Cancel or completion |");
+        source.Should().Contain("| VoiceOver announcement and navigation | VoiceOver identifies the sheet, target controls, Cancel action, and completion or cancel return state clearly enough to navigate safely |");
 
         source.Should().Contain("## Keyboard-Only Accessibility");
         source.Should().Contain("Complete this section with the mouse or trackpad set aside after launch.");
@@ -74,7 +87,17 @@ public sealed class MacOsPublicPreviewHumanChecklistTests
         source.Should().Contain("| First launch | VoiceOver identifies the app/window and initial focus |");
         source.Should().Contain("| Workbook grid focus | Active cell or grid location is announced with useful context |");
         source.Should().Contain("| Dialog titles and buttons | Find, Replace, Go To, Format Cells, warnings, About, and Legal Notices announce titles, fields, default buttons, and destructive actions |");
-        source.Should().Contain("| Known issues review | Every confusing announcement or missing name has severity, workaround, owner, and public-preview blocking decision |");
+        source.Should().Contain("| Known issues review | `Accessibility Known Issues` is complete; every confusing announcement or missing name has severity, workaround, owner, and public-preview blocking decision |");
+
+        source.Should().Contain("## Accessibility Known Issues");
+        source.Should().Contain("If no issues are known for this runtime, keep exactly one explicit `None` row.");
+        source.Should().Contain("The VoiceOver `Known issues review` row and the Public-Preview Decision known-issues row must both reflect this table.");
+        source.Should().Contain("| Issue ID | Affected workflow | Severity | User impact / evidence | Workaround | Owner | Public-preview blocking | Decision / rationale |");
+        source.Should().Contain("| None | None | None | No keyboard-only or VoiceOver known issues found during this runtime validation | None | Release owner | No | No known accessibility issues; public preview may proceed |");
+
+        source.Should().Contain("## Log And Artifact Collection");
+        source.Should().Contain("| macOS release-assets wrapper | Yes |");
+        source.Should().Contain("| `FreeX-latest-macos-distribution-candidate-manifest.json` | Yes |");
 
         source.Should().Contain("## Public-Preview Decision");
         source.Should().Contain("| This runtime passed human Finder/Gatekeeper validation | Pass / Fail |");
@@ -83,6 +106,7 @@ public sealed class MacOsPublicPreviewHumanChecklistTests
         source.Should().Contain("| Known issues are listed with severity, workaround, owner, and blocking decision | Pass / Fail |");
         source.Should().Contain("| Release owner accepts this runtime for public preview | Yes / No |");
         source.Should().Contain("macOS human validation decision: Pass / Fail / Internal-only");
+        source.Should().Contain("Native share-sheet readiness:");
         source.Should().Contain("Decision owner:");
     }
 }

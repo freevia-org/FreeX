@@ -221,14 +221,22 @@ internal static class XlsxWorkbookSchemaNormalizer
             return null;
 
         var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
-        return relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(relationship => string.Equals(
-                relationship.Attribute("Type")?.Value,
-                VmlDrawingRelationshipType,
-                StringComparison.OrdinalIgnoreCase))
-            .Select(relationship => relationship.Attribute("Id")?.Value)
-            .FirstOrDefault(id => !string.IsNullOrWhiteSpace(id));
+        foreach (var relationship in relsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+        {
+            if (!string.Equals(
+                    relationship.Attribute("Type")?.Value,
+                    VmlDrawingRelationshipType,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var id = relationship.Attribute("Id")?.Value;
+            if (!string.IsNullOrWhiteSpace(id))
+                return id;
+        }
+
+        return null;
     }
 
     internal static bool NormalizeWorkbook(XDocument workbookXml, XNamespace workbookNs)

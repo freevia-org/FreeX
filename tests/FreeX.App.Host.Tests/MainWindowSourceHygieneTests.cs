@@ -87,6 +87,57 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ScreenshotTour_ProvidesHomeNumberFormatDropdownEvidenceHook()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR");
+        source.Should().Contain("CaptureHomeNumberFormatDropdownTourAsync");
+        source.Should().Contain("home-number-format-dropdown-tour");
+        source.Should().Contain("NumberFormatBox.IsDropDownOpen = true");
+        source.Should().Contain("FindOpenPopupChild(NumberFormatBox)");
+        source.Should().Contain("HomeNumberFormatDropdownTourManifest");
+        source.Should().Contain("interactive:home-number-format:opened");
+        source.Should().Contain("RenderTargetBitmap-combobox-popup-child");
+        source.Should().Contain("interactive_home_number_format_opened.png");
+        source.Should().Contain("HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label)");
+    }
+
+    [Fact]
+    public void ScreenshotTour_ProvidesHomeBordersDropdownEvidenceHook()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var xaml = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "MainWindow.xaml");
+
+        xaml.Should().Contain("x:Name=\"BordersMenuButton\"");
+        source.Should().Contain("FREEX_HOME_BORDERS_DROPDOWN_TOUR");
+        source.Should().Contain("CaptureHomeBordersDropdownTourAsync");
+        source.Should().Contain("home-borders-dropdown-tour");
+        source.Should().Contain("BordersMenuButton.ContextMenu");
+        source.Should().Contain("HomeBordersDropdownTourManifest");
+        source.Should().Contain("interactive:home-borders:opened");
+        source.Should().Contain("RenderTargetBitmap-context-menu");
+        source.Should().Contain("interactive_home_borders_opened.png");
+        source.Should().Contain("The scenario captures the top-level Borders menu");
+    }
+
+    [Fact]
+    public void ScreenshotTour_ProvidesWorksheetContextMenuEvidenceHook()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_WORKSHEET_CONTEXT_MENU_TOUR");
+        source.Should().Contain("CaptureWorksheetContextMenuTourAsync");
+        source.Should().Contain("worksheet-context-menu-tour");
+        source.Should().Contain("OnGridContextMenuRequested(address, GetKeyboardContextMenuGridPoint(address))");
+        source.Should().Contain("SheetGrid.ContextMenu");
+        source.Should().Contain("WorksheetContextMenuTourManifest");
+        source.Should().Contain("interactive:worksheet-cell-context-menu:opened");
+        source.Should().Contain("RenderTargetBitmap-worksheet-context-menu");
+        source.Should().Contain("interactive_worksheet_cell_context_menu_opened.png");
+    }
+
+    [Fact]
     public void AppChrome_DoesNotUseLegacyGreenThemeConstants()
     {
         var appHostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");

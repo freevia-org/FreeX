@@ -88,11 +88,23 @@ public static class ChartTypePickerPlanner
             .Select(category => new ChartTypePickerCategory(
                 category.Name,
                 category.Types
-                    .Select(type => supported.FirstOrDefault(option => option.Type == type))
+                    .Select(type => FindSupportedOption(supported, type))
                     .OfType<ChartTypePickerOption>()
                     .ToList()))
             .Where(category => category.Options.Count > 0)
             .ToList();
+    }
+
+    private static ChartTypePickerOption? FindSupportedOption(IReadOnlyList<ChartTypePickerOption> supported, ChartType type)
+    {
+        for (var index = 0; index < supported.Count; index++)
+        {
+            var option = supported[index];
+            if (option.Type == type)
+                return option;
+        }
+
+        return null;
     }
 
     public static IReadOnlyList<ChartTypeGalleryChoice> GetGalleryChoices(string categoryName) =>

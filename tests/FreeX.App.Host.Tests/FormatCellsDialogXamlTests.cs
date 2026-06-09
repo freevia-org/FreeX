@@ -36,6 +36,10 @@ public sealed partial class FormatCellsDialogXamlTests
 
         xaml.ShouldContainLocalizedAttribute("Content", "_OK");
         xaml.ShouldContainLocalizedAttribute("Content", "_Cancel");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"FormatCellsOkButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"FormatCellsCancelButton\"");
+        xaml.Should().Contain("IsDefault=\"True\"");
+        xaml.Should().Contain("IsCancel=\"True\"");
     }
 
     [Fact]

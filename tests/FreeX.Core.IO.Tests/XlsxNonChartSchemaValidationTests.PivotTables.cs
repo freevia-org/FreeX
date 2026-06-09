@@ -81,6 +81,25 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourcePivotTable.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedPivotCache = reloaded.PivotCaches.Should().ContainSingle().Subject;
+        reloadedPivotCache.CacheId.Should().Be(1);
+        reloadedPivotCache.SourceType.Should().Be(PivotCacheSourceType.WorksheetRange);
+        reloadedPivotCache.SourceSheetName.Should().Be("PivotData");
+        reloadedPivotCache.SourceReference.Should().Be("A1:B3");
+        reloadedPivotCache.PackagePart.Should().Be("xl/pivotCache/pivotCacheDefinition1.xml");
+        reloadedPivotCache.Fields.Select(field => field.Name).Should().Equal("Category", "Amount");
+
+        var reloadedPivotTable = reloaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject;
+        reloadedPivotTable.Name.Should().Be("PivotTable1");
+        reloadedPivotTable.CacheId.Should().Be(1);
+        reloadedPivotTable.TargetRange.Start.ToA1().Should().Be("A5");
+        reloadedPivotTable.TargetRange.End.ToA1().Should().Be("B8");
+        reloadedPivotTable.PackagePart.Should().Be("xl/pivotTables/pivotTable1.xml");
+        reloadedPivotTable.RowFields.Should().ContainSingle().Which.SourceFieldIndex.Should().Be(0);
+        reloadedPivotTable.DataFields.Should().ContainSingle().Which.Name.Should().Be("Sum of Amount");
     }
 
     [Fact]
@@ -129,6 +148,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Name
             .Should()
             .Be(workbookNs + "pivotTableDefinition");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetCell(10, 4)!.Value.Should().Be(new NumberValue(42));
+        var reloadedCache = reloaded.PivotCaches.Should().ContainSingle().Subject;
+        reloadedCache.CacheId.Should().Be(1);
+        reloadedCache.SourceType.Should().Be(PivotCacheSourceType.WorksheetRange);
+        reloadedCache.SourceSheetName.Should().Be("PivotData");
+        reloadedCache.SourceReference.Should().Be("A1:B3");
+        reloadedCache.Fields.Select(field => field.Name).Should().Equal("Category", "Amount");
+        var reloadedPivot = reloadedSheet.PivotTables.Should().ContainSingle().Subject;
+        reloadedPivot.Name.Should().Be("PivotTable1");
+        reloadedPivot.CacheId.Should().Be(1);
+        reloadedPivot.RowFields.Should().ContainSingle();
+        reloadedPivot.DataFields.Should().ContainSingle();
     }
 
     [Fact]
@@ -162,6 +197,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         pivotTable.Attribute("blankLineAfterItems").Should().BeNull();
         pivotTable.Attribute("rowGrandTotals")!.Value.Should().Be("0");
         pivotTable.Attribute("colGrandTotals")!.Value.Should().Be("1");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetCell(10, 4)!.Value.Should().Be(new NumberValue(42));
+        reloaded.PivotCaches.Should().ContainSingle().Which.CacheId.Should().Be(1);
+        var reloadedPivot = reloadedSheet.PivotTables.Should().ContainSingle().Subject;
+        reloadedPivot.Name.Should().Be("PivotTable1");
+        reloadedPivot.CacheId.Should().Be(1);
+        reloadedPivot.ShowRowGrandTotals.Should().BeFalse();
+        reloadedPivot.ShowColumnGrandTotals.Should().BeTrue();
+        reloadedPivot.RowFields.Should().ContainSingle();
+        reloadedPivot.DataFields.Should().ContainSingle();
     }
 
     private static Workbook CreatePivotTableSourceWorkbook()

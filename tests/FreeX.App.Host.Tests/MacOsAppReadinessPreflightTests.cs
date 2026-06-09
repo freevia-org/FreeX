@@ -11,6 +11,11 @@ public sealed class MacOsAppReadinessPreflightTests
         var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1"));
 
         script.Should().Contain("Avalonia app TargetFramework must be net10.0");
+        script.Should().Contain("EnableMacOsTargetFramework");
+        script.Should().Contain("net10.0-macos");
+        script.Should().Contain("SupportedOSPlatformVersion");
+        script.Should().Contain("MacOs\\**\\*.cs");
+        script.Should().Contain("FREEX_MACOS_SHARE_SHEET");
         script.Should().Contain("Avalonia app RuntimeIdentifiers");
         script.Should().Contain("ApplicationTitle");
         script.Should().Contain("CFBundleName");
@@ -33,6 +38,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("gatekeeper_assessment_status=accepted");
         script.Should().Contain("gatekeeper_assessment_source=Notarized Developer ID");
         script.Should().Contain("Distribution-candidate run requires accepted Gatekeeper assessment from Notarized Developer ID.");
+        script.Should().Contain("artifact_bundle_metadata_subject=unzipped_app_bundle");
+        script.Should().Contain("bundle_identifier=$(/usr/libexec/PlistBuddy -c ''Print :CFBundleIdentifier'' \"$app_info_plist\")");
+        script.Should().Contain("bundle_package_type=$(/usr/libexec/PlistBuddy -c ''Print :CFBundlePackageType'' \"$app_info_plist\")");
+        script.Should().Contain("bundle_minimum_system_version=$(/usr/libexec/PlistBuddy -c ''Print :LSMinimumSystemVersion'' \"$app_info_plist\")");
+        script.Should().Contain("bundle_high_resolution_capable=$(/usr/libexec/PlistBuddy -c ''Print :NSHighResolutionCapable'' \"$app_info_plist\")");
         script.Should().Contain("publish-distribution-candidate:");
         script.Should().Contain("actions/download-artifact@v7");
         script.Should().Contain("Test portable PDF macOS route");
@@ -40,9 +50,18 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests");
         script.Should().Contain("dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj");
@@ -55,6 +74,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FreeX-latest-macos-distribution-candidate-manifest.json");
         script.Should().Contain("FreeX-latest-$assetLabel-default-open-launch-smoke.txt");
         script.Should().Contain("distribution_candidate_required_markers");
+        script.Should().Contain("smoke_status=passed");
+        script.Should().Contain("Assert-ContainsRequiredText -Text $smokeReportText -Needle \"macos_launch_smoke=passed\"");
         script.Should().Contain("default_open_launch_smoke_report");
         script.Should().Contain("gh release create");
         script.Should().Contain("gh release upload");
@@ -83,10 +104,29 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_unmerge_cells_menu_item=true");
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
+        script.Should().Contain("launchservices_smoke_timeout_seconds=60");
+        script.Should().Contain("launchservices_cleanup_timeout_seconds=10");
+        script.Should().Contain("run_bounded_launchservices_smoke \"bundle_id\" \"$launch_smoke_report\"");
+        script.Should().Contain("run_bounded_launchservices_smoke \"open_with\" \"$open_with_report\"");
+        script.Should().Contain("run_bounded_launchservices_smoke \"default_open\" \"$default_open_report\"");
+        script.Should().Contain("launchservices_smoke_cleanup_timeout=true");
+        script.Should().Contain("macOS workflow must route all three hosted LaunchServices launch smoke paths through run_bounded_launchservices_smoke.");
+        script.Should().Contain("Require hosted smoke before app artifact upload");
+        script.Should().Contain("smoke_status=skipped_host_arch_mismatch");
+        script.Should().Contain("app_artifact_upload_blocked=host_arch_mismatch");
+        script.Should().Contain("Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.");
+        script.Should().Contain("macOS workflow must require successful hosted smoke before uploading the app artifact.");
         script.Should().Contain("open_with_report=\"$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt\"");
         script.Should().Contain("open_with_smoke_file=\"$RUNNER_TEMP/freex-$runtime-open-with.csv\"");
         script.Should().Contain("app_path=\"$unzip_root/FreeX.app\"");
         script.Should().Contain("open -W -n -a \"$app_path\" \"$open_with_smoke_file\" --args --macos-launch-smoke \"$open_with_report\"");
+        script.Should().Contain("--macos-launch-smoke-diagnostics-dir \"$app_diagnostics_dir\"");
+        script.Should().Contain("app_diagnostics_directory_configured=true");
+        script.Should().Contain("app_diagnostics_events_path=\"$app_diagnostics_dir/events.jsonl\"");
+        script.Should().Contain("app_diagnostics_crash_reports_dir=\"$app_diagnostics_dir/CrashReports\"");
+        script.Should().Contain("app_diagnostics_crash_count=0");
+        script.Should().Contain("app_diagnostics_artifact=freex-`$runtime-macos-app-diagnostics");
+        script.Should().Contain("app_diagnostics_events_jsonl=true");
         script.Should().Contain("opened_source_path=.*freex-$runtime-open-with.csv");
         script.Should().Contain("freex-${{ matrix.runtime }}-macos-open-with-launch-smoke.txt");
         script.Should().Contain("default_open_report=\"$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt\"");
@@ -97,6 +137,22 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("launchservices_default_open_app_override=false");
         script.Should().Contain("launchservices_default_open_document_extension=fxl");
         script.Should().Contain("src\\FreeX.App.Services\\PortablePdfDocumentExporter.cs");
+        script.Should().Contain("src\\FreeX.App.Services\\WorkbookShareActionPlanner.cs");
+        script.Should().Contain("public static WorkbookShareActionSurface MacOsPreview");
+        script.Should().Contain("surface.CanShowShareSheet || surface.CanOpenContainingFolder");
+        script.Should().Contain("src\\FreeX.App.Services\\WorkbookViewportScrollPlanner.cs");
+        script.Should().Contain("public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)");
+        script.Should().Contain("public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(");
+        script.Should().Contain("WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)");
+        script.Should().Contain("WorkbookViewportScrollPlanner.CalculateViewportOrigin(");
+        script.Should().Contain("src\\FreeX.App.Services\\LocalFilePath.cs");
+        script.Should().Contain("public static bool TryNormalize(string? candidate, out string normalizedPath)");
+        script.Should().Contain("TryCreateExplicitUri(path, out var uri)");
+        script.Should().Contain("src\\FreeX.App.Services\\OpenRecentWorkbookMenuPlanner.cs");
+        script.Should().Contain("OpenRecentWorkbookMenuPlanner.Create(");
+        script.Should().Contain("public const int DefaultMaximumItems = 10;");
+        script.Should().Contain("Func<string, string?> resolveOpenWorkbookPath");
+        script.Should().Contain("PlatformPathIdentityComparer.Current");
         script.Should().Contain("/Encoding /WinAnsiEncoding");
         script.Should().Contain("EncodeWinAnsiHexText(normalized)");
         script.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
@@ -109,28 +165,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("PdfExportOverwriteCancelButton");
         script.Should().Contain("launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click");
         script.Should().Contain("freex-${{ matrix.runtime }}-macos-default-open-launch-smoke.txt");
-        script.Should().Contain("--macos-launch-smoke-verify-image-clipboard");
-        script.Should().Contain("--macos-launch-smoke-verify-live-command-keys");
-        script.Should().Contain("live_command_key_smoke_ready=true");
-        script.Should().Contain("tell application \"System Events\"");
-        script.Should().Contain("keystroke \"a\" using {command down}");
-        script.Should().Contain("keystroke \"b\" using {command down}");
-        script.Should().Contain("keystroke \"i\" using {command down}");
-        script.Should().Contain("keystroke \"u\" using {command down}");
-        script.Should().Contain("live_command_key_system_events_result=blocked_or_failed");
-        script.Should().Contain("launch_clipboard_image=\"$RUNNER_TEMP/freex-$runtime-clipboard.png\"");
-        script.Should().Contain("/usr/bin/swift - \"$launch_clipboard_image\"");
-        script.Should().Contain("NSPasteboard.general");
-        script.Should().Contain("external_image_clipboard_paste_required=true");
-        script.Should().Contain("external_image_clipboard_paste=true");
-        script.Should().Contain("external_image_clipboard_picture_count=[1-9]");
-        script.Should().Contain("external_image_clipboard_picture_png_bytes=[1-9]");
-        script.Should().Contain("live_command_key_smoke_required=true");
-        script.Should().Contain("live_command_key_smoke=passed");
-        script.Should().Contain("live_cmd_select_all_state_changed=true");
-        script.Should().Contain("live_cmd_bold_state_changed=true");
-        script.Should().Contain("live_cmd_italic_state_changed=true");
-        script.Should().Contain("live_cmd_underline_state_changed=true");
+        script.Should().Contain("cmd_find_direct_route_source_guard=true");
+        script.Should().Contain("cmd_page_up_direct_route_source_guard=true");
+        script.Should().Contain("cmd_page_down_direct_route_source_guard=true");
+        script.Should().Contain("external_image_clipboard_paste_required=false");
+        script.Should().Contain("live_command_key_smoke_required=false");
+        script.Should().Contain("live_command_key_smoke=not_required");
         script.Should().Contain("native_new_workbook_menu_item=true");
         script.Should().Contain("native_open_recent_menu_item=true");
         script.Should().Contain("native_open_recent_item_count=[1-9]");
@@ -198,6 +238,20 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("format_cells_dialog_action_buttons=true");
         script.Should().Contain("format_cells_dialog_compact_layout=true");
         script.Should().Contain("format_cells_dialog_result_closed_without_accept=true");
+        script.Should().Contain("sort_dialog=true");
+        script.Should().Contain("sort_dialog_sort_on_controls=true");
+        script.Should().Contain("sort_dialog_color_controls=true");
+        script.Should().Contain("sort_dialog_action_buttons=true");
+        script.Should().Contain("sort_dialog_compact_layout=true");
+        script.Should().Contain("sort_dialog_result_closed_without_accept=true");
+        script.Should().Contain("data_validation_dropdown_control=true");
+        script.Should().Contain("data_validation_dropdown_items=true");
+        script.Should().Contain("data_validation_dialog=true");
+        script.Should().Contain("data_validation_dialog_criteria_controls=true");
+        script.Should().Contain("data_validation_dialog_message_controls=true");
+        script.Should().Contain("data_validation_dialog_action_buttons=true");
+        script.Should().Contain("data_validation_dialog_compact_layout=true");
+        script.Should().Contain("data_validation_dialog_result_closed_without_accept=true");
         script.Should().Contain("native_fill_cells_menu_item=true");
         script.Should().Contain("native_fill_down_menu_item=true");
         script.Should().Contain("native_fill_right_menu_item=true");
@@ -508,6 +562,20 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("format_cells_dialog_action_buttons=");
         script.Should().Contain("format_cells_dialog_compact_layout=");
         script.Should().Contain("format_cells_dialog_result_closed_without_accept=");
+        script.Should().Contain("sort_dialog=");
+        script.Should().Contain("sort_dialog_sort_on_controls=");
+        script.Should().Contain("sort_dialog_color_controls=");
+        script.Should().Contain("sort_dialog_action_buttons=");
+        script.Should().Contain("sort_dialog_compact_layout=");
+        script.Should().Contain("sort_dialog_result_closed_without_accept=");
+        script.Should().Contain("data_validation_dropdown_control=");
+        script.Should().Contain("data_validation_dropdown_items=");
+        script.Should().Contain("data_validation_dialog=");
+        script.Should().Contain("data_validation_dialog_criteria_controls=");
+        script.Should().Contain("data_validation_dialog_message_controls=");
+        script.Should().Contain("data_validation_dialog_action_buttons=");
+        script.Should().Contain("data_validation_dialog_compact_layout=");
+        script.Should().Contain("data_validation_dialog_result_closed_without_accept=");
         script.Should().Contain("native_help_menu=true");
         script.Should().Contain("native_help_online_menu_item=true");
         script.Should().Contain("native_legal_notices_menu_item=");
@@ -705,7 +773,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_session.FillSelectedRange(direction)");
         script.Should().Contain("private void SelectCurrentRegionOrAll()");
         script.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
-        script.Should().Contain("private void RecordRecentWorkbook(string path)");
+        script.Should().Contain("private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)");
+        script.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics)");
+        script.Should().Contain("RecordFileAccessEvent(`\"workbook_file_access_identity`\", status, grantKind)");
+        script.Should().Contain("RecordFileAccessEvent(`\"workbook_file_access_scope`\", status, grantKind)");
+        script.Should().Contain("[\"payloadRedacted\"] = string.IsNullOrWhiteSpace(grantKind) ? null : \"true\"");
         script.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();");
         script.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
         script.Should().Contain("RefreshViewportSizeForZoom();");
@@ -850,6 +922,48 @@ public sealed class MacOsAppReadinessPreflightTests
     }
 
     [Fact]
+    public void MacOsAppReadinessPreflight_FailsWhenHostedSmokeGateIsRemovedBeforeAppUpload()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(temp.Path);
+        var workflowPath = Path.Combine(temp.Path, ".github", "workflows", "macos-app.yml");
+        var workflow = File.ReadAllText(workflowPath);
+        File.WriteAllText(
+            workflowPath,
+            workflow.Replace(
+                "Require hosted smoke before app artifact upload",
+                "Upload app artifact without hosted smoke gate",
+                StringComparison.Ordinal));
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("macOS workflow is missing required readiness marker: Require hosted smoke before app artifact upload");
+    }
+
+    [Fact]
+    public void MacOsAppReadinessPreflight_FailsWhenBundleLaunchServicesSmokeIsUnbounded()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(temp.Path);
+        var workflowPath = Path.Combine(temp.Path, ".github", "workflows", "macos-app.yml");
+        var workflow = File.ReadAllText(workflowPath);
+        File.WriteAllText(
+            workflowPath,
+            workflow.Replace(
+                "run_bounded_launchservices_smoke \"bundle_id\" \"$launch_smoke_report\"",
+                "run_unbounded_launchservices_smoke \"bundle_id\" \"$launch_smoke_report\"",
+                StringComparison.Ordinal));
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("macOS workflow is missing required readiness marker: run_bounded_launchservices_smoke \"bundle_id\"");
+    }
+
+    [Fact]
     public void MacOsAppReadinessPreflight_FailsForForbiddenPortableSourceToken()
     {
         using var temp = new TestTemporaryDirectory();
@@ -871,6 +985,84 @@ public sealed class MacOsAppReadinessPreflightTests
         var combinedOutput = result.Output + result.Error;
         combinedOutput.Should().Contain("Portable macOS source contains forbidden token 'System.Windows'");
         combinedOutput.Should().Contain("src/FreeX.App.Avalonia/WindowsOnlyLeak.cs");
+    }
+
+    [Fact]
+    public void MacOsAppReadinessPreflight_FailsForNativeMacOsTokenOutsideMacOsSourceBoundary()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(
+            temp.Path,
+            extraAvaloniaSource: """
+            using AppKit;
+
+            namespace FreeX.App.Avalonia;
+
+            internal static class NativeLeak
+            {
+                private static readonly object PickerType = typeof(NSSharingServicePicker);
+            }
+            """);
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        var combinedOutput = result.Output + result.Error;
+        combinedOutput.Should().Contain("Portable macOS source contains native macOS token 'AppKit' outside src/FreeX.App.Avalonia/MacOs");
+        combinedOutput.Should().Contain("src/FreeX.App.Avalonia/WindowsOnlyLeak.cs");
+    }
+
+    [Fact]
+    public void MacOsAppReadinessPreflight_FailsForWindowsTokenInsideMacOsSourceBoundary()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(
+            temp.Path,
+            extraAvaloniaSourcePath: "src/FreeX.App.Avalonia/MacOs/NativeWorkbookShareSheetService.cs",
+            extraAvaloniaSource: """
+            namespace FreeX.App.Avalonia;
+
+            internal static class NativeWorkbookShareSheetService
+            {
+                private const string Token = "System.Windows";
+            }
+            """);
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        var combinedOutput = result.Output + result.Error;
+        combinedOutput.Should().Contain("Portable macOS source contains forbidden token 'System.Windows'");
+        combinedOutput.Should().Contain("src/FreeX.App.Avalonia/MacOs/NativeWorkbookShareSheetService.cs");
+    }
+
+    [Fact]
+    public void MacOsAppReadinessPreflight_AllowsNativeMacOsTokensInsideMacOsSourceBoundary()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(
+            temp.Path,
+            extraAvaloniaSourcePath: "src/FreeX.App.Avalonia/MacOs/NativeWorkbookShareSheetService.cs",
+            extraAvaloniaSource: """
+            using AppKit;
+            using Foundation;
+
+            namespace FreeX.App.Avalonia;
+
+            internal static class NativeWorkbookShareSheetService
+            {
+                private static readonly object PickerType = typeof(NSSharingServicePicker);
+                private static readonly object UrlType = typeof(NSUrl);
+            }
+            """);
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().Be(0, result.Output + result.Error);
+        (result.Output + result.Error).Should().Contain("macOS app readiness preflight passed.");
     }
 
     [Fact]
@@ -901,6 +1093,7 @@ public sealed class MacOsAppReadinessPreflightTests
         string workflowExtraRuntime = "",
         string workflowArm64Runner = "macos-15",
         string workflowX64Runner = "macos-15-intel",
+        string extraAvaloniaSourcePath = "src/FreeX.App.Avalonia/WindowsOnlyLeak.cs",
         string extraAvaloniaSource = "")
     {
         WriteFile(
@@ -924,12 +1117,20 @@ public sealed class MacOsAppReadinessPreflightTests
               <ItemGroup>
                 <Content Include="Packaging\macos\FreeX.icns" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
               </ItemGroup>
+              <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-macos'">
+                <Compile Remove="MacOs\**\*.cs" />
+              </ItemGroup>
               <PropertyGroup>
                 <AssemblyName>FreeX</AssemblyName>
                 <ApplicationTitle>FreeX</ApplicationTitle>
                 <OutputType>Exe</OutputType>
                 <RuntimeIdentifiers>osx-arm64;osx-x64</RuntimeIdentifiers>
-                <TargetFramework>{{TargetFramework}}</TargetFramework>
+                <SupportedOSPlatformVersion Condition="'$(TargetFramework)' == 'net10.0-macos'">12.0</SupportedOSPlatformVersion>
+                <TargetFramework Condition="'$(EnableMacOsTargetFramework)' != 'true'">{{TargetFramework}}</TargetFramework>
+                <TargetFrameworks Condition="'$(EnableMacOsTargetFramework)' == 'true'">net10.0;net10.0-macos</TargetFrameworks>
+              </PropertyGroup>
+              <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-macos'">
+                <DefineConstants>$(DefineConstants);FREEX_MACOS_SHARE_SHEET</DefineConstants>
               </PropertyGroup>
             </Project>
             """.Replace("{{TargetFramework}}", targetFramework));
@@ -1031,7 +1232,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     run: |
                       dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \
                         --configuration Release \
-                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
+                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
                         --logger "trx;LogFileName=freex-${"{{"} matrix.runtime {"}}"}-portable-pdf-exporter-tests.trx" \
                         --results-directory artifacts
                       dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj \
@@ -1042,18 +1243,24 @@ public sealed class MacOsAppReadinessPreflightTests
                   - name: Build app project
                     run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
                   - shell: bash
+                    env:
+                      FREEX_RUNTIME: ${"{{"} matrix.runtime {"}}"}
+                      FREEX_DISTRIBUTION_CANDIDATE: ${"{{"} github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true {"}}"}
                     run: |
                       app="$RUNNER_TEMP/FreeX.app"
                       artifact_root="$GITHUB_WORKSPACE/artifacts"
                       smoke_log="$artifact_root/smoke.log"
-                      runtime="osx-arm64"
+                      runtime="$FREEX_RUNTIME"
+                      evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
                       zip_name="freex-$runtime-macos-app.zip"
                       zip_path="$artifact_root/$zip_name"
                       unzip_root="$RUNNER_TEMP/freex-$runtime-unzip"
                       app_path="$unzip_root/FreeX.app"
+                      launch_smoke_report="$artifact_root/launch.txt"
                       open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
                       default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
-                      distribution_candidate="${"{{"} github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true {"}}"}"
+                      app_diagnostics_dir="$artifact_root/freex-$runtime-macos-app-diagnostics"
+                      distribution_candidate="$FREEX_DISTRIBUTION_CANDIDATE"
                       artifact_channel="internal-preview"
                       distribution_contract="internal_preview_not_for_distribution_notarization_optional"
                       artifact_channel="distribution-candidate"
@@ -1102,12 +1309,18 @@ public sealed class MacOsAppReadinessPreflightTests
                       test -f "$app/Contents/Resources/FreeX.icns"
                       /usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist"
                       /usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist"
+                      /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist"
+                      /usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$app/Contents/Info.plist"
+                      /usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist"
+                      /usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' "$app/Contents/Info.plist"
                       /usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist"
                       /usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist"
                       lipo -archs "$app/Contents/MacOS/FreeX"
                       codesign --verify --deep --strict "$app"
                       ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
+                      ditto -x -k "$zip_path" "$unzip_root"
                       (cd "$artifact_root" && shasum -a 256 "$zip_name" > "$zip_name.sha256")
+                      app_info_plist="$unzip_root/FreeX.app/Contents/Info.plist"
                       test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
                       test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
                       xcrun notarytool submit "$zip_path"
@@ -1116,10 +1329,21 @@ public sealed class MacOsAppReadinessPreflightTests
                       shasum -a 256 -c "$zip_name.sha256"
                       zip_sha256="$(cut -d ' ' -f 1 "$artifact_root/$zip_name.sha256")"
                       echo "zip_sha256=$zip_sha256"
+                      echo "artifact_bundle_metadata_subject=unzipped_app_bundle"
+                      echo "bundle_executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_info_plist")"
+                      echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app_info_plist")"
+                      echo "bundle_identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_info_plist")"
+                      echo "bundle_package_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$app_info_plist")"
+                      echo "bundle_minimum_system_version=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app_info_plist")"
+                      echo "bundle_high_resolution_capable=$(/usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' "$app_info_plist")"
+                      echo "artifact_document_extensions_subject=unzipped_app_bundle"
+                      echo "native_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app_info_plist")"
+                      echo "imported_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app_info_plist")"
                       cat > "$tester_instructions_path" <<EOF
                       This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel; distribution-candidate artifacts must show Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment in evidence.
                       Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs.
                       Unzip the GitHub Actions artifact wrapper first; these files are inside it.
+                      ditto -x -k $zip_name .
                       If artifact_channel=internal-preview, ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.
                       EOF
                       "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke | tee "$smoke_log"
@@ -1134,27 +1358,34 @@ public sealed class MacOsAppReadinessPreflightTests
                       test "$format_cells_style_roundtrip_count" -ge 2
                       echo "format_cells_style_roundtrip=true"
                       echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"
+                      launchservices_smoke_timeout_seconds=60
+                      launchservices_cleanup_timeout_seconds=10
+                      append_launchservices_failure_diagnostics() {"{"}
+                        echo "app_diagnostics_events_jsonl=true"
+                      {"}"}
+                      wait_for_bounded_launchservices_cleanup() {"{"}
+                        local launchservices_pid="$1"
+                        kill "$launchservices_pid" 2>/dev/null || true
+                        kill -9 "$launchservices_pid" 2>/dev/null || true
+                      {"}"}
+                      run_bounded_launchservices_smoke() {"{"}
+                        local smoke_name="$1"
+                        local report_path="$2"
+                        local timed_out=false
+                        echo "launchservices_smoke_timed_out=$timed_out"
+                        echo "launchservices_smoke_cleanup_timeout=true"
+                        echo "launchservices_smoke_name=$smoke_name"
+                        cat "$report_path" >> "$evidence_path"
+                      {"}"}
                       /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
-                      launch_clipboard_image="$RUNNER_TEMP/freex-$runtime-clipboard.png"
-                      base64 -D > "$launch_clipboard_image"
-                      /usr/bin/swift - "$launch_clipboard_image" <<'SWIFT'
-                      NSPasteboard.general
-                      pasteboard.clearContents()
-                      pasteboard.writeObjects([image])
-                      SWIFT
-                      open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$artifact_root/launch.txt" --macos-launch-smoke-verify-image-clipboard --macos-launch-smoke-verify-live-command-keys
-                      live_command_key_ready=false
-                      grep -q "live_command_key_smoke_ready=true" "$artifact_root/launch.txt"
-                      tell application "System Events"
-                      keystroke "a" using {"{"}command down{"}"}
-                      keystroke "b" using {"{"}command down{"}"}
-                      keystroke "i" using {"{"}command down{"}"}
-                      keystroke "u" using {"{"}command down{"}"}
-                      live_command_key_system_events_result=blocked_or_failed
+                      run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report" \
+                        open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
                       osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
                       open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"
-                      open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report"
+                      run_bounded_launchservices_smoke "open_with" "$open_with_report" \
+                        open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
                       grep -q "macos_launch_smoke=passed" "$open_with_report"
+                      grep -q "app_diagnostics_directory_configured=true" "$open_with_report"
                       grep -q "window_shown=true" "$open_with_report"
                       grep -q "opened_source_path=.*freex-$runtime-open-with.csv" "$open_with_report"
                       grep -q "viewport_rows=[1-9]" "$open_with_report"
@@ -1165,7 +1396,9 @@ public sealed class MacOsAppReadinessPreflightTests
                       cat > "$default_open_smoke_file" <<'JSON'
                       {"{"} "FileFormat": "FreeX.NativeJsonWorkbook" {"}"}
                       JSON
-                      open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report"
+                      run_bounded_launchservices_smoke "default_open" "$default_open_report" \
+                        open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+                      grep -q "app_diagnostics_directory_configured=true" "$default_open_report"
                       launchservices_default_open_app_override=false
                       launchservices_default_open_document_extension=fxl
                       launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click
@@ -1173,22 +1406,36 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "launchservices_default_open_app_override=false" "$default_open_report"
                       grep -q "launchservices_default_open_document_extension=fxl" "$default_open_report"
                       grep -q "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click" "$default_open_report"
-                      grep -q "external_image_clipboard_paste_required=true" "$artifact_root/launch.txt"
-                      grep -q "external_image_clipboard_paste=true" "$artifact_root/launch.txt"
-                      grep -q "external_image_clipboard_picture_count=[1-9]" "$artifact_root/launch.txt"
-                      grep -q "external_image_clipboard_picture_png_bytes=[1-9]" "$artifact_root/launch.txt"
-                      grep -q "live_command_key_smoke_required=true" "$artifact_root/launch.txt"
-                      grep -q "live_command_key_smoke=passed" "$artifact_root/launch.txt"
-                      grep -q "live_command_key_smoke_attempted=true" "$artifact_root/launch.txt"
-                      grep -q "live_command_key_smoke_ready=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_select_all_received=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_select_all_state_changed=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_bold_received=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_bold_state_changed=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_italic_received=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_italic_state_changed=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_underline_received=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_underline_state_changed=true" "$artifact_root/launch.txt"
+                      app_diagnostics_events_path="$app_diagnostics_dir/events.jsonl"
+                      app_diagnostics_crash_reports_dir="$app_diagnostics_dir/CrashReports"
+                      if [[ -d "$app_diagnostics_crash_reports_dir" ]]; then
+                        app_diagnostics_crash_count="$(find "$app_diagnostics_crash_reports_dir" -type f -name '*.json' | wc -l | tr -d ' ')"
+                      else
+                        app_diagnostics_crash_count=0
+                      fi
+                      echo "app_diagnostics_artifact=freex-$runtime-macos-app-diagnostics"
+                      echo "app_diagnostics_events_jsonl=true"
+                      echo "app_diagnostics_crash_report_count=$app_diagnostics_crash_count"
+                      test -f "$app_diagnostics_events_path"
+                      grep -q '"eventName":"app_start"' "$app_diagnostics_events_path"
+                      grep -q '"eventName":"app_ready"' "$app_diagnostics_events_path"
+                      grep -q '"eventName":"macos_launch_smoke"' "$app_diagnostics_events_path"
+                      echo "smoke_status=passed" >> "$evidence_path"
+                      host_arch="$(uname -m)"
+                      echo "smoke_status=skipped_host_arch_mismatch" >> "$evidence_path"
+                      echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$launch_smoke_report"
+                      echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$open_with_report"
+                      echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$default_open_report"
+                      echo "app_artifact_upload_blocked=host_arch_mismatch" >> "$evidence_path"
+                      rm -f "$zip_path" "$zip_path.sha256"
+                      echo "Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact."
+                      exit 1
+                      grep -q "external_image_clipboard_paste_required=false" "$artifact_root/launch.txt"
+                      grep -q "live_command_key_smoke_required=false" "$artifact_root/launch.txt"
+                      grep -q "live_command_key_smoke=not_required" "$artifact_root/launch.txt"
+                      grep -q "cmd_find_direct_route_source_guard=true" "$artifact_root/launch.txt"
+                      grep -q "cmd_page_up_direct_route_source_guard=true" "$artifact_root/launch.txt"
+                      grep -q "cmd_page_down_direct_route_source_guard=true" "$artifact_root/launch.txt"
                       grep -q "new_sheet_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_format_painter_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_autosum_button=true" "$artifact_root/launch.txt"
@@ -1218,6 +1465,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_open_recent_item_count=[1-9]" "$artifact_root/launch.txt"
                       grep -q "native_workbook_statistics_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_export_pdf_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_share_workbook_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_edit_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_close_workbook_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_data_menu=true" "$artifact_root/launch.txt"
@@ -1328,6 +1576,20 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "format_cells_dialog_action_buttons=true" "$artifact_root/launch.txt"
                       grep -q "format_cells_dialog_compact_layout=true" "$artifact_root/launch.txt"
                       grep -q "format_cells_dialog_result_closed_without_accept=true" "$artifact_root/launch.txt"
+                      grep -q "sort_dialog=true" "$artifact_root/launch.txt"
+                      grep -q "sort_dialog_sort_on_controls=true" "$artifact_root/launch.txt"
+                      grep -q "sort_dialog_color_controls=true" "$artifact_root/launch.txt"
+                      grep -q "sort_dialog_action_buttons=true" "$artifact_root/launch.txt"
+                      grep -q "sort_dialog_compact_layout=true" "$artifact_root/launch.txt"
+                      grep -q "sort_dialog_result_closed_without_accept=true" "$artifact_root/launch.txt"
+                      grep -q "data_validation_dropdown_control=true" "$artifact_root/launch.txt"
+                      grep -q "data_validation_dropdown_items=true" "$artifact_root/launch.txt"
+                      grep -q "data_validation_dialog=true" "$artifact_root/launch.txt"
+                      grep -q "data_validation_dialog_criteria_controls=true" "$artifact_root/launch.txt"
+                      grep -q "data_validation_dialog_message_controls=true" "$artifact_root/launch.txt"
+                      grep -q "data_validation_dialog_action_buttons=true" "$artifact_root/launch.txt"
+                      grep -q "data_validation_dialog_compact_layout=true" "$artifact_root/launch.txt"
+                      grep -q "data_validation_dialog_result_closed_without_accept=true" "$artifact_root/launch.txt"
                       grep -q "native_autosum_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_autosum_sum_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_autosum_average_menu_item=true" "$artifact_root/launch.txt"
@@ -1406,6 +1668,25 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_legal_notices_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_quit_menu_item=true" "$artifact_root/launch.txt"
                       echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")"
+                  - name: Require hosted smoke before app artifact upload
+                    shell: bash
+                    env:
+                      FREEX_RUNTIME: ${"{{"} matrix.runtime {"}}"}
+                    run: |
+                      runtime="$FREEX_RUNTIME"
+                      artifact_root="$GITHUB_WORKSPACE/artifacts"
+                      evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
+                      launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
+                      open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
+                      default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
+                      if grep -q "^smoke_status=skipped_host_arch_mismatch$" "$evidence_path"; then
+                        echo "Host/runtime architecture mismatch for $runtime cannot publish a macOS app artifact."
+                        exit 1
+                      fi
+                      grep -q "^smoke_status=passed$" "$evidence_path"
+                      grep -q "^macos_launch_smoke=passed$" "$launch_smoke_report"
+                      grep -q "^macos_launch_smoke=passed$" "$open_with_report"
+                      grep -q "^macos_launch_smoke=passed$" "$default_open_report"
                   - name: Upload app artifact
                     uses: actions/upload-artifact@v7
                     with:
@@ -1426,9 +1707,10 @@ public sealed class MacOsAppReadinessPreflightTests
                         artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-default-open-launch-smoke.txt
                         artifacts/freex-${"{{"} matrix.runtime {"}}"}-portable-pdf-exporter-tests.trx
                         artifacts/freex-${"{{"} matrix.runtime {"}}"}-export-path-tests.trx
+                        artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-app-diagnostics/**
               publish-distribution-candidate:
                 name: Publish macOS distribution candidate
-                needs: macos-app
+                needs: [macos-app, macos-preview-readiness]
                 if: ${"{{"} github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true {"}}"}
                 runs-on: ubuntu-latest
                 timeout-minutes: 30
@@ -1453,6 +1735,9 @@ public sealed class MacOsAppReadinessPreflightTests
                       FreeX-latest-$assetLabel-default-open-launch-smoke.txt
                       source_artifact_pattern
                       distribution_candidate_required_markers
+                      smoke_status=passed
+                      $packagingSmokeText = Get-Content -LiteralPath $packagingSmokePath -Raw
+                      Assert-ContainsRequiredText -Text $smokeReportText -Needle "macos_launch_smoke=passed"
                       default_open_launch_smoke_report
                   - name: Upload release-channel prepared assets
                     uses: actions/upload-artifact@v7
@@ -1483,10 +1768,23 @@ public sealed class MacOsAppReadinessPreflightTests
                         return smokeExitCode;
 
                     MacOsLaunchSmokeOptions.TryParse(args, out var launchSmokeOptions, out var startupArguments, out var launchSmokeError);
+                    var diagnostics = AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory);
+                    diagnostics.RegisterUnhandledExceptionHandlers();
+                    diagnostics.RecordEvent("app_start");
                     App.StartupArguments = startupArguments;
                     App.LaunchSmokeOptions = launchSmokeOptions;
-                    BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
-                    return 0;
+                    App.Diagnostics = diagnostics;
+                    try
+                    {
+                        BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
+                        diagnostics.RecordEvent("app_exit");
+                        return 0;
+                    }
+                    catch (Exception ex)
+                    {
+                        diagnostics.RecordCrash(ex, "avalonia_startup");
+                        throw;
+                    }
                 }
             }
             """);
@@ -1499,13 +1797,124 @@ public sealed class MacOsAppReadinessPreflightTests
 
             public sealed class App
             {
+                internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }
+
                 private static async Task ActivatedAsync(MainWindow mainWindow, ActivatedEventArgs args)
                 {
+                    Diagnostics?.RecordEvent("app_ready");
                     this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime;
                     if (args is not FileActivatedEventArgs fileArgs || fileArgs.Kind != ActivationKind.File)
                         return;
 
                     await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);
+                    MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Avalonia/AvaloniaAppDiagnostics.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            internal sealed class AvaloniaAppDiagnostics
+            {
+                public static AvaloniaAppDiagnostics Create(string? diagnosticsDirectory = null)
+                {
+                    AppDiagnosticsOptions.CreateDefault();
+                    new AppDiagnosticsFileStore(options);
+                    AppDiagnosticsMetadata.Create("Version Test");
+                    return new();
+                }
+
+                public void RegisterUnhandledExceptionHandlers()
+                {
+                    AppDomain.CurrentDomain.UnhandledException += (_, args) => { };
+                    TaskScheduler.UnobservedTaskException += (_, args) => { };
+                }
+
+                public void RecordEvent(string eventName, IReadOnlyDictionary<string, string?>? properties = null)
+                {
+                    AppDiagnosticsFileStore.SanitizeProperties(properties);
+                }
+
+                public string RecordCrash(Exception exception, string source) => "";
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/AppDiagnosticsFileStore.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public sealed class AppDiagnosticsFileStore
+            {
+                private static readonly HashSet<string> AllowedPropertyNames = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    "grantKind",
+                    "payloadRedacted"
+                };
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Avalonia/WorkbookFileAccessService.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            internal interface IWorkbookFileAccessService { }
+
+            internal sealed class WorkbookFileAccessScope
+            {
+                public static WorkbookFileAccessScope FromDisposable(IDisposable disposable, Action? onDispose = null) => new();
+            }
+
+            internal static class WorkbookFileAccessServiceFactory
+            {
+                public static IWorkbookFileAccessService Create(AvaloniaAppDiagnostics? diagnostics = null) =>
+                    new AvaloniaWorkbookFileAccessService(diagnostics);
+            }
+
+            internal sealed class AvaloniaWorkbookFileAccessService : IWorkbookFileAccessService
+            {
+                internal const string MacOsSecurityScopedBookmarkKind = "macos-security-scoped-bookmark";
+
+                public AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null) { }
+
+                private async Task BeginAsync(IStorageItem storageItem, IStorageProvider storageProvider, WorkbookFileAccessIdentity identity, string path)
+                {
+                    if (storageItem is { CanBookmark: true } && StorageItemMatchesPath(storageItem, path))
+                    {
+                        var bookmark = await storageItem.SaveBookmarkAsync();
+                        RecordIdentityEvent("bookmark_created", grantKind: MacOsSecurityScopedBookmarkKind);
+                        var storageFile = await storageProvider.OpenFileBookmarkAsync(bookmark);
+                        PlatformPathIdentityComparer.Current.Equals(identity.LocalPath, resolvedPath);
+                        RecordScopeEvent("scope_started", grantKind: MacOsSecurityScopedBookmarkKind);
+                        WorkbookFileAccessScope.FromDisposable(
+                            storageFile,
+                            () => RecordScopeEvent("scope_ended", grantKind: MacOsSecurityScopedBookmarkKind));
+                    }
+                }
+
+                private static bool StorageItemMatchesPath(IStorageItem storageItem, string path) => true;
+
+                private void RecordIdentityEvent(string status, string? grantKind = null) =>
+                    RecordFileAccessEvent("workbook_file_access_identity", status, grantKind);
+
+                private void RecordScopeEvent(string status, string? grantKind = null) =>
+                    RecordFileAccessEvent("workbook_file_access_scope", status, grantKind);
+
+                private void RecordFileAccessEvent(string eventName, string status, string? grantKind)
+                {
+                    _diagnostics?.RecordEvent(eventName, new Dictionary<string, string?>
+                    {
+                        ["scope"] = "workbook_file_access",
+                        ["grantKind"] = string.IsNullOrWhiteSpace(grantKind) ? null : grantKind,
+                        ["payloadRedacted"] = string.IsNullOrWhiteSpace(grantKind) ? null : "true"
+                    });
                 }
             }
             """);
@@ -1530,7 +1939,23 @@ public sealed class MacOsAppReadinessPreflightTests
                     ShellFocusRegion.SheetTabs,
                     ShellFocusRegion.StatusBar
                 ];
+                /*
+                private readonly ScrollBar _verticalWorksheetScrollBar = new();
+                private readonly ScrollBar _horizontalWorksheetScrollBar = new();
+                private bool _isUpdatingWorksheetScrollBars;
+                root.Children.Add(BuildWorksheetViewportChrome());
+                _sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                _verticalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;
+                _horizontalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;
+                WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)
+                ApplyWorksheetScrollAxis(_verticalWorksheetScrollBar, state.Vertical);
+                ApplyWorksheetScrollAxis(_horizontalWorksheetScrollBar, state.Horizontal);
+                WorkbookViewportScrollPlanner.CalculateViewportOrigin(
+                _session.SetViewportOrigin(topRow, leftCol)
+                */
                 public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files) => await Task.CompletedTask;
+                private IWorkbookFileAccessService _fileAccess = WorkbookFileAccessServiceFactory.Create(App.Diagnostics);
                 private static void RenderCell(CellStyle? style)
                 {
                     CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
@@ -1705,6 +2130,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
                     fileMenu.Items.Add(_openRecentMenuItem);
                     RefreshNativeOpenRecentMenu(isIdle);
+                    LocalFilePath.TryNormalize(candidate, out var normalizedCandidate)
+                    Directory.Exists(normalizedCandidate)
+                    File.Exists(normalizedCandidate)
+                    _session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage)
+                    path = target!.Path;
                     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
                     private readonly NativeMenuItem _exportPdfMenuItem = new();
                     _exportPdfMenuItem.Header = "Export to PDF...";
@@ -2015,9 +2445,19 @@ public sealed class MacOsAppReadinessPreflightTests
                     else if (e.Key == Key.D && HasOnlyControlModifier(e.KeyModifiers)) { }
                     else if (e.Key == Key.R && HasOnlyControlModifier(e.KeyModifiers)) { }
                     Header = "(No Recent Workbooks)";
-                    entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));
-                    _recentFiles.AddOrUpdate(path);
-                    RecordRecentWorkbook(target.Path);
+                    OpenRecentWorkbookMenuPlanner.Create(
+                    _recentFiles.Entries
+                    File.Exists
+                    path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null
+                    plan.ItemCount == 0
+                    foreach (var entry in plan.Items)
+                    var fileAccessIdentity = entry.FileAccessIdentity;
+                    Header = entry.Header
+                    if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)
+                    await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);
+                    _recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);
+                    RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
+                    RecordRecentWorkbook(target.Path, fileAccessIdentity);
                     _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
                     fileMenu.Items.Add(_newWorkbookMenuItem);
                     fileMenu.Items.Add(_closeWorkbookMenuItem);
@@ -2139,7 +2579,13 @@ public sealed class MacOsAppReadinessPreflightTests
                     Key.Home => GetEdgeSheetTabId(first: true);
                     Key.End => GetEdgeSheetTabId(first: false);
                     Math.Clamp(targetIndex, 0, _session.SheetTabs.Count - 1);
-                    FirstOrDefault(item => item.IsEnabled)?.Focus();
+                    FocusFirstEnabledSheetTabMenuItem(items);
+                    private static void FocusFirstEnabledSheetTabMenuItem(IEnumerable<Control> items);
+                    foreach (var item in items);
+                    item is MenuItem { IsEnabled: true } menuItem;
+                    menuItem.Focus();
+                    button.Tag is SheetId tag &&
+                    tag == sheetId;
                     if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed);
                     var selectRange = modifiers.HasFlag(KeyModifiers.Shift);
                     var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);
@@ -2394,10 +2840,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 {
                     var range = _session.SelectCurrentRegionOrAll();
                 }
-                private List<RecentFileEntry> GetOpenableRecentWorkbookEntries() => new();
-                private async Task OpenRecentWorkbookAsync(string path) => await Task.CompletedTask;
+                private async Task OpenRecentWorkbookAsync(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null) => await Task.CompletedTask;
                 private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source) { }
-                private void RecordRecentWorkbook(string path) { }
+                private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null) { }
                 private void CreateNewWorkbook() { }
                 private async Task CloseWorkbookAsync() => await Task.CompletedTask;
                 private void ResetToNewWorkbook(string status) { }
@@ -2427,8 +2872,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 private SheetId? GetEdgeSheetTabId(bool first) => null;
                 private bool FocusActiveSheetTab() => true;
                 private bool FocusSheetTab(SheetId sheetId) => true;
-                private static void SheetTabContextMenu_Opened(object? sender, RoutedEventArgs args) { }
-                private Button? FindSheetTabButton(SheetId sheetId) => button.Tag is SheetId tag && tag == sheetId ? new() : null;
+                private static void SheetTabContextMenu_Opened(object? sender, RoutedEventArgs args) { FocusFirstEnabledSheetTabMenuItem([]); }
+                private static void FocusFirstEnabledSheetTabMenuItem(IEnumerable<Control> items) { foreach (var item in items) { if (item is MenuItem { IsEnabled: true } menuItem) { menuItem.Focus(); return; } } }
+                private Button? FindSheetTabButton(SheetId sheetId) => button.Tag is SheetId tag &&
+                    tag == sheetId ? new() : null;
                 private bool HasSheetTabButton(Func<Button, bool> predicate) => true;
                 private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args) { }
                 private NativeMenu CreateNativeSheetTabColorMenu() => new();
@@ -2512,17 +2959,52 @@ public sealed class MacOsAppReadinessPreflightTests
             internal sealed class MacOsLaunchSmokeOptions
             {
                 public const string Argument = "--macos-launch-smoke";
+                public const string DiagnosticsDirectoryArgument = "--macos-launch-smoke-diagnostics-dir";
                 public const string VerifyImageClipboardPasteArgument = "--macos-launch-smoke-verify-image-clipboard";
                 public const string VerifyLiveCommandKeysArgument = "--macos-launch-smoke-verify-live-command-keys";
+                public string? DiagnosticsDirectory { get; }
                 public bool VerifyImageClipboardPaste { get; }
                 public static void Parse(List<string> filteredArguments, out string[] startupArguments)
                 {
                     var reportPath = "";
+                    var diagnosticsDirectory = "";
+                    diagnosticsDirectory = args[++index];
                     var verifyImageClipboardPaste = true;
                     var verifyLiveCommandKeys = true;
-                    new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste, verifyLiveCommandKeys).ToString();
+                    new MacOsLaunchSmokeOptions(
+                        reportPath,
+                        verifyImageClipboardPaste,
+                        verifyLiveCommandKeys,
+                        diagnosticsDirectory);
                     startupArguments = filteredArguments.ToArray();
                 }
+
+                public static void Start(MainWindow mainWindow, MacOsLaunchSmokeOptions options, AvaloniaAppDiagnostics? diagnostics = null)
+                {
+                    RunAsync(mainWindow, options, diagnostics);
+                }
+
+                private static void RunAsync(MainWindow mainWindow, MacOsLaunchSmokeOptions options, AvaloniaAppDiagnostics? diagnostics)
+                {
+                    diagnostics?.RecordEvent("macos_launch_smoke");
+                    diagnostics?.RecordCrash(ex, "macos_launch_smoke");
+                    var reportMarker = "app_diagnostics_directory_configured={FormatBool(appDiagnosticsConfigured)}";
+                }
+            }
+
+            internal sealed class MacOsLaunchSmokeCommandKeySnapshot
+            {
+                private bool HasFindDirectRouteSourceGuard { get; }
+                private bool HasPageUpDirectRouteSourceGuard { get; }
+                private bool HasPageDownDirectRouteSourceGuard { get; }
+
+                public bool IsPassed =>
+                    HasFindDirectRouteSourceGuard &&
+                    HasPageUpDirectRouteSourceGuard &&
+                    HasPageDownDirectRouteSourceGuard;
+
+                private static bool HasMainWindowDirectCommandRouteSourceSupport(params string[] requiredMethodNames) =>
+                    requiredMethodNames.Length > 0;
             }
 
             internal sealed class MacOsLaunchSmokeSnapshot
@@ -2541,6 +3023,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeOpenRecentMenuItem &&
                     NativeOpenRecentItemCount > 0 &&
                     HasNativeExportPdfMenuItem &&
+                    HasNativeShareWorkbookMenuItem &&
                     HasNativeWorkbookStatisticsMenuItem &&
                     HasNativeSelectAllMenuItem &&
                     HasNativeFindMenuItem &&
@@ -2684,6 +3167,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeOpenRecentMenuItem { get; }
                 private int NativeOpenRecentItemCount { get; }
                 private bool HasNativeExportPdfMenuItem { get; }
+                private bool HasNativeShareWorkbookMenuItem { get; }
                 private bool HasNativeWorkbookStatisticsMenuItem { get; }
                 private bool HasNativeSelectAllMenuItem { get; }
                 private bool HasNativeFindMenuItem { get; }
@@ -2801,9 +3285,21 @@ public sealed class MacOsAppReadinessPreflightTests
                 public int ExternalImageClipboardPicturePngByteCount { get; }
                 public int NativeBordersPresetCount { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string DialogReport => "macos_dialog_smoke= macos_dialog_smoke_attempted= macos_dialog_smoke_status= macos_dialog_activation_completed= find_dialog= find_dialog_text_box= find_dialog_action_buttons= find_dialog_options= find_dialog_format_controls= find_dialog_compact_layout= find_dialog_result_closed_without_accept= replace_dialog= replace_dialog_text_boxes= replace_dialog_action_buttons= replace_dialog_options= replace_dialog_format_controls= replace_dialog_compact_layout= replace_dialog_result_closed_without_accept= go_to_dialog= go_to_dialog_reference_controls= go_to_dialog_compact_layout= go_to_dialog_result_closed_without_accept= go_to_special_dialog= go_to_special_dialog_kind_controls= go_to_special_dialog_value_type_controls= go_to_special_dialog_compact_layout= go_to_special_dialog_result_closed_without_accept= format_cells_dialog= format_cells_dialog_tab_strip= format_cells_dialog_default_number_tab= format_cells_dialog_number_controls= format_cells_dialog_action_buttons= format_cells_dialog_compact_layout= format_cells_dialog_result_closed_without_accept=";
+                public string DialogReport => "macos_dialog_smoke= macos_dialog_smoke_attempted= macos_dialog_smoke_status= macos_dialog_activation_completed= find_dialog= find_dialog_text_box= find_dialog_action_buttons= find_dialog_options= find_dialog_format_controls= find_dialog_compact_layout= find_dialog_result_closed_without_accept= replace_dialog= replace_dialog_text_boxes= replace_dialog_action_buttons= replace_dialog_options= replace_dialog_format_controls= replace_dialog_compact_layout= replace_dialog_result_closed_without_accept= go_to_dialog= go_to_dialog_reference_controls= go_to_dialog_compact_layout= go_to_dialog_result_closed_without_accept= go_to_special_dialog= go_to_special_dialog_kind_controls= go_to_special_dialog_value_type_controls= go_to_special_dialog_compact_layout= go_to_special_dialog_result_closed_without_accept= format_cells_dialog= format_cells_dialog_tab_strip= format_cells_dialog_default_number_tab= format_cells_dialog_number_controls= format_cells_dialog_action_buttons= format_cells_dialog_compact_layout= format_cells_dialog_result_closed_without_accept= sort_dialog= sort_dialog_sort_on_controls= sort_dialog_color_controls= sort_dialog_action_buttons= sort_dialog_compact_layout= sort_dialog_result_closed_without_accept= data_validation_dropdown_control= data_validation_dropdown_items= data_validation_dialog= data_validation_dialog_criteria_controls= data_validation_dialog_message_controls= data_validation_dialog_action_buttons= data_validation_dialog_compact_layout= data_validation_dialog_result_closed_without_accept=";
                 public string NewRouteReport => "native_flash_fill_menu_item= native_review_menu= native_advanced_filter_menu_item= native_remove_duplicates_menu_item= native_subtotal_menu_item= native_data_validation_preview_menu_item= native_data_validation_menu_item= native_what_if_analysis_menu_item= native_goal_seek_menu_item= native_data_table_menu_item= native_scenario_manager_menu_item= native_forecast_sheet_menu_item= native_review_summary_menu_item= native_check_accessibility_menu_item= native_next_note_menu_item= native_previous_note_menu_item= native_next_comment_menu_item= native_previous_comment_menu_item=";
-                public string Report => "live_command_key_smoke_required= live_command_key_smoke= live_command_key_smoke_attempted= live_command_key_smoke_ready= live_cmd_select_all_received= live_cmd_select_all_state_changed= live_cmd_bold_received= live_cmd_bold_state_changed= live_cmd_italic_received= live_cmd_italic_state_changed= live_cmd_underline_received= live_cmd_underline_state_changed= external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_export_pdf_menu_item= native_workbook_statistics_menu_item= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_autosum_button= toolbar_autosum_sum_menu_item= toolbar_autosum_average_menu_item= toolbar_autosum_count_numbers_menu_item= toolbar_autosum_count_all_menu_item= toolbar_autosum_max_menu_item= toolbar_autosum_min_menu_item= toolbar_fill_cells_button= toolbar_fill_down_menu_item= toolbar_fill_right_menu_item= toolbar_fill_up_menu_item= toolbar_fill_left_menu_item= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_wrap_text_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_data_menu= native_flash_fill_menu_item= native_remove_duplicates_menu_item= native_subtotal_menu_item= native_data_validation_preview_menu_item= native_view_menu= native_sheet_menu= native_window_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_find_menu_item= native_find_next_menu_item= native_replace_menu_item= native_go_to_menu_item= native_go_to_special_menu_item= native_sort_ascending_menu_item= native_sort_descending_menu_item= native_format_cells_menu_item= native_autosum_menu_item= native_autosum_sum_menu_item= native_autosum_average_menu_item= native_autosum_count_numbers_menu_item= native_autosum_count_all_menu_item= native_autosum_max_menu_item= native_autosum_min_menu_item= native_fill_cells_menu_item= native_fill_down_menu_item= native_fill_right_menu_item= native_fill_up_menu_item= native_fill_left_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_minimize_window_menu_item= native_zoom_window_menu_item= native_bring_all_to_front_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "live_command_key_smoke_required= live_command_key_smoke= live_command_key_smoke_attempted= live_command_key_smoke_ready= cmd_find_direct_route_source_guard= cmd_page_up_direct_route_source_guard= cmd_page_down_direct_route_source_guard= live_cmd_select_all_received= live_cmd_select_all_state_changed= live_cmd_bold_received= live_cmd_bold_state_changed= live_cmd_italic_received= live_cmd_italic_state_changed= live_cmd_underline_received= live_cmd_underline_state_changed= external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_export_pdf_menu_item= native_share_workbook_menu_item= native_workbook_statistics_menu_item= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_autosum_button= toolbar_autosum_sum_menu_item= toolbar_autosum_average_menu_item= toolbar_autosum_count_numbers_menu_item= toolbar_autosum_count_all_menu_item= toolbar_autosum_max_menu_item= toolbar_autosum_min_menu_item= toolbar_fill_cells_button= toolbar_fill_down_menu_item= toolbar_fill_right_menu_item= toolbar_fill_up_menu_item= toolbar_fill_left_menu_item= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_wrap_text_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_data_menu= native_flash_fill_menu_item= native_remove_duplicates_menu_item= native_subtotal_menu_item= native_data_validation_preview_menu_item= native_view_menu= native_sheet_menu= native_window_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_find_menu_item= native_find_next_menu_item= native_replace_menu_item= native_go_to_menu_item= native_go_to_special_menu_item= native_sort_ascending_menu_item= native_sort_descending_menu_item= native_format_cells_menu_item= native_autosum_menu_item= native_autosum_sum_menu_item= native_autosum_average_menu_item= native_autosum_count_numbers_menu_item= native_autosum_count_all_menu_item= native_autosum_max_menu_item= native_autosum_min_menu_item= native_fill_cells_menu_item= native_fill_down_menu_item= native_fill_right_menu_item= native_fill_up_menu_item= native_fill_left_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_minimize_window_menu_item= native_zoom_window_menu_item= native_bring_all_to_front_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+            }
+
+            internal sealed class MacOsLaunchSmokeCommandKeySnapshot
+            {
+                private bool HasFindDirectRouteSourceGuard { get; }
+                private bool HasPageUpDirectRouteSourceGuard { get; }
+                private bool HasPageDownDirectRouteSourceGuard { get; }
+
+                public bool IsPassed =>
+                    HasFindDirectRouteSourceGuard &&
+                    HasPageUpDirectRouteSourceGuard &&
+                    HasPageDownDirectRouteSourceGuard;
             }
 
             internal sealed class MacOsLaunchSmokeCoordinator
@@ -2818,6 +3314,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     IsPassed(snapshot, options, initialExternalImageClipboardPictureCount).ToString();
                     HasExternalImageClipboardPasteEvidence(snapshot, initialExternalImageClipboardPictureCount).ToString();
                 }
+
+                private static bool HasMainWindowDirectCommandRouteSourceSupport(params string[] requiredMarkers) => true;
             }
             """);
 
@@ -2903,7 +3401,19 @@ public sealed class MacOsAppReadinessPreflightTests
             """
             namespace FreeX.App.Services;
 
-            public sealed class RecentFileEntry { }
+            public sealed class RecentFileEntry
+            {
+                public WorkbookFileAccessIdentity? FileAccessIdentity { get; set; }
+            }
+
+            public sealed class WorkbookFileAccessIdentity
+            {
+                public bool TryWithLocalPath(string path, out WorkbookFileAccessIdentity? identity)
+                {
+                    identity = this;
+                    return true;
+                }
+            }
 
             public sealed class RecentFilesStore
             {
@@ -3262,6 +3772,256 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
+            "src/FreeX.App.Services/WorkbookShareActionPlanner.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public enum WorkbookShareActionPlanKind
+            {
+                ShareSheet,
+                OpenContainingFolder,
+                SaveAsBeforeShare,
+                Deferred
+            }
+
+            public enum WorkbookShareActionUnavailableReason
+            {
+                None,
+                ShareSheetUnavailable,
+                ContainingFolderUnavailable
+            }
+
+            public sealed record WorkbookShareActionSurface(
+                string ShareSheetLabel,
+                bool CanShowShareSheet,
+                bool CanOpenContainingFolder = false,
+                string OpenContainingFolderLabel = "Open Containing Folder")
+            {
+                public static WorkbookShareActionSurface MacOsPreview { get; } =
+                    new("macOS Share Sheet", CanShowShareSheet: false);
+            }
+
+            public sealed record WorkbookShareActionPlan(
+                WorkbookShareActionPlanKind Kind,
+                string? Path,
+                string? ContainingFolderPath = null,
+                WorkbookShareReadinessSaveAsReason SaveAsReason = WorkbookShareReadinessSaveAsReason.None,
+                string? CandidatePath = null,
+                WorkbookShareActionUnavailableReason UnavailableReason = WorkbookShareActionUnavailableReason.None,
+                WorkbookShareActionSurface? Surface = null);
+
+            public static class WorkbookShareActionPlanner
+            {
+                public static WorkbookShareActionPlan CreatePlan(
+                    string? currentFilePath,
+                    Func<string, bool>? fileExists = null) =>
+                    CreatePlan(currentFilePath, WorkbookShareActionSurface.MacOsPreview, fileExists);
+
+                public static WorkbookShareActionPlan CreatePlan(
+                    string? currentFilePath,
+                    WorkbookShareActionSurface surface,
+                    Func<string, bool>? fileExists = null)
+                {
+                    var readiness = WorkbookShareReadinessPlanner.CreatePlan(
+                        currentFilePath,
+                        new WorkbookShareSurface(surface.ShareSheetLabel),
+                        fileExists);
+                    var hasNativeAction = surface.CanShowShareSheet || surface.CanOpenContainingFolder;
+                    if (readiness.Kind != WorkbookShareReadinessPlanKind.ShareExistingFile)
+                        return new WorkbookShareActionPlan(
+                            hasNativeAction ? WorkbookShareActionPlanKind.SaveAsBeforeShare : WorkbookShareActionPlanKind.Deferred,
+                            null);
+
+                    if (surface.CanOpenContainingFolder &&
+                        TryGetContainingFolderPath(readiness.Path, out var containingFolderPath))
+                        return new WorkbookShareActionPlan(
+                            WorkbookShareActionPlanKind.OpenContainingFolder,
+                            readiness.Path,
+                            containingFolderPath,
+                            UnavailableReason: WorkbookShareActionUnavailableReason.ShareSheetUnavailable,
+                            Surface: surface);
+
+                    return new WorkbookShareActionPlan(WorkbookShareActionPlanKind.ShareSheet, readiness.Path);
+                }
+
+                private static bool TryGetContainingFolderPath(string? filePath, out string containingFolderPath)
+                {
+                    containingFolderPath = "";
+                    return false;
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/LocalFilePath.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public static class LocalFilePath
+            {
+                public static bool TryNormalize(string? candidate, out string normalizedPath)
+                {
+                    normalizedPath = "";
+                    var path = candidate!.Trim();
+                    if (TryCreateExplicitUri(path, out var uri))
+                    {
+                        if (!uri.IsFile)
+                            return false;
+
+                        path = uri.LocalPath;
+                    }
+
+                    path.Contains('\0', StringComparison.Ordinal);
+                    IsUnixAbsolutePath(path);
+                    Path.GetFullPath(path);
+                    return true;
+                }
+
+                private static bool TryCreateExplicitUri(string candidate, out Uri uri)
+                {
+                    Uri.TryCreate(candidate, UriKind.Absolute, out var parsed);
+                    IsWindowsDrivePath(candidate, parsed.Scheme);
+                    uri = parsed;
+                    return true;
+                }
+
+                private static bool IsWindowsDrivePath(string candidate, string scheme) =>
+                    char.IsAsciiLetter(candidate[0]);
+
+                private static bool IsUnixAbsolutePath(string path) => true;
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/OpenRecentWorkbookMenuPlanner.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public sealed record OpenRecentWorkbookMenuItemPlan(
+                string Path,
+                string Header,
+                DateTimeOffset LastOpened,
+                WorkbookFileAccessIdentity? FileAccessIdentity = null);
+
+            public sealed record OpenRecentWorkbookMenuPlan(IReadOnlyList<OpenRecentWorkbookMenuItemPlan> Items)
+            {
+                public int ItemCount => Items.Count;
+            }
+
+            public static class OpenRecentWorkbookMenuPlanner
+            {
+                public const int DefaultMaximumItems = 10;
+
+                public static OpenRecentWorkbookMenuPlan Create(
+                    IEnumerable<RecentFileEntry> entries,
+                    Func<string, bool> fileExists,
+                    Func<string, bool> canOpenWorkbook,
+                    int maximumItems = DefaultMaximumItems)
+                {
+                    return Create(
+                        entries,
+                        fileExists,
+                        path => canOpenWorkbook(path) ? path : null,
+                        maximumItems);
+                }
+
+                public static OpenRecentWorkbookMenuPlan Create(
+                    IEnumerable<RecentFileEntry> entries,
+                    Func<string, bool> fileExists,
+                    Func<string, string?> resolveOpenWorkbookPath,
+                    int maximumItems = DefaultMaximumItems)
+                {
+                    if (maximumItems < 1)
+                        return new OpenRecentWorkbookMenuPlan([]);
+
+                    var seenPaths = new HashSet<string>(PlatformPathIdentityComparer.Current);
+                    return new OpenRecentWorkbookMenuPlan(
+                        entries
+                            .Where(entry => !string.IsNullOrWhiteSpace(entry.Path))
+                            .OrderByDescending(entry => entry.LastOpened)
+                            .Select(entry => (Entry: entry, Path: resolveOpenWorkbookPath(entry.Path)))
+                            .Where(item => !string.IsNullOrWhiteSpace(item.Path) && fileExists(item.Path))
+                            .Where(item => seenPaths.Add(item.Path!))
+                            .Take(maximumItems)
+                            .Select(item => new OpenRecentWorkbookMenuItemPlan(
+                                item.Path!,
+                                FormatHeader(item.Path!),
+                                item.Entry.LastOpened,
+                                ResolveIdentityForPath(item.Entry.FileAccessIdentity, item.Path!)))
+                            .ToList());
+                }
+
+                public static string FormatHeader(string path)
+                {
+                    Path.GetFileName(path);
+                    Path.GetDirectoryName(path);
+                    return path;
+                }
+
+                private static WorkbookFileAccessIdentity? ResolveIdentityForPath(
+                    WorkbookFileAccessIdentity? identity,
+                    string path) =>
+                    identity is not null && identity.TryWithLocalPath(path, out var resolvedIdentity)
+                        ? resolvedIdentity
+                        : null;
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/WorkbookViewportScrollPlanner.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public readonly record struct WorkbookViewportScrollAxis(
+                double Minimum,
+                double Maximum,
+                double Value,
+                double ViewportSize,
+                double SmallChange,
+                double LargeChange,
+                bool IsEnabled);
+
+            public readonly record struct WorkbookViewportScrollState(
+                WorkbookViewportScrollAxis Vertical,
+                WorkbookViewportScrollAxis Horizontal);
+
+            public static class WorkbookViewportScrollPlanner
+            {
+                private const double MinimumScrollValue = 1;
+
+                public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)
+                {
+                    CountScrollableRows(viewport.RowMetrics, sheet.FrozenRows);
+                    CountScrollableColumns(viewport.ColMetrics, sheet.FrozenCols);
+                    return default;
+                }
+
+                public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(
+                    Sheet sheet,
+                    double verticalScrollValue,
+                    double horizontalScrollValue) =>
+                    (
+                        ScrollbarValueToWorksheetIndex(verticalScrollValue, sheet.FrozenRows, CellAddress.MaxRow),
+                        ScrollbarValueToWorksheetIndex(horizontalScrollValue, sheet.FrozenCols, CellAddress.MaxCol));
+
+                public static uint ScrollbarValueToWorksheetIndex(double value, uint frozenCount, uint limit) => 1;
+                public static uint WorksheetIndexToScrollbarValue(uint worksheetIndex, uint frozenCount) => 1;
+                public static uint CalculateScrollableLimit(uint absoluteLimit, uint frozenCount) => 1;
+                public static uint CalculateMaximumViewportOrigin(uint absoluteLimit, uint visibleSpan) => 1;
+
+                private static WorkbookViewportScrollAxis CreateAxis(uint visibleSpan, double maximum) =>
+                    new(1, maximum, 1, visibleSpan, SmallChange: 1, LargeChange: 1, IsEnabled: maximum > MinimumScrollValue);
+
+                private static uint CountScrollableRows(IReadOnlyList<RowMetric> rows, uint frozenRows) => 1;
+                private static uint CountScrollableColumns(IReadOnlyList<ColMetric> columns, uint frozenColumns) => 1;
+            }
+            """);
+
+        WriteFile(
+            root,
             "src/FreeX.App.Services/FormatCellsCompactPlanner.cs",
             """
             namespace FreeX.App.Services;
@@ -3392,7 +4152,7 @@ public sealed class MacOsAppReadinessPreflightTests
 
         if (!string.IsNullOrWhiteSpace(extraAvaloniaSource))
         {
-            WriteFile(root, "src/FreeX.App.Avalonia/WindowsOnlyLeak.cs", extraAvaloniaSource);
+            WriteFile(root, extraAvaloniaSourcePath, extraAvaloniaSource);
         }
     }
 

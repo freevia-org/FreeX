@@ -4,7 +4,10 @@ namespace FreeX.App.Host;
 
 public static class DrawingTargetResolver
 {
-    public static PictureModel? GetTargetPicture(Sheet? sheet, CellAddress? selectedAnchor)
+    public static PictureModel? GetTargetPicture(
+        Sheet? sheet,
+        CellAddress? selectedAnchor,
+        bool allowFallback = true)
     {
         if (sheet is null || sheet.Pictures.Count == 0)
             return null;
@@ -13,10 +16,14 @@ public static class DrawingTargetResolver
             sheet.Pictures,
             selectedAnchor,
             picture => picture.Anchor,
-            picture => picture.IsVisible);
+            picture => picture.IsVisible,
+            allowFallback);
     }
 
-    public static DrawingShapeModel? GetTargetDrawingShape(Sheet? sheet, CellAddress? selectedAnchor)
+    public static DrawingShapeModel? GetTargetDrawingShape(
+        Sheet? sheet,
+        CellAddress? selectedAnchor,
+        bool allowFallback = true)
     {
         if (sheet is null || sheet.DrawingShapes.Count == 0)
             return null;
@@ -25,25 +32,46 @@ public static class DrawingTargetResolver
             sheet.DrawingShapes,
             selectedAnchor,
             shape => shape.Anchor,
-            shape => shape.IsVisible);
+            shape => shape.IsVisible,
+            allowFallback);
     }
 
     public static DrawingObjectTarget? GetTargetDrawingObject(
         Sheet? sheet,
         CellAddress? selectedAnchor,
-        DrawingObjectTargetKind? preferredKind = null)
+        DrawingObjectTargetKind? preferredKind = null,
+        Guid selectedObjectId = default,
+        bool includePictures = false,
+        bool allowFallback = true)
     {
         if (sheet is null)
             return null;
 
+        if (preferredKind is not null && selectedObjectId != Guid.Empty)
+        {
+            var selectedTarget = GetTargetById(sheet, preferredKind.Value, selectedObjectId, includePictures);
+            if (selectedTarget is not null)
+                return selectedTarget;
+
+            if (!allowFallback || (preferredKind.Value == DrawingObjectTargetKind.Picture && !includePictures))
+                return null;
+        }
+
         if (preferredKind is null or DrawingObjectTargetKind.Shape &&
-            GetTargetDrawingShape(sheet, selectedAnchor) is { } shape)
+            GetTargetDrawingShape(sheet, selectedAnchor, allowFallback) is { } shape)
         {
             return DrawingObjectTarget.FromShape(shape);
         }
 
+        if (includePictures &&
+            (preferredKind is null or DrawingObjectTargetKind.Picture) &&
+            GetTargetPicture(sheet, selectedAnchor, allowFallback) is { } picture)
+        {
+            return DrawingObjectTarget.FromPicture(picture);
+        }
+
         if (preferredKind is null or DrawingObjectTargetKind.TextBox &&
-            GetTargetTextBox(sheet, selectedAnchor) is { } textBox)
+            GetTargetTextBox(sheet, selectedAnchor, allowFallback) is { } textBox)
         {
             return DrawingObjectTarget.FromTextBox(textBox);
         }
@@ -82,7 +110,47 @@ public static class DrawingTargetResolver
         return fallback;
     }
 
-    private static TextBoxModel? GetTargetTextBox(Sheet sheet, CellAddress? selectedAnchor)
+    private static DrawingObjectTarget? GetTargetById(
+        Sheet sheet,
+        DrawingObjectTargetKind kind,
+        Guid selectedObjectId,
+        bool includePictures)
+    {
+        switch (kind)
+        {
+            case DrawingObjectTargetKind.Picture when includePictures:
+                foreach (var picture in sheet.Pictures)
+                {
+                    if (picture.Id == selectedObjectId && picture.IsVisible)
+                        return DrawingObjectTarget.FromPicture(picture);
+                }
+
+                return null;
+            case DrawingObjectTargetKind.Shape:
+                foreach (var shape in sheet.DrawingShapes)
+                {
+                    if (shape.Id == selectedObjectId && shape.IsVisible)
+                        return DrawingObjectTarget.FromShape(shape);
+                }
+
+                return null;
+            case DrawingObjectTargetKind.TextBox:
+                foreach (var textBox in sheet.TextBoxes)
+                {
+                    if (textBox.Id == selectedObjectId && textBox.IsVisible)
+                        return DrawingObjectTarget.FromTextBox(textBox);
+                }
+
+                return null;
+            default:
+                return null;
+        }
+    }
+
+    private static TextBoxModel? GetTargetTextBox(
+        Sheet sheet,
+        CellAddress? selectedAnchor,
+        bool allowFallback)
     {
         if (sheet.TextBoxes.Count == 0)
             return null;
@@ -91,14 +159,16 @@ public static class DrawingTargetResolver
             sheet.TextBoxes,
             selectedAnchor,
             textBox => textBox.Anchor,
-            textBox => textBox.IsVisible);
+            textBox => textBox.IsVisible,
+            allowFallback);
     }
 
     private static T? GetSelectedOrLast<T>(
         IReadOnlyList<T> items,
         CellAddress? selectedAnchor,
         Func<T, CellAddress> getAnchor,
-        Func<T, bool> isVisible)
+        Func<T, bool> isVisible,
+        bool allowFallback)
         where T : class
     {
         T? lastVisible = null;
@@ -117,7 +187,7 @@ public static class DrawingTargetResolver
                 lastVisible ??= item;
             }
         }
-        else
+        else if (allowFallback)
         {
             for (var index = items.Count - 1; index >= 0; index--)
             {
@@ -127,7 +197,7 @@ public static class DrawingTargetResolver
             }
         }
 
-        return lastVisible;
+        return allowFallback ? lastVisible : null;
     }
 
     private static DrawingObjectZOrderTarget? ResolveDrawingZOrderTarget(
@@ -179,6 +249,7 @@ public static class DrawingTargetResolver
 
 public enum DrawingObjectTargetKind
 {
+    Picture,
     Shape,
     TextBox
 }
@@ -193,6 +264,17 @@ public sealed record DrawingObjectTarget(
     CellColor? FillColor,
     CellColor? OutlineColor)
 {
+    public static DrawingObjectTarget FromPicture(PictureModel picture) =>
+        new(
+            DrawingObjectTargetKind.Picture,
+            picture.Id,
+            picture.Anchor,
+            picture.Width,
+            picture.Height,
+            picture.RotationDegrees,
+            null,
+            null);
+
     public static DrawingObjectTarget FromShape(DrawingShapeModel shape) =>
         new(
             DrawingObjectTargetKind.Shape,

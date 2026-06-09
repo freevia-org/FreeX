@@ -22,7 +22,15 @@ public partial class MainWindow
         IWorkbookCommand CreateCommand()
         {
             var currentRange = SheetGrid.SelectedRange ?? range;
-            command = new AddChartSheetCommand(_currentSheetId, currentRange, ChartType.Column, "Chart");
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            var dataRange = sheet is null
+                ? currentRange
+                : ChartDataSourcePlanner.ResolveInsertionRange(sheet, currentRange);
+            command = new AddChartSheetCommand(
+                _currentSheetId,
+                dataRange,
+                ChartType.Column,
+                "Chart");
             return command;
         }
 
@@ -58,7 +66,14 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Insert Chart",
                 range,
-                currentRange => new AddChartCommand(_currentSheetId, currentRange, type, "Chart")))
+                currentRange =>
+                {
+                    var sheet = _workbook.GetSheet(_currentSheetId);
+                    var dataRange = sheet is null
+                        ? currentRange
+                        : ChartDataSourcePlanner.ResolveInsertionRange(sheet, currentRange);
+                    return new AddChartCommand(_currentSheetId, dataRange, type, "Chart");
+                }))
             return;
 
         UpdateViewport();
@@ -99,14 +114,15 @@ public partial class MainWindow
             FormatRangeReference(chart.DataRange.Start, chart.DataRange.End),
             chart.FirstColIsCategories,
             request => ApplySelectDataSourceRangeSelection(dialog, request),
-            sheetId: _currentSheetId)
+            sheetId: _currentSheetId,
+            resolveSheetId: ResolveSheetIdByName)
         {
             Owner = this
         };
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ChartInputParser.TryParseDataRange(dialog.Result.SourceRangeText, _currentSheetId, out var dataRange))
+        if (!ChartInputParser.TryParseDataRange(dialog.Result.SourceRangeText, _currentSheetId, ResolveSheetIdByName, out var dataRange))
         {
             _messageService.ShowWarning(
                 UiText.Get("MainWindowMessage_ChartInvalidDataRange"),
@@ -231,12 +247,55 @@ public partial class MainWindow
     private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        chart = sheet?.Charts.FirstOrDefault(item => !item.IsPivotChart) ?? null!;
+        chart = null!;
+        if (sheet is not null)
+        {
+            foreach (var candidate in sheet.Charts)
+            {
+                if (!IsChartContextualRibbonTarget(candidate))
+                    continue;
+
+                chart = candidate;
+                break;
+            }
+        }
+
         if (chart is not null)
             return true;
 
         _messageService.ShowInfo(UiText.Get("MainWindowMessage_ChartSelectBeforeCommand"), caption);
         return false;
+    }
+
+    private void RefreshChartContextualTabs()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        SetChartContextualTabsVisible(HasChartContextualRibbonTarget(sheet));
+    }
+
+    private static bool HasChartContextualRibbonTarget(Sheet? sheet) =>
+        sheet?.Charts.Any(IsChartContextualRibbonTarget) == true;
+
+    private static bool IsChartContextualRibbonTarget(ChartModel chart) =>
+        chart.IsVisible && !chart.IsPivotChart;
+
+    private void SetChartContextualTabsVisible(bool visible)
+    {
+        var visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (ChartDesignTab is not null)
+            ChartDesignTab.Visibility = visibility;
+        if (ChartFormatTab is not null)
+            ChartFormatTab.Visibility = visibility;
+
+        if (!visible &&
+            RibbonTabs is not null &&
+            (ReferenceEquals(RibbonTabs.SelectedItem, ChartDesignTab) ||
+             ReferenceEquals(RibbonTabs.SelectedItem, ChartFormatTab)))
+        {
+            RibbonTabs.SelectedIndex = 1;
+        }
+
+        InvalidateVisibleKeyTipElementCache();
     }
 
     private void ChartColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Column);
@@ -554,7 +613,7 @@ public partial class MainWindow
                 chart =>
                 {
                     var formats = chart.PointDataLabelFormats.ToList();
-                    var existingIndex = formats.FindIndex(format => format.SeriesIndex == 0 && format.PointIndex == 0);
+                    var existingIndex = IndexOfPointDataLabelFormat(formats, 0, 0);
                     var current = existingIndex >= 0 ? formats[existingIndex] : new ChartPointDataLabelFormat(0, 0);
                     var updated = current with
                     {
@@ -575,6 +634,18 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+    }
+
+    private static int IndexOfPointDataLabelFormat(IReadOnlyList<ChartPointDataLabelFormat> formats, int seriesIndex, int pointIndex)
+    {
+        for (var index = 0; index < formats.Count; index++)
+        {
+            var format = formats[index];
+            if (format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex)
+                return index;
+        }
+
+        return -1;
     }
 
     private void ChartAreaFillBtn_Click(object sender, RoutedEventArgs e)
@@ -977,7 +1048,7 @@ public partial class MainWindow
                 chart =>
                 {
                     var formats = chart.SeriesFormats.ToList();
-                    var existingIndex = formats.FindIndex(format => format.SeriesIndex == 0);
+                    var existingIndex = IndexOfSeriesFormat(formats, 0);
                     var current = existingIndex >= 0 ? formats[existingIndex] : new ChartSeriesFormat(0);
                     var updated = update(current);
                     if (existingIndex >= 0)
@@ -989,6 +1060,15 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+    }
+
+    private static int IndexOfSeriesFormat(IReadOnlyList<ChartSeriesFormat> formats, int seriesIndex)
+    {
+        for (var index = 0; index < formats.Count; index++)
+            if (formats[index].SeriesIndex == seriesIndex)
+                return index;
+
+        return -1;
     }
 
     private void InsertChartOfType(string type)

@@ -5,7 +5,7 @@ namespace FreeX.Core.Commands;
 /// <summary>
 /// In-memory implementation of the command bus with undo/redo stacks.
 /// </summary>
-public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier
+public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, ICommandHistoryProvider
 {
     private const int MaxUndoDepth = 100;
     private const int MaxUndoByteBudget = 52_428_800; // 50 MB
@@ -118,6 +118,16 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier
     public bool CanRedo(WorkbookId workbookId) =>
         _stacks.TryGetValue(workbookId, out var stack) && stack.CanRedo;
 
+    public IReadOnlyList<CommandHistoryEntry> GetUndoHistory(WorkbookId workbookId, int maxCount) =>
+        maxCount <= 0 || !_stacks.TryGetValue(workbookId, out var stack)
+            ? []
+            : stack.GetUndoHistory(maxCount);
+
+    public IReadOnlyList<CommandHistoryEntry> GetRedoHistory(WorkbookId workbookId, int maxCount) =>
+        maxCount <= 0 || !_stacks.TryGetValue(workbookId, out var stack)
+            ? []
+            : stack.GetRedoHistory(maxCount);
+
     public CommandOutcome RepeatLast(WorkbookId workbookId)
     {
         if (!_repeatableCommandFactories.TryGetValue(workbookId, out var commandFactory))
@@ -163,10 +173,16 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier
     private static int EstimateBytes(IWorkbookCommand command) =>
         command is IEstimatesMemory mem ? mem.EstimatedBytes : DefaultCommandBytes;
 
+    private static string GetHistoryLabel(IWorkbookCommand command) =>
+        string.IsNullOrWhiteSpace(command.Label)
+            ? command.GetType().Name
+            : command.Label.Trim();
+
     private readonly record struct CommandStackEntry(
         IWorkbookCommand Command,
         int Bytes,
-        IReadOnlyList<CellAddress>? AffectedCells);
+        IReadOnlyList<CellAddress>? AffectedCells,
+        string Label);
 
     private sealed class CommandStack
     {
@@ -193,7 +209,7 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier
             int bytes,
             IReadOnlyList<CellAddress>? affectedCells)
         {
-            PushUndoEntry(new CommandStackEntry(command, bytes, affectedCells));
+            PushUndoEntry(new CommandStackEntry(command, bytes, affectedCells, GetHistoryLabel(command)));
             _redoStack.Clear(); // New action invalidates redo history
 
             TrimUndoStack();
@@ -238,6 +254,29 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier
         public void PushRedo(CommandStackEntry entry)
         {
             _redoStack.Push(entry);
+        }
+
+        public IReadOnlyList<CommandHistoryEntry> GetUndoHistory(int maxCount)
+        {
+            var history = new List<CommandHistoryEntry>(Math.Min(maxCount, _undoStack.Count));
+            for (var node = _undoStack.Last; node is not null && history.Count < maxCount; node = node.Previous)
+                history.Add(new CommandHistoryEntry(node.Value.Label));
+
+            return history;
+        }
+
+        public IReadOnlyList<CommandHistoryEntry> GetRedoHistory(int maxCount)
+        {
+            var history = new List<CommandHistoryEntry>(Math.Min(maxCount, _redoStack.Count));
+            foreach (var entry in _redoStack)
+            {
+                if (history.Count >= maxCount)
+                    break;
+
+                history.Add(new CommandHistoryEntry(entry.Label));
+            }
+
+            return history;
         }
 
         /// <summary>

@@ -32,6 +32,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetBackgroundImageModel(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -49,6 +50,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .Be(sourceWorksheetRelationships.ToString(SaveOptions.DisableFormatting));
         ReadWorksheetBackgroundImageBytes(saved).Should().Equal(sourceImageBytes);
+
+        saved.Position = 0;
+        AssertWorksheetBackgroundImageModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     [Fact]
@@ -65,6 +69,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetBackgroundImageModel(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -74,6 +79,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetBackgroundPictureMarkerSanitized(saved);
         ReadWorksheetBackgroundImageBytes(saved).Should().Equal(MinimalPngBytes());
+
+        saved.Position = 0;
+        AssertWorksheetBackgroundImageModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     private static Workbook CreateWorksheetBackgroundImageSourceWorkbook()
@@ -119,6 +127,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         picture.Attribute("customPictureFlag").Should().BeNull();
         picture.Attribute("customDuplicatePictureFlag").Should().BeNull();
         picture.Elements().Should().BeEmpty();
+    }
+
+    private static void AssertWorksheetBackgroundImageModel(Sheet sheet)
+    {
+        sheet.BackgroundImage.Should().NotBeNull();
+        sheet.BackgroundImage!.ImageBytes.Should().Equal(MinimalPngBytes());
+        sheet.BackgroundImage.ContentType.Should().Be("image/png");
+        sheet.BackgroundImage.FileName.Should().Be("background.png");
     }
 
     private static byte[] ReadWorksheetBackgroundImageBytes(Stream stream)

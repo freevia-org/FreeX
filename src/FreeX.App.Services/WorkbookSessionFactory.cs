@@ -83,7 +83,8 @@ public sealed class WorkbookSessionFactory
             SourcePath: target.Path,
             OpenedAsTemplate: result.OpenedAsTemplate,
             FeatureReport: result.FeatureReport,
-            LoadWarnings: result.LoadWarnings);
+            LoadWarnings: result.LoadWarnings,
+            SourceFileAccessIdentity: target.FileAccessIdentity ?? WorkbookFileAccessIdentity.FromLocalPath(target.Path));
 
         return Create(
             source,

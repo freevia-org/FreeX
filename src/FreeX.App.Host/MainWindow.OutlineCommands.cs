@@ -16,6 +16,8 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void GroupRowsMenuItem_Click(object sender, RoutedEventArgs e) => GroupRowsBtn_Click(sender, e);
+
     private void UngroupRowsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -25,6 +27,16 @@ public partial class MainWindow
                 currentRange => OutlineGroupingService.GetGroupingAxis(currentRange) == OutlineGroupingAxis.Columns
                     ? new GroupColumnsCommand(_currentSheetId, currentRange.Start.Col, currentRange.End.Col, 0)
                     : new GroupRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.End.Row, 0)))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void UngroupRowsMenuItem_Click(object sender, RoutedEventArgs e) => UngroupRowsBtn_Click(sender, e);
+
+    private void ClearOutlineMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryExecuteGroupedSheetCommand("Clear Outline", sheetId => new ClearWorksheetOutlineCommand(sheetId)))
             return;
 
         UpdateViewport();

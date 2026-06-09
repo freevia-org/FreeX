@@ -222,11 +222,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private void NewRule_Click(object sender, RoutedEventArgs e)
     {
-        var defaultRange = _selection ?? _sheet.ConditionalFormats
-            .Select(r => (GridRange?)r.AppliesTo)
-            .FirstOrDefault() ?? new GridRange(
-                new CellAddress(_sheet.Id, 1, 1),
-                new CellAddress(_sheet.Id, 1, 1));
+        var defaultRange = GetDefaultNewRuleRange();
 
         var dlg = new NewConditionalFormatRuleDialog(DefaultNewRuleType, defaultRange);
         dlg.Owner = this;
@@ -380,7 +376,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             _rules.Add(rule);
 
         if (selectedRuleId is { } id)
-            _listView.SelectedItem = _rules.FirstOrDefault(rule => rule.Id == id);
+            _listView.SelectedItem = FindWorkingRuleById(id);
     }
 
     private bool IsFilteringToRange() => CurrentScopeRange() is not null;
@@ -403,9 +399,11 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         if (_selection is not { } selection)
             return null;
 
-        return _sheet.StructuredTables
-            .FirstOrDefault(table => RangesOverlap(table.Range, selection))
-            ?.Range;
+        foreach (var table in _sheet.StructuredTables)
+            if (RangesOverlap(table.Range, selection))
+                return table.Range;
+
+        return null;
     }
 
     private void RangePickerButton_Click(object sender, RoutedEventArgs e)
@@ -418,7 +416,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         {
             if (current is DockPanel panel)
             {
-                var rangeBox = panel.Children.OfType<TextBox>().FirstOrDefault();
+                var rangeBox = FindFirstTextBox(panel);
                 if (rangeBox is not null)
                 {
                     rangeBox.Focus();
@@ -435,6 +433,37 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             current = System.Windows.Media.VisualTreeHelper.GetParent(current)
                 ?? LogicalTreeHelper.GetParent(current);
         }
+    }
+
+    private GridRange GetDefaultNewRuleRange()
+    {
+        if (_selection is { } selection)
+            return selection;
+
+        foreach (var rule in _sheet.ConditionalFormats)
+            return rule.AppliesTo;
+
+        return new GridRange(
+            new CellAddress(_sheet.Id, 1, 1),
+            new CellAddress(_sheet.Id, 1, 1));
+    }
+
+    private ConditionalFormat? FindWorkingRuleById(Guid ruleId)
+    {
+        foreach (var rule in _rules)
+            if (rule.Id == ruleId)
+                return rule;
+
+        return null;
+    }
+
+    private static TextBox? FindFirstTextBox(Panel panel)
+    {
+        foreach (var child in panel.Children)
+            if (child is TextBox textBox)
+                return textBox;
+
+        return null;
     }
 
     public void ApplyAppliesToRangeSelection(Guid ruleId, GridRange range)

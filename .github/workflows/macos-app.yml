@@ -8,9 +8,11 @@ on:
         required: false
         type: boolean
         default: false
-  push:
-    branches:
-      - main
+      validate_macos_tfm:
+        description: Compile the opt-in net10.0-macos target with the hosted macOS workload; evidence only, no app artifact.
+        required: false
+        type: boolean
+        default: false
   pull_request:
     branches:
       - main
@@ -61,6 +63,8 @@ jobs:
           mkdir -p "$artifact_root"
           {
             echo "runtime=$runtime"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+            echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
             echo "runner_label=${{ matrix.runner }}"
             echo "runner_os=${RUNNER_OS:-unknown}"
             echo "runner_arch=${RUNNER_ARCH:-unknown}"
@@ -83,7 +87,7 @@ jobs:
 
           dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \
             --configuration Release \
-            --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
+            --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
             --logger "trx;LogFileName=freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx" \
             --results-directory artifacts
 
@@ -106,10 +110,12 @@ jobs:
           MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
           MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
           MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+          FREEX_RUNTIME: ${{ matrix.runtime }}
+          FREEX_DISTRIBUTION_CANDIDATE: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}
         run: |
           set -euo pipefail
 
-          runtime="${{ matrix.runtime }}"
+          runtime="$FREEX_RUNTIME"
           output_root="$RUNNER_TEMP/freex-$runtime"
           app="$output_root/FreeX.app"
           artifact_root="$GITHUB_WORKSPACE/artifacts"
@@ -120,9 +126,10 @@ jobs:
           launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
           open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
           default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
+          app_diagnostics_dir="$artifact_root/freex-$runtime-macos-app-diagnostics"
           notary_log="$artifact_root/freex-$runtime-macos-notarization.log"
           tester_instructions_path="$artifact_root/freex-$runtime-macos-tester-instructions.md"
-          distribution_candidate="${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}"
+          distribution_candidate="$FREEX_DISTRIBUTION_CANDIDATE"
           artifact_channel="internal-preview"
           distribution_contract="internal_preview_not_for_distribution_notarization_optional"
           if [[ "$distribution_candidate" == "true" ]]; then
@@ -145,7 +152,8 @@ jobs:
           trap cleanup_signing_keychain EXIT
 
           rm -rf "$output_root"
-          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$artifact_root"
+          rm -rf "$app_diagnostics_dir"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$artifact_root" "$app_diagnostics_dir"
           : > "$notary_log"
           {
             echo ""
@@ -219,14 +227,32 @@ jobs:
           test -x "$app/Contents/MacOS/FreeX"
           test -f "$app/Contents/MacOS/FreeX.dll"
           test -f "$app/Contents/Resources/FreeX.icns"
+          native_document_extensions=(fxl)
+          imported_document_extensions=(xlsx xlsm xltx xltm xls xlsb xlt csv tsv tab)
+          assert_bundle_document_extensions() {
+            local plist_path="$1"
+            local document_type_index="$2"
+            shift 2
+            local expected_extensions=("$@")
+            local extension_index
+            for extension_index in "${!expected_extensions[@]}"; do
+              test "$(/usr/libexec/PlistBuddy -c "Print :CFBundleDocumentTypes:$document_type_index:CFBundleTypeExtensions:$extension_index" "$plist_path")" = "${expected_extensions[$extension_index]}"
+            done
+          }
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")" = "FreeX"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")" = "FreeX.icns"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "io.github.tony-xmelon.freex"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$app/Contents/Info.plist")" = "APPL"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")" = "12.0"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' "$app/Contents/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app/Contents/Info.plist")" = "FreeX Workbook"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")" = "fxl"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$app/Contents/Info.plist")" = "Owner"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app/Contents/Info.plist")" = "Spreadsheet Workbooks"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")" = "xlsx"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")" = "Alternate"
+          assert_bundle_document_extensions "$app/Contents/Info.plist" 0 "${native_document_extensions[@]}"
+          assert_bundle_document_extensions "$app/Contents/Info.plist" 1 "${imported_document_extensions[@]}"
           binary_archs="$(lipo -archs "$app/Contents/MacOS/FreeX")"
           if [[ "$runtime" == "osx-arm64" ]]; then
             echo "$binary_archs" | grep -qw arm64
@@ -314,9 +340,17 @@ jobs:
           app_path="$unzip_root/FreeX.app"
           rm -rf "$unzip_root"
           mkdir -p "$unzip_root"
-          unzip -q "$zip_path" -d "$unzip_root"
+          ditto -x -k "$zip_path" "$unzip_root"
+          app_info_plist="$unzip_root/FreeX.app/Contents/Info.plist"
+          test -f "$app_info_plist"
           test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
           test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_info_plist")" = "io.github.tony-xmelon.freex"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$app_info_plist")" = "APPL"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app_info_plist")" = "12.0"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' "$app_info_plist")" = "true"
+          assert_bundle_document_extensions "$app_info_plist" 0 "${native_document_extensions[@]}"
+          assert_bundle_document_extensions "$app_info_plist" 1 "${imported_document_extensions[@]}"
           codesign --verify --deep --strict "$unzip_root/FreeX.app"
           gatekeeper_assessment_required="$distribution_candidate"
           set +e
@@ -372,14 +406,22 @@ jobs:
             echo "host_arch=$host_arch"
             echo "binary_archs=$binary_archs"
             echo "zip_name=$zip_name"
-            echo "bundle_executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
-            echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")"
-            echo "native_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app/Contents/Info.plist")"
-            echo "native_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
-            echo "native_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$app/Contents/Info.plist")"
-            echo "imported_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app/Contents/Info.plist")"
-            echo "imported_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
-            echo "imported_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")"
+            echo "artifact_bundle_metadata_subject=unzipped_app_bundle"
+            echo "bundle_executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_info_plist")"
+            echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app_info_plist")"
+            echo "bundle_identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_info_plist")"
+            echo "bundle_package_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$app_info_plist")"
+            echo "bundle_minimum_system_version=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app_info_plist")"
+            echo "bundle_high_resolution_capable=$(/usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' "$app_info_plist")"
+            echo "native_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app_info_plist")"
+            echo "native_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app_info_plist")"
+            echo "artifact_document_extensions_subject=unzipped_app_bundle"
+            echo "native_document_extensions=$(IFS=';'; echo "${native_document_extensions[*]}")"
+            echo "native_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$app_info_plist")"
+            echo "imported_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app_info_plist")"
+            echo "imported_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app_info_plist")"
+            echo "imported_document_extensions=$(IFS=';'; echo "${imported_document_extensions[*]}")"
+            echo "imported_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app_info_plist")"
             echo "codesign_verified=true"
             echo "codesign_mode=$signing_mode"
             echo "notarization_status=$notarization_status"
@@ -415,84 +457,157 @@ jobs:
             } >> "$evidence_path"
             echo "smoke_status=passed" >> "$evidence_path"
 
+            launchservices_smoke_timeout_seconds=60
+            launchservices_cleanup_timeout_seconds=10
+            quit_launchservices_app() {
+              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
+            }
+            launchservices_process_is_active() {
+              local launchservices_pid="$1"
+              local process_state
+              process_state="$(ps -o stat= -p "$launchservices_pid" 2>/dev/null | tr -d ' ')"
+              [[ -n "$process_state" && "$process_state" != Z* ]]
+            }
+            append_launchservices_failure_diagnostics() {
+              local report_path="$1"
+              {
+                if [[ -d "$app_diagnostics_dir" ]]; then
+                  echo "app_diagnostics_directory_configured=true"
+                else
+                  echo "app_diagnostics_directory_configured=false"
+                fi
+                if [[ -f "$app_diagnostics_dir/events.jsonl" ]]; then
+                  echo "app_diagnostics_events_jsonl=true"
+                else
+                  echo "app_diagnostics_events_jsonl=false"
+                fi
+              } >> "$report_path"
+            }
+            append_launchservices_smoke_markers() {
+              local smoke_name="$1"
+              local report_path="$2"
+              if [[ "$smoke_name" == "default_open" ]]; then
+                {
+                  echo "launchservices_default_open_attempted=true"
+                  echo "launchservices_default_open_app_override=false"
+                  echo "launchservices_default_open_document_extension=fxl"
+                  echo "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click"
+                } >> "$report_path"
+              fi
+            }
+            write_launchservices_missing_report() {
+              local smoke_name="$1"
+              local report_path="$2"
+              local timed_out="$3"
+              {
+                echo "macos_launch_smoke=missing_report"
+                echo "launchservices_smoke_name=$smoke_name"
+                echo "launchservices_smoke_timeout_seconds=$launchservices_smoke_timeout_seconds"
+                echo "launchservices_smoke_timed_out=$timed_out"
+              } > "$report_path"
+              append_launchservices_smoke_markers "$smoke_name" "$report_path"
+              append_launchservices_failure_diagnostics "$report_path"
+            }
+            wait_for_bounded_launchservices_cleanup() {
+              local launchservices_pid="$1"
+              local smoke_name="$2"
+              local report_path="$3"
+              local elapsed=0
+              while (( elapsed < launchservices_cleanup_timeout_seconds )); do
+                if ! launchservices_process_is_active "$launchservices_pid"; then
+                  local launchservices_status=0
+                  wait "$launchservices_pid" || launchservices_status=$?
+                  return "$launchservices_status"
+                fi
+                sleep 1
+                elapsed=$((elapsed + 1))
+              done
+              local forced_cleanup=false
+              if launchservices_process_is_active "$launchservices_pid"; then
+                forced_cleanup=true
+                kill "$launchservices_pid" 2>/dev/null || true
+                sleep 1
+                if launchservices_process_is_active "$launchservices_pid"; then
+                  kill -9 "$launchservices_pid" 2>/dev/null || true
+                fi
+              fi
+              local launchservices_status=0
+              wait "$launchservices_pid" || launchservices_status=$?
+              if [[ "$forced_cleanup" == "true" ]]; then
+                {
+                  echo "launchservices_smoke_cleanup_timeout=true"
+                  echo "launchservices_smoke_cleanup_timeout_seconds=$launchservices_cleanup_timeout_seconds"
+                  echo "launchservices_smoke_name=$smoke_name"
+                } >> "$report_path"
+                return 124
+              fi
+              return "$launchservices_status"
+            }
+            run_bounded_launchservices_smoke() {
+              local smoke_name="$1"
+              local report_path="$2"
+              shift 2
+              rm -f "$report_path"
+              "$@" &
+              local launchservices_pid=$!
+              local elapsed=0
+              local timed_out=false
+              while (( elapsed < launchservices_smoke_timeout_seconds )); do
+                if [[ -f "$report_path" ]]; then
+                  break
+                fi
+                if ! launchservices_process_is_active "$launchservices_pid"; then
+                  break
+                fi
+                sleep 1
+                elapsed=$((elapsed + 1))
+              done
+              if [[ ! -f "$report_path" && "$elapsed" -ge "$launchservices_smoke_timeout_seconds" ]] &&
+                 launchservices_process_is_active "$launchservices_pid"; then
+                timed_out=true
+              fi
+              if [[ ! -f "$report_path" ]]; then
+                write_launchservices_missing_report "$smoke_name" "$report_path" "$timed_out"
+                quit_launchservices_app
+                wait_for_bounded_launchservices_cleanup "$launchservices_pid" "$smoke_name" "$report_path" || true
+                cat "$report_path" >> "$evidence_path"
+                return 1
+              fi
+              quit_launchservices_app
+              local cleanup_status=0
+              wait_for_bounded_launchservices_cleanup "$launchservices_pid" "$smoke_name" "$report_path" || cleanup_status=$?
+              append_launchservices_smoke_markers "$smoke_name" "$report_path"
+              cat "$report_path" >> "$evidence_path"
+              if [[ "$cleanup_status" -ne 0 ]]; then
+                return "$cleanup_status"
+              fi
+            }
+
             launch_smoke_file="$RUNNER_TEMP/freex-$runtime-launch.csv"
             printf 'Name,Amount\nFreeX Launch,84\n' > "$launch_smoke_file"
-            launch_clipboard_image="$RUNNER_TEMP/freex-$runtime-clipboard.png"
-            base64 -D > "$launch_clipboard_image" <<'EOF'
-            iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=
-            EOF
-            /usr/bin/swift - "$launch_clipboard_image" <<'SWIFT'
-            import AppKit
-
-            let imagePath = CommandLine.arguments[1]
-            guard let image = NSImage(contentsOfFile: imagePath) else {
-                fatalError("Could not load launch smoke clipboard image.")
-            }
-
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            guard pasteboard.writeObjects([image]) else {
-                fatalError("Could not write launch smoke image to pasteboard.")
-            }
-            SWIFT
-            rm -f "$launch_smoke_report"
             /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
-            open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-verify-image-clipboard --macos-launch-smoke-verify-live-command-keys &
-            launch_pid=$!
-            live_command_key_ready=false
-            for _ in {1..90}; do
-              if [[ -f "$launch_smoke_report" ]] && grep -q "live_command_key_smoke_ready=true" "$launch_smoke_report"; then
-                live_command_key_ready=true
-                break
-              fi
-              if ! kill -0 "$launch_pid" 2>/dev/null; then
-                break
-              fi
-              sleep 1
-            done
-            if [[ ! -f "$launch_smoke_report" ]]; then
-              echo "macos_launch_smoke=missing_report" > "$launch_smoke_report"
-              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
-              wait "$launch_pid" || true
-              cat "$launch_smoke_report" >> "$evidence_path"
-              exit 1
-            fi
-            if [[ "$live_command_key_ready" != "true" ]]; then
-              wait "$launch_pid" || true
-              cat "$launch_smoke_report" >> "$evidence_path"
-              exit 1
-            fi
-            live_command_key_system_events_result=attempted
-            if ! osascript <<'APPLESCRIPT'
-            tell application id "io.github.tony-xmelon.freex" to activate
-            delay 0.5
-            tell application "System Events"
-              tell process "FreeX"
-                set frontmost to true
-              end tell
-              keystroke "a" using {command down}
-              delay 0.2
-              keystroke "b" using {command down}
-              delay 0.2
-              keystroke "i" using {command down}
-              delay 0.2
-              keystroke "u" using {command down}
-            end tell
-            APPLESCRIPT
-            then
-              live_command_key_system_events_result=blocked_or_failed
-            fi
-            {
-              echo "live_command_key_system_events_attempted=true"
-              echo "live_command_key_system_events_result=$live_command_key_system_events_result"
-            } >> "$evidence_path"
-            wait "$launch_pid" || true
-            cat "$launch_smoke_report" >> "$evidence_path"
+            run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report" \
+              open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
             grep -q "macos_launch_smoke=passed" "$launch_smoke_report"
+            grep -q "app_diagnostics_directory_configured=true" "$launch_smoke_report"
             grep -q "window_shown=true" "$launch_smoke_report"
             grep -q "opened_source_path=.*freex-$runtime-launch.csv" "$launch_smoke_report"
             grep -q "viewport_rows=[1-9]" "$launch_smoke_report"
             grep -q "viewport_columns=[1-9]" "$launch_smoke_report"
+            grep -q "macos_accessibility_smoke=passed" "$launch_smoke_report"
+            grep -q "a11y_formula_box_name=true" "$launch_smoke_report"
+            grep -q "a11y_formula_box_help=true" "$launch_smoke_report"
+            grep -q "a11y_formula_box_id=true" "$launch_smoke_report"
+            grep -q "a11y_status_text_name=true" "$launch_smoke_report"
+            grep -q "a11y_status_text_help=true" "$launch_smoke_report"
+            grep -q "a11y_status_text_id=true" "$launch_smoke_report"
+            grep -q "a11y_status_text_value=true" "$launch_smoke_report"
+            grep -q "a11y_cell_address_name=true" "$launch_smoke_report"
+            grep -q "a11y_cell_address_help=true" "$launch_smoke_report"
+            grep -q "a11y_cell_address_id=true" "$launch_smoke_report"
+            grep -q "a11y_selection_stats_name=true" "$launch_smoke_report"
+            grep -q "a11y_selection_stats_help=true" "$launch_smoke_report"
+            grep -q "a11y_selection_stats_id=true" "$launch_smoke_report"
             grep -q "command_key_smoke=passed" "$launch_smoke_report"
             grep -q "command_key_smoke_attempted=true" "$launch_smoke_report"
             grep -q "cmd_new_workbook_menu_gesture=true" "$launch_smoke_report"
@@ -509,22 +624,9 @@ jobs:
             grep -q "cmd_bold_menu_gesture=true" "$launch_smoke_report"
             grep -q "cmd_italic_menu_gesture=true" "$launch_smoke_report"
             grep -q "cmd_underline_menu_gesture=true" "$launch_smoke_report"
-            grep -q "live_command_key_smoke_required=true" "$launch_smoke_report"
-            grep -q "live_command_key_smoke=passed" "$launch_smoke_report"
-            grep -q "live_command_key_smoke_attempted=true" "$launch_smoke_report"
-            grep -q "live_command_key_smoke_ready=true" "$launch_smoke_report"
-            grep -q "live_cmd_select_all_received=true" "$launch_smoke_report"
-            grep -q "live_cmd_select_all_state_changed=true" "$launch_smoke_report"
-            grep -q "live_cmd_bold_received=true" "$launch_smoke_report"
-            grep -q "live_cmd_bold_state_changed=true" "$launch_smoke_report"
-            grep -q "live_cmd_italic_received=true" "$launch_smoke_report"
-            grep -q "live_cmd_italic_state_changed=true" "$launch_smoke_report"
-            grep -q "live_cmd_underline_received=true" "$launch_smoke_report"
-            grep -q "live_cmd_underline_state_changed=true" "$launch_smoke_report"
-            grep -q "external_image_clipboard_paste_required=true" "$launch_smoke_report"
-            grep -q "external_image_clipboard_paste=true" "$launch_smoke_report"
-            grep -q "external_image_clipboard_picture_count=[1-9]" "$launch_smoke_report"
-            grep -q "external_image_clipboard_picture_png_bytes=[1-9]" "$launch_smoke_report"
+            grep -q "live_command_key_smoke_required=false" "$launch_smoke_report"
+            grep -q "live_command_key_smoke=not_required" "$launch_smoke_report"
+            grep -q "external_image_clipboard_paste_required=false" "$launch_smoke_report"
             grep -q "new_sheet_button=true" "$launch_smoke_report"
             grep -q "toolbar_format_painter_button=true" "$launch_smoke_report"
             grep -q "toolbar_autosum_button=true" "$launch_smoke_report"
@@ -564,6 +666,7 @@ jobs:
             grep -q "native_save_menu_item=true" "$launch_smoke_report"
             grep -q "native_save_as_menu_item=true" "$launch_smoke_report"
             grep -q "native_export_pdf_menu_item=true" "$launch_smoke_report"
+            grep -q "native_share_workbook_menu_item=true" "$launch_smoke_report"
             grep -q "native_workbook_statistics_menu_item=true" "$launch_smoke_report"
             grep -q "native_close_workbook_menu_item=true" "$launch_smoke_report"
             grep -q "native_edit_menu=true" "$launch_smoke_report"
@@ -668,6 +771,20 @@ jobs:
             grep -q "format_cells_dialog_action_buttons=true" "$launch_smoke_report"
             grep -q "format_cells_dialog_compact_layout=true" "$launch_smoke_report"
             grep -q "format_cells_dialog_result_closed_without_accept=true" "$launch_smoke_report"
+            grep -q "sort_dialog=true" "$launch_smoke_report"
+            grep -q "sort_dialog_sort_on_controls=true" "$launch_smoke_report"
+            grep -q "sort_dialog_color_controls=true" "$launch_smoke_report"
+            grep -q "sort_dialog_action_buttons=true" "$launch_smoke_report"
+            grep -q "sort_dialog_compact_layout=true" "$launch_smoke_report"
+            grep -q "sort_dialog_result_closed_without_accept=true" "$launch_smoke_report"
+            grep -q "data_validation_dropdown_control=true" "$launch_smoke_report"
+            grep -q "data_validation_dropdown_items=true" "$launch_smoke_report"
+            grep -q "data_validation_dialog=true" "$launch_smoke_report"
+            grep -q "data_validation_dialog_criteria_controls=true" "$launch_smoke_report"
+            grep -q "data_validation_dialog_message_controls=true" "$launch_smoke_report"
+            grep -q "data_validation_dialog_action_buttons=true" "$launch_smoke_report"
+            grep -q "data_validation_dialog_compact_layout=true" "$launch_smoke_report"
+            grep -q "data_validation_dialog_result_closed_without_accept=true" "$launch_smoke_report"
             grep -q "native_autosum_menu_item=true" "$launch_smoke_report"
             grep -q "native_autosum_sum_menu_item=true" "$launch_smoke_report"
             grep -q "native_autosum_average_menu_item=true" "$launch_smoke_report"
@@ -748,28 +865,10 @@ jobs:
 
             open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"
             printf 'Name,Amount\nFreeX Open With,126\n' > "$open_with_smoke_file"
-            rm -f "$open_with_report"
-            open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" &
-            open_with_pid=$!
-            for _ in {1..60}; do
-              if [[ -f "$open_with_report" ]]; then
-                break
-              fi
-              if ! kill -0 "$open_with_pid" 2>/dev/null; then
-                break
-              fi
-              sleep 1
-            done
-            if [[ ! -f "$open_with_report" ]]; then
-              echo "macos_launch_smoke=missing_report" > "$open_with_report"
-              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
-              wait "$open_with_pid" || true
-              cat "$open_with_report" >> "$evidence_path"
-              exit 1
-            fi
-            wait "$open_with_pid" || true
-            cat "$open_with_report" >> "$evidence_path"
+            run_bounded_launchservices_smoke "open_with" "$open_with_report" \
+              open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
             grep -q "macos_launch_smoke=passed" "$open_with_report"
+            grep -q "app_diagnostics_directory_configured=true" "$open_with_report"
             grep -q "window_shown=true" "$open_with_report"
             grep -q "opened_source_path=.*freex-$runtime-open-with.csv" "$open_with_report"
             grep -q "viewport_rows=[1-9]" "$open_with_report"
@@ -790,40 +889,10 @@ jobs:
               '    }' \
               '  ]' \
               '}' > "$default_open_smoke_file"
-            rm -f "$default_open_report"
-            open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" &
-            default_open_pid=$!
-            for _ in {1..60}; do
-              if [[ -f "$default_open_report" ]]; then
-                break
-              fi
-              if ! kill -0 "$default_open_pid" 2>/dev/null; then
-                break
-              fi
-              sleep 1
-            done
-            if [[ ! -f "$default_open_report" ]]; then
-              {
-                echo "macos_launch_smoke=missing_report"
-                echo "launchservices_default_open_attempted=true"
-                echo "launchservices_default_open_app_override=false"
-                echo "launchservices_default_open_document_extension=fxl"
-                echo "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click"
-              } > "$default_open_report"
-              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
-              wait "$default_open_pid" || true
-              cat "$default_open_report" >> "$evidence_path"
-              exit 1
-            fi
-            wait "$default_open_pid" || true
-            {
-              echo "launchservices_default_open_attempted=true"
-              echo "launchservices_default_open_app_override=false"
-              echo "launchservices_default_open_document_extension=fxl"
-              echo "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click"
-            } >> "$default_open_report"
-            cat "$default_open_report" >> "$evidence_path"
+            run_bounded_launchservices_smoke "default_open" "$default_open_report" \
+              open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
             grep -q "macos_launch_smoke=passed" "$default_open_report"
+            grep -q "app_diagnostics_directory_configured=true" "$default_open_report"
             grep -q "window_shown=true" "$default_open_report"
             grep -q "opened_source_path=.*freex-$runtime-default-open.fxl" "$default_open_report"
             grep -q "viewport_rows=[1-9]" "$default_open_report"
@@ -834,12 +903,33 @@ jobs:
             grep -q "launchservices_default_open_app_override=false" "$default_open_report"
             grep -q "launchservices_default_open_document_extension=fxl" "$default_open_report"
             grep -q "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click" "$default_open_report"
+
+            app_diagnostics_events_path="$app_diagnostics_dir/events.jsonl"
+            app_diagnostics_crash_reports_dir="$app_diagnostics_dir/CrashReports"
+            if [[ -d "$app_diagnostics_crash_reports_dir" ]]; then
+              app_diagnostics_crash_count="$(find "$app_diagnostics_crash_reports_dir" -type f -name '*.json' | wc -l | tr -d ' ')"
+            else
+              app_diagnostics_crash_count=0
+            fi
+            {
+              echo "app_diagnostics_artifact=freex-$runtime-macos-app-diagnostics"
+              echo "app_diagnostics_events_jsonl=true"
+              echo "app_diagnostics_crash_report_count=$app_diagnostics_crash_count"
+            } >> "$evidence_path"
+            test -f "$app_diagnostics_events_path"
+            grep -q '"eventName":"app_start"' "$app_diagnostics_events_path"
+            grep -q '"eventName":"app_ready"' "$app_diagnostics_events_path"
+            grep -q '"eventName":"macos_launch_smoke"' "$app_diagnostics_events_path"
           else
             echo "Skipping launch smoke for $runtime on $host_arch host." | tee "$smoke_log"
             echo "smoke_status=skipped_host_arch_mismatch" >> "$evidence_path"
             echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$launch_smoke_report"
             echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$open_with_report"
             echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$default_open_report"
+            echo "app_artifact_upload_blocked=host_arch_mismatch" >> "$evidence_path"
+            rm -f "$zip_path" "$zip_path.sha256"
+            echo "Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact." | tee -a "$smoke_log" >&2
+            exit 1
           fi
 
           tester_channel_summary="This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel; distribution-candidate artifacts must show Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment in evidence."
@@ -889,7 +979,7 @@ jobs:
 
           ## Open
 
-          Unzip $zip_name, then open FreeX.app. If macOS Gatekeeper blocks the preview, check freex-$runtime-macos-evidence.txt first:
+          Extract $zip_name with Finder/Archive Utility, or run ditto -x -k $zip_name . from Terminal, then open FreeX.app. If macOS Gatekeeper blocks the preview, check freex-$runtime-macos-evidence.txt first:
 
           - artifact_channel=$artifact_channel
           - distribution_candidate=$distribution_candidate
@@ -908,8 +998,32 @@ jobs:
 
           ## Report
 
-          When filing feedback, include the runtime ($runtime), the GitHub Actions run, freex-$runtime-macos-evidence.txt, and the smoke logs when relevant.
+          When filing feedback, include the runtime ($runtime), the GitHub Actions run, freex-$runtime-macos-evidence.txt, the matching macOS diagnostics artifact, and the smoke logs when relevant.
           EOF
+
+      - name: Require hosted smoke before app artifact upload
+        shell: bash
+        env:
+          FREEX_RUNTIME: ${{ matrix.runtime }}
+        run: |
+          set -euo pipefail
+
+          runtime="$FREEX_RUNTIME"
+          artifact_root="$GITHUB_WORKSPACE/artifacts"
+          evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
+          launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
+          open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
+          default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
+
+          if grep -q "^smoke_status=skipped_host_arch_mismatch$" "$evidence_path"; then
+            echo "Host/runtime architecture mismatch for $runtime cannot publish a macOS app artifact." >&2
+            exit 1
+          fi
+
+          grep -q "^smoke_status=passed$" "$evidence_path"
+          grep -q "^macos_launch_smoke=passed$" "$launch_smoke_report"
+          grep -q "^macos_launch_smoke=passed$" "$open_with_report"
+          grep -q "^macos_launch_smoke=passed$" "$default_open_report"
 
       - name: Upload app artifact
         uses: actions/upload-artifact@v7
@@ -926,6 +1040,7 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-notarization.log
             artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
           if-no-files-found: error
+          retention-days: 14
 
       - name: Upload app diagnostics
         if: always()
@@ -942,13 +1057,393 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
             artifacts/freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx
             artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx
+            artifacts/freex-${{ matrix.runtime }}-macos-app-diagnostics/**
             artifacts/freex-${{ matrix.runtime }}-macos-app.zip
             artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256
           if-no-files-found: warn
+          retention-days: 14
+
+  macos-tfm-build:
+    name: macOS TFM compile validation (${{ matrix.runtime }})
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_macos_tfm == true }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: osx-arm64
+            arch: arm64
+            runner: macos-26
+          - runtime: osx-x64
+            arch: x64
+            runner: macos-26-intel
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300.3
+      FREEX_MACOS_ARCH: ${{ matrix.arch }}
+      FREEX_MACOS_TFM: net10.0-macos
+      FREEX_MACOS_TFM_EVIDENCE: artifacts/freex-${{ matrix.arch }}-macos-tfm-build-evidence.txt
+      FREEX_RUNTIME: ${{ matrix.runtime }}
+      FREEX_XCODE_PATH: /Applications/Xcode_26.5.app/Contents/Developer
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.300
+
+      - name: Capture macOS TFM toolchain evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -d "$FREEX_XCODE_PATH"
+          sudo xcode-select -s "$FREEX_XCODE_PATH"
+
+          mkdir -p "$(dirname "$FREEX_MACOS_TFM_EVIDENCE")"
+          {
+            echo "runtime=$FREEX_RUNTIME"
+            echo "arch=$FREEX_MACOS_ARCH"
+            echo "macos_tfm=$FREEX_MACOS_TFM"
+            echo "dotnet_workload_set_version=$FREEX_DOTNET_WORKLOAD_SET_VERSION"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+            echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "runner_label=${{ matrix.runner }}"
+            echo "runner_os=${RUNNER_OS:-unknown}"
+            echo "runner_arch=${RUNNER_ARCH:-unknown}"
+            echo "image_os=${ImageOS:-unknown}"
+            echo "image_version=${ImageVersion:-unknown}"
+            echo "xcode_path=$FREEX_XCODE_PATH"
+            echo "[sw_vers]"
+            sw_vers
+            echo "[uname -m]"
+            uname -m
+            echo "[dotnet --version]"
+            dotnet --version
+            echo "[dotnet --info]"
+            dotnet --info
+            echo "[xcodebuild -version]"
+            xcodebuild -version
+            echo "[dotnet workload search macos]"
+            dotnet workload search macos
+            echo "[dotnet workload list before install]"
+            dotnet workload list || true
+          } | tee "$FREEX_MACOS_TFM_EVIDENCE"
+
+      - name: Install macOS workload
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo ""
+            echo "[dotnet workload install macos]"
+            dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION" --skip-manifest-update
+            echo "[dotnet workload --info]"
+            dotnet workload --info
+            echo "[dotnet workload list after install]"
+            dotnet workload list
+            echo "macos_tfm_workload=installed"
+          } | tee -a "$FREEX_MACOS_TFM_EVIDENCE"
+
+      - name: Build opt-in macOS TFM
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          compile_items_path="artifacts/freex-${FREEX_MACOS_ARCH}-macos-tfm-compile-items-evidence.txt"
+
+          dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
+            --configuration Release \
+            --framework "$FREEX_MACOS_TFM" \
+            --runtime "$FREEX_RUNTIME" \
+            -p:EnableMacOsTargetFramework=true
+
+          dotnet msbuild src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
+            -p:Configuration=Release \
+            -p:EnableMacOsTargetFramework=true \
+            -p:TargetFramework="$FREEX_MACOS_TFM" \
+            -p:RuntimeIdentifier="$FREEX_RUNTIME" \
+            -getItem:Compile \
+            > "$compile_items_path"
+
+          grep -q "MacOsWorkbookShareSheetService.cs" "$compile_items_path"
+
+          {
+            echo "macos_tfm_build=passed"
+            echo "macos_tfm=$FREEX_MACOS_TFM"
+            echo "runtime=$FREEX_RUNTIME"
+            echo "macos_tfm_source_boundary=src/FreeX.App.Avalonia/MacOs"
+            echo "macos_tfm_native_share_sheet_source=src/FreeX.App.Avalonia/MacOs/MacOsWorkbookShareSheetService.cs"
+            echo "macos_tfm_native_source_compiled=true"
+            echo "macos_tfm_compile_items_artifact=freex-${FREEX_MACOS_ARCH}-macos-tfm-compile-items-evidence.txt"
+            echo "macos_tfm_artifact_channel=evidence-only"
+          } | tee -a "$FREEX_MACOS_TFM_EVIDENCE"
+
+      - name: Upload macOS TFM build evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-tfm-build-${{ matrix.arch }}-evidence
+          path: artifacts/freex-${{ matrix.arch }}-macos-tfm-*-evidence.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  macos-preview-readiness:
+    name: Aggregate macOS preview evidence
+    needs: macos-app
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download macOS preview artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: "freex-${{ github.run_id }}-${{ github.run_attempt }}-osx-*-macos-*"
+          path: artifacts/macos-preview-evidence
+          merge-multiple: false
+
+      - name: Validate aggregate readiness
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
+
+          $artifactRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts/macos-preview-evidence"
+          $expectedWrapperNames = @(
+            "freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-arm64-macos-app",
+            "freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-arm64-macos-diagnostics",
+            "freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-x64-macos-app",
+            "freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-x64-macos-diagnostics"
+          )
+          if (-not (Test-Path -LiteralPath $artifactRoot -PathType Container)) {
+            throw "Downloaded macOS preview artifact root was not found: $artifactRoot"
+          }
+
+          $downloadedWrapperNames = @(Get-ChildItem -LiteralPath $artifactRoot -Directory | ForEach-Object { $_.Name } | Sort-Object)
+          $missingWrapperNames = @($expectedWrapperNames | Where-Object { $downloadedWrapperNames -cnotcontains $_ })
+          $unexpectedWrapperNames = @($downloadedWrapperNames | Where-Object { $expectedWrapperNames -cnotcontains $_ })
+          if ($missingWrapperNames.Count -gt 0) {
+            throw "Missing downloaded macOS preview artifact wrapper(s): $($missingWrapperNames -join ', ')"
+          }
+          if ($unexpectedWrapperNames.Count -gt 0) {
+            throw "Unexpected downloaded macOS preview artifact wrapper(s): $($unexpectedWrapperNames -join ', ')"
+          }
+
+          $arguments = @(
+            "-ArtifactRoot", $artifactRoot,
+            "-ExpectedRunId", $env:GITHUB_RUN_ID,
+            "-ExpectedRunAttempt", $env:GITHUB_RUN_ATTEMPT,
+            "-RequireSeparateDiagnosticsArtifact"
+          )
+          if ("${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}" -eq "true") {
+            $arguments += "-DistributionCandidate"
+          }
+
+          & (Join-Path $env:GITHUB_WORKSPACE "tools/Test-MacOsPublicPreviewReadiness.ps1") @arguments
+
+      - name: Write aggregate manifest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
+
+          $artifactRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts/macos-preview-evidence"
+          $outputRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts/macos-preview-readiness"
+          Remove-Item -LiteralPath $outputRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
+
+          $artifactDigestByName = @{}
+          $artifactRows = @(gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/artifacts?per_page=100" --jq '.artifacts[] | [.name, (.digest // "")] | @tsv')
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to query current run artifacts."
+          }
+
+          foreach ($row in $artifactRows) {
+            $parts = $row -split "`t", 2
+            if ($parts.Count -eq 2 -and -not [string]::IsNullOrWhiteSpace($parts[0])) {
+              $artifactDigestByName[$parts[0]] = $parts[1]
+            }
+          }
+
+          function Get-LatestEvidenceMarkers {
+            param(
+              [Parameter(Mandatory = $true)][string]$Path,
+              [Parameter(Mandatory = $true)][string[]]$Keys
+            )
+
+            $markers = [ordered]@{}
+            $lines = @(Get-Content -LiteralPath $Path)
+            foreach ($key in $Keys) {
+              $value = $null
+              $escapedKey = [System.Text.RegularExpressions.Regex]::Escape($key)
+              foreach ($line in $lines) {
+                $match = [System.Text.RegularExpressions.Regex]::Match($line, "^$escapedKey=(.*)$")
+                if ($match.Success) {
+                  $value = $match.Groups[1].Value
+                }
+              }
+
+              $markers[$key] = $value
+            }
+
+            return $markers
+          }
+
+          function Find-DownloadedArtifactFile {
+            param(
+              [Parameter(Mandatory = $true)][string]$Root,
+              [Parameter(Mandatory = $true)][string]$FileName,
+              [Parameter(Mandatory = $true)][string]$ArtifactName
+            )
+
+            $matches = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $FileName)
+            if ($matches.Count -eq 0) {
+              throw "macOS artifact '$ArtifactName' is missing required file '$FileName' under '$Root'."
+            }
+            if ($matches.Count -gt 1) {
+              $matchList = ($matches | ForEach-Object { $_.FullName }) -join ', '
+              throw "macOS artifact '$ArtifactName' contains multiple '$FileName' files: $matchList."
+            }
+
+            return $matches[0].FullName
+          }
+
+          $markerKeys = @(
+            "github_run_id",
+            "github_run_attempt",
+            "artifact_channel",
+            "distribution_candidate",
+            "distribution_readiness",
+            "smoke_status",
+            "artifact_bundle_metadata_subject",
+            "bundle_executable",
+            "bundle_icon",
+            "bundle_identifier",
+            "bundle_package_type",
+            "bundle_minimum_system_version",
+            "bundle_high_resolution_capable",
+            "artifact_document_extensions_subject",
+            "native_document_type",
+            "native_document_extension",
+            "native_document_extensions",
+            "native_document_handler_rank",
+            "imported_document_type",
+            "imported_document_extension",
+            "imported_document_extensions",
+            "imported_document_handler_rank",
+            "codesign_mode",
+            "notarization_status",
+            "stapler_validated",
+            "gatekeeper_assessment_status",
+            "gatekeeper_assessment_source",
+            "zip_sha256"
+          )
+
+          $runtimeEntries = @()
+          foreach ($runtime in @("osx-arm64", "osx-x64")) {
+            $appArtifactName = "freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-$runtime-macos-app"
+            $diagnosticsArtifactName = "freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-$runtime-macos-diagnostics"
+            $appDirectory = Join-Path $artifactRoot $appArtifactName
+            $diagnosticsDirectory = Join-Path $artifactRoot $diagnosticsArtifactName
+            if (-not (Test-Path -LiteralPath $appDirectory -PathType Container)) {
+              throw "Downloaded app artifact wrapper was not found: $appArtifactName"
+            }
+            if (-not (Test-Path -LiteralPath $diagnosticsDirectory -PathType Container)) {
+              throw "Downloaded diagnostics artifact wrapper was not found: $diagnosticsArtifactName"
+            }
+
+            $zipPath = Find-DownloadedArtifactFile -Root $appDirectory -FileName "freex-$runtime-macos-app.zip" -ArtifactName $appArtifactName
+            $checksumPath = Find-DownloadedArtifactFile -Root $appDirectory -FileName "freex-$runtime-macos-app.zip.sha256" -ArtifactName $appArtifactName
+            $evidencePath = Find-DownloadedArtifactFile -Root $appDirectory -FileName "freex-$runtime-macos-evidence.txt" -ArtifactName $appArtifactName
+            $zipSha256 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            $checksumText = (Get-Content -LiteralPath $checksumPath -Raw).Trim()
+            $evidenceMarkers = Get-LatestEvidenceMarkers -Path $evidencePath -Keys $markerKeys
+
+            $runtimeEntries += [ordered]@{
+              runtime = $runtime
+              app_artifact = $appArtifactName
+              app_artifact_digest = $artifactDigestByName[$appArtifactName]
+              diagnostics_artifact = $diagnosticsArtifactName
+              diagnostics_artifact_digest = $artifactDigestByName[$diagnosticsArtifactName]
+              zip_sha256 = $zipSha256
+              checksum_file = $checksumText
+              evidence_file = "freex-$runtime-macos-evidence.txt"
+              evidence_markers = $evidenceMarkers
+            }
+          }
+
+          $manifest = [ordered]@{
+            schema = "io.github.tony-xmelon.freex.macos-preview-readiness.v1"
+            repository = $env:GITHUB_REPOSITORY
+            workflow = $env:GITHUB_WORKFLOW
+            run_id = $env:GITHUB_RUN_ID
+            run_attempt = $env:GITHUB_RUN_ATTEMPT
+            commit = $env:GITHUB_SHA
+            generated_at_utc = (Get-Date).ToUniversalTime().ToString("o")
+            source_artifact_pattern = "freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-*"
+            readiness_script = "tools/Test-MacOsPublicPreviewReadiness.ps1"
+            require_separate_diagnostics_artifact = $true
+            runtimes = $runtimeEntries
+          }
+
+          $manifestPath = Join-Path $outputRoot "macos-preview-readiness-manifest.json"
+          $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding ascii
+
+          $summaryLines = @(
+            "macos_preview_readiness=passed",
+            "run_id=$env:GITHUB_RUN_ID",
+            "run_attempt=$env:GITHUB_RUN_ATTEMPT",
+            "source_artifact_pattern=freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-*"
+          )
+          foreach ($entry in $runtimeEntries) {
+            $summaryLines += "runtime=$($entry.runtime)"
+            $summaryLines += "app_artifact=$($entry.app_artifact)"
+            $summaryLines += "app_artifact_digest=$($entry.app_artifact_digest)"
+            $summaryLines += "diagnostics_artifact=$($entry.diagnostics_artifact)"
+            $summaryLines += "diagnostics_artifact_digest=$($entry.diagnostics_artifact_digest)"
+            $summaryLines += "zip_sha256=$($entry.zip_sha256)"
+            $summaryLines += "artifact_channel=$($entry.evidence_markers.artifact_channel)"
+            $summaryLines += "distribution_readiness=$($entry.evidence_markers.distribution_readiness)"
+            $summaryLines += "smoke_status=$($entry.evidence_markers.smoke_status)"
+            $summaryLines += "bundle_identifier=$($entry.evidence_markers.bundle_identifier)"
+            $summaryLines += "bundle_package_type=$($entry.evidence_markers.bundle_package_type)"
+          }
+
+          Set-Content -LiteralPath (Join-Path $outputRoot "macos-preview-readiness-summary.txt") -Value $summaryLines -Encoding ascii
+
+      - name: Upload aggregate readiness
+        uses: actions/upload-artifact@v7
+        with:
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-preview-readiness
+          path: artifacts/macos-preview-readiness/*
+          if-no-files-found: error
+          retention-days: 14
 
   publish-distribution-candidate:
     name: Publish macOS distribution candidate
-    needs: macos-app
+    needs: [macos-app, macos-preview-readiness]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1061,7 +1556,10 @@ jobs:
               "artifact_channel=distribution-candidate",
               "distribution_candidate=true",
               "distribution_contract=distribution_candidate_requires_developer_id_notarization_stapling",
+              "github_run_id=$($env:GITHUB_RUN_ID)",
+              "github_run_attempt=$($env:GITHUB_RUN_ATTEMPT)",
               "distribution_readiness=distribution_candidate_ready",
+              "smoke_status=passed",
               "codesign_verified=true",
               "codesign_mode=developer-id",
               "notarization_status=accepted",
@@ -1076,6 +1574,20 @@ jobs:
               "zip_sha256="
             )) {
               Assert-ContainsRequiredText -Text $evidenceText -Needle $marker -Label "$runtime evidence"
+            }
+
+            $packagingSmokeText = Get-Content -LiteralPath $packagingSmokePath -Raw
+            foreach ($marker in @("Packaging smoke opened", "format_cells_style_roundtrip=true", "edited, saved, and reopened")) {
+              Assert-ContainsRequiredText -Text $packagingSmokeText -Needle $marker -Label "$runtime packaging smoke"
+            }
+
+            foreach ($smokeReport in @(
+              [ordered]@{ Path = $launchSmokePath; Label = "$runtime launch smoke" },
+              [ordered]@{ Path = $openWithSmokePath; Label = "$runtime Open With launch smoke" },
+              [ordered]@{ Path = $defaultOpenSmokePath; Label = "$runtime default-open launch smoke" }
+            )) {
+              $smokeReportText = Get-Content -LiteralPath ([string]$smokeReport.Path) -Raw
+              Assert-ContainsRequiredText -Text $smokeReportText -Needle "macos_launch_smoke=passed" -Label ([string]$smokeReport.Label)
             }
 
             $notarizationText = Get-Content -LiteralPath $notarizationLogPath -Raw
@@ -1146,6 +1658,7 @@ jobs:
             workflow = $env:GITHUB_WORKFLOW
             run_id = $env:GITHUB_RUN_ID
             run_attempt = $env:GITHUB_RUN_ATTEMPT
+            release_assets_artifact = "freex-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)-macos-release-assets"
             commit = $env:GITHUB_SHA
             generated_at_utc = (Get-Date).ToUniversalTime().ToString("o")
             source_artifact_pattern = "freex-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)-*-macos-app"
@@ -1153,6 +1666,7 @@ jobs:
               "artifact_channel=distribution-candidate",
               "distribution_candidate=true",
               "distribution_readiness=distribution_candidate_ready",
+              "smoke_status=passed",
               "codesign_mode=developer-id",
               "notarization_status=accepted",
               "stapler_validated=true",
@@ -1170,11 +1684,12 @@ jobs:
           Set-Content -LiteralPath $instructionsPath -Encoding ascii -Value @"
           # FreeX macOS Distribution Candidate
 
-          This release was published only after both hosted runtime artifacts completed and this publication job revalidated distribution-candidate evidence for Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment.
+          This release was published only after both hosted runtime artifacts completed and this publication job revalidated distribution-candidate smoke evidence, Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment.
 
           Commit: $($env:GITHUB_SHA)
           Run: $($env:GITHUB_RUN_ID)
           Attempt: $($env:GITHUB_RUN_ATTEMPT)
+          Actions artifact wrapper: freex-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)-macos-release-assets
 
           ## Stable Assets
 
@@ -1184,7 +1699,7 @@ jobs:
           - FreeX-latest-macos-x64.zip.sha256
           - FreeX-latest-macos-distribution-candidate-manifest.json
 
-          Each runtime also publishes stable evidence, packaging smoke, launch smoke, Open With launch smoke, default-open launch smoke, notarization log, and tester-instruction assets. Reject the candidate if the evidence does not show artifact_channel=distribution-candidate, distribution_readiness=distribution_candidate_ready, codesign_mode=developer-id, notarization_status=accepted, stapler_validated=true, gatekeeper_assessment_status=accepted, and gatekeeper_assessment_source=Notarized Developer ID.
+          Each runtime also publishes stable evidence, packaging smoke, launch smoke, Open With launch smoke, default-open launch smoke, notarization log, and tester-instruction assets. Reject the candidate if the evidence does not show artifact_channel=distribution-candidate, distribution_readiness=distribution_candidate_ready, smoke_status=passed, codesign_mode=developer-id, notarization_status=accepted, stapler_validated=true, gatekeeper_assessment_status=accepted, and gatekeeper_assessment_source=Notarized Developer ID.
 
           ## Verify
 
@@ -1194,7 +1709,7 @@ jobs:
       - name: Upload release-channel prepared assets
         uses: actions/upload-artifact@v7
         with:
-          name: freex-${{ steps.candidate.outputs.release_id }}-macos-release-assets
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-release-assets
           path: artifacts/macos-release-assets/*
           if-no-files-found: error
 

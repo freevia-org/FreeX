@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 

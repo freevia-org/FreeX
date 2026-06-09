@@ -1160,9 +1160,17 @@ public partial class MainWindow
 
     private static void EnsureCollapsedRibbonGroupMenuItems(ContextMenu menu)
     {
-        if (menu.Items.Count > 0 || menu.Tag is not FrameworkElement group)
+        if (menu.Tag is not FrameworkElement group)
             return;
 
+        if (menu.Items.Count > 0 &&
+            GetMenuItems(menu).Any(item => !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item))))
+        {
+            return;
+        }
+
+        menu.Items.Clear();
+        group.UpdateLayout();
         PopulateCollapsedRibbonGroupMenu(menu, group);
     }
 
@@ -1343,16 +1351,55 @@ public partial class MainWindow
         }
 
         var contentRoot = GetRibbonTabContentRoot(tabItem);
-        var activePanel = EnumerateVisualDescendants(contentRoot)
-            .Concat(EnumerateLogicalDescendants(contentRoot))
-            .OfType<StackPanel>()
-            .Distinct()
-            .Where(panel => FindVisualAncestor<Button>(panel) is not { } button ||
-                            !RibbonMetadata.IsCollapsedGroupButton(button))
-            .OrderByDescending(panel => panel.Children.OfType<DependencyObject>().Count(RibbonMetadata.IsRibbonGroup))
-            .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
-                                     panel.Children.OfType<DependencyObject>().Any(RibbonMetadata.IsRibbonGroup));
+        var activePanel = FindActiveRibbonPanelCandidate(contentRoot);
         return CacheActiveRibbonPanel(tabItem, activePanel);
+    }
+
+    private static StackPanel? FindActiveRibbonPanelCandidate(DependencyObject contentRoot)
+    {
+        var visitedPanels = new HashSet<StackPanel>();
+        StackPanel? activePanel = null;
+        var activePanelRibbonGroupCount = -1;
+
+        foreach (var descendant in EnumerateVisualDescendants(contentRoot)
+                     .Concat(EnumerateLogicalDescendants(contentRoot)))
+        {
+            if (descendant is not StackPanel panel ||
+                !visitedPanels.Add(panel) ||
+                FindVisualAncestor<Button>(panel) is { } button &&
+                RibbonMetadata.IsCollapsedGroupButton(button))
+            {
+                continue;
+            }
+
+            var ribbonGroupCount = CountRibbonGroupChildren(panel);
+            if (panel.Orientation != Orientation.Horizontal ||
+                ribbonGroupCount == 0 ||
+                ribbonGroupCount <= activePanelRibbonGroupCount)
+            {
+                continue;
+            }
+
+            activePanel = panel;
+            activePanelRibbonGroupCount = ribbonGroupCount;
+        }
+
+        return activePanel;
+    }
+
+    private static int CountRibbonGroupChildren(StackPanel panel)
+    {
+        var count = 0;
+        foreach (var child in panel.Children)
+        {
+            if (child is DependencyObject dependencyObject &&
+                RibbonMetadata.IsRibbonGroup(dependencyObject))
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private bool TryGetCachedActiveRibbonPanel(TabItem tabItem, out StackPanel? activePanel)
@@ -1624,12 +1671,8 @@ public partial class MainWindow
             : null;
         var smallSpacerColumn = RibbonAdaptiveStateApplicator.GetSmallButtonSpacerColumn(smallGrid);
         var largeStack = isLargeButton ? content as StackPanel : null;
-        var largeIconSlot = largeStack?.Children
-            .OfType<Border>()
-            .FirstOrDefault(RibbonMetadata.IsCommandIcon);
-        var largeLabelBlock = largeStack?.Children
-            .OfType<TextBlock>()
-            .FirstOrDefault(RibbonMetadata.IsCommandLabel);
+        var largeIconSlot = largeStack is not null ? FindLargeCommandIconSlot(largeStack) : null;
+        var largeLabelBlock = largeStack is not null ? FindLargeCommandLabelBlock(largeStack) : null;
         var largeIconChild = largeIconSlot?.Child as FrameworkElement;
 
         return new RibbonCompactButtonSnapshot(
@@ -1651,6 +1694,34 @@ public partial class MainWindow
             largeIconSlot,
             largeIconChild,
             largeLabelBlock);
+    }
+
+    private static Border? FindLargeCommandIconSlot(StackPanel largeStack)
+    {
+        foreach (var child in largeStack.Children)
+        {
+            if (child is Border border &&
+                RibbonMetadata.IsCommandIcon(border))
+            {
+                return border;
+            }
+        }
+
+        return null;
+    }
+
+    private static TextBlock? FindLargeCommandLabelBlock(StackPanel largeStack)
+    {
+        foreach (var child in largeStack.Children)
+        {
+            if (child is TextBlock textBlock &&
+                RibbonMetadata.IsCommandLabel(textBlock))
+            {
+                return textBlock;
+            }
+        }
+
+        return null;
     }
 
     private static IEnumerable<DependencyObject> EnumerateSelfVisualAndLogicalDescendants(DependencyObject root) =>

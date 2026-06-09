@@ -255,18 +255,25 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
     private static XElement? FindChildByIdentityKey(XElement target, XElement sourceChild)
     {
-        return target.Elements(sourceChild.Name)
-            .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+        var sourceKey = ElementIdentityKey(sourceChild);
+        foreach (var child in target.Elements(sourceChild.Name))
+        {
+            if (ElementIdentityKey(child) == sourceKey)
+                return child;
+        }
+
+        return null;
     }
 
     private static XElement? FindScenarioByName(XElement targetScenarios, XNamespace workbookNs, string? name)
     {
-        return targetScenarios
-            .Elements(workbookNs + "scenario")
-            .FirstOrDefault(element => string.Equals(
-                element.Attribute("name")?.Value,
-                name,
-                StringComparison.OrdinalIgnoreCase));
+        foreach (var element in targetScenarios.Elements(workbookNs + "scenario"))
+        {
+            if (string.Equals(element.Attribute("name")?.Value, name, StringComparison.OrdinalIgnoreCase))
+                return element;
+        }
+
+        return null;
     }
 
     private static bool IsScenarioListIndexAttribute(XAttribute attribute)

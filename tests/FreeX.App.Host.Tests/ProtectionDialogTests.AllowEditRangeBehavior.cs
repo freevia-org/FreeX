@@ -20,6 +20,9 @@ public sealed partial class ProtectionDialogTests
         AllowEditRangeDialog.CreateAddResult(range)
             .Should()
             .Be(new AllowEditRangeDialogResult(AllowEditRangeDialogAction.Add, range));
+        AllowEditRangeDialog.CreateModifyResult(range, range)
+            .Should()
+            .Be(new AllowEditRangeDialogResult(AllowEditRangeDialogAction.Modify, range, range));
         AllowEditRangeDialog.CreateRemoveResult(range)
             .Should()
             .Be(new AllowEditRangeDialogResult(AllowEditRangeDialogAction.Remove, range));
@@ -37,17 +40,17 @@ public sealed partial class ProtectionDialogTests
         AllowEditRangeDialogPlanner.BuildExistingRangeItems([range]).Should().Equal(range.ToString());
         AllowEditRangeDialogPlanner.BuildButtonState(rangeCount: 0, hasSelectedRange: false)
             .Should()
-            .Be(new AllowEditRangeButtonState(false, false));
+            .Be(new AllowEditRangeButtonState(false, false, false));
         AllowEditRangeDialogPlanner.BuildButtonState(rangeCount: 1, hasSelectedRange: false)
             .Should()
-            .Be(new AllowEditRangeButtonState(false, true));
+            .Be(new AllowEditRangeButtonState(false, false, false));
         AllowEditRangeDialogPlanner.BuildButtonState(rangeCount: 1, hasSelectedRange: true)
             .Should()
-            .Be(new AllowEditRangeButtonState(true, true));
+            .Be(new AllowEditRangeButtonState(true, true, false));
     }
 
     [Fact]
-    public void AllowEditRangeDialogExistingRangesList_DoubleClickRemovesSelectedRange()
+    public void AllowEditRangeDialogExistingRangesList_DoubleClickLoadsSelectedRangeForModification()
     {
         StaTestRunner.Run(() =>
         {
@@ -55,23 +58,42 @@ public sealed partial class ProtectionDialogTests
             var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2));
             var dialog = new AllowEditRangeDialog(sheetId, "C3:D4", [range]);
             var existingRangesBox = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_existingRangesBox");
+            var rangeBox = DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "_rangeBox");
+
+            existingRangesBox.SelectedIndex = 0;
+            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = Control.MouseDoubleClickEvent
+            };
+            existingRangesBox.RaiseEvent(doubleClick);
+
+            doubleClick.Handled.Should().BeTrue();
+            rangeBox.Text.Should().Be(range.ToString());
+            dialog.DialogResult.Should().BeNull();
+        });
+    }
+
+    [Fact]
+    public void AllowEditRangeDialogModifySelectedRange_ReturnsModifyResultOnAccept()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var originalRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2));
+            var updatedRange = new GridRange(new CellAddress(sheetId, 3, 3), new CellAddress(sheetId, 4, 4));
+            var dialog = new AllowEditRangeDialog(sheetId, "C3:D4", [originalRange]);
+            var existingRangesBox = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_existingRangesBox");
 
             dialog.Dispatcher.BeginInvoke(() =>
             {
                 existingRangesBox.SelectedIndex = 0;
-                var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
-                existingRangesBox.RaiseEvent(doubleClick);
-                doubleClick.Handled.Should().BeTrue();
-
-                dialog.Dispatcher.BeginInvoke(() =>
-                {
-                    if (dialog.DialogResult is null)
-                        dialog.Close();
-                }, DispatcherPriority.ContextIdle);
+                InvokePrivate(dialog, "ModifySelectedRange_Click");
+                dialog.ApplyRangeSelection("C3:D4");
+                InvokePrivate(dialog, "Accept");
             }, DispatcherPriority.ApplicationIdle);
 
             dialog.ShowDialog().Should().BeTrue();
-            dialog.Result.Should().Be(AllowEditRangeDialog.CreateRemoveResult(range));
+            dialog.Result.Should().Be(AllowEditRangeDialog.CreateModifyResult(originalRange, updatedRange));
         });
     }
 

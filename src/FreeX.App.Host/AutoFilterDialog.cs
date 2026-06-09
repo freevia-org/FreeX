@@ -16,7 +16,8 @@ public sealed partial class AutoFilterDialog : Window
     private readonly CheckBox _addCurrentSelectionToFilterBox = new()
     {
         Content = UiText.Get("AutoFilter_AddCurrentSelectionToFilter"),
-        Margin = new Thickness(0, 0, 0, 6)
+        Margin = new Thickness(0, 0, 0, 6),
+        Visibility = Visibility.Collapsed
     };
     private readonly CheckBox _selectAllBox = new()
     {
@@ -75,6 +76,8 @@ public sealed partial class AutoFilterDialog : Window
     private readonly Button _numberFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_NumberFilters"), Visibility.Collapsed);
     private readonly Button _dateFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_DateFilters"), Visibility.Collapsed);
     private readonly ListBox _checklistBox = new();
+    private readonly Button _okButton = new() { Content = UiText.Ok, IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
+    private readonly Button _cancelButton = new() { Content = UiText.Cancel, IsCancel = true, Width = 76 };
     private readonly GroupBox _customFilterGroup = new()
     {
         Header = UiText.Get("AutoFilter_CustomFilter"),
@@ -89,8 +92,10 @@ public sealed partial class AutoFilterDialog : Window
     };
     private AutoFilterColorFilter? _selectedColorFilter;
     private bool _updatingSelectAllBox;
+    private bool _useModelessFlyoutCommit;
 
     public AutoFilterDialogResult Result { get; private set; }
+    public event EventHandler<AutoFilterDialogResult>? ResultCommitted;
 
     public AutoFilterDialog(IEnumerable<AutoFilterChecklistItem> items)
         : this(items.Select(item => new AutoFilterDialogItem(item.DisplayText, item.Value, true)))
@@ -102,6 +107,7 @@ public sealed partial class AutoFilterDialog : Window
     {
         Title = UiText.Format("AutoFilter_TitleWithHeader", menuPlan.HeaderText);
         _clearFilterButton.Content = UiText.Format("AutoFilter_ClearFilterFromHeader", menuPlan.HeaderText);
+        _clearFilterButton.IsEnabled = FindClearFilterEntry(menuPlan)?.IsEnabled ?? true;
         SetSortLabels(menuPlan.FilterKind);
         ShowFilterFamilyButton(menuPlan.FilterKind);
         var criteriaSuggestions = GetCriteriaSuggestions(menuPlan);
@@ -141,6 +147,17 @@ public sealed partial class AutoFilterDialog : Window
             PopulateColorChoices(colorOptions);
     }
 
+    private static AutoFilterMenuEntry? FindClearFilterEntry(AutoFilterMenuPlan menuPlan)
+    {
+        foreach (var entry in menuPlan.Entries)
+        {
+            if (entry.Kind == AutoFilterMenuEntryKind.ClearFilter)
+                return entry;
+        }
+
+        return null;
+    }
+
     public AutoFilterDialog(IEnumerable<AutoFilterDialogItem> items)
     {
         _allItems = items.ToList();
@@ -164,24 +181,22 @@ public sealed partial class AutoFilterDialog : Window
             Margin = new Thickness(0, 8, 0, 0)
         };
         DockPanel.SetDock(buttons, Dock.Bottom);
-        var ok = new Button { Content = UiText.Ok, IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
-        ok.Click += (_, _) =>
+        _okButton.Click += (_, _) =>
         {
             if (!ValidateTypedCriteriaInputs())
                 return;
 
-            Result = BuildResult(
+            CommitResult(BuildResult(
                 AutoFilterSortDirection.None,
                 _allItems,
                 _searchBox.Text,
                 _criteriaBox.Text,
                 _selectedColorFilter,
-                _addCurrentSelectionToFilterBox.IsChecked == true);
-            DialogResult = true;
+                _addCurrentSelectionToFilterBox.IsChecked == true));
         };
-        var cancel = new Button { Content = UiText.Cancel, IsCancel = true, Width = 76 };
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        _cancelButton.Click += (_, _) => CancelResult();
+        buttons.Children.Add(_okButton);
+        buttons.Children.Add(_cancelButton);
         root.Children.Add(buttons);
 
         var stack = new StackPanel();
@@ -205,8 +220,7 @@ public sealed partial class AutoFilterDialog : Window
             _criteriaValueBox.Clear();
             _searchBox.Clear();
             ReplaceAllItems(SelectAll(_allItems));
-            Result = CreateClearFilterResult();
-            DialogResult = true;
+            CommitResult(CreateClearFilterResult());
         };
         stack.Children.Add(_clearFilterButton);
         _filterByColorGroup.Content = _filterByColorPanel;
@@ -220,10 +234,13 @@ public sealed partial class AutoFilterDialog : Window
         }
 
         AddFilterMenuSeparator(stack);
-        stack.Children.Add(new Label { Content = UiText.Get("AutoFilter_Search2"), Target = _searchBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
-        _searchBox.Margin = new Thickness(0, 0, 0, 6);
+        _searchBox.Margin = new Thickness(0, 8, 0, 6);
+        _searchBox.MinHeight = 24;
         _searchBox.ToolTip = UiText.Get("AutoFilter_Search3");
-        _searchBox.TextChanged += (_, _) => ReplaceItems(FilterItems(_allItems, _searchBox.Text));
+        AutomationProperties.SetName(_searchBox, UiText.Get("AutoFilter_Search3"));
+        AutomationProperties.SetHelpText(_searchBox, UiText.Get("AutoFilter_Search3"));
+        AutomationProperties.SetAccessKey(_searchBox, "S");
+        _searchBox.TextChanged += (_, _) => ApplySearchTextChange();
         stack.Children.Add(_searchBox);
         stack.Children.Add(_addCurrentSelectionToFilterBox);
         _selectAllBox.Checked += (_, _) => SetSelectionForVisibleItems(isSelected: true);
@@ -293,6 +310,39 @@ public sealed partial class AutoFilterDialog : Window
         PreviewKeyDown += AutoFilterDialog_PreviewKeyDown;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
         UpdateSelectAllBoxState();
+    }
+
+    public void ConfigureAsModelessFlyout()
+    {
+        _useModelessFlyoutCommit = true;
+        WindowStyle = WindowStyle.None;
+        ShowInTaskbar = false;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        _cancelButton.IsCancel = false;
+    }
+
+    private void CommitResult(AutoFilterDialogResult result)
+    {
+        Result = result;
+        if (_useModelessFlyoutCommit)
+        {
+            ResultCommitted?.Invoke(this, result);
+            Close();
+            return;
+        }
+
+        DialogResult = true;
+    }
+
+    private void CancelResult()
+    {
+        if (_useModelessFlyoutCommit)
+        {
+            Close();
+            return;
+        }
+
+        DialogResult = false;
     }
 
     private static IReadOnlyList<FilterChoice> CreateDatePresetChoices() =>

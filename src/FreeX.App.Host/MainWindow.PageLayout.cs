@@ -1,7 +1,10 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -243,9 +246,18 @@ public partial class MainWindow
         TryExecuteGroupedSheetCommand("Paper Size", sheetId => new SetPaperSizeCommand(sheetId, WorksheetPaperSize.Legal));
     }
 
+    private void SizeExecutive_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
+    private void SizeStatement_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
+    private void SizeTabloid_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
+    private void SizeA3_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
+    private void SizeA5_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
+    private void SizeB4_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
+    private void SizeB5_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
+
     private void PrintAreaBtn_Click(object sender, RoutedEventArgs e)
     {
-        PrintAreaSetMenuItem_Click(sender, e);
+        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
+            OpenRibbonContextMenu(btn, cm);
     }
     private void PrintAreaSetMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -267,17 +279,124 @@ public partial class MainWindow
         ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit);
     }
 
-    private void PageBreaksBtn_Click(object sender, RoutedEventArgs e)
+    private void PageLayoutScaleWidthBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var selected = SheetGrid.SelectedRange?.Start;
-        var defaultValue = selected is { } address
-            ? UiText.Format("MainWindowDialog_PageBreakDefaultRowFormat", Math.Max(2u, address.Row))
-            : UiText.Get("MainWindowDialog_PageBreakDefaultClear");
-        var dialog = new PageBreakDialog(defaultValue) { Owner = this };
-        if (dialog.ShowDialog() != true)
+        if (_suppressToolbarSync || PageLayoutScaleWidthBox.SelectedItem is null) return;
+        CommitPageLayoutScaleWidthBoxText();
+    }
+
+    private void PageLayoutScaleWidthBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || _suppressToolbarSync) return;
+        CommitPageLayoutScaleWidthBoxText();
+        e.Handled = true;
+    }
+
+    private void PageLayoutScaleWidthBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        CommitPageLayoutScaleWidthBoxText();
+    }
+
+    private void PageLayoutScaleHeightBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressToolbarSync || PageLayoutScaleHeightBox.SelectedItem is null) return;
+        CommitPageLayoutScaleHeightBoxText();
+    }
+
+    private void PageLayoutScaleHeightBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || _suppressToolbarSync) return;
+        CommitPageLayoutScaleHeightBoxText();
+        e.Handled = true;
+    }
+
+    private void PageLayoutScaleHeightBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        CommitPageLayoutScaleHeightBoxText();
+    }
+
+    private void PageLayoutScalePercentBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressToolbarSync || PageLayoutScalePercentBox.SelectedItem is null) return;
+        CommitPageLayoutScalePercentBoxText();
+    }
+
+    private void PageLayoutScalePercentBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || _suppressToolbarSync) return;
+        CommitPageLayoutScalePercentBoxText();
+        e.Handled = true;
+    }
+
+    private void PageLayoutScalePercentBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        CommitPageLayoutScalePercentBoxText();
+    }
+
+    private void CommitPageLayoutScaleWidthBoxText()
+    {
+        var current = _workbook.GetSheet(_currentSheetId)?.ScaleToFit ?? WorksheetScaleToFit.Default;
+        var text = GetComboBoxText(PageLayoutScaleWidthBox);
+        var wide = TryParseScalePages(text, out var pages) ? pages : (int?)null;
+        ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(null, wide, current.FitToPagesTall));
+    }
+
+    private void CommitPageLayoutScaleHeightBoxText()
+    {
+        var current = _workbook.GetSheet(_currentSheetId)?.ScaleToFit ?? WorksheetScaleToFit.Default;
+        var text = GetComboBoxText(PageLayoutScaleHeightBox);
+        var tall = TryParseScalePages(text, out var pages) ? pages : (int?)null;
+        ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(null, current.FitToPagesWide, tall));
+    }
+
+    private void CommitPageLayoutScalePercentBoxText()
+    {
+        var text = GetComboBoxText(PageLayoutScalePercentBox);
+        if (!PageLayoutInputParser.TryParseScaleToFit(text, out var scaleToFit) ||
+            scaleToFit.ScalePercent is null)
+        {
+            return;
+        }
+
+        ApplyPageLayoutScaleToFit(scaleToFit);
+    }
+
+    private void ApplyPageLayoutScaleToFit(WorksheetScaleToFit scaleToFit)
+    {
+        if (!TryExecuteGroupedSheetCommand("Scale To Fit", sheetId => new SetScaleToFitCommand(sheetId, scaleToFit)))
             return;
 
-        ApplyPageBreakDialogResult(dialog.Result);
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    private static string GetComboBoxText(ComboBox comboBox) =>
+        comboBox.SelectedItem?.ToString() ?? comboBox.Text ?? "";
+
+    private static bool TryParseScalePages(string text, out int pages)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.EndsWith("page", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[..^4].TrimEnd();
+        else if (trimmed.EndsWith("pages", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[..^5].TrimEnd();
+
+        return int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out pages) &&
+               pages > 0;
+    }
+
+    private void PageBreaksBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
+        {
+            OpenRibbonContextMenu(btn, cm);
+            return;
+        }
+
+        ShowPageBreakDialog(GetDefaultPageBreakDialogValue());
     }
 
     private void InsertPageBreakMenuItem_Click(object sender, RoutedEventArgs e)
@@ -285,16 +404,12 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var selected = SheetGrid.SelectedRange?.Start;
-        if (selected is null) return;
-        var address = selected.Value;
+        if (SheetGrid.SelectedRange is not { } selectedRange) return;
 
-        var rowBreaks = sheet.RowPageBreaks.ToList();
-        var columnBreaks = sheet.ColumnPageBreaks.ToList();
-
-        rowBreaks.Add(Math.Max(2u, address.Row));
-        columnBreaks.Add(Math.Max(2u, address.Col));
-        TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
+        var plan = PageBreakSelectionPlanner.Insert(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks);
+        TryExecuteGroupedSheetCommand(
+            "Page Breaks",
+            sheetId => new SetPageBreaksCommand(sheetId, plan.RowBreaks, plan.ColumnBreaks));
     }
 
     private void RemovePageBreakMenuItem_Click(object sender, RoutedEventArgs e)
@@ -302,21 +417,37 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var selected = SheetGrid.SelectedRange?.Start;
-        if (selected is null) return;
-        var address = selected.Value;
+        if (SheetGrid.SelectedRange is not { } selectedRange) return;
 
-        var rowBreaks = sheet.RowPageBreaks.ToList();
-        var columnBreaks = sheet.ColumnPageBreaks.ToList();
-
-        rowBreaks.Remove(Math.Max(2u, address.Row));
-        columnBreaks.Remove(Math.Max(2u, address.Col));
-        TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
+        var plan = PageBreakSelectionPlanner.Remove(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks);
+        TryExecuteGroupedSheetCommand(
+            "Page Breaks",
+            sheetId => new SetPageBreaksCommand(sheetId, plan.RowBreaks, plan.ColumnBreaks));
     }
 
     private void ResetAllPageBreaksMenuItem_Click(object sender, RoutedEventArgs e)
     {
         TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, [], []));
+    }
+
+    private void ShowPageBreakDialog(string defaultValue)
+    {
+        var dialog = new PageBreakDialog(defaultValue) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyPageBreakDialogResult(dialog.Result);
+    }
+
+    private string GetDefaultPageBreakDialogValue()
+    {
+        if (SheetGrid.SelectedRange is not { } selectedRange)
+            return "row 2";
+
+        if (SelectionRangeService.IsWholeColumnSelection(selectedRange))
+            return $"column {selectedRange.Start.Col.ToString(CultureInfo.InvariantCulture)}";
+
+        return $"row {selectedRange.Start.Row.ToString(CultureInfo.InvariantCulture)}";
     }
 
     private void ApplyPageBreakDialogResult(PageBreakDialogResult result)

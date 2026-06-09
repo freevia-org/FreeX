@@ -33,6 +33,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         SchemaErrors(saved).Should().BeEmpty();
 
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetValue(6, 1).Should().Be(new TextValue("edited"));
+
+        saved.Position = 0;
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
@@ -69,6 +75,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.Save(loaded, saved);
         saved.Position = 0;
 
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetValue(1, 1).Should().Be(new TextValue("x"));
+        reloadedSheet.GetValue(2, 1).Should().Be(new TextValue("edited"));
+
+        saved.Position = 0;
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         archive.GetEntry("customXml/item99.xml").Should().NotBeNull();
         archive.GetEntry("customXml/_rels/item99.xml.rels").Should().BeNull();
@@ -95,6 +107,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.Save(loaded, saved);
         saved.Position = 0;
 
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetValue(1, 1).Should().Be(new TextValue("x"));
+        reloadedSheet.GetValue(2, 1).Should().Be(new TextValue("edited"));
+
+        saved.Position = 0;
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         LoadPackageXml(archive, "xl/workbook.xml")
@@ -267,6 +285,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 1, 1)).Should().Be(new TextValue("Rich font"));
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 2, 1)).Should().Be(new TextValue("edited"));
     }
 
     [Fact]
@@ -303,6 +326,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 1, 1)).Should().Be(new TextValue("Rich inline font"));
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 2, 1)).Should().Be(new TextValue("edited"));
     }
 
     [Fact]
@@ -346,6 +374,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 1, 1)).Should().Be(new TextValue("Rich inline font"));
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 1, 2)).Should().Be(new TextValue("edited"));
     }
 
     private static void AddCssFontFamilyRichInlineString(MemoryStream stream)

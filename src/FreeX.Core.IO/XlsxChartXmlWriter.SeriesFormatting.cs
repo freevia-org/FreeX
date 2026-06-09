@@ -21,11 +21,15 @@ internal static partial class XlsxChartXmlWriter
             .OrderBy(format => format.PointIndex)
             .Select(format => ToPointDataLabelXml(format, chartNs, drawingNs))
             .ToArray();
-        var seriesDefaults = chart.SeriesDataLabelFormats
-            .Where(format => format.SeriesIndex == seriesIndex)
-            .GroupBy(format => format.SeriesIndex)
-            .Select(group => group.Last())
-            .FirstOrDefault(HasSeriesDataLabelFormatting);
+        ChartSeriesDataLabelFormat? seriesDefaults = null;
+        foreach (var format in chart.SeriesDataLabelFormats)
+        {
+            if (format.SeriesIndex == seriesIndex)
+                seriesDefaults = format;
+        }
+
+        if (seriesDefaults is not null && !HasSeriesDataLabelFormatting(seriesDefaults))
+            seriesDefaults = null;
 
         return labels.Length == 0 && seriesDefaults is null
             ? null

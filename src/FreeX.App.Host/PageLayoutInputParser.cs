@@ -235,10 +235,10 @@ public static class PageLayoutInputParser
         normalized.Equals("auto", StringComparison.OrdinalIgnoreCase);
 
     public static bool IsValidRowBreak(uint row) =>
-        row is > 0 and <= CellAddress.MaxRow;
+        row is > 1 and <= CellAddress.MaxRow;
 
     public static bool IsValidColumnBreak(uint column) =>
-        column is > 0 and <= CellAddress.MaxCol;
+        column is > 1 and <= CellAddress.MaxCol;
 
     private static bool IsValidRepeatRow(uint row) =>
         row is > 0 and <= CellAddress.MaxRow;

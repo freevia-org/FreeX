@@ -88,7 +88,9 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("Content = UiText.Ok");
         source.Should().Contain("Content = UiText.Cancel");
         source.Should().Contain("UiText.Get(\"AutoFilter_CriteriaText\")");
-        source.Should().Contain("UiText.Get(\"AutoFilter_Search2\")");
+        source.Should().Contain("AutomationProperties.SetName(_searchBox, UiText.Get(\"AutoFilter_Search3\"));");
+        source.Should().Contain("AutomationProperties.SetAccessKey(_searchBox, \"S\");");
+        source.Should().NotContain("Content = UiText.Get(\"AutoFilter_Search2\")");
         source.Should().NotContain("RadioButton _sortNone");
     }
 
@@ -98,6 +100,36 @@ public sealed partial class AutoFilterDialogTests
         var source = ReadAutoFilterDialogSources();
 
         source.Should().Contain("AutomationProperties.SetName(_checklistBox, UiText.Get(\"AutoFilter_FilterValues\"));");
+    }
+
+    [Fact]
+    public void DialogControls_SearchBoxHasNoStandaloneVisibleLabel()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AutoFilterDialog(
+            [
+                new AutoFilterDialogItem("Apple", "Apple", true),
+                new AutoFilterDialogItem("Banana", "Banana", true)
+            ]);
+            dialog.Show();
+            try
+            {
+                dialog.UpdateLayout();
+                var searchBox = WpfTestTree.FindVisualDescendants<TextBox>(dialog)
+                    .Single(textBox => AutomationProperties.GetName(textBox) == "Search");
+                var labels = WpfTestTree.FindVisualDescendants<Label>(dialog)
+                    .Select(label => label.Content?.ToString() ?? string.Empty)
+                    .ToList();
+
+                AutomationProperties.GetAccessKey(searchBox).Should().Be("S");
+                labels.Should().NotContain("_Search");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -125,9 +157,82 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("IsThreeState = true");
         source.Should().Contain("SetSelectionForVisibleItems");
         source.Should().Contain("UpdateSelectAllBoxState");
+        source.Should().Contain("ApplySearchTextChange");
+        source.Should().Contain("_addCurrentSelectionToFilterBox.Visibility = hasSearchText");
         source.Should().NotContain("private readonly RadioButton _sortNone");
         source.Should().NotContain("var selectionRow = new StackPanel");
         source.Should().NotContain("UiText.Get(\"AutoFilter_ClearAll\")");
+    }
+
+    [Fact]
+    public void DialogControls_ClearFilterButtonHonorsMenuPlanEnabledState()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var menuPlan = new AutoFilterMenuPlan(
+                "Status",
+                AutoFilterMenuFilterKind.Text,
+                [
+                    new AutoFilterMenuEntry("Sort A to Z", AutoFilterMenuEntryKind.SortAscending),
+                    new AutoFilterMenuEntry(
+                        UiText.Format("AutoFilter_ClearFilterFrom", "Status"),
+                        AutoFilterMenuEntryKind.ClearFilter,
+                        isEnabled: false),
+                    new AutoFilterMenuEntry(new AutoFilterChecklistItem("Open", "Open"))
+                ]);
+            var dialog = new AutoFilterDialog(menuPlan);
+            dialog.Show();
+            try
+            {
+                var clearButton = WpfTestTree.FindVisualDescendants<Button>(dialog)
+                    .Single(button => button.Content?.ToString()?.Contains("Clear Filter From", StringComparison.Ordinal) == true);
+
+                clearButton.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void DialogControls_SearchWithNoMatchesDisablesSelectAllAndChecklist()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AutoFilterDialog(
+            [
+                new AutoFilterDialogItem("Apple", "Apple", true),
+                new AutoFilterDialogItem("Banana", "Banana", true)
+            ]);
+            dialog.Show();
+            try
+            {
+                dialog.UpdateLayout();
+                var searchBox = WpfTestTree.FindVisualDescendants<TextBox>(dialog)
+                    .Single(textBox => AutomationProperties.GetName(textBox) == "Search");
+                var selectAll = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
+                    .Single(checkBox => checkBox.Content?.ToString() == UiText.Get("AutoFilter_SelectAll"));
+                var addCurrentSelection = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
+                    .Single(checkBox => checkBox.Content?.ToString() == UiText.Get("AutoFilter_AddCurrentSelectionToFilter"));
+                var checklist = WpfTestTree.FindVisualDescendants<ListBox>(dialog).Single();
+
+                addCurrentSelection.Visibility.Should().Be(System.Windows.Visibility.Collapsed);
+
+                searchBox.Text = "zzz";
+                dialog.UpdateLayout();
+
+                selectAll.IsEnabled.Should().BeFalse();
+                checklist.IsEnabled.Should().BeFalse();
+                addCurrentSelection.Visibility.Should().Be(System.Windows.Visibility.Visible);
+                addCurrentSelection.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -311,7 +416,10 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("TryOpenVisibleFilterFamilySubmenu()");
         source.Should().Contain("private bool TryOpenVisibleFilterFamilySubmenu()");
         source.Should().Contain("_textFiltersButton, _numberFiltersButton, _dateFiltersButton");
-        source.Should().Contain("FirstOrDefault(button => button.Visibility == Visibility.Visible)");
+        source.Should().Contain("private Button? FindFirstVisibleFilterFamilyButton()");
+        source.Should().Contain("_textFiltersButton.Visibility == Visibility.Visible");
+        source.Should().Contain("_numberFiltersButton.Visibility == Visibility.Visible");
+        source.Should().Contain("_dateFiltersButton.Visibility == Visibility.Visible");
         source.Should().Contain("private bool TryOpenFilterFamilySubmenu(Button filterButton)");
         source.Should().Contain("submenu.IsOpen = true;");
         source.Should().Contain("Keyboard.Focus(firstItem);");

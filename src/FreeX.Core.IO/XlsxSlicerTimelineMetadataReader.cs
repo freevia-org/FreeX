@@ -116,11 +116,30 @@ internal static class XlsxSlicerTimelineMetadataReader
         return FirstChildByLocalName(root, localName);
     }
 
-    private static XElement? FirstChildByLocalName(XElement root, string localName) =>
-        root.Elements().FirstOrDefault(element => HasLocalName(element, localName));
+    private static XElement? FirstChildByLocalName(XElement root, string localName)
+    {
+        foreach (var element in root.Elements())
+        {
+            if (HasLocalName(element, localName))
+                return element;
+        }
 
-    private static XElement? FirstDescendantByLocalName(XElement? root, string localName) =>
-        root?.Descendants().FirstOrDefault(element => HasLocalName(element, localName));
+        return null;
+    }
+
+    private static XElement? FirstDescendantByLocalName(XElement? root, string localName)
+    {
+        if (root is null)
+            return null;
+
+        foreach (var element in root.Descendants())
+        {
+            if (HasLocalName(element, localName))
+                return element;
+        }
+
+        return null;
+    }
 
     private static bool HasLocalName(XElement element, string localName) =>
         string.Equals(element.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase);
@@ -213,8 +232,13 @@ internal static class XlsxSlicerTimelineMetadataReader
         return new DrawingControlMetadata(new DrawingAnchorRange(from, to), shapeName);
     }
 
-    private static string? ReadFirstShapeName(XElement anchor, XNamespace spreadsheetDrawingNs) =>
-        anchor.Descendants(spreadsheetDrawingNs + "cNvPr").FirstOrDefault()?.Attribute("name")?.Value;
+    private static string? ReadFirstShapeName(XElement anchor, XNamespace spreadsheetDrawingNs)
+    {
+        foreach (var element in anchor.Descendants(spreadsheetDrawingNs + "cNvPr"))
+            return element.Attribute("name")?.Value;
+
+        return null;
+    }
 
     private static DrawingAnchorPoint? ReadAnchorPoint(XElement? point, XNamespace spreadsheetDrawingNs)
     {

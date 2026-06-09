@@ -1,0 +1,61 @@
+using FluentAssertions;
+using FreeX.App.Services;
+
+namespace FreeX.App.Services.Tests;
+
+public sealed class AtomicFileWriterTests
+{
+    [Fact]
+    public void WriteAllText_CreatesFileWithContentIncludingMissingDirectories()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "Library", "Application Support", "FreeX", "options.json");
+
+        AtomicFileWriter.WriteAllText(path, "payload");
+
+        File.ReadAllText(path).Should().Be("payload");
+        Directory.EnumerateFileSystemEntries(Path.GetDirectoryName(path)!, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void WriteAllText_RepeatedWritesLeaveOnlyTargetFile()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "recent.json");
+
+        for (var index = 0; index < 5; index++)
+            AtomicFileWriter.WriteAllText(path, $"payload-{index}");
+
+        File.ReadAllText(path).Should().Be("payload-4");
+        Directory.EnumerateFileSystemEntries(temp.Path).Should().ContainSingle().Which.Should().Be(path);
+        Directory.EnumerateFileSystemEntries(temp.Path, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void WriteAllText_StaleFixedTempArtifactDoesNotBlockWrite()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "recent.json");
+        var staleFixedTempPath = path + ".tmp";
+        Directory.CreateDirectory(staleFixedTempPath);
+
+        AtomicFileWriter.WriteAllText(path, "payload");
+
+        File.ReadAllText(path).Should().Be("payload");
+        Directory.Exists(staleFixedTempPath).Should().BeTrue();
+        Directory.EnumerateFileSystemEntries(temp.Path, ".recent.json.*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void WriteAllText_WhenMoveFailsCleansTempArtifact()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var blockedPath = Path.Combine(temp.Path, "options.json");
+        Directory.CreateDirectory(blockedPath);
+
+        var act = () => AtomicFileWriter.WriteAllText(blockedPath, "payload");
+
+        act.Should().Throw<Exception>();
+        Directory.EnumerateFileSystemEntries(temp.Path, "*.tmp").Should().BeEmpty();
+    }
+}

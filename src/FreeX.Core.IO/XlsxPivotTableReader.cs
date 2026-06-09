@@ -237,6 +237,7 @@ internal static partial class XlsxPivotTableReader
             ReadNativePivotFieldGroups(pivotFieldsElement, workbookNs),
             ReadFreeXPivotFieldGroups(root, workbookNs));
         var nativeFieldMetadata = ReadNativePivotFieldMetadata(pivotFieldsElement, workbookNs);
+        var firstPivotFieldElement = FindFirstPivotFieldElement(pivotFieldsElement, workbookNs);
         var nativeFiltersElement = root.Element(workbookNs + "filters");
         var calculatedFieldsElement = root.Element(workbookNs + "calculatedFields");
         var calculatedFields = ReadPivotCalculatedFields(calculatedFieldsElement, workbookNs, pivotCache);
@@ -264,8 +265,8 @@ internal static partial class XlsxPivotTableReader
             Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(location!, "firstHeaderRow") ?? 1),
             Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(location!, "firstDataRow") ?? 1),
             Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(location!, "firstDataCol") ?? 1),
-            XlsxXmlAttributeReader.ReadBoolAttribute(root.Element(workbookNs + "pivotFields")?.Elements(workbookNs + "pivotField").FirstOrDefault(), "defaultSubtotal"),
-            XlsxXmlAttributeReader.ReadBoolAttribute(root.Element(workbookNs + "pivotFields")?.Elements(workbookNs + "pivotField").FirstOrDefault(), "subtotalTop")
+            XlsxXmlAttributeReader.ReadBoolAttribute(firstPivotFieldElement, "defaultSubtotal"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(firstPivotFieldElement, "subtotalTop")
                 ? PivotSubtotalPlacement.Top
                 : PivotSubtotalPlacement.Bottom,
             // OOXML CT_pivotTableDefinition spells grand-total visibility as rowGrandTotals / colGrandTotals
@@ -334,6 +335,17 @@ internal static partial class XlsxPivotTableReader
             labelFilters,
             sorts);
         return true;
+    }
+
+    private static XElement? FindFirstPivotFieldElement(XElement? pivotFieldsElement, XNamespace workbookNs)
+    {
+        if (pivotFieldsElement is null)
+            return null;
+
+        foreach (var pivotFieldElement in pivotFieldsElement.Elements(workbookNs + "pivotField"))
+            return pivotFieldElement;
+
+        return null;
     }
 
     // Reads a grand-total flag, preferring the OOXML attribute name (rowGrandTotals / colGrandTotals) and

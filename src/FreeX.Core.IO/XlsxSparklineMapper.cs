@@ -126,9 +126,19 @@ internal static class XlsxSparklineMapper
         }
     }
 
-    private static XElement? FindChildByLocalName(XElement? element, string localName) =>
-        element?.Elements().FirstOrDefault(child =>
-            string.Equals(child.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase));
+    private static XElement? FindChildByLocalName(XElement? element, string localName)
+    {
+        if (element is null)
+            return null;
+
+        foreach (var child in element.Elements())
+        {
+            if (string.Equals(child.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase))
+                return child;
+        }
+
+        return null;
+    }
 
     private static XElement ToSparklineGroupXml(
         Sheet sheet,

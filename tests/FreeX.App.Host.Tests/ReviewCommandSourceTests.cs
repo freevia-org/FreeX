@@ -55,7 +55,7 @@ public sealed class ReviewCommandSourceTests
     [InlineData("Protect Sheet", "PS", "ProtectSheetBtn_Click")]
     [InlineData("Protect Workbook", "PW", "ProtectWorkbookBtn_Click")]
     [InlineData("Allow Users to Edit Ranges", "AR", "AllowEditRangesBtn_Click")]
-    [InlineData("Share Workbook", "SH", "ShareWorkbookBtn_Click")]
+    [InlineData("Share", "SH", "ShareWorkbookBtn_Click")]
     public void ReviewProtectButtons_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string keyTip,
@@ -91,12 +91,24 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("new DeleteThreadedCommentReplyCommand(");
         normalizedSource.Should().Contain("replyIndex,\n                            result.IsResolved");
         source.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(sheet.ThreadedComments)");
-        source.Should().Contain("CommentNavigationPlanner.FormatThreadedCommentList(sheet.ThreadedComments)");
+        source.Should().Contain("CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments)");
+        source.Should().Contain("ShowOrRefreshCommentListWindow(");
+        source.Should().Contain("new CommentListWindow(title, items, NavigateToCell) { Owner = this }");
+        source.Should().Contain("window.Show();");
         source.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(sheet.Comments)");
-        source.Should().Contain("CommentNavigationPlanner.FormatNoteList(sheet.Comments)");
+        source.Should().Contain("CommentListWindow.CreateNoteItems(sheet.Comments)");
         source.Should().NotContain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
         source.Should().NotContain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
+        source.Should().NotContain("_messageService.ShowInfo(text, UiText.Get(\"MainWindowMessage_CommentsTitle\"))");
+        source.Should().NotContain("_messageService.ShowInfo(text, UiText.Get(\"MainWindow_Text_Notes\"))");
         source.Should().Contain("ProtectionDialogPlanner.CreateSheetResult(");
+        source.Should().Contain("string? unprotectPassword = null;");
+        source.Should().Contain("sheet.IsProtected && !TryConfirmSheetUnprotectPassword(sheet, out unprotectPassword)");
+        source.Should().Contain("private bool TryConfirmSheetUnprotectPassword(Sheet sheet, out string? password)");
+        source.Should().Contain("_workbook.IsStructureProtected");
+        source.Should().Contain("TryConfirmWorkbookUnprotectPassword(out pwd)");
+        source.Should().Contain("ProtectionPasswordHelper.VerifyStoredPassword(storedPassword, password)");
+        source.Should().Contain("The password you supplied is not correct.");
         source.Should().Contain("SheetProtectionWorkflow.CreateCommand(sheet, result)");
         source.Should().Contain("WorkbookProtectionWorkflow.CreateCommand(_workbook, pwd)");
         source.Should().Contain("new AllowEditRangeDialog(");

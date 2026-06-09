@@ -111,6 +111,48 @@ public sealed class MainWindowMouseResizeTests
     }
 
     [Fact]
+    public void DragColumnResize_ZeroWidthHidesSelectedColumns()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRange(1, 2, 1, 4);
+
+            harness.PreviewColumnResize(3, 0);
+            harness.CommitColumnResize(3, 0);
+
+            harness.CurrentSheet.ColumnWidths.ContainsKey(2).Should().BeFalse();
+            harness.CurrentSheet.ColumnWidths.ContainsKey(3).Should().BeFalse();
+            harness.CurrentSheet.ColumnWidths.ContainsKey(4).Should().BeFalse();
+            harness.CurrentSheet.HiddenCols.Should().Contain([2u, 3u, 4u]);
+        });
+    }
+
+    [Fact]
+    public void DragColumnCollapsedBoundary_UnhidesOnlyContiguousHiddenColumns()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRange(1, 1, 1, 5);
+            harness.CurrentSheet.HiddenCols.Add(2);
+            harness.CurrentSheet.HiddenCols.Add(3);
+            harness.CurrentSheet.HiddenCols.Add(4);
+
+            harness.PreviewColumnResize(2, 96);
+            harness.CommitColumnResize(2, 96);
+
+            harness.CurrentSheet.HiddenCols.Should().NotContain([2u, 3u, 4u]);
+            harness.CurrentSheet.ColumnWidths.Should().ContainKeys(2u, 3u, 4u);
+            harness.CurrentSheet.ColumnWidths[2].Should().BeApproximately(12, 0.0001);
+            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(12, 0.0001);
+            harness.CurrentSheet.ColumnWidths[4].Should().BeApproximately(12, 0.0001);
+            harness.CurrentSheet.ColumnWidths.ContainsKey(1).Should().BeFalse();
+            harness.CurrentSheet.ColumnWidths.ContainsKey(5).Should().BeFalse();
+        });
+    }
+
+    [Fact]
     public void CanceledColumnResizePreview_DoesNotReuseStaleSelectionRange()
     {
         StaTestRunner.Run(() =>
@@ -146,6 +188,48 @@ public sealed class MainWindowMouseResizeTests
             harness.CurrentSheet.RowHeights[3].Should().BeApproximately(36, 0.0001);
             harness.CurrentSheet.RowHeights[4].Should().BeApproximately(36, 0.0001);
             harness.CurrentSheet.RowHeights.ContainsKey(6).Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void DragRowResize_ZeroHeightHidesSelectedRows()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRange(2, 1, 4, 1);
+
+            harness.PreviewRowResize(3, 0);
+            harness.CommitRowResize(3, 0);
+
+            harness.CurrentSheet.RowHeights.ContainsKey(2).Should().BeFalse();
+            harness.CurrentSheet.RowHeights.ContainsKey(3).Should().BeFalse();
+            harness.CurrentSheet.RowHeights.ContainsKey(4).Should().BeFalse();
+            harness.CurrentSheet.HiddenRows.Should().Contain([2u, 3u, 4u]);
+        });
+    }
+
+    [Fact]
+    public void DragRowCollapsedBoundary_UnhidesOnlyContiguousHiddenRows()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRange(1, 1, 5, 1);
+            harness.CurrentSheet.HiddenRows.Add(2);
+            harness.CurrentSheet.HiddenRows.Add(3);
+            harness.CurrentSheet.HiddenRows.Add(4);
+
+            harness.PreviewRowResize(2, 28);
+            harness.CommitRowResize(2, 28);
+
+            harness.CurrentSheet.HiddenRows.Should().NotContain([2u, 3u, 4u]);
+            harness.CurrentSheet.RowHeights.Should().ContainKeys(2u, 3u, 4u);
+            harness.CurrentSheet.RowHeights[2].Should().BeApproximately(28, 0.0001);
+            harness.CurrentSheet.RowHeights[3].Should().BeApproximately(28, 0.0001);
+            harness.CurrentSheet.RowHeights[4].Should().BeApproximately(28, 0.0001);
+            harness.CurrentSheet.RowHeights.ContainsKey(1).Should().BeFalse();
+            harness.CurrentSheet.RowHeights.ContainsKey(5).Should().BeFalse();
         });
     }
 

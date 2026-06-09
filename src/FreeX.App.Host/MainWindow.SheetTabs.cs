@@ -71,16 +71,34 @@ public partial class MainWindow
         => FindSheetTabIndex(tabs, _currentSheetId);
 
     private SheetTabViewModel? FindSheetTab(SheetId sheetId)
-        => _sheetTabs.FirstOrDefault(tab => tab.Id == sheetId);
+    {
+        foreach (var tab in _sheetTabs)
+            if (tab.Id == sheetId)
+                return tab;
+
+        return null;
+    }
 
     private SheetTabViewModel? FindCurrentSheetTab()
         => FindSheetTab(_currentSheetId);
 
     private static MenuItem? FindFirstEnabledMenuItem(ContextMenu contextMenu)
-        => contextMenu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
+    {
+        foreach (var item in contextMenu.Items)
+            if (item is MenuItem { IsEnabled: true } menuItem)
+                return menuItem;
+
+        return null;
+    }
 
     private static Sheet? FindHiddenSheetByName(IReadOnlyList<Sheet> hiddenSheets, string sheetName)
-        => hiddenSheets.FirstOrDefault(sheet => sheet.Name.Equals(sheetName, StringComparison.OrdinalIgnoreCase));
+    {
+        foreach (var sheet in hiddenSheets)
+            if (sheet.Name.Equals(sheetName, StringComparison.OrdinalIgnoreCase))
+                return sheet;
+
+        return null;
+    }
 
     private void SelectSingleSheetTab(SheetId sheetId)
     {
@@ -236,6 +254,22 @@ public partial class MainWindow
             Math.Min(SheetTabsScroller.ScrollableWidth, SheetTabsScroller.HorizontalOffset + SheetTabNavScrollAmount));
     }
 
+    private void SheetNavButton_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var dialog = new ActivateSheetDialog(_workbook, _currentSheetId) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        _currentSheetId = dialog.Result.SheetId;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
+        _sheetGroupAnchor = _currentSheetId;
+        UpdateViewport();
+        RefreshSheetTabs();
+        FocusSheetGridIfNeeded();
+        e.Handled = true;
+    }
+
     // ── Sheet tab context menu ────────────────────────────────────────────────
 
     private void SheetTabsScroller_Loaded(object sender, RoutedEventArgs e)
@@ -273,8 +307,8 @@ public partial class MainWindow
         var inactiveNavigationBrush = (Brush)FindResource("FreeXBorderStrongBrush");
         SheetNavLeftBtn.Foreground = canScrollLeft ? activeNavigationBrush : inactiveNavigationBrush;
         SheetNavRightBtn.Foreground = canScrollRight ? activeNavigationBrush : inactiveNavigationBrush;
-        SheetNavLeftBtn.IsHitTestVisible = canScrollLeft;
-        SheetNavRightBtn.IsHitTestVisible = canScrollRight;
+        SheetNavLeftBtn.IsHitTestVisible = canScroll;
+        SheetNavRightBtn.IsHitTestVisible = canScroll;
         UpdateAddSheetButtonInteractivity();
         UpdateSheetTabsChromeLayer();
     }
@@ -1146,6 +1180,9 @@ public partial class MainWindow
         Keyboard.Focus(firstEnabledItem);
     }
 
+    private void SheetTabContextMenu_XamlOpened(object sender, RoutedEventArgs e) =>
+        SheetTabContextMenu_Opened(sender, e);
+
     private bool TryHandleFocusedSheetTabKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
     {
         if (Keyboard.Modifiers != ModifierKeys.None ||
@@ -1374,6 +1411,58 @@ public partial class MainWindow
         RefreshSheetTabs();
     }
 
+    private void SheetCtxMoveOrCopy_Click(object sender, RoutedEventArgs e)
+    {
+        var tab = GetContextMenuTab(sender);
+        if (tab == null) return;
+
+        var dialog = new MoveOrCopySheetDialog(_workbook, tab.Id) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (dialog.Result.CreateCopy)
+        {
+            var sourceIndex = -1;
+            for (var index = 0; index < _workbook.Sheets.Count; index++)
+            {
+                if (_workbook.Sheets[index].Id != tab.Id)
+                    continue;
+
+                sourceIndex = index;
+                break;
+            }
+
+            if (!TryExecuteCommand(new DuplicateSheetCommand(tab.Id), "Duplicate Sheet"))
+                return;
+
+            var copyIndex = Math.Min(sourceIndex + 1, _workbook.Sheets.Count - 1);
+            var targetIndex = dialog.Result.InsertBeforeIndex <= sourceIndex
+                ? dialog.Result.InsertBeforeIndex
+                : Math.Min(dialog.Result.InsertBeforeIndex, _workbook.Sheets.Count - 1);
+            if (copyIndex != targetIndex &&
+                !TryExecuteCommand(new MoveSheetCommand(copyIndex, targetIndex), "Move Sheet"))
+                return;
+
+            _currentSheetId = _workbook.Sheets[Math.Clamp(targetIndex, 0, _workbook.Sheets.Count - 1)].Id;
+        }
+        else
+        {
+            var selectedSheetIds = _groupedSheetIds.Contains(tab.Id)
+                ? _groupedSheetIds.ToList()
+                : [tab.Id];
+            if (!TryExecuteCommand(new MoveSheetsCommand(selectedSheetIds, dialog.Result.InsertBeforeIndex), "Move Sheet"))
+                return;
+
+            _currentSheetId = tab.Id;
+        }
+
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
+        _sheetGroupAnchor = _currentSheetId;
+        UpdateViewport();
+        RefreshSheetTabs();
+    }
+
     private void SheetCtxHide_Click(object sender, RoutedEventArgs e)
     {
         var tab = GetContextMenuTab(sender);
@@ -1450,6 +1539,12 @@ public partial class MainWindow
         if (tab == null) return;
         ColorSheetTab(tab.Id);
     }
+
+    private void SheetCtxProtectSheet_Click(object sender, RoutedEventArgs e) =>
+        ProtectSheetBtn_Click(sender, e);
+
+    private void SheetCtxTabColor_SubmenuOpened(object sender, RoutedEventArgs e) =>
+        SheetCtxTabColor_Click(sender, e);
 
     private void ColorCurrentSheetTab()
     {

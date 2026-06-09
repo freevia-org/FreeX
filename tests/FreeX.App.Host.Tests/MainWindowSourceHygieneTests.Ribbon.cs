@@ -423,7 +423,7 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private bool TryExecuteRepeatableCurrentSelectionRangesCommand(");
         mainSource.Should().NotContain("private bool TryExecuteRepeatableCurrentRangeCommand(");
         mainSource.Should().NotContain("private bool TryExecuteRepeatableChartLayout(");
-        mainSource.Should().NotContain("private void ExecuteUndo(");
+        mainSource.Should().NotContain("private bool ExecuteUndo(");
         mainSource.Should().NotContain("private void ExecuteRepeatLast(");
         mainSource.Should().NotContain("private IWorkbookCommand CreateSingleCellEditCommand(");
 
@@ -435,7 +435,7 @@ public sealed partial class MainWindowSourceHygieneTests
         commandSource.Should().Contain("private bool TryExecuteRepeatableCurrentSelectionRangesCommand(");
         commandSource.Should().Contain("private bool TryExecuteRepeatableCurrentRangeCommand(");
         commandSource.Should().Contain("private bool TryExecuteRepeatableChartLayout(");
-        commandSource.Should().Contain("private void ExecuteUndo(");
+        commandSource.Should().Contain("private bool ExecuteUndo(");
         commandSource.Should().Contain("private void ExecuteRepeatLast(");
         commandSource.Should().Contain("private IWorkbookCommand CreateSingleCellEditCommand(");
         commandSource.Should().Contain("ExecuteRepeatable");
@@ -527,6 +527,15 @@ public sealed partial class MainWindowSourceHygieneTests
         qatSource.Should().Contain("state.WithSelectionContext(");
         qatSource.Should().Contain("_lastQuickAccessCommandStateWorkbookId == _workbook.Id");
         qatSource.Should().Contain("QuickAccessCommandStateResolver.CanExecute(target.Availability, state)");
+        qatSource.Should().Contain("GetQuickAccessHistoryButtonName(command.Id)");
+        qatSource.Should().Contain("\"UndoQatHistoryBtn\"");
+        qatSource.Should().Contain("\"RedoQatHistoryBtn\"");
+        qatSource.Should().Contain("_commandBus is not ICommandHistoryProvider historyProvider");
+        qatSource.Should().Contain("historyProvider.GetUndoHistory(_workbook.Id, QuickAccessHistoryMaxCount)");
+        qatSource.Should().Contain("historyProvider.GetRedoHistory(_workbook.Id, QuickAccessHistoryMaxCount)");
+        qatSource.Should().Contain("private void ExecuteQuickAccessHistory(string commandId, int actionCount)");
+        qatSource.Should().Contain("QuickAccessToolbarCommandIds.Undo => ExecuteUndo()");
+        qatSource.Should().Contain("QuickAccessToolbarCommandIds.Redo => ExecuteRedo()");
         qatStateSource.Should().Contain("WithSelectionContext(bool hasActiveWorksheet, bool hasSelection)");
         qatStateSource.Should().Contain("QuickAccessToolbarCommandIds.Undo => QuickAccessCommandAvailability.Undo");
         qatStateSource.Should().Contain("QuickAccessToolbarCommandIds.Redo => QuickAccessCommandAvailability.Redo");
@@ -966,7 +975,7 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.Should().Contain("Click=\"ChartPieMenuItem_Click\"");
         source.Should().Contain("private void InsertChartOfType(ChartType type)");
         source.Should().Contain("ChartAuthoringPlanner.CanAuthor(type)");
-        source.Should().Contain("new AddChartCommand(_currentSheetId, currentRange, type, \"Chart\")");
+        source.Should().Contain("ChartDataSourcePlanner.ResolveInsertionRange(sheet, currentRange)");
         source.Should().Contain("UpdateViewport();");
     }
 
@@ -1210,10 +1219,17 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void DrawGradientAndEffectsButtons_ExposeStableAutomationMetadata()
+    public void DrawObjectButtons_ExposeStableAutomationMetadata()
     {
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawBringForwardButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawSendBackwardButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawSelectionPaneButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawRotateObjectButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawObjectSizeButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeFillButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawObjectOutlineButton\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeGradientButton\"");
         xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Open gradient fill controls for the selected shape.");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeEffectsButton\"");

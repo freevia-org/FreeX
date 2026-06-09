@@ -557,21 +557,52 @@ internal static class XlsxPackageMetadataMerger
     private static XElement? FindExistingCustomXmlPropertiesRelationship(
         IEnumerable<XElement> relationships,
         ArchiveEntryIndex targetIndex,
-        string itemPart) =>
-        relationships.FirstOrDefault(relationship =>
-            !IsExternalRelationship(relationship) &&
-            IsCustomXmlPropertiesPart(ResolveRelationshipTarget(itemPart, relationship)) &&
-            targetIndex.Contains(ResolveRelationshipTarget(itemPart, relationship)));
+        string itemPart)
+    {
+        foreach (var relationship in relationships)
+        {
+            if (TargetsExistingCustomXmlPropertiesPart(relationship, targetIndex, itemPart))
+                return relationship;
+        }
+
+        return null;
+    }
 
     private static XElement? FindCustomXmlPropertiesRelationshipTargeting(
         IEnumerable<XElement> relationships,
         string itemPart,
-        string propertiesPart) =>
-        relationships.FirstOrDefault(relationship =>
-            string.Equals(
-                ResolveRelationshipTarget(itemPart, relationship),
-                propertiesPart,
-                StringComparison.OrdinalIgnoreCase));
+        string propertiesPart)
+    {
+        foreach (var relationship in relationships)
+        {
+            if (RelationshipTargetsPart(relationship, itemPart, propertiesPart))
+                return relationship;
+        }
+
+        return null;
+    }
+
+    private static bool TargetsExistingCustomXmlPropertiesPart(
+        XElement relationship,
+        ArchiveEntryIndex targetIndex,
+        string itemPart)
+    {
+        if (IsExternalRelationship(relationship))
+            return false;
+
+        var targetPart = ResolveRelationshipTarget(itemPart, relationship);
+        return IsCustomXmlPropertiesPart(targetPart) &&
+               targetIndex.Contains(targetPart);
+    }
+
+    private static bool RelationshipTargetsPart(
+        XElement relationship,
+        string sourcePart,
+        string targetPart) =>
+        string.Equals(
+            ResolveRelationshipTarget(sourcePart, relationship),
+            targetPart,
+            StringComparison.OrdinalIgnoreCase);
 
     private static string ResolveRelationshipTarget(string sourcePart, XElement relationship)
     {
@@ -818,11 +849,20 @@ internal static class XlsxPackageMetadataMerger
     private static XElement? FindContentTypeOverride(
         XElement root,
         XNamespace contentTypeNs,
-        string normalizedPartName) =>
-        root.Elements(contentTypeNs + "Override")
-            .FirstOrDefault(element =>
-                TryNormalizeContentTypePartName(element.Attribute("PartName")?.Value, out var targetPartName) &&
-                string.Equals(targetPartName, normalizedPartName, StringComparison.OrdinalIgnoreCase));
+        string normalizedPartName)
+    {
+        foreach (var element in root.Elements(contentTypeNs + "Override"))
+        {
+            if (IsContentTypeOverrideForPart(element, normalizedPartName))
+                return element;
+        }
+
+        return null;
+    }
+
+    private static bool IsContentTypeOverrideForPart(XElement element, string normalizedPartName) =>
+        TryNormalizeContentTypePartName(element.Attribute("PartName")?.Value, out var targetPartName) &&
+        string.Equals(targetPartName, normalizedPartName, StringComparison.OrdinalIgnoreCase);
 
     private static bool ShouldPreserveRelationship(
         string relationshipPartPath,
@@ -1485,7 +1525,7 @@ internal static class XlsxPackageMetadataMerger
         public ZipArchiveEntry? Get(string entryName)
         {
             var normalizedEntryName = NormalizeEntryName(entryName);
-            return _entries.TryGetValue(normalizedEntryName, out var matches) ? matches.FirstOrDefault() : null;
+            return _entries.TryGetValue(normalizedEntryName, out var matches) ? FirstEntryMatch(matches) : null;
         }
 
         public bool Contains(string entryName) => Get(entryName) is not null;
@@ -1521,5 +1561,8 @@ internal static class XlsxPackageMetadataMerger
 
         private static string NormalizeEntryName(string entryName) =>
             XlsxPackagePath.NormalizePackagePath(entryName);
+
+        private static ZipArchiveEntry? FirstEntryMatch(List<ZipArchiveEntry> matches) =>
+            matches.Count == 0 ? null : matches[0];
     }
 }

@@ -5,6 +5,10 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class MacOsHumanValidationChecklistPreflightTests
 {
+    private const string AccessibilityKnownIssuesNoneRow = "| None | None | None | No keyboard-only or VoiceOver known issues found during this runtime validation | None | Release Owner | No | No known accessibility issues; public preview may proceed |";
+    private const string AccessibilityKnownIssuesNonBlockingIssueRow = "| FX-A11Y-001 | VoiceOver Smoke - workbook grid focus | Medium | Active cell omits row number in announcement; transcript attached | Use Name Box and status text to confirm location | Accessibility Owner | No | Accepted as non-blocking for public preview; tracked in FX-A11Y-001 |";
+    private const string AccessibilityKnownIssuesBlockingIssueRow = "| FX-A11Y-001 | Keyboard-Only Accessibility - dialogs | High | Save confirmation traps focus after keyboard-only close | Use pointer to cancel the dialog | Accessibility Owner | Yes | Blocks public preview until fixed |";
+
     [Fact]
     public void HumanValidationChecklistPreflight_DocumentsCompletedChecklistGate()
     {
@@ -15,6 +19,10 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
         script.Should().Contain("ExpectedRunId");
         script.Should().Contain("ExpectedRunAttempt");
         script.Should().Contain("Public-Preview Decision");
+        script.Should().Contain("Accessibility Known Issues");
+        script.Should().Contain("Future Native Share Sheet Readiness");
+        script.Should().Contain("Test-NativeShareSheetReadiness");
+        script.Should().Contain("Native AppKit share sheet implementation status");
         script.Should().Contain("Release owner accepts this runtime for public preview");
         script.Should().Contain("macOS human validation checklist passed");
 
@@ -22,6 +30,10 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
         checklist.Should().Contain("-ExpectedRuntime osx-arm64");
         checklist.Should().Contain("-ExpectedRunId <run-id>");
         checklist.Should().Contain("-ExpectedRunAttempt <run-attempt>");
+        checklist.Should().Contain("## Future Native Share Sheet Readiness");
+        checklist.Should().Contain("a native AppKit share sheet is not implemented yet");
+        checklist.Should().Contain("| Native AppKit share sheet implementation status |");
+        checklist.Should().Contain("## Accessibility Known Issues");
     }
 
     [Fact]
@@ -86,6 +98,291 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
         result.CombinedOutput.Should().Contain("Candidate Summary 'Artifact wrapper name' must be 'freex-41-1-osx-arm64-macos-app'");
     }
 
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenWorkflowIdentityIsMalformed()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "malformed-run-macos-human-checklist.md");
+        var checklist = CreateCompletedChecklist()
+            .Replace("| Workflow run id / attempt | 42 / 1 |", "| Workflow run id / attempt | run 42 / attempt 1 |");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(checklistPath);
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Candidate Summary 'Workflow run id / attempt' must be '<numeric run id> / <numeric run attempt>', but was 'run 42 / attempt 1'.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenWrapperNamesDoNotMatchSummaryIdentityWithoutExpectedArgs()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "wrong-wrapper-run-macos-human-checklist.md");
+        var checklist = CreateCompletedChecklist()
+            .Replace("| Artifact wrapper name | freex-42-1-osx-arm64-macos-app |", "| Artifact wrapper name | freex-41-1-osx-arm64-macos-app |")
+            .Replace("| Diagnostics artifact name | freex-42-1-osx-arm64-macos-diagnostics |", "| Diagnostics artifact name | freex-42-2-osx-arm64-macos-diagnostics |");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(checklistPath);
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Candidate Summary 'Artifact wrapper name' must be 'freex-42-1-osx-arm64-macos-app'");
+        result.CombinedOutput.Should().Contain("Candidate Summary 'Diagnostics artifact name' must be 'freex-42-1-osx-arm64-macos-diagnostics'");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenChecksumEvidenceDoesNotCopyCandidateZipAndHash()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "wrong-checksum-evidence-macos-human-checklist.md");
+        var zipHash = new string('a', 64);
+        var checklist = CreateCompletedChecklist()
+            .Replace(
+                $"| Checksum | OK | freex-osx-arm64-macos-app.zip: OK; sha256 {zipHash} | Pass | checksum.txt |",
+                "| Checksum | OK | shasum verified | Pass | checksum.txt |");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(checklistPath);
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Hosted Evidence Copy-Forward 'Checksum' evidence must include 'freex-osx-arm64-macos-app.zip'.");
+        result.CombinedOutput.Should().Contain($"Hosted Evidence Copy-Forward 'Checksum' evidence must include '{zipHash}'.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenLogCollectionRowsDoNotNameExpectedArtifacts()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "generic-log-artifacts-macos-human-checklist.md");
+        var checklist = CreateCompletedChecklist()
+            .Replace("| GitHub Actions app artifact wrapper | Yes | freex-42-1-osx-arm64-macos-app | retained |", "| GitHub Actions app artifact wrapper | Yes | app-wrapper | retained |")
+            .Replace("| Inner app ZIP and .sha256 file | Yes | freex-osx-arm64-macos-app.zip; freex-osx-arm64-macos-app.zip.sha256 | retained |", "| Inner app ZIP and .sha256 file | Yes | zip bundle | retained |")
+            .Replace("| freex-osx-arm64-macos-evidence.txt | Yes | freex-osx-arm64-macos-evidence.txt | retained |", "| freex-osx-arm64-macos-evidence.txt | Yes | evidence.txt | retained |")
+            .Replace("| macOS release-assets wrapper | Yes | freex-42-1-macos-release-assets | retained |", "| macOS release-assets wrapper | Yes | release assets | retained |")
+            .Replace("| FreeX-latest-macos-distribution-candidate-manifest.json | Yes | freex-42-1-macos-release-assets/FreeX-latest-macos-distribution-candidate-manifest.json | retained |", "| FreeX-latest-macos-distribution-candidate-manifest.json | Yes | manifest.json | retained |")
+            .Replace("| Diagnostics artifact | Yes | freex-42-1-osx-arm64-macos-diagnostics | retained |", "| Diagnostics artifact | Yes | diagnostics.zip | retained |");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(checklistPath);
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Log And Artifact Collection 'GitHub Actions app artifact wrapper' must include 'freex-42-1-osx-arm64-macos-app'.");
+        result.CombinedOutput.Should().Contain("Log And Artifact Collection 'Inner app ZIP and .sha256 file' must include 'freex-osx-arm64-macos-app.zip'.");
+        result.CombinedOutput.Should().Contain("Log And Artifact Collection 'Inner app ZIP and .sha256 file' must include 'freex-osx-arm64-macos-app.zip.sha256'.");
+        result.CombinedOutput.Should().Contain("Log And Artifact Collection 'freex-osx-arm64-macos-evidence.txt' must include 'freex-osx-arm64-macos-evidence.txt'.");
+        result.CombinedOutput.Should().Contain("Log And Artifact Collection 'macOS release-assets wrapper' must include 'macos-release-assets'.");
+        result.CombinedOutput.Should().Contain("Log And Artifact Collection 'FreeX-latest-macos-distribution-candidate-manifest.json' must include 'FreeX-latest-macos-distribution-candidate-manifest.json'.");
+        result.CombinedOutput.Should().Contain("Log And Artifact Collection 'Diagnostics artifact' must include 'freex-42-1-osx-arm64-macos-diagnostics'.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_PassesWhenAccessibilityKnownIssuesListAcceptedNonBlockingIssue()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "non-blocking-accessibility-issue-macos-human-checklist.md");
+        var checklist = CreateCompletedChecklist()
+            .Replace(AccessibilityKnownIssuesNoneRow, AccessibilityKnownIssuesNonBlockingIssueRow)
+            .Replace("See Accessibility Known Issues section; no issues found", "See Accessibility Known Issues section; one non-blocking issue accepted");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(
+            checklistPath,
+            "-ExpectedRuntime osx-arm64 -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("macOS human validation checklist passed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenAccessibilityKnownIssuesSectionIsMissing()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "missing-accessibility-known-issues-macos-human-checklist.md");
+        File.WriteAllText(checklistPath, RemoveChecklistSection(CreateCompletedChecklist(), "Accessibility Known Issues"));
+
+        var result = RunChecklistPreflight(
+            checklistPath,
+            "-ExpectedRuntime osx-arm64 -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Checklist must include the 'Accessibility Known Issues' table.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenAccessibilityKnownIssuesMixNoneAndIssueRows()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "mixed-accessibility-known-issues-macos-human-checklist.md");
+        File.WriteAllText(
+            checklistPath,
+            CreateCompletedChecklist().Replace(
+                AccessibilityKnownIssuesNoneRow,
+                AccessibilityKnownIssuesNoneRow + Environment.NewLine + AccessibilityKnownIssuesNonBlockingIssueRow));
+
+        var result = RunChecklistPreflight(
+            checklistPath,
+            "-ExpectedRuntime osx-arm64 -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Accessibility Known Issues must contain either exactly one 'None' row or issue rows, not both.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenAccessibilityKnownIssueRowsDoNotFollowSchema()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "malformed-accessibility-known-issues-macos-human-checklist.md");
+        File.WriteAllText(
+            checklistPath,
+            CreateCompletedChecklist().Replace(
+                AccessibilityKnownIssuesNoneRow,
+                "| FX-A11Y-001 | VoiceOver Smoke - workbook grid focus | Needs triage |  |  |  | Maybe |  |"));
+
+        var result = RunChecklistPreflight(
+            checklistPath,
+            "-ExpectedRuntime osx-arm64 -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Accessibility Known Issues 'FX-A11Y-001' severity must be one of: Critical, High, Medium, Low. Actual value: 'Needs triage'.");
+        result.CombinedOutput.Should().Contain("Accessibility Known Issues 'FX-A11Y-001' user impact / evidence must be filled in.");
+        result.CombinedOutput.Should().Contain("Accessibility Known Issues 'FX-A11Y-001' workaround must be filled in.");
+        result.CombinedOutput.Should().Contain("Accessibility Known Issues 'FX-A11Y-001' owner must be filled in.");
+        result.CombinedOutput.Should().Contain("Accessibility Known Issues 'FX-A11Y-001' public-preview blocking must be one of: Yes, No. Actual value: 'Maybe'.");
+        result.CombinedOutput.Should().Contain("Accessibility Known Issues 'FX-A11Y-001' decision / rationale must be filled in.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenAccessibilityKnownIssueBlocksPublicPreview()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "blocking-accessibility-known-issue-macos-human-checklist.md");
+        File.WriteAllText(checklistPath, CreateCompletedChecklist().Replace(AccessibilityKnownIssuesNoneRow, AccessibilityKnownIssuesBlockingIssueRow));
+
+        var result = RunChecklistPreflight(
+            checklistPath,
+            "-ExpectedRuntime osx-arm64 -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Accessibility Known Issues 'FX-A11Y-001' is marked public-preview blocking; public-preview candidates must be Internal-only until it is resolved or accepted as non-blocking.");
+        result.CombinedOutput.Should().Contain("Public-Preview Decision 'Known issues are listed with severity, workaround, owner, and blocking decision' cannot pass while Accessibility Known Issues has public-preview blocking issues.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenVoiceOverKnownIssuesReviewDoesNotPointToAccessibilityKnownIssues()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "untied-voiceover-known-issues-macos-human-checklist.md");
+        File.WriteAllText(
+            checklistPath,
+            CreateCompletedChecklist().Replace(
+                "| Known issues review | decisions recorded | See Accessibility Known Issues section; no issues found | Pass | Accessibility Known Issues table |",
+                "| Known issues review | decisions recorded | No issues found | Pass | release notes |"));
+
+        var result = RunChecklistPreflight(
+            checklistPath,
+            "-ExpectedRuntime osx-arm64 -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("VoiceOver Smoke 'Known issues review' must include 'Accessibility Known Issues'.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenNativeShareSheetNotImplementedRowsAreMixed()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "mixed-native-share-sheet-macos-human-checklist.md");
+        var checklist = CreateCompletedChecklist()
+            .Replace(
+                "| Saved workbook opens native share sheet | saved workbook opens sheet | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |",
+                "| Saved workbook opens native share sheet | saved workbook opens sheet | tester marked a pass even though native AppKit share sheet is not implemented | Pass | release notes |");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(
+            checklistPath,
+            "-ExpectedRuntime osx-arm64 -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Future Native Share Sheet Readiness 'Saved workbook opens native share sheet' status must be one of: Not implemented. Actual value: 'Pass'.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenImplementedNativeShareSheetRowsDoNotPass()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "partial-native-share-sheet-macos-human-checklist.md");
+        var checklist = CreateCompletedChecklist()
+            .Replace(
+                "| Native AppKit share sheet implementation status | native share sheet implementation | Native AppKit share sheet is not implemented in this candidate; existing share fallback is current route | Not implemented | release notes |",
+                "| Native AppKit share sheet implementation status | native share sheet implementation | Native AppKit share sheet is implemented in this candidate | Pass | implementation evidence |");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(
+            checklistPath,
+            "-ExpectedRuntime osx-arm64 -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Future Native Share Sheet Readiness 'Saved workbook opens native share sheet' status must be one of: Pass. Actual value: 'Not implemented'.");
+        result.CombinedOutput.Should().Contain("Future Native Share Sheet Readiness 'Existing share fallback still works' status must be one of: Pass. Actual value: 'Not implemented'.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenImportantTemplateRowsAreOmitted()
+    {
+        var missingRows = new (string Section, string Label)[]
+        {
+            ("Gatekeeper First Launch", "Confirm quarantine is still present before first launch, if the artifact was browser-downloaded"),
+            ("Gatekeeper First Launch", "Record Gatekeeper prompt"),
+            ("Command-Key Menu Behavior", "Cmd+Shift+S"),
+            ("Command-Key Menu Behavior", "Cmd+A"),
+            ("Command-Key Menu Behavior", "Cmd+F and Find Next menu route"),
+            ("Command-Key Menu Behavior", "Cmd+B, Cmd+I, Cmd+U"),
+            ("Finder And File Association", "Drag supported .fxl/.xlsx workbook onto FreeX.app or Dock icon"),
+            ("Finder And File Association", "Drag supported workbook from Finder onto already-running FreeX window"),
+            ("Future Native Share Sheet Readiness", "Native AppKit share sheet implementation status"),
+            ("Future Native Share Sheet Readiness", "Saved workbook opens native share sheet"),
+            ("Future Native Share Sheet Readiness", "Cancel leaves workbook and file unchanged"),
+            ("Future Native Share Sheet Readiness", "Share target receives workbook file"),
+            ("Future Native Share Sheet Readiness", "Existing share fallback still works"),
+            ("Future Native Share Sheet Readiness", "Keyboard focus after open and cancel"),
+            ("Future Native Share Sheet Readiness", "VoiceOver announcement and navigation"),
+            ("Keyboard-Only Accessibility", "Formula box edits"),
+            ("Keyboard-Only Accessibility", "Sheet tabs"),
+            ("Keyboard-Only Accessibility", "Context menus"),
+            ("VoiceOver Smoke", "Status text"),
+            ("VoiceOver Smoke", "Sheet tabs"),
+        };
+
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "missing-rows-macos-human-checklist.md");
+        var checklist = missingRows.Aggregate(
+            CreateCompletedChecklist(),
+            (current, row) => RemoveChecklistRow(current, row.Section, row.Label));
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(
+            checklistPath,
+            "-ExpectedRuntime osx-arm64 -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().NotBe(0);
+        foreach (var row in missingRows)
+        {
+            result.CombinedOutput.Should().Contain($"Checklist section '{row.Section}' must include '{row.Label}'.");
+        }
+
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
     private static PowerShellResult RunChecklistPreflight(string checklistPath, string arguments = "")
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
@@ -93,6 +390,70 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             "Test-MacOsHumanValidationChecklist.ps1",
             repoRoot,
             $"-ChecklistPath \"{checklistPath}\" {arguments}");
+    }
+
+    private static string RemoveChecklistRow(string checklist, string section, string rowLabel)
+    {
+        var rowPrefix = $"| {rowLabel} |";
+        var lines = checklist.Split(["\r\n", "\n"], StringSplitOptions.None);
+        var filtered = new List<string>(lines.Length);
+        var currentSection = "";
+        var removedCount = 0;
+
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("## ", StringComparison.Ordinal))
+            {
+                currentSection = line[3..].Trim();
+            }
+
+            if (string.Equals(currentSection, section, StringComparison.Ordinal) &&
+                line.TrimStart().StartsWith(rowPrefix, StringComparison.Ordinal))
+            {
+                removedCount++;
+                continue;
+            }
+
+            filtered.Add(line);
+        }
+
+        removedCount.Should().Be(1, $"the synthetic checklist should include exactly one '{rowLabel}' row in '{section}'");
+        return string.Join(Environment.NewLine, filtered);
+    }
+
+    private static string RemoveChecklistSection(string checklist, string section)
+    {
+        var sectionHeader = $"## {section}";
+        var lines = checklist.Split(["\r\n", "\n"], StringSplitOptions.None);
+        var filtered = new List<string>(lines.Length);
+        var isRemovingSection = false;
+        var removed = false;
+
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("## ", StringComparison.Ordinal))
+            {
+                if (isRemovingSection)
+                {
+                    isRemovingSection = false;
+                }
+
+                if (string.Equals(line.Trim(), sectionHeader, StringComparison.Ordinal))
+                {
+                    isRemovingSection = true;
+                    removed = true;
+                    continue;
+                }
+            }
+
+            if (!isRemovingSection)
+            {
+                filtered.Add(line);
+            }
+        }
+
+        removed.Should().BeTrue($"the synthetic checklist should include the '{section}' section");
+        return string.Join(Environment.NewLine, filtered);
     }
 
     private static string CreateCompletedChecklist()
@@ -128,7 +489,7 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
 
             | Required check | Expected public-preview evidence | Actual evidence | Status | Attachment |
             | --- | --- | --- | --- | --- |
-            | Checksum | OK | shasum verified | Pass | checksum.txt |
+            | Checksum | OK | freex-osx-arm64-macos-app.zip: OK; sha256 {{zipHash}} | Pass | checksum.txt |
             | Artifact channel | distribution candidate | artifact_channel=distribution-candidate | Pass | evidence.txt |
             | Distribution readiness | ready | distribution_readiness=distribution_candidate_ready | Pass | evidence.txt |
             | Signing | Developer ID | codesign_mode=developer-id | Pass | codesign.txt |
@@ -144,7 +505,9 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
 
             | Step | Expected result | Actual result | Status | Evidence |
             | --- | --- | --- | --- | --- |
+            | Confirm quarantine is still present before first launch, if the artifact was browser-downloaded | quarantine evidence or N/A note | browser path did not preserve quarantine | N/A | terminal transcript |
             | Double-click FreeX.app in Finder | launches | launched from Finder | Pass | screenshot |
+            | Record Gatekeeper prompt | prompt allows opening or no prompt is shown | no Gatekeeper prompt was shown after notarized launch | Pass | screenshot |
             | App reaches first usable window | usable window | workbook window opened | Pass | screenshot |
             | Quit and relaunch from Finder | relaunch works | relaunch worked | Pass | screenshot |
 
@@ -153,18 +516,42 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | Step | Expected result | Actual result | Status | Evidence |
             | --- | --- | --- | --- | --- |
             | Verify .fxl appears as a FreeX-supported document type | listed | FreeX listed | Pass | screenshot |
+            | Set default .fxl handler, if permitted | default handler set or constraint recorded | tester machine policy disallows Change All | Skipped | notes |
             | Double-click .fxl in Finder | opens workbook | opened selected workbook | Pass | screenshot |
             | Confirm workbook identity | identity matches | expected sheet visible | Pass | screenshot |
             | Right-click .fxl > Open With > FreeX | opens file | opened through Open With | Pass | screenshot |
+            | Drag supported .fxl/.xlsx workbook onto FreeX.app or Dock icon | opens dropped workbook | opened dropped workbook through app icon | Pass | screenshot |
             | Repeat while FreeX is already running | opens in session | opened in existing session | Pass | screenshot |
+            | Drag supported workbook from Finder onto already-running FreeX window | accepts Finder drop | running window opened dropped workbook | Pass | screenshot |
+            | Optional spreadsheet file Open With | opens representative spreadsheet when in scope | spreadsheet Open With was out of candidate scope | N/A | notes |
 
             ## Workbook Smoke
 
             | Step | Expected result | Actual result | Status | Evidence |
             | --- | --- | --- | --- | --- |
             | Create a new workbook | blank workbook | created | Pass | screenshot |
+            | Enter values and formulas | values and formulas commit | entered values and formula committed | Pass | screenshot |
             | Save and Save As | saves files | saved and save-as worked | Pass | screenshot |
+            | Open picker creates bookmark identity | grant metadata stays redacted | opened through native picker and diagnostics had redacted grant metadata only | Pass | diagnostics excerpt |
+            | Bookmark scope wraps open, save, and recent-file I/O | file access remains available | open, save, save-as, and recent-file routes worked after relaunch | Pass | notes |
+            | Bookmark payload stays out of diagnostics and release evidence | sensitive fields absent | diagnostics and evidence had no paths, filenames, formulas, contents, storage identifiers, or bookmark payloads | Pass | diagnostics review |
+            | Close dirty workbook | prompt choices clear | Save, Discard, and Cancel reachable | Pass | screenshot |
             | Reopen saved workbook | values survive | reopened expected values | Pass | screenshot |
+            | Recent files | recent route updated | saved workbook appeared in recent files | Pass | screenshot |
+            | On-device file grant persistence | picker/recent/Open With survives relaunch | reopened from Recent after relaunch and Open With without reselecting the file | Pass | notes |
+            | File-access grant diagnostics review | diagnostics stay redacted | grant events contained only grant kind and redaction metadata; no path or bookmark payload fields | Pass | diagnostics review |
+
+            ## Future Native Share Sheet Readiness
+
+            | Gate | Expected result when native AppKit share sheet is implemented | Actual result | Status | Evidence |
+            | --- | --- | --- | --- | --- |
+            | Native AppKit share sheet implementation status | native share sheet implementation | Native AppKit share sheet is not implemented in this candidate; existing share fallback is current route | Not implemented | release notes |
+            | Saved workbook opens native share sheet | saved workbook opens sheet | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |
+            | Cancel leaves workbook and file unchanged | cancel is non-destructive | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |
+            | Share target receives workbook file | target receives workbook file | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |
+            | Existing share fallback still works | fallback remains usable | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |
+            | Keyboard focus after open and cancel | focus sane | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |
+            | VoiceOver announcement and navigation | VoiceOver sane | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |
 
             ## Command-Key Menu Behavior
 
@@ -174,8 +561,13 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | Cmd+N | creates workbook | created | Pass | screenshot |
             | Cmd+O | opens picker | picker opened | Pass | screenshot |
             | Cmd+S | saves workbook | saved | Pass | screenshot |
+            | Cmd+Shift+S | opens Save As | Save As opened | Pass | screenshot |
             | Cmd+W | closes workbook | closed with prompt | Pass | screenshot |
             | Cmd+Q | quits app | quit with prompt | Pass | screenshot |
+            | Cmd+A | selects current region then sheet | selection expanded as expected | Pass | screenshot |
+            | Cmd+F and Find Next menu route | Find opens and advances | Find opened and next match advanced | Pass | screenshot |
+            | Cmd+B, Cmd+I, Cmd+U | format commands apply | formatting applied and survived reopen | Pass | screenshot |
+            | Cmd+PageUp / Cmd+PageDown or hardware equivalent | switches sheets or limitation recorded | keyboard lacks Page keys; alternate route recorded | N/A | notes |
 
             ## Keyboard-Only Accessibility
 
@@ -183,7 +575,13 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | --- | --- | --- | --- | --- |
             | First launch and initial focus | focus visible | visible initial focus | Pass | screenshot |
             | Grid navigation and editing | keyboard works | navigation and edit worked | Pass | notes |
+            | Formula box edits | keyboard reach/edit/commit/cancel works | formula box reached and edited by keyboard | Pass | notes |
+            | Native menus | menus reachable | File, Edit, Format, View, Sheet, and Help invoked | Pass | notes |
+            | Toolbar or command surface | commands reachable | primary command surface reached by keyboard | Pass | notes |
+            | Sheet tabs | tab strip reachable | sheet add, rename, and context route reachable | Pass | notes |
             | Dialogs | predictable focus | dialogs navigated | Pass | notes |
+            | Context menus | context menus keyboard reachable | grid and sheet-tab menus opened from keyboard | Pass | notes |
+            | Help and feedback routes | help routes reachable | Help, About, and Legal Notices reached | Pass | notes |
             | Dirty close and Quit | choices reachable | choices reachable | Pass | notes |
 
             ## VoiceOver Smoke
@@ -194,8 +592,18 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | Workbook grid focus | location announced | active cell announced | Pass | transcript |
             | Visible cells | values discoverable | values announced | Pass | transcript |
             | Formula box | formula understandable | formula announced | Pass | transcript |
+            | Status text | status discoverable | selection summary announced | Pass | transcript |
+            | Sheet tabs | sheet state understandable | selected sheet and tab actions announced | Pass | transcript |
+            | Drawing objects, if present | objects identifiable | no drawing objects included in candidate smoke workbook | N/A | notes |
             | Dialog titles and buttons | titles announced | dialog title and buttons announced | Pass | transcript |
-            | Known issues review | decisions recorded | no blocking issues | Pass | release notes |
+            | Gatekeeper or accessibility prompts | prompts understandable | no system prompt appeared during VoiceOver pass | N/A | notes |
+            | Known issues review | decisions recorded | See Accessibility Known Issues section; no issues found | Pass | Accessibility Known Issues table |
+
+            ## Accessibility Known Issues
+
+            | Issue ID | Affected workflow | Severity | User impact / evidence | Workaround | Owner | Public-preview blocking | Decision / rationale |
+            | --- | --- | --- | --- | --- | --- | --- | --- |
+            | None | None | None | No keyboard-only or VoiceOver known issues found during this runtime validation | None | Release Owner | No | No known accessibility issues; public preview may proceed |
 
             ## Log And Artifact Collection
 
@@ -203,13 +611,16 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | --- | --- | --- | --- |
             | Completed checklist/report | Yes | checklist.md | retained |
             | GitHub Actions app artifact wrapper | Yes | freex-42-1-osx-arm64-macos-app | retained |
-            | Inner app ZIP and .sha256 file | Yes | freex-osx-arm64-macos-app.zip | retained |
-            | freex-osx-arm64-macos-evidence.txt | Yes | evidence.txt | retained |
+            | Inner app ZIP and .sha256 file | Yes | freex-osx-arm64-macos-app.zip; freex-osx-arm64-macos-app.zip.sha256 | retained |
+            | freex-osx-arm64-macos-evidence.txt | Yes | freex-osx-arm64-macos-evidence.txt | retained |
+            | macOS release-assets wrapper | Yes | freex-42-1-macos-release-assets | retained |
+            | FreeX-latest-macos-distribution-candidate-manifest.json | Yes | freex-42-1-macos-release-assets/FreeX-latest-macos-distribution-candidate-manifest.json | retained |
             | Packaging smoke log | Yes | packaging.log | retained |
             | Launch smoke file | Yes | launch.txt | retained |
             | Notarization log | Yes | notarization.log | retained |
             | Tester instructions | Yes | tester-instructions.md | retained |
-            | Diagnostics artifact | Yes | diagnostics.zip | retained |
+            | Diagnostics artifact | Yes | freex-42-1-osx-arm64-macos-diagnostics | retained |
+            | Screenshots or recordings | Required for failures and Gatekeeper/default-handler proof | screenshots.zip | retained |
             | Terminal transcript | Required for checksum/signing/stapler commands | terminal.txt | retained |
 
             ## Public-Preview Decision

@@ -16,6 +16,7 @@ public sealed class WorkbookSessionTests
         session.Workbook.Name.Should().Be(WorkbookFactory.DefaultWorkbookName);
         session.StartupStatus.Should().Be("Created new workbook.");
         session.CurrentFilePath.Should().BeNull();
+        session.CurrentFileAccessIdentity.Should().BeNull();
         session.IsDirty.Should().BeFalse();
         session.CanSaveCurrentSource(out _).Should().BeFalse();
         session.CanUndo.Should().BeFalse();
@@ -37,11 +38,16 @@ public sealed class WorkbookSessionTests
             "Opened .xltx.",
             IsFallback: false,
             SourcePath: sourcePath,
-            OpenedAsTemplate: true);
+            OpenedAsTemplate: true,
+            SourceFileAccessIdentity: new WorkbookFileAccessIdentity(
+                sourcePath,
+                "macos-security-scoped-bookmark",
+                "template-token"));
 
         var session = CreateSession(source);
 
         session.CurrentFilePath.Should().BeNull();
+        session.CurrentFileAccessIdentity.Should().BeNull();
         session.CanSaveCurrentSource(out _).Should().BeFalse();
         session.DisplayName.Should().Be("Budget.xltx");
         session.StartupStatus.Should().Contain("Opened as template.");
@@ -88,7 +94,10 @@ public sealed class WorkbookSessionTests
         resolved.Should().BeTrue();
         message.Should().BeEmpty();
         target.Should().NotBeNull();
-        target!.Path.Should().Be("Book.XLSM");
+        target!.Path.Should().Be(Path.GetFullPath("Book.XLSM"));
+        target.FileAccessIdentity.Should().NotBeNull();
+        target.FileAccessIdentity!.LocalPath.Should().Be(target.Path);
+        target.FileAccessIdentity.HasBookmark.Should().BeFalse();
         target.Adapter.Should().BeSameAs(adapter);
         target.Extension.Should().Be(".XLSM");
         target.Format.FormatName.Should().Be("XLSM Macro-Enabled Workbook");
@@ -113,7 +122,49 @@ public sealed class WorkbookSessionTests
         session.TryResolveOpenTarget("bad\0Book.xlsx", out var malformedTarget, out var malformedMessage)
             .Should().BeFalse();
         malformedTarget.Should().BeNull();
-        malformedMessage.Should().Be("Unsupported file type.");
+        malformedMessage.Should().Be("Open requires a local file path.");
+    }
+
+    [Theory]
+    [InlineData("/Users/quinn/Work/Budget.XLSX", "/Users/quinn/Work/Budget.XLSX")]
+    [InlineData("file:///Users/quinn/Work/Budget%202026.XLSX", "/Users/quinn/Work/Budget 2026.XLSX")]
+    public void TryResolveOpenTarget_NormalizesMacOsLocalFileIngress(string candidate, string expectedPath)
+    {
+        var adapter = new TestFileAdapter(formats: [
+            new FileFormatDescriptor(".xlsx", "Excel Workbook", CanOpen: true, CanSave: false)
+        ]);
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(CreateWorkbook(), "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 240,
+            viewportWidth: 320,
+            adapters: [adapter]);
+
+        var resolved = session.TryResolveOpenTarget(candidate, out var target, out var message);
+
+        resolved.Should().BeTrue();
+        message.Should().BeEmpty();
+        target.Should().NotBeNull();
+        target!.Path.Should().Be(expectedPath);
+        target.FileAccessIdentity.Should().NotBeNull();
+        target.FileAccessIdentity!.LocalPath.Should().Be(expectedPath);
+        target.Extension.Should().Be(".XLSX");
+        target.Adapter.Should().BeSameAs(adapter);
+    }
+
+    [Fact]
+    public void TryResolveOpenTarget_RejectsNonFileUri()
+    {
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            CreateWorkbook(),
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.TryResolveOpenTarget("https://example.test/Book.xlsx", out var target, out var message)
+            .Should().BeFalse();
+
+        target.Should().BeNull();
+        message.Should().Be("Open requires a local file path.");
     }
 
     [Fact]
@@ -219,6 +270,146 @@ public sealed class WorkbookSessionTests
         result.ErrorMessage.Should().Be("Reference is not valid.");
         session.ActiveSheet.Id.Should().Be(sheet.Id);
         session.SelectedRange.Should().Be(originalRange);
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void OpenSelectedHyperlink_NavigatesDocumentReferenceWithoutDirtyingWorkbook()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var dataSheet = workbook.AddSheet("Data Sheet");
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var expectedRange = new GridRange(
+            new CellAddress(dataSheet.Id, 2, 2),
+            new CellAddress(dataSheet.Id, 4, 3));
+        sheet.Hyperlinks[source] = " 'Data Sheet'!B2:C4 ";
+        sheet.HyperlinkMetadata[source] = new HyperlinkMetadata(HyperlinkTargetKind.PlaceInThisDocument);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(source);
+        session.CanOpenSelectedHyperlink.Should().BeTrue();
+
+        var result = session.OpenSelectedHyperlink();
+
+        result.Success.Should().BeTrue();
+        result.SelectedRange.Should().Be(expectedRange);
+        session.ActiveSheet.Id.Should().Be(dataSheet.Id);
+        session.SelectedRange.Should().Be(expectedRange);
+        session.ActiveCell.Should().Be(expectedRange.Start);
+        session.FormulaEditAddress.Should().BeNull();
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void OpenSelectedHyperlink_LeavesExternalUrlUnsupportedWithoutNavigation()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.Hyperlinks[source] = "https://example.test/report";
+        sheet.HyperlinkMetadata[source] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(source);
+
+        var result = session.OpenSelectedHyperlink();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("External hyperlinks are not supported on this platform.");
+        session.ActiveSheet.Id.Should().Be(sheet.Id);
+        session.SelectedRange.Should().Be(new GridRange(source, source));
+        session.ActiveCell.Should().Be(source);
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryGetSelectedHyperlinkPlan_ExposesExternalTargetWithoutNavigation()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.Hyperlinks[source] = " https://example.test/report ";
+        sheet.HyperlinkMetadata[source] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(source);
+
+        session.TryGetSelectedHyperlinkPlan(out var plan).Should().BeTrue();
+
+        plan.Should().Be(new HyperlinkNavigationPlan(
+            HyperlinkNavigationKind.External,
+            "https://example.test/report",
+            null));
+        session.ActiveSheet.Id.Should().Be(sheet.Id);
+        session.SelectedRange.Should().Be(new GridRange(source, source));
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryGetSelectedHyperlinkPlan_ResolvesRelativeLocalFileAgainstWorkbookPathWithoutNavigation()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var workbookDirectory = Path.Combine(Path.GetTempPath(), "FreeXWorkbookSessionHyperlinks");
+        var workbookPath = Path.Combine(workbookDirectory, "Book.fxl");
+        var expectedLocalPath = Path.GetFullPath(Path.Combine(workbookDirectory, "Reports", "Budget.xlsx"));
+        sheet.Hyperlinks[source] = " Reports/Budget.xlsx ";
+        sheet.HyperlinkMetadata[source] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false,
+            SourcePath: workbookPath));
+        session.SelectCell(source);
+
+        session.TryGetSelectedHyperlinkPlan(out var plan).Should().BeTrue();
+
+        plan.Should().Be(new HyperlinkNavigationPlan(
+            HyperlinkNavigationKind.LocalFile,
+            "Reports/Budget.xlsx",
+            null,
+            expectedLocalPath));
+        session.ActiveSheet.Id.Should().Be(sheet.Id);
+        session.SelectedRange.Should().Be(new GridRange(source, source));
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void OpenSelectedHyperlink_LeavesLocalFileUnsupportedWithoutNavigation()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var workbookPath = Path.Combine(Path.GetTempPath(), "FreeXWorkbookSessionHyperlinks", "Book.fxl");
+        sheet.Hyperlinks[source] = " Reports/Budget.xlsx ";
+        sheet.HyperlinkMetadata[source] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false,
+            SourcePath: workbookPath));
+        session.SelectCell(source);
+
+        var result = session.OpenSelectedHyperlink();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Local file hyperlinks require a platform file-opening route.");
+        session.ActiveSheet.Id.Should().Be(sheet.Id);
+        session.SelectedRange.Should().Be(new GridRange(source, source));
+        session.ActiveCell.Should().Be(source);
         session.IsDirty.Should().BeFalse();
     }
 
@@ -1443,7 +1634,11 @@ public sealed class WorkbookSessionTests
         [
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Charts, "xl/charts/chart1.xml")
         ]);
-        var target = new WorkbookOpenTarget(path, adapter, ".xltx", format);
+        var identity = new WorkbookFileAccessIdentity(
+            path,
+            "macos-security-scoped-bookmark",
+            "template-token");
+        var target = new WorkbookOpenTarget(path, adapter, ".xltx", format, identity);
         var result = new WorkbookOpenResult(
             workbook,
             featureReport,
@@ -1459,12 +1654,41 @@ public sealed class WorkbookSessionTests
             adapters: [adapter]);
 
         session.CurrentFilePath.Should().BeNull();
+        session.CurrentFileAccessIdentity.Should().BeNull();
         session.CurrentXlsxFeatureReport.Should().BeSameAs(featureReport);
         session.DisplayName.Should().Be("Budget.xltx");
         session.Workbook.Name.Should().Be("Budget.xltx");
         session.StartupStatus.Should().Contain("Opened as template.");
         session.StartupStatus.Should().Contain("Unsupported XLSX features detected.");
         session.StartupStatus.Should().Contain("1 load warning.");
+    }
+
+    [Fact]
+    public void CreateOpened_CarriesTargetFileAccessIdentityIntoCurrentSession()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "Budget.fxl");
+        var format = new FileFormatDescriptor(".fxl", "FreeX Workbook", CanOpen: true, CanSave: true);
+        var adapter = new TestFileAdapter(formats: [format]);
+        var workbook = CreateWorkbook("Budget");
+        var identity = new WorkbookFileAccessIdentity(
+            path,
+            "macos-security-scoped-bookmark",
+            "open-token");
+        var target = new WorkbookOpenTarget(path, adapter, ".fxl", format, identity);
+        var result = new WorkbookOpenResult(workbook, null, "Budget", OpenedAsTemplate: false, LoadWarnings: []);
+
+        var session = new WorkbookSessionFactory().CreateOpened(
+            target,
+            result,
+            viewportHeight: 240,
+            viewportWidth: 320,
+            adapters: [adapter]);
+
+        session.CurrentFilePath.Should().Be(path);
+        session.CurrentFileAccessIdentity.Should().NotBeNull();
+        session.CurrentFileAccessIdentity!.LocalPath.Should().Be(path);
+        session.CurrentFileAccessIdentity.BookmarkKind.Should().Be("macos-security-scoped-bookmark");
+        session.CurrentFileAccessIdentity.BookmarkPayload.Should().Be("open-token");
     }
 
     [Theory]
@@ -1591,6 +1815,49 @@ public sealed class WorkbookSessionTests
         sheet.GetValue(3, 2).Should().Be(new NumberValue(1));
         sheet.GetValue(4, 1).Should().Be(new TextValue("B"));
         sheet.GetValue(4, 2).Should().Be(new NumberValue(2));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SortSelectedRange_CustomColorKeyUsesTargetColorAndPreservesHeader()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var red = new CellColor(255, 0, 0);
+        var redStyle = workbook.RegisterStyle(new CellStyle { FillColor = red });
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Owner"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Queued"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Ava"));
+        var redCell = Cell.FromValue(new TextValue("Escalated"));
+        redCell.StyleId = redStyle;
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), redCell);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("Ben"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Done"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new TextValue("Cia"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        var range = new GridRange(a1, new CellAddress(sheet.Id, 4, 2));
+        session.SelectRange(range);
+
+        var result = session.SortSelectedRange(
+            [new SortKey(0, true, SortOn.CellColor, red)],
+            new SortOptions(CaseSensitive: false, LeftToRight: false),
+            hasHeaders: true);
+
+        result.Success.Should().BeTrue();
+        session.SelectedRange.Should().Be(range);
+        session.ActiveCell.Should().Be(a1);
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Status"));
+        sheet.GetValue(1, 2).Should().Be(new TextValue("Owner"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Escalated"));
+        sheet.GetValue(2, 2).Should().Be(new TextValue("Ben"));
+        GetStyle(workbook, sheet, new CellAddress(sheet.Id, 2, 1)).FillColor.Should().Be(red);
         session.IsDirty.Should().BeTrue();
         session.CanUndo.Should().BeTrue();
     }
@@ -3515,6 +3782,104 @@ public sealed class WorkbookSessionTests
         sheet.HyperlinkMetadata[a1].Should().Be(new HyperlinkMetadata(
             HyperlinkTargetKind.ExistingFileOrWebPage,
             ScreenTip: "Open example"));
+    }
+
+    [Fact]
+    public void SetSelectedRangeHyperlink_AppliesPlanToSelectedRangeAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new TextValue("Old A"));
+        sheet.SetCell(b1, new TextValue("Old B"));
+        sheet.SetCell(c1, new TextValue("Outside"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+        var plan = HyperlinkDialogPlanner.Plan(
+            "review@example.test",
+            "Team mail",
+            HyperlinkTargetKind.EmailAddress,
+            "Email team",
+            "team@example.test");
+
+        var result = session.SetSelectedRangeHyperlink(plan);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(a1, b1);
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b1));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new TextValue("Team mail"));
+        sheet.GetValue(b1).Should().Be(new TextValue("Team mail"));
+        sheet.GetValue(c1).Should().Be(new TextValue("Outside"));
+        sheet.Hyperlinks[a1].Should().Be("mailto:review@example.test");
+        sheet.Hyperlinks[b1].Should().Be("mailto:review@example.test");
+        sheet.HyperlinkMetadata[a1].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Email team",
+            "team@example.test"));
+        sheet.HyperlinkMetadata[b1].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Email team",
+            "team@example.test"));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new TextValue("Old A"));
+        sheet.GetValue(b1).Should().Be(new TextValue("Old B"));
+        sheet.Hyperlinks.Should().NotContainKey(a1);
+        sheet.Hyperlinks.Should().NotContainKey(b1);
+        sheet.HyperlinkMetadata.Should().NotContainKey(a1);
+        sheet.HyperlinkMetadata.Should().NotContainKey(b1);
+    }
+
+    [Fact]
+    public void SetSelectedRangeHyperlink_PropagatesAcrossGroupedSheets()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        summary.SetCell(summaryA1, new TextValue("Summary"));
+        details.SetCell(detailsA1, new TextValue("Details"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryA1);
+        var plan = HyperlinkDialogPlanner.Plan(
+            "Sheet1!A1",
+            "Jump",
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump within workbook",
+            "SummaryTop");
+
+        var result = session.SetSelectedRangeHyperlink(plan);
+
+        result.Success.Should().BeTrue();
+        summary.Hyperlinks[summaryA1].Should().Be("Sheet1!A1");
+        details.Hyperlinks[detailsA1].Should().Be("Sheet1!A1");
+        summary.HyperlinkMetadata[summaryA1].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump within workbook",
+            "SummaryTop"));
+        details.HyperlinkMetadata[detailsA1].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump within workbook",
+            "SummaryTop"));
+        summary.GetValue(summaryA1).Should().Be(new TextValue("Jump"));
+        details.GetValue(detailsA1).Should().Be(new TextValue("Jump"));
     }
 
     [Fact]
@@ -7784,6 +8149,10 @@ public sealed class WorkbookSessionTests
     {
         var sourcePath = Path.Combine(Path.GetTempPath(), "Book.xlsx");
         var savedPath = Path.Combine(Path.GetTempPath(), "Saved.fxl");
+        var sourceIdentity = new WorkbookFileAccessIdentity(
+            sourcePath,
+            "macos-security-scoped-bookmark",
+            "source-token");
         var session = CreateSession(new StartupWorkbookLoadResult(
             CreateWorkbook(),
             "Book.xlsx",
@@ -7793,7 +8162,8 @@ public sealed class WorkbookSessionTests
             FeatureReport: new XlsxFeatureReport(
             [
                 new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Charts, "xl/charts/chart1.xml")
-            ])));
+            ]),
+            SourceFileAccessIdentity: sourceIdentity));
         session.SelectCell(session.ActiveCell);
         session.CommitCellText("changed");
 
@@ -7801,9 +8171,37 @@ public sealed class WorkbookSessionTests
 
         session.IsDirty.Should().BeFalse();
         session.CurrentFilePath.Should().Be(savedPath);
+        session.CurrentFileAccessIdentity.Should().NotBeNull();
+        session.CurrentFileAccessIdentity!.LocalPath.Should().Be(savedPath);
+        session.CurrentFileAccessIdentity.HasBookmark.Should().BeFalse();
         session.CurrentXlsxFeatureReport.Should().BeNull();
         session.DisplayName.Should().Be("Saved.fxl");
         session.Workbook.Name.Should().Be("Saved.fxl");
+    }
+
+    [Fact]
+    public void MarkSaved_PreservesCurrentFileAccessIdentityWhenSavingSamePath()
+    {
+        var sourcePath = Path.Combine(Path.GetTempPath(), "Book.fxl");
+        var sourceIdentity = new WorkbookFileAccessIdentity(
+            sourcePath,
+            "macos-security-scoped-bookmark",
+            "same-path-token");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            CreateWorkbook(),
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false,
+            SourcePath: sourcePath,
+            SourceFileAccessIdentity: sourceIdentity));
+
+        session.MarkSaved(sourcePath);
+
+        session.CurrentFilePath.Should().Be(sourcePath);
+        session.CurrentFileAccessIdentity.Should().NotBeNull();
+        session.CurrentFileAccessIdentity!.LocalPath.Should().Be(sourcePath);
+        session.CurrentFileAccessIdentity.BookmarkKind.Should().Be("macos-security-scoped-bookmark");
+        session.CurrentFileAccessIdentity.BookmarkPayload.Should().Be("same-path-token");
     }
 
     [Fact]

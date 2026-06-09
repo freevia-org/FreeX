@@ -18,6 +18,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorkbookThemePackage(saved);
+        AssertReloadedWorkbookTheme(
+            saved,
+            "FreeX Schema Theme",
+            "FreeX Major",
+            "FreeX Minor",
+            "FreeX Effects",
+            new CellColor(12, 34, 56),
+            new CellColor(5, 99, 193));
     }
 
     [Fact]
@@ -57,6 +65,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Value
             .Should()
             .BeEmpty();
+        AssertReloadedWorkbookTheme(
+            saved,
+            "FreeX Typeface Sanitize",
+            "Google Sans",
+            "Aptos Display",
+            WorkbookTheme.Office.EffectsName,
+            WorkbookTheme.Office.GetColor(WorkbookThemeColorSlot.Accent1),
+            WorkbookTheme.Office.GetColor(WorkbookThemeColorSlot.Hyperlink));
     }
 
     [Fact]
@@ -101,6 +117,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceContentTypes.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedTheme = adapter.Load(saved).Theme;
+        reloadedTheme.Name.Should().Be("FreeX Schema Theme");
+        reloadedTheme.MajorFontName.Should().Be("FreeX Major");
+        reloadedTheme.MinorFontName.Should().Be("FreeX Minor");
+        reloadedTheme.EffectsName.Should().Be("FreeX Effects");
+        reloadedTheme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
     }
 
     [Fact]
@@ -125,6 +149,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         ReadThemeMajorLatinTypeface(saved).Should().Be("Google Sans");
+
+        saved.Position = 0;
+        var reloadedTheme = adapter.Load(saved).Theme;
+        reloadedTheme.MajorFontName.Should().Be("Google Sans");
+        reloadedTheme.MinorFontName.Should().Be("FreeX Minor");
+        reloadedTheme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
     }
 
     [Fact]
@@ -146,6 +176,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         ReadThemeMajorLatinTypeface(saved).Should().Be("Google Sans");
+
+        saved.Position = 0;
+        var reloadedTheme = adapter.Load(saved).Theme;
+        reloadedTheme.MajorFontName.Should().Be("Google Sans");
+        reloadedTheme.MinorFontName.Should().Be("FreeX Minor");
+        reloadedTheme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
     }
 
     private static Workbook CreateWorkbookThemeSourceWorkbook()
@@ -199,6 +235,26 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Value
             .Should()
             .Be("FreeX Effects");
+    }
+
+    private static void AssertReloadedWorkbookTheme(
+        Stream stream,
+        string expectedName,
+        string expectedMajorFont,
+        string expectedMinorFont,
+        string expectedEffects,
+        CellColor expectedAccent1,
+        CellColor expectedHyperlink)
+    {
+        stream.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(stream);
+
+        reloaded.Theme.Name.Should().Be(expectedName);
+        reloaded.Theme.MajorFontName.Should().Be(expectedMajorFont);
+        reloaded.Theme.MinorFontName.Should().Be(expectedMinorFont);
+        reloaded.Theme.EffectsName.Should().Be(expectedEffects);
+        reloaded.Theme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(expectedAccent1);
+        reloaded.Theme.GetColor(WorkbookThemeColorSlot.Hyperlink).Should().Be(expectedHyperlink);
     }
 
     private static void SetThemeMajorLatinTypeface(MemoryStream stream, string typeface)

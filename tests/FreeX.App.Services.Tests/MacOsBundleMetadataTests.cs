@@ -8,6 +8,9 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class MacOsBundleMetadataTests
 {
+    private const string NativeWorkbookContentType = "io.github.tony-xmelon.freex.workbook";
+    private const string NativeWorkbookMimeType = "application/vnd.freex.workbook+json";
+
     [Fact]
     public void InfoPlist_DefinesPreviewBundleIdentityAndDocumentRegistration()
     {
@@ -39,11 +42,31 @@ public sealed class MacOsBundleMetadataTests
         PlistString(nativeWorkbook, "CFBundleTypeRole").Should().Be("Editor");
         PlistString(nativeWorkbook, "LSHandlerRank").Should().Be("Owner");
         PlistStringArray(nativeWorkbook, "CFBundleTypeExtensions").Should().Equal("fxl");
+        PlistStringArray(nativeWorkbook, "LSItemContentTypes").Should().Equal(NativeWorkbookContentType);
+
+        var exportedTypesElement = PlistArray(plist, "UTExportedTypeDeclarations");
+        exportedTypesElement.Should().NotBeNull("the native .fxl workbook should advertise a stable UTI");
+        var exportedTypes = exportedTypesElement!
+            .Elements("dict")
+            .ToList();
+        exportedTypes.Should().HaveCount(1);
+
+        var nativeWorkbookType = exportedTypes[0];
+        PlistString(nativeWorkbookType, "UTTypeIdentifier").Should().Be(NativeWorkbookContentType);
+        PlistString(nativeWorkbookType, "UTTypeDescription").Should().Be("FreeX Workbook");
+        PlistStringArray(nativeWorkbookType, "UTTypeConformsTo").Should().Equal("public.json");
+
+        var tagSpecification = PlistValue(nativeWorkbookType, "UTTypeTagSpecification");
+        tagSpecification.Should().NotBeNull();
+        tagSpecification!.Name.LocalName.Should().Be("dict");
+        PlistStringArray(tagSpecification, "public.filename-extension").Should().Equal("fxl");
+        PlistString(tagSpecification, "public.mime-type").Should().Be(NativeWorkbookMimeType);
 
         var importedWorkbooks = documentTypes[1];
         PlistString(importedWorkbooks, "CFBundleTypeName").Should().Be("Spreadsheet Workbooks");
         PlistString(importedWorkbooks, "CFBundleTypeRole").Should().Be("Viewer");
         PlistString(importedWorkbooks, "LSHandlerRank").Should().Be("Alternate");
+        PlistStringArray(importedWorkbooks, "LSItemContentTypes").Should().BeEmpty();
         PlistStringArray(importedWorkbooks, "CFBundleTypeExtensions")
             .Should()
             .Equal("xlsx", "xlsm", "xltx", "xltm", "xls", "xlsb", "xlt", "csv", "tsv", "tab");
@@ -150,7 +173,15 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("notarization_status=\"skipped_missing_credentials\"");
         workflow.Should().Contain("echo \"[bundle]\"");
         workflow.Should().Contain("echo \"binary_archs=$binary_archs\"");
-        workflow.Should().Contain("echo \"bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' \"$app/Contents/Info.plist\")\"");
+        workflow.Should().Contain("app_info_plist=\"$unzip_root/FreeX.app/Contents/Info.plist\"");
+        workflow.Should().Contain("echo \"artifact_bundle_metadata_subject=unzipped_app_bundle\"");
+        workflow.Should().Contain("echo \"bundle_executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' \"$app_info_plist\")\"");
+        workflow.Should().Contain("echo \"bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' \"$app_info_plist\")\"");
+        workflow.Should().Contain("echo \"bundle_identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \"$app_info_plist\")\"");
+        workflow.Should().Contain("echo \"bundle_package_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' \"$app_info_plist\")\"");
+        workflow.Should().Contain("echo \"bundle_minimum_system_version=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' \"$app_info_plist\")\"");
+        workflow.Should().Contain("echo \"bundle_high_resolution_capable=$(/usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' \"$app_info_plist\")\"");
+        workflow.Should().Contain("echo \"artifact_document_extensions_subject=unzipped_app_bundle\"");
         workflow.Should().Contain("echo \"codesign_verified=true\"");
         workflow.Should().Contain("echo \"codesign_mode=$signing_mode\"");
         workflow.Should().Contain("echo \"notarization_status=$notarization_status\"");
@@ -161,7 +192,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("echo \"smoke_status=skipped_host_arch_mismatch\" >> \"$evidence_path\"");
         workflow.Should().Contain("codesign --verify --deep --strict");
         workflow.Should().Contain("host_arch=\"$(uname -m)\"");
-        workflow.Should().Contain("unzip -q");
+        workflow.Should().Contain("ditto -x -k \"$zip_path\" \"$unzip_root\"");
         workflow.Should().Contain("test -x \"$unzip_root/FreeX.app/Contents/MacOS/FreeX\"");
         workflow.Should().Contain("(cd \"$artifact_root\" && shasum -a 256 \"$zip_name\" > \"$zip_name.sha256\")");
         workflow.Should().Contain("(cd \"$artifact_root\" && shasum -a 256 -c \"$zip_name.sha256\")");
@@ -170,6 +201,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("This artifact is a preview build for macOS port validation. It is not a public release channel.");
         workflow.Should().Contain("Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs.");
         workflow.Should().Contain("Unzip the GitHub Actions artifact wrapper first; these files are inside it.");
+        workflow.Should().Contain("ditto -x -k $zip_name .");
         workflow.Should().Contain("Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.");
         workflow.Should().Contain("codesign --verify --deep --strict \"$unzip_root/FreeX.app\"");
         workflow.Should().Contain("\"$unzip_root/FreeX.app/Contents/MacOS/FreeX\" --packaging-smoke | tee \"$smoke_log\"");
@@ -185,37 +217,30 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("echo \"format_cells_style_roundtrip=true\"");
         workflow.Should().Contain("echo \"format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count\"");
         workflow.Should().Contain("lsregister -f \"$unzip_root/FreeX.app\"");
-        workflow.Should().Contain("launch_clipboard_image=\"$RUNNER_TEMP/freex-$runtime-clipboard.png\"");
-        workflow.Should().Contain("base64 -D > \"$launch_clipboard_image\"");
-        workflow.Should().Contain("/usr/bin/swift - \"$launch_clipboard_image\"");
-        workflow.Should().Contain("NSPasteboard.general");
-        workflow.Should().Contain("pasteboard.clearContents()");
-        workflow.Should().Contain("pasteboard.writeObjects([image])");
         workflow.Should().Contain("open -W -n -b io.github.tony-xmelon.freex \"$launch_smoke_file\" --args --macos-launch-smoke \"$launch_smoke_report\"");
-        workflow.Should().Contain("--macos-launch-smoke-verify-image-clipboard");
-        workflow.Should().Contain("--macos-launch-smoke-verify-live-command-keys");
-        workflow.Should().Contain("live_command_key_ready=false");
-        workflow.Should().Contain("live_command_key_smoke_ready=true");
-        workflow.Should().Contain("tell application \"System Events\"");
-        workflow.Should().Contain("keystroke \"a\" using {command down}");
-        workflow.Should().Contain("keystroke \"b\" using {command down}");
-        workflow.Should().Contain("keystroke \"i\" using {command down}");
-        workflow.Should().Contain("keystroke \"u\" using {command down}");
-        workflow.Should().Contain("live_command_key_system_events_result=blocked_or_failed");
+        workflow.Should().Contain("--macos-launch-smoke-diagnostics-dir \"$app_diagnostics_dir\"");
+        workflow.Should().Contain("grep -q \"app_diagnostics_directory_configured=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("app_diagnostics_events_path=\"$app_diagnostics_dir/events.jsonl\"");
+        workflow.Should().Contain("grep -q '\"eventName\":\"app_start\"' \"$app_diagnostics_events_path\"");
+        workflow.Should().Contain("grep -q '\"eventName\":\"app_ready\"' \"$app_diagnostics_events_path\"");
+        workflow.Should().Contain("grep -q '\"eventName\":\"macos_launch_smoke\"' \"$app_diagnostics_events_path\"");
+        workflow.Should().NotContain("--macos-launch-smoke-verify-image-clipboard");
+        workflow.Should().NotContain("--macos-launch-smoke-verify-live-command-keys");
+        workflow.Should().NotContain("<<'APPLESCRIPT'");
         workflow.Should().Contain("macos_launch_smoke=missing_report");
         workflow.Should().Contain("grep -q \"macos_launch_smoke=passed\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"window_shown=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"opened_source_path=.*freex-$runtime-launch.csv\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"external_image_clipboard_paste_required=true\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"live_command_key_smoke_required=true\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"live_command_key_smoke=passed\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"live_cmd_select_all_state_changed=true\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"live_cmd_bold_state_changed=true\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"live_cmd_italic_state_changed=true\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"live_cmd_underline_state_changed=true\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"external_image_clipboard_paste=true\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"external_image_clipboard_picture_count=[1-9]\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("grep -q \"external_image_clipboard_picture_png_bytes=[1-9]\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"external_image_clipboard_paste_required=false\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"live_command_key_smoke_required=false\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"live_command_key_smoke=not_required\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"macos_accessibility_smoke=passed\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_formula_box_name=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_formula_box_help=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_status_text_name=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_status_text_value=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_cell_address_name=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_selection_stats_name=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"new_sheet_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"toolbar_format_painter_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"toolbar_fill_cells_button=true\" \"$launch_smoke_report\"");
@@ -247,6 +272,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_save_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_save_as_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_export_pdf_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_share_workbook_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_workbook_statistics_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_close_workbook_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_data_menu=true\" \"$launch_smoke_report\"");
@@ -401,6 +427,7 @@ public sealed class MacOsBundleMetadataTests
         appArtifactUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md");
         appArtifactUpload.Should().NotContain("portable-pdf-exporter-tests.trx");
         appArtifactUpload.Should().NotContain("export-path-tests.trx");
+        appArtifactUpload.Should().NotContain("macos-app-diagnostics");
         appArtifactUpload.Should().Contain("if-no-files-found: error");
 
         var diagnosticsUpload = ExtractWorkflowStepBlock(workflow, "Upload app diagnostics");
@@ -408,7 +435,24 @@ public sealed class MacOsBundleMetadataTests
         diagnosticsUpload.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics");
         diagnosticsUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx");
         diagnosticsUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx");
+        diagnosticsUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app-diagnostics/**");
         diagnosticsUpload.Should().Contain("if-no-files-found: warn");
+    }
+
+    [Fact]
+    public void MacOsWorkflow_DistributionCandidatePublicationWaitsForAggregateReadiness()
+    {
+        var workflow = File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml"));
+        var aggregateJob = ExtractWorkflowJobBlock(workflow, "macos-preview-readiness");
+        var releaseJob = ExtractWorkflowJobBlock(workflow, "publish-distribution-candidate");
+
+        releaseJob.Should().Contain("needs: [macos-app, macos-preview-readiness]");
+        releaseJob.Should().Contain("if: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}");
+        releaseJob.Should().Contain("- name: Download macOS app artifacts");
+        releaseJob.Should().Contain("pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-macos-app");
+        workflow.IndexOf(aggregateJob, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(workflow.IndexOf(releaseJob, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -517,6 +561,19 @@ public sealed class MacOsBundleMetadataTests
             next = workflow.Length;
 
         return workflow[start..next];
+    }
+
+    private static string ExtractWorkflowJobBlock(string workflow, string jobName)
+    {
+        var marker = $"  {jobName}:";
+        var start = workflow.IndexOf(marker, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, $"workflow should contain the {jobName} job");
+        var nextMatch = Regex.Match(workflow[(start + marker.Length)..], @"(?m)^  [A-Za-z0-9_-]+:\s*$");
+        var end = nextMatch.Success
+            ? start + marker.Length + nextMatch.Index
+            : workflow.Length;
+
+        return workflow[start..end];
     }
 
     private static IReadOnlyList<string> WorkflowRuntimeRunnerPairs(string workflow) =>

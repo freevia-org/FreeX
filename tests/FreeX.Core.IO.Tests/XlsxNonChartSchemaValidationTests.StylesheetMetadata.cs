@@ -21,6 +21,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var stylesXml = ReadPackageRootElement(saved, "xl/styles.xml");
         AssertStylesheetTableStyleMetadata(stylesXml, "FreeXAuthoredTableStyle", "FreeXAuthoredPivotStyle");
         AssertStylesheetChildOrder(stylesXml);
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        reloaded.StructuredTableStyles.Should().ContainSingle(style =>
+            style.Name == "FreeXAuthoredTableStyle" &&
+            style.AppliesToTables &&
+            !style.AppliesToPivotTables &&
+            style.Elements.Count == 2);
+        reloaded.PivotTableStyles.Should().ContainSingle(style =>
+            style.Name == "FreeXAuthoredPivotStyle" &&
+            style.AppliesToPivotTables &&
+            !style.AppliesToTables &&
+            style.Elements.Count == 2);
     }
 
     [Fact]
@@ -64,6 +77,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceTableStyles.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        reloaded.StructuredTableStyles.Should().ContainSingle(style =>
+            style.Name == "ExcelNativeStructuredStyle" &&
+            style.AppliesToTables &&
+            !style.AppliesToPivotTables &&
+            style.Elements.Count == 2);
+        reloaded.PivotTableStyles.Should().ContainSingle(style =>
+            style.Name == "ExcelNativePivotStyle" &&
+            style.AppliesToPivotTables &&
+            !style.AppliesToTables &&
+            style.Elements.Count == 1);
     }
 
     [Fact]
@@ -90,6 +116,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var savedStylesXml = ReadPackageRootElement(saved, "xl/styles.xml");
         AssertStylesheetTableStyleMetadata(savedStylesXml, "ExcelNativeStructuredStyle", "ExcelNativePivotStyle");
         AssertStylesheetTableStylesSanitized(savedStylesXml);
+
+        saved.Position = 0;
+        AssertReloadedStylesheetMetadataModel(adapter.Load(saved));
     }
 
     [Fact]
@@ -116,6 +145,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var savedStylesXml = ReadPackageRootElement(saved, "xl/styles.xml");
         AssertStylesheetDifferentialStylesSanitized(savedStylesXml);
         AssertStylesheetTableStyleMetadata(savedStylesXml, "ExcelNativeStructuredStyle", "ExcelNativePivotStyle");
+
+        saved.Position = 0;
+        AssertReloadedStylesheetMetadataModel(adapter.Load(saved));
     }
 
     [Fact]
@@ -152,6 +184,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         extension.Attribute("customStylesheetExtFlag").Should().BeNull();
         extension.ToString(SaveOptions.DisableFormatting).Should().Contain("FreeXStylesheetExtension");
         AssertStylesheetChildOrder(savedStylesXml);
+
+        saved.Position = 0;
+        AssertReloadedStylesheetMetadataModel(adapter.Load(saved));
     }
 
     private static Workbook CreateAuthoredStylesheetMetadataWorkbook()
@@ -414,6 +449,27 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Value
             .Should()
             .Be("1");
+    }
+
+    private static void AssertReloadedStylesheetMetadataModel(Workbook reloaded)
+    {
+        reloaded.StructuredTableStyles.Should().ContainSingle(style =>
+            style.Name == "ExcelNativeStructuredStyle" &&
+            style.AppliesToTables &&
+            !style.AppliesToPivotTables &&
+            style.Elements.Count == 2);
+        reloaded.PivotTableStyles.Should().ContainSingle(style =>
+            style.Name == "ExcelNativePivotStyle" &&
+            style.AppliesToPivotTables &&
+            !style.AppliesToTables &&
+            style.Elements.Count == 1);
+
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetValue(5, 2).Should().Be(new NumberValue(42));
+        reloadedSheet.StructuredTables.Should().ContainSingle(table =>
+            table.Name == "SalesTable" &&
+            table.StyleName == "ExcelNativeStructuredStyle");
+        reloadedSheet.ConditionalFormats.Should().HaveCount(2);
     }
 
     private static void AssertStylesheetTableStylesSanitized(XElement stylesRoot)

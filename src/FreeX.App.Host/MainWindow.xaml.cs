@@ -270,6 +270,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.SelectionMoveRequested += OnSelectionMoveRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
         SheetGrid.HeaderContextMenuRequested += OnGridHeaderContextMenuRequested;
+        SheetGrid.AutoFilterDropdownRequested += OnAutoFilterDropdownRequested;
         SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested;
         SheetGrid.WaterfallChartPointContextMenuRequested += OnWaterfallChartPointContextMenuRequested;
         SheetGrid.PageMarginsChanged += OnPageMarginsChanged;
@@ -358,6 +359,11 @@ public partial class MainWindow : Window, IWorkbookWindow
         if (!ReferenceEquals(MaxRestoreBtn.Content, MaxRestoreIcon))
             MaxRestoreBtn.Content = MaxRestoreIcon;
         System.Windows.Automation.AutomationProperties.SetName(
+            MaxRestoreBtn,
+            UiText.Get(isMaximized
+                ? "MainWindow_AutomationName_RestoreDown"
+                : "MainWindow_AutomationName_Maximize"));
+        System.Windows.Automation.AutomationProperties.SetHelpText(
             MaxRestoreBtn,
             UiText.Get(isMaximized
                 ? "MainWindow_AutomationName_RestoreDown"

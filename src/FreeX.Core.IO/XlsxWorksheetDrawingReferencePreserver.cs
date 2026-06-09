@@ -230,8 +230,16 @@ internal static class XlsxWorksheetDrawingReferencePreserver
                 .Elements(context.PackageRelNs + "Relationship")
                 .Where(IsDrawingRelationship)
                 .ToList();
-            var activeDrawingRelationship = drawingRelationships.FirstOrDefault(relationship =>
-                string.Equals(relationship.Attribute("Id")?.Value, activeDrawingRelId, StringComparison.Ordinal));
+            XElement? activeDrawingRelationship = null;
+            foreach (var relationship in drawingRelationships)
+            {
+                if (string.Equals(relationship.Attribute("Id")?.Value, activeDrawingRelId, StringComparison.Ordinal))
+                {
+                    activeDrawingRelationship = relationship;
+                    break;
+                }
+            }
+
             if (activeDrawingRelationship is null)
                 continue;
 

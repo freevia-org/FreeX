@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -38,6 +39,13 @@ public sealed partial class AutoFilterDialog
 
     private void AutoFilterDialog_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (_useModelessFlyoutCommit && e.Key == Key.Escape)
+        {
+            Close();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key != Key.F || Keyboard.Modifiers != ModifierKeys.None)
             return;
 
@@ -56,9 +64,21 @@ public sealed partial class AutoFilterDialog
 
     private bool TryOpenVisibleFilterFamilySubmenu()
     {
-        var filterButton = new[] { _textFiltersButton, _numberFiltersButton, _dateFiltersButton }
-            .FirstOrDefault(button => button.Visibility == Visibility.Visible);
+        var filterButton = FindFirstVisibleFilterFamilyButton();
         return filterButton is not null && TryOpenFilterFamilySubmenu(filterButton);
+    }
+
+    private Button? FindFirstVisibleFilterFamilyButton()
+    {
+        if (_textFiltersButton.Visibility == Visibility.Visible)
+            return _textFiltersButton;
+
+        if (_numberFiltersButton.Visibility == Visibility.Visible)
+            return _numberFiltersButton;
+
+        return _dateFiltersButton.Visibility == Visibility.Visible
+            ? _dateFiltersButton
+            : null;
     }
 
     private bool TryOpenFilterFamilySubmenu(Button filterButton)
@@ -67,7 +87,7 @@ public sealed partial class AutoFilterDialog
         {
             submenu.PlacementTarget = filterButton;
             submenu.IsOpen = true;
-            var firstItem = submenu.Items.OfType<MenuItem>().FirstOrDefault();
+            var firstItem = FindFirstSubmenuItem(submenu);
             if (firstItem is not null)
             {
                 firstItem.Focus();
@@ -82,6 +102,17 @@ public sealed partial class AutoFilterDialog
         ShowCustomFilterPanel();
         UpdateCriteriaTextFromTypedControls();
         return true;
+    }
+
+    private static MenuItem? FindFirstSubmenuItem(ContextMenu submenu)
+    {
+        foreach (var item in submenu.Items)
+        {
+            if (item is MenuItem menuItem)
+                return menuItem;
+        }
+
+        return null;
     }
 
     private void ShowFilterFamilyButton(AutoFilterMenuFilterKind filterKind)
@@ -102,16 +133,11 @@ public sealed partial class AutoFilterDialog
 
     private void ConfigureFilterFamilySubmenu(AutoFilterMenuPlan menuPlan)
     {
-        var family = menuPlan.Entries.FirstOrDefault(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily);
+        var family = FindFilterFamilyEntry(menuPlan);
         if (family is null || family.Children.Count == 0)
             return;
 
-        var parentButton = menuPlan.FilterKind switch
-        {
-            AutoFilterMenuFilterKind.Number => _numberFiltersButton,
-            AutoFilterMenuFilterKind.Date => _dateFiltersButton,
-            _ => _textFiltersButton
-        };
+        var parentButton = GetFilterFamilyButton(menuPlan.FilterKind);
         var submenu = new ContextMenu();
         var usedAccessKeys = new HashSet<char>();
         foreach (var child in family.Children)
@@ -127,6 +153,27 @@ public sealed partial class AutoFilterDialog
 
         parentButton.ContextMenu = submenu;
     }
+
+    private static AutoFilterMenuEntry? FindFilterFamilyEntry(AutoFilterMenuPlan menuPlan)
+    {
+        var entries = menuPlan.Entries;
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            if (entry.Kind == AutoFilterMenuEntryKind.FilterFamily)
+                return entry;
+        }
+
+        return null;
+    }
+
+    private Button GetFilterFamilyButton(AutoFilterMenuFilterKind filterKind) =>
+        filterKind switch
+        {
+            AutoFilterMenuFilterKind.Number => _numberFiltersButton,
+            AutoFilterMenuFilterKind.Date => _dateFiltersButton,
+            _ => _textFiltersButton
+        };
 
     private static string AddUniqueAccessKey(string header, HashSet<char> usedAccessKeys)
     {
@@ -151,9 +198,7 @@ public sealed partial class AutoFilterDialog
             return;
 
         ShowCustomFilterPanel();
-        var option = _criteriaOperatorBox.Items
-            .OfType<AutoFilterCriteriaOption>()
-            .FirstOrDefault(item => string.Equals(item.CriteriaPrefix, child.Value, StringComparison.Ordinal));
+        var option = FindCriteriaOptionByPrefix(child.Value);
         if (option is not null)
             _criteriaOperatorBox.SelectedItem = option;
 
@@ -165,6 +210,21 @@ public sealed partial class AutoFilterDialog
             _criteriaValueBox.Focus();
     }
 
+    private AutoFilterCriteriaOption? FindCriteriaOptionByPrefix(string criteriaPrefix)
+    {
+        var items = _criteriaOperatorBox.Items;
+        for (var i = 0; i < items.Count; i++)
+        {
+            if (items[i] is AutoFilterCriteriaOption option && HasCriteriaPrefix(option, criteriaPrefix))
+                return option;
+        }
+
+        return null;
+    }
+
+    private static bool HasCriteriaPrefix(AutoFilterCriteriaOption option, string criteriaPrefix) =>
+        string.Equals(option.CriteriaPrefix, criteriaPrefix, StringComparison.Ordinal);
+
     private void ShowCustomFilterPanel()
     {
         _customFilterGroup.Visibility = Visibility.Visible;
@@ -173,14 +233,13 @@ public sealed partial class AutoFilterDialog
 
     private void ApplySortCommand(AutoFilterSortDirection direction)
     {
-        Result = BuildResult(
+        CommitResult(BuildResult(
             direction,
             _allItems,
             string.Empty,
             string.Empty,
             null,
-            addCurrentSelectionToFilter: false);
-        DialogResult = true;
+            addCurrentSelectionToFilter: false));
     }
 
     public static (string Ascending, string Descending) GetSortLabels(AutoFilterMenuFilterKind filterKind) =>
@@ -370,14 +429,26 @@ public sealed partial class AutoFilterDialog
     private void ApplyColorChoice(AutoFilterColorFilter colorFilter)
     {
         _selectedColorFilter = colorFilter;
-        Result = BuildResult(
+        CommitResult(BuildResult(
             AutoFilterSortDirection.None,
             _allItems,
             _searchBox.Text,
             _criteriaBox.Text,
             colorFilter,
-            _addCurrentSelectionToFilterBox.IsChecked == true);
-        DialogResult = true;
+            _addCurrentSelectionToFilterBox.IsChecked == true));
+    }
+
+    private void ApplySearchTextChange()
+    {
+        ReplaceItems(FilterItems(_allItems, _searchBox.Text));
+
+        var hasSearchText = !string.IsNullOrWhiteSpace(_searchBox.Text);
+        _addCurrentSelectionToFilterBox.Visibility = hasSearchText
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        _addCurrentSelectionToFilterBox.IsEnabled = hasSearchText && _items.Count > 0;
+        if (!hasSearchText)
+            _addCurrentSelectionToFilterBox.IsChecked = false;
     }
 
     private void SetSelectionForVisibleItems(bool isSelected)
@@ -393,6 +464,12 @@ public sealed partial class AutoFilterDialog
         _updatingSelectAllBox = true;
         try
         {
+            var hasItems = _items.Count > 0;
+            _selectAllBox.IsEnabled = hasItems;
+            _checklistBox.IsEnabled = hasItems;
+            _addCurrentSelectionToFilterBox.IsEnabled =
+                _addCurrentSelectionToFilterBox.Visibility == Visibility.Visible && hasItems;
+
             if (_items.Count == 0)
             {
                 _selectAllBox.IsChecked = false;

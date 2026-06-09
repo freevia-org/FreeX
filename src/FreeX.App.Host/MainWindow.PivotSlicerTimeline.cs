@@ -20,7 +20,8 @@ public partial class MainWindow
             .Select(slicer => new SlicerPaneItem(
                 slicer.Name,
                 slicer.SourceFieldName ?? slicer.CacheName,
-                BuildSlicerTiles(slicer)))
+                BuildSlicerTiles(slicer),
+                SlicerTimelinePlanner.HasActiveSlicerFilter(slicer)))
             .ToList();
         var timelines = _workbook.Timelines
             .Where(timeline => !string.IsNullOrWhiteSpace(timeline.Name))
@@ -53,8 +54,16 @@ public partial class MainWindow
 
         foreach (var sheet in _workbook.Sheets)
         {
-            var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-                string.Equals(pivot.Name, slicer.SourcePivotTableName, StringComparison.OrdinalIgnoreCase));
+            PivotTableModel? pivotTable = null;
+            foreach (var pivot in sheet.PivotTables)
+            {
+                if (!string.Equals(pivot.Name, slicer.SourcePivotTableName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                pivotTable = pivot;
+                break;
+            }
+
             if (pivotTable is null)
                 continue;
 
@@ -77,8 +86,16 @@ public partial class MainWindow
         if (sender is not Button { DataContext: SlicerTileItem tile })
             return;
 
-        var slicer = _workbook.Slicers.FirstOrDefault(item =>
-            string.Equals(item.Name, tile.SlicerName, StringComparison.OrdinalIgnoreCase));
+        SlicerModel? slicer = null;
+        foreach (var item in _workbook.Slicers)
+        {
+            if (!string.Equals(item.Name, tile.SlicerName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            slicer = item;
+            break;
+        }
+
         if (slicer is null)
             return;
 

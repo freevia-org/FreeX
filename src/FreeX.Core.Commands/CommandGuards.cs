@@ -58,13 +58,27 @@ internal static class CommandGuards
         string pivotTableName,
         [NotNullWhen(true)] out PivotTableModel? pivotTable)
     {
-        pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
-        return pivotTable is not null;
+        foreach (var candidate in sheet.PivotTables)
+        {
+            if (string.Equals(candidate.Name, pivotTableName, StringComparison.OrdinalIgnoreCase))
+            {
+                pivotTable = candidate;
+                return true;
+            }
+        }
+
+        pivotTable = null;
+        return false;
     }
 
-    public static PivotCacheModel? FindPivotCache(Workbook workbook, PivotTableModel pivotTable) =>
-        workbook.PivotCaches.FirstOrDefault(cache => cache.CacheId == pivotTable.CacheId);
+    public static PivotCacheModel? FindPivotCache(Workbook workbook, PivotTableModel pivotTable)
+    {
+        foreach (var cache in workbook.PivotCaches)
+            if (cache.CacheId == pivotTable.CacheId)
+                return cache;
+
+        return null;
+    }
 
     public static CommandOutcome RejectPivotTableNameRequired() =>
         new(false, PivotTableNameRequiredMessage);
@@ -101,14 +115,32 @@ internal static class CommandGuards
         int tableId,
         [NotNullWhen(true)] out StructuredTableModel? table)
     {
-        table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == tableId);
-        return table is not null;
+        foreach (var candidate in sheet.StructuredTables)
+        {
+            if (candidate.Id == tableId)
+            {
+                table = candidate;
+                return true;
+            }
+        }
+
+        table = null;
+        return false;
     }
 
     public static bool TryFindStructuredTableIndex(Sheet sheet, int tableId, out int tableIndex)
     {
-        tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == tableId);
-        return tableIndex >= 0;
+        for (var i = 0; i < sheet.StructuredTables.Count; i++)
+        {
+            if (sheet.StructuredTables[i].Id == tableId)
+            {
+                tableIndex = i;
+                return true;
+            }
+        }
+
+        tableIndex = -1;
+        return false;
     }
 
     public static CommandOutcome RejectStructuredTableHasNoColumns() =>

@@ -2,7 +2,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-internal sealed record AllowEditRangeButtonState(bool CanDeleteSelectedRange, bool CanClearRanges);
+internal sealed record AllowEditRangeButtonState(bool CanModifySelectedRange, bool CanDeleteSelectedRange, bool CanUsePermissions);
 
 internal static class AllowEditRangeDialogPlanner
 {
@@ -11,6 +11,9 @@ internal static class AllowEditRangeDialogPlanner
 
     public static AllowEditRangeDialogResult CreateAddResult(GridRange range) =>
         new(AllowEditRangeDialogAction.Add, range);
+
+    public static AllowEditRangeDialogResult CreateModifyResult(GridRange originalRange, GridRange updatedRange) =>
+        new(AllowEditRangeDialogAction.Modify, updatedRange, originalRange);
 
     public static AllowEditRangeDialogResult CreateRemoveResult(GridRange range) =>
         new(AllowEditRangeDialogAction.Remove, range);
@@ -25,7 +28,8 @@ internal static class AllowEditRangeDialogPlanner
     {
         var hasRanges = rangeCount > 0;
         return new AllowEditRangeButtonState(
+            CanModifySelectedRange: hasRanges && hasSelectedRange,
             CanDeleteSelectedRange: hasRanges && hasSelectedRange,
-            CanClearRanges: hasRanges);
+            CanUsePermissions: false);
     }
 }

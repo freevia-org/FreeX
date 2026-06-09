@@ -139,12 +139,72 @@ function Get-ProjectProperty {
 
     foreach ($group in @($Project.Project.PropertyGroup)) {
         $value = $group.$Name
-        if (-not [string]::IsNullOrWhiteSpace($value)) {
-            return [string]$value
+        if ($null -eq $value) {
+            continue
+        }
+
+        if ($value -is [System.Xml.XmlElement]) {
+            $text = [string]$value.InnerText
+        } else {
+            $text = [string]$value
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($text)) {
+            return $text
         }
     }
 
     return $null
+}
+
+function Get-ProjectPropertyNodes {
+    param(
+        [Parameter(Mandatory = $true)][xml]$Project,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $nodes = @()
+    foreach ($group in @($Project.Project.PropertyGroup)) {
+        foreach ($child in @($group.ChildNodes)) {
+            if ($child.NodeType -eq [System.Xml.XmlNodeType]::Element -and $child.LocalName -eq $Name) {
+                $nodes += $child
+            }
+        }
+    }
+
+    return $nodes
+}
+
+function Get-ProjectItemNodes {
+    param(
+        [Parameter(Mandatory = $true)][xml]$Project,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $nodes = @()
+    foreach ($group in @($Project.Project.ItemGroup)) {
+        foreach ($child in @($group.ChildNodes)) {
+            if ($child.NodeType -eq [System.Xml.XmlNodeType]::Element -and $child.LocalName -eq $Name) {
+                $nodes += $child
+            }
+        }
+    }
+
+    return $nodes
+}
+
+function Get-ProjectNodeCondition {
+    param([Parameter(Mandatory = $true)]$Node)
+
+    if ($Node.HasAttribute("Condition")) {
+        return [string]$Node.GetAttribute("Condition")
+    }
+
+    if ($Node.ParentNode -and $Node.ParentNode.HasAttribute("Condition")) {
+        return [string]$Node.ParentNode.GetAttribute("Condition")
+    }
+
+    return ""
 }
 
 function Get-ProjectItems {
@@ -241,6 +301,13 @@ function Test-IsIgnoredSourcePath {
         $segments -contains ".claude"
 }
 
+function Test-IsMacOsConditionalSourcePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $relative = Get-RepoRelativePath $Path
+    return $relative.StartsWith("src/FreeX.App.Avalonia/MacOs/", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Test-MacOsIcon {
     param([Parameter(Mandatory = $true)][string]$IconFilePath)
 
@@ -280,9 +347,30 @@ function Test-AvaloniaProject {
 
     [xml]$project = Get-Content -LiteralPath $ProjectPath -Raw
 
-    $targetFramework = Get-ProjectProperty -Project $project -Name "TargetFramework"
-    Assert-True -Condition ($targetFramework -eq "net10.0") -Message "Avalonia app TargetFramework must be net10.0, but was '$targetFramework'."
-    Assert-True -Condition ($targetFramework.IndexOf("-windows", [System.StringComparison]::OrdinalIgnoreCase) -lt 0) -Message "Avalonia app TargetFramework must not be Windows-specific."
+    $targetFrameworkNodes = @(Get-ProjectPropertyNodes -Project $project -Name "TargetFramework")
+    Assert-True -Condition ($targetFrameworkNodes.Count -gt 0) -Message "Avalonia app TargetFramework must be net10.0."
+
+    $targetFrameworkValues = @($targetFrameworkNodes | ForEach-Object { [string]$_.InnerText } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    Assert-True -Condition ($targetFrameworkValues -contains "net10.0") -Message "Avalonia app TargetFramework must be net10.0, but was '$($targetFrameworkValues -join ';')'."
+    foreach ($targetFrameworkValue in $targetFrameworkValues) {
+        Assert-True -Condition ($targetFrameworkValue.IndexOf("-windows", [System.StringComparison]::OrdinalIgnoreCase) -lt 0) -Message "Avalonia app TargetFramework must not be Windows-specific."
+    }
+
+    $targetFrameworksNodes = @(Get-ProjectPropertyNodes -Project $project -Name "TargetFrameworks")
+    Assert-True -Condition ($targetFrameworksNodes.Count -eq 1) -Message "Avalonia app TargetFrameworks must have a single opt-in macOS TFM property."
+    $macOsTargetFrameworksCondition = Get-ProjectNodeCondition $targetFrameworksNodes[0]
+    Assert-True -Condition ($macOsTargetFrameworksCondition -eq "'`$(EnableMacOsTargetFramework)' == 'true'") -Message "Avalonia app TargetFrameworks must be guarded by EnableMacOsTargetFramework."
+    $macOsTargetFrameworks = @([string]$targetFrameworksNodes[0].InnerText -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    Assert-ExactSet -Actual $macOsTargetFrameworks -Expected @("net10.0", "net10.0-macos") -Label "Avalonia app opt-in TargetFrameworks"
+
+    $defaultFrameworkNodes = @($targetFrameworkNodes | Where-Object { [string]$_.InnerText -eq "net10.0" })
+    Assert-True -Condition ($defaultFrameworkNodes.Count -eq 1) -Message "Avalonia app must keep exactly one default net10.0 TargetFramework."
+    Assert-True -Condition ((Get-ProjectNodeCondition $defaultFrameworkNodes[0]) -eq "'`$(EnableMacOsTargetFramework)' != 'true'") -Message "Avalonia app default TargetFramework must be used when EnableMacOsTargetFramework is not true."
+
+    $supportedOsVersionNodes = @(Get-ProjectPropertyNodes -Project $project -Name "SupportedOSPlatformVersion")
+    Assert-True -Condition ($supportedOsVersionNodes.Count -eq 1) -Message "Avalonia app must declare SupportedOSPlatformVersion for net10.0-macos."
+    Assert-True -Condition ([string]$supportedOsVersionNodes[0].InnerText -eq "12.0") -Message "Avalonia app SupportedOSPlatformVersion must be 12.0."
+    Assert-True -Condition ((Get-ProjectNodeCondition $supportedOsVersionNodes[0]) -eq "'`$(TargetFramework)' == 'net10.0-macos'") -Message "Avalonia app SupportedOSPlatformVersion must be scoped to net10.0-macos."
 
     $outputType = Get-ProjectProperty -Project $project -Name "OutputType"
     Assert-True -Condition ($outputType -eq "Exe") -Message "Avalonia app OutputType must be Exe."
@@ -307,6 +395,14 @@ function Test-AvaloniaProject {
 
     $contentItems = @(Get-ProjectItems -Project $project -Name "Content" | ForEach-Object { [string]$_.Include })
     Assert-True -Condition ($contentItems -contains "Packaging\macos\FreeX.icns") -Message "Avalonia app project must include the macOS app icon as content."
+
+    $macOsSourceRemoves = @(Get-ProjectItemNodes -Project $project -Name "Compile" | Where-Object { $_.GetAttribute("Remove") -eq "MacOs\**\*.cs" })
+    Assert-True -Condition ($macOsSourceRemoves.Count -eq 1) -Message "Avalonia app project must exclude MacOs source from non-macOS target frameworks."
+    Assert-True -Condition ((Get-ProjectNodeCondition $macOsSourceRemoves[0]) -eq "'`$(TargetFramework)' != 'net10.0-macos'") -Message "Avalonia app MacOs source exclusion must apply outside net10.0-macos."
+
+    $macOsDefineConstants = @(Get-ProjectPropertyNodes -Project $project -Name "DefineConstants" | Where-Object { [string]$_.InnerText -match "(^|;)FREEX_MACOS_SHARE_SHEET(;|$)" })
+    Assert-True -Condition ($macOsDefineConstants.Count -eq 1) -Message "Avalonia app project must define FREEX_MACOS_SHARE_SHEET for the native macOS share sheet."
+    Assert-True -Condition ((Get-ProjectNodeCondition $macOsDefineConstants[0]) -eq "'`$(TargetFramework)' == 'net10.0-macos'") -Message "Avalonia app FREEX_MACOS_SHARE_SHEET constant must be scoped to net10.0-macos."
 
     $allowedProjectReferences = @(
         "FreeX.App.Services",
@@ -357,7 +453,7 @@ function Test-InfoPlist {
     $documentTypes = Get-PlistValue -Dict $rootDict -Key "CFBundleDocumentTypes"
     Assert-True -Condition ($null -ne $documentTypes -and $documentTypes.Name -eq "array") -Message "Info.plist must declare CFBundleDocumentTypes."
     $documentTypeDicts = @($documentTypes.ChildNodes | Where-Object { $_.NodeType -eq [System.Xml.XmlNodeType]::Element -and $_.Name -eq "dict" })
-    Assert-True -Condition ($documentTypeDicts.Count -ge 2) -Message "Info.plist must declare native and imported workbook document types."
+    Assert-True -Condition ($documentTypeDicts.Count -eq 2) -Message "Info.plist must declare exactly the native and imported workbook document types."
 
     $nativeWorkbook = $documentTypeDicts[0]
     Assert-True -Condition ((Get-PlistString -Dict $nativeWorkbook -Key "CFBundleTypeName") -eq "FreeX Workbook") -Message "Info.plist native document type name must be FreeX Workbook."
@@ -365,7 +461,7 @@ function Test-InfoPlist {
     Assert-True -Condition ((Get-PlistString -Dict $nativeWorkbook -Key "LSHandlerRank") -eq "Owner") -Message "Info.plist native document handler rank must be Owner."
     $nativeExtensions = Get-PlistValue -Dict $nativeWorkbook -Key "CFBundleTypeExtensions"
     $nativeExtensionValues = @($nativeExtensions.ChildNodes | Where-Object { $_.NodeType -eq [System.Xml.XmlNodeType]::Element -and $_.Name -eq "string" } | ForEach-Object { $_.InnerText })
-    Assert-True -Condition ($nativeExtensionValues -contains "fxl") -Message "Info.plist native document type must include fxl."
+    Assert-ExactSet -Actual $nativeExtensionValues -Expected @("fxl") -Label "Info.plist native document type extensions"
 
     $importedWorkbooks = $documentTypeDicts[1]
     Assert-True -Condition ((Get-PlistString -Dict $importedWorkbooks -Key "CFBundleTypeName") -eq "Spreadsheet Workbooks") -Message "Info.plist imported document type name must be Spreadsheet Workbooks."
@@ -373,9 +469,7 @@ function Test-InfoPlist {
     Assert-True -Condition ((Get-PlistString -Dict $importedWorkbooks -Key "LSHandlerRank") -eq "Alternate") -Message "Info.plist imported document handler rank must be Alternate."
     $importedExtensions = Get-PlistValue -Dict $importedWorkbooks -Key "CFBundleTypeExtensions"
     $importedExtensionValues = @($importedExtensions.ChildNodes | Where-Object { $_.NodeType -eq [System.Xml.XmlNodeType]::Element -and $_.Name -eq "string" } | ForEach-Object { $_.InnerText })
-    foreach ($extension in @("xlsx", "xlsm", "xltx", "xltm", "xls", "xlsb", "xlt", "csv", "tsv", "tab")) {
-        Assert-True -Condition ($importedExtensionValues -contains $extension) -Message "Info.plist imported document type must include $extension."
-    }
+    Assert-ExactSet -Actual $importedExtensionValues -Expected @("xlsx", "xlsm", "xltx", "xltm", "xls", "xlsb", "xlt", "csv", "tsv", "tab") -Label "Info.plist imported document type extensions"
 }
 
 function Test-MacOsWorkflow {
@@ -412,9 +506,18 @@ function Test-MacOsWorkflow {
         "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests",
         "dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj",
@@ -440,15 +543,29 @@ function Test-MacOsWorkflow {
         'test -f "$app/Contents/Resources/FreeX.icns"',
         "PlistBuddy -c 'Print :CFBundleExecutable'",
         "PlistBuddy -c 'Print :CFBundleIconFile'",
+        "PlistBuddy -c 'Print :CFBundleIdentifier'",
+        "PlistBuddy -c 'Print :CFBundlePackageType'",
+        "PlistBuddy -c 'Print :LSMinimumSystemVersion'",
+        "PlistBuddy -c 'Print :NSHighResolutionCapable'",
         "PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0'",
         "PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0'",
         "lipo -archs",
         "codesign --verify --deep --strict",
         "ditto -c -k --sequesterRsrc --keepParent",
+        'ditto -x -k "$zip_path" "$unzip_root"',
         "shasum -a 256",
         'test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"',
         'test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"',
         'tester_instructions_path="$artifact_root/freex-$runtime-macos-tester-instructions.md"',
+        "Require hosted smoke before app artifact upload",
+        'smoke_status=skipped_host_arch_mismatch',
+        'echo "app_artifact_upload_blocked=host_arch_mismatch" >> "$evidence_path"',
+        'rm -f "$zip_path" "$zip_path.sha256"',
+        'Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.',
+        'grep -q "^smoke_status=passed$" "$evidence_path"',
+        'grep -q "^macos_launch_smoke=passed$" "$launch_smoke_report"',
+        'grep -q "^macos_launch_smoke=passed$" "$open_with_report"',
+        'grep -q "^macos_launch_smoke=passed$" "$default_open_report"',
         "actions/upload-artifact@v7",
         "if-no-files-found: error",
         "Upload app diagnostics",
@@ -457,7 +574,7 @@ function Test-MacOsWorkflow {
         "if-no-files-found: warn",
         "publish-distribution-candidate:",
         "Publish macOS distribution candidate",
-        "needs: macos-app",
+        "needs: [macos-app, macos-preview-readiness]",
         "if: `${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}",
         "permissions:",
         "actions: read",
@@ -474,6 +591,8 @@ function Test-MacOsWorkflow {
         'FreeX-latest-$assetLabel-default-open-launch-smoke.txt',
         "source_artifact_pattern",
         "distribution_candidate_required_markers",
+        '$packagingSmokeText = Get-Content -LiteralPath $packagingSmokePath -Raw',
+        'Assert-ContainsRequiredText -Text $smokeReportText -Needle "macos_launch_smoke=passed"',
         "default_open_launch_smoke_report",
         "Upload release-channel prepared assets",
         "Create or update GitHub release",
@@ -482,7 +601,10 @@ function Test-MacOsWorkflow {
         "--draft=false",
         "--prerelease",
         "Developer ID signing is disabled for pull_request events; using ad-hoc signing.",
-        'distribution_candidate="${{ github.event_name == ''workflow_dispatch'' && inputs.distribution_candidate == true }}"',
+        'FREEX_RUNTIME: ${{ matrix.runtime }}',
+        'FREEX_DISTRIBUTION_CANDIDATE: ${{ github.event_name == ''workflow_dispatch'' && inputs.distribution_candidate == true }}',
+        'runtime="$FREEX_RUNTIME"',
+        'distribution_candidate="$FREEX_DISTRIBUTION_CANDIDATE"',
         'artifact_channel="internal-preview"',
         'artifact_channel="distribution-candidate"',
         "internal_preview_not_for_distribution_notarization_optional",
@@ -512,16 +634,28 @@ function Test-MacOsWorkflow {
         "gatekeeper_assessment_source=Notarized Developer ID",
         "distribution_readiness=internal_preview_not_for_distribution",
         "distribution_readiness=distribution_candidate_ready",
+        "smoke_status=passed",
         'echo "artifact_channel=$artifact_channel"',
         'echo "distribution_candidate=$distribution_candidate"',
         'echo "distribution_readiness=$distribution_readiness"',
         'shasum -a 256 -c "$zip_name.sha256"',
         'zip_sha256="$(cut -d '' '' -f 1 "$artifact_root/$zip_name.sha256")"',
         'echo "zip_sha256=$zip_sha256"',
+        'echo "artifact_bundle_metadata_subject=unzipped_app_bundle"',
+        'bundle_executable=$(/usr/libexec/PlistBuddy -c ''Print :CFBundleExecutable'' "$app_info_plist")',
+        'bundle_icon=$(/usr/libexec/PlistBuddy -c ''Print :CFBundleIconFile'' "$app_info_plist")',
+        'bundle_identifier=$(/usr/libexec/PlistBuddy -c ''Print :CFBundleIdentifier'' "$app_info_plist")',
+        'bundle_package_type=$(/usr/libexec/PlistBuddy -c ''Print :CFBundlePackageType'' "$app_info_plist")',
+        'bundle_minimum_system_version=$(/usr/libexec/PlistBuddy -c ''Print :LSMinimumSystemVersion'' "$app_info_plist")',
+        'bundle_high_resolution_capable=$(/usr/libexec/PlistBuddy -c ''Print :NSHighResolutionCapable'' "$app_info_plist")',
+        'artifact_document_extensions_subject=unzipped_app_bundle',
+        'native_document_type=$(/usr/libexec/PlistBuddy -c ''Print :CFBundleDocumentTypes:0:CFBundleTypeName'' "$app_info_plist")',
+        'imported_document_type=$(/usr/libexec/PlistBuddy -c ''Print :CFBundleDocumentTypes:1:CFBundleTypeName'' "$app_info_plist")',
         'cat > "$tester_instructions_path" <<EOF',
         "This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel; distribution-candidate artifacts must show Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment in evidence.",
         "Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs.",
         "Unzip the GitHub Actions artifact wrapper first; these files are inside it.",
+        'ditto -x -k $zip_name .',
         "If artifact_channel=internal-preview, ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.",
         "--packaging-smoke",
         "Packaging smoke opened",
@@ -535,53 +669,66 @@ function Test-MacOsWorkflow {
         'echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"',
         "edited, saved, and reopened",
         "lsregister -f",
+        'app_diagnostics_dir="$artifact_root/freex-$runtime-macos-app-diagnostics"',
+        '--macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"',
+        "app_diagnostics_directory_configured=true",
+        'app_diagnostics_events_path="$app_diagnostics_dir/events.jsonl"',
+        'app_diagnostics_crash_reports_dir="$app_diagnostics_dir/CrashReports"',
+        'if [[ -d "$app_diagnostics_crash_reports_dir" ]]; then',
+        'app_diagnostics_crash_count=0',
+        "app_diagnostics_artifact=freex-`$runtime-macos-app-diagnostics",
+        "app_diagnostics_events_jsonl=true",
+        "app_diagnostics_crash_report_count=`$app_diagnostics_crash_count",
+        'test -f "$app_diagnostics_events_path"',
+        'grep -q ''"eventName":"app_start"'' "$app_diagnostics_events_path"',
+        'grep -q ''"eventName":"app_ready"'' "$app_diagnostics_events_path"',
+        'grep -q ''"eventName":"macos_launch_smoke"'' "$app_diagnostics_events_path"',
+        "launchservices_smoke_timeout_seconds=60",
+        "launchservices_cleanup_timeout_seconds=10",
+        "append_launchservices_failure_diagnostics",
+        "wait_for_bounded_launchservices_cleanup",
+        'run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report"',
         "open -W -n -b io.github.tony-xmelon.freex",
         'open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"',
         'open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"',
         'app_path="$unzip_root/FreeX.app"',
+        'run_bounded_launchservices_smoke "open_with" "$open_with_report"',
         'open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report"',
         'default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"',
         'default_open_smoke_file="$RUNNER_TEMP/freex-$runtime-default-open.fxl"',
         '"FileFormat": "FreeX.NativeJsonWorkbook"',
+        'run_bounded_launchservices_smoke "default_open" "$default_open_report"',
         'open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report"',
+        'launchservices_smoke_timed_out=$timed_out',
+        "launchservices_smoke_cleanup_timeout=true",
+        'kill "$launchservices_pid" 2>/dev/null || true',
+        'kill -9 "$launchservices_pid" 2>/dev/null || true',
+        'cat "$report_path" >> "$evidence_path"',
         "launchservices_default_open_app_override=false",
         "launchservices_default_open_document_extension=fxl",
         "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click",
         "osascript -e 'tell application id `"io.github.tony-xmelon.freex`" to quit' || true",
         "--macos-launch-smoke",
-        "--macos-launch-smoke-verify-image-clipboard",
-        "--macos-launch-smoke-verify-live-command-keys",
-        "live_command_key_smoke_ready=true",
         "cmd_find_direct_route_source_guard=true",
         "cmd_page_up_direct_route_source_guard=true",
         "cmd_page_down_direct_route_source_guard=true",
-        'tell application "System Events"',
-        'keystroke "a" using {command down}',
-        'keystroke "b" using {command down}',
-        'keystroke "i" using {command down}',
-        'keystroke "u" using {command down}',
-        "live_command_key_system_events_result=blocked_or_failed",
-        'launch_clipboard_image="$RUNNER_TEMP/freex-$runtime-clipboard.png"',
-        'base64 -D > "$launch_clipboard_image"',
-        '/usr/bin/swift - "$launch_clipboard_image"',
-        "NSPasteboard.general",
-        "pasteboard.clearContents()",
-        "pasteboard.writeObjects([image])",
-        "live_command_key_smoke_required=true",
-        "live_command_key_smoke=passed",
-        "live_command_key_smoke_attempted=true",
-        "live_cmd_select_all_received=true",
-        "live_cmd_select_all_state_changed=true",
-        "live_cmd_bold_received=true",
-        "live_cmd_bold_state_changed=true",
-        "live_cmd_italic_received=true",
-        "live_cmd_italic_state_changed=true",
-        "live_cmd_underline_received=true",
-        "live_cmd_underline_state_changed=true",
-        "external_image_clipboard_paste_required=true",
-        "external_image_clipboard_paste=true",
-        "external_image_clipboard_picture_count=[1-9]",
-        "external_image_clipboard_picture_png_bytes=[1-9]",
+        "live_command_key_smoke_required=false",
+        "live_command_key_smoke=not_required",
+        "external_image_clipboard_paste_required=false",
+        "macos_accessibility_smoke=passed",
+        "a11y_formula_box_name=true",
+        "a11y_formula_box_help=true",
+        "a11y_formula_box_id=true",
+        "a11y_status_text_name=true",
+        "a11y_status_text_help=true",
+        "a11y_status_text_id=true",
+        "a11y_status_text_value=true",
+        "a11y_cell_address_name=true",
+        "a11y_cell_address_help=true",
+        "a11y_cell_address_id=true",
+        "a11y_selection_stats_name=true",
+        "a11y_selection_stats_help=true",
+        "a11y_selection_stats_id=true",
         "new_sheet_button=true",
         "toolbar_format_painter_button=true",
         "toolbar_autosum_button=true",
@@ -618,6 +765,7 @@ function Test-MacOsWorkflow {
         "native_open_recent_menu_item=true",
         "native_open_recent_item_count=[1-9]",
         "native_export_pdf_menu_item=true",
+        "native_share_workbook_menu_item=true",
         'grep -q "macos_launch_smoke=passed" "$open_with_report"',
         'grep -q "window_shown=true" "$open_with_report"',
         'grep -q "opened_source_path=.*freex-$runtime-open-with.csv" "$open_with_report"',
@@ -734,6 +882,20 @@ function Test-MacOsWorkflow {
         "format_cells_dialog_action_buttons=true",
         "format_cells_dialog_compact_layout=true",
         "format_cells_dialog_result_closed_without_accept=true",
+        "sort_dialog=true",
+        "sort_dialog_sort_on_controls=true",
+        "sort_dialog_color_controls=true",
+        "sort_dialog_action_buttons=true",
+        "sort_dialog_compact_layout=true",
+        "sort_dialog_result_closed_without_accept=true",
+        "data_validation_dropdown_control=true",
+        "data_validation_dropdown_items=true",
+        "data_validation_dialog=true",
+        "data_validation_dialog_criteria_controls=true",
+        "data_validation_dialog_message_controls=true",
+        "data_validation_dialog_action_buttons=true",
+        "data_validation_dialog_compact_layout=true",
+        "data_validation_dialog_result_closed_without_accept=true",
         "native_autosum_menu_item=true",
         "native_autosum_sum_menu_item=true",
         "native_autosum_average_menu_item=true",
@@ -818,12 +980,36 @@ function Test-MacOsWorkflow {
         Assert-ContainsText -Text $workflow -Needle $marker -Message "macOS workflow is missing required readiness marker: $marker"
     }
 
+    $releasePublicationJobMatch = [System.Text.RegularExpressions.Regex]::Match(
+        $workflow,
+        "(?ms)^  publish-distribution-candidate:\s*(?:#.*)?\r?\n(?<block>.*?)(?=^  [A-Za-z0-9_-]+:\s*(?:#.*)?$|\z)")
+    Assert-True -Condition $releasePublicationJobMatch.Success -Message "macOS workflow must define the publish-distribution-candidate job."
+    $releasePublicationJobBlock = $releasePublicationJobMatch.Value
+    Assert-ContainsText `
+        -Text $releasePublicationJobBlock `
+        -Needle "needs: [macos-app, macos-preview-readiness]" `
+        -Message "macOS distribution-candidate publication must depend on aggregate preview readiness."
+
+    $boundedLaunchSmokeCount = ([regex]::Matches($workflow, 'run_bounded_launchservices_smoke "')).Count
+    Assert-True -Condition ($boundedLaunchSmokeCount -eq 3) -Message "macOS workflow must route all three hosted LaunchServices launch smoke paths through run_bounded_launchservices_smoke."
+    Assert-TextBefore -Text $workflow -First "run_bounded_launchservices_smoke() {" -Second 'run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report"' -Message "macOS workflow must define the bounded LaunchServices smoke helper before the bundle-id launch smoke."
+
     Assert-TextBefore -Text $workflow -First "Capture runner toolchain evidence" -Second "Test portable PDF macOS route" -Message "macOS workflow must capture hosted runner evidence before running the focused portable PDF/service tests."
     Assert-TextBefore -Text $workflow -First "Test portable PDF macOS route" -Second "dotnet build $projectPath --configuration Release" -Message "macOS workflow must run the focused portable PDF/service tests before building the Avalonia app project."
     Assert-TextBefore -Text $workflow -First "dotnet build $projectPath --configuration Release" -Second "dotnet publish $projectPath" -Message "macOS workflow must build the Avalonia app project before publishing the app bundle."
+    Assert-TextBefore -Text $workflow -First 'echo "smoke_status=skipped_host_arch_mismatch" >> "$evidence_path"' -Second 'Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.' -Message "macOS workflow must record host/runtime mismatch evidence before failing app artifact publication."
+    Assert-TextBefore -Text $workflow -First 'rm -f "$zip_path" "$zip_path.sha256"' -Second 'Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.' -Message "macOS workflow must remove a mismatched app zip before failing app artifact publication."
+    Assert-TextBefore -Text $workflow -First 'Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.' -Second "Require hosted smoke before app artifact upload" -Message "macOS workflow must fail host/runtime mismatches before reaching the hosted smoke upload gate."
+    Assert-TextBefore -Text $workflow -First "Require hosted smoke before app artifact upload" -Second "Upload app artifact" -Message "macOS workflow must require successful hosted smoke before uploading the app artifact."
 
     $appArtifactUpload = Get-WorkflowStepBlock -Workflow $workflow -StepName "Upload app artifact"
+    $hostedSmokeGate = Get-WorkflowStepBlock -Workflow $workflow -StepName "Require hosted smoke before app artifact upload"
     $diagnosticsUpload = Get-WorkflowStepBlock -Workflow $workflow -StepName "Upload app diagnostics"
+    Assert-ContainsText -Text $hostedSmokeGate -Needle 'smoke_status=skipped_host_arch_mismatch' -Message "macOS hosted smoke gate must reject host/runtime architecture mismatch evidence before app artifact upload."
+    Assert-ContainsText -Text $hostedSmokeGate -Needle 'grep -q "^smoke_status=passed$" "$evidence_path"' -Message "macOS hosted smoke gate must require smoke_status=passed evidence before app artifact upload."
+    Assert-ContainsText -Text $hostedSmokeGate -Needle 'grep -q "^macos_launch_smoke=passed$" "$launch_smoke_report"' -Message "macOS hosted smoke gate must require bundle-id launch smoke before app artifact upload."
+    Assert-ContainsText -Text $hostedSmokeGate -Needle 'grep -q "^macos_launch_smoke=passed$" "$open_with_report"' -Message "macOS hosted smoke gate must require Open With launch smoke before app artifact upload."
+    Assert-ContainsText -Text $hostedSmokeGate -Needle 'grep -q "^macos_launch_smoke=passed$" "$default_open_report"' -Message "macOS hosted smoke gate must require default-open launch smoke before app artifact upload."
     $testResultPaths = @(
         'artifacts/freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx',
         'artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx'
@@ -833,6 +1019,8 @@ function Test-MacOsWorkflow {
         Assert-True -Condition ($appArtifactUpload.IndexOf($testResultPath, [System.StringComparison]::Ordinal) -lt 0) -Message "macOS app artifact upload must not include diagnostic test result $testResultPath."
     }
 
+    Assert-ContainsText -Text $diagnosticsUpload -Needle 'artifacts/freex-${{ matrix.runtime }}-macos-app-diagnostics/**' -Message "macOS diagnostics upload must include app diagnostics emitted by hosted launch smoke."
+    Assert-True -Condition ($appArtifactUpload.IndexOf('artifacts/freex-${{ matrix.runtime }}-macos-app-diagnostics/**', [System.StringComparison]::Ordinal) -lt 0) -Message "macOS app artifact upload must not include app diagnostics internals."
     Assert-ContainsText -Text $diagnosticsUpload -Needle "if: always()" -Message "macOS diagnostics upload must run even when earlier workflow steps fail."
     Assert-ContainsText -Text $diagnosticsUpload -Needle "if-no-files-found: warn" -Message "macOS diagnostics upload must warn, not fail, when optional diagnostics are missing."
 }
@@ -844,8 +1032,14 @@ function Test-SourceWiring {
             Markers = @(
                 "PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)",
                 "MacOsLaunchSmokeOptions.TryParse(",
+                "AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory)",
+                "diagnostics.RegisterUnhandledExceptionHandlers();",
+                "diagnostics.RecordEvent(`"app_start`"",
                 "App.StartupArguments = startupArguments;",
                 "App.LaunchSmokeOptions = launchSmokeOptions;",
+                "App.Diagnostics = diagnostics;",
+                "diagnostics.RecordEvent(`"app_exit`"",
+                "diagnostics.RecordCrash(ex, `"avalonia_startup`")",
                 "BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);"
             )
             OrderedPairs = @(
@@ -858,10 +1052,61 @@ function Test-SourceWiring {
         @{
             Path = "src\FreeX.App.Avalonia\App.cs"
             Markers = @(
+                "internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }",
+                "Diagnostics?.RecordEvent(`"app_ready`"",
                 "this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime",
                 "args is not FileActivatedEventArgs fileArgs",
                 "fileArgs.Kind != ActivationKind.File",
-                "await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);"
+                "await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);",
+                "MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Avalonia\AvaloniaAppDiagnostics.cs"
+            Markers = @(
+                "internal sealed class AvaloniaAppDiagnostics",
+                "AppDiagnosticsOptions.CreateDefault()",
+                "new AppDiagnosticsFileStore(options)",
+                "AppDiagnosticsMetadata.Create(",
+                "AppDomain.CurrentDomain.UnhandledException +=",
+                "TaskScheduler.UnobservedTaskException +=",
+                "RecordEvent(string eventName",
+                "RecordCrash(Exception exception, string source)",
+                "AppDiagnosticsFileStore.SanitizeProperties(properties)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\AppDiagnosticsFileStore.cs"
+            Markers = @(
+                "AllowedPropertyNames",
+                '"grantKind"',
+                '"payloadRedacted"'
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Avalonia\WorkbookFileAccessService.cs"
+            Markers = @(
+                "Create(AvaloniaAppDiagnostics? diagnostics = null)",
+                "new AvaloniaWorkbookFileAccessService(diagnostics)",
+                "AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null)",
+                "MacOsSecurityScopedBookmarkKind = `"macos-security-scoped-bookmark`"",
+                "storageItem is { CanBookmark: true }",
+                "StorageItemMatchesPath(storageItem, path)",
+                "storageItem.SaveBookmarkAsync()",
+                "storageProvider.OpenFileBookmarkAsync(bookmark)",
+                "PlatformPathIdentityComparer.Current.Equals(identity.LocalPath, resolvedPath)",
+                "WorkbookFileAccessScope.FromDisposable(",
+                "RecordIdentityEvent(`"bookmark_created`", grantKind: MacOsSecurityScopedBookmarkKind);",
+                "RecordScopeEvent(`"scope_started`", grantKind: MacOsSecurityScopedBookmarkKind);",
+                "RecordScopeEvent(`"scope_ended`", grantKind: MacOsSecurityScopedBookmarkKind)",
+                "RecordFileAccessEvent(`"workbook_file_access_identity`", status, grantKind)",
+                "RecordFileAccessEvent(`"workbook_file_access_scope`", status, grantKind)",
+                '["scope"] = "workbook_file_access"',
+                '["grantKind"] = string.IsNullOrWhiteSpace(grantKind) ? null : grantKind',
+                '["payloadRedacted"] = string.IsNullOrWhiteSpace(grantKind) ? null : "true"'
             )
             OrderedPairs = @()
         },
@@ -870,7 +1115,21 @@ function Test-SourceWiring {
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
                 "using FreeX.Core.Calc;",
+                "private readonly ScrollBar _verticalWorksheetScrollBar = new();",
+                "private readonly ScrollBar _horizontalWorksheetScrollBar = new();",
+                "private bool _isUpdatingWorksheetScrollBars;",
+                "root.Children.Add(BuildWorksheetViewportChrome());",
+                "_sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;",
+                "_sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;",
+                "_verticalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;",
+                "_horizontalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;",
+                "WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)",
+                "ApplyWorksheetScrollAxis(_verticalWorksheetScrollBar, state.Vertical);",
+                "ApplyWorksheetScrollAxis(_horizontalWorksheetScrollBar, state.Horizontal);",
+                "WorkbookViewportScrollPlanner.CalculateViewportOrigin(",
+                "_session.SetViewportOrigin(topRow, leftCol)",
                 "public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)",
+                "WorkbookFileAccessServiceFactory.Create(App.Diagnostics)",
                 "CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true)",
                 "_formatPainterButton.Content = `"Format Painter`";",
                 "AutomationProperties.SetAutomationId(_formatPainterButton, `"HomeFormatPainterButton`");",
@@ -1114,6 +1373,31 @@ function Test-SourceWiring {
                 "private void UnmergeSelectedRange()",
                 "_session.UnmergeSelectedRange()",
                 "HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == `"Merge & Center`"",
+                "AutomationProperties.SetAutomationId(_formulaBox, `"FormulaBox`");",
+                "AutomationProperties.SetName(_formulaBox, `"Formula bar`");",
+                "AutomationProperties.SetHelpText(_formulaBox, `"Edit the active cell value or formula.`");",
+                "AutomationProperties.SetAutomationId(_statusText, `"StatusText`");",
+                "AutomationProperties.SetName(_statusText, `"Status`");",
+                "AutomationProperties.SetHelpText(_statusText, `"Shows the current workbook status.`");",
+                "AutomationProperties.SetAutomationId(_cellAddressText, `"CellAddressText`");",
+                "AutomationProperties.SetName(_cellAddressText, `"Cell address`");",
+                "AutomationProperties.SetHelpText(_cellAddressText, `"Shows the active cell address.`");",
+                "AutomationProperties.SetAutomationId(_selectionStatsText, `"SelectionStatsText`");",
+                "AutomationProperties.SetName(_selectionStatsText, `"Selection statistics`");",
+                "AutomationProperties.SetHelpText(_selectionStatsText, `"Shows statistics for the current selection.`");",
+                "HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), `"Formula bar`", StringComparison.Ordinal)",
+                "HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), `"Edit the active cell value or formula.`", StringComparison.Ordinal)",
+                "HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), `"FormulaBox`", StringComparison.Ordinal)",
+                "HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), `"Status`", StringComparison.Ordinal)",
+                "HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), `"Shows the current workbook status.`", StringComparison.Ordinal)",
+                "HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), `"StatusText`", StringComparison.Ordinal)",
+                "HasStatusTextValue: !string.IsNullOrWhiteSpace(_statusText.Text)",
+                "HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), `"Cell address`", StringComparison.Ordinal)",
+                "HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), `"Shows the active cell address.`", StringComparison.Ordinal)",
+                "HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), `"CellAddressText`", StringComparison.Ordinal)",
+                "HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), `"Selection statistics`", StringComparison.Ordinal)",
+                "HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), `"Shows statistics for the current selection.`", StringComparison.Ordinal)",
+                "HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), `"SelectionStatsText`", StringComparison.Ordinal)",
                 "HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, `"Merge & Center`", requireGesture: false)",
                 "HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, `"Unmerge Cells`", requireGesture: false)",
                 "CreateNativePasteSpecialMenu()",
@@ -1202,6 +1486,11 @@ function Test-SourceWiring {
                 "_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);",
                 "fileMenu.Items.Add(_openRecentMenuItem);",
                 "RefreshNativeOpenRecentMenu(isIdle);",
+                "LocalFilePath.TryNormalize(candidate, out var normalizedCandidate)",
+                "Directory.Exists(normalizedCandidate)",
+                "File.Exists(normalizedCandidate)",
+                "_session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage)",
+                "path = target!.Path;",
                 "_selectAllMenuItem.Header = `"Select All`";",
                 "_selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);",
                 "_selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();",
@@ -1503,13 +1792,23 @@ function Test-SourceWiring {
                 "SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false)",
                 "private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)",
                 "Header = `"(No Recent Workbooks)`"",
-                "private List<RecentFileEntry> GetOpenableRecentWorkbookEntries()",
-                "entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));",
-                "private async Task OpenRecentWorkbookAsync(string path)",
+                "OpenRecentWorkbookMenuPlanner.Create(",
+                "_recentFiles.Entries",
+                "File.Exists",
+                "path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null",
+                "plan.ItemCount == 0",
+                "foreach (var entry in plan.Items)",
+                "var fileAccessIdentity = entry.FileAccessIdentity;",
+                "Header = entry.Header",
+                "private async Task OpenRecentWorkbookAsync(",
+                "WorkbookFileAccessIdentity? fileAccessIdentity = null",
+                "if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)",
+                "await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);",
                 "private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)",
-                "private void RecordRecentWorkbook(string path)",
-                "_recentFiles.AddOrUpdate(path);",
-                "RecordRecentWorkbook(target.Path);",
+                "private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)",
+                "_recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);",
+                "RecordRecentWorkbook(target.Path, target.FileAccessIdentity);",
+                "RecordRecentWorkbook(target.Path, fileAccessIdentity);",
                 "_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();",
                 "fileMenu.Items.Add(_newWorkbookMenuItem);",
                 "fileMenu.Items.Add(_closeWorkbookMenuItem);",
@@ -1600,10 +1899,14 @@ function Test-SourceWiring {
                 "private bool FocusActiveSheetTab()",
                 "private bool FocusSheetTab(SheetId sheetId)",
                 "private static void SheetTabContextMenu_Opened(object? sender, RoutedEventArgs args)",
-                "FirstOrDefault(item => item.IsEnabled)?",
-                ".Focus();",
+                "FocusFirstEnabledSheetTabMenuItem(items);",
+                "private static void FocusFirstEnabledSheetTabMenuItem(IEnumerable<Control> items)",
+                "foreach (var item in items)",
+                "item is MenuItem { IsEnabled: true } menuItem",
+                "menuItem.Focus();",
                 "private Button? FindSheetTabButton(SheetId sheetId)",
-                "button.Tag is SheetId tag && tag == sheetId",
+                "button.Tag is SheetId tag &&",
+                "tag == sheetId",
                 "private bool HasSheetTabButton(Func<Button, bool> predicate)",
                 "HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable)",
                 "HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true",
@@ -1787,12 +2090,18 @@ function Test-SourceWiring {
             Path = "src\FreeX.App.Avalonia\MacOsLaunchSmoke.cs"
             Markers = @(
                 "public const string Argument = `"--macos-launch-smoke`";",
+                "public const string DiagnosticsDirectoryArgument = `"--macos-launch-smoke-diagnostics-dir`";",
                 "public const string VerifyImageClipboardPasteArgument = `"--macos-launch-smoke-verify-image-clipboard`";",
                 "public const string VerifyLiveCommandKeysArgument = `"--macos-launch-smoke-verify-live-command-keys`";",
                 "startupArguments = filteredArguments.ToArray();",
                 "verifyImageClipboardPaste = true;",
                 "verifyLiveCommandKeys = true;",
-                "new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste, verifyLiveCommandKeys)",
+                "diagnosticsDirectory = args[++index];",
+                "diagnosticsDirectory);",
+                "RunAsync(mainWindow, options, diagnostics)",
+                "diagnostics?.RecordEvent(`"macos_launch_smoke`"",
+                "diagnostics?.RecordCrash(ex, `"macos_launch_smoke`")",
+                "app_diagnostics_directory_configured={FormatBool(appDiagnosticsConfigured)}",
                 "await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();",
                 "liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();",
                 "liveCommandKeyEvidence.IsPassed",
@@ -1876,6 +2185,20 @@ function Test-SourceWiring {
                 "HasBordersButton &&",
                 "HasWrapTextButton &&",
                 "HasMergeAndCenterButton &&",
+                "HasAccessibilitySmokeEvidence &&",
+                "HasFormulaBoxAutomationName &&",
+                "HasFormulaBoxAutomationHelp &&",
+                "HasFormulaBoxAutomationId &&",
+                "HasStatusTextAutomationName &&",
+                "HasStatusTextAutomationHelp &&",
+                "HasStatusTextAutomationId &&",
+                "HasStatusTextValue &&",
+                "HasCellAddressAutomationName &&",
+                "HasCellAddressAutomationHelp &&",
+                "HasCellAddressAutomationId &&",
+                "HasSelectionStatsAutomationName &&",
+                "HasSelectionStatsAutomationHelp &&",
+                "HasSelectionStatsAutomationId",
                 "HasFocusableSheetTab &&",
                 "HasFocusableActiveSheetTab &&",
                 "HasShellFocusCycleTargets &&",
@@ -1942,6 +2265,7 @@ function Test-SourceWiring {
                 "HasNativeMergeAndCenterMenuItem &&",
                 "HasNativeUnmergeCellsMenuItem &&",
                 "HasNativeExportPdfMenuItem &&",
+                "HasNativeShareWorkbookMenuItem &&",
                 "HasNativeWorkbookStatisticsMenuItem &&",
                 "native_new_workbook_menu_item=",
                 "cmd_find_direct_route_source_guard=",
@@ -1963,9 +2287,24 @@ function Test-SourceWiring {
                 "external_image_clipboard_paste=",
                 "external_image_clipboard_picture_count=",
                 "external_image_clipboard_picture_png_bytes=",
+                "macos_accessibility_smoke=",
+                "a11y_formula_box_name=",
+                "a11y_formula_box_help=",
+                "a11y_formula_box_id=",
+                "a11y_status_text_name=",
+                "a11y_status_text_help=",
+                "a11y_status_text_id=",
+                "a11y_status_text_value=",
+                "a11y_cell_address_name=",
+                "a11y_cell_address_help=",
+                "a11y_cell_address_id=",
+                "a11y_selection_stats_name=",
+                "a11y_selection_stats_help=",
+                "a11y_selection_stats_id=",
                 "native_open_recent_menu_item=",
                 "native_open_recent_item_count=",
                 "native_export_pdf_menu_item=",
+                "native_share_workbook_menu_item=",
                 "native_close_workbook_menu_item=",
                 "native_workbook_statistics_menu_item=",
                 "new_sheet_button=",
@@ -2095,6 +2434,20 @@ function Test-SourceWiring {
                 "format_cells_dialog_action_buttons=",
                 "format_cells_dialog_compact_layout=",
                 "format_cells_dialog_result_closed_without_accept=",
+                "sort_dialog=",
+                "sort_dialog_sort_on_controls=",
+                "sort_dialog_color_controls=",
+                "sort_dialog_action_buttons=",
+                "sort_dialog_compact_layout=",
+                "sort_dialog_result_closed_without_accept=",
+                "data_validation_dropdown_control=",
+                "data_validation_dropdown_items=",
+                "data_validation_dialog=",
+                "data_validation_dialog_criteria_controls=",
+                "data_validation_dialog_message_controls=",
+                "data_validation_dialog_action_buttons=",
+                "data_validation_dialog_compact_layout=",
+                "data_validation_dialog_result_closed_without_accept=",
                 "native_autosum_menu_item=",
                 "native_autosum_sum_menu_item=",
                 "native_autosum_average_menu_item=",
@@ -2394,6 +2747,98 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
+            Path = "src\FreeX.App.Services\LocalFilePath.cs"
+            Markers = @(
+                "public static class LocalFilePath",
+                "public static bool TryNormalize(string? candidate, out string normalizedPath)",
+                "TryCreateExplicitUri(path, out var uri)",
+                "if (!uri.IsFile)",
+                "path = uri.LocalPath;",
+                "path.Contains('\0', StringComparison.Ordinal)",
+                "IsUnixAbsolutePath(path)",
+                "Path.GetFullPath(path)",
+                "private static bool TryCreateExplicitUri(string candidate, out Uri uri)",
+                "Uri.TryCreate(candidate, UriKind.Absolute, out var parsed)",
+                "IsWindowsDrivePath(candidate, parsed.Scheme)",
+                "private static bool IsWindowsDrivePath(string candidate, string scheme)",
+                "char.IsAsciiLetter(candidate[0])",
+                "private static bool IsUnixAbsolutePath(string path)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\OpenRecentWorkbookMenuPlanner.cs"
+            Markers = @(
+                "public sealed record OpenRecentWorkbookMenuItemPlan(",
+                "public sealed record OpenRecentWorkbookMenuPlan(",
+                "public int ItemCount => Items.Count;",
+                "public static class OpenRecentWorkbookMenuPlanner",
+                "public const int DefaultMaximumItems = 10;",
+                "public static OpenRecentWorkbookMenuPlan Create(",
+                "IEnumerable<RecentFileEntry> entries",
+                "Func<string, bool> fileExists",
+                "Func<string, bool> canOpenWorkbook",
+                "Func<string, string?> resolveOpenWorkbookPath",
+                "maximumItems < 1",
+                "PlatformPathIdentityComparer.Current",
+                ".Where(entry => !string.IsNullOrWhiteSpace(entry.Path))",
+                ".OrderByDescending(entry => entry.LastOpened)",
+                ".Select(entry => (Entry: entry, Path: resolveOpenWorkbookPath(entry.Path)))",
+                ".Where(item => !string.IsNullOrWhiteSpace(item.Path) && fileExists(item.Path))",
+                ".Where(item => seenPaths.Add(item.Path!))",
+                ".Take(maximumItems)",
+                "FormatHeader(item.Path!)",
+                "public static string FormatHeader(string path)",
+                "Path.GetFileName(path)",
+                "Path.GetDirectoryName(path)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\WorkbookShareActionPlanner.cs"
+            Markers = @(
+                "public enum WorkbookShareActionPlanKind",
+                "ShareSheet,",
+                "OpenContainingFolder,",
+                "SaveAsBeforeShare,",
+                "Deferred",
+                "public sealed record WorkbookShareActionSurface(",
+                "bool CanShowShareSheet,",
+                "bool CanOpenContainingFolder = false",
+                "public static WorkbookShareActionSurface MacOsPreview",
+                'new("macOS Share Sheet", CanShowShareSheet: false);',
+                "public static class WorkbookShareActionPlanner",
+                "CreatePlan(currentFilePath, WorkbookShareActionSurface.MacOsPreview, fileExists);",
+                "WorkbookShareReadinessPlanner.CreatePlan(",
+                "surface.CanShowShareSheet || surface.CanOpenContainingFolder",
+                "WorkbookShareActionPlanKind.SaveAsBeforeShare",
+                "WorkbookShareActionPlanKind.OpenContainingFolder",
+                "WorkbookShareActionUnavailableReason.ShareSheetUnavailable",
+                "TryGetContainingFolderPath(readiness.Path, out var containingFolderPath)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\WorkbookViewportScrollPlanner.cs"
+            Markers = @(
+                "public readonly record struct WorkbookViewportScrollAxis(",
+                "public readonly record struct WorkbookViewportScrollState(",
+                "public static class WorkbookViewportScrollPlanner",
+                "public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)",
+                "CountScrollableRows(viewport.RowMetrics, sheet.FrozenRows)",
+                "CountScrollableColumns(viewport.ColMetrics, sheet.FrozenCols)",
+                "public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(",
+                "ScrollbarValueToWorksheetIndex(verticalScrollValue, sheet.FrozenRows, CellAddress.MaxRow)",
+                "ScrollbarValueToWorksheetIndex(horizontalScrollValue, sheet.FrozenCols, CellAddress.MaxCol)",
+                "public static uint WorksheetIndexToScrollbarValue(uint worksheetIndex, uint frozenCount)",
+                "public static uint CalculateScrollableLimit(uint absoluteLimit, uint frozenCount)",
+                "public static uint CalculateMaximumViewportOrigin(uint absoluteLimit, uint visibleSpan)",
+                "SmallChange: 1",
+                "IsEnabled: maximum > MinimumScrollValue"
+            )
+            OrderedPairs = @()
+        },
+        @{
             Path = "src\FreeX.App.Services\FormatCellsCompactPlanner.cs"
             Markers = @(
                 "public sealed record FormatCellsCompactRequest(",
@@ -2541,7 +2986,7 @@ function Test-SourceWiring {
 function Test-PortableSourceHygiene {
     param([Parameter(Mandatory = $true)][string[]]$SourceRoots)
 
-    $forbiddenTokens = @(
+    $alwaysForbiddenTokens = @(
         "System.Windows",
         "Microsoft.Win32",
         "Windows.ApplicationModel",
@@ -2555,6 +3000,13 @@ function Test-PortableSourceHygiene {
         "UseWPF",
         "FreeX.App.Host",
         "FreeX.App.UI"
+    )
+    $nativeMacOsTokens = @(
+        "AppKit",
+        "Foundation",
+        "ObjCRuntime",
+        "NSSharingServicePicker",
+        "NSSharingService"
     )
     $extensions = @(".cs", ".csproj", ".axaml", ".xaml")
     $sourceFiles = New-Object System.Collections.Generic.List[System.IO.FileInfo]
@@ -2578,9 +3030,19 @@ function Test-PortableSourceHygiene {
 
     foreach ($file in $sourceFiles) {
         $content = Get-Content -LiteralPath $file.FullName -Raw
-        foreach ($token in $forbiddenTokens) {
+        foreach ($token in $alwaysForbiddenTokens) {
             if ($content.IndexOf($token, [System.StringComparison]::Ordinal) -ge 0) {
                 throw "Portable macOS source contains forbidden token '$token' in $(Get-RepoRelativePath $file.FullName)."
+            }
+        }
+
+        if (Test-IsMacOsConditionalSourcePath $file.FullName) {
+            continue
+        }
+
+        foreach ($token in $nativeMacOsTokens) {
+            if ($content.IndexOf($token, [System.StringComparison]::Ordinal) -ge 0) {
+                throw "Portable macOS source contains native macOS token '$token' outside src/FreeX.App.Avalonia/MacOs in $(Get-RepoRelativePath $file.FullName)."
             }
         }
     }

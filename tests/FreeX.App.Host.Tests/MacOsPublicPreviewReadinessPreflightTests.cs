@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -24,18 +25,40 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         script.Should().Contain("gatekeeper_assessment_status");
         script.Should().Contain("gatekeeper_assessment_source");
         script.Should().Contain("zip_sha256");
+        script.Should().Contain("Get-ExpectedBundleMetadataEvidence");
+        script.Should().Contain("artifact_bundle_metadata_subject");
+        script.Should().Contain("bundle_identifier");
+        script.Should().Contain("bundle_package_type");
+        script.Should().Contain("bundle_minimum_system_version");
+        script.Should().Contain("bundle_high_resolution_capable");
+        script.Should().Contain("RequireAggregateReadinessArtifact");
         script.Should().Contain("RequireReleasePublicationArtifact");
+        script.Should().Contain("macos-preview-readiness-manifest.json");
+        script.Should().Contain("freex-<run-id>-<run-attempt>-macos-preview-readiness");
         script.Should().Contain("FreeX-latest-macos-distribution-candidate-manifest.json");
         script.Should().Contain("default_open_launch_smoke_report");
         script.Should().Contain("format_cells_style_roundtrip_count");
+        script.Should().Contain("command_key_smoke_attempted");
         script.Should().Contain("live_command_key_smoke");
+        script.Should().Contain("macos_dialog_smoke_attempted");
+        script.Should().Contain("macos_dialog_activation_completed");
+        script.Should().Contain("go_to_special_dialog_kind_controls");
+        script.Should().Contain("data_validation_dialog_action_buttons");
         script.Should().Contain("macos_launch_smoke");
         script.Should().Contain("RequireSeparateDiagnosticsArtifact");
+        script.Should().Contain("GITHUB_ACTIONS");
+        script.Should().Contain("::error title=macOS public-preview readiness::");
         script.Should().Contain("freex-$Runtime-macos-open-with-launch-smoke.txt");
         script.Should().Contain("freex-$Runtime-macos-default-open-launch-smoke.txt");
         script.Should().Contain("launchservices_default_open_boundary");
         script.Should().Contain("ExpectedRunId");
+        script.Should().Contain("freex-<run-id>-<run-attempt>-macos-release-assets");
         script.Should().Contain("multiple downloaded macOS app artifact bundles");
+        script.Should().Contain("System.IO.Compression.ZipFile");
+        script.Should().Contain("Contents/Info.plist");
+        script.Should().Contain("Contents/MacOS/FreeX");
+        script.Should().Contain("Contents/MacOS/FreeX.dll");
+        script.Should().Contain("Contents/Resources/FreeX.icns");
         script.Should().Contain("macOS public-preview evidence preflight passed");
 
         signingRunbook.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1");
@@ -44,16 +67,19 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         signingRunbook.Should().Contain("-RequireReleasePublicationArtifact");
         signingRunbook.Should().Contain("-ExpectedRunId <run-id>");
         signingRunbook.Should().Contain("-ExpectedRunAttempt <run-attempt>");
+        signingRunbook.Should().Contain("freex-<run-id>-<run-attempt>-macos-release-assets");
         signingRunbook.Should().Contain("Keep those wrapper directory names intact under `artifacts/macos-preview`.");
         distributionPlan.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1");
         distributionPlan.Should().Contain("Windows-runnable");
         distributionPlan.Should().Contain("-ExpectedRunId <run-id>");
         distributionPlan.Should().Contain("-ExpectedRunAttempt <run-attempt>");
         distributionPlan.Should().Contain("-RequireReleasePublicationArtifact");
+        distributionPlan.Should().Contain("freex-<run-id>-<run-attempt>-macos-release-assets");
         distributionPlan.Should().Contain("Do not flatten wrapper contents directly into the artifact root");
         hostedRunnerPlan.Should().Contain("-ExpectedRunId <run-id>");
         hostedRunnerPlan.Should().Contain("-ExpectedRunAttempt <run-attempt>");
         hostedRunnerPlan.Should().Contain("-RequireReleasePublicationArtifact");
+        hostedRunnerPlan.Should().Contain("freex-<run-id>-<run-attempt>-macos-release-assets");
         hostedRunnerPlan.Should().Contain("wrapper directory under the artifact root");
 
         AssertDistributionCandidatePreflightCommandsRequireReleasePublicationArtifact(
@@ -62,13 +88,19 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         AssertDistributionCandidatePreflightCommandsRequireReleasePublicationArtifact(
             distributionPlan,
             "docs/release/test-distribution.md");
+        AssertDownloadedHostedPreflightCommandsRequireDiagnosticsAndAggregateArtifacts(
+            distributionPlan,
+            "docs/release/test-distribution.md");
         AssertDistributionCandidatePreflightCommandsRequireReleasePublicationArtifact(
+            hostedRunnerPlan,
+            "docs/planning/macos-hosted-runner-build-plan.md");
+        AssertDownloadedHostedPreflightCommandsRequireDiagnosticsAndAggregateArtifacts(
             hostedRunnerPlan,
             "docs/planning/macos-hosted-runner-build-plan.md");
     }
 
     [Fact]
-    public void ReadinessPreflight_PassesForSyntheticInternalPreviewBundles()
+    public void ReadinessPreflight_PassesForSyntheticInternalPreviewBundlesWithExplicitLiveCommandKeySmoke()
     {
         using var temp = new TestTemporaryDirectory();
         CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
@@ -80,6 +112,21 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.Output.Should().Contain("macOS public-preview evidence preflight passed");
         result.Output.Should().Contain("osx-arm64");
         result.Output.Should().Contain("osx-x64");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_PassesWhenHostedLaunchSmokeMarksLiveCommandKeySmokeNotRequired()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        MarkLiveCommandKeySmokeNotRequired(arm64);
+        MarkLiveCommandKeySmokeNotRequired(x64);
+
+        var result = RunPreflight(temp.Path);
+
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("macOS public-preview evidence preflight passed");
     }
 
     [Fact]
@@ -95,6 +142,133 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.Output.Should().Contain("macOS public-preview evidence preflight passed");
         result.Output.Should().Contain("freex-42-1-osx-arm64-macos-app");
         result.Output.Should().Contain("freex-42-1-osx-x64-macos-app");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_PassesForDownloadedWrappersWithArtifactsSubdirectory()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        MoveWrapperContentsUnderArtifactsSubdirectory(temp.Path);
+        AssertNestedWrapperFile(temp.Path, "freex-42-1-osx-arm64-macos-app", "freex-osx-arm64-macos-app.zip");
+        AssertNestedWrapperFile(temp.Path, "freex-42-1-osx-arm64-macos-diagnostics", "freex-osx-arm64-macos-app.zip");
+        AssertNestedWrapperFile(temp.Path, "freex-42-1-osx-x64-macos-app", "freex-osx-x64-macos-app.zip");
+        AssertNestedWrapperFile(temp.Path, "freex-42-1-osx-x64-macos-diagnostics", "freex-osx-x64-macos-app.zip");
+
+        var result = RunPreflight(
+            temp.Path,
+            "-ExpectedRunId 42 -ExpectedRunAttempt 1 -RequireSeparateDiagnosticsArtifact");
+
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("macOS public-preview evidence preflight passed");
+        result.Output.Should().Contain("freex-42-1-osx-arm64-macos-app");
+        result.Output.Should().Contain("freex-42-1-osx-x64-macos-app");
+        result.Output.Should().Contain("artifacts");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_PassesForSyntheticAggregateReadinessArtifactWithExpectedRun()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        CreateSyntheticAggregateReadinessArtifact(temp.Path, arm64, x64);
+
+        var result = RunPreflight(
+            temp.Path,
+            "-ExpectedRunId 42 -ExpectedRunAttempt 1 -RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact");
+
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("macOS public-preview evidence preflight passed");
+        result.Output.Should().Contain("freex-42-1-macos-preview-readiness");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenExpectedAggregateReadinessArtifactIsMissing()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+
+        var result = RunPreflight(temp.Path, "-RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact");
+
+        AssertPreflightRejected(
+            result,
+            "macos-preview-readiness-manifest.json",
+            "macos-preview-readiness-summary.txt");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenAggregateReadinessArtifactIsFlattened()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var aggregateDirectory = CreateSyntheticAggregateReadinessArtifact(temp.Path, arm64, x64);
+        foreach (var file in Directory.EnumerateFiles(aggregateDirectory))
+        {
+            File.Move(file, Path.Combine(temp.Path, Path.GetFileName(file)), overwrite: true);
+        }
+
+        Directory.Delete(aggregateDirectory);
+
+        var result = RunPreflight(temp.Path, "-RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact");
+
+        AssertPreflightRejected(
+            result,
+            "macOS aggregate readiness artifact does not preserve a GitHub Actions artifact wrapper directory",
+            "freex-<run-id>-<run-attempt>-macos-preview-readiness",
+            "Do not flatten aggregate readiness files");
+    }
+
+    [Theory]
+    [InlineData("manifest", "\"run_id\": \"42\"", "\"run_id\": \"41\"", "macOS aggregate readiness manifest JSON property 'run_id' must be '42'")]
+    [InlineData("summary", "run_attempt=1", "run_attempt=2", "macOS aggregate readiness summary must include 'run_attempt=1'")]
+    public void ReadinessPreflight_FailsWhenAggregateReadinessUsesStaleRunIdentity(
+        string target,
+        string oldValue,
+        string newValue,
+        string expectedNeedle)
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var aggregateDirectory = CreateSyntheticAggregateReadinessArtifact(temp.Path, arm64, x64);
+        var fileName = target == "manifest"
+            ? "macos-preview-readiness-manifest.json"
+            : "macos-preview-readiness-summary.txt";
+        ReplaceInFile(Path.Combine(aggregateDirectory, fileName), oldValue, newValue);
+
+        var result = RunPreflight(
+            temp.Path,
+            "-ExpectedRunId 42 -ExpectedRunAttempt 1 -RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact");
+
+        AssertPreflightRejected(result, expectedNeedle);
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenAggregateReadinessBundleMetadataDrifts()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var aggregateDirectory = CreateSyntheticAggregateReadinessArtifact(temp.Path, arm64, x64);
+        ReplaceInFile(
+            Path.Combine(aggregateDirectory, "macos-preview-readiness-manifest.json"),
+            "\"bundle_identifier\": \"io.github.tony-xmelon.freex\"",
+            "\"bundle_identifier\": \"com.example.stale\"");
+
+        var result = RunPreflight(
+            temp.Path,
+            "-ExpectedRunId 42 -ExpectedRunAttempt 1 -RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact");
+
+        AssertPreflightRejected(
+            result,
+            "aggregate readiness manifest evidence_markers",
+            "bundle_identifier",
+            "io.github.tony-xmelon.freex",
+            "com.example.stale");
     }
 
     [Fact]
@@ -125,6 +299,141 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
     }
 
     [Fact]
+    public void ReadinessPreflight_FailsWhenReleasePublicationArtifactIsFlattened()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        var releaseDirectory = CreateSyntheticReleasePublicationArtifact(temp.Path, arm64, x64);
+        foreach (var file in Directory.EnumerateFiles(releaseDirectory))
+        {
+            File.Move(file, Path.Combine(temp.Path, Path.GetFileName(file)), overwrite: true);
+        }
+
+        Directory.Delete(releaseDirectory);
+
+        var result = RunPreflight(temp.Path, "-DistributionCandidate -RequireReleasePublicationArtifact");
+
+        AssertPreflightRejected(
+            result,
+            "macOS release publication artifact does not preserve a GitHub Actions artifact wrapper directory",
+            "freex-<run-id>-<run-attempt>-macos-release-assets",
+            "Do not flatten release assets");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenReleasePublicationManifestAndInstructionsAreSplitAcrossWrappers()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        var releaseDirectory = CreateSyntheticReleasePublicationArtifact(temp.Path, arm64, x64);
+        var staleReleaseDirectory = Path.Combine(temp.Path, "freex-41-1-macos-release-assets");
+        Directory.CreateDirectory(staleReleaseDirectory);
+
+        const string instructionsName = "FreeX-latest-macos-distribution-candidate-instructions.md";
+        File.Move(
+            Path.Combine(releaseDirectory, instructionsName),
+            Path.Combine(staleReleaseDirectory, instructionsName));
+
+        var result = RunPreflight(temp.Path, "-DistributionCandidate -RequireReleasePublicationArtifact");
+
+        AssertPreflightRejected(
+            result,
+            "macOS release publication manifest and instructions must be in the same downloaded",
+            "release-assets wrapper directory",
+            "freex-42-1-macos-release-assets",
+            "freex-41-1-macos-release-assets",
+            "cleanup_action=remove_split_or_stale_release_assets");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenReleasePublicationWrapperUsesStaleRunIdentity()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        var releaseDirectory = CreateSyntheticReleasePublicationArtifact(temp.Path, arm64, x64);
+        var staleReleaseDirectory = Path.Combine(temp.Path, "freex-41-1-macos-release-assets");
+        Directory.Move(releaseDirectory, staleReleaseDirectory);
+
+        var result = RunPreflight(
+            temp.Path,
+            "-DistributionCandidate -RequireReleasePublicationArtifact -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        AssertPreflightRejected(
+            result,
+            "macOS release publication artifact is from GitHub Actions run '41', expected run '42'",
+            "freex-41-1-macos-release-assets",
+            "release_assets_artifact");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenReleasePublicationArtifactUsesStaleRunIdentity()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        var releaseDirectory = CreateSyntheticReleasePublicationArtifact(temp.Path, arm64, x64);
+        var manifestPath = Path.Combine(releaseDirectory, "FreeX-latest-macos-distribution-candidate-manifest.json");
+        ReplaceInFile(manifestPath, "\"run_id\": \"42\"", "\"run_id\": \"41\"");
+        ReplaceInFile(manifestPath, "freex-42-1-*-macos-app", "freex-41-1-*-macos-app");
+        ReplaceInFile(
+            Path.Combine(releaseDirectory, "FreeX-latest-macos-arm64-evidence.txt"),
+            "github_run_id=42",
+            "github_run_id=41");
+
+        var result = RunPreflight(
+            temp.Path,
+            "-DistributionCandidate -RequireReleasePublicationArtifact -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        AssertPreflightRejected(
+            result,
+            "macOS release publication manifest JSON property 'run_id' must be '42'",
+            "source_artifact_pattern",
+            "osx-arm64 release publication evidence asset must include 'github_run_id=42'");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenReleasePublicationStableZipHashIsStale()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        var releaseDirectory = CreateSyntheticReleasePublicationArtifact(temp.Path, arm64, x64);
+        File.AppendAllText(Path.Combine(releaseDirectory, "FreeX-latest-macos-arm64.zip"), "corrupt");
+
+        var result = RunPreflight(temp.Path, "-DistributionCandidate -RequireReleasePublicationArtifact");
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 release publication manifest asset sha256 must match stable ZIP",
+            "osx-arm64 release publication checksum hash must match stable ZIP",
+            "FreeX-latest-macos-arm64.zip");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenSeparateDiagnosticsArtifactUsesStaleRunIdentity()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        CreateSyntheticDiagnosticsArtifact(temp.Path, arm64, runId: "41");
+        CreateSyntheticDiagnosticsArtifact(temp.Path, x64);
+
+        var result = RunPreflight(temp.Path, "-DistributionCandidate -RequireSeparateDiagnosticsArtifact");
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 diagnostics artifact is from GitHub Actions run '41' attempt '1'",
+            "osx-arm64 app",
+            "artifact is from run '42' attempt '1'",
+            "Remove stale",
+            "artifact",
+            "folders");
+    }
+
+    [Fact]
     public void ReadinessPreflight_FailsWhenDistributionCandidateLacksSigningEvidence()
     {
         using var temp = new TestTemporaryDirectory();
@@ -140,6 +449,24 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.CombinedOutput.Should().Contain("codesign_mode=developer-id");
         result.CombinedOutput.Should().Contain("notarization_status=accepted");
         result.CombinedOutput.Should().Contain("stapler_validated=true");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenDistributionCandidateEvidenceAppendsConflictingDuplicateSigningKey()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        File.AppendAllText(arm64.EvidencePath, Lines("codesign_mode=ad-hoc"));
+
+        var result = RunPreflight(temp.Path, "-DistributionCandidate");
+
+        AssertPreflightRejected(
+            result,
+            "conflicting duplicate 'codesign_mode' values",
+            "codesign_mode=developer-id",
+            "ad-hoc",
+            "Remove stale or contradictory entries");
     }
 
     [Fact]
@@ -287,7 +614,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
     [InlineData("live_cmd_bold_state_changed=true", "live_cmd_bold_state_changed=false", "live_cmd_bold_state_changed=true")]
     [InlineData("live_cmd_italic_state_changed=true", "live_cmd_italic_state_changed=false", "live_cmd_italic_state_changed=true")]
     [InlineData("live_cmd_underline_state_changed=true", "live_cmd_underline_state_changed=false", "live_cmd_underline_state_changed=true")]
-    public void ReadinessPreflight_FailsWhenCommandKeySmokeEvidenceIsStaleOrWeakened(
+    public void ReadinessPreflight_FailsWhenExplicitLiveCommandKeySmokeEvidenceIsStaleOrWeakened(
         string oldValue,
         string newValue,
         string expectedNeedle)
@@ -300,6 +627,68 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var result = RunPreflight(temp.Path);
 
         AssertPreflightRejected(result, "osx-arm64 command key smoke", expectedNeedle);
+    }
+
+    [Theory]
+    [InlineData("command_key_smoke=passed", "command_key_smoke=failed", "command_key_smoke=passed")]
+    [InlineData("command_key_smoke_attempted=true", "command_key_smoke_attempted=false", "command_key_smoke_attempted=true")]
+    [InlineData("cmd_find_direct_route_source_guard=true", "cmd_find_direct_route_source_guard=false", "cmd_find_direct_route_source_guard=true")]
+    [InlineData("cmd_bold_menu_gesture=true", "cmd_bold_menu_gesture=false", "cmd_bold_menu_gesture=true")]
+    public void ReadinessPreflight_FailsWhenHostedCommandKeySmokeLosesNonLiveProof(
+        string oldValue,
+        string newValue,
+        string expectedNeedle)
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        MarkLiveCommandKeySmokeNotRequired(arm64);
+        MarkLiveCommandKeySmokeNotRequired(x64);
+        ReplaceInFile(GetRuntimeArtifactPath(arm64, names => names.LaunchSmoke), oldValue, newValue);
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(result, "osx-arm64 command key smoke", expectedNeedle);
+    }
+
+    [Theory]
+    [InlineData("macos_dialog_smoke=passed", "macos_dialog_smoke=failed", "macos_dialog_smoke=passed")]
+    [InlineData("go_to_special_dialog_kind_controls=true", "go_to_special_dialog_kind_controls=false", "go_to_special_dialog_kind_controls=true")]
+    [InlineData("data_validation_dialog_action_buttons=true", "data_validation_dialog_action_buttons=false", "data_validation_dialog_action_buttons=true")]
+    public void ReadinessPreflight_FailsWhenHostedDialogSmokeEvidenceIsStaleOrWeakened(
+        string oldValue,
+        string newValue,
+        string expectedNeedle)
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        ReplaceInFile(GetRuntimeArtifactPath(arm64, names => names.LaunchSmoke), oldValue, newValue);
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(result, "osx-arm64 dialog smoke", expectedNeedle);
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenCommandKeySmokeAppendsConflictingDuplicateStatus()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        File.AppendAllText(
+            GetRuntimeArtifactPath(arm64, names => names.LaunchSmoke),
+            Lines("live_command_key_smoke=failed"));
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 command key smoke",
+            "conflicting duplicate 'live_command_key_smoke' values",
+            "live_command_key_smoke=passed",
+            "failed",
+            "Remove stale or contradictory entries");
     }
 
     [Fact]
@@ -315,6 +704,42 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.ExitCode.Should().NotBe(0);
         result.CombinedOutput.Should().Contain("checksum file hash must match");
         result.CombinedOutput.Should().Contain("zip_sha256");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenAppZipIsPlainTextEvenWhenChecksumMatches()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        ReplaceSyntheticZipWithPlainTextAndRefreshChecksum(arm64);
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 app ZIP must be a readable ZIP archive",
+            "FreeX.app bundle layout");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenBundleMetadataEvidenceIsMissingOrStale()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        RemoveLinesContaining(arm64.EvidencePath, "bundle_identifier=");
+        ReplaceInFile(arm64.EvidencePath, "bundle_package_type=APPL", "bundle_package_type=BNDL");
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 bundle metadata evidence",
+            "bundle_identifier=io.github.tony-xmelon.freex",
+            "bundle_package_type=APPL",
+            "Actual value(s):",
+            "BNDL.");
     }
 
     [Fact]
@@ -347,7 +772,27 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.CombinedOutput.Should().Contain("osx-arm64 has multiple downloaded macOS app artifact bundles");
         result.CombinedOutput.Should().Contain("freex-41-1-osx-arm64-macos-app");
         result.CombinedOutput.Should().Contain("freex-42-1-osx-arm64-macos-app");
-        result.CombinedOutput.Should().Contain("Remove stale artifact folders");
+        result.CombinedOutput.Should().Contain("Remove stale");
+        result.CombinedOutput.Should().Contain("artifact");
+        result.CombinedOutput.Should().Contain("folders");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenAppEvidenceUsesStaleRunAttempt()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        ReplaceInFile(arm64.EvidencePath, "github_run_attempt=1", "github_run_attempt=2");
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 evidence GitHub Actions identity",
+            "github_run_attempt=1",
+            "Actual value(s):",
+            "2.");
     }
 
     [Fact]
@@ -363,7 +808,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.CombinedOutput.Should().Contain("mixed GitHub Actions runs");
         result.CombinedOutput.Should().Contain("osx-arm64 uses run 42");
         result.CombinedOutput.Should().Contain("osx-x64 uses run 41");
-        result.CombinedOutput.Should().Contain("Remove stale artifact");
+        result.CombinedOutput.Should().Contain("cleanup_action=remove_stale_artifact_folders");
     }
 
     private static PowerShellResult RunPreflight(string artifactRoot, string arguments = "")
@@ -392,6 +837,28 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             $"{documentName} must require release-publication artifact validation in distribution-candidate command examples");
     }
 
+    private static void AssertDownloadedHostedPreflightCommandsRequireDiagnosticsAndAggregateArtifacts(
+        string document,
+        string documentName)
+    {
+        var commandLines = document
+            .Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
+            .Where(line =>
+                line.Contains("tools/Test-MacOsPublicPreviewReadiness.ps1", StringComparison.Ordinal) &&
+                line.Contains("-ArtifactRoot artifacts/macos-preview", StringComparison.Ordinal) &&
+                line.Contains("-ExpectedRunId <run-id>", StringComparison.Ordinal) &&
+                line.Contains("-ExpectedRunAttempt <run-attempt>", StringComparison.Ordinal))
+            .ToArray();
+
+        commandLines.Should().NotBeEmpty($"{documentName} should document downloaded hosted macOS preview evidence validation");
+        commandLines.Should().OnlyContain(
+            line => line.Contains("-RequireSeparateDiagnosticsArtifact", StringComparison.Ordinal),
+            $"{documentName} must require diagnostics artifact wrapper validation when validating downloaded hosted macOS preview evidence");
+        commandLines.Should().OnlyContain(
+            line => line.Contains("-RequireAggregateReadinessArtifact", StringComparison.Ordinal),
+            $"{documentName} must require aggregate readiness wrapper validation when validating downloaded hosted macOS preview evidence");
+    }
+
     private static SyntheticBundle CreateSyntheticBundle(
         string root,
         string runtime,
@@ -406,7 +873,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         Directory.CreateDirectory(bundleDirectory);
 
         var zipPath = Path.Combine(bundleDirectory, names.Zip);
-        File.WriteAllText(zipPath, $"Synthetic FreeX.app zip for {runtime}.");
+        CreateSyntheticMacOsAppZip(zipPath);
         var zipHash = ComputeSha256(zipPath);
         File.WriteAllText(Path.Combine(bundleDirectory, names.Checksum), $"{zipHash}  {names.Zip}{Environment.NewLine}");
 
@@ -436,6 +903,22 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             $"distribution_contract={contract}",
             $"distribution_readiness={readiness}",
             $"zip_name={names.Zip}",
+            "artifact_bundle_metadata_subject=unzipped_app_bundle",
+            "bundle_executable=FreeX",
+            "bundle_icon=FreeX.icns",
+            "bundle_identifier=io.github.tony-xmelon.freex",
+            "bundle_package_type=APPL",
+            "bundle_minimum_system_version=12.0",
+            "bundle_high_resolution_capable=true",
+            "artifact_document_extensions_subject=unzipped_app_bundle",
+            "native_document_type=FreeX Workbook",
+            "native_document_extension=fxl",
+            "native_document_extensions=fxl",
+            "native_document_handler_rank=Owner",
+            "imported_document_type=Spreadsheet Workbooks",
+            "imported_document_extension=xlsx",
+            "imported_document_extensions=xlsx;xlsm;xltx;xltm;xls;xlsb;xlt;csv;tsv;tab",
+            "imported_document_handler_rank=Alternate",
             "codesign_verified=true",
             $"codesign_mode={codesignMode}",
             $"notarization_status={notarizationStatus}",
@@ -479,6 +962,22 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                 "viewport_columns=8",
                 "native_open_recent_menu_item=true",
                 "native_open_recent_item_count=1",
+                "command_key_smoke=passed",
+                "command_key_smoke_attempted=true",
+                "cmd_new_workbook_menu_gesture=true",
+                "cmd_open_menu_gesture=true",
+                "cmd_save_menu_gesture=true",
+                "cmd_save_as_menu_gesture=true",
+                "cmd_close_workbook_menu_gesture=true",
+                "cmd_quit_menu_gesture=true",
+                "cmd_select_all_menu_gesture=true",
+                "cmd_find_menu_gesture=true",
+                "cmd_find_direct_route_source_guard=true",
+                "cmd_page_up_direct_route_source_guard=true",
+                "cmd_page_down_direct_route_source_guard=true",
+                "cmd_bold_menu_gesture=true",
+                "cmd_italic_menu_gesture=true",
+                "cmd_underline_menu_gesture=true",
                 "live_command_key_smoke_required=true",
                 "live_command_key_smoke=passed",
                 "live_command_key_smoke_attempted=true",
@@ -486,7 +985,55 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                 "live_cmd_select_all_state_changed=true",
                 "live_cmd_bold_state_changed=true",
                 "live_cmd_italic_state_changed=true",
-                "live_cmd_underline_state_changed=true"));
+                "live_cmd_underline_state_changed=true",
+                "macos_dialog_smoke=passed",
+                "macos_dialog_smoke_attempted=true",
+                "macos_dialog_smoke_status=passed",
+                "macos_dialog_activation_completed=true",
+                "find_dialog=true",
+                "find_dialog_text_box=true",
+                "find_dialog_action_buttons=true",
+                "find_dialog_options=true",
+                "find_dialog_format_controls=true",
+                "find_dialog_compact_layout=true",
+                "find_dialog_result_closed_without_accept=true",
+                "replace_dialog=true",
+                "replace_dialog_text_boxes=true",
+                "replace_dialog_action_buttons=true",
+                "replace_dialog_options=true",
+                "replace_dialog_format_controls=true",
+                "replace_dialog_compact_layout=true",
+                "replace_dialog_result_closed_without_accept=true",
+                "go_to_dialog=true",
+                "go_to_dialog_reference_controls=true",
+                "go_to_dialog_compact_layout=true",
+                "go_to_dialog_result_closed_without_accept=true",
+                "go_to_special_dialog=true",
+                "go_to_special_dialog_kind_controls=true",
+                "go_to_special_dialog_value_type_controls=true",
+                "go_to_special_dialog_compact_layout=true",
+                "go_to_special_dialog_result_closed_without_accept=true",
+                "format_cells_dialog=true",
+                "format_cells_dialog_tab_strip=true",
+                "format_cells_dialog_default_number_tab=true",
+                "format_cells_dialog_number_controls=true",
+                "format_cells_dialog_action_buttons=true",
+                "format_cells_dialog_compact_layout=true",
+                "format_cells_dialog_result_closed_without_accept=true",
+                "sort_dialog=true",
+                "sort_dialog_sort_on_controls=true",
+                "sort_dialog_color_controls=true",
+                "sort_dialog_action_buttons=true",
+                "sort_dialog_compact_layout=true",
+                "sort_dialog_result_closed_without_accept=true",
+                "data_validation_dropdown_control=true",
+                "data_validation_dropdown_items=true",
+                "data_validation_dialog=true",
+                "data_validation_dialog_criteria_controls=true",
+                "data_validation_dialog_message_controls=true",
+                "data_validation_dialog_action_buttons=true",
+                "data_validation_dialog_compact_layout=true",
+                "data_validation_dialog_result_closed_without_accept=true"));
 
         File.WriteAllText(
             Path.Combine(bundleDirectory, names.OpenWithSmoke),
@@ -562,12 +1109,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
 
         if (includeDiagnosticsArtifact)
         {
-            var diagnosticsDirectory = Path.Combine(root, $"freex-{runId}-{runAttempt}-{runtime}-macos-diagnostics");
-            Directory.CreateDirectory(diagnosticsDirectory);
-            foreach (var file in Directory.EnumerateFiles(bundleDirectory))
-            {
-                File.Copy(file, Path.Combine(diagnosticsDirectory, Path.GetFileName(file)), overwrite: true);
-            }
+            CreateSyntheticDiagnosticsArtifact(root, new SyntheticBundle(runtime, bundleDirectory, zipPath, evidencePath, packagingSmokePath), runId, runAttempt);
         }
 
         return new SyntheticBundle(
@@ -578,7 +1120,190 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             packagingSmokePath);
     }
 
-    private static void CreateSyntheticReleasePublicationArtifact(string root, params SyntheticBundle[] bundles)
+    private static string CreateSyntheticDiagnosticsArtifact(
+        string root,
+        SyntheticBundle bundle,
+        string runId = "42",
+        string runAttempt = "1")
+    {
+        var diagnosticsDirectory = Path.Combine(root, $"freex-{runId}-{runAttempt}-{bundle.Runtime}-macos-diagnostics");
+        Directory.CreateDirectory(diagnosticsDirectory);
+        foreach (var file in Directory.EnumerateFiles(bundle.BundleDirectory))
+        {
+            File.Copy(file, Path.Combine(diagnosticsDirectory, Path.GetFileName(file)), overwrite: true);
+        }
+
+        return diagnosticsDirectory;
+    }
+
+    private static void CreateSyntheticMacOsAppZip(string zipPath)
+    {
+        if (File.Exists(zipPath))
+        {
+            File.Delete(zipPath);
+        }
+
+        using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
+        AddTextEntry(archive, "FreeX.app/Contents/Info.plist", "<plist version=\"1.0\"><dict /></plist>");
+        AddTextEntry(archive, "FreeX.app\\Contents\\MacOS\\FreeX", "#!/bin/sh\n");
+        AddTextEntry(archive, "FreeX.app/Contents/MacOS/FreeX.dll", "FreeX managed entry assembly");
+        AddTextEntry(archive, "FreeX.app\\Contents\\Resources\\FreeX.icns", "icns");
+    }
+
+    private static void AddTextEntry(ZipArchive archive, string entryName, string contents)
+    {
+        var entry = archive.CreateEntry(entryName);
+        using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        writer.Write(contents);
+    }
+
+    private static void ReplaceSyntheticZipWithPlainTextAndRefreshChecksum(SyntheticBundle bundle)
+    {
+        var oldHash = ComputeSha256(bundle.ZipPath);
+        File.WriteAllText(bundle.ZipPath, $"This is not a ZIP archive for {bundle.Runtime}.");
+        var newHash = ComputeSha256(bundle.ZipPath);
+        var names = RuntimeArtifactNames.For(bundle.Runtime);
+        File.WriteAllText(
+            Path.Combine(bundle.BundleDirectory, names.Checksum),
+            $"{newHash}  {names.Zip}{Environment.NewLine}");
+        ReplaceInFile(bundle.EvidencePath, $"zip_sha256={oldHash}", $"zip_sha256={newHash}");
+    }
+
+    private static void MoveWrapperContentsUnderArtifactsSubdirectory(string root)
+    {
+        foreach (var wrapperDirectory in Directory.EnumerateDirectories(root))
+        {
+            var artifactsDirectory = Path.Combine(wrapperDirectory, "artifacts");
+            Directory.CreateDirectory(artifactsDirectory);
+
+            foreach (var file in Directory.EnumerateFiles(wrapperDirectory))
+            {
+                File.Move(
+                    file,
+                    Path.Combine(artifactsDirectory, Path.GetFileName(file)));
+            }
+
+            foreach (var directory in Directory.EnumerateDirectories(wrapperDirectory)
+                         .Where(directory => !string.Equals(
+                             directory,
+                             artifactsDirectory,
+                             StringComparison.OrdinalIgnoreCase)))
+            {
+                Directory.Move(
+                    directory,
+                    Path.Combine(artifactsDirectory, Path.GetFileName(directory)));
+            }
+        }
+    }
+
+    private static void AssertNestedWrapperFile(string root, string wrapperName, string fileName)
+    {
+        var wrapperDirectory = Path.Combine(root, wrapperName);
+        Directory.EnumerateFiles(wrapperDirectory).Should().BeEmpty();
+        File.Exists(Path.Combine(wrapperDirectory, "artifacts", fileName)).Should().BeTrue();
+    }
+
+    private static string CreateSyntheticAggregateReadinessArtifact(string root, params SyntheticBundle[] bundles)
+    {
+        var aggregateDirectory = Path.Combine(root, "freex-42-1-macos-preview-readiness");
+        Directory.CreateDirectory(aggregateDirectory);
+
+        var runtimeEntries = new List<Dictionary<string, object?>>();
+        var summaryLines = new List<string>
+        {
+            "macos_preview_readiness=passed",
+            "run_id=42",
+            "run_attempt=1",
+            "source_artifact_pattern=freex-42-1-osx-*-macos-*"
+        };
+
+        foreach (var bundle in bundles)
+        {
+            var names = RuntimeArtifactNames.For(bundle.Runtime);
+            var zipHash = ComputeSha256(bundle.ZipPath);
+            var appArtifact = $"freex-42-1-{bundle.Runtime}-macos-app";
+            var diagnosticsArtifact = $"freex-42-1-{bundle.Runtime}-macos-diagnostics";
+            runtimeEntries.Add(new Dictionary<string, object?>
+            {
+                ["runtime"] = bundle.Runtime,
+                ["app_artifact"] = appArtifact,
+                ["app_artifact_digest"] = $"sha256:{zipHash}",
+                ["diagnostics_artifact"] = diagnosticsArtifact,
+                ["diagnostics_artifact_digest"] = $"sha256:{zipHash}",
+                ["zip_sha256"] = zipHash,
+                ["checksum_file"] = $"{zipHash}  {names.Zip}",
+                ["evidence_file"] = names.Evidence,
+                ["evidence_markers"] = new Dictionary<string, string>
+                {
+                    ["github_run_id"] = "42",
+                    ["github_run_attempt"] = "1",
+                    ["artifact_channel"] = "internal-preview",
+                    ["distribution_candidate"] = "false",
+                    ["distribution_readiness"] = "internal_preview_not_for_distribution",
+                    ["smoke_status"] = "passed",
+                    ["artifact_bundle_metadata_subject"] = "unzipped_app_bundle",
+                    ["bundle_executable"] = "FreeX",
+                    ["bundle_icon"] = "FreeX.icns",
+                    ["bundle_identifier"] = "io.github.tony-xmelon.freex",
+                    ["bundle_package_type"] = "APPL",
+                    ["bundle_minimum_system_version"] = "12.0",
+                    ["bundle_high_resolution_capable"] = "true",
+                    ["artifact_document_extensions_subject"] = "unzipped_app_bundle",
+                    ["native_document_type"] = "FreeX Workbook",
+                    ["native_document_extension"] = "fxl",
+                    ["native_document_extensions"] = "fxl",
+                    ["native_document_handler_rank"] = "Owner",
+                    ["imported_document_type"] = "Spreadsheet Workbooks",
+                    ["imported_document_extension"] = "xlsx",
+                    ["imported_document_extensions"] = "xlsx;xlsm;xltx;xltm;xls;xlsb;xlt;csv;tsv;tab",
+                    ["imported_document_handler_rank"] = "Alternate",
+                    ["codesign_mode"] = "ad-hoc",
+                    ["notarization_status"] = "skipped_missing_credentials",
+                    ["stapler_validated"] = "false",
+                    ["gatekeeper_assessment_status"] = "rejected",
+                    ["gatekeeper_assessment_source"] = "unavailable",
+                    ["zip_sha256"] = zipHash
+                }
+            });
+
+            summaryLines.Add($"runtime={bundle.Runtime}");
+            summaryLines.Add($"app_artifact={appArtifact}");
+            summaryLines.Add($"app_artifact_digest=sha256:{zipHash}");
+            summaryLines.Add($"diagnostics_artifact={diagnosticsArtifact}");
+            summaryLines.Add($"diagnostics_artifact_digest=sha256:{zipHash}");
+            summaryLines.Add($"zip_sha256={zipHash}");
+            summaryLines.Add("artifact_channel=internal-preview");
+            summaryLines.Add("distribution_readiness=internal_preview_not_for_distribution");
+            summaryLines.Add("smoke_status=passed");
+        }
+
+        var manifest = new Dictionary<string, object?>
+        {
+            ["schema"] = "io.github.tony-xmelon.freex.macos-preview-readiness.v1",
+            ["repository"] = "tony-xmelon/FreeX",
+            ["workflow"] = "macOS App Preview",
+            ["run_id"] = "42",
+            ["run_attempt"] = "1",
+            ["commit"] = "0123abcdef0123456789abcdef0123456789abcd",
+            ["generated_at_utc"] = "2026-06-08T00:00:00.0000000Z",
+            ["source_artifact_pattern"] = "freex-42-1-osx-*-macos-*",
+            ["readiness_script"] = "tools/Test-MacOsPublicPreviewReadiness.ps1",
+            ["require_separate_diagnostics_artifact"] = true,
+            ["runtimes"] = runtimeEntries
+        };
+
+        File.WriteAllText(
+            Path.Combine(aggregateDirectory, "macos-preview-readiness-manifest.json"),
+            JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
+
+        File.WriteAllText(
+            Path.Combine(aggregateDirectory, "macos-preview-readiness-summary.txt"),
+            Lines(summaryLines.ToArray()));
+
+        return aggregateDirectory;
+    }
+
+    private static string CreateSyntheticReleasePublicationArtifact(string root, params SyntheticBundle[] bundles)
     {
         var releaseDirectory = Path.Combine(root, "freex-42-1-macos-release-assets");
         Directory.CreateDirectory(releaseDirectory);
@@ -631,6 +1356,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             ["workflow"] = "macOS App Preview",
             ["run_id"] = "42",
             ["run_attempt"] = "1",
+            ["release_assets_artifact"] = "freex-42-1-macos-release-assets",
             ["commit"] = "0123abcdef0123456789abcdef0123456789abcd",
             ["generated_at_utc"] = "2026-06-08T00:00:00.0000000Z",
             ["source_artifact_pattern"] = "freex-42-1-*-macos-app",
@@ -660,9 +1386,12 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             Lines(
                 "# FreeX macOS Distribution Candidate",
                 "Published release assets include FreeX-latest-macos-arm64.zip and FreeX-latest-macos-x64.zip.",
+                "Preserve the freex-42-1-macos-release-assets Actions artifact wrapper with this manifest and instructions.",
                 "Use FreeX-latest-macos-distribution-candidate-manifest.json to verify the release asset set.",
                 "Each runtime includes default-open launch smoke, evidence, notarization, and tester instruction assets.",
                 "Reject the distribution-candidate unless Developer ID signing, accepted notarization, stapler validation, Gatekeeper, and gatekeeper_assessment_status=accepted are present."));
+
+        return releaseDirectory;
     }
 
     private static string CopyReleaseAsset(SyntheticBundle bundle, string sourceName, string releaseDirectory, string destinationName)
@@ -692,6 +1421,19 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var lines = File.ReadAllLines(path);
         lines.Should().Contain(line => line.Contains(value, StringComparison.Ordinal));
         File.WriteAllLines(path, lines.Where(line => !line.Contains(value, StringComparison.Ordinal)));
+    }
+
+    private static void MarkLiveCommandKeySmokeNotRequired(SyntheticBundle bundle)
+    {
+        var launchSmokePath = GetRuntimeArtifactPath(bundle, names => names.LaunchSmoke);
+        ReplaceInFile(launchSmokePath, "live_command_key_smoke_required=true", "live_command_key_smoke_required=false");
+        ReplaceInFile(launchSmokePath, "live_command_key_smoke=passed", "live_command_key_smoke=not_required");
+        ReplaceInFile(launchSmokePath, "live_command_key_smoke_attempted=true", "live_command_key_smoke_attempted=false");
+        ReplaceInFile(launchSmokePath, "live_command_key_smoke_ready=true", "live_command_key_smoke_ready=false");
+        ReplaceInFile(launchSmokePath, "live_cmd_select_all_state_changed=true", "live_cmd_select_all_state_changed=false");
+        ReplaceInFile(launchSmokePath, "live_cmd_bold_state_changed=true", "live_cmd_bold_state_changed=false");
+        ReplaceInFile(launchSmokePath, "live_cmd_italic_state_changed=true", "live_cmd_italic_state_changed=false");
+        ReplaceInFile(launchSmokePath, "live_cmd_underline_state_changed=true", "live_cmd_underline_state_changed=false");
     }
 
     private static string GetRuntimeArtifactPath(SyntheticBundle bundle, Func<RuntimeArtifactNames, string> selectName) =>

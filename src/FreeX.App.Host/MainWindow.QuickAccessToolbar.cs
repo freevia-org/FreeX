@@ -4,12 +4,16 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Shell;
+using FreeX.Core.Commands;
 
 namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private const int QuickAccessHistoryMaxCount = 16;
+
     private readonly List<Button> _quickAccessToolbarButtons = [];
+    private readonly HashSet<ButtonBase> _quickAccessToolbarChromeButtons = [];
     private readonly List<QuickAccessToolbarStateTarget> _quickAccessToolbarStateTargets = [];
     private readonly HashSet<string> _registeredQuickAccessToolbarNames = new(StringComparer.Ordinal);
 
@@ -19,6 +23,7 @@ public partial class MainWindow
         TitleBarQatPanel.Children.Clear();
         BelowRibbonQatPanel.Children.Clear();
         _quickAccessToolbarButtons.Clear();
+        _quickAccessToolbarChromeButtons.Clear();
         _quickAccessToolbarStateTargets.Clear();
 
         var commands = QuickAccessToolbarCatalog.Normalize(_options.QuickAccessToolbarCommands);
@@ -32,14 +37,23 @@ public partial class MainWindow
         for (var index = 0; index < commands.Count; index++)
         {
             var command = commands[index];
-            var button = CreateQuickAccessToolbarButton(command, index + 1, showBelowRibbon);
+            var hasHistoryFlyout = IsQuickAccessHistoryCommand(command.Id);
+            var button = CreateQuickAccessToolbarButton(command, index + 1, showBelowRibbon, hasHistoryFlyout);
+            var availability = QuickAccessCommandStateResolver.GetAvailability(command.Id);
             targetPanel.Children.Add(button);
             _quickAccessToolbarButtons.Add(button);
-            _quickAccessToolbarStateTargets.Add(new(
-                button,
-                QuickAccessCommandStateResolver.GetAvailability(command.Id)));
-            RegisterName(command.AutomationId, button);
-            _registeredQuickAccessToolbarNames.Add(command.AutomationId);
+            _quickAccessToolbarChromeButtons.Add(button);
+            _quickAccessToolbarStateTargets.Add(new(button, availability));
+            RegisterQuickAccessToolbarName(command.AutomationId, button);
+
+            if (hasHistoryFlyout)
+            {
+                var historyButton = CreateQuickAccessToolbarHistoryButton(command, showBelowRibbon);
+                targetPanel.Children.Add(historyButton);
+                _quickAccessToolbarChromeButtons.Add(historyButton);
+                _quickAccessToolbarStateTargets.Add(new(historyButton, availability));
+                RegisterQuickAccessToolbarName(historyButton.Name, historyButton);
+            }
         }
 
         RefreshQuickAccessToolbarCommandStates(force: true);
@@ -48,7 +62,8 @@ public partial class MainWindow
     private Button CreateQuickAccessToolbarButton(
         QuickAccessToolbarCommandDefinition command,
         int visibleIndex,
-        bool showBelowRibbon)
+        bool showBelowRibbon,
+        bool hasHistoryFlyout)
     {
         var iconBrush = (Brush)FindResource(showBelowRibbon
             ? "FreeXTextBrush"
@@ -56,9 +71,9 @@ public partial class MainWindow
         var button = new Button
         {
             Name = command.AutomationId,
-            Width = 26,
+            Width = hasHistoryFlyout ? 24 : 26,
             Height = 22,
-            Margin = new Thickness(0, 0, 2, 0),
+            Margin = hasHistoryFlyout ? new Thickness(0) : new Thickness(0, 0, 2, 0),
             Style = (Style)FindResource(showBelowRibbon ? "RibbonBtn" : "TitleBarQatButton"),
             FontSize = 13,
             Content = new RibbonIcon
@@ -81,6 +96,47 @@ public partial class MainWindow
         RibbonMetadata.SetCatalogId(button, command.Id);
         button.ContextMenu = CreateQuickAccessToolbarCustomizationContextMenu(command.Id);
         button.Click += (_, args) => ExecuteQuickAccessToolbarCommand(command.Id, button, args);
+        return button;
+    }
+
+    private Button CreateQuickAccessToolbarHistoryButton(
+        QuickAccessToolbarCommandDefinition command,
+        bool showBelowRibbon)
+    {
+        var iconBrush = (Brush)FindResource(showBelowRibbon
+            ? "FreeXTextBrush"
+            : "FreeXWhiteBrush");
+        var title = UiText.Get(command.TitleResourceKey);
+        var button = new Button
+        {
+            Name = GetQuickAccessHistoryButtonName(command.Id),
+            Width = 12,
+            Height = 22,
+            Margin = new Thickness(0, 0, 2, 0),
+            Padding = new Thickness(0),
+            Style = (Style)FindResource(showBelowRibbon ? "RibbonBtn" : "TitleBarQatButton"),
+            Content = new RibbonIcon
+            {
+                Kind = RibbonCommandIconKind.ChevronDown,
+                IconSize = 9,
+                Foreground = iconBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+
+        WindowChrome.SetIsHitTestVisibleInChrome(button, !showBelowRibbon);
+        var historyTitle = UiText.Format("QuickAccessToolbar_HistoryAutomationNameFormat", title);
+        AutomationProperties.SetAutomationId(button, button.Name);
+        AutomationProperties.SetName(button, historyTitle);
+        RibbonTooltip.SetTitle(button, historyTitle);
+        RibbonTooltip.SetDescription(
+            button,
+            UiText.Format("QuickAccessToolbar_HistoryDescriptionFormat", title.ToLowerInvariant()));
+        RibbonMetadata.SetCommandName(button, $"{command.CommandName} History");
+        RibbonMetadata.SetCatalogId(button, command.Id);
+        button.ContextMenu = CreateQuickAccessToolbarCustomizationContextMenu(command.Id);
+        button.Click += (_, _) => OpenQuickAccessHistoryMenu(command.Id, button);
         return button;
     }
 
@@ -172,6 +228,12 @@ public partial class MainWindow
         RebuildQuickAccessToolbar();
     }
 
+    private void RegisterQuickAccessToolbarName(string name, FrameworkElement element)
+    {
+        RegisterName(name, element);
+        _registeredQuickAccessToolbarNames.Add(name);
+    }
+
     private void UnregisterQuickAccessToolbarNames()
     {
         foreach (var name in _registeredQuickAccessToolbarNames.ToArray())
@@ -198,7 +260,7 @@ public partial class MainWindow
         _quickAccessToolbarButtons;
 
     private bool IsQuickAccessToolbarButton(FrameworkElement element) =>
-        element is Button button && _quickAccessToolbarButtons.Contains(button);
+        element is ButtonBase button && _quickAccessToolbarChromeButtons.Contains(button);
 
     private void RefreshQuickAccessToolbarCommandStates(bool force = false)
     {
@@ -269,8 +331,88 @@ public partial class MainWindow
         if (!QuickAccessToolbarCatalog.TryGet(commandId, out var command))
             return null;
 
-        return _quickAccessToolbarButtons
-            .FirstOrDefault(button => string.Equals(button.Name, command.AutomationId, StringComparison.Ordinal));
+        foreach (var button in _quickAccessToolbarButtons)
+        {
+            if (string.Equals(button.Name, command.AutomationId, StringComparison.Ordinal))
+                return button;
+        }
+
+        return null;
+    }
+
+    private static bool IsQuickAccessHistoryCommand(string commandId) =>
+        string.Equals(commandId, QuickAccessToolbarCommandIds.Undo, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(commandId, QuickAccessToolbarCommandIds.Redo, StringComparison.OrdinalIgnoreCase);
+
+    private static string GetQuickAccessHistoryButtonName(string commandId) =>
+        string.Equals(commandId, QuickAccessToolbarCommandIds.Undo, StringComparison.OrdinalIgnoreCase)
+            ? "UndoQatHistoryBtn"
+            : "RedoQatHistoryBtn";
+
+    private IReadOnlyList<CommandHistoryEntry> GetQuickAccessHistoryEntries(string commandId)
+    {
+        if (_commandBus is not ICommandHistoryProvider historyProvider)
+            return [];
+
+        return commandId switch
+        {
+            QuickAccessToolbarCommandIds.Undo => historyProvider.GetUndoHistory(_workbook.Id, QuickAccessHistoryMaxCount),
+            QuickAccessToolbarCommandIds.Redo => historyProvider.GetRedoHistory(_workbook.Id, QuickAccessHistoryMaxCount),
+            _ => []
+        };
+    }
+
+    private void OpenQuickAccessHistoryMenu(string commandId, ButtonBase placementTarget)
+    {
+        var entries = GetQuickAccessHistoryEntries(commandId);
+        var menu = new ContextMenu
+        {
+            PlacementTarget = placementTarget,
+            Placement = PlacementMode.Bottom
+        };
+
+        if (entries.Count == 0)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = string.Equals(commandId, QuickAccessToolbarCommandIds.Undo, StringComparison.OrdinalIgnoreCase)
+                    ? "No actions to undo"
+                    : "No actions to redo",
+                IsEnabled = false
+            });
+        }
+        else
+        {
+            for (var index = 0; index < entries.Count; index++)
+            {
+                var actionCount = index + 1;
+                var item = new MenuItem
+                {
+                    Header = entries[index].Label
+                };
+                AutomationProperties.SetAutomationId(item, $"{commandId}QatHistoryItem{actionCount}");
+                item.Click += (_, _) => ExecuteQuickAccessHistory(commandId, actionCount);
+                menu.Items.Add(item);
+            }
+        }
+
+        menu.IsOpen = true;
+    }
+
+    private void ExecuteQuickAccessHistory(string commandId, int actionCount)
+    {
+        for (var index = 0; index < actionCount; index++)
+        {
+            var success = commandId switch
+            {
+                QuickAccessToolbarCommandIds.Undo => ExecuteUndo(),
+                QuickAccessToolbarCommandIds.Redo => ExecuteRedo(),
+                _ => false
+            };
+
+            if (!success)
+                break;
+        }
     }
 
     private async void ExecuteQuickAccessToolbarCommand(string commandId, object sender, RoutedEventArgs args)
@@ -400,6 +542,6 @@ public partial class MainWindow
     }
 
     private readonly record struct QuickAccessToolbarStateTarget(
-        Button Button,
+        ButtonBase Button,
         QuickAccessCommandAvailability Availability);
 }

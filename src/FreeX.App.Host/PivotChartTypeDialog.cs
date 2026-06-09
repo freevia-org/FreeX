@@ -31,10 +31,10 @@ public sealed class PivotChartTypeDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         _tabs.Margin = new Thickness(0, 0, 0, 12);
         _tabs.Height = 290;
-        _recommendedGallery.ItemsSource = ChartTypePickerPlanner.GetRecommendedGalleryChoices();
+        var recommendedChoices = ChartTypePickerPlanner.GetRecommendedGalleryChoices();
+        _recommendedGallery.ItemsSource = recommendedChoices;
         _recommendedGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
-        _recommendedGallery.SelectedItem = ChartTypePickerPlanner.GetRecommendedGalleryChoices()
-            .FirstOrDefault(choice => choice.Type == currentType);
+        _recommendedGallery.SelectedItem = FindGalleryChoice(recommendedChoices, currentType);
         if (_recommendedGallery.SelectedItem is null)
             _recommendedGallery.SelectedIndex = 0;
         _tabs.Items.Add(new TabItem
@@ -64,6 +64,18 @@ public sealed class PivotChartTypeDialog : Window
         _tabs.SelectedIndex == 0
             ? _recommendedGallery.SelectedItem as ChartTypeGalleryChoice
             : _subtypeGallery.SelectedItem as ChartTypeGalleryChoice;
+
+    private static ChartTypeGalleryChoice? FindGalleryChoice(IReadOnlyList<ChartTypeGalleryChoice> choices, ChartType type)
+    {
+        for (var index = 0; index < choices.Count; index++)
+        {
+            var choice = choices[index];
+            if (choice.Type == type)
+                return choice;
+        }
+
+        return null;
+    }
 
     private void FocusInitialKeyboardTarget()
     {
