@@ -15,6 +15,23 @@ public sealed class HomeBorderCommandSourceTests
         button.Should().Contain("<Button.ContextMenu>");
     }
 
+    [Fact]
+    public void BordersRibbonMenu_ListsNoBorderOptionAndRoutesItToClearBorders()
+    {
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
+        var menuItem = xaml.ExtractMenuItemElementByClickHandler("BorderNoneMenuItem_Click");
+
+        menuItem.ShouldContainLocalizedAttribute("Header", "No Border");
+        menuItem.ShouldContainInvariantCommandName("No Border");
+        menuItem.Should().Contain("local:RibbonTooltip.KeyTip=\"N\"");
+        menuItem.Should().Contain("<local:BorderMenuIcon Kind=\"None\"/>");
+        SourceMethodExtractor.ExtractMethodSource(source, "private void BorderNoneMenuItem_Click(")
+            .Should().Contain("ApplyBorderPreset(RibbonBorderPreset.None)");
+        source.Should().Contain("case RibbonBorderPreset.None:");
+        source.Should().Contain("ApplyStyleDiff(BorderShortcutService.GetClearBorderDiff());");
+    }
+
     [Theory]
     [InlineData("All Borders", "A", "BorderAllMenuItem_Click", "All")]
     [InlineData("Outside Borders", "O", "BorderOutsideMenuItem_Click", "Outside")]

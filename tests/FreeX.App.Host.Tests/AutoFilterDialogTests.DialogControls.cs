@@ -444,6 +444,10 @@ public sealed partial class AutoFilterDialogTests
         var source = ReadAutoFilterDialogSources();
 
         source.Should().Contain("if (!ValidateTypedCriteriaInputs())");
+        source.Should().Contain("if (_customFilterGroup.Visibility != Visibility.Visible)");
+        source.Should().Contain("private string GetCommittedCriteriaText()");
+        source.Should().Contain("? _criteriaBox.Text");
+        source.Should().Contain(": string.Empty");
         source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterFilterValue\"), _criteriaValueBox);");
         source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterFirstBetweenValue\"), _betweenMinBox);");
         source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterSecondBetweenValue\"), _betweenMaxBox);");
