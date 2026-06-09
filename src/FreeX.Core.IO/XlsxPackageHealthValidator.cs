@@ -108,6 +108,7 @@ public static class XlsxPackageHealthValidator
         AddPivotCachePackageIssues(archive, issues);
         AddPivotTablePackageIssues(archive, issues);
         AddWorksheetDrawingPackageIssues(archive, issues);
+        AddWorksheetBackgroundPicturePackageIssues(archive, issues);
         AddWorksheetTablePackageIssues(archive, issues);
         return issues;
     }
@@ -1945,6 +1946,80 @@ public static class XlsxPackageHealthValidator
         return true;
     }
 
+    private static void AddWorksheetBackgroundPicturePackageIssues(ZipArchive archive, List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, "[Content_Types].xml", issues, out var contentTypesXml) ||
+            contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
+        {
+            return;
+        }
+
+        var entryNames = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var worksheetParts = entryNames
+            .Where(part => part.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase))
+            .Where(part => part.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .Where(part => !IsPackageRelationshipPart(part))
+            .OrderBy(part => part, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var worksheetPart in worksheetParts)
+            AddWorksheetBackgroundPicturePackageIssues(archive, contentTypesXml, entryNames, worksheetPart, issues);
+    }
+
+    private static void AddWorksheetBackgroundPicturePackageIssues(
+        ZipArchive archive,
+        XDocument contentTypesXml,
+        IReadOnlySet<string> entryNames,
+        string worksheetPart,
+        List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, worksheetPart, issues, out var worksheetXml) ||
+            worksheetXml.Root?.Name != WorkbookNs + "worksheet")
+        {
+            return;
+        }
+
+        var backgroundPictureReferences = worksheetXml.Root
+            .Descendants(WorkbookNs + "picture")
+            .Select((picture, index) => new WorksheetBackgroundPictureReference(
+                worksheetPart,
+                index + 1,
+                picture.Attribute(OfficeRelationshipNs + "id")?.Value))
+            .ToArray();
+        if (backgroundPictureReferences.Length == 0)
+            return;
+
+        var worksheetRelsPart = GetRelationshipPartPath(worksheetPart);
+        XDocument? worksheetRelationshipsXml = null;
+        IReadOnlyDictionary<string, XElement>? worksheetRelationships = null;
+
+        foreach (var reference in backgroundPictureReferences)
+        {
+            if (string.IsNullOrWhiteSpace(reference.RelationshipId))
+            {
+                issues.Add($"{worksheetPart} background picture #{reference.Ordinal} has no relationship id");
+                continue;
+            }
+
+            ValidateDrawingOwnedRelationship(
+                archive,
+                contentTypesXml,
+                entryNames,
+                worksheetPart,
+                worksheetRelsPart,
+                ref worksheetRelationshipsXml,
+                ref worksheetRelationships,
+                reference.RelationshipId,
+                $"background picture #{reference.Ordinal}",
+                ImageRelationshipType,
+                expectedContentType: null,
+                expectedRoot: null,
+                issues);
+        }
+    }
+
     private static void AddWorksheetTablePackageIssues(ZipArchive archive, List<string> issues)
     {
         if (!TryLoadPackageXml(archive, "[Content_Types].xml", issues, out var contentTypesXml) ||
@@ -2575,6 +2650,11 @@ public static class XlsxPackageHealthValidator
         string? RelationshipId);
 
     private sealed record WorksheetDrawingReference(
+        string WorksheetPart,
+        int Ordinal,
+        string? RelationshipId);
+
+    private sealed record WorksheetBackgroundPictureReference(
         string WorksheetPart,
         int Ordinal,
         string? RelationshipId);

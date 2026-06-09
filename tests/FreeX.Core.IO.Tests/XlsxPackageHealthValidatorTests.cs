@@ -786,6 +786,61 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_AcceptsWorkbookWithWorksheetBackgroundPicture()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: WorksheetWithBackgroundPictureXml("rIdBackgroundPicture1"),
+            extraEntries:
+            [
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdBackgroundPicture1", ImageRelationshipType, "../media/background1.png"))),
+                ("xl/media/background1.png", "png")
+            ],
+            contentTypeDefaults:
+            [
+                """<Default Extension="png" ContentType="image/png" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_FlagsWorksheetBackgroundPictureMissingRelationship()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: WorksheetWithBackgroundPictureXml("rIdBackgroundPicture1"),
+            extraEntries:
+            [
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml())
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/worksheets/sheet1.xml background picture #1 reference rIdBackgroundPicture1: targets missing relationship rIdBackgroundPicture1", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsWorksheetBackgroundPictureWithWrongContentType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: WorksheetWithBackgroundPictureXml("rIdBackgroundPicture1"),
+            extraEntries:
+            [
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdBackgroundPicture1", ImageRelationshipType, "../media/background1.png"))),
+                ("xl/media/background1.png", "png")
+            ],
+            contentTypeDefaults:
+            [
+                """<Default Extension="png" ContentType="application/octet-stream" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/media/background1.png has content type application/octet-stream; expected an image/* content type", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_AcceptsWorkbookWithWorksheetTablePackage()
     {
         using var package = CreateMinimalWorkbookPackage(
@@ -1585,6 +1640,15 @@ public sealed class XlsxPackageHealthValidatorTests
                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
           <c:chart />
         </c:chartSpace>
+        """;
+
+    private static string WorksheetWithBackgroundPictureXml(string relationshipId) =>
+        $"""
+        <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                   xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <sheetData />
+          <picture r:id="{relationshipId}" />
+        </worksheet>
         """;
 
     private static string WorksheetWithTablePartsXml(string relationshipId, string count = "1") =>
