@@ -74,6 +74,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("capture.PairKey");
         source.Should().Contain("capture.CounterpartFileName");
         source.Should().Contain("FreeX main window owns foreground focus");
+        source.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER");
+        source.Should().Contain("IsScreenshotTourBackgroundRenderAllowed");
+        source.Should().Contain("no global mouse, keyboard, or screen capture input is used");
     }
 
     [Fact]
