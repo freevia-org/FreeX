@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -37,6 +38,8 @@ public partial class MainWindow
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
     private const string KeyTipOverlayTourManifestFileName = "keytip_overlay_tour_manifest.json";
     private const string PrintPreviewTourManifestFileName = "print_preview_tour_manifest.json";
+    private const string OptionsAccountTourManifestFileName = "options_account_tour_manifest.json";
+    private const string OptionsAccountTourOutputDirectoryName = "options-account-tour";
     private const string QatUndoRedoTourManifestFileName = "qat_undo_redo_tour_manifest.json";
     private const string QatUndoRedoTourOutputDirectoryName = "qat-undo-redo-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
@@ -47,6 +50,53 @@ public partial class MainWindow
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowTextLength(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
+
+    [DllImport("user32.dll")]
+    private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
+
+    [DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetWindowDC(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteDC(IntPtr hdc);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateCompatibleBitmap(IntPtr hdc, int cx, int cy);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr SelectObject(IntPtr hdc, IntPtr h);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr ho);
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
     // Activated by FREEX_SS_TOUR=1 env var.  Output lands in <repo-root>/screenshots/.
     private async void TryStartScreenshotTour()
@@ -60,8 +110,9 @@ public partial class MainWindow
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
+        var optionsAccountTour = Environment.GetEnvironmentVariable("FREEX_OPTIONS_ACCOUNT_TOUR") == "1";
         var qatUndoRedoTour = Environment.GetEnvironmentVariable("FREEX_QAT_UNDO_REDO_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !qatUndoRedoTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -78,7 +129,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, qatUndoRedoTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -110,6 +161,7 @@ public partial class MainWindow
         bool worksheetContextMenuTour,
         bool keyTipOverlayTour,
         bool printPreviewTour,
+        bool optionsAccountTour,
         bool qatUndoRedoTour)
     {
         if (ribbonPlan is not null)
@@ -135,6 +187,9 @@ public partial class MainWindow
 
         if (printPreviewTour)
             await CapturePrintPreviewTourAsync(Path.Combine(outputDir, "print-preview-tour"));
+
+        if (optionsAccountTour)
+            await CaptureOptionsAccountTourAsync(Path.Combine(outputDir, OptionsAccountTourOutputDirectoryName));
 
         if (qatUndoRedoTour)
             await CaptureQatUndoRedoTourAsync(Path.Combine(outputDir, QatUndoRedoTourOutputDirectoryName));
@@ -722,6 +777,350 @@ public partial class MainWindow
         closeButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         return !dialog.IsVisible;
     }
+
+    private async Task CaptureOptionsAccountTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteOptionsAccountTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1120;
+        Height = 768;
+        await Task.Delay(700);
+
+        ShowStartScreen();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(350);
+
+        SsAccountNavBtn.Focus();
+        Keyboard.Focus(SsAccountNavBtn);
+        await CaptureCurrentWindowAsync(outputDir, "freex_account_backstage_entry_focused", 760);
+
+        var accountPlan = LocalAccountPlanner.Create(
+            _options,
+            _currentFilePath,
+            _workbook.Name,
+            workbook: _workbook,
+            hasSelection: SheetGrid.SelectedRange is not null);
+        var accountMessageCapture = CaptureOwnedNativeDialogWhenShownAsync(
+            UiText.Get("DeferredCommand_LocalAccount_Title"),
+            outputDir,
+            "freex_account_local_account_message");
+        SsAccountBtn_Click(SsAccountNavBtn, new RoutedEventArgs(ButtonBase.ClickEvent, SsAccountNavBtn));
+        var accountMessage = await accountMessageCapture;
+
+        Activate();
+        SsAccountNavBtn.Focus();
+        Keyboard.Focus(SsAccountNavBtn);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, "freex_account_backstage_focus_return", 760);
+
+        var optionCaptures = new List<OptionsAccountTourManifestCapture>();
+        var dialog = new OptionsDialog(_options, _workbook.DisabledFormulaErrorCodes)
+        {
+            Owner = this,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowActivated = true
+        };
+        bool categoryListFocused;
+        bool closedViaCancelEquivalent;
+        bool focusReturned;
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            dialog.UpdateLayout();
+            await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await Task.Delay(450);
+
+            var categories = FindDescendantByAutomationId<ListBox>(dialog, "OptionsCategoryList")
+                ?? throw new InvalidOperationException("Options Account tour could not find the Options category list.");
+
+            categories.Focus();
+            Keyboard.Focus(categories);
+            categoryListFocused = Keyboard.FocusedElement == categories;
+            optionCaptures.Add(await CaptureOptionsDialogCategoryAsync(
+                dialog,
+                categories,
+                outputDir,
+                0,
+                "options:default-category-list",
+                "default-general",
+                "freex_options_default_general_category_list",
+                "Default Options dialog opens on General with the category list focused and OK/Cancel visible."));
+
+            optionCaptures.Add(await CaptureOptionsDialogCategoryAsync(
+                dialog,
+                categories,
+                outputDir,
+                1,
+                "options:category-navigation",
+                "formulas",
+                "freex_options_formulas_category_navigation",
+                "Category navigation selects Formulas and shows calculation/error-checking options."));
+
+            optionCaptures.Add(await CaptureOptionsDialogCategoryAsync(
+                dialog,
+                categories,
+                outputDir,
+                8,
+                "options:category-navigation",
+                "quick-access-toolbar",
+                "freex_options_quick_access_toolbar_category_navigation",
+                "Category navigation selects Quick Access Toolbar and shows command-list customization controls."));
+
+            optionCaptures.Add(await CaptureOptionsDialogCategoryAsync(
+                dialog,
+                categories,
+                outputDir,
+                11,
+                "options:category-navigation",
+                "view",
+                "freex_options_view_category_navigation",
+                "Category navigation selects View and shows formula-bar view toggles."));
+
+            closedViaCancelEquivalent = CloseOptionsTourDialogWithCancel(dialog);
+        }
+        finally
+        {
+            if (dialog.IsVisible)
+                dialog.Close();
+        }
+
+        Activate();
+        ShowStartScreen();
+        SsOptionsNavBtn.Focus();
+        Keyboard.Focus(SsOptionsNavBtn);
+        focusReturned = IsActive && Keyboard.FocusedElement == SsOptionsNavBtn;
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, "freex_options_cancel_focus_return", 760);
+
+        ValidateOptionsAccountTourEvidence(outputDir);
+        await WriteOptionsAccountTourManifestAsync(
+            outputDir,
+            accountPlan,
+            accountMessage,
+            optionCaptures,
+            categoryListFocused,
+            closedViaCancelEquivalent,
+            focusReturned);
+    }
+
+    private async Task<OptionsAccountTourManifestCapture> CaptureOptionsDialogCategoryAsync(
+        OptionsDialog dialog,
+        ListBox categories,
+        string outputDir,
+        int selectedIndex,
+        string captureKey,
+        string state,
+        string fileName,
+        string evidenceSummary)
+    {
+        if (selectedIndex < 0 || selectedIndex >= categories.Items.Count)
+            throw new InvalidOperationException($"Options Account tour category index {selectedIndex} is outside the category list.");
+
+        categories.SelectedIndex = selectedIndex;
+        categories.Focus();
+        Keyboard.Focus(categories);
+        dialog.UpdateLayout();
+        await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        await Task.Delay(250);
+        await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+
+        var categoryName = categories.Items[selectedIndex] is ListBoxItem item
+            ? item.Content?.ToString() ?? state
+            : state;
+
+        return new OptionsAccountTourManifestCapture(
+            CaptureKey: captureKey,
+            PairKey: $"interactive:options-account:{state}",
+            ScenarioId: "options-account:options-dialog",
+            State: state,
+            Surface: "Options dialog",
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: "RenderTargetBitmap-options-dialog-window",
+            EvidenceSummary: evidenceSummary,
+            CategoryName: categoryName,
+            CategoryIndex: selectedIndex,
+            FocusedElementAutomationId: Keyboard.FocusedElement is DependencyObject focusedElement
+                ? AutomationProperties.GetAutomationId(focusedElement)
+                : null,
+            CaptureLogicalWidth: dialog.ActualWidth,
+            CaptureLogicalHeight: dialog.ActualHeight);
+    }
+
+    private static bool CloseOptionsTourDialogWithCancel(OptionsDialog dialog)
+    {
+        var cancelButton = FindDescendantByAutomationId<Button>(dialog, "OptionsCancelButton");
+        if (cancelButton?.IsCancel != true)
+            return false;
+
+        dialog.Close();
+        return !dialog.IsVisible;
+    }
+
+    private async Task<OptionsAccountTourManifestCapture> CaptureOwnedNativeDialogWhenShownAsync(
+        string caption,
+        string outputDir,
+        string fileName)
+    {
+        var owner = new WindowInteropHelper(this).Handle;
+        if (owner == IntPtr.Zero)
+            throw new InvalidOperationException("Options Account tour could not resolve the FreeX owner window handle.");
+
+        return await Task.Run(() =>
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            IntPtr dialogHandle;
+            do
+            {
+                dialogHandle = FindOwnedNativeWindow(owner, caption);
+                if (dialogHandle != IntPtr.Zero)
+                    break;
+
+                Task.Delay(100).GetAwaiter().GetResult();
+            }
+            while (DateTime.UtcNow < deadline);
+
+            if (dialogHandle == IntPtr.Zero)
+                throw new InvalidOperationException($"Options Account tour did not find the owned native dialog '{caption}'.");
+
+            var size = CaptureNativeWindow(dialogHandle, outputDir, fileName);
+            PostMessage(dialogHandle, 0x0010, IntPtr.Zero, IntPtr.Zero);
+
+            return new OptionsAccountTourManifestCapture(
+                CaptureKey: "account:local-account-message:opened",
+                PairKey: "interactive:options-account:local-account-message",
+                ScenarioId: "options-account:account-message",
+                State: "local-account-message",
+                Surface: "Account owned native message",
+                FileName: fileName,
+                OutputFileName: $"{fileName}.png",
+                CaptureMethod: "PrintWindow-owned-native-dialog",
+                EvidenceSummary: "Account command opens the FreeX-owned local-account information message with explicit Microsoft 365 sign-in/cloud/coauthoring exclusion.",
+                CategoryName: null,
+                CategoryIndex: null,
+                FocusedElementAutomationId: null,
+                CaptureLogicalWidth: size.Width,
+                CaptureLogicalHeight: size.Height);
+        });
+    }
+
+    private static IntPtr FindOwnedNativeWindow(IntPtr owner, string caption)
+    {
+        var result = IntPtr.Zero;
+        EnumWindows((hWnd, _) =>
+        {
+            if (!IsWindowVisible(hWnd) || GetWindow(hWnd, 4) != owner)
+                return true;
+
+            var title = GetNativeWindowTitle(hWnd);
+            if (!string.Equals(title, caption, StringComparison.CurrentCulture))
+                return true;
+
+            result = hWnd;
+            return false;
+        }, IntPtr.Zero);
+
+        return result;
+    }
+
+    private static string GetNativeWindowTitle(IntPtr hWnd)
+    {
+        var length = GetWindowTextLength(hWnd);
+        if (length <= 0)
+            return string.Empty;
+
+        var builder = new StringBuilder(length + 1);
+        _ = GetWindowText(hWnd, builder, builder.Capacity);
+        return builder.ToString();
+    }
+
+    private static OptionsAccountTourNativeCaptureSize CaptureNativeWindow(IntPtr hWnd, string outputDir, string fileName)
+    {
+        if (!GetWindowRect(hWnd, out var rect))
+            throw new InvalidOperationException($"Options Account tour could not read native window bounds for {fileName}.png.");
+
+        var width = Math.Max(1, rect.Right - rect.Left);
+        var height = Math.Max(1, rect.Bottom - rect.Top);
+        var windowDc = GetWindowDC(hWnd);
+        if (windowDc == IntPtr.Zero)
+            throw new InvalidOperationException($"Options Account tour could not acquire native window DC for {fileName}.png.");
+
+        var memoryDc = IntPtr.Zero;
+        var bitmap = IntPtr.Zero;
+        var oldBitmap = IntPtr.Zero;
+        try
+        {
+            memoryDc = CreateCompatibleDC(windowDc);
+            bitmap = CreateCompatibleBitmap(windowDc, width, height);
+            if (memoryDc == IntPtr.Zero || bitmap == IntPtr.Zero)
+                throw new InvalidOperationException($"Options Account tour could not allocate native capture bitmap for {fileName}.png.");
+
+            oldBitmap = SelectObject(memoryDc, bitmap);
+            if (!PrintWindow(hWnd, memoryDc, 0))
+                throw new InvalidOperationException($"Options Account tour PrintWindow failed for {fileName}.png.");
+
+            var source = Imaging.CreateBitmapSourceFromHBitmap(
+                bitmap,
+                IntPtr.Zero,
+                Int32Rect.Empty,
+                BitmapSizeOptions.FromEmptyOptions());
+            source.Freeze();
+
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(source));
+            var path = Path.Combine(outputDir, $"{fileName}.png");
+            using var stream = File.Create(path);
+            encoder.Save(stream);
+            return new OptionsAccountTourNativeCaptureSize(width, height);
+        }
+        finally
+        {
+            if (oldBitmap != IntPtr.Zero)
+                SelectObject(memoryDc, oldBitmap);
+            if (bitmap != IntPtr.Zero)
+                DeleteObject(bitmap);
+            if (memoryDc != IntPtr.Zero)
+                DeleteDC(memoryDc);
+            ReleaseDC(hWnd, windowDc);
+        }
+    }
+
+    private static void DeleteOptionsAccountTourEvidence(string outputDir)
+    {
+        foreach (var fileName in OptionsAccountTourExpectedFileNames().Append(OptionsAccountTourManifestFileName))
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static void ValidateOptionsAccountTourEvidence(string outputDir)
+    {
+        var missing = OptionsAccountTourExpectedFileNames()
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+        if (missing.Length > 0)
+            throw new InvalidOperationException($"Options Account tour did not capture expected evidence: {string.Join(", ", missing)}.");
+    }
+
+    private static IReadOnlyList<string> OptionsAccountTourExpectedFileNames() =>
+    [
+        "freex_account_backstage_entry_focused.png",
+        "freex_account_local_account_message.png",
+        "freex_account_backstage_focus_return.png",
+        "freex_options_default_general_category_list.png",
+        "freex_options_formulas_category_navigation.png",
+        "freex_options_quick_access_toolbar_category_navigation.png",
+        "freex_options_view_category_navigation.png",
+        "freex_options_cancel_focus_return.png"
+    ];
 
     private static T? FindDescendantByAutomationId<T>(DependencyObject root, string automationId)
         where T : FrameworkElement
@@ -2035,6 +2434,108 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.PrintPreviewTourManifest);
     }
 
+    private static async Task WriteOptionsAccountTourManifestAsync(
+        string outputDir,
+        LocalAccountPlan accountPlan,
+        OptionsAccountTourManifestCapture accountMessageCapture,
+        IReadOnlyList<OptionsAccountTourManifestCapture> optionCaptures,
+        bool categoryListFocusedByDefault,
+        bool closedViaCancelEquivalent,
+        bool focusReturned)
+    {
+        var captures = new List<OptionsAccountTourManifestCapture>
+        {
+            new(
+                CaptureKey: "account:backstage-entry:focused",
+                PairKey: "interactive:options-account:account-backstage-entry-focused",
+                ScenarioId: "options-account:account-backstage-entry",
+                State: "account-entry-focused",
+                Surface: "Backstage Account entry",
+                FileName: "freex_account_backstage_entry_focused",
+                OutputFileName: "freex_account_backstage_entry_focused.png",
+                CaptureMethod: "RenderTargetBitmap-main-window",
+                EvidenceSummary: "Backstage is open with the Account navigation command focused beside the Options command.",
+                CategoryName: null,
+                CategoryIndex: null,
+                FocusedElementAutomationId: "BackstageAccountButton",
+                CaptureLogicalWidth: 1120,
+                CaptureLogicalHeight: 760),
+            accountMessageCapture,
+            new(
+                CaptureKey: "account:closed:focus-return",
+                PairKey: "interactive:options-account:account-focus-return",
+                ScenarioId: "options-account:account-focus-return",
+                State: "account-focus-return",
+                Surface: "Backstage Account entry",
+                FileName: "freex_account_backstage_focus_return",
+                OutputFileName: "freex_account_backstage_focus_return.png",
+                CaptureMethod: "RenderTargetBitmap-main-window",
+                EvidenceSummary: "After the Account message closes, focus is restored to the Backstage Account command.",
+                CategoryName: null,
+                CategoryIndex: null,
+                FocusedElementAutomationId: "BackstageAccountButton",
+                CaptureLogicalWidth: 1120,
+                CaptureLogicalHeight: 760)
+        };
+        captures.AddRange(optionCaptures);
+        captures.Add(new OptionsAccountTourManifestCapture(
+            CaptureKey: "options:closed:cancel-focus-return",
+            PairKey: "interactive:options-account:options-cancel-focus-return",
+            ScenarioId: "options-account:options-focus-return",
+            State: "options-cancel-focus-return",
+            Surface: "Backstage Options entry",
+            FileName: "freex_options_cancel_focus_return",
+            OutputFileName: "freex_options_cancel_focus_return.png",
+            CaptureMethod: "RenderTargetBitmap-main-window",
+            EvidenceSummary: "After verifying the OptionsCancelButton IsCancel metadata and closing the tour dialog, focus is restored to the Backstage Options command.",
+            CategoryName: null,
+            CategoryIndex: null,
+            FocusedElementAutomationId: "BackstageOptionsButton",
+            CaptureLogicalWidth: 1120,
+            CaptureLogicalHeight: 760));
+
+        var manifest = new OptionsAccountTourManifest(
+            Tool: "FREEX_OPTIONS_ACCOUNT_TOUR",
+            EvidenceFamily: "backstage-options-account",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "options-account:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_<Surface>_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#UI-CMD-FILE-005",
+            EntryPaths: ["File > Account", "File > Options"],
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-WPF-windows-and-PrintWindow-owned-native-dialog",
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process WPF RenderTargetBitmap captures plus owned native Account dialog PrintWindow capture; no global mouse or keyboard input is used."
+                    : "Abort before WPF window file writes unless the expected FreeX window owns foreground focus; owned native Account dialog is captured by HWND ownership and caption."),
+            AccountTitle: accountPlan.Title,
+            AccountDetailLabels: accountPlan.Details.Select(detail => detail.Label).ToArray(),
+            AccountMicrosoft365Exclusion: accountPlan.Details
+                .FirstOrDefault(detail => string.Equals(detail.Label, "Microsoft 365 services", StringComparison.OrdinalIgnoreCase))
+                ?.Value ?? string.Empty,
+            CategoryListFocusedByDefault: categoryListFocusedByDefault,
+            OptionsClosedViaCancelEquivalent: closedViaCancelEquivalent,
+            FocusReturnedToBackstageOptionsCommand: focusReturned,
+            PlannedCaptureCount: OptionsAccountTourExpectedFileNames().Count,
+            ActualCaptureCount: captures.Count,
+            Captures: captures,
+            Limitations:
+            [
+                "This in-app tour captures real FreeX Backstage and Options WPF surfaces with RenderTargetBitmap and the real owned Account MessageBox with PrintWindow.",
+                "The tour does not synthesize global mouse/keytip/UIA input; those interaction paths remain separate from this visual evidence.",
+                "The Options close proof verifies the OptionsCancelButton IsCancel metadata before closing the modeless tour dialog directly; modal Escape/Cancel event routing remains separate.",
+                "The tour does not persist option changes through OK.",
+                "The Account command is a local-account information message, not a Microsoft account sign-in surface; the manifest records the explicit Microsoft 365 services exclusion text."
+            ]);
+
+        var path = Path.Combine(outputDir, OptionsAccountTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.OptionsAccountTourManifest);
+    }
+
     private static async Task WriteKeyTipOverlayTourManifestAsync(
         string outputDir,
         IReadOnlyList<KeyTipOverlayTourManifestCapture> captures)
@@ -2299,6 +2800,57 @@ public partial class MainWindow
         string OutputFileName,
         string EvidenceSummary);
 
+    private sealed record OptionsAccountTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> EntryPaths,
+        string CaptureStatus,
+        string CaptureMethod,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        string AccountTitle,
+        IReadOnlyList<string> AccountDetailLabels,
+        string AccountMicrosoft365Exclusion,
+        bool CategoryListFocusedByDefault,
+        bool OptionsClosedViaCancelEquivalent,
+        bool FocusReturnedToBackstageOptionsCommand,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        IReadOnlyList<OptionsAccountTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record OptionsAccountTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        string EvidenceSummary,
+        string? CategoryName,
+        int? CategoryIndex,
+        string? FocusedElementAutomationId,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
+
+    private sealed record OptionsAccountTourNativeCaptureSize(int Width, int Height);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct NativeRect
+    {
+        public readonly int Left;
+        public readonly int Top;
+        public readonly int Right;
+        public readonly int Bottom;
+    }
+
     private sealed record KeyTipOverlayTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -2392,6 +2944,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(HomeBordersDropdownTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
+    [JsonSerializable(typeof(OptionsAccountTourManifest))]
     [JsonSerializable(typeof(KeyTipOverlayTourManifest))]
     [JsonSerializable(typeof(QatUndoRedoTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;

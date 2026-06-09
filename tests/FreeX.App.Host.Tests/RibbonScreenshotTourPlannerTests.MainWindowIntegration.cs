@@ -19,6 +19,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar)");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_AUTOFILTER_FLYOUT_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PRINT_PREVIEW_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_OPTIONS_ACCOUNT_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_QAT_UNDO_REDO_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
@@ -27,6 +28,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("EnsurePivotTableScreenshotTourContext");
         source.Should().Contain("CaptureAutoFilterFlyoutTourAsync");
         source.Should().Contain("CapturePrintPreviewTourAsync");
+        source.Should().Contain("CaptureOptionsAccountTourAsync");
         source.Should().Contain("CaptureQatUndoRedoTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
@@ -35,13 +37,16 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("ValidateRibbonScreenshotTourCaptures");
         source.Should().Contain("DeleteAutoFilterFlyoutTourEvidence");
         source.Should().Contain("DeletePrintPreviewTourEvidence");
+        source.Should().Contain("DeleteOptionsAccountTourEvidence");
         source.Should().Contain("WriteRibbonScreenshotTourManifestAsync");
         source.Should().Contain("WriteAutoFilterFlyoutTourManifestAsync");
         source.Should().Contain("WritePrintPreviewTourManifestAsync");
+        source.Should().Contain("WriteOptionsAccountTourManifestAsync");
         source.Should().Contain("WriteQatUndoRedoTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
         source.Should().Contain("print_preview_tour_manifest.json");
+        source.Should().Contain("options_account_tour_manifest.json");
         source.Should().Contain("qat_undo_redo_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
@@ -182,5 +187,34 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("PrintPreviewTourManifest");
         source.Should().Contain("RenderTargetBitmap-print-preview-dialog-and-main-window");
         source.Should().Contain("The native Windows print dialog is not opened during this tour");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesOptionsAndAccountVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_OPTIONS_ACCOUNT_TOUR");
+        source.Should().Contain("options-account-tour");
+        source.Should().Contain("freex_account_backstage_entry_focused");
+        source.Should().Contain("freex_account_local_account_message");
+        source.Should().Contain("freex_account_backstage_focus_return");
+        source.Should().Contain("freex_options_default_general_category_list");
+        source.Should().Contain("freex_options_formulas_category_navigation");
+        source.Should().Contain("freex_options_quick_access_toolbar_category_navigation");
+        source.Should().Contain("freex_options_view_category_navigation");
+        source.Should().Contain("freex_options_cancel_focus_return");
+        source.Should().Contain("LocalAccountPlanner.Create");
+        source.Should().Contain("SsAccountBtn_Click(SsAccountNavBtn");
+        source.Should().Contain("CaptureOwnedNativeDialogWhenShownAsync");
+        source.Should().Contain("PrintWindow-owned-native-dialog");
+        source.Should().Contain("new OptionsDialog(_options, _workbook.DisabledFormulaErrorCodes)");
+        source.Should().Contain("FindDescendantByAutomationId<ListBox>(dialog, \"OptionsCategoryList\")");
+        source.Should().Contain("OptionsCancelButton");
+        source.Should().Contain("CategoryListFocusedByDefault");
+        source.Should().Contain("OptionsClosedViaCancelEquivalent");
+        source.Should().Contain("FocusReturnedToBackstageOptionsCommand");
+        source.Should().Contain("AccountMicrosoft365Exclusion");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.OptionsAccountTourManifest");
     }
 }
