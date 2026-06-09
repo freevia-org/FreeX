@@ -203,6 +203,8 @@ internal static class ExcelOpenSmoke
         "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
     private static readonly XNamespace SpreadsheetNs =
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace SpreadsheetRevision2Ns =
+        "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2";
     private static readonly XNamespace SlicerNs =
         "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
     private static readonly XNamespace TimelineNs =
@@ -5073,6 +5075,7 @@ internal static class ExcelOpenSmoke
         foreach (var attribute in workbookView.Attributes())
         {
             if (attribute.IsNamespaceDeclaration ||
+                IsKnownNamespacedWorkbookViewAttribute(attribute.Name) ||
                 (attribute.Name.NamespaceName.Length == 0 && IsKnownWorkbookViewAttribute(attribute.Name.LocalName)))
             {
                 continue;
@@ -5127,6 +5130,9 @@ internal static class ExcelOpenSmoke
             "showVerticalScroll" or
             "showSheetTabs" or
             "autoFilterDateGrouping";
+
+    private static bool IsKnownNamespacedWorkbookViewAttribute(XName name) =>
+        name == SpreadsheetRevision2Ns + "uid";
 
     private static bool IsKnownWorkbookViewVisibility(string value) =>
         value.Trim() is "visible" or "hidden" or "veryHidden";
