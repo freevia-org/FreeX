@@ -21,10 +21,6 @@ public partial class MainWindow : Window, IWorkbookWindow
     private const double MaximizedSafeInsetDip = 8.0;
     private const double SheetTabNavScrollAmount = 140.0;
     private const double SheetTabScrollEpsilon = 0.5;
-    private const double SheetTabMinimumViewportWidth = 80.0;
-    private const double SheetTabMinimumHorizontalScrollbarWidth = 180.0;
-    private const double SheetTabPreferredHorizontalScrollbarRatio = 0.36;
-    private const double SheetTabPreferredHorizontalScrollbarMaxWidth = 420.0;
     private const double SheetTabOverlapWidth = 16.0;
     private const double SheetTabRightNavigationReserveWidth = 28.0;
     private const double SheetTabChromeHeight = 28.0;

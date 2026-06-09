@@ -252,7 +252,7 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.Should().Contain("HorizontalAlignment=\"Right\" HorizontalContentAlignment=\"Center\"");
         xaml.Should().Contain("<ScrollBar x:Name=\"HorizontalScroll\" Grid.Column=\"5\"");
         xaml.Should().Contain("VerticalAlignment=\"Center\" Margin=\"0\"");
-        xaml.Should().Contain("MinWidth=\"180\"");
+        xaml.Should().Contain("MinWidth=\"0\"");
         xaml.IndexOf("x:Name=\"AddSheetButton\"", StringComparison.Ordinal)
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"SheetNavRightBtn\"", StringComparison.Ordinal));
         xaml.Should().Contain("Visibility=\"Hidden\"");
@@ -260,9 +260,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         source.Should().Contain("UpdateSheetTabNavigation();");
         source.Should().Contain("private void UpdateSheetTabViewportWidth()");
-        source.Should().Contain("Math.Min(tabContentWidth, available)");
-        source.Should().Contain("SheetTabMinimumHorizontalScrollbarWidth");
-        source.Should().Contain("preferredScrollbarWidth");
+        source.Should().Contain("SheetTabScrollbarLayoutPlanner.Plan(tabContentWidth, rowHeaderWidth, rowWidth)");
         source.Should().Contain("CreateVisibleSheetTabClipGeometry");
         source.Should().NotContain("CreateScrollableSheetTabClipGeometry");
         source.Should().Contain("AddSheetButton.Measure");

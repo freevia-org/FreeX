@@ -384,28 +384,9 @@ public partial class MainWindow
 
     private void ApplySheetTabViewportWidths(double tabContentWidth, double rowHeaderWidth, double rowWidth)
     {
-        var fixedWidth = rowHeaderWidth;
-        var available = Math.Max(
-            SheetTabMinimumViewportWidth + SheetTabMinimumHorizontalScrollbarWidth,
-            rowWidth - fixedWidth);
-        var preferredScrollbarWidth = Math.Clamp(
-            available * SheetTabPreferredHorizontalScrollbarRatio,
-            SheetTabMinimumHorizontalScrollbarWidth,
-            SheetTabPreferredHorizontalScrollbarMaxWidth);
-        var tabsBeforeScrollbarShrinks = Math.Max(
-            SheetTabMinimumViewportWidth,
-            available - preferredScrollbarWidth);
-        var tabsAtMinimumScrollbar = Math.Max(
-            SheetTabMinimumViewportWidth,
-            available - SheetTabMinimumHorizontalScrollbarWidth);
-        var targetWidth = Math.Min(tabContentWidth, available);
-        var targetScrollbarWidth = tabContentWidth <= tabsBeforeScrollbarShrinks
-            ? preferredScrollbarWidth
-            : Math.Max(
-                SheetTabMinimumHorizontalScrollbarWidth,
-                available - Math.Min(tabContentWidth, tabsAtMinimumScrollbar));
-
-        targetWidth = Math.Min(targetWidth, tabsAtMinimumScrollbar);
+        var layout = SheetTabScrollbarLayoutPlanner.Plan(tabContentWidth, rowHeaderWidth, rowWidth);
+        var targetWidth = layout.SheetTabsViewportWidth;
+        var targetScrollbarWidth = layout.HorizontalScrollbarWidth;
 
         var tabsWidthUnchanged = Math.Abs(SheetTabsScroller.Width - targetWidth) <= 0.5;
         var scrollbarWidthUnchanged = Math.Abs(HorizontalScroll.Width - targetScrollbarWidth) <= 0.5;
