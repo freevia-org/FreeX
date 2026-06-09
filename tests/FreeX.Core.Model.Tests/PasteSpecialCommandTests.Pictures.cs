@@ -71,6 +71,48 @@ public sealed partial class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void PasteRangeAsPictureCommand_PreservesCellSnapshotFormatting()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var style = new CellStyle
+        {
+            Bold = true,
+            Italic = true,
+            FontColor = new CellColor(210, 20, 30),
+            FillColor = new CellColor(220, 240, 255),
+            HorizontalAlignment = FreeX.Core.Model.HorizontalAlignment.Right,
+            BorderBottom = new CellBorder(BorderStyle.Thick, new CellColor(30, 60, 90))
+        };
+        var source = new[]
+        {
+            (
+                new CellAddress(sheet.Id, 1, 1),
+                new PictureCellSnapshot(0, 0, "123", style, IsNumericOrDate: true))
+        };
+
+        var command = new PasteRangeAsPictureCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            source,
+            new CellAddress(sheet.Id, 5, 5));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        style.Bold = false;
+        style.FillColor = new CellColor(255, 255, 255);
+
+        var snapshot = sheet.Pictures.Should().ContainSingle().Subject.Cells.Should().ContainSingle().Subject;
+        snapshot.Text.Should().Be("123");
+        snapshot.IsNumericOrDate.Should().BeTrue();
+        snapshot.Style.Should().NotBeSameAs(style);
+        snapshot.Style!.Bold.Should().BeTrue();
+        snapshot.Style.FillColor.Should().Be(new CellColor(220, 240, 255));
+        snapshot.Style.HorizontalAlignment.Should().Be(FreeX.Core.Model.HorizontalAlignment.Right);
+        snapshot.Style.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thick, new CellColor(30, 60, 90)));
+    }
+
+    [Fact]
     public void InsertPictureCommand_AddsBinaryImagePictureAndUndoRemoves()
     {
         var wb = new Workbook("test");

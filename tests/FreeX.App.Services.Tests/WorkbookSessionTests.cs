@@ -4017,6 +4017,91 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void InsertAutoSumFormula_AggregatesUseVerticalSelectionAndMoveBelowFormula()
+    {
+        var functionNames = new[] { "SUM", "AVERAGE", "COUNT", "COUNTA", "MAX", "MIN" };
+
+        foreach (var functionName in functionNames)
+        {
+            var workbook = CreateWorkbook();
+            var sheet = workbook.Sheets.Single();
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            var a2 = new CellAddress(sheet.Id, 2, 1);
+            var a3 = new CellAddress(sheet.Id, 3, 1);
+            var a4 = new CellAddress(sheet.Id, 4, 1);
+            sheet.SetCell(a1, new NumberValue(10));
+            sheet.SetCell(a2, new NumberValue(20));
+            sheet.SetCell(a3, new NumberValue(30));
+            var session = CreateSession(new StartupWorkbookLoadResult(
+                workbook,
+                "Book.fxl",
+                "Opened .fxl.",
+                IsFallback: false));
+            session.SelectRange(new GridRange(a1, a3));
+
+            var result = session.InsertAutoSumFormula(functionName);
+
+            result.Success.Should().BeTrue(functionName);
+            result.AffectedCells.Should().ContainSingle().Which.Should().Be(a4);
+            sheet.GetCell(a4)!.FormulaText.Should().Be($"{functionName}(A1:A3)");
+            session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 5, 1));
+            session.SelectedRange.Should().Be(new GridRange(session.ActiveCell, session.ActiveCell));
+        }
+    }
+
+    [Fact]
+    public void InsertAutoSumFormula_SumUsesHorizontalSelectionAndMovesBelowInsertedFormula()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        sheet.SetCell(a1, new NumberValue(10));
+        sheet.SetCell(b1, new NumberValue(20));
+        sheet.SetCell(c1, new NumberValue(30));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, c1));
+
+        var result = session.InsertAutoSumFormula("SUM");
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().ContainSingle().Which.Should().Be(d1);
+        sheet.GetCell(d1)!.FormulaText.Should().Be("SUM(A1:C1)");
+        session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 2, 4));
+    }
+
+    [Fact]
+    public void InsertAutoSumFormula_ReturnsNoOpWhenSelectionTargetWouldExceedWorksheet()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var start = new CellAddress(sheet.Id, CellAddress.MaxRow - 1, 1);
+        var end = new CellAddress(sheet.Id, CellAddress.MaxRow, 1);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(start, end));
+
+        var result = session.InsertAutoSumFormula("SUM");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("outside the worksheet bounds");
+        result.AffectedCells.Should().BeEmpty();
+        session.ActiveCell.Should().Be(start);
+        session.SelectedRange.Should().Be(new GridRange(start, end));
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void InsertAutoSumFormula_SumUsesNumbersAboveMovesActiveCellAndUndoRestores()
     {
         var workbook = CreateWorkbook();
@@ -5599,6 +5684,31 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void IncreaseSelectedRangeDecimalPlaces_PreservesCommaStyleSemantics()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        const string commaStyleFormat = "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)";
+        sheet.SetCell(a1, new NumberValue(1234.5));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { NumberFormat = commaStyleFormat });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.IncreaseSelectedRangeDecimalPlaces();
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartNumberFormat.Should().Be("_(* #,##0.000_);_(* (#,##0.000);_(* \"-\"???_);_(@_)");
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).NumberFormat.Should().Be("_(* #,##0.000_);_(* (#,##0.000);_(* \"-\"???_);_(@_)");
+        session.Viewport.Cells.Single(cell => cell.Row == 1 && cell.Col == 1)
+            .DisplayText.Should().Contain("1,234.500");
+    }
+
+    [Fact]
     public void DecreaseSelectedRangeDecimalPlaces_UsesSelectedRangeStartFormat()
     {
         var workbook = CreateWorkbook();
@@ -5941,6 +6051,51 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeBorderPreset_NoBorderRemovesExistingBordersPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var existingBorder = new CellBorder(BorderStyle.Thin, CellColor.Black);
+        sheet.SetCell(a1, new TextValue("value"));
+        var borderedStyle = CellStyle.Default.Clone();
+        borderedStyle.BorderTop = existingBorder;
+        borderedStyle.BorderRight = existingBorder;
+        borderedStyle.BorderBottom = existingBorder;
+        borderedStyle.BorderLeft = existingBorder;
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(borderedStyle);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b2));
+
+        var result = session.SetSelectedRangeBorderPreset(CellBorderPreset.NoBorder);
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b2));
+        var clearedStyle = GetStyle(workbook, sheet, a1);
+        clearedStyle.BorderTop.Should().Be(new CellBorder());
+        clearedStyle.BorderRight.Should().Be(new CellBorder());
+        clearedStyle.BorderBottom.Should().Be(new CellBorder());
+        clearedStyle.BorderLeft.Should().Be(new CellBorder());
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        var restoredStyle = GetStyle(workbook, sheet, a1);
+        restoredStyle.BorderTop.Should().Be(existingBorder);
+        restoredStyle.BorderRight.Should().Be(existingBorder);
+        restoredStyle.BorderBottom.Should().Be(existingBorder);
+        restoredStyle.BorderLeft.Should().Be(existingBorder);
+    }
+
+    [Fact]
     public void SetSelectedRangeBorderPreset_RejectsProtectedSheetWithoutMarkingDirty()
     {
         var workbook = CreateWorkbook();
@@ -6020,6 +6175,48 @@ public sealed class WorkbookSessionTests
         undo.Success.Should().BeTrue();
         sheet.MergedRegions.Should().NotContain(range);
         sheet.GetValue(b2).Should().Be(new TextValue("restored"));
+        GetStyle(workbook, sheet, a1).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
+    }
+
+    [Fact]
+    public void MergeAndCenterSelectedRange_ConcatenateAllCellsCombinesContentRowMajorAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var range = new GridRange(a1, b2);
+        sheet.SetCell(a1, new TextValue("first"));
+        sheet.SetCell(b1, new NumberValue(42));
+        sheet.SetCell(b2, new TextValue("last"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(range);
+
+        var result = session.MergeAndCenterSelectedRange(MergeCellContentResolution.ConcatenateAllCells);
+
+        result.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().Contain(range);
+        sheet.GetValue(a1).Should().Be(new TextValue("first 42 last"));
+        sheet.GetValue(b1).Should().Be(BlankValue.Instance);
+        sheet.GetValue(a2).Should().Be(BlankValue.Instance);
+        sheet.GetValue(b2).Should().Be(BlankValue.Instance);
+        GetStyle(workbook, sheet, a1).HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        session.CanUndo.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().NotContain(range);
+        sheet.GetValue(a1).Should().Be(new TextValue("first"));
+        sheet.GetValue(b1).Should().Be(new NumberValue(42));
+        sheet.GetValue(a2).Should().Be(BlankValue.Instance);
+        sheet.GetValue(b2).Should().Be(new TextValue("last"));
         GetStyle(workbook, sheet, a1).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
     }
 

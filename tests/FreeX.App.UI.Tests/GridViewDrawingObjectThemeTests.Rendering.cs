@@ -196,6 +196,78 @@ public sealed partial class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void PictureRenderer_DrawsCellRangeSnapshotFormatting()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var style = new CellStyle
+            {
+                FillColor = new CellColor(220, 240, 255),
+                FontColor = new CellColor(180, 0, 0),
+                HorizontalAlignment = FreeX.Core.Model.HorizontalAlignment.Right,
+                BorderBottom = new CellBorder(BorderStyle.Thick, new CellColor(30, 60, 90))
+            };
+            var picture = new PictureModel
+            {
+                Anchor = new CellAddress(SheetId.New(), 1, 1),
+                SourceRowCount = 1,
+                SourceColumnCount = 1,
+                Width = 80,
+                Height = 30,
+                Cells =
+                {
+                    new PictureCellSnapshot(0, 0, "123", style, IsNumericOrDate: true)
+                }
+            };
+            var grid = new GridView
+            {
+                Width = 100,
+                Height = 45,
+                ShowHeaders = false,
+                Viewport = new ViewportModel(
+                    [],
+                    [new RowMetric(1, 30, 0)],
+                    [new ColMetric(1, 80, 0)]),
+                Pictures = [picture]
+            };
+
+            grid.Measure(new Size(100, 45));
+            grid.Arrange(new Rect(0, 0, 100, 45));
+            grid.UpdateLayout();
+
+            var bitmap = new RenderTargetBitmap(
+                100,
+                45,
+                96,
+                96,
+                PixelFormats.Pbgra32);
+            bitmap.Render(grid);
+
+            var pixels = new byte[100 * 45 * 4];
+            bitmap.CopyPixels(pixels, stride: 100 * 4, offset: 0);
+
+            var fillOffset = (10 * 100 + 10) * 4;
+            pixels[fillOffset + 0].Should().BeGreaterThan(240);
+            pixels[fillOffset + 1].Should().BeGreaterThan(220);
+            pixels[fillOffset + 2].Should().BeGreaterThan(200);
+
+            var borderPixels = 0;
+            for (var x = 4; x < 76; x++)
+            {
+                var offset = (29 * 100 + x) * 4;
+                if (pixels[offset + 0] is >= 70 and <= 110 &&
+                    pixels[offset + 1] is >= 45 and <= 75 &&
+                    pixels[offset + 2] is >= 15 and <= 45)
+                {
+                    borderPixels++;
+                }
+            }
+
+            borderPixels.Should().BeGreaterThan(30, "the snapshot bottom border should use the captured cell style");
+        });
+    }
+
+    [Fact]
     public void DrawingObjectRendering_DrawsAuthoredThreeDRotationAsPerspectiveCue()
     {
         WpfTestThread.Run(() =>

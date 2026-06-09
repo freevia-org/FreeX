@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 
 using FreeX.Core.Model;
+using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 
 namespace FreeX.App.UI;
 
@@ -83,12 +85,31 @@ public partial class GridView
             return;
         }
 
-        dc.DrawRectangle(fill, PictureBorderPen, rect);
-
         var rows = Math.Max(1, picture.SourceRowCount);
         var cols = Math.Max(1, picture.SourceColumnCount);
         var cellWidth = rect.Width / cols;
         var cellHeight = rect.Height / rows;
+        var cellLookup = picture.Cells
+            .Where(cell => cell.RowOffset < rows && cell.ColumnOffset < cols)
+            .ToDictionary(cell => (cell.RowOffset, cell.ColumnOffset));
+
+        dc.DrawRectangle(fill, PictureBorderPen, rect);
+
+        for (uint row = 0; row < rows; row++)
+        {
+            for (uint col = 0; col < cols; col++)
+            {
+                if (!cellLookup.TryGetValue((row, col), out var cell) || cell.Style is not { } style)
+                    continue;
+
+                var cellRect = new Rect(
+                    rect.Left + col * cellWidth,
+                    rect.Top + row * cellHeight,
+                    cellWidth,
+                    cellHeight);
+                DrawPictureCellStyle(dc, cellRect, style);
+            }
+        }
 
         for (uint r = 1; r < rows; r++)
         {
@@ -102,26 +123,16 @@ public partial class GridView
             dc.DrawLine(PictureGridPen, new Point(x, rect.Top), new Point(x, rect.Bottom));
         }
 
-        foreach (var cell in picture.Cells)
+        foreach (var cell in cellLookup.Values)
         {
-            if (cell.RowOffset >= rows || cell.ColumnOffset >= cols || string.IsNullOrEmpty(cell.Text))
-                continue;
-            var textRect = new Rect(
-                rect.Left + cell.ColumnOffset * cellWidth + 3,
-                rect.Top + cell.RowOffset * cellHeight + 1,
-                Math.Max(1, cellWidth - 6),
-                Math.Max(1, cellHeight - 2));
-            var text = GetDrawingObjectText(
-                cell.Text,
-                TextBrush,
-                11,
-                textRect.Width,
-                textRect.Height,
-                pixelsPerDip,
-                TextTrimming.CharacterEllipsis);
-            dc.PushClip(GetDrawingObjectClipGeometry(textRect));
-            dc.DrawText(text, textRect.TopLeft);
-            dc.Pop();
+            var cellRect = new Rect(
+                rect.Left + cell.ColumnOffset * cellWidth,
+                rect.Top + cell.RowOffset * cellHeight,
+                cellWidth,
+                cellHeight);
+            DrawPictureCellText(dc, cell, cellRect, pixelsPerDip);
+            if (cell.Style is { } style && HasVisibleCellBorder(style))
+                DrawPictureCellBorders(dc, cellRect, style);
         }
 
         DrawPictureSelectionAdorner(dc, picture, rect);
@@ -149,6 +160,106 @@ public partial class GridView
             PictureSelectionBrush,
             null,
             new Rect(point.X - handle / 2, point.Y - handle / 2, handle, handle));
+    }
+
+    private void DrawPictureCellStyle(DrawingContext dc, Rect rect, CellStyle style)
+    {
+        Brush? fillBrush = style.FillColor is { } fillColor
+            ? BrushForCellColor(fillColor, _brushCache)
+            : null;
+        if (fillBrush is not null)
+            dc.DrawRectangle(fillBrush, null, rect);
+
+        DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
+    }
+
+    private void DrawPictureCellText(
+        DrawingContext dc,
+        PictureCellSnapshot cell,
+        Rect cellRect,
+        double pixelsPerDip)
+    {
+        if (string.IsNullOrEmpty(cell.Text))
+            return;
+
+        var style = cell.Style;
+        var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
+        var textRotation = style?.TextRotation ?? 0;
+        var renderText = PrepareCellDisplayTextForRender(cell.Text, textRotation);
+        var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
+        var indentPx = (style?.IndentLevel ?? 0) * 8.0;
+        Brush textBrush = TextBrush;
+
+        if (style?.ShrinkToFit == true && style.WrapText != true)
+        {
+            var typefaceKey = CreateCellTypefaceKey(style);
+            var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
+            fontSize = ResolveCachedShrinkFontSize(
+                renderText,
+                typefaceKey,
+                typeface,
+                fontSize,
+                Math.Max(1, cellRect.Width - 4 - indentPx),
+                ToDisplayFontSize(6),
+                pixelsPerDip);
+        }
+
+        var typefaceForText = CreateCellTypeface(style);
+        if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
+            textBrush = BrushForCellColor(fontColor, _brushCache);
+
+        var text = new FormattedText(
+            renderText,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            typefaceForText,
+            fontSize,
+            textBrush,
+            pixelsPerDip);
+        if (BuildTextDecorations(style) is { } decorations)
+            text.SetTextDecorations(decorations);
+
+        if (style?.WrapText == true)
+        {
+            text.MaxTextWidth = Math.Max(1, cellRect.Width - 4);
+            text.TextAlignment = hAlign switch
+            {
+                CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
+                CellHAlign.Right => TextAlignment.Right,
+                _ => TextAlignment.Left
+            };
+        }
+        else
+        {
+            text.Trimming = TextTrimming.CharacterEllipsis;
+            text.MaxTextWidth = Math.Max(1, cellRect.Width - 4 - indentPx);
+        }
+
+        var textLayout = CalculateCellTextRenderLayout(
+            cellRect,
+            text.Width,
+            text.Height,
+            hAlign,
+            style?.VerticalAlignment,
+            cell.IsNumericOrDate,
+            indentPx,
+            textRotation);
+        var clipRect = new Rect(
+            cellRect.Left + 2,
+            cellRect.Top + 1,
+            Math.Max(1, cellRect.Width - 4),
+            Math.Max(1, cellRect.Height - 2));
+        dc.PushClip(GetDrawingObjectClipGeometry(clipRect));
+        DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);
+        dc.Pop();
+    }
+
+    private void DrawPictureCellBorders(DrawingContext dc, Rect rect, CellStyle style)
+    {
+        DrawBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), _brushCache, _borderPenCache);
+        DrawBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
+        DrawBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), _brushCache, _borderPenCache);
+        DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
     }
 
     private static bool HasPictureCrop(PictureModel picture) =>

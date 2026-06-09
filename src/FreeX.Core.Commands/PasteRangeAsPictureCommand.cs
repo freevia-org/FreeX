@@ -17,6 +17,28 @@ public sealed class PasteRangeAsPictureCommand : IWorkbookCommand
         CellAddress destination,
         bool isLinkedToSourceRange = false,
         string? sourceSheetName = null)
+        : this(
+            sheetId,
+            sourceRange,
+            sourceCells.Select(cell => (
+                cell.Address,
+                new PictureCellSnapshot(
+                    cell.Address.Row - sourceRange.Start.Row,
+                    cell.Address.Col - sourceRange.Start.Col,
+                    cell.Text))).ToList(),
+            destination,
+            isLinkedToSourceRange,
+            sourceSheetName)
+    {
+    }
+
+    public PasteRangeAsPictureCommand(
+        SheetId sheetId,
+        GridRange sourceRange,
+        IReadOnlyList<(CellAddress Address, PictureCellSnapshot Snapshot)> sourceCells,
+        CellAddress destination,
+        bool isLinkedToSourceRange = false,
+        string? sourceSheetName = null)
     {
         _sheetId = sheetId;
         _picture = new PictureModel
@@ -31,7 +53,7 @@ public sealed class PasteRangeAsPictureCommand : IWorkbookCommand
             Height = Math.Max(40, sourceRange.RowCount * 20)
         };
 
-        foreach (var (address, text) in sourceCells)
+        foreach (var (address, snapshot) in sourceCells)
         {
             if (address.Row < sourceRange.Start.Row ||
                 address.Row > sourceRange.End.Row ||
@@ -42,7 +64,9 @@ public sealed class PasteRangeAsPictureCommand : IWorkbookCommand
             _picture.Cells.Add(new PictureCellSnapshot(
                 address.Row - sourceRange.Start.Row,
                 address.Col - sourceRange.Start.Col,
-                text));
+                snapshot.Text,
+                snapshot.Style?.Clone(),
+                snapshot.IsNumericOrDate));
         }
     }
 

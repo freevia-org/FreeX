@@ -12,6 +12,7 @@ public partial class MainWindow
     private record InternalClipboard(
         GridRange SourceRange,
         List<(CellAddress Source, Cell Cell)> Cells,
+        List<(CellAddress Source, PictureCellSnapshot Snapshot)> PictureCells,
         string Text,
         bool IsCut = false);
     private InternalClipboard? _internalClipboard;
@@ -78,6 +79,7 @@ public partial class MainWindow
         // Capture raw cells (including formulas) for paste formula adjustment
         var sheet = _workbook.GetSheet(_currentSheetId);
         var clipCells = new List<(CellAddress, Cell)>();
+        var pictureCells = CapturePictureCells(viewport, sheet, range);
         for (uint r = range.Start.Row; r <= range.End.Row; r++)
         {
             for (uint c = range.Start.Col; c <= range.End.Col; c++)
@@ -87,8 +89,55 @@ public partial class MainWindow
                 clipCells.Add((addr, cell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
             }
         }
-        _internalClipboard = new InternalClipboard(range, clipCells, text, isCut);
+        _internalClipboard = new InternalClipboard(range, clipCells, pictureCells, text, isCut);
     }
+
+    private static List<(CellAddress Source, PictureCellSnapshot Snapshot)> CapturePictureCells(
+        ViewportModel viewport,
+        Sheet? sheet,
+        GridRange range)
+    {
+        var displayCells = new Dictionary<(uint Row, uint Col), DisplayCell>(viewport.Cells.Count);
+        foreach (var cell in viewport.Cells)
+            displayCells[(cell.Row, cell.Col)] = cell;
+
+        var result = new List<(CellAddress, PictureCellSnapshot)>();
+        for (uint r = range.Start.Row; r <= range.End.Row; r++)
+        {
+            for (uint c = range.Start.Col; c <= range.End.Col; c++)
+            {
+                var address = new CellAddress(range.Start.Sheet, r, c);
+                if (displayCells.TryGetValue((r, c), out var displayCell))
+                {
+                    result.Add((address, CreatePictureSnapshot(range, address, displayCell)));
+                    continue;
+                }
+
+                var cell = sheet?.GetCell(r, c);
+                result.Add((
+                    address,
+                    new PictureCellSnapshot(
+                        r - range.Start.Row,
+                        c - range.Start.Col,
+                        DrawingInputParser.FormatPictureCellText(cell?.Value ?? BlankValue.Instance),
+                        null,
+                        cell?.Value is NumberValue or DateTimeValue)));
+            }
+        }
+
+        return result;
+    }
+
+    private static PictureCellSnapshot CreatePictureSnapshot(
+        GridRange range,
+        CellAddress address,
+        DisplayCell cell) =>
+        new(
+            address.Row - range.Start.Row,
+            address.Col - range.Start.Col,
+            cell.DisplayText,
+            cell.Style?.Clone(),
+            cell.RawValue is NumberValue or DateTimeValue);
 
     private void ExecutePaste(
         PasteMode mode = PasteMode.All,
@@ -542,9 +591,7 @@ public partial class MainWindow
         if (isLinkedPicture && sourceSheet is null)
             return;
 
-        var sourceCells = clip.Cells
-            .Select(c => (c.Item1, DrawingInputParser.FormatPictureCellText(c.Item2.Value)))
-            .ToList();
+        var sourceCells = clip.PictureCells;
         IWorkbookCommand CreatePastePictureCommand()
         {
             var currentRange = SheetGrid.SelectedRange ?? range;

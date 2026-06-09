@@ -52,6 +52,19 @@ public static class GridAutofillPlanner
         return null;
     }
 
+    public static GridRange CalculateCompletedSelectionRange(GridRange source, GridRange fillRange)
+    {
+        return new GridRange(
+            new CellAddress(
+                source.Start.Sheet,
+                Math.Min(source.Start.Row, fillRange.Start.Row),
+                Math.Min(source.Start.Col, fillRange.Start.Col)),
+            new CellAddress(
+                source.Start.Sheet,
+                Math.Max(source.End.Row, fillRange.End.Row),
+                Math.Max(source.End.Col, fillRange.End.Col)));
+    }
+
     public static GridAutoScrollRequest CalculateEdgeScrollIntent(
         double pointerX,
         double pointerY,

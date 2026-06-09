@@ -11,6 +11,7 @@ public sealed class WorkbookSession
     private sealed record InternalClipboard(
         GridRange SourceRange,
         IReadOnlyList<(CellAddress Source, Cell Cell)> Cells,
+        IReadOnlyList<(CellAddress Source, PictureCellSnapshot Snapshot)> PictureCells,
         string Text,
         bool IsCut);
 
@@ -1432,16 +1433,17 @@ public sealed class WorkbookSession
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(functionName);
 
-        var target = SelectedRange.Start;
-        var formula = AutoSumFormulaPlanner.BuildFormula(ActiveSheet, functionName, target);
+        if (!AutoSumFormulaPlanner.TryCreatePlan(ActiveSheet, functionName, SelectedRange, out var plan))
+            return new WorkbookCellEditResult(false, "AutoSum target is outside the worksheet bounds.", [], null);
+
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            CreateEditCellsCommand([(target, Cell.FromFormula(formula))]));
+            CreateEditCellsCommand([(plan.Target, Cell.FromFormula(plan.Formula))]));
         if (!result.Success)
             return result;
 
-        ApplySuccessfulEditResult(result, target);
-        SelectCell(GetNextAutoSumCell(target));
+        ApplySuccessfulEditResult(result, plan.Target);
+        SelectCell(GetNextAutoSumCell(plan.Target));
         return result;
     }
 
@@ -1747,9 +1749,7 @@ public sealed class WorkbookSession
         }
 
         var destination = ActiveCell;
-        var sourceCells = internalClipboard.Cells
-            .Select(static cell => (cell.Source, FormatPictureCellText(cell.Cell.Value)))
-            .ToList();
+        var sourceCells = internalClipboard.PictureCells;
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             CreateGroupedSheetCommand(
@@ -2139,7 +2139,8 @@ public sealed class WorkbookSession
         CellBorderPreset? borderPreset,
         BorderStyle borderStyle = BorderStyle.Thin,
         CellColor? borderColor = null,
-        bool? mergeCells = null)
+        bool? mergeCells = null,
+        MergeCellContentResolution mergeContentResolution = MergeCellContentResolution.KeepFirstCell)
     {
         ArgumentNullException.ThrowIfNull(diff);
 
@@ -2157,7 +2158,7 @@ public sealed class WorkbookSession
             commands.Add(CreateSetFontSizeCommand(range, fontSize, GetFittingRowHeight(fontSize)));
 
         if (mergeCells is { } shouldMerge)
-            commands.AddRange(CreateFormatCellsMergeCommands(range, shouldMerge));
+            commands.AddRange(CreateFormatCellsMergeCommands(range, shouldMerge, mergeContentResolution));
 
         if (commands.Count == 0)
             return new WorkbookCellEditResult(true, null, [], RecalcReport: null);
@@ -2188,12 +2189,13 @@ public sealed class WorkbookSession
         return result;
     }
 
-    public WorkbookCellEditResult MergeAndCenterSelectedRange()
+    public WorkbookCellEditResult MergeAndCenterSelectedRange(
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
     {
         var range = SelectedRange;
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            CreateMergeAndCenterCommand(range));
+            CreateMergeAndCenterCommand(range, contentResolution));
         if (!result.Success)
             return result;
 
@@ -2605,20 +2607,30 @@ public sealed class WorkbookSession
         return ToCommand(CellBorderPresetPlanner.GetDisplayName(preset), commands);
     }
 
-    private IWorkbookCommand CreateMergeAndCenterCommand(GridRange range)
+    private IWorkbookCommand CreateMergeAndCenterCommand(
+        GridRange range,
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
         var commands = new List<IWorkbookCommand>(targetSheetIds.Count * 2);
         foreach (var sheetId in targetSheetIds)
         {
+            var sheet = Workbook.GetSheet(sheetId);
             var sheetRange = RemapRangeToSheet(range, sheetId);
-            commands.AddRange(CellMergePlanner.CreateMergeAndCenterCommands(sheetId, sheetRange));
+            commands.AddRange(CellMergePlanner.CreateMergeAndCenterCommands(
+                sheet,
+                sheetId,
+                sheetRange,
+                contentResolution));
         }
 
         return ToCommand("Merge & Center", commands);
     }
 
-    private IReadOnlyList<IWorkbookCommand> CreateFormatCellsMergeCommands(GridRange range, bool mergeCells)
+    private IReadOnlyList<IWorkbookCommand> CreateFormatCellsMergeCommands(
+        GridRange range,
+        bool mergeCells,
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
         var commands = new List<IWorkbookCommand>();
@@ -2628,11 +2640,18 @@ public sealed class WorkbookSession
             if (sheet is null)
                 continue;
 
-            commands.AddRange(CellMergePlanner.CreateMergeCommands(
-                sheet,
-                sheetId,
-                RemapRangeToSheet(range, sheetId),
-                mergeCells));
+            var sheetRange = RemapRangeToSheet(range, sheetId);
+            commands.AddRange(mergeCells && contentResolution == MergeCellContentResolution.ConcatenateAllCells
+                ? CellMergePlanner.CreateMergeAndCenterCommands(
+                    sheet,
+                    sheetId,
+                    sheetRange,
+                    contentResolution).Where(command => command is not ApplyStyleCommand)
+                : CellMergePlanner.CreateMergeCommands(
+                    sheet,
+                    sheetId,
+                    sheetRange,
+                    mergeCells));
         }
 
         return commands;
@@ -3753,13 +3772,50 @@ public sealed class WorkbookSession
     {
         var sheet = Workbook.GetSheet(range.Start.Sheet);
         var cells = new List<(CellAddress Source, Cell Cell)>();
+        var pictureCells = CapturePictureCells(range, sheet);
         foreach (var address in range.AllCells())
         {
             var cell = sheet?.GetCell(address)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
             cells.Add((address, cell));
         }
 
-        return new InternalClipboard(range, cells, text, isCut);
+        return new InternalClipboard(range, cells, pictureCells, text, isCut);
+    }
+
+    private List<(CellAddress Source, PictureCellSnapshot Snapshot)> CapturePictureCells(GridRange range, Sheet? sheet)
+    {
+        var displayCells = new Dictionary<(uint Row, uint Col), DisplayCell>(Viewport.Cells.Count);
+        foreach (var cell in Viewport.Cells)
+            displayCells[(cell.Row, cell.Col)] = cell;
+
+        var result = new List<(CellAddress, PictureCellSnapshot)>();
+        foreach (var address in range.AllCells())
+        {
+            if (displayCells.TryGetValue((address.Row, address.Col), out var displayCell))
+            {
+                result.Add((
+                    address,
+                    new PictureCellSnapshot(
+                        address.Row - range.Start.Row,
+                        address.Col - range.Start.Col,
+                        displayCell.DisplayText,
+                        displayCell.Style?.Clone(),
+                        displayCell.RawValue is NumberValue or DateTimeValue)));
+                continue;
+            }
+
+            var cell = sheet?.GetCell(address);
+            result.Add((
+                address,
+                new PictureCellSnapshot(
+                    address.Row - range.Start.Row,
+                    address.Col - range.Start.Col,
+                    FormatPictureCellText(cell?.Value ?? BlankValue.Instance),
+                    null,
+                    cell?.Value is NumberValue or DateTimeValue)));
+        }
+
+        return result;
     }
 
     private bool TryCreateMultiRangeClipboardTextResult(

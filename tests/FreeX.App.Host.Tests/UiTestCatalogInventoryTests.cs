@@ -147,6 +147,8 @@ public sealed partial class UiTestCatalogInventoryTests
 
         row.Should().Contain("FREEX_SS_TOUR=1");
         row.Should().Contain("FREEX_SS_TOUR_BURST=1");
+        row.Should().Contain("FREEX_SS_TOUR_CONTEXT=table");
+        row.Should().Contain("FREEX_SS_TOUR_OUTPUT_SUBDIR");
         row.Should().Contain("FREEX_SS_TOUR_TABS");
         row.Should().Contain("FREEX_SS_TOUR_WIDTHS");
         row.Should().Contain($"{plannedCaptureCount} planned captures");

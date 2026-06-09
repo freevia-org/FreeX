@@ -59,6 +59,7 @@ internal static partial class ViewportConditionalFormatEvaluator
         cf.RuleType switch
         {
             CfRuleType.AboveAverage or
+            CfRuleType.DataBar or
             CfRuleType.ColorScale or
             CfRuleType.Top10 or
             CfRuleType.DuplicateValues or
@@ -69,13 +70,15 @@ internal static partial class ViewportConditionalFormatEvaluator
 
     private static bool RequiresIconSetAggregateCache(ConditionalFormat cf)
     {
-        var thresholdCount = GetIconSetCount(cf.IconSetStyle) - 1;
-        if (cf.IconSetThresholds.Count < thresholdCount)
+        var iconCount = GetIconSetCount(cf.IconSetStyle);
+        var thresholdCount = iconCount - 1;
+        var thresholdStartIndex = GetIconSetThresholdStartIndex(cf, iconCount);
+        if (cf.IconSetThresholds.Count - thresholdStartIndex < thresholdCount)
             return true;
 
         for (var i = 0; i < thresholdCount; i++)
         {
-            var threshold = cf.IconSetThresholds[i];
+            var threshold = cf.IconSetThresholds[thresholdStartIndex + i];
             if (RequiresAggregateThreshold(threshold.Type) ||
                 (threshold.Type == CfThresholdType.Number && !TryParseDouble(threshold.Value, out _)))
             {
@@ -95,13 +98,21 @@ internal static partial class ViewportConditionalFormatEvaluator
                    (cf.UseThreeColorScale && cf.MidThresholdType == CfThresholdType.Percentile);
         }
 
+        if (cf.RuleType == CfRuleType.DataBar)
+        {
+            return cf.DataBarMinThresholdType == CfThresholdType.Percentile ||
+                   cf.DataBarMaxThresholdType == CfThresholdType.Percentile;
+        }
+
         if (cf.RuleType != CfRuleType.IconSet)
             return false;
 
-        var thresholdCount = Math.Min(GetIconSetCount(cf.IconSetStyle) - 1, cf.IconSetThresholds.Count);
+        var iconCount = GetIconSetCount(cf.IconSetStyle);
+        var thresholdStartIndex = GetIconSetThresholdStartIndex(cf, iconCount);
+        var thresholdCount = Math.Min(iconCount - 1, cf.IconSetThresholds.Count - thresholdStartIndex);
         for (var i = 0; i < thresholdCount; i++)
         {
-            if (cf.IconSetThresholds[i].Type == CfThresholdType.Percentile)
+            if (cf.IconSetThresholds[thresholdStartIndex + i].Type == CfThresholdType.Percentile)
                 return true;
         }
 

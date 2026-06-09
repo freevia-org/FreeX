@@ -15,26 +15,38 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_CONTEXT\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_TABS\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_WIDTHS\")");
+        source.Should().Contain("ScreenshotTourOutputSubdirectoryEnvVar = \"FREEX_SS_TOUR_OUTPUT_SUBDIR\"");
+        source.Should().Contain("Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar)");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_AUTOFILTER_FLYOUT_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PRINT_PREVIEW_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_QAT_UNDO_REDO_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_STATUS_FOOTER_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
+        source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
         source.Should().Contain("EnsureTableDesignScreenshotTourContext");
         source.Should().Contain("EnsurePivotTableScreenshotTourContext");
         source.Should().Contain("CaptureAutoFilterFlyoutTourAsync");
+        source.Should().Contain("CapturePrintPreviewTourAsync");
         source.Should().Contain("CaptureQatUndoRedoTourAsync");
+        source.Should().Contain("CaptureStatusFooterTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
         source.Should().Contain("DeleteRibbonScreenshotTourEvidence");
         source.Should().Contain("ValidateRibbonScreenshotTourCaptures");
         source.Should().Contain("DeleteAutoFilterFlyoutTourEvidence");
+        source.Should().Contain("DeletePrintPreviewTourEvidence");
         source.Should().Contain("WriteRibbonScreenshotTourManifestAsync");
         source.Should().Contain("WriteAutoFilterFlyoutTourManifestAsync");
+        source.Should().Contain("WritePrintPreviewTourManifestAsync");
         source.Should().Contain("WriteQatUndoRedoTourManifestAsync");
+        source.Should().Contain("WriteStatusFooterTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
+        source.Should().Contain("print_preview_tour_manifest.json");
         source.Should().Contain("qat_undo_redo_tour_manifest.json");
+        source.Should().Contain("status_footer_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
@@ -81,6 +93,19 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER");
         source.Should().Contain("IsScreenshotTourBackgroundRenderAllowed");
         source.Should().Contain("no global mouse, keyboard, or screen capture input is used");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_AllowsRelativeOutputSubdirectoryUnderScreenshots()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_SS_TOUR_OUTPUT_SUBDIR");
+        source.Should().Contain("Path.IsPathRooted(requestedSubdirectory)");
+        source.Should().Contain("must be a relative path under screenshots");
+        source.Should().Contain("Path.GetFullPath(Path.Combine(root, requestedSubdirectory))");
+        source.Should().Contain("resolved.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase)");
+        source.Should().Contain("must stay under screenshots");
     }
 
     [Fact]
@@ -133,5 +158,63 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         qatSource.Should().Contain("private ContextMenu CreateQuickAccessHistoryMenu");
         qatSource.Should().Contain("OpenQuickAccessHistoryMenu(string commandId, ButtonBase placementTarget)");
         qatSource.Should().Contain("var menu = CreateQuickAccessHistoryMenu(commandId, placementTarget);");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesRealPrintPreviewEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_PRINT_PREVIEW_TOUR");
+        source.Should().Contain("OpenPrintBackstage();");
+        source.Should().Contain("freex_print_backstage_file_print_entry");
+        source.Should().Contain("freex_print_preview_ctrlp_entry_opened");
+        source.Should().Contain("freex_print_preview_toolbar_first_page");
+        source.Should().Contain("freex_print_preview_toolbar_last_page");
+        source.Should().Contain("freex_print_preview_zoom_settings_summary");
+        source.Should().Contain("freex_print_preview_closed_focus_return");
+        source.Should().Contain("CreatePrintPreviewTourDialog");
+        source.Should().Contain("new PrintPreviewDialog(");
+        source.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
+        source.Should().Contain("FindDescendantByAutomationId<TextBox>(dialog, \"PrintPreviewPageNumberBox\")");
+        source.Should().Contain("NavigationCommands.GoToPage.Execute(null, pageNumberBox)");
+        source.Should().Contain("FindDescendantByAutomationId<ComboBox>(dialog, \"PrintPreviewZoomBox\")");
+        source.Should().Contain("ClosePrintPreviewTourDialogWithEscape");
+        source.Should().Contain("PrintPreviewCloseButton");
+        source.Should().Contain("SsPrintPreviewButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(SsPrintPreviewButton);");
+        source.Should().Contain("PrintPreviewTourManifest");
+        source.Should().Contain("RenderTargetBitmap-print-preview-dialog-and-main-window");
+        source.Should().Contain("The native Windows print dialog is not opened during this tour");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesStatusFooterVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_STATUS_FOOTER_TOUR");
+        source.Should().Contain("status-footer-tour");
+        source.Should().Contain("EnsureStatusFooterTourContext");
+        source.Should().Contain("StatusBarShowAverage = true");
+        source.Should().Contain("StatusBarShowNumericalCount = true");
+        source.Should().Contain("CaptureElementAsync(StatusBarRoot, outputDir, fileName)");
+        source.Should().Contain("RenderTargetBitmap-status-footer-element");
+        source.Should().Contain("freex_status_footer_ready_baseline");
+        source.Should().Contain("freex_status_footer_selection_stats_numeric_mixed");
+        source.Should().Contain("freex_status_footer_formula_edit_mode");
+        source.Should().Contain("freex_status_footer_view_shortcut_page_layout");
+        source.Should().Contain("freex_status_footer_zoom_min_10");
+        source.Should().Contain("freex_status_footer_zoom_baseline_100");
+        source.Should().Contain("freex_status_footer_zoom_max_400");
+        source.Should().Contain("interactive:status-footer:<State>");
+        source.Should().Contain("StatusModeText");
+        source.Should().Contain("NumericalCountText");
+        source.Should().Contain("ZoomSliderValue");
+        source.Should().Contain("NormalViewChecked");
+        source.Should().Contain("PageLayoutViewChecked");
+        source.Should().Contain("PageBreakPreviewChecked");
+        source.Should().Contain("FormulaBarText");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest");
     }
 }

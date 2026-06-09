@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
@@ -30,5 +31,17 @@ public sealed class ConditionalFormatIconSetPlannerTests
             .Label
             .Should()
             .Be(UiText.Get("ConditionalFormatIconSet_3Arrows_Label"));
+    }
+
+    [Theory]
+    [InlineData("3Arrows", new[] { "0", "33", "66" })]
+    [InlineData("4Arrows", new[] { "0", "25", "50", "75" })]
+    [InlineData("5Arrows", new[] { "0", "20", "40", "60", "80" })]
+    public void CreateThresholds_UsesExcelStyleBaselineAndBandCutPoints(string style, string[] expectedValues)
+    {
+        var thresholds = ConditionalFormatIconSetPlanner.CreateThresholds(style);
+
+        thresholds.Select(threshold => threshold.Type).Should().OnlyContain(type => type == CfThresholdType.Percent);
+        thresholds.Select(threshold => threshold.Value).Should().Equal(expectedValues);
     }
 }

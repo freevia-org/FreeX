@@ -2757,7 +2757,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetAutomationId(_mergeAndCenterButton, "HomeMergeAndCenterButton");
                     AutomationProperties.SetHelpText(_mergeAndCenterButton, "Merge and center the selected cells.");
                     _mergeAndCenterMenuItem.Header = "Merge & Center";
-                    _mergeAndCenterMenuItem.Click += (_, _) => MergeAndCenterSelectedRange();
+                    _mergeAndCenterMenuItem.Click += async (_, _) => await MergeAndCenterSelectedRangeAsync();
                     _unmergeCellsMenuItem.Header = "Unmerge Cells";
                     _unmergeCellsMenuItem.Click += (_, _) => UnmergeSelectedRange();
                     formatMenu.Items.Add(_mergeAndCenterMenuItem);
@@ -2826,9 +2826,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 {
                     var result = _session.SetSelectedRangeBorderPreset(preset);
                 }
-                private void MergeAndCenterSelectedRange()
+                private async Task MergeAndCenterSelectedRangeAsync()
                 {
-                    var result = _session.MergeAndCenterSelectedRange();
+                    var result = _session.MergeAndCenterSelectedRange(contentResolution);
                 }
                 private void UnmergeSelectedRange()
                 {
@@ -3525,9 +3525,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 new ClearCommentsCommand(sheetId, sheetRange)
                 new ClearHyperlinksCommand(sheetId, sheetRange)
                 public WorkbookCellEditResult InsertAutoSumFormula(string functionName)
-                AutoSumFormulaPlanner.BuildFormula(ActiveSheet, functionName, target)
-                CreateEditCellsCommand([(target, Cell.FromFormula(formula))])
-                SelectCell(GetNextAutoSumCell(target));
+                AutoSumFormulaPlanner.TryCreatePlan(ActiveSheet, functionName, SelectedRange, out var plan)
+                CreateEditCellsCommand([(plan.Target, Cell.FromFormula(plan.Formula))])
+                SelectCell(GetNextAutoSumCell(plan.Target));
                 public bool CanFillSelectedRange(FillCellsDirection direction)
                 public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)
                 new FillCellsCommand(sheetId, sheetRange, direction)
@@ -3555,16 +3555,23 @@ public sealed class MacOsAppReadinessPreflightTests
                 BorderShortcutService.HasBorderChanges(diff)
                 GroupedApplyStyleCommand(targetSheetIds, sourceRange, diff)
                 public WorkbookCellEditResult ApplySelectedRangeCompactFormat(
-                    bool? mergeCells = null)
-                CreateFormatCellsMergeCommands(range, shouldMerge)
+                    bool? mergeCells = null,
+                    MergeCellContentResolution mergeContentResolution = MergeCellContentResolution.KeepFirstCell)
+                CreateFormatCellsMergeCommands(range, shouldMerge, mergeContentResolution)
                 public bool IsSelectedRangeMerged => CellMergePlanner.IsSelectionMerged(ActiveSheet, SelectedRange);
-                public WorkbookCellEditResult MergeAndCenterSelectedRange()
-                CreateMergeAndCenterCommand(range)
+                public WorkbookCellEditResult MergeAndCenterSelectedRange(
+                    MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
+                CreateMergeAndCenterCommand(range, contentResolution)
                 public WorkbookCellEditResult UnmergeSelectedRange()
                 CreateUnmergeCommands(range)
-                private IWorkbookCommand CreateMergeAndCenterCommand(GridRange range)
-                CellMergePlanner.CreateMergeAndCenterCommands(sheetId, sheetRange)
-                private IReadOnlyList<IWorkbookCommand> CreateFormatCellsMergeCommands(GridRange range, bool mergeCells)
+                private IWorkbookCommand CreateMergeAndCenterCommand(
+                    GridRange range,
+                    MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
+                CellMergePlanner.CreateMergeAndCenterCommands(
+                private IReadOnlyList<IWorkbookCommand> CreateFormatCellsMergeCommands(
+                    GridRange range,
+                    bool mergeCells,
+                    MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
                 CellMergePlanner.CreateMergeCommands(
                 private IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(GridRange range)
                 CellMergePlanner.CreateUnmergeCommands(sheet, sheetId, RemapRangeToSheet(range, sheetId))

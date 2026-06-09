@@ -14,5 +14,8 @@
         <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlTextBrushKey}" Color="#111111"/>
         <SolidColorBrush x:Key="{x:Static sys:SystemColors.MenuTextBrushKey}" Color="#111111"/>
         <SolidColorBrush x:Key="FreeXTitleBarBrush" Color="#17324D"/>
+        <Style TargetType="{x:Type ComboBox}">
+            <Setter Property="local:ComboBoxDropDownWheelBehavior.IsEnabled" Value="True"/>
+        </Style>
     </Application.Resources>
 </Application>

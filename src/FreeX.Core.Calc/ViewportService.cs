@@ -29,6 +29,7 @@ public sealed partial class ViewportService : IViewportService
         var cfContext = BuildConditionalFormatContext(sheet, workbook);
         var hasConditionalStyles = HasConditionalStyleRules(cfContext);
         var hasConditionalIcons = cfContext.IconRulesByPriority.Count != 0;
+        var hasConditionalDataBars = HasConditionalDataBarRules(cfContext);
         var styleCache = new ViewportStyleCache();
         var visibleCellSlots = EstimateVisibleCellSlots(rowMetrics.Count, colMetrics.Count);
         var scanOccupiedViewportCells = ShouldScanOccupiedViewportCells(
@@ -74,6 +75,7 @@ public sealed partial class ViewportService : IViewportService
                     cfContext,
                     hasConditionalStyles,
                     hasConditionalIcons,
+                    hasConditionalDataBars,
                     hasAnyCellComments,
                     ref styleCache);
             }
@@ -100,6 +102,7 @@ public sealed partial class ViewportService : IViewportService
                         hasAnyStyleOnlyCells,
                         hasConditionalStyles,
                         hasConditionalIcons,
+                        hasConditionalDataBars,
                         ref styleCache);
             }
         }
@@ -125,7 +128,7 @@ public sealed partial class ViewportService : IViewportService
                 sheet.SplitColumn,
                 splitTopRows,
                 splitLeftColumns,
-                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas, cfContext, hasAnyCellComments, ref styleCache),
+                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas, cfContext, hasAnyCellComments, hasConditionalDataBars, ref styleCache),
                 topRightColumns,
                 bottomLeftRows)
             : null;
@@ -262,6 +265,7 @@ public sealed partial class ViewportService : IViewportService
         CfEvaluationContext cfContext,
         bool hasConditionalStyles,
         bool hasConditionalIcons,
+        bool hasConditionalDataBars,
         bool hasAnyCellComments,
         ref ViewportStyleCache styleCache)
     {
@@ -290,6 +294,7 @@ public sealed partial class ViewportService : IViewportService
                 cfContext,
                 hasConditionalStyles,
                 hasConditionalIcons,
+                hasConditionalDataBars,
                 hasAnyCellComments,
                 ref styleCache);
         }
@@ -370,13 +375,15 @@ public sealed partial class ViewportService : IViewportService
         CfEvaluationContext cfContext,
         bool hasConditionalStyles,
         bool hasConditionalIcons,
+        bool hasConditionalDataBars,
         bool hasAnyCellComments,
         ref ViewportStyleCache styleCache)
     {
         var style = styleCache.Get(workbook, cell.StyleId);
         ConditionalFormatIcon? cfIcon = null;
+        ConditionalFormatDataBar? cfDataBar = null;
         var hasComment = false;
-        if (hasConditionalStyles || hasConditionalIcons || hasAnyCellComments)
+        if (hasConditionalStyles || hasConditionalIcons || hasConditionalDataBars || hasAnyCellComments)
             ApplyConditionalVisualsAndComments(
                 sheet,
                 sheetId,
@@ -388,12 +395,14 @@ public sealed partial class ViewportService : IViewportService
                 cell.StyleId == StyleId.Default,
                 hasConditionalStyles,
                 hasConditionalIcons,
+                hasConditionalDataBars,
                 hasAnyCellComments,
                 ref style,
                 out cfIcon,
+                out cfDataBar,
                 out hasComment);
 
-        var displayText = cfIcon?.ShowValue == false
+        var displayText = cfIcon?.ShowValue == false || cfDataBar?.ShowValue == false
             ? ""
             : GetDisplayText(workbook, sheet, cell, ref style, targetWidthCharacters);
 
@@ -407,7 +416,8 @@ public sealed partial class ViewportService : IViewportService
             null,
             style,
             cfIcon,
-            hasComment));
+            hasComment,
+            cfDataBar));
     }
 
     private struct ViewportStyleCache
@@ -436,12 +446,15 @@ public sealed partial class ViewportService : IViewportService
         bool baseStyleIsDefault,
         bool hasConditionalStyles,
         bool hasConditionalIcons,
+        bool hasConditionalDataBars,
         bool hasAnyCellComments,
         ref CellStyle style,
         out ConditionalFormatIcon? cfIcon,
+        out ConditionalFormatDataBar? cfDataBar,
         out bool hasComment)
     {
         cfIcon = null;
+        cfDataBar = null;
         hasComment = false;
 
         var addr = new CellAddress(sheetId, row, col);
@@ -459,6 +472,9 @@ public sealed partial class ViewportService : IViewportService
         if (hasConditionalIcons)
             cfIcon = EvaluateConditionalIcon(sheet, addr, value, workbook, cfContext);
 
+        if (hasConditionalDataBars)
+            cfDataBar = EvaluateConditionalDataBar(sheet, addr, value, workbook, cfContext);
+
         if (hasAnyCellComments)
             hasComment = HasCellComment(sheet, addr, hasAnyCellComments);
     }
@@ -467,7 +483,19 @@ public sealed partial class ViewportService : IViewportService
     {
         for (var i = 0; i < cfContext.RulesByPriority.Count; i++)
         {
-            if (cfContext.RulesByPriority[i].RuleType != CfRuleType.IconSet)
+            var rule = cfContext.RulesByPriority[i];
+            if (rule.RuleType == CfRuleType.ColorScale || rule.FormatIfTrue is not null)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasConditionalDataBarRules(CfEvaluationContext cfContext)
+    {
+        for (var i = 0; i < cfContext.RulesByPriority.Count; i++)
+        {
+            if (cfContext.RulesByPriority[i].RuleType == CfRuleType.DataBar)
                 return true;
         }
 
@@ -548,6 +576,7 @@ public sealed partial class ViewportService : IViewportService
         bool includeFormulas,
         CfEvaluationContext cfContext,
         bool hasAnyCellComments,
+        bool hasConditionalDataBars,
         ref ViewportStyleCache styleCache)
     {
         var dedupeCells = SplitPaneRegionsCanOverlap(topRows, leftColumns, bottomLeftRows, topRightColumns);
@@ -567,15 +596,15 @@ public sealed partial class ViewportService : IViewportService
         foreach (var row in topRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, ref styleCache);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
             foreach (var column in topRightColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, ref styleCache);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
         }
 
         foreach (var row in bottomLeftRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, ref styleCache);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
         }
 
         return cells;
@@ -622,6 +651,7 @@ public sealed partial class ViewportService : IViewportService
         bool hasAnyStyleOnlyCells,
         bool hasConditionalStyles,
         bool hasConditionalIcons,
+        bool hasConditionalDataBars,
         ref ViewportStyleCache styleCache)
     {
         if (dedupeCells && !AddSeenCell(ref seen, row, col))
@@ -657,8 +687,9 @@ public sealed partial class ViewportService : IViewportService
 
             var style = styleCache.Get(workbook, styleOnlyId.Value);
             ConditionalFormatIcon? cfIcon = null;
+            ConditionalFormatDataBar? cfDataBar = null;
             var hasComment = false;
-            if (hasConditionalStyles || hasConditionalIcons || hasAnyCellComments)
+            if (hasConditionalStyles || hasConditionalIcons || hasConditionalDataBars || hasAnyCellComments)
                 ApplyConditionalVisualsAndComments(
                     sheet,
                     sheetId,
@@ -670,9 +701,11 @@ public sealed partial class ViewportService : IViewportService
                     styleOnlyId.Value == StyleId.Default,
                     hasConditionalStyles,
                     hasConditionalIcons,
+                    hasConditionalDataBars,
                     hasAnyCellComments,
                     ref style,
                     out cfIcon,
+                    out cfDataBar,
                     out hasComment);
 
             cells.Add(new DisplayCell(
@@ -685,7 +718,8 @@ public sealed partial class ViewportService : IViewportService
                 null,
                 style,
                 cfIcon,
-                hasComment));
+                hasComment,
+                cfDataBar));
             return;
         }
 
@@ -702,6 +736,7 @@ public sealed partial class ViewportService : IViewportService
             cfContext,
             hasConditionalStyles,
             hasConditionalIcons,
+            hasConditionalDataBars,
             hasAnyCellComments,
             ref styleCache);
     }
