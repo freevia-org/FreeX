@@ -89,6 +89,14 @@ public static class ExcelWorksheetNavigationPlanner
 
             var nextRow = (uint)next;
             var nextFull = CellHasData(sheet, nextRow, current.Col);
+            if (startFull && !nextFull && row == current.Row)
+            {
+                return FindVerticalDataBoundaryFromBlank(
+                    sheet,
+                    new CellAddress(current.Sheet, nextRow, current.Col),
+                    rowDirection);
+            }
+
             if (startFull && !nextFull)
                 break;
 
@@ -115,6 +123,14 @@ public static class ExcelWorksheetNavigationPlanner
 
             var nextColumn = (uint)next;
             var nextFull = CellHasData(sheet, current.Row, nextColumn);
+            if (startFull && !nextFull && column == current.Col)
+            {
+                return FindHorizontalDataBoundaryFromBlank(
+                    sheet,
+                    new CellAddress(current.Sheet, current.Row, nextColumn),
+                    columnDirection);
+            }
+
             if (startFull && !nextFull)
                 break;
 

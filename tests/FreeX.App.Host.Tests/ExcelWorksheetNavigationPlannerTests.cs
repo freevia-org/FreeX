@@ -221,6 +221,49 @@ public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper outpu
     }
 
     [Fact]
+    public void FindVerticalDataBoundary_FromFilledCellBeforeGapMovesToNextFilledCell()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 3, 3), new NumberValue(20));
+        sheet.SetCell(new CellAddress(SheetId, 8, 3), new NumberValue(80));
+
+        ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 3, 3),
+                rowDirection: 1)
+            .Should()
+            .Be(new CellAddress(SheetId, 8, 3));
+    }
+
+    [Fact]
+    public void FindVerticalDataBoundary_FromFilledCellBeforeTrailingBlankMovesToGridEdge()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 3, 3), new NumberValue(20));
+
+        ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 3, 3),
+                rowDirection: 1)
+            .Should()
+            .Be(new CellAddress(SheetId, CellAddress.MaxRow, 3));
+    }
+
+    [Fact]
+    public void FindVerticalDataBoundary_FromBlankCellWithNoLaterFilledCellMovesToGridEdge()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 3, 3), new NumberValue(20));
+
+        ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 4, 3),
+                rowDirection: 1)
+            .Should()
+            .Be(new CellAddress(SheetId, CellAddress.MaxRow, 3));
+    }
+
+    [Fact]
     public void FindHorizontalDataBoundary_FromBlankCellStopsOnFirstFilledCell()
     {
         var sheet = new Sheet(SheetId, "Sheet1");
@@ -232,6 +275,35 @@ public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper outpu
                 columnDirection: 1)
             .Should()
             .Be(new CellAddress(SheetId, 5, 4));
+    }
+
+    [Fact]
+    public void FindHorizontalDataBoundary_FromFilledCellBeforeGapMovesToNextFilledCell()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 5, 4), new TextValue("Start"));
+        sheet.SetCell(new CellAddress(SheetId, 5, 9), new TextValue("Found"));
+
+        ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 5, 4),
+                columnDirection: 1)
+            .Should()
+            .Be(new CellAddress(SheetId, 5, 9));
+    }
+
+    [Fact]
+    public void FindHorizontalDataBoundary_FromBlankCellWithNoLaterFilledCellMovesToGridEdge()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 5, 4), new TextValue("Start"));
+
+        ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 5, 5),
+                columnDirection: 1)
+            .Should()
+            .Be(new CellAddress(SheetId, 5, CellAddress.MaxCol));
     }
 
     [Fact]
