@@ -7,8 +7,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -32,6 +35,10 @@ public partial class MainWindow
     private const string HomeBordersDropdownTourCaptureFileName = "freex_dropdown_home_borders_opened";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
+    private const string KeyTipOverlayTourManifestFileName = "keytip_overlay_tour_manifest.json";
+    private const string PrintPreviewTourManifestFileName = "print_preview_tour_manifest.json";
+    private const string QatUndoRedoTourManifestFileName = "qat_undo_redo_tour_manifest.json";
+    private const string QatUndoRedoTourOutputDirectoryName = "qat-undo-redo-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -51,7 +58,10 @@ public partial class MainWindow
         var homeNumberFormatDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR") == "1";
         var homeBordersDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_BORDERS_DROPDOWN_TOUR") == "1";
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour)
+        var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
+        var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
+        var qatUndoRedoTour = Environment.GetEnvironmentVariable("FREEX_QAT_UNDO_REDO_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !qatUndoRedoTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -68,7 +78,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, qatUndoRedoTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -97,7 +107,10 @@ public partial class MainWindow
         bool autoFilterFlyoutTour,
         bool homeNumberFormatDropdownTour,
         bool homeBordersDropdownTour,
-        bool worksheetContextMenuTour)
+        bool worksheetContextMenuTour,
+        bool keyTipOverlayTour,
+        bool printPreviewTour,
+        bool qatUndoRedoTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -116,6 +129,15 @@ public partial class MainWindow
 
         if (worksheetContextMenuTour)
             await CaptureWorksheetContextMenuTourAsync(Path.Combine(outputDir, "worksheet-context-menu-tour"));
+
+        if (keyTipOverlayTour)
+            await CaptureKeyTipOverlayTourAsync(Path.Combine(outputDir, "keytip-overlay-tour"));
+
+        if (printPreviewTour)
+            await CapturePrintPreviewTourAsync(Path.Combine(outputDir, "print-preview-tour"));
+
+        if (qatUndoRedoTour)
+            await CaptureQatUndoRedoTourAsync(Path.Combine(outputDir, QatUndoRedoTourOutputDirectoryName));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -501,6 +523,671 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, $"{WorksheetContextMenuTourCaptureFileName}.png");
         if (!File.Exists(path))
             throw new InvalidOperationException("Worksheet context menu tour did not create the planned FreeX context menu capture.");
+    }
+
+    private async Task CapturePrintPreviewTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeletePrintPreviewTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 768;
+        await Task.Delay(700);
+
+        var sheet = EnsurePrintPreviewTourContext();
+        UpdateViewport();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+
+        OpenPrintBackstage();
+        UpdateLayout();
+        await Task.Delay(350);
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, "freex_print_backstage_file_print_entry", 760);
+
+        var totalPages = Math.Max(1, PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService).Pages.Count);
+        var initialPreview = CreatePrintPreviewTourDialog();
+        try
+        {
+            initialPreview.Show();
+            initialPreview.Activate();
+            initialPreview.UpdateLayout();
+            await Task.Delay(550);
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await CaptureWindowElementForScreenshotTourAsync(initialPreview, outputDir, "freex_print_preview_ctrlp_entry_opened");
+        }
+        finally
+        {
+            initialPreview.Close();
+        }
+
+        var dialog = CreatePrintPreviewTourDialog();
+        var closedViaEscape = false;
+        var focusReturned = false;
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            dialog.UpdateLayout();
+            await Task.Delay(550);
+            await WaitForRibbonScreenshotRenderPassAsync();
+
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_print_preview_toolbar_first_page");
+
+            var pageNumberBox = FindDescendantByAutomationId<TextBox>(dialog, "PrintPreviewPageNumberBox");
+            if (pageNumberBox is not null && totalPages > 1)
+            {
+                pageNumberBox.Text = totalPages.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                pageNumberBox.Focus();
+                Keyboard.Focus(pageNumberBox);
+                NavigationCommands.GoToPage.Execute(null, pageNumberBox);
+                await Task.Delay(350);
+                await WaitForRibbonScreenshotRenderPassAsync();
+                await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_print_preview_toolbar_last_page");
+            }
+
+            var zoomBox = FindDescendantByAutomationId<ComboBox>(dialog, "PrintPreviewZoomBox");
+            if (zoomBox is not null)
+            {
+                zoomBox.SelectedItem = UiText.Get("PrintPreview_ZoomPageWidth");
+                await Task.Delay(350);
+                await WaitForRibbonScreenshotRenderPassAsync();
+                await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_print_preview_zoom_settings_summary");
+            }
+
+            closedViaEscape = ClosePrintPreviewTourDialogWithEscape(dialog);
+            await Task.Delay(350);
+            Activate();
+            SsPrintPreviewButton.Focus();
+            Keyboard.Focus(SsPrintPreviewButton);
+            focusReturned = IsActive && Keyboard.FocusedElement == SsPrintPreviewButton;
+            await CaptureCurrentWindowAsync(outputDir, "freex_print_preview_closed_focus_return", 760);
+        }
+        finally
+        {
+            if (dialog.IsVisible)
+                dialog.Close();
+        }
+
+        ValidatePrintPreviewTourEvidence(outputDir, totalPages);
+        await WritePrintPreviewTourManifestAsync(outputDir, sheet, totalPages, closedViaEscape, focusReturned);
+    }
+
+    private PrintPreviewDialog CreatePrintPreviewTourDialog()
+    {
+        var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var settings = sheet is null
+            ? new PrintSettingsPlan([UiText.Get("MainWindowPrintSettings_ActiveSheet")])
+            : PrintSettingsPlanner.Build(sheet);
+        return new PrintPreviewDialog(
+            _workbook.Name,
+            doc,
+            settings,
+            showMargins: () => PageMarginsBtn_Click(this, new RoutedEventArgs()),
+            showPageSetup: () => PageSetupDialogBtn_Click(this, new RoutedEventArgs()),
+            refreshPreviewWithSettings: BuildActiveSheetPrintPreview,
+            sheetId: _currentSheetId,
+            sheet: sheet,
+            executeCommand: cmd => TryExecuteCommand(cmd, "Print Settings"))
+        {
+            Owner = this,
+            Width = 2600,
+            Height = 820,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+    }
+
+    private Sheet EnsurePrintPreviewTourContext()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId) ?? _workbook.Sheets.FirstOrDefault();
+        if (sheet is null)
+            throw new InvalidOperationException("Print Preview tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PaperSize = WorksheetPaperSize.Letter;
+        sheet.PrintGridlines = true;
+        sheet.PrintHeadings = true;
+        sheet.ScaleToFit = new WorksheetScaleToFit(100, 1, 0);
+
+        for (uint row = 1; row <= 140; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue(row == 1 ? "Print Preview Tour" : $"Line {row - 1:000}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(row == 1 ? "State" : $"Toolbar navigation sample {row - 1:000}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(row));
+        }
+
+        var activeCell = new CellAddress(sheet.Id, 1, 1);
+        SetActiveCell(activeCell);
+        if (SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = new GridRange(activeCell, activeCell);
+            SheetGrid.SelectedRanges = null;
+        }
+
+        return sheet;
+    }
+
+    private static void DeletePrintPreviewTourEvidence(string outputDir)
+    {
+        foreach (var fileName in PrintPreviewTourExpectedFileNames(includeLastPage: true).Append(PrintPreviewTourManifestFileName))
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static void ValidatePrintPreviewTourEvidence(string outputDir, int totalPages)
+    {
+        var missing = PrintPreviewTourExpectedFileNames(totalPages > 1)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+        if (missing.Length > 0)
+            throw new InvalidOperationException($"Print Preview tour did not capture expected evidence: {string.Join(", ", missing)}.");
+    }
+
+    private static IReadOnlyList<string> PrintPreviewTourExpectedFileNames(bool includeLastPage)
+    {
+        var files = new List<string>
+        {
+            "freex_print_backstage_file_print_entry.png",
+            "freex_print_preview_ctrlp_entry_opened.png",
+            "freex_print_preview_toolbar_first_page.png",
+            "freex_print_preview_zoom_settings_summary.png",
+            "freex_print_preview_closed_focus_return.png"
+        };
+        if (includeLastPage)
+            files.Insert(3, "freex_print_preview_toolbar_last_page.png");
+
+        return files;
+    }
+
+    private async Task CaptureWindowElementForScreenshotTourAsync(Window window, string outputDir, string fileName)
+    {
+        await EnsureWindowForegroundForScreenshotTourAsync(window, $"capturing {fileName}.png");
+        await CaptureElementAsync(window, outputDir, fileName);
+        AssertWindowForegroundForScreenshotTour(window, $"saved {fileName}.png");
+    }
+
+    private static bool ClosePrintPreviewTourDialogWithEscape(PrintPreviewDialog dialog)
+    {
+        var closeButton = FindDescendantByAutomationId<Button>(dialog, "PrintPreviewCloseButton");
+        if (closeButton?.IsCancel != true)
+            return false;
+
+        closeButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        return !dialog.IsVisible;
+    }
+
+    private static T? FindDescendantByAutomationId<T>(DependencyObject root, string automationId)
+        where T : FrameworkElement
+    {
+        if (root is T element && AutomationProperties.GetAutomationId(element) == automationId)
+            return element;
+
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            var match = FindDescendantByAutomationId<T>(child, automationId);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
+    }
+
+    private async Task CaptureQatUndoRedoTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteQatUndoRedoTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1100;
+        Height = 768;
+        await Task.Delay(700);
+
+        var address = EnsureQatUndoRedoTourContext();
+        var captures = new List<QatUndoRedoTourManifestCapture>();
+
+        try
+        {
+            captures.Add(await CaptureQatUndoRedoWindowStateAsync(
+                outputDir,
+                "fresh-disabled",
+                "freex_qat_initial_disabled",
+                address));
+
+            ExecuteQatUndoRedoTourMutation(address);
+            captures.Add(await CaptureQatUndoRedoWindowStateAsync(
+                outputDir,
+                "after-edit-undo-enabled",
+                "freex_qat_after_edit_undo_enabled",
+                address));
+
+            captures.Add(await CaptureQatUndoRedoHistoryMenuAsync(
+                outputDir,
+                QuickAccessToolbarCommandIds.Undo,
+                "undo-history-opened",
+                "freex_qat_undo_history_menu_opened",
+                address));
+
+            if (!ExecuteUndo())
+                throw new InvalidOperationException("QAT undo/redo tour could not execute the first Undo action.");
+
+            captures.Add(await CaptureQatUndoRedoWindowStateAsync(
+                outputDir,
+                "after-one-undo-redo-enabled",
+                "freex_qat_after_one_undo_redo_enabled",
+                address));
+
+            if (!ExecuteUndo())
+                throw new InvalidOperationException("QAT undo/redo tour could not execute the second Undo action.");
+
+            captures.Add(await CaptureQatUndoRedoWindowStateAsync(
+                outputDir,
+                "after-two-undos-redo-menu-ready",
+                "freex_qat_after_two_undos_redo_menu_ready",
+                address));
+
+            captures.Add(await CaptureQatUndoRedoHistoryMenuAsync(
+                outputDir,
+                QuickAccessToolbarCommandIds.Redo,
+                "redo-history-opened",
+                "freex_qat_redo_history_menu_opened",
+                address));
+
+            if (!ExecuteRedo() || !ExecuteRedo())
+                throw new InvalidOperationException("QAT undo/redo tour could not execute both Redo actions.");
+
+            captures.Add(await CaptureQatUndoRedoWindowStateAsync(
+                outputDir,
+                "after-redo-restored",
+                "freex_qat_after_redo_restored",
+                address));
+
+            ValidateQatUndoRedoTourEvidence(outputDir, captures);
+            await WriteQatUndoRedoTourManifestAsync(outputDir, address, captures);
+        }
+        catch
+        {
+            DeleteQatUndoRedoTourEvidence(outputDir);
+            throw;
+        }
+    }
+
+    private CellAddress EnsureQatUndoRedoTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("QAT undo/redo tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.ClearCell(address);
+        sheet.ClearCell(new CellAddress(sheet.Id, 1, 2));
+        sheet.ClearCell(new CellAddress(sheet.Id, 2, 1));
+        SetActiveCell(address);
+        if (SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = new GridRange(address, address);
+            SheetGrid.SelectedRanges = null;
+            SheetGrid.Focus();
+        }
+
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        return address;
+    }
+
+    private void ExecuteQatUndoRedoTourMutation(CellAddress address)
+    {
+        var edit = (address, Cell.FromValue(new TextValue("QAT undo redo proof")));
+        if (!TryExecuteEditCells([edit], "Edit Cell", out var editOutcome))
+            throw new InvalidOperationException(editOutcome.ErrorMessage ?? "QAT undo/redo tour cell edit failed.");
+
+        var styleRange = new GridRange(address, address);
+        var diff = new StyleDiff(FillColor: new CellColor(255, 242, 204), Bold: true);
+        if (!TryExecuteApplyStyle(styleRange, diff, "Apply Style"))
+            throw new InvalidOperationException("QAT undo/redo tour style mutation failed.");
+
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private async Task<QatUndoRedoTourManifestCapture> CaptureQatUndoRedoWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        CellAddress address)
+    {
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateQatUndoRedoTourCapture(state, "window", fileName, address, "RenderTargetBitmap-window-full", ActualWidth, Math.Min(ActualHeight, 760), []);
+    }
+
+    private async Task<QatUndoRedoTourManifestCapture> CaptureQatUndoRedoHistoryMenuAsync(
+        string outputDir,
+        string commandId,
+        string state,
+        string fileName,
+        CellAddress address)
+    {
+        var historyButton = FindName(GetQuickAccessHistoryButtonName(commandId)) as ButtonBase
+            ?? throw new InvalidOperationException($"QAT undo/redo tour could not find history button for '{commandId}'.");
+        var menu = CreateQuickAccessHistoryMenu(commandId, historyButton);
+        try
+        {
+            menu.IsOpen = true;
+            menu.UpdateLayout();
+            await Task.Delay(350);
+            menu.UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+
+            await CaptureElementAsync(menu, outputDir, fileName);
+            var menuHeaders = menu.Items
+                .OfType<MenuItem>()
+                .Select(item => item.Header?.ToString() ?? string.Empty)
+                .Where(header => !string.IsNullOrWhiteSpace(header))
+                .ToArray();
+            return CreateQatUndoRedoTourCapture(state, "history-menu", fileName, address, "RenderTargetBitmap-qat-history-context-menu", menu.ActualWidth, menu.ActualHeight, menuHeaders);
+        }
+        finally
+        {
+            menu.IsOpen = false;
+        }
+    }
+
+    private QatUndoRedoTourManifestCapture CreateQatUndoRedoTourCapture(
+        string state,
+        string surface,
+        string fileName,
+        CellAddress address,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        IReadOnlyList<string> menuHeaders)
+    {
+        var sheet = _workbook.GetSheet(address.Sheet);
+        var cell = sheet?.GetCell(address);
+        var style = cell is null ? _workbook.GetStyle(StyleId.Default) : _workbook.GetStyle(cell.StyleId);
+        var undoButton = GetQuickAccessToolbarButton(QuickAccessToolbarCommandIds.Undo);
+        var redoButton = GetQuickAccessToolbarButton(QuickAccessToolbarCommandIds.Redo);
+        var undoHistoryButton = FindName(GetQuickAccessHistoryButtonName(QuickAccessToolbarCommandIds.Undo)) as ButtonBase;
+        var redoHistoryButton = FindName(GetQuickAccessHistoryButtonName(QuickAccessToolbarCommandIds.Redo)) as ButtonBase;
+        var undoHistory = GetQuickAccessHistoryEntries(QuickAccessToolbarCommandIds.Undo)
+            .Select(entry => entry.Label)
+            .ToArray();
+        var redoHistory = GetQuickAccessHistoryEntries(QuickAccessToolbarCommandIds.Redo)
+            .Select(entry => entry.Label)
+            .ToArray();
+
+        return new QatUndoRedoTourManifestCapture(
+            CaptureKey: $"interactive:qat-undo-redo:{state}",
+            PairKey: $"interactive:qat-undo-redo:{state}",
+            ScenarioId: "qat:undo-redo",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            UndoButtonEnabled: undoButton?.IsEnabled == true,
+            UndoHistoryButtonEnabled: undoHistoryButton?.IsEnabled == true,
+            RedoButtonEnabled: redoButton?.IsEnabled == true,
+            RedoHistoryButtonEnabled: redoHistoryButton?.IsEnabled == true,
+            CanUndo: _commandBus.CanUndo(_workbook.Id),
+            CanRedo: _commandBus.CanRedo(_workbook.Id),
+            ActiveCell: address.ToA1(),
+            ActiveCellText: FormatQatUndoRedoTourValue(cell?.Value),
+            ActiveCellBold: style.Bold,
+            ActiveCellFillColor: FormatQatUndoRedoTourColor(style.FillColor),
+            StatusText: StatusReadyText.Text,
+            UndoHistoryLabels: undoHistory,
+            RedoHistoryLabels: redoHistory,
+            MenuHeaders: menuHeaders);
+    }
+
+    private static string FormatQatUndoRedoTourValue(ScalarValue? value) =>
+        value switch
+        {
+            null or BlankValue => string.Empty,
+            TextValue text => text.Value,
+            NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+            DateTimeValue dateTime => dateTime.ToDateTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+            ErrorValue error => error.Code,
+            RangeValue range => $"{range.RowCount}x{range.ColCount} range",
+            _ => value.ToString() ?? string.Empty
+        };
+
+    private static string? FormatQatUndoRedoTourColor(CellColor? color) =>
+        color is { } value ? $"#{value.R:X2}{value.G:X2}{value.B:X2}" : null;
+
+    private static void DeleteQatUndoRedoTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_qat_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, QatUndoRedoTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateQatUndoRedoTourEvidence(string outputDir, IReadOnlyList<QatUndoRedoTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"QAT undo/redo tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
+    private async Task CaptureKeyTipOverlayTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteKeyTipOverlayTourEvidence(outputDir);
+
+        var captures = new List<KeyTipOverlayTourManifestCapture>();
+
+        try
+        {
+            await ApplyScreenshotTourWidthAsync(new RibbonScreenshotTourWidth("1100", 1100));
+            await CaptureKeyTipOverlayWindowStateAsync(
+                outputDir,
+                captures,
+                "top-level-tabs-qat",
+                "top-level",
+                "Top-level Alt/F10 mode with top-level tab and QAT badges.",
+                () => EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel));
+
+            await CaptureKeyTipOverlayWindowStateAsync(
+                outputDir,
+                captures,
+                "home-visible-commands",
+                "commands",
+                "Home command scope with visible command badges, including combo box and dropdown-command placements.",
+                () =>
+                {
+                    SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home"));
+                    EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+                });
+
+            await CaptureKeyTipOverlayMenuStateAsync(outputDir, captures);
+
+            await ApplyScreenshotTourWidthAsync(new RibbonScreenshotTourWidth("750", 750));
+            await CaptureKeyTipOverlayWindowStateAsync(
+                outputDir,
+                captures,
+                "narrow-home-collapsed-commands",
+                "commands",
+                "Narrow Home command scope with generated collapsed-group keytip badges.",
+                () =>
+                {
+                    SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home"));
+                    EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+                },
+                requireCollapsedGroupBadges: true);
+
+            ValidateKeyTipOverlayTourEvidence(outputDir, captures);
+            await WriteKeyTipOverlayTourManifestAsync(outputDir, captures);
+        }
+        catch
+        {
+            DeleteKeyTipOverlayTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            ExitRibbonKeyTipMode();
+        }
+    }
+
+    private async Task CaptureKeyTipOverlayWindowStateAsync(
+        string outputDir,
+        List<KeyTipOverlayTourManifestCapture> captures,
+        string fileName,
+        string scope,
+        string stateDescription,
+        Action prepareState,
+        bool requireCollapsedGroupBadges = false)
+    {
+        ExitRibbonKeyTipMode();
+        prepareState();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(350);
+        UpdateLayout();
+
+        var badgeCount = KeyTipOverlay.Children.OfType<Border>().Count();
+        var collapsedBadgeCount = string.Equals(scope, "commands", StringComparison.Ordinal)
+            ? GetVisibleKeyTipElements(RibbonKeyTipScope.Commands).Count(RibbonMetadata.IsCollapsedGroupButton)
+            : 0;
+        if (badgeCount == 0)
+            throw new InvalidOperationException($"Keytip overlay tour state '{fileName}' produced no badges.");
+        if (requireCollapsedGroupBadges && collapsedBadgeCount == 0)
+            throw new InvalidOperationException($"Keytip overlay tour state '{fileName}' did not expose any collapsed-group badges.");
+
+        await CaptureCurrentWindowAsync(outputDir, fileName, ScreenshotTourCaptureHeight);
+        captures.Add(new KeyTipOverlayTourManifestCapture(
+            CaptureKey: $"keytip-overlay:{scope}:{fileName}",
+            State: fileName,
+            Scope: scope,
+            Description: stateDescription,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: "RenderTargetBitmap-window-top-band",
+            CaptureLogicalWidth: ActualWidth,
+            CaptureLogicalHeight: ScreenshotTourCaptureHeight,
+            BadgeCount: badgeCount,
+            CollapsedGroupBadgeCount: collapsedBadgeCount,
+            MenuItemKeyTipCount: 0,
+            IsInProcess: true,
+            IsForegroundGuarded: !IsScreenshotTourBackgroundRenderAllowed()));
+    }
+
+    private async Task CaptureKeyTipOverlayMenuStateAsync(
+        string outputDir,
+        List<KeyTipOverlayTourManifestCapture> captures)
+    {
+        ExitRibbonKeyTipMode();
+        await ApplyScreenshotTourWidthAsync(new RibbonScreenshotTourWidth("1100", 1100));
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home"));
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);
+        HandleActiveRibbonKeyTip(Key.H);
+        HandleActiveRibbonKeyTip(Key.B);
+        await Task.Delay(350);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        var menu = _activeRibbonKeyTipMenu
+            ?? throw new InvalidOperationException("Keytip overlay tour could not open Home > Borders menu with Alt,H,B.");
+        menu.UpdateLayout();
+        var menuKeyTipCount = GetEnabledMenuItems(menu)
+            .Count(item => !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item)));
+
+        await CaptureElementAsync(menu, outputDir, "home-borders-menu-scope");
+        captures.Add(new KeyTipOverlayTourManifestCapture(
+            CaptureKey: "keytip-overlay:menu:home-borders-menu-scope",
+            State: "home-borders-menu-scope",
+            Scope: "menu",
+            Description: "Home Borders dropdown opened through keytip routing; menu item keytips are rendered as scoped input gesture text.",
+            FileName: "home-borders-menu-scope",
+            OutputFileName: "home-borders-menu-scope.png",
+            CaptureMethod: "RenderTargetBitmap-context-menu",
+            CaptureLogicalWidth: menu.ActualWidth,
+            CaptureLogicalHeight: menu.ActualHeight,
+            BadgeCount: 0,
+            CollapsedGroupBadgeCount: 0,
+            MenuItemKeyTipCount: menuKeyTipCount,
+            IsInProcess: true,
+            IsForegroundGuarded: false));
+
+        HandleActiveRibbonKeyTip(Key.C);
+        await Task.Delay(350);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        var submenuChild = FindOpenPopupChild(menu)
+            ?? throw new InvalidOperationException("Keytip overlay tour could not locate the open Borders > Line Color submenu popup.");
+        var activeItemsControl = _activeRibbonKeyTipItemsControl
+            ?? throw new InvalidOperationException("Keytip overlay tour did not retain the nested menu keytip scope.");
+        var nestedKeyTipCount = GetEnabledMenuItems(activeItemsControl)
+            .Count(item => !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item)));
+
+        await CaptureElementAsync(submenuChild, outputDir, "home-borders-line-color-submenu-scope");
+        captures.Add(new KeyTipOverlayTourManifestCapture(
+            CaptureKey: "keytip-overlay:menu:home-borders-line-color-submenu-scope",
+            State: "home-borders-line-color-submenu-scope",
+            Scope: "nested-menu",
+            Description: "Home Borders > Line Color submenu opened through keytip routing after Alt,H,B,C.",
+            FileName: "home-borders-line-color-submenu-scope",
+            OutputFileName: "home-borders-line-color-submenu-scope.png",
+            CaptureMethod: "RenderTargetBitmap-menu-popup-child",
+            CaptureLogicalWidth: submenuChild.ActualWidth,
+            CaptureLogicalHeight: submenuChild.ActualHeight,
+            BadgeCount: 0,
+            CollapsedGroupBadgeCount: 0,
+            MenuItemKeyTipCount: nestedKeyTipCount,
+            IsInProcess: true,
+            IsForegroundGuarded: false));
+    }
+
+    private static void DeleteKeyTipOverlayTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, KeyTipOverlayTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateKeyTipOverlayTourEvidence(
+        string outputDir,
+        IReadOnlyList<KeyTipOverlayTourManifestCapture> captures)
+    {
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Keytip overlay tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
     }
 
     private async Task CaptureRibbonTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
@@ -889,6 +1576,20 @@ public partial class MainWindow
         AssertWindowForegroundForScreenshotTour(operation);
     }
 
+    private static async Task EnsureWindowForegroundForScreenshotTourAsync(Window window, string operation)
+    {
+        if (IsScreenshotTourBackgroundRenderAllowed())
+        {
+            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            return;
+        }
+
+        window.Activate();
+        window.Focus();
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        AssertWindowForegroundForScreenshotTour(window, operation);
+    }
+
     private void AssertWindowForegroundForScreenshotTour(string operation)
     {
         if (IsScreenshotTourBackgroundRenderAllowed())
@@ -902,6 +1603,23 @@ public partial class MainWindow
         {
             throw new InvalidOperationException(
                 $"Screenshot tour blocked: FreeX main window must own foreground focus before {operation}; " +
+                $"foreground handle 0x{foregroundWindowHandle.ToInt64():X}, expected 0x{expectedWindowHandle.ToInt64():X}.");
+        }
+    }
+
+    private static void AssertWindowForegroundForScreenshotTour(Window window, string operation)
+    {
+        if (IsScreenshotTourBackgroundRenderAllowed())
+            return;
+
+        var expectedWindowHandle = new WindowInteropHelper(window).Handle;
+        var foregroundWindowHandle = GetForegroundWindow();
+        if (expectedWindowHandle == IntPtr.Zero ||
+            foregroundWindowHandle != expectedWindowHandle ||
+            !window.IsActive)
+        {
+            throw new InvalidOperationException(
+                $"Screenshot tour blocked: expected WPF window must own foreground focus before {operation}; " +
                 $"foreground handle 0x{foregroundWindowHandle.ToInt64():X}, expected 0x{expectedWindowHandle.ToInt64():X}.");
         }
     }
@@ -1171,6 +1889,199 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeBordersDropdownTourManifest);
     }
 
+    private static async Task WriteQatUndoRedoTourManifestAsync(
+        string outputDir,
+        CellAddress address,
+        IReadOnlyList<QatUndoRedoTourManifestCapture> captures)
+    {
+        var manifest = new QatUndoRedoTourManifest(
+            Tool: "FREEX_QAT_UNDO_REDO_TOUR",
+            EvidenceFamily: "qat",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "qat:undo-redo",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_qat_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            SelectedCell: address.ToA1(),
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-window-full-and-qat-history-context-menu",
+            Pairing: new QatUndoRedoTourManifestPairing(
+                "interactive:qat-undo-redo:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            Captures: captures,
+            Limitations:
+            [
+                "This in-app tour drives the real FreeX command bus and Quick Access Toolbar controls, then captures WPF output with RenderTargetBitmap.",
+                "The tour does not use global mouse or keyboard input; foreground/live OS-input validation remains separate unless the capture is run without the background-render override.",
+                "The edit and style mutation are created by the in-app harness through the same command stack used by routed UI commands, not by physical keyboard text entry.",
+                "No Microsoft Excel counterpart capture is produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, QatUndoRedoTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.QatUndoRedoTourManifest);
+    }
+
+    private static async Task WritePrintPreviewTourManifestAsync(
+        string outputDir,
+        Sheet sheet,
+        int totalPages,
+        bool closedViaEscapeEquivalent,
+        bool focusReturned)
+    {
+        var includeLastPage = totalPages > 1;
+        var captures = new List<PrintPreviewTourManifestCapture>
+        {
+            new(
+                CaptureKey: "print-preview:file-print-entry:opened",
+                PairKey: "interactive:print-preview:file-print-entry:opened",
+                ScenarioId: "print-preview:file-print-entry",
+                State: "opened",
+                EntryPath: "File > Print",
+                FileName: "freex_print_backstage_file_print_entry",
+                OutputFileName: "freex_print_backstage_file_print_entry.png",
+                EvidenceSummary: "Backstage Print view shows the Print Preview command and active sheet settings summary."),
+            new(
+                CaptureKey: "print-preview:ctrl-p-entry:opened",
+                PairKey: "interactive:print-preview:ctrl-p-entry:opened",
+                ScenarioId: "print-preview:ctrl-p-entry",
+                State: "opened",
+                EntryPath: "Ctrl+P routed to File > Print, then Print Preview",
+                FileName: "freex_print_preview_ctrlp_entry_opened",
+                OutputFileName: "freex_print_preview_ctrlp_entry_opened.png",
+                EvidenceSummary: "Print Preview dialog opens with the production toolbar, preview surface, settings panel, and Print as the initial keyboard target."),
+            new(
+                CaptureKey: "print-preview:toolbar:first-page",
+                PairKey: "interactive:print-preview:toolbar:first-page",
+                ScenarioId: "print-preview:toolbar-navigation",
+                State: "first-page",
+                EntryPath: "File > Print > Print Preview",
+                FileName: "freex_print_preview_toolbar_first_page",
+                OutputFileName: "freex_print_preview_toolbar_first_page.png",
+                EvidenceSummary: "Toolbar shows first-page navigation state, page count label, print controls, zoom, margins, page setup, close, and settings summary.")
+        };
+
+        if (includeLastPage)
+        {
+            captures.Add(new PrintPreviewTourManifestCapture(
+                CaptureKey: "print-preview:toolbar:last-page",
+                PairKey: "interactive:print-preview:toolbar:last-page",
+                ScenarioId: "print-preview:toolbar-navigation",
+                State: "last-page",
+                EntryPath: "File > Print > Print Preview, page number box to final page",
+                FileName: "freex_print_preview_toolbar_last_page",
+                OutputFileName: "freex_print_preview_toolbar_last_page.png",
+                EvidenceSummary: "Toolbar shows the final-page page-count label after keyboard-equivalent page-number navigation."));
+        }
+
+        captures.AddRange(
+        [
+            new PrintPreviewTourManifestCapture(
+                CaptureKey: "print-preview:zoom-settings-summary:page-width",
+                PairKey: "interactive:print-preview:zoom-settings-summary:page-width",
+                ScenarioId: "print-preview:zoom-settings-summary",
+                State: "page-width-zoom",
+                EntryPath: "Print Preview > Zoom > Page Width",
+                FileName: "freex_print_preview_zoom_settings_summary",
+                OutputFileName: "freex_print_preview_zoom_settings_summary.png",
+                EvidenceSummary: "Zoom combo is changed to Page Width while the print settings summary remains visible."),
+            new PrintPreviewTourManifestCapture(
+                CaptureKey: "print-preview:closed:focus-return",
+                PairKey: "interactive:print-preview:closed:focus-return",
+                ScenarioId: "print-preview:close-focus-return",
+                State: "closed-focus-return",
+                EntryPath: "Print Preview close via IsCancel Close button route",
+                FileName: "freex_print_preview_closed_focus_return",
+                OutputFileName: "freex_print_preview_closed_focus_return.png",
+                EvidenceSummary: "Preview is closed and the workbook window is visible again with focus explicitly returned to the backstage Print Preview command.")
+        ]);
+
+        var manifest = new PrintPreviewTourManifest(
+            Tool: "FREEX_PRINT_PREVIEW_TOUR",
+            EvidenceFamily: "print-preview",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "print-preview:foreground-focus-return",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_print_preview_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            EntryPaths: ["Ctrl+P", "File > Print > Print Preview"],
+            SheetName: sheet.Name,
+            TotalPages: totalPages,
+            SettingsSummary: PrintSettingsPlanner.Build(sheet).Summary,
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-print-preview-dialog-and-main-window",
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no global mouse, keyboard, or screen capture input was used."
+                    : "Abort before file write unless the expected FreeX main window or Print Preview dialog owns foreground focus for each capture."),
+            ClosedViaEscapeEquivalent: closedViaEscapeEquivalent,
+            FocusReturnedToBackstagePrintPreviewCommand: focusReturned,
+            Captures: captures,
+            Limitations:
+            [
+                "This in-app tour renders real FreeX WPF windows using RenderTargetBitmap rather than OS CopyFromScreen.",
+                "The Ctrl+P route is represented by FreeX's existing source-proven Ctrl+P-to-File-Print path plus a live Print Preview dialog opened from that backstage entry point; no global Ctrl+P keystroke is synthesized.",
+                "The close capture uses the PrintPreviewCloseButton IsCancel route as the Escape-equivalent path, then explicitly returns focus to the backstage Print Preview command before the final screenshot.",
+                "The native Windows print dialog is not opened during this tour to avoid sending output to a real printer or blocking on system print UI."
+            ]);
+
+        var path = Path.Combine(outputDir, PrintPreviewTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.PrintPreviewTourManifest);
+    }
+
+    private static async Task WriteKeyTipOverlayTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<KeyTipOverlayTourManifestCapture> captures)
+    {
+        var manifest = new KeyTipOverlayTourManifest(
+            Tool: "FREEX_KEYTIP_OVERLAY_TOUR",
+            EvidenceFamily: "keytip-overlay",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "ribbon-keytip-overlay-pixel-placement",
+            OutputDirectory: outputDir,
+            OutputNaming: "<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "in-process-background-render-allowed"
+                : "foreground-guarded-in-process-render",
+            FocusGuard: new KeyTipOverlayTourManifestFocusGuard(
+                RequiredForWindowCaptures: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, or screen capture input is used."
+                    : "Window-band captures abort unless the FreeX main window owns foreground focus immediately before render and file write. Popup element captures are in-process element renders."),
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Captures: captures,
+            CoveredStates:
+            [
+                "Top-level Alt/F10 tab badges",
+                "QAT badges in top-level keytip mode",
+                "Home visible command-scope badges",
+                "Home Borders dropdown menu keytip scope",
+                "Home Borders > Line Color nested submenu keytip scope",
+                "Narrow Home command-scope collapsed-group badges"
+            ],
+            Limitations:
+            [
+                "Window-band captures cover the top 300 logical pixels of the FreeX window.",
+                "Top-level, QAT, visible command, and narrow collapsed cases capture the production KeyTipOverlay badges.",
+                "Dropdown and nested submenu states are captured as live WPF popup elements; their scoped keytips are rendered as menu input gesture text rather than overlay badges because the production keytip mode intentionally clears the owner-window badge overlay while menu scope is active.",
+                "This evidence proves FreeX pixel placement for the captured states only; broader Excel pair captures remain separate foreground-guarded work."
+            ]);
+
+        var path = Path.Combine(outputDir, KeyTipOverlayTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.KeyTipOverlayTourManifest);
+    }
+
     private sealed record RibbonScreenshotTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -1357,12 +2268,132 @@ public partial class MainWindow
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
 
+    private sealed record PrintPreviewTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> EntryPaths,
+        string SheetName,
+        int TotalPages,
+        string SettingsSummary,
+        string CaptureStatus,
+        string CaptureMethod,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        bool ClosedViaEscapeEquivalent,
+        bool FocusReturnedToBackstagePrintPreviewCommand,
+        IReadOnlyList<PrintPreviewTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record PrintPreviewTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string EntryPath,
+        string FileName,
+        string OutputFileName,
+        string EvidenceSummary);
+
+    private sealed record KeyTipOverlayTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string CaptureStatus,
+        string CaptureMode,
+        KeyTipOverlayTourManifestFocusGuard FocusGuard,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        IReadOnlyList<KeyTipOverlayTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record KeyTipOverlayTourManifestFocusGuard(
+        bool RequiredForWindowCaptures,
+        string Policy);
+
+    private sealed record KeyTipOverlayTourManifestCapture(
+        string CaptureKey,
+        string State,
+        string Scope,
+        string Description,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        int BadgeCount,
+        int CollapsedGroupBadgeCount,
+        int MenuItemKeyTipCount,
+        bool IsInProcess,
+        bool IsForegroundGuarded);
+
+    private sealed record QatUndoRedoTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string SelectedCell,
+        string CaptureStatus,
+        string CaptureMethod,
+        QatUndoRedoTourManifestPairing Pairing,
+        IReadOnlyList<QatUndoRedoTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record QatUndoRedoTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record QatUndoRedoTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        bool UndoButtonEnabled,
+        bool UndoHistoryButtonEnabled,
+        bool RedoButtonEnabled,
+        bool RedoHistoryButtonEnabled,
+        bool CanUndo,
+        bool CanRedo,
+        string ActiveCell,
+        string ActiveCellText,
+        bool ActiveCellBold,
+        string? ActiveCellFillColor,
+        string StatusText,
+        IReadOnlyList<string> UndoHistoryLabels,
+        IReadOnlyList<string> RedoHistoryLabels,
+        IReadOnlyList<string> MenuHeaders);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
     [JsonSerializable(typeof(HomeNumberFormatDropdownTourManifest))]
     [JsonSerializable(typeof(HomeBordersDropdownTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
+    [JsonSerializable(typeof(PrintPreviewTourManifest))]
+    [JsonSerializable(typeof(KeyTipOverlayTourManifest))]
+    [JsonSerializable(typeof(QatUndoRedoTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.

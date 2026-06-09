@@ -1470,6 +1470,12 @@ for ($i = 0; $i -lt 30; $i++) {
 if ($hwnd -eq [IntPtr]::Zero) { Write-Error "No Excel window found"; exit 1 }
 
 Write-Host "HWND: $hwnd"
+# Get PID and expected title from the launched window before foreground activation.
+$wpid = 0
+[Win32e]::GetWindowThreadProcessId($hwnd, [ref]$wpid) | Out-Null
+Write-Host "Excel PID: $wpid"
+$expectedTitle = Get-WindowTitle $hwnd
+
 # Restore (not maximized), then move to primary monitor top-left. The width matrix loop
 # controls maximized and fixed-width states.
 [Win32e]::ShowWindow($hwnd, 1) | Out-Null   # SW_RESTORE
@@ -1477,13 +1483,7 @@ Start-Sleep -Milliseconds 300
 # SWP_NOSIZE=0x0001 - move to primary monitor origin without resizing
 [Win32e]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, 0, 0, 0x0001) | Out-Null
 Start-Sleep -Milliseconds 300
-[Win32e]::SetForegroundWindow($hwnd) | Out-Null
-Start-Sleep -Seconds 2
-
-# Get PID from window for UIA lookup
-$wpid = 0
-[Win32e]::GetWindowThreadProcessId($hwnd, [ref]$wpid) | Out-Null
-Write-Host "Excel PID: $wpid"
+Set-ExcelForegroundWindow $hwnd $wpid $expectedTitle "initial capture setup"
 
 $desktop = [System.Windows.Automation.AutomationElement]::RootElement
 $cond    = New-Object System.Windows.Automation.PropertyCondition(
@@ -1494,14 +1494,10 @@ if ($appEl -eq $null) { Write-Error "UIA element not found"; exit 1 }
 $captureH = [int]([Math]::Ceiling(300 * $scale))
 Write-Host "Capture height: $captureH physical px (300 logical)"
 
-$expectedTitle = Get-WindowTitle $hwnd
-
 function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
     if ($null -eq $widthSpec.WindowLogicalWidth) {
         [Win32e]::ShowWindow($windowHandle, 3) | Out-Null
-        [Win32e]::SetForegroundWindow($windowHandle) | Out-Null
-        Start-Sleep -Milliseconds 1200
-        Assert-ForegroundWindowOwnership $wpid $expectedTitle "window resize capture setup"
+        Set-ExcelForegroundWindow $windowHandle $wpid $expectedTitle "window resize capture setup"
         return
     }
 
@@ -1510,9 +1506,7 @@ function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
     [Win32e]::ShowWindow($windowHandle, 1) | Out-Null
     Start-Sleep -Milliseconds 200
     [Win32e]::SetWindowPos($windowHandle, [IntPtr]::Zero, 0, 0, $physicalWidth, $physicalHeight, 0) | Out-Null
-    [Win32e]::SetForegroundWindow($windowHandle) | Out-Null
-    Start-Sleep -Milliseconds 700
-    Assert-ForegroundWindowOwnership $wpid $expectedTitle "window resize capture setup"
+    Set-ExcelForegroundWindow $windowHandle $wpid $expectedTitle "window resize capture setup"
 }
 
 function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect, $captureLogicalHeight, $capturePhysicalHeight, $widths, $files, $expectedPid, $expectedTitle) {
