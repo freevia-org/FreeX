@@ -105,6 +105,41 @@ public sealed class HomeFontCommandSourceTests
     }
 
     [Fact]
+    public void FontFamilyDropdown_UsesScrollableOfficeStyleFontItems()
+    {
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
+        var resources = DialogSourceTestSupport.ReadHostSources("Resources\\MainWindowResources.xaml");
+        var selector = xaml.ExtractElementByName("ComboBox", "FontNameBox");
+
+        selector.Should().Contain("MaxDropDownHeight=\"260\"");
+        selector.Should().Contain("ItemTemplate=\"{StaticResource FontNameComboBoxItemTemplate}\"");
+        selector.Should().Contain("ItemContainerStyle=\"{StaticResource FontNameComboBoxItemStyle}\"");
+        resources.Should().Contain("x:Key=\"FontNameComboBoxItemTemplate\"");
+        resources.Should().Contain("FontFamily=\"{Binding}\"");
+        resources.Should().Contain("x:Key=\"FontNameComboBoxItemStyle\"");
+        resources.Should().Contain("Property=\"IsHighlighted\" Value=\"True\"");
+        resources.Should().Contain("Property=\"IsSelected\" Value=\"True\"");
+        resources.Should().Contain("SelectionMarker");
+    }
+
+    [Fact]
+    public void SharedComboBoxDropdownStyle_ProvidesWheelHoverAndSelectionBehavior()
+    {
+        var appXaml = DialogSourceTestSupport.ReadHostSources("App.xaml");
+        var resources = DialogSourceTestSupport.ReadHostSources("Resources\\MainWindowResources.xaml");
+        var behaviorSource = DialogSourceTestSupport.ReadHostSources("ComboBoxDropDownWheelBehavior.cs");
+
+        appXaml.Should().Contain("local:ComboBoxDropDownWheelBehavior.IsEnabled");
+        resources.Should().Contain("local:ComboBoxDropDownWheelBehavior.IsEnabled");
+        resources.Should().Contain("Property=\"IsHighlighted\" Value=\"True\"");
+        resources.Should().Contain("Property=\"IsSelected\" Value=\"True\"");
+        resources.Should().Contain("Property=\"FontWeight\" Value=\"SemiBold\"");
+        behaviorSource.Should().Contain("InputManager.Current.PreProcessInput += InputManager_PreProcessInput");
+        behaviorSource.Should().Contain("DropDownOpened += ComboBox_DropDownOpened");
+        behaviorSource.Should().Contain("ScrollDropDown(scrollViewer, wheelArgs)");
+    }
+
+    [Fact]
     public void FontColorButtons_ExposeStableAutomationMetadata()
     {
         var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
