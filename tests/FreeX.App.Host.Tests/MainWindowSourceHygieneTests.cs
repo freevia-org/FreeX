@@ -138,6 +138,27 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ScreenshotTour_ProvidesKeyTipOverlayEvidenceHook()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_KEYTIP_OVERLAY_TOUR");
+        source.Should().Contain("CaptureKeyTipOverlayTourAsync");
+        source.Should().Contain("keytip-overlay-tour");
+        source.Should().Contain("EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel)");
+        source.Should().Contain("EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands)");
+        source.Should().Contain("HandleActiveRibbonKeyTip(Key.B)");
+        source.Should().Contain("HandleActiveRibbonKeyTip(Key.C)");
+        source.Should().Contain("requireCollapsedGroupBadges: true");
+        source.Should().Contain("KeyTipOverlayTourManifest");
+        source.Should().Contain("ribbon-keytip-overlay-pixel-placement");
+        source.Should().Contain("RenderTargetBitmap-window-top-band");
+        source.Should().Contain("RenderTargetBitmap-context-menu");
+        source.Should().Contain("RenderTargetBitmap-menu-popup-child");
+        source.Should().Contain("Dropdown and nested submenu states are captured as live WPF popup elements");
+    }
+
+    [Fact]
     public void AppChrome_DoesNotUseLegacyGreenThemeConstants()
     {
         var appHostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");

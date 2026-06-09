@@ -26,6 +26,16 @@ public sealed class ExcelOpenSmokeReportSchemaTests
     }
 
     [Fact]
+    public void SaveReopenValidation_AllowsExcelWorkbookViewRevisionUid()
+    {
+        var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
+
+        programSource.Should().Contain("SpreadsheetRevision2Ns");
+        programSource.Should().Contain("IsKnownNamespacedWorkbookViewAttribute(attribute.Name)");
+        programSource.Should().Contain("name == SpreadsheetRevision2Ns + \"uid\"");
+    }
+
+    [Fact]
     public void PublicCorpusWarningTolerance_DoesNotAllowSupportedThreadedCommentsWarnings()
     {
         var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
@@ -73,6 +83,57 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         expectationBlock.Should().Contain("MinFreeXReopenedDataValidations = saveReopen ? 10 : 0");
     }
 
+    [Fact]
+    public void GeneratedFeatureFixtures_AssertBidirectionalGridFormulaStyleAndLayoutCounters()
+    {
+        var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
+        var expectationBlock = ExtractMethodBlock(programSource, "private static WorkbookSmokeExpectations FormulaExpectations");
+
+        expectationBlock.Should().Contain("MinFreeXPreSaveFrozenSheets: expectFreeXPreSave ? 1 : 0");
+        expectationBlock.Should().Contain("MinFreeXPreSaveCustomColumnWidths: expectFreeXPreSave ? 4 : 0");
+        expectationBlock.Should().Contain("MinFreeXPreSaveStyledCells: expectFreeXPreSave ? 6 : 0");
+        expectationBlock.Should().Contain("MinFreeXPreSaveNumberFormatCells: expectFreeXPreSave ? 4 : 0");
+        expectationBlock.Should().Contain("MinExcelOpenedFreezePaneSheets: 1");
+        expectationBlock.Should().Contain("MinExcelOpenedCustomColumnWidths: 4");
+        expectationBlock.Should().Contain("MinExcelOpenedStyledCells: 6");
+        expectationBlock.Should().Contain("MinExcelReopenedFreezePaneSheets: saveReopen ? 1 : 0");
+        expectationBlock.Should().Contain("MinFreeXReopenedFrozenSheets: saveReopen ? 1 : 0");
+        expectationBlock.Should().Contain("MinFreeXReopenedStyledCells: saveReopen ? 6 : 0");
+    }
+
+    [Fact]
+    public void GeneratedFeatureFixtures_AssertTableAutofilterAndPackagePartsBothDirections()
+    {
+        var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
+        var expectationBlock = ExtractMethodBlock(programSource, "private static WorkbookSmokeExpectations StructuredTableExpectations");
+
+        expectationBlock.Should().Contain("MinFreeXPreSaveAutoFilterSheets: expectFreeXPreSave ? minStructuredTables : 0");
+        expectationBlock.Should().Contain("MinExcelOpenedAutoFilterSheets: minStructuredTables");
+        expectationBlock.Should().Contain("MinExcelReopenedAutoFilterSheets: saveReopen ? minStructuredTables : 0");
+        expectationBlock.Should().Contain("MinFreeXReopenedAutoFilterSheets: saveReopen ? minStructuredTables : 0");
+        expectationBlock.Should().Contain("RequiredFreeXSavedPackageParts:");
+        expectationBlock.Should().Contain("\"xl/tables/table1.xml\"");
+        expectationBlock.Should().Contain("RequiredExcelSavedPackageParts:");
+    }
+
+    [Fact]
+    public void GeneratedFeatureFixtures_AssertProtectionFreezePaneAndPivotPackagePartsBothDirections()
+    {
+        var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
+        var protectionBlock = ExtractMethodBlock(programSource, "private static WorkbookSmokeExpectations ProtectionPageExpectations");
+        var pivotBlock = ExtractMethodBlock(programSource, "private static WorkbookSmokeExpectations PivotTableExpectations");
+
+        protectionBlock.Should().Contain("MinFreeXPreSaveFrozenSheets: expectFreeXPreSave ? 1 : 0");
+        protectionBlock.Should().Contain("MinExcelOpenedFreezePaneSheets: 1");
+        protectionBlock.Should().Contain("MinExcelReopenedFreezePaneSheets: saveReopen ? 1 : 0");
+        protectionBlock.Should().Contain("MinFreeXReopenedFrozenSheets: saveReopen ? 1 : 0");
+
+        pivotBlock.Should().Contain("RequiredFreeXSavedPackageParts:");
+        pivotBlock.Should().Contain("\"xl/pivotTables/pivotTable1.xml\"");
+        pivotBlock.Should().Contain("\"xl/pivotCache/pivotCacheDefinition1.xml\"");
+        pivotBlock.Should().Contain("RequiredExcelSavedPackageParts:");
+    }
+
     private static void AssertCoreValidationCalls(
         string source,
         string pathExpression,
@@ -93,5 +154,18 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         var nextElse = source.IndexOf("else if (string.Equals(row.Id", start + rowId.Length, StringComparison.Ordinal);
         nextElse.Should().BeGreaterThan(start, $"the smoke expectation block for {rowId} should be bounded by another row block");
         return source[start..nextElse];
+    }
+
+    private static string ExtractMethodBlock(string source, string methodStartText)
+    {
+        var start = source.IndexOf(methodStartText, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, $"the smoke tool must contain {methodStartText}");
+
+        var nextMethod = source.IndexOf("\r\n    private static", start + methodStartText.Length, StringComparison.Ordinal);
+        if (nextMethod < 0)
+            nextMethod = source.IndexOf("\n    private static", start + methodStartText.Length, StringComparison.Ordinal);
+
+        nextMethod.Should().BeGreaterThan(start, $"the smoke expectation method {methodStartText} should be bounded by another private static member");
+        return source[start..nextMethod];
     }
 }
