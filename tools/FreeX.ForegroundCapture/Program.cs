@@ -81,10 +81,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "excel-number-format" => RunExcelNumberFormatScenario(),
             "excel-borders" => RunExcelPopupScenario("excel-borders", PrepareExcelBlankWorkbook, "%hb", "Net UI Tool Window"),
             "excel-context-menu" => RunExcelContextMenuScenario(),
+            "excel-format-cells-dialog" => RunExcelFormatCellsDialogScenario(),
+            "excel-data-validation-dropdown" => RunExcelDataValidationDropdownScenario(),
             "excel-open-dialog" => RunExcelDialogScenario("excel-open-dialog", PrepareExcelBlankWorkbook, "^{F12}", "#32770", "Open"),
             "excel-save-as-dialog" => RunExcelSaveAsDialogScenario(),
             "freex-open-dialog" => RunFreeXDialogScenario("freex-open-dialog", "^{F12}", "#32770", "Open"),
             "freex-save-as-dialog" => RunFreeXDialogScenario("freex-save-as-dialog", "{F12}", "#32770", "Save As"),
+            "freex-format-cells-dialog" => RunFreeXFormatCellsDialogScenario(),
             "freex-status-zoom-in-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-in-click", ClickAutomationIdExpectZoom("StatusZoomInButton", 105)),
             "freex-status-zoom-out-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-out-click", ClickAutomationIdExpectZoom("StatusZoomOutButton", 95)),
             "freex-status-zoom-slider-drag" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-drag", DragFirstSliderExpectChangedZoom("Zoom", 100)),
@@ -299,6 +302,101 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
+    private CaptureResult RunExcelFormatCellsDialogScenario()
+    {
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelBlankWorkbook(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("excel-format-cells-dialog", guard, "before-input");
+            }
+
+            SendKeys.SendWait("%hoe");
+            Thread.Sleep(options.AfterInputDelay);
+
+            var dialog = WindowFinder.FindProcessWindow(
+                pid.Value,
+                window => window.Handle != hwnd.ToInt64() &&
+                    window.Title.Contains("Format Cells", StringComparison.OrdinalIgnoreCase) &&
+                    window.Bounds.Width > 350 &&
+                    window.Bounds.Height > 250,
+                options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked("excel-format-cells-dialog", "dialog-not-found", "Did not detect Excel Format Cells dialog after Alt,H,O,E.", options.OutputRoot, "excel", guard);
+            }
+
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            return CaptureWindow("excel-format-cells-dialog", "excel", dialog, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunExcelDataValidationDropdownScenario()
+    {
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            dynamic worksheet = PrepareExcelDataValidationDropdownWorkbook(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("excel-data-validation-dropdown", guard, "before-input");
+            }
+
+            worksheet.Range["A2"].Activate();
+            SendKeys.SendWait("%{DOWN}");
+            Thread.Sleep(options.AfterInputDelay);
+
+            var popup = WindowFinder.FindForegroundProcessPopup(pid.Value, hwnd.ToInt64(), TimeSpan.FromMilliseconds(1200), 70, 40);
+            if (popup is null)
+            {
+                guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+                if (!guard.Success)
+                {
+                    return BlockedWithGuard("excel-data-validation-dropdown", guard, "before-coordinate-click");
+                }
+
+                ClickExcelCellDropdownArrow(excel, worksheet, "A2");
+                Thread.Sleep(options.AfterInputDelay);
+                popup = WindowFinder.FindForegroundProcessPopup(pid.Value, hwnd.ToInt64(), options.PopupTimeout, 70, 40);
+            }
+
+            if (popup is null)
+            {
+                return CaptureResult.Blocked("excel-data-validation-dropdown", "popup-not-found", "Did not detect foreground Excel Data Validation list dropdown after Alt+Down or guarded in-cell arrow click.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow("excel-data-validation-dropdown", "excel", popup, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
     private CaptureResult RunExcelDialogScenario(
         string scenario,
         Action<dynamic> prepare,
@@ -438,6 +536,64 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
             return CaptureWindow(scenario, "freex", dialog, guard, "complete");
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
+    private CaptureResult RunFreeXFormatCellsDialogScenario()
+    {
+        Process? process = null;
+
+        try
+        {
+            var exePath = ResolveFreeXExePath();
+            process = Process.Start(new ProcessStartInfo(exePath)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory
+            });
+
+            if (process is null)
+            {
+                return CaptureResult.Blocked("freex-format-cells-dialog", "launch-failed", $"Failed to launch '{exePath}'.", options.OutputRoot, "freex");
+            }
+
+            var window = WindowFinder.WaitForMainWindow(process.Id, options.LaunchTimeout);
+            if (window is null)
+            {
+                return CaptureResult.Blocked("freex-format-cells-dialog", "window-not-found", $"FreeX process {process.Id} did not expose a visible main window.", options.OutputRoot, "freex");
+            }
+
+            var handle = new IntPtr(window.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(handle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-format-cells-dialog", guard, "before-input");
+            }
+
+            SendCtrl1();
+            Thread.Sleep(options.AfterInputDelay);
+
+            var dialog = WindowFinder.FindProcessWindow(
+                process.Id,
+                candidate => candidate.Handle != window.Handle &&
+                    candidate.Title.Contains("Format Cells", StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Bounds.Width > 350 &&
+                    candidate.Bounds.Height > 250,
+                options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked("freex-format-cells-dialog", "dialog-not-found", "Did not detect FreeX Format Cells dialog after Ctrl+1.", options.OutputRoot, "freex", guard);
+            }
+
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            return CaptureWindow("freex-format-cells-dialog", "freex", dialog, guard, "complete");
         }
         finally
         {
@@ -890,6 +1046,24 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return worksheet;
     }
 
+    private static dynamic PrepareExcelDataValidationDropdownWorkbook(dynamic excel)
+    {
+        dynamic worksheet = excel.ActiveSheet;
+        worksheet.Range["A1"].Value2 = "Region";
+        worksheet.Range["A2"].Value2 = string.Empty;
+        worksheet.Range["B1"].Value2 = "Allowed values";
+        worksheet.Range["B2"].Value2 = "North";
+        worksheet.Range["B3"].Value2 = "South";
+        worksheet.Range["B4"].Value2 = "West";
+        dynamic target = worksheet.Range["A2"];
+        target.Validation.Delete();
+        target.Validation.Add(Type: 3, AlertStyle: 1, Operator: 1, Formula1: "North,South,West");
+        target.Validation.InCellDropdown = true;
+        worksheet.Range["A:B"].EntireColumn.AutoFit();
+        target.Select();
+        return worksheet;
+    }
+
     private static void ClickExcelAutoFilterHeaderDropdown(dynamic excel, dynamic worksheet)
     {
         dynamic header = worksheet.Range["A1"];
@@ -905,6 +1079,34 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
         Thread.Sleep(60);
         NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+    }
+
+    private static void ClickExcelCellDropdownArrow(dynamic excel, dynamic worksheet, string address)
+    {
+        dynamic range = worksheet.Range[address];
+        dynamic window = excel.ActiveWindow;
+        var left = (int)window.PointsToScreenPixelsX(range.Left);
+        var top = (int)window.PointsToScreenPixelsY(range.Top);
+        const double pointToScreenScale = 2.0;
+        var clickX = (int)(left + (range.Width * pointToScreenScale) - 8);
+        var clickY = (int)(top + (range.Height * pointToScreenScale / 2.0));
+
+        NativeMethods.SetCursorPos(clickX, clickY);
+        Thread.Sleep(100);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+    }
+
+    private static void SendCtrl1()
+    {
+        NativeMethods.KeybdEvent(NativeMethods.VK_CONTROL, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.KeybdEvent(NativeMethods.VK_1, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.KeybdEvent(NativeMethods.VK_1, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.KeybdEvent(NativeMethods.VK_CONTROL, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
     }
 
     private static bool TryOpenExcelAutoFilterWithUia(IntPtr excelWindowHandle)
@@ -1520,6 +1722,7 @@ internal static class NativeMethods
     public const int MOUSEEVENTF_WHEEL = 0x0800;
     public const int KEYEVENTF_KEYUP = 0x0002;
     public const byte VK_CONTROL = 0x11;
+    public const byte VK_1 = 0x31;
     public static readonly IntPtr HWND_TOPMOST = new(-1);
     public static readonly IntPtr HWND_NOTOPMOST = new(-2);
 
