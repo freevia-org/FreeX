@@ -402,6 +402,32 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void TableCatalogRows_DocumentTableWorkflowsTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var lines = Regex.Split(catalog, "\\r?\\n");
+        var rows = new[]
+        {
+            lines.Single(line => line.StartsWith("| UI-CAT-HOME-003 |", StringComparison.Ordinal)),
+            lines.Single(line => line.StartsWith("| UI-CAT-INSERT-001 |", StringComparison.Ordinal)),
+            lines.Single(line => line.StartsWith("| UI-CAT-INSERT-001D |", StringComparison.Ordinal)),
+            lines.Single(line => line.StartsWith("| UI-CMD-HOME-STYLE-002 |", StringComparison.Ordinal)),
+            lines.Single(line => line.StartsWith("| UI-CMD-INSERT-004 |", StringComparison.Ordinal))
+        };
+
+        foreach (var row in rows)
+            row.Should().Contain("table-workflows-tour");
+
+        catalog.Should().Contain("FREEX_TABLE_WORKFLOWS_TOUR=1");
+        catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
+        catalog.Should().Contain("table_workflows_tour_manifest.json");
+        catalog.Should().Contain("freex_table_workflows_create_table_submitted_result.png");
+        catalog.Should().Contain("freex_table_workflows_filter_totals_style_result.png");
+        catalog.Should().Contain("freex_table_workflows_reopened_persisted_table.png");
+        catalog.Should().Contain("freex_table_workflows_saved.xlsx");
+    }
+
+    [Fact]
     public void InsertCatalogRows_DocumentPivotOptionsSlicerTourEvidence()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
