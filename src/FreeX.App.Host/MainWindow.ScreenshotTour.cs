@@ -95,6 +95,9 @@ public partial class MainWindow
     private const string FileIoImportSmokeTourOutputDirectoryName = "file-io-import-smoke-tour";
     private const string InsertTablesChartsTourManifestFileName = "insert_tables_charts_tour_manifest.json";
     private const string InsertTablesChartsTourOutputDirectoryName = "insert-tables-charts-tour";
+    private const string TableWorkflowsTourManifestFileName = "table_workflows_tour_manifest.json";
+    private const string TableWorkflowsTourOutputDirectoryName = "table-workflows-tour";
+    private const string TableWorkflowsTourSavedWorkbookFileName = "freex_table_workflows_saved.xlsx";
     private const string ChartDataLayoutTourManifestFileName = "chart_data_layout_tour_manifest.json";
     private const string ChartDataLayoutTourOutputDirectoryName = "chart-data-layout-tour";
     private const string ChartPersistenceRenderTourManifestFileName = "chart_persistence_render_tour_manifest.json";
@@ -223,6 +226,7 @@ public partial class MainWindow
         var dataSubmittedWorkflowsTour = Environment.GetEnvironmentVariable("FREEX_DATA_SUBMITTED_WORKFLOWS_TOUR") == "1";
         var fileIoImportSmokeTour = Environment.GetEnvironmentVariable("FREEX_FILE_IO_IMPORT_SMOKE_TOUR") == "1";
         var insertTablesChartsTour = Environment.GetEnvironmentVariable("FREEX_INSERT_TABLES_CHARTS_TOUR") == "1";
+        var tableWorkflowsTour = Environment.GetEnvironmentVariable("FREEX_TABLE_WORKFLOWS_TOUR") == "1";
         var chartDataLayoutTour = Environment.GetEnvironmentVariable("FREEX_CHART_DATA_LAYOUT_TOUR") == "1";
         var chartPersistenceRenderTour = Environment.GetEnvironmentVariable("FREEX_CHART_PERSISTENCE_RENDER_TOUR") == "1";
         var pivotFieldListContextTour = Environment.GetEnvironmentVariable("FREEX_PIVOT_FIELD_LIST_CONTEXT_TOUR") == "1";
@@ -239,7 +243,7 @@ public partial class MainWindow
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
         var reviewProtectionMatrixTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_PROTECTION_MATRIX_TOUR") == "1";
         var reviewStatsShareTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_STATS_SHARE_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeStylesConditionalFormattingTour && !homeClipboardCellsEditingTour && !homeSubmittedWorkflowsTour && !ribbonOverflowKeytipTour && !worksheetContextMenuTour && !worksheetContextTargetsTour && !keyTipOverlayTour && !printPreviewTour && !backstageRecentExportShareTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !statusFooterInteractionsTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !insertObjectPersistenceTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !dataSubmittedWorkflowsTour && !fileIoImportSmokeTour && !insertTablesChartsTour && !chartDataLayoutTour && !chartPersistenceRenderTour && !pivotFieldListContextTour && !pivotOptionsSlicerTour && !viewPanesZoomTour && !viewWorkflowsTour && !pageLayoutSetupTour && !pageLayoutOutputTour && !drawObjectFormattingTour && !drawObjectPersistenceTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !formulaSubmittedPersistenceTour && !reviewCommentsProtectionTour && !reviewProtectionMatrixTour && !reviewStatsShareTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeStylesConditionalFormattingTour && !homeClipboardCellsEditingTour && !homeSubmittedWorkflowsTour && !ribbonOverflowKeytipTour && !worksheetContextMenuTour && !worksheetContextTargetsTour && !keyTipOverlayTour && !printPreviewTour && !backstageRecentExportShareTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !statusFooterInteractionsTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !insertObjectPersistenceTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !dataSubmittedWorkflowsTour && !fileIoImportSmokeTour && !insertTablesChartsTour && !tableWorkflowsTour && !chartDataLayoutTour && !chartPersistenceRenderTour && !pivotFieldListContextTour && !pivotOptionsSlicerTour && !viewPanesZoomTour && !viewWorkflowsTour && !pageLayoutSetupTour && !pageLayoutOutputTour && !drawObjectFormattingTour && !drawObjectPersistenceTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !formulaSubmittedPersistenceTour && !reviewCommentsProtectionTour && !reviewProtectionMatrixTour && !reviewStatsShareTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -256,7 +260,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeStylesConditionalFormattingTour, homeClipboardCellsEditingTour, homeSubmittedWorkflowsTour, ribbonOverflowKeytipTour, worksheetContextMenuTour, worksheetContextTargetsTour, keyTipOverlayTour, printPreviewTour, backstageRecentExportShareTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, statusFooterInteractionsTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, insertObjectPersistenceTour, dataToolsDialogsTour, dataSortFilterOutlineTour, dataSubmittedWorkflowsTour, fileIoImportSmokeTour, insertTablesChartsTour, chartDataLayoutTour, chartPersistenceRenderTour, pivotFieldListContextTour, pivotOptionsSlicerTour, viewPanesZoomTour, viewWorkflowsTour, pageLayoutSetupTour, pageLayoutOutputTour, drawObjectFormattingTour, drawObjectPersistenceTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, formulaSubmittedPersistenceTour, reviewCommentsProtectionTour, reviewProtectionMatrixTour, reviewStatsShareTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeStylesConditionalFormattingTour, homeClipboardCellsEditingTour, homeSubmittedWorkflowsTour, ribbonOverflowKeytipTour, worksheetContextMenuTour, worksheetContextTargetsTour, keyTipOverlayTour, printPreviewTour, backstageRecentExportShareTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, statusFooterInteractionsTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, insertObjectPersistenceTour, dataToolsDialogsTour, dataSortFilterOutlineTour, dataSubmittedWorkflowsTour, fileIoImportSmokeTour, insertTablesChartsTour, tableWorkflowsTour, chartDataLayoutTour, chartPersistenceRenderTour, pivotFieldListContextTour, pivotOptionsSlicerTour, viewPanesZoomTour, viewWorkflowsTour, pageLayoutSetupTour, pageLayoutOutputTour, drawObjectFormattingTour, drawObjectPersistenceTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, formulaSubmittedPersistenceTour, reviewCommentsProtectionTour, reviewProtectionMatrixTour, reviewStatsShareTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -311,6 +315,7 @@ public partial class MainWindow
         bool dataSubmittedWorkflowsTour,
         bool fileIoImportSmokeTour,
         bool insertTablesChartsTour,
+        bool tableWorkflowsTour,
         bool chartDataLayoutTour,
         bool chartPersistenceRenderTour,
         bool pivotFieldListContextTour,
@@ -412,6 +417,8 @@ public partial class MainWindow
             await CaptureFileIoImportSmokeTourAsync(Path.Combine(outputDir, FileIoImportSmokeTourOutputDirectoryName));
         if (insertTablesChartsTour)
             await CaptureInsertTablesChartsTourAsync(Path.Combine(outputDir, InsertTablesChartsTourOutputDirectoryName));
+        if (tableWorkflowsTour)
+            await CaptureTableWorkflowsTourAsync(Path.Combine(outputDir, TableWorkflowsTourOutputDirectoryName));
         if (chartDataLayoutTour)
             await CaptureChartDataLayoutTourAsync(Path.Combine(outputDir, ChartDataLayoutTourOutputDirectoryName));
         if (chartPersistenceRenderTour)
@@ -12948,6 +12955,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(DataSubmittedWorkflowsTourManifest))]
     [JsonSerializable(typeof(FileIoImportSmokeTourManifest))]
     [JsonSerializable(typeof(InsertTablesChartsTourManifest))]
+    [JsonSerializable(typeof(TableWorkflowsTourManifest))]
     [JsonSerializable(typeof(ChartDataLayoutTourManifest))]
     [JsonSerializable(typeof(ChartPersistenceRenderTourManifest))]
     [JsonSerializable(typeof(PivotFieldListContextTourManifest))]
