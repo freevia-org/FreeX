@@ -95,12 +95,15 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             // S3 native-dialog continuation scenarios.
             "freex-save-as-dialog-cancel" => RunFreeXDialogCancelScenario("freex-save-as-dialog-cancel", "{F12}", "#32770", "Save As"),
             "freex-save-as-overwrite-prompt" => RunFreeXSaveAsOverwritePromptScenario(),
+            "freex-save-as-invalid-path" => RunFreeXSaveAsInvalidPathScenario(),
             "freex-export-pdf-save-dialog-cancel" => RunFreeXExportSaveDialogCancelScenario(),
             "freex-export-overwrite-prompt" => RunFreeXExportOverwritePromptScenario(),
             "freex-export-xps-accept" => RunFreeXExportXpsAcceptScenario(),
             "freex-native-print-dialog" => RunFreeXNativePrintDialogScenario(),
             "freex-background-picker-cancel" => RunFreeXBackgroundPickerCancelScenario(),
             "freex-background-picker-select" => RunFreeXBackgroundPickerSelectScenario(),
+            "freex-background-picker-replace" => RunFreeXBackgroundPickerReplaceScenario(),
+            "freex-background-clear" => RunFreeXBackgroundClearScenario(),
             "freex-status-zoom-in-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-in-click", ClickAutomationIdExpectZoom("StatusZoomInButton", 105)),
             "freex-status-zoom-out-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-out-click", ClickAutomationIdExpectZoom("StatusZoomOutButton", 95)),
             "freex-status-zoom-slider-drag" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-drag", DragFirstSliderExpectChangedZoom("Zoom", 100)),
@@ -918,6 +921,70 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
+    private CaptureResult RunFreeXSaveAsInvalidPathScenario()
+    {
+        Process? process = null;
+        var invalidDirectory = Path.Combine(options.OutputRoot, "s3-missing-save-as-directory");
+        var invalidPath = Path.Combine(invalidDirectory, "invalid-path.xlsx");
+        if (Directory.Exists(invalidDirectory))
+        {
+            Directory.Delete(invalidDirectory, recursive: true);
+        }
+
+        try
+        {
+            var launch = LaunchFreeX("freex-save-as-invalid-path");
+            if (launch.Result is not null)
+            {
+                return launch.Result;
+            }
+
+            process = launch.Process!;
+            var handle = new IntPtr(launch.Window!.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(handle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-save-as-invalid-path", guard, "before-input");
+            }
+
+            SendKeys.SendWait("{F12}");
+            Thread.Sleep(options.AfterInputDelay);
+            var dialog = WindowFinder.FindProcessWindow(process.Id, "#32770", "Save As", options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked("freex-save-as-invalid-path", "dialog-not-found", "Did not detect FreeX Save As common dialog before invalid path entry.", options.OutputRoot, "freex", guard);
+            }
+
+            TypeDialogPath(invalidPath);
+            var prompt = WindowFinder.FindProcessWindow(
+                process.Id,
+                window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    window.Handle != dialog.Handle &&
+                    (window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("Error", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("path", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("not found", StringComparison.OrdinalIgnoreCase)),
+                options.PopupTimeout);
+            if (prompt is null)
+            {
+                return CaptureResult.Blocked("freex-save-as-invalid-path", "invalid-path-prompt-not-found", $"Typed a missing-directory .xlsx path but did not detect a native invalid-path prompt: {invalidPath}", options.OutputRoot, "freex", guard);
+            }
+
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            var result = CaptureWindow("freex-save-as-invalid-path", "freex", prompt, guard, "complete", $"Missing-directory save path was rejected by the native Save As flow: {invalidPath}");
+            SendKeys.SendWait("{ESC}");
+            Thread.Sleep(options.AfterInputDelay);
+            return result with { OutputPath = invalidPath };
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
     private CaptureResult RunFreeXExportSaveDialogCancelScenario()
     {
         Process? process = null;
@@ -1070,6 +1137,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked("freex-export-xps-accept", "options-dialog-not-found", "Accepted an explicit .xps path but did not detect the PDF/XPS options dialog.", options.OutputRoot, "freex", guard);
             }
 
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            var result = CaptureWindow("freex-export-xps-accept", "freex", optionsDialog, guard, "complete", $"Explicit XPS save path accepted by native SaveFileDialog; awaiting output: {xpsPath}") with { OutputPath = xpsPath };
             SendKeys.SendWait("{ENTER}");
             Thread.Sleep(options.AfterInputDelay);
 
@@ -1080,22 +1149,42 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     (candidate.Title.Contains("Export XPS", StringComparison.OrdinalIgnoreCase) ||
                      candidate.Title.Contains("XPS", StringComparison.OrdinalIgnoreCase) ||
                      candidate.Title.Contains("Export Error", StringComparison.OrdinalIgnoreCase)),
-                options.PopupTimeout);
-            if (completion is null)
+                TimeSpan.FromMilliseconds(1500));
+            if (completion is not null)
             {
-                return CaptureResult.Blocked("freex-export-xps-accept", "completion-dialog-not-found", "Accepted XPS export options but did not detect a completion or error dialog.", options.OutputRoot, "freex", guard);
+                Thread.Sleep(options.AfterDialogDetectedDelay);
+                var existsAfterDialog = File.Exists(xpsPath);
+                var completionStatus = existsAfterDialog ? "complete" : "blocked";
+                var validationAfterDialog = existsAfterDialog
+                    ? $"Explicit .xps native save path was accepted and output exists: {xpsPath}"
+                    : $"Explicit .xps native save path reached '{completion.Title}', but output was not created: {xpsPath}";
+                var completionResult = CaptureWindow("freex-export-xps-accept", "freex", completion, guard, completionStatus, validationAfterDialog) with { OutputPath = xpsPath };
+                SendKeys.SendWait("{ENTER}");
+                Thread.Sleep(options.AfterInputDelay);
+                return completionResult;
             }
 
-            Thread.Sleep(options.AfterDialogDetectedDelay);
-            var exists = File.Exists(xpsPath);
-            var status = exists ? "complete" : "blocked";
-            var validation = exists
-                ? $"Explicit .xps native save path was accepted and output exists: {xpsPath}"
-                : $"Explicit .xps native save path reached '{completion.Title}', but output was not created: {xpsPath}";
-            var result = CaptureWindow("freex-export-xps-accept", "freex", completion, guard, status, validation) with { OutputPath = xpsPath };
-            SendKeys.SendWait("{ENTER}");
-            Thread.Sleep(options.AfterInputDelay);
-            return result;
+            if (!WaitForFile(xpsPath, options.PopupTimeout))
+            {
+                var blockedResult = result with
+                {
+                    CaptureStatus = "blocked",
+                    BlockReason = $"xps-output-not-created: Explicit .xps path returned from options without completion dialog, but output was not created: {xpsPath}"
+                };
+                RewriteManifest(blockedResult);
+                return blockedResult;
+            }
+
+            return AttachContinuationCapture(
+                result,
+                "freex-export-xps-accept",
+                process.Id,
+                mainHandle,
+                "FreeX",
+                $"Explicit .xps native save path was accepted, output exists, and foreground returned to FreeX: {xpsPath}") with
+            {
+                OutputPath = xpsPath
+            };
         }
         finally
         {
@@ -1172,13 +1261,20 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
                     candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase),
                 options.PopupTimeout);
+            printDialog ??= WindowFinder.FindForegroundWindow(
+                candidate => candidate.ProcessId == process.Id &&
+                    candidate.Handle != preview.Handle &&
+                    candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase),
+                TimeSpan.FromMilliseconds(1200));
             if (printDialog is null)
             {
                 return CaptureResult.Blocked("freex-native-print-dialog", "native-print-dialog-not-found", "Clicked Print Preview's Print button but did not detect a native Windows Print dialog.", options.OutputRoot, "freex", guard);
             }
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
-            var result = CaptureWindow("freex-native-print-dialog", "freex", printDialog, guard, "complete", "Print Preview's Print button opened the native Windows PrintDialog in the FreeX foreground-owned process.");
+            var dialogGuard = new ForegroundGuardResult(true, process.Id, printDialog.Handle, printDialog, null);
+            var result = CaptureWindow("freex-native-print-dialog", "freex", printDialog, dialogGuard, "complete", "Print Preview's Print button opened the native Windows PrintDialog in the FreeX foreground-owned process.");
             SendKeys.SendWait("{ESC}");
             Thread.Sleep(options.AfterInputDelay);
             return result;
@@ -1238,6 +1334,120 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     OutputPath = imagePath
                 };
             });
+    }
+
+    private CaptureResult RunFreeXBackgroundPickerReplaceScenario()
+    {
+        Process? process = null;
+        var firstImagePath = Path.Combine(options.OutputRoot, "s3-sheet-background-initial.png");
+        var replacementImagePath = Path.Combine(options.OutputRoot, "s3-sheet-background-replacement.png");
+        CreateTinyPng(firstImagePath, Color.LightSteelBlue, Color.DarkSlateBlue);
+        CreateTinyPng(replacementImagePath, Color.LightGoldenrodYellow, Color.Firebrick);
+
+        try
+        {
+            var launch = LaunchFreeX("freex-background-picker-replace");
+            if (launch.Result is not null)
+            {
+                return launch.Result;
+            }
+
+            process = launch.Process!;
+            var mainHandle = new IntPtr(launch.Window!.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(mainHandle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-background-picker-replace", guard, "before-initial-background");
+            }
+
+            var initial = SelectFreeXBackgroundImage(process, mainHandle, guard, firstImagePath, captureDialog: false);
+            if (initial is not null)
+            {
+                return initial;
+            }
+
+            guard = ForegroundGuard.FocusAndVerify(mainHandle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-background-picker-replace", guard, "before-replacement-background");
+            }
+
+            var replacement = SelectFreeXBackgroundImage(process, mainHandle, guard, replacementImagePath, captureDialog: true);
+            return replacement ?? CaptureResult.Blocked("freex-background-picker-replace", "replacement-result-missing", "Replacement picker flow returned no capture result.", options.OutputRoot, "freex", guard);
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
+    private CaptureResult RunFreeXBackgroundClearScenario()
+    {
+        Process? process = null;
+        var imagePath = Path.Combine(options.OutputRoot, "s3-sheet-background-clear-seed.png");
+        CreateTinyPng(imagePath, Color.Honeydew, Color.SeaGreen);
+
+        try
+        {
+            var launch = LaunchFreeX("freex-background-clear");
+            if (launch.Result is not null)
+            {
+                return launch.Result;
+            }
+
+            process = launch.Process!;
+            var mainHandle = new IntPtr(launch.Window!.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(mainHandle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-background-clear", guard, "before-background-seed");
+            }
+
+            var seed = SelectFreeXBackgroundImage(process, mainHandle, guard, imagePath, captureDialog: false);
+            if (seed is not null)
+            {
+                return seed;
+            }
+
+            guard = ForegroundGuard.FocusAndVerify(mainHandle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-background-clear", guard, "before-background-clear");
+            }
+
+            var blocked = OpenFreeXBackgroundContextMenu(process, mainHandle, guard);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryInvokeProcessMenuItem(process.Id, "Delete Background"))
+            {
+                return CaptureResult.Blocked("freex-background-clear", "delete-background-menu-item-not-found", "Opened the Background button context menu, but could not find or invoke Delete Background.", options.OutputRoot, "freex", guard);
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+            var window = WindowFinder.GetWindowInfo(mainHandle);
+            if (window is null)
+            {
+                return CaptureResult.Blocked("freex-background-clear", "main-window-not-found", "Could not read FreeX main window after Delete Background.", options.OutputRoot, "freex", guard);
+            }
+
+            return CaptureWindow("freex-background-clear", "freex", window, guard, "complete", $"Selected a PNG worksheet background and then invoked Delete Background; seed image: {imagePath}") with
+            {
+                OutputPath = imagePath
+            };
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
     }
 
     private CaptureResult RunFreeXNativeDialogOpenedByAction(
@@ -1341,6 +1551,89 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         return InvokeOrClickElement(options.Scenario, process.Id, mainHandle, backgroundButton, "freex");
+    }
+
+    private CaptureResult? SelectFreeXBackgroundImage(
+        Process process,
+        IntPtr mainHandle,
+        ForegroundGuardResult guard,
+        string imagePath,
+        bool captureDialog)
+    {
+        var blocked = OpenFreeXBackgroundPicker(process, mainHandle, guard);
+        if (blocked is not null)
+        {
+            return blocked;
+        }
+
+        var dialog = WindowFinder.FindProcessWindow(process.Id, "#32770", "Sheet Background", options.PopupTimeout);
+        if (dialog is null)
+        {
+            return CaptureResult.Blocked(options.Scenario, "dialog-not-found", "Did not detect FreeX native Sheet Background OpenFileDialog.", options.OutputRoot, "freex", guard);
+        }
+
+        CaptureResult? result = null;
+        if (captureDialog)
+        {
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            result = CaptureWindow(options.Scenario, "freex", dialog, guard, "complete", $"Replacing worksheet background through native picker with: {imagePath}");
+        }
+
+        TypeDialogPath(imagePath);
+        Thread.Sleep(options.AfterInputDelay);
+
+        if (result is null)
+        {
+            return null;
+        }
+
+        return AttachContinuationCapture(
+            result,
+            options.Scenario,
+            process.Id,
+            mainHandle,
+            "FreeX",
+            $"Selected replacement worksheet background path and returned focus to FreeX: {imagePath}") with
+        {
+            OutputPath = imagePath
+        };
+    }
+
+    private CaptureResult? OpenFreeXBackgroundContextMenu(Process process, IntPtr mainHandle, ForegroundGuardResult guard)
+    {
+        var pageLayoutTab = FindDescendantByNameAndType(mainHandle, "Page Layout", ControlType.TabItem);
+        if (pageLayoutTab is not null)
+        {
+            TrySelectOrInvoke(pageLayoutTab);
+            Thread.Sleep(options.AfterInputDelay);
+        }
+        else
+        {
+            SendKeys.SendWait("%p");
+            Thread.Sleep(options.AfterInputDelay);
+        }
+
+        var backgroundButton = FindDescendantByNameAndType(mainHandle, "Background", ControlType.Button);
+        if (backgroundButton is null)
+        {
+            return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the Page Layout Background button before opening its clear menu.", options.OutputRoot, "freex", guard);
+        }
+
+        var bounds = backgroundButton.Current.BoundingRectangle;
+        if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+        {
+            return CaptureResult.Blocked(options.Scenario, "uia-target-bounds-invalid", $"Background button bounds were not usable: {bounds}.", options.OutputRoot, "freex", guard);
+        }
+
+        var focused = ForegroundGuard.FocusAndVerify(mainHandle, process.Id, "FreeX", options.FocusTimeout);
+        if (!focused.Success)
+        {
+            return CaptureResult.Blocked(options.Scenario, "foreground-guard-failed", "Foreground guard failed before opening the Background context menu.", options.OutputRoot, "freex", focused);
+        }
+
+        RightClickScreenPoint(CenterX(bounds), CenterY(bounds));
+        Thread.Sleep(options.AfterInputDelay);
+        return null;
     }
 
     private CaptureResult? OpenFreeXExportSaveDialog(
@@ -1531,18 +1824,37 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return false;
     }
 
-    private static void CreateTinyPng(string path)
+    private static void CreateTinyPng(string path) =>
+        CreateTinyPng(path, Color.LightSteelBlue, Color.DarkSlateBlue);
+
+    private static void CreateTinyPng(string path, Color background, Color accent)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
         using var bitmap = new Bitmap(8, 8);
         using (var graphics = Graphics.FromImage(bitmap))
         {
-            graphics.Clear(Color.LightSteelBlue);
-            using var brush = new SolidBrush(Color.DarkSlateBlue);
+            graphics.Clear(background);
+            using var brush = new SolidBrush(accent);
             graphics.FillRectangle(brush, 2, 2, 4, 4);
         }
 
         bitmap.Save(path, ImageFormat.Png);
+    }
+
+    private static bool WaitForFile(string path, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (File.Exists(path))
+            {
+                return true;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return File.Exists(path);
     }
 
     private CaptureResult? InvokeOrClickElement(string scenario, int processId, IntPtr ownerHandle, AutomationElement element, string subject)
@@ -3491,9 +3803,15 @@ internal sealed record CaptureOptions(
           freex-format-cells-context-dialog
           freex-save-as-dialog-cancel
           freex-save-as-overwrite-prompt
+          freex-save-as-invalid-path
           freex-export-pdf-save-dialog-cancel
+          freex-export-overwrite-prompt
+          freex-export-xps-accept
+          freex-native-print-dialog
           freex-background-picker-cancel
           freex-background-picker-select
+          freex-background-picker-replace
+          freex-background-clear
           freex-status-zoom-in-click
           freex-status-zoom-out-click
           freex-status-zoom-slider-drag
@@ -3856,6 +4174,23 @@ internal static class WindowFinder
                 !foreground.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase) &&
                 foreground.Bounds.Width >= minimumWidth &&
                 foreground.Bounds.Height >= minimumHeight)
+            {
+                return foreground;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return null;
+    }
+
+    public static WindowInfo? FindForegroundWindow(Func<WindowInfo, bool> predicate, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var foreground = GetWindowInfo(NativeMethods.GetForegroundWindow());
+            if (foreground is not null && predicate(foreground))
             {
                 return foreground;
             }
