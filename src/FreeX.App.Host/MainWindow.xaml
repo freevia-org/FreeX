@@ -3911,10 +3911,10 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="0.85*"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="1.25*"/>
                     </Grid.RowDefinitions>
                     <DockPanel Grid.Row="0" LastChildFill="True">
                         <Button x:Name="PivotFieldListCloseBtn"
@@ -3934,20 +3934,22 @@
                     <TextBlock Grid.Row="1"
                                Text="{local:Loc Key=MainWindow_Text_ChooseFieldsToAddToReport}"
                                FontSize="12"
-                               Margin="0,12,0,4"/>
+                               Margin="0,8,0,3"/>
                     <TextBox x:Name="PivotFieldListSearchBox"
                              Grid.Row="2"
                              Height="24"
-                             Margin="0,0,0,6"
+                             Margin="0,0,0,4"
                              VerticalContentAlignment="Center"
                              TextChanged="PivotFieldListSearchBox_TextChanged"
                              AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_SearchPivotTableFields}"/>
                     <ListBox x:Name="PivotAvailableFieldsList"
                              Grid.Row="3"
-                             MinHeight="120"
+                             MinHeight="96"
                              SelectionMode="Single"
                              AllowDrop="True"
                              PreviewMouseMove="PivotFieldList_PreviewMouseMove"
+                             PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
+                             DragOver="PivotFieldList_DragOver"
                              Drop="PivotFieldList_Drop"
                              AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AvailablePivotTableFields}">
                         <ListBox.ItemTemplate>
@@ -3975,7 +3977,7 @@
                         </ListBox.ContextMenu>
                     </ListBox>
 
-                    <StackPanel Grid.Row="4" Margin="0,8,0,8">
+                    <StackPanel Grid.Row="4" Margin="0,6,0,6">
                         <UniformGrid Columns="5">
                             <Button Content="{local:Loc Key=MainWindow_Content_Rows}" Click="PivotFieldToRowsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToRows}" local:RibbonMetadata.CommandName="Rows"/>
                             <Button Content="{local:Loc Key=MainWindow_Content_Columns}" Click="PivotFieldToColumnsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToColumns}" local:RibbonMetadata.CommandName="Columns"/>
@@ -4025,6 +4027,8 @@
                                  SelectionMode="Single"
                                  AllowDrop="True"
                                  PreviewMouseMove="PivotFieldList_PreviewMouseMove"
+                                 PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
+                                 DragOver="PivotFieldList_DragOver"
                                  Drop="PivotFieldList_Drop"
                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableFiltersArea}">
                             <ListBox.ContextMenu>
@@ -4037,6 +4041,8 @@
                                     <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearFilter}" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click" local:RibbonMetadata.CommandName="Clear Filter"/>
                                     <Separator/>
                                     <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFieldSettings}" local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click" local:RibbonMetadata.CommandName="Value Field Settings"/>
+                                    <Separator/>
+                                    <MenuItem Header="{local:Loc Key=MainWindow_Content_Remove}" local:RibbonTooltip.KeyTip="R" Click="PivotFieldRemoveBtn_Click" local:RibbonMetadata.CommandName="Remove"/>
                                 </ContextMenu>
                             </ListBox.ContextMenu>
                         </ListBox>
@@ -4047,6 +4053,8 @@
                                  SelectionMode="Single"
                                  AllowDrop="True"
                                  PreviewMouseMove="PivotFieldList_PreviewMouseMove"
+                                 PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
+                                 DragOver="PivotFieldList_DragOver"
                                  Drop="PivotFieldList_Drop"
                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableColumnsArea}">
                             <ListBox.ContextMenu>
@@ -4059,6 +4067,8 @@
                                     <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearFilter}" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click" local:RibbonMetadata.CommandName="Clear Filter"/>
                                     <Separator/>
                                     <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFieldSettings}" local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click" local:RibbonMetadata.CommandName="Value Field Settings"/>
+                                    <Separator/>
+                                    <MenuItem Header="{local:Loc Key=MainWindow_Content_Remove}" local:RibbonTooltip.KeyTip="R" Click="PivotFieldRemoveBtn_Click" local:RibbonMetadata.CommandName="Remove"/>
                                 </ContextMenu>
                             </ListBox.ContextMenu>
                         </ListBox>
@@ -4072,6 +4082,8 @@
                                  SelectionMode="Single"
                                  AllowDrop="True"
                                  PreviewMouseMove="PivotFieldList_PreviewMouseMove"
+                                 PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
+                                 DragOver="PivotFieldList_DragOver"
                                  Drop="PivotFieldList_Drop"
                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableRowsArea}">
                             <ListBox.ContextMenu>
@@ -4084,6 +4096,8 @@
                                     <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearFilter}" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click" local:RibbonMetadata.CommandName="Clear Filter"/>
                                     <Separator/>
                                     <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFieldSettings}" local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click" local:RibbonMetadata.CommandName="Value Field Settings"/>
+                                    <Separator/>
+                                    <MenuItem Header="{local:Loc Key=MainWindow_Content_Remove}" local:RibbonTooltip.KeyTip="R" Click="PivotFieldRemoveBtn_Click" local:RibbonMetadata.CommandName="Remove"/>
                                 </ContextMenu>
                             </ListBox.ContextMenu>
                         </ListBox>
@@ -4094,6 +4108,8 @@
                                  SelectionMode="Single"
                                  AllowDrop="True"
                                  PreviewMouseMove="PivotFieldList_PreviewMouseMove"
+                                 PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
+                                 DragOver="PivotFieldList_DragOver"
                                  Drop="PivotFieldList_Drop"
                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableValuesArea}">
                             <ListBox.ContextMenu>
@@ -4106,6 +4122,8 @@
                                     <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearFilter}" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click" local:RibbonMetadata.CommandName="Clear Filter"/>
                                     <Separator/>
                                     <MenuItem Header="{local:Loc Key=MainWindow_Header_ValueFieldSettings}" local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click" local:RibbonMetadata.CommandName="Value Field Settings"/>
+                                    <Separator/>
+                                    <MenuItem Header="{local:Loc Key=MainWindow_Content_Remove}" local:RibbonTooltip.KeyTip="R" Click="PivotFieldRemoveBtn_Click" local:RibbonMetadata.CommandName="Remove"/>
                                 </ContextMenu>
                             </ListBox.ContextMenu>
                         </ListBox>
