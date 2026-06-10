@@ -431,6 +431,30 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void InsertCatalogRows_DocumentChartPersistenceRenderTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-INSERT-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-INSERT-002B |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-INSERT-002C |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-INSERT-016 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(4);
+        rows.Should().OnlyContain(row => row.Contains("chart-persistence-render-tour"));
+
+        catalog.Should().Contain("FREEX_CHART_PERSISTENCE_RENDER_TOUR=1");
+        catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
+        catalog.Should().Contain("chart_persistence_render_tour_manifest.json");
+        catalog.Should().Contain("freex_chart_persistence_render_mutated_rendered_chart.png");
+        catalog.Should().Contain("freex_chart_persistence_render_reopened_rendered_chart.png");
+        catalog.Should().Contain("freex_chart_persistence_render_saved.fxl");
+    }
+
+    [Fact]
     public void PageCatalogRows_DocumentPageLayoutSetupTourEvidence()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");

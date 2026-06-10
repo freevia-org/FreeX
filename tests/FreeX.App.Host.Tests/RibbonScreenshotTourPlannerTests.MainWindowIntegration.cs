@@ -11,6 +11,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         var source = DialogSourceTestSupport.ReadHostSources(
             "MainWindow.ScreenshotTour.cs",
             "MainWindow.ScreenshotTour.ChartDataLayout.cs",
+            "MainWindow.ScreenshotTour.ChartPersistenceRender.cs",
             "MainWindow.ScreenshotTour.RibbonOverflowKeytip.cs");
 
         source.Should().Contain("RibbonScreenshotTourPlanner.CreatePlan");
@@ -33,6 +34,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_INSERT_OBJECTS_LINKS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DATA_TOOLS_DIALOGS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_CHART_DATA_LAYOUT_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_CHART_PERSISTENCE_RENDER_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_VIEW_PANES_ZOOM_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_REVIEW_COMMENTS_PROTECTION_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PAGE_LAYOUT_SETUP_TOUR\")");
@@ -68,6 +70,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CapturePageLayoutSetupTourAsync");
         source.Should().Contain("CaptureDrawObjectFormattingTourAsync");
         source.Should().Contain("CaptureChartDataLayoutTourAsync");
+        source.Should().Contain("CaptureChartPersistenceRenderTourAsync");
         source.Should().Contain("CaptureHomeFontColorsTourAsync");
         source.Should().Contain("CaptureHomeStylesConditionalFormattingTourAsync");
         source.Should().Contain("CaptureHomeClipboardCellsEditingTourAsync");
@@ -119,6 +122,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("page_layout_setup_tour_manifest.json");
         source.Should().Contain("draw_object_formatting_tour_manifest.json");
         source.Should().Contain("chart_data_layout_tour_manifest.json");
+        source.Should().Contain("chart_persistence_render_tour_manifest.json");
         source.Should().Contain("home_font_colors_tour_manifest.json");
         source.Should().Contain("home_styles_conditional_formatting_tour_manifest.json");
         source.Should().Contain("home_clipboard_cells_editing_tour_manifest.json");
@@ -845,6 +849,46 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         catalog.Should().Contain("chart_data_layout_tour_manifest.json");
         catalog.Should().Contain("freex_chart_data_layout_select_data_dialog.png");
         catalog.Should().Contain("freex_chart_data_layout_waterfall_point_context_menu.png");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesChartPersistenceRenderVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs", "MainWindow.ScreenshotTour.ChartPersistenceRender.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_CHART_PERSISTENCE_RENDER_TOUR");
+        source.Should().Contain("chart-persistence-render-tour");
+        source.Should().Contain("EnsureChartPersistenceRenderTourContext");
+        source.Should().Contain("FreeXObjectDisplay.All");
+        source.Should().Contain("FreeXObjectDisplay.Placeholders");
+        source.Should().Contain("new ChangeChartSourceCommand(context.Sheet.Id, context.Chart.Id, context.MutatedSourceRange");
+        source.Should().Contain("new ChangeChartTypeCommand(context.Sheet.Id, context.Chart.Id, ChartType.Line)");
+        source.Should().Contain("new SetChartStyleCommand(context.Sheet.Id, context.Chart.Id, 18)");
+        source.Should().Contain("new SetChartLayoutCommand(");
+        source.Should().Contain("SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter))");
+        source.Should().Contain("OpenFileAsync(savedWorkbookPath)");
+        source.Should().Contain("ChartTypeSupport.IsRenderable(context.Chart.Type)");
+        source.Should().Contain("OnWaterfallChartPointContextMenuRequested(context.WaterfallChart, pointIndex: 1");
+        source.Should().Contain("freex_chart_persistence_render_seeded_rendered_chart");
+        source.Should().Contain("freex_chart_persistence_render_mutated_rendered_chart");
+        source.Should().Contain("freex_chart_persistence_render_mutated_placeholder_chart");
+        source.Should().Contain("freex_chart_persistence_render_saved_native_json_title");
+        source.Should().Contain("freex_chart_persistence_render_reopened_rendered_chart");
+        source.Should().Contain("freex_chart_persistence_render_reopened_placeholder_chart");
+        source.Should().Contain("freex_chart_persistence_render_waterfall_point_context_menu");
+        source.Should().Contain("ChartPersistenceRenderTourSavedWorkbookFileName");
+        source.Should().Contain("freex_chart_persistence_render_saved.fxl");
+        source.Should().Contain("ChartPersistenceRenderTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.ChartPersistenceRenderTourManifest");
+        source.Should().Contain("XLSX chart mutation persistence remains a separate compatibility lane");
+
+        catalog.Should().Contain("FREEX_CHART_PERSISTENCE_RENDER_TOUR=1");
+        catalog.Should().Contain("screenshots/chart-persistence-render-tour/");
+        catalog.Should().Contain("chart_persistence_render_tour_manifest.json");
+        catalog.Should().Contain("freex_chart_persistence_render_mutated_rendered_chart.png");
+        catalog.Should().Contain("freex_chart_persistence_render_reopened_rendered_chart.png");
+        catalog.Should().Contain("freex_chart_persistence_render_saved.fxl");
     }
 
     [Fact]
