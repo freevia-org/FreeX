@@ -32,6 +32,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_STATUS_FOOTER_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_INSERT_OBJECTS_LINKS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DATA_TOOLS_DIALOGS_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DATA_SUBMITTED_WORKFLOWS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_CHART_DATA_LAYOUT_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_VIEW_PANES_ZOOM_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_REVIEW_COMMENTS_PROTECTION_TOUR\")");
@@ -63,6 +64,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureStatusFooterTourAsync");
         source.Should().Contain("CaptureInsertObjectsLinksTourAsync");
         source.Should().Contain("CaptureDataToolsDialogsTourAsync");
+        source.Should().Contain("CaptureDataSubmittedWorkflowsTourAsync");
         source.Should().Contain("CaptureViewPanesZoomTourAsync");
         source.Should().Contain("CaptureReviewCommentsProtectionTourAsync");
         source.Should().Contain("CapturePageLayoutSetupTourAsync");
@@ -114,6 +116,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("status_footer_tour_manifest.json");
         source.Should().Contain("insert_objects_links_tour_manifest.json");
         source.Should().Contain("data_tools_dialogs_tour_manifest.json");
+        source.Should().Contain("data_submitted_workflows_tour_manifest.json");
         source.Should().Contain("view_panes_zoom_tour_manifest.json");
         source.Should().Contain("review_comments_protection_tour_manifest.json");
         source.Should().Contain("page_layout_setup_tour_manifest.json");
