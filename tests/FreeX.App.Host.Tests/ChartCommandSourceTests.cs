@@ -86,6 +86,17 @@ public sealed class ChartCommandSourceTests
     }
 
     [Fact]
+    public void InsertChartCommand_UsesVisiblePlacementAndSelectsInsertedChart()
+    {
+        var source = ReadHostSourceFile("MainWindow.ChartCommands.cs");
+
+        source.Should().Contain("ChartInsertionPlacementPlanner.CreatePlacement(");
+        source.Should().Contain("command = new AddChartCommand(");
+        source.Should().Contain("SelectInsertedChart(command.ChartId)");
+        source.Should().Contain("SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.Chart");
+    }
+
+    [Fact]
     public void MapChartCommand_IsNotSurfacedAsDeferredRibbonButton()
     {
         var xaml = ReadMainWindowXaml();

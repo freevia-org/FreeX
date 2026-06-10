@@ -167,6 +167,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
         hitTestBlock.Should().Contain("for (var i = TextBoxes.Count - 1; i >= 0; i--)");
         hitTestBlock.Should().Contain("for (var i = Pictures.Count - 1; i >= 0; i--)");
         hitTestBlock.Should().Contain("for (var i = DrawingShapes.Count - 1; i >= 0; i--)");
+        hitTestBlock.Should().Contain("for (var i = Charts.Count - 1; i >= 0; i--)");
         hitTestBlock.Should().NotContain(".Reverse()");
     }
 

@@ -231,7 +231,9 @@ public partial class GridView
             }
 
             var selectedObjectDragKind = ObjectDragKind.None;
-            if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
+            if (SelectedObjectId != Guid.Empty &&
+                SelectedObjectKind != ObjectKind.None &&
+                SelectedObjectKind != ObjectKind.Chart)
             {
                 var selectedObjectRect = GetSelectedObjectRect();
                 selectedObjectDragKind = HitTestObjectHandle(pos, selectedObjectRect);
@@ -242,8 +244,10 @@ public partial class GridView
                 return;
             }
 
+            var hitObject = HitTestDrawingObject(pos);
             var hoveringObjectBody = selectedObjectDragKind == ObjectDragKind.None &&
-                HitTestDrawingObject(pos).Id != Guid.Empty;
+                hitObject.Id != Guid.Empty &&
+                hitObject.Kind != ObjectKind.Chart;
             if (hoveringObjectBody)
             {
                 Cursor = Cursors.SizeAll;
@@ -464,7 +468,9 @@ public partial class GridView
         }
 
         // Check if clicking on an already-selected object's handles
-        if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
+        if (SelectedObjectId != Guid.Empty &&
+            SelectedObjectKind != ObjectKind.None &&
+            SelectedObjectKind != ObjectKind.Chart)
         {
             var selRect = GetSelectedObjectRect();
             var dragKind = HitTestObjectHandle(pos, selRect);
@@ -493,6 +499,17 @@ public partial class GridView
             SelectedObjectKind = hit.Kind;
             _selectedObjectId = hit.Id;
             _selectedObjectKind = hit.Kind;
+            if (hit.Kind == ObjectKind.Chart)
+            {
+                _objectDragKind = ObjectDragKind.None;
+                _objectDragStartRect = Rect.Empty;
+                _objectDragCurrentRect = Rect.Empty;
+                Cursor = null;
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+
             _objectDragKind = ObjectDragKind.Move;
             _objectDragStartPos = pos;
             _objectDragStartRect = hit.Rect;

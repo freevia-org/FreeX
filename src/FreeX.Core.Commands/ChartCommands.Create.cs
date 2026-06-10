@@ -10,6 +10,7 @@ public sealed class AddChartCommand : IWorkbookCommand
     private bool _added;
 
     public string Label => "Insert Chart";
+    public Guid ChartId => _chart.Id;
 
     public AddChartCommand(
         SheetId sheetId,
