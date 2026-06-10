@@ -178,6 +178,36 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void ScreenshotHarnessCatalogRow_DocumentsNativeOpenSaveDialogEvidenceArtifacts()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var evidencePaths = new[]
+        {
+            "screenshots/open-workbook-dialog-tour/freex_open_workbook_dialog_opened.png",
+            "screenshots/open-workbook-dialog-tour/freex_open_workbook_dialog_tour_manifest.json",
+            "screenshots/save-as-workbook-dialog-tour/freex_save_as_workbook_dialog_opened.png",
+            "screenshots/save-as-workbook-dialog-tour/freex_save_as_workbook_dialog_tour_manifest.json",
+            "screenshots_excel/open-workbook-dialog-tour/interactive_open_workbook_dialog_opened.png",
+            "screenshots_excel/open-workbook-dialog-tour/excel_open_workbook_dialog_tour_manifest.json",
+            "screenshots_excel/save-as-workbook-dialog-tour/interactive_save_as_workbook_dialog_opened.png",
+            "screenshots_excel/save-as-workbook-dialog-tour/excel_save_as_workbook_dialog_tour_manifest.json",
+        };
+
+        foreach (var evidencePath in evidencePaths)
+        {
+            catalog.Should().Contain(evidencePath);
+            File.Exists(WorkspaceFileLocator.Find(evidencePath.Split('/'))).Should().BeTrue(evidencePath);
+        }
+
+        WorkspaceFileLocator
+            .ReadAllText("screenshots", "open-workbook-dialog-tour", "freex_open_workbook_dialog_tour_manifest.json")
+            .Should().Contain("interactive:open-workbook-dialog:opened");
+        WorkspaceFileLocator
+            .ReadAllText("screenshots_excel", "save-as-workbook-dialog-tour", "excel_save_as_workbook_dialog_tour_manifest.json")
+            .Should().Contain("interactive:save-as-workbook-dialog:opened");
+    }
+
+    [Fact]
     public void ContextualObjectCatalogRow_DocumentsChartScreenshotEvidenceAndObjectTabGap()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
