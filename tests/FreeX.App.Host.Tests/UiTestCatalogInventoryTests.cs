@@ -387,6 +387,37 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().Contain("freex_page_layout_setup_dialog_sheet_tab_print_titles.png");
     }
 
+    [Fact]
+    public void DrawCatalogRows_DocumentObjectFormattingTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-DRAW-001 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-DRAW-001A |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-DRAW-001B |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-DRAW-001C |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-DRAW-001 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-DRAW-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-DRAW-003 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-DRAW-004 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-DRAW-005 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(9);
+        foreach (var row in rows)
+        {
+            row.Should().Contain("draw-object-formatting-tour");
+        }
+
+        catalog.Should().Contain("FREEX_DRAW_OBJECT_FORMATTING_TOUR=1");
+        catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
+        catalog.Should().Contain("draw_object_formatting_tour_manifest.json");
+        catalog.Should().Contain("freex_draw_object_formatting_shape_effects_dialog.png");
+        catalog.Should().Contain("freex_draw_object_formatting_selection_pane_rename_visibility.png");
+    }
+
     [Theory]
     [InlineData("screenshot_excel.ps1")]
     [InlineData("screenshot_ribbon.ps1")]

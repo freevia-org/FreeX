@@ -31,7 +31,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_VIEW_PANES_ZOOM_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_REVIEW_COMMENTS_PROTECTION_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PAGE_LAYOUT_SETUP_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DRAW_OBJECT_FORMATTING_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_FONT_COLORS_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_AUTHORING_NAMES_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
@@ -55,7 +57,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureViewPanesZoomTourAsync");
         source.Should().Contain("CaptureReviewCommentsProtectionTourAsync");
         source.Should().Contain("CapturePageLayoutSetupTourAsync");
+        source.Should().Contain("CaptureDrawObjectFormattingTourAsync");
         source.Should().Contain("CaptureHomeFontColorsTourAsync");
+        source.Should().Contain("CaptureHomeClipboardCellsEditingTourAsync");
         source.Should().Contain("CaptureFormulaAuthoringNamesTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
@@ -81,6 +85,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WriteViewPanesZoomTourManifestAsync");
         source.Should().Contain("WriteReviewCommentsProtectionTourManifestAsync");
         source.Should().Contain("WritePageLayoutSetupTourManifestAsync");
+        source.Should().Contain("WriteDrawObjectFormattingTourManifestAsync");
         source.Should().Contain("WriteFormulaAuthoringNamesTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
@@ -97,7 +102,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("view_panes_zoom_tour_manifest.json");
         source.Should().Contain("review_comments_protection_tour_manifest.json");
         source.Should().Contain("page_layout_setup_tour_manifest.json");
+        source.Should().Contain("draw_object_formatting_tour_manifest.json");
         source.Should().Contain("home_font_colors_tour_manifest.json");
+        source.Should().Contain("home_clipboard_cells_editing_tour_manifest.json");
         source.Should().Contain("formula_authoring_names_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
@@ -670,6 +677,54 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void MainWindowScreenshotTour_CapturesDrawObjectFormattingVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_DRAW_OBJECT_FORMATTING_TOUR");
+        source.Should().Contain("draw-object-formatting-tour");
+        source.Should().Contain("EnsureDrawObjectFormattingTourContext");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"Draw\"))");
+        source.Should().Contain("Id = Guid.Parse(\"aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa\")");
+        source.Should().Contain("Id = Guid.Parse(\"bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb\")");
+        source.Should().Contain("Id = Guid.Parse(\"cccccccc-3333-4333-8333-cccccccccccc\")");
+        source.Should().Contain("sheet.DrawingShapes.Add(shape);");
+        source.Should().Contain("sheet.Pictures.Add(picture);");
+        source.Should().Contain("sheet.TextBoxes.Add(textBox);");
+        source.Should().Contain("new ColorPickerDialog(context.Shape.FillColor, allowNoColor: false)");
+        source.Should().Contain("new ShapeGradientDialog(context.Shape.GetEffectiveGradientFillDirection())");
+        source.Should().Contain("new ShapeEffectsDialog(context.Shape.GetEffectiveEffectPreset())");
+        source.Should().Contain("new ObjectSizeDialog(context.Shape.Width, context.Shape.Height, UiText.Get(\"MainWindowMessage_ObjectSizeTitle\"))");
+        source.Should().Contain("new FormatPictureDialog(picture)");
+        source.Should().Contain("new SelectionPaneDialog(SelectionPanePlanner.BuildItems(context.Sheet))");
+        source.Should().Contain("FindDescendantByRibbonCommandName<Button>(RibbonTabs, \"Crop Picture\")");
+        source.Should().Contain("SelectionPaneToggleVisibilityButton");
+        source.Should().Contain("freex_draw_object_formatting_draw_tab_baseline");
+        source.Should().Contain("freex_draw_object_formatting_shape_fill_color_picker");
+        source.Should().Contain("freex_draw_object_formatting_object_outline_color_picker");
+        source.Should().Contain("freex_draw_object_formatting_shape_gradient_dialog");
+        source.Should().Contain("freex_draw_object_formatting_shape_effects_dialog");
+        source.Should().Contain("freex_draw_object_formatting_crop_menu_opened");
+        source.Should().Contain("freex_draw_object_formatting_object_size_dialog");
+        source.Should().Contain("freex_draw_object_formatting_picture_size_tab");
+        source.Should().Contain("freex_draw_object_formatting_picture_alt_text_tab");
+        source.Should().Contain("freex_draw_object_formatting_selection_pane_rename_visibility");
+        source.Should().Contain("UI-CAT-DRAW-001");
+        source.Should().Contain("UI-CMD-DRAW-003");
+        source.Should().Contain("UI-CMD-DRAW-005");
+        source.Should().Contain("DrawObjectFormattingTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.DrawObjectFormattingTourManifest");
+        source.Should().Contain("Picture insertion uses deterministic in-process placeholder bytes");
+        source.Should().Contain("Selection Pane rename and visibility states are previewed in the dialog before OK/apply");
+
+        catalog.Should().Contain("FREEX_DRAW_OBJECT_FORMATTING_TOUR=1");
+        catalog.Should().Contain("screenshots/draw-object-formatting-tour/");
+        catalog.Should().Contain("draw_object_formatting_tour_manifest.json");
+        catalog.Should().Contain("freex_draw_object_formatting_selection_pane_rename_visibility.png");
+    }
+
+    [Fact]
     public void MainWindowScreenshotTour_CapturesHomeFontColorsVisualEvidence()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
@@ -746,6 +801,60 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("No global mouse or keyboard input is synthesized");
         source.Should().Contain("The trace-arrow and show-formulas captures are FreeX-only visual states; no paired Microsoft Excel evidence is produced by this tool.");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.FormulaDiagnosticsTourManifest");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesHomeClipboardCellsEditingVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR");
+        source.Should().Contain("home-clipboard-cells-editing-tour");
+        source.Should().Contain("EnsureHomeClipboardCellsEditingTourContext");
+        source.Should().Contain("SeedHomeClipboardCellsEditingInternalClipboard");
+        source.Should().Contain("new InternalClipboard(");
+        source.Should().Contain("SheetGrid.ClipboardRange = copySourceRange;");
+        source.Should().Contain("CaptureHomeClipboardCellsEditingMenuAsync");
+        source.Should().Contain("FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)");
+        source.Should().Contain("new CellShiftDialog(CellShiftDialogMode.Insert)");
+        source.Should().Contain("new CellShiftDialog(CellShiftDialogMode.Delete)");
+        source.Should().Contain("CreateHomeClipboardCellsEditingSortDialog");
+        source.Should().Contain("new SortDialog(");
+        source.Should().Contain("CreateHomeClipboardCellsEditingFindReplaceDialog(replaceMode: false)");
+        source.Should().Contain("CreateHomeClipboardCellsEditingFindReplaceDialog(replaceMode: true)");
+        source.Should().Contain("new GoToDialog(_currentSheetId, context.GoToDefaultAddress");
+        source.Should().Contain("new GoToSpecialDialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_clipboard_copied_state");
+        source.Should().Contain("freex_home_clipboard_cells_editing_paste_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_insert_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_delete_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_format_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_clear_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_sort_filter_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_find_select_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_insert_cells_dialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_delete_cells_dialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_custom_sort_dialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_find_dialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_replace_dialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_go_to_dialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_go_to_special_dialog");
+        source.Should().Contain("UI-CMD-HOME-CLIP-001");
+        source.Should().Contain("UI-CMD-HOME-CLIP-002");
+        source.Should().Contain("UI-CMD-HOME-CELLS-001");
+        source.Should().Contain("UI-CMD-HOME-CELLS-002");
+        source.Should().Contain("UI-CMD-HOME-CELLS-003");
+        source.Should().Contain("UI-CMD-HOME-CELLS-004");
+        source.Should().Contain("UI-CMD-HOME-EDIT-003");
+        source.Should().Contain("UI-CMD-HOME-EDIT-004");
+        source.Should().Contain("no global mouse, keyboard, keytip, OS clipboard, or screen capture input is used");
+        source.Should().Contain("Paste Special, Format Painter persistent/double-click mode");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.HomeClipboardCellsEditingTourManifest");
+
+        catalog.Should().Contain("FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR=1");
+        catalog.Should().Contain("screenshots/home-clipboard-cells-editing-tour/");
+        catalog.Should().Contain("home_clipboard_cells_editing_tour_manifest.json");
     }
 
     [Fact]
