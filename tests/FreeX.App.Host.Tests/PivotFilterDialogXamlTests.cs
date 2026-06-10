@@ -416,8 +416,11 @@ public sealed class PivotFilterDialogXamlTests
             .Should()
             .Contain([
                 "Choose items to show:",
-                "Open the full label filter dialog to filter PivotTable items by their captions.",
-                "Open the full value filter dialog to filter PivotTable items by summarized values."
+                "No item filter",
+                "No label filter",
+                "No value filter",
+                "Manage label filters for this PivotTable field.",
+                "Manage value filters for this PivotTable field."
             ]);
 
         document.Descendants(presentation + "Button")
@@ -432,14 +435,64 @@ public sealed class PivotFilterDialogXamlTests
             .Should()
             .Be("ValueFilterButton_Click");
 
-        document.Descendants(presentation + "ComboBox")
-            .Any(element => element.Attribute("IsEnabled")?.Value == "False")
+        document.Descendants(presentation + "Button")
+            .Where(element => element.Attribute(xaml + "Name") is not null)
+            .Select(element => element.Attribute(xaml + "Name")?.Value)
             .Should()
-            .BeFalse("the field checklist should not show disabled label/value filter previews");
+            .Contain([
+                "ClearItemFilterButton",
+                "ClearFieldFiltersButton",
+                "RemoveLabelFilterButton",
+                "RemoveValueFilterButton"
+            ]);
 
         source.Should().Contain("public PivotFieldFilterDialogAction RequestedAction");
         source.Should().Contain("LabelFilterButton_Click");
         source.Should().Contain("ValueFilterButton_Click");
+        source.Should().Contain("RemoveLabelFilterButton_Click");
+        source.Should().Contain("RemoveValueFilterButton_Click");
+        source.Should().Contain("ClearFieldFiltersButton_Click");
+    }
+
+    [Fact]
+    public void PivotFieldFilterDialog_ShowsActiveFilterStateAndFocusesRequestedTab()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var state = new PivotFieldFilterState(
+                "Region",
+                0,
+                ["East", "West"],
+                ["East"],
+                new PivotLabelFilterModel(0, PivotLabelFilterKind.Contains, "Ea"),
+                new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, ComparisonValue: 10, SourceFieldIndex: 0),
+                [new PivotDataFieldModel(2, "Sum of Amount", "sum")]);
+            var dialog = new PivotFieldFilterDialog(
+                ["East", "West"],
+                ["East"],
+                filterState: state,
+                initialTab: PivotFieldFilterDialogTab.ValueFilters);
+            dialog.Show();
+            try
+            {
+                GetControl<TextBlock>(dialog, "ItemFilterSummaryText").Text.Should().Contain("East");
+                GetControl<TextBlock>(dialog, "LabelFilterSummaryText").Text.Should().Contain("contains \"Ea\"");
+                GetControl<TextBlock>(dialog, "ValueFilterSummaryText").Text.Should().Contain("Sum of Amount > 10");
+                GetControl<Button>(dialog, "ClearFieldFiltersButton").Content.Should().Be("Clear Filters from \"Region\"");
+                GetControl<Button>(dialog, "ClearItemFilterButton").IsEnabled.Should().BeTrue();
+                GetControl<Button>(dialog, "RemoveLabelFilterButton").IsEnabled.Should().BeTrue();
+                GetControl<Button>(dialog, "RemoveValueFilterButton").IsEnabled.Should().BeTrue();
+                GetControl<Button>(dialog, "LabelFilterButton").Content.Should().Be("Edit Label Filter...");
+                GetControl<Button>(dialog, "ValueFilterButton").Content.Should().Be("Edit Value Filter...");
+                GetControl<TabControl>(dialog, "FilterTabs").SelectedItem
+                    .Should()
+                    .Be(GetControl<TabItem>(dialog, "ValueFiltersTab"));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Theory]

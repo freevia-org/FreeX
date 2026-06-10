@@ -4318,7 +4318,7 @@
     <value>Clear Contents</value>
   </data>
   <data name="MainWindow_Header_ClearFilter" xml:space="preserve">
-    <value>Clear Filter</value>
+    <value>Clear Filters from This Field</value>
   </data>
   <data name="MainWindow_Header_ClearFormats" xml:space="preserve">
     <value>Clear Formats</value>

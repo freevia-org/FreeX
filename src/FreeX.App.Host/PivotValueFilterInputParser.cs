@@ -12,6 +12,25 @@ public static class PivotValueFilterInputParser
         string value2Text,
         int sourceFieldIndex,
         out PivotValueFilterModel filter,
+        out string? error) =>
+        TryCreateFilter(
+            kind,
+            usesCount,
+            valueText,
+            value2Text,
+            sourceFieldIndex,
+            dataFieldIndex: 0,
+            out filter,
+            out error);
+
+    public static bool TryCreateFilter(
+        PivotValueFilterKind kind,
+        bool usesCount,
+        string valueText,
+        string value2Text,
+        int sourceFieldIndex,
+        int dataFieldIndex,
+        out PivotValueFilterModel filter,
         out string? error)
     {
         filter = default!;
@@ -25,13 +44,13 @@ public static class PivotValueFilterInputParser
                 return false;
             }
 
-            filter = new PivotValueFilterModel(0, kind, Count: count, SourceFieldIndex: sourceFieldIndex);
+            filter = new PivotValueFilterModel(dataFieldIndex, kind, Count: count, SourceFieldIndex: sourceFieldIndex);
             return true;
         }
 
         if (kind is PivotValueFilterKind.AboveAverage or PivotValueFilterKind.BelowAverage)
         {
-            filter = new PivotValueFilterModel(0, kind, SourceFieldIndex: sourceFieldIndex);
+            filter = new PivotValueFilterModel(dataFieldIndex, kind, SourceFieldIndex: sourceFieldIndex);
             return true;
         }
 
@@ -54,7 +73,7 @@ public static class PivotValueFilterInputParser
         }
 
         filter = new PivotValueFilterModel(
-            0,
+            dataFieldIndex,
             kind,
             ComparisonValue: value,
             ComparisonValue2: value2,

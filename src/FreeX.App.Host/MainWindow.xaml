@@ -3869,6 +3869,9 @@
                     BorderBrush="#C8C8C8"
                     BorderThickness="1,0,0,0"
                     Visibility="Collapsed"
+                    AllowDrop="True"
+                    DragOver="PivotFieldListRemoveZone_DragOver"
+                    Drop="PivotFieldListRemoveZone_Drop"
                     KeyboardNavigation.TabNavigation="Cycle"
                     KeyboardNavigation.ControlTabNavigation="Cycle"
                     AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableFields}">
@@ -3914,6 +3917,7 @@
                              AllowDrop="True"
                              PreviewMouseMove="PivotFieldList_PreviewMouseMove"
                              PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
+                             GiveFeedback="PivotFieldList_GiveFeedback"
                              DragOver="PivotFieldList_DragOver"
                              Drop="PivotFieldList_Drop"
                              AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AvailablePivotTableFields}">
@@ -3948,7 +3952,11 @@
                             <Button Content="{local:Loc Key=MainWindow_Content_Columns}" Click="PivotFieldToColumnsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToColumns}" local:RibbonMetadata.CommandName="Columns"/>
                             <Button Content="{local:Loc Key=MainWindow_Content_Values}" Click="PivotFieldToValuesBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToValues}" local:RibbonMetadata.CommandName="Values"/>
                             <Button Content="{local:Loc Key=MainWindow_Content_Filters}" Click="PivotFieldToFiltersBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToFilters}" local:RibbonMetadata.CommandName="Filters"/>
-                            <Button Content="{local:Loc Key=MainWindow_Content_Remove}" Click="PivotFieldRemoveBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_RemoveSelectedPivotTableField}" local:RibbonMetadata.CommandName="Remove"/>
+                            <Button Content="{local:Loc Key=MainWindow_Content_Remove}" Click="PivotFieldRemoveBtn_Click" Margin="1" MinHeight="24"
+                                    AllowDrop="True"
+                                    DragOver="PivotFieldRemoveDropZone_DragOver"
+                                    Drop="PivotFieldRemoveDropZone_Drop"
+                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_RemoveSelectedPivotTableField}" local:RibbonMetadata.CommandName="Remove"/>
                         </UniformGrid>
                         <DockPanel Margin="0,6,0,0" LastChildFill="False">
                             <CheckBox x:Name="PivotFieldListDeferLayoutCheckBox"
@@ -3993,6 +4001,7 @@
                                  AllowDrop="True"
                                  PreviewMouseMove="PivotFieldList_PreviewMouseMove"
                                  PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
+                                 GiveFeedback="PivotFieldList_GiveFeedback"
                                  DragOver="PivotFieldList_DragOver"
                                  Drop="PivotFieldList_Drop"
                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableFiltersArea}">
@@ -4019,6 +4028,7 @@
                                  AllowDrop="True"
                                  PreviewMouseMove="PivotFieldList_PreviewMouseMove"
                                  PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
+                                 GiveFeedback="PivotFieldList_GiveFeedback"
                                  DragOver="PivotFieldList_DragOver"
                                  Drop="PivotFieldList_Drop"
                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableColumnsArea}">
@@ -4048,6 +4058,7 @@
                                  AllowDrop="True"
                                  PreviewMouseMove="PivotFieldList_PreviewMouseMove"
                                  PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
+                                 GiveFeedback="PivotFieldList_GiveFeedback"
                                  DragOver="PivotFieldList_DragOver"
                                  Drop="PivotFieldList_Drop"
                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableRowsArea}">
@@ -4074,6 +4085,7 @@
                                  AllowDrop="True"
                                  PreviewMouseMove="PivotFieldList_PreviewMouseMove"
                                  PreviewMouseRightButtonDown="PivotFieldList_PreviewMouseRightButtonDown"
+                                 GiveFeedback="PivotFieldList_GiveFeedback"
                                  DragOver="PivotFieldList_DragOver"
                                  Drop="PivotFieldList_Drop"
                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_PivotTableValuesArea}">
