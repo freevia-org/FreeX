@@ -392,6 +392,18 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void FidelityContract_StatesThreadedCommentsAreModelBackedAndCloudSemanticsAreOutOfScope()
+    {
+        var contract = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/fidelity-contract.md");
+        var troubleshooting = TestWorkspaceFiles.ReadWorkspaceText("docs", "user/troubleshooting.md");
+
+        contract.Should().Contain("| Threaded comments | Partial | Model-backed local threaded comment roots, replies, authors, timestamps, and resolved state load/save through worksheet threaded-comment parts and workbook persons parts");
+        contract.Should().Contain("Microsoft 365 Share/co-authoring state, cloud permissions, presence, version history, and other cloud/service state are outside local XLSX package fidelity.");
+        contract.Should().NotContain("| Threaded comments | Excluded | Retained as package part |");
+        troubleshooting.Should().Contain("FreeX loads and saves local threaded comment roots, replies, authors, timestamps, and resolved state, but Microsoft 365 cloud sync, co-authoring presence, and service-side conversation state are outside local workbook fidelity.");
+    }
+
+    [Fact]
     public void CorpusReport_StatesCustomRibbonUiPackageReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();

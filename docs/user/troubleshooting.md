@@ -37,7 +37,7 @@ Common warning messages and what they mean:
 | **Power Query / Power Pivot** | Data model or query connections are present. FreeX cannot refresh them, but the cached data and metadata are retained. |
 | **Unsupported chart type** | The file contains a chart family or package shape outside the current FreeX model, such as Filled Map or an unparseable future chart part. The chart package part is retained and disclosed rather than silently dropped. |
 | **ActiveX / Form controls** | Form controls or ActiveX objects are present. They are preserved but not interactive. |
-| **Threaded comments** | Excel threaded comment threads are present. FreeX shows them as read-only notes; full threaded comment editing is not yet supported. |
+| **Threaded comments** | FreeX loads and saves local threaded comment roots, replies, authors, timestamps, and resolved state, but Microsoft 365 cloud sync, co-authoring presence, and service-side conversation state are outside local workbook fidelity. |
 | **Track changes / revision history** | Revision history is present and preserved but not shown in the editing UI. |
 | **Digital signature** | The file carries a digital signature that will be broken if you save with changes. |
 | **Custom Ribbon UI** | A custom ribbon XML definition is present. FreeX shows its own ribbon; the customization is preserved. |

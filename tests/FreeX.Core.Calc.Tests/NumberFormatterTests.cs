@@ -77,6 +77,20 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("_([$\u20AC-407]* #,##0.00_);_([$\u20AC-407]* (#,##0.00);_([$\u20AC-407]* \"-\"??_);_(@_)", 1234.5, "\u20AC 1.234,50")]
+    [InlineData("_([$\u20AC-407]* #,##0.00_);_([$\u20AC-407]* (#,##0.00);_([$\u20AC-407]* \"-\"??_);_(@_)", -1234.5, "\u20AC (1.234,50)")]
+    [InlineData("_([$\u20B9-439]* #,##0.00_);_([$\u20B9-439]* (#,##0.00);_([$\u20B9-439]* \"-\"??_);_(@_)", 1234567.89, "\u20B9 12,34,567.89")]
+    public void AccountingSubset_UsesLocaleSeparatorsAndGroupSizesWithCurrencyTokens(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void AccountingSubset_KeepsTrailingSkipDirectiveAtValueEndForTargetWidth()
     {

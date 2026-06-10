@@ -88,6 +88,28 @@ public sealed partial class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void GetDirectDependents_ForRangeReturnsFormulaCellsReferencingAnyCellInRange()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var watchedRange = new GridRange(
+            new CellAddress(sheet1.Id, 2, 2),
+            new CellAddress(sheet1.Id, 4, 3));
+        var localDependent = new CellAddress(sheet1.Id, 6, 1);
+        var crossSheetDependent = new CellAddress(sheet2.Id, 1, 1);
+        var outsideDependent = new CellAddress(sheet1.Id, 7, 1);
+
+        sheet1.SetCell(localDependent, Cell.FromFormula("SUM(B2:C4)"));
+        sheet2.SetCell(crossSheetDependent, Cell.FromFormula("Sheet1!C3*2"));
+        sheet1.SetCell(outsideDependent, Cell.FromFormula("SUM(D2:D4)"));
+
+        FormulaAuditingService.GetDirectDependents(wb, watchedRange)
+            .Should()
+            .Equal(localDependent, crossSheetDependent);
+    }
+
+    [Fact]
     public void GetDependentTraceArrows_ReturnsMultiLevelFormulaChain()
     {
         var wb = new Workbook("test");

@@ -33,6 +33,7 @@ public sealed class CrossTargetCommandMatrixDocumentTests
             "Clear All/Formats/Contents/Comments/Hyperlinks",
             "Font, fill, borders, number format, alignment, merge, wrap",
             "Conditional Formatting and Data Validation",
+            "Formula auditing, error checking, evaluate formula, and Watch Window",
             "Format as Table",
             "Insert chart",
             "Insert picture/shape/text box",
@@ -64,11 +65,13 @@ public sealed class CrossTargetCommandMatrixDocumentTests
 
         var priorities = PriorityRows(doc).ToArray();
 
-        priorities.Should().HaveCount(9);
+        priorities.Should().HaveCount(10);
         priorities[0].Should().ContainAll("Paste/Paste Special", "filtered rows", "table data-body ranges", "hidden rows/columns");
         priorities[1].Should().ContainAll("AutoFilter flyout", "table header", "protected sheet");
         priorities[2].Should().ContainAll("Sort", "filtered table", "hidden rows", "protected sheet");
         priorities[3].Should().ContainAll("Insert/Delete/Hide/Unhide/AutoFit", "hidden boundaries");
+        priorities.Should().Contain(row => row.Contains("Formula auditing", StringComparison.Ordinal));
+        priorities.Should().Contain(row => row.Contains("Watch Window", StringComparison.Ordinal));
         priorities.Should().Contain(row => row.Contains("object", StringComparison.OrdinalIgnoreCase));
         priorities.Should().Contain(row => row.Contains("PivotTable", StringComparison.Ordinal));
         priorities.Should().Contain(row => row.Contains("Page Layout", StringComparison.Ordinal));

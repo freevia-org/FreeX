@@ -109,6 +109,23 @@ public sealed class WatchWindowServiceTests
     }
 
     [Fact]
+    public void GetEntries_SkipsStaleWatchesWhoseSheetNoLongerExists()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var valid = new CellAddress(sheet.Id, 1, 1);
+        var stale = new CellAddress(SheetId.New(), 2, 2);
+        sheet.SetCell(valid, new NumberValue(42));
+        workbook.WatchedCells.Add(stale);
+        workbook.WatchedCells.Add(valid);
+
+        WatchWindowService.GetEntries(workbook)
+            .Should()
+            .ContainSingle()
+            .Which.Address.Should().Be(valid);
+    }
+
+    [Fact]
     public void WatchWindowEntry_IsValueTypedToAvoidPerEntryAllocations()
     {
         typeof(WatchWindowEntry).IsValueType.Should().BeTrue();
