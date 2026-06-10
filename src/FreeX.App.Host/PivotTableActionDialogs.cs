@@ -17,8 +17,7 @@ public sealed class PivotTableNameDialog : Window
     {
         Result = CreateResult(currentName);
         Title = UiText.Get("PivotTableName_Title");
-        Width = 360;
-        Height = 150;
+        DialogSizing.ApplyContentHeight(this, width: 360, minHeight: 150);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -85,8 +84,7 @@ public sealed class MovePivotTableDialog : Window
         _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(destinationRangeText);
         Title = UiText.Get("MovePivotTable_Title");
-        Width = 420;
-        Height = 160;
+        DialogSizing.ApplyContentHeight(this, width: 420, minHeight: 160);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;

@@ -81,17 +81,25 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "excel-number-format" => RunExcelNumberFormatScenario(),
             "excel-borders" => RunExcelPopupScenario("excel-borders", PrepareExcelBlankWorkbook, "%hb", "Net UI Tool Window"),
             "excel-context-menu" => RunExcelContextMenuScenario(),
+            "excel-format-cells-dialog" => RunExcelFormatCellsDialogScenario(),
+            "excel-data-validation-dropdown" => RunExcelDataValidationDropdownScenario(),
             "excel-open-dialog" => RunExcelDialogScenario("excel-open-dialog", PrepareExcelBlankWorkbook, "^{F12}", "#32770", "Open"),
             "excel-save-as-dialog" => RunExcelSaveAsDialogScenario(),
             "freex-open-dialog" => RunFreeXDialogScenario("freex-open-dialog", "^{F12}", "#32770", "Open"),
             "freex-save-as-dialog" => RunFreeXDialogScenario("freex-save-as-dialog", "{F12}", "#32770", "Save As"),
-            "freex-status-zoom-in-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-in-click", ClickAutomationId("StatusZoomInButton")),
-            "freex-status-zoom-slider-drag" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-drag", DragFirstSlider("Zoom")),
+            "freex-format-cells-dialog" => RunFreeXFormatCellsDialogScenario(),
+            "freex-status-zoom-in-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-in-click", ClickAutomationIdExpectZoom("StatusZoomInButton", 105)),
+            "freex-status-zoom-out-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-out-click", ClickAutomationIdExpectZoom("StatusZoomOutButton", 95)),
+            "freex-status-zoom-slider-drag" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-drag", DragFirstSliderExpectChangedZoom("Zoom", 100)),
+            "freex-status-zoom-slider-rangevalue-set" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-rangevalue-set", SetFirstSliderRangeValue("Zoom", 150)),
+            "freex-status-ctrl-wheel-grid-zoom" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-wheel-grid-zoom", CtrlWheelRelativeExpectZoom(0.36, 0.56, 120, 110)),
             "freex-sheet-tab-context-menu" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-context-menu", RightClickNamedElement("Sheet1", ControlType.TabItem)),
             "freex-grid-drag-select" => RunFreeXMainWindowPointerScenario("freex-grid-drag-select", DragRelative(0.14, 0.56, 0.37, 0.69)),
             _ => CaptureResult.Blocked(options.Scenario, "unsupported-scenario", $"Unsupported scenario '{options.Scenario}'.", options.OutputRoot, options.Subject)
         };
     }
+
+    private string? _lastResultValidation;
 
     private CaptureResult RunExcelAutoFilterScenario()
     {
@@ -294,6 +302,101 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
+    private CaptureResult RunExcelFormatCellsDialogScenario()
+    {
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelBlankWorkbook(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("excel-format-cells-dialog", guard, "before-input");
+            }
+
+            SendKeys.SendWait("%hoe");
+            Thread.Sleep(options.AfterInputDelay);
+
+            var dialog = WindowFinder.FindProcessWindow(
+                pid.Value,
+                window => window.Handle != hwnd.ToInt64() &&
+                    window.Title.Contains("Format Cells", StringComparison.OrdinalIgnoreCase) &&
+                    window.Bounds.Width > 350 &&
+                    window.Bounds.Height > 250,
+                options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked("excel-format-cells-dialog", "dialog-not-found", "Did not detect Excel Format Cells dialog after Alt,H,O,E.", options.OutputRoot, "excel", guard);
+            }
+
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            return CaptureWindow("excel-format-cells-dialog", "excel", dialog, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunExcelDataValidationDropdownScenario()
+    {
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            dynamic worksheet = PrepareExcelDataValidationDropdownWorkbook(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("excel-data-validation-dropdown", guard, "before-input");
+            }
+
+            worksheet.Range["A2"].Activate();
+            SendKeys.SendWait("%{DOWN}");
+            Thread.Sleep(options.AfterInputDelay);
+
+            var popup = WindowFinder.FindForegroundProcessPopup(pid.Value, hwnd.ToInt64(), TimeSpan.FromMilliseconds(1200), 70, 40);
+            if (popup is null)
+            {
+                guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+                if (!guard.Success)
+                {
+                    return BlockedWithGuard("excel-data-validation-dropdown", guard, "before-coordinate-click");
+                }
+
+                ClickExcelCellDropdownArrow(excel, worksheet, "A2");
+                Thread.Sleep(options.AfterInputDelay);
+                popup = WindowFinder.FindForegroundProcessPopup(pid.Value, hwnd.ToInt64(), options.PopupTimeout, 70, 40);
+            }
+
+            if (popup is null)
+            {
+                return CaptureResult.Blocked("excel-data-validation-dropdown", "popup-not-found", "Did not detect foreground Excel Data Validation list dropdown after Alt+Down or guarded in-cell arrow click.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow("excel-data-validation-dropdown", "excel", popup, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
     private CaptureResult RunExcelDialogScenario(
         string scenario,
         Action<dynamic> prepare,
@@ -443,11 +546,70 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
+    private CaptureResult RunFreeXFormatCellsDialogScenario()
+    {
+        Process? process = null;
+
+        try
+        {
+            var exePath = ResolveFreeXExePath();
+            process = Process.Start(new ProcessStartInfo(exePath)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory
+            });
+
+            if (process is null)
+            {
+                return CaptureResult.Blocked("freex-format-cells-dialog", "launch-failed", $"Failed to launch '{exePath}'.", options.OutputRoot, "freex");
+            }
+
+            var window = WindowFinder.WaitForMainWindow(process.Id, options.LaunchTimeout);
+            if (window is null)
+            {
+                return CaptureResult.Blocked("freex-format-cells-dialog", "window-not-found", $"FreeX process {process.Id} did not expose a visible main window.", options.OutputRoot, "freex");
+            }
+
+            var handle = new IntPtr(window.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(handle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-format-cells-dialog", guard, "before-input");
+            }
+
+            SendCtrl1();
+            Thread.Sleep(options.AfterInputDelay);
+
+            var dialog = WindowFinder.FindProcessWindow(
+                process.Id,
+                candidate => candidate.Handle != window.Handle &&
+                    candidate.Title.Contains("Format Cells", StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Bounds.Width > 350 &&
+                    candidate.Bounds.Height > 250,
+                options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked("freex-format-cells-dialog", "dialog-not-found", "Did not detect FreeX Format Cells dialog after Ctrl+1.", options.OutputRoot, "freex", guard);
+            }
+
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            return CaptureWindow("freex-format-cells-dialog", "freex", dialog, guard, "complete");
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
     private CaptureResult RunFreeXMainWindowPointerScenario(
         string scenario,
         Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> action)
     {
         Process? process = null;
+        _lastResultValidation = null;
 
         try
         {
@@ -484,7 +646,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
             var refreshedWindow = WindowFinder.GetWindowInfo(handle) ?? window;
-            return CaptureWindow(scenario, "freex", refreshedWindow, guard, "complete");
+            guard = ForegroundGuard.FocusAndVerify(handle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-capture");
+            }
+
+            return CaptureWindow(scenario, "freex", refreshedWindow, guard, "complete", _lastResultValidation);
         }
         finally
         {
@@ -495,7 +663,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
-    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> ClickAutomationId(string automationId)
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> ClickAutomationIdExpectZoom(
+        string automationId,
+        double expectedSliderValue)
         => (handle, processId, _, guard) =>
         {
             var root = AutomationElement.FromHandle(handle);
@@ -507,19 +677,21 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find AutomationId '{automationId}'.", options.OutputRoot, "freex", guard);
             }
 
-            return GuardedClickElement(options.Scenario, processId, handle, element, MouseButtonKind.Left);
+            var blocked = GuardedClickElement(options.Scenario, processId, handle, element, MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            return ValidateZoomSliderValue(handle, expectedSliderValue, $"AutomationId '{automationId}' click");
         };
 
-    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragFirstSlider(string nameContains)
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragFirstSliderExpectChangedZoom(
+        string nameContains,
+        double originalSliderValue)
         => (handle, processId, _, guard) =>
         {
-            var root = AutomationElement.FromHandle(handle);
-            var sliders = root.FindAll(
-                TreeScope.Descendants,
-                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Slider));
-            var slider = sliders
-                .Cast<AutomationElement>()
-                .FirstOrDefault(candidate => candidate.Current.Name.Contains(nameContains, StringComparison.OrdinalIgnoreCase));
+            var slider = FindFirstSlider(handle, nameContains);
             if (slider is null)
             {
                 return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find a slider named like '{nameContains}'.", options.OutputRoot, "freex", guard);
@@ -531,7 +703,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(options.Scenario, "uia-target-bounds-invalid", $"Slider bounds were not usable: {bounds}.", options.OutputRoot, "freex", guard);
             }
 
-            return GuardedDrag(
+            var blocked = GuardedDrag(
                 options.Scenario,
                 processId,
                 handle,
@@ -539,6 +711,79 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 (int)(bounds.Top + bounds.Height / 2.0),
                 (int)(bounds.Left + bounds.Width * 0.82),
                 (int)(bounds.Top + bounds.Height / 2.0));
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            return ValidateZoomSliderChanged(handle, originalSliderValue, "foreground slider drag");
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SetFirstSliderRangeValue(
+        string nameContains,
+        double targetSliderValue)
+        => (handle, processId, _, guard) =>
+        {
+            var slider = FindFirstSlider(handle, nameContains);
+            if (slider is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find a slider named like '{nameContains}'.", options.OutputRoot, "freex", guard);
+            }
+
+            if (!slider.TryGetCurrentPattern(RangeValuePattern.Pattern, out var patternObject) ||
+                patternObject is not RangeValuePattern rangePattern)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-rangevalue-unavailable", $"Slider named like '{nameContains}' did not expose RangeValuePattern.", options.OutputRoot, "freex", guard);
+            }
+
+            guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(options.Scenario, guard, "before-uia-rangevalue-set");
+            }
+
+            rangePattern.SetValue(targetSliderValue);
+            Thread.Sleep(options.AfterInputDelay);
+
+            return ValidateZoomSliderValue(handle, targetSliderValue, $"native UIA RangeValue.SetValue({targetSliderValue:0.###})");
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> CtrlWheelRelativeExpectZoom(
+        double x,
+        double y,
+        int wheelDelta,
+        double expectedSliderValue)
+        => (handle, processId, window, _) =>
+        {
+            var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(options.Scenario, guard, "before-ctrl-keydown");
+            }
+
+            NativeMethods.SetCursorPos(
+                window.Bounds.Left + (int)(window.Bounds.Width * x),
+                window.Bounds.Top + (int)(window.Bounds.Height * y));
+            NativeMethods.KeybdEvent(NativeMethods.VK_CONTROL, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(80);
+
+            try
+            {
+                guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+                if (!guard.Success)
+                {
+                    return BlockedWithGuard(options.Scenario, guard, "before-ctrl-wheel");
+                }
+
+                NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_WHEEL, 0, 0, wheelDelta, UIntPtr.Zero);
+                Thread.Sleep(options.AfterInputDelay);
+            }
+            finally
+            {
+                NativeMethods.KeybdEvent(NativeMethods.VK_CONTROL, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+            }
+
+            return ValidateZoomSliderValue(handle, expectedSliderValue, $"Ctrl+wheel delta {wheelDelta} over worksheet grid");
         };
 
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> RightClickNamedElement(string name, ControlType controlType)
@@ -622,7 +867,85 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return null;
     }
 
-    private CaptureResult CaptureWindow(string scenario, string subject, WindowInfo window, ForegroundGuardResult guard, string status)
+    private CaptureResult? ValidateZoomSliderValue(IntPtr handle, double expectedSliderValue, string trigger)
+    {
+        var slider = FindFirstSlider(handle, "Zoom");
+        if (slider is null || !TryGetRangeValue(slider, out var actualSliderValue))
+        {
+            return CaptureResult.Blocked(options.Scenario, "zoom-validation-unavailable", "Could not read the Zoom slider RangeValue after input.", options.OutputRoot, "freex");
+        }
+
+        if (Math.Abs(actualSliderValue - expectedSliderValue) > 0.75)
+        {
+            return CaptureResult.Blocked(
+                options.Scenario,
+                "zoom-validation-failed",
+                $"Expected Zoom slider value near {expectedSliderValue:0.###} after {trigger}, but UIA reported {actualSliderValue:0.###}.",
+                options.OutputRoot,
+                "freex");
+        }
+
+        var zoomPercent = SliderToZoomPercent(actualSliderValue);
+        _lastResultValidation = $"{trigger}; UIA Zoom slider={actualSliderValue:0.###}; expected slider={expectedSliderValue:0.###}; expected visible zoom text about {zoomPercent:0}%";
+        return null;
+    }
+
+    private CaptureResult? ValidateZoomSliderChanged(IntPtr handle, double originalSliderValue, string trigger)
+    {
+        var slider = FindFirstSlider(handle, "Zoom");
+        if (slider is null || !TryGetRangeValue(slider, out var actualSliderValue))
+        {
+            return CaptureResult.Blocked(options.Scenario, "zoom-validation-unavailable", "Could not read the Zoom slider RangeValue after input.", options.OutputRoot, "freex");
+        }
+
+        if (Math.Abs(actualSliderValue - originalSliderValue) < 2.0)
+        {
+            return CaptureResult.Blocked(
+                options.Scenario,
+                "zoom-validation-failed",
+                $"Expected Zoom slider value to move away from {originalSliderValue:0.###} after {trigger}, but UIA reported {actualSliderValue:0.###}.",
+                options.OutputRoot,
+                "freex");
+        }
+
+        var zoomPercent = SliderToZoomPercent(actualSliderValue);
+        _lastResultValidation = $"{trigger}; UIA Zoom slider moved from {originalSliderValue:0.###} to {actualSliderValue:0.###}; expected visible zoom text about {zoomPercent:0}%";
+        return null;
+    }
+
+    private static AutomationElement? FindFirstSlider(IntPtr handle, string nameContains)
+    {
+        var root = AutomationElement.FromHandle(handle);
+        var sliders = root.FindAll(
+            TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Slider));
+        return sliders
+            .Cast<AutomationElement>()
+            .FirstOrDefault(candidate => candidate.Current.Name.Contains(nameContains, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool TryGetRangeValue(AutomationElement element, out double value)
+    {
+        value = 0;
+        if (!element.TryGetCurrentPattern(RangeValuePattern.Pattern, out var patternObject) ||
+            patternObject is not RangeValuePattern rangePattern)
+        {
+            return false;
+        }
+
+        value = rangePattern.Current.Value;
+        return true;
+    }
+
+    private static double SliderToZoomPercent(double sliderValue)
+    {
+        sliderValue = Math.Max(0, Math.Min(200, sliderValue));
+        return sliderValue <= 100
+            ? 10 + sliderValue / 100 * 90
+            : 100 + (sliderValue - 100) / 100 * 300;
+    }
+
+    private CaptureResult CaptureWindow(string scenario, string subject, WindowInfo window, ForegroundGuardResult guard, string status, string? resultValidation = null)
     {
         var scenarioDir = Path.Combine(options.OutputRoot, scenario);
         Directory.CreateDirectory(scenarioDir);
@@ -640,7 +963,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             window,
             guard,
             null,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow)
+        {
+            ResultValidation = resultValidation
+        };
 
         var manifestPath = Path.Combine(scenarioDir, $"{scenario}_manifest.json");
         File.WriteAllText(manifestPath, JsonSerializer.Serialize(result with { ManifestPath = manifestPath }, ProgramAccessor.JsonOptions));
@@ -720,6 +1046,24 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return worksheet;
     }
 
+    private static dynamic PrepareExcelDataValidationDropdownWorkbook(dynamic excel)
+    {
+        dynamic worksheet = excel.ActiveSheet;
+        worksheet.Range["A1"].Value2 = "Region";
+        worksheet.Range["A2"].Value2 = string.Empty;
+        worksheet.Range["B1"].Value2 = "Allowed values";
+        worksheet.Range["B2"].Value2 = "North";
+        worksheet.Range["B3"].Value2 = "South";
+        worksheet.Range["B4"].Value2 = "West";
+        dynamic target = worksheet.Range["A2"];
+        target.Validation.Delete();
+        target.Validation.Add(Type: 3, AlertStyle: 1, Operator: 1, Formula1: "North,South,West");
+        target.Validation.InCellDropdown = true;
+        worksheet.Range["A:B"].EntireColumn.AutoFit();
+        target.Select();
+        return worksheet;
+    }
+
     private static void ClickExcelAutoFilterHeaderDropdown(dynamic excel, dynamic worksheet)
     {
         dynamic header = worksheet.Range["A1"];
@@ -735,6 +1079,34 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
         Thread.Sleep(60);
         NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+    }
+
+    private static void ClickExcelCellDropdownArrow(dynamic excel, dynamic worksheet, string address)
+    {
+        dynamic range = worksheet.Range[address];
+        dynamic window = excel.ActiveWindow;
+        var left = (int)window.PointsToScreenPixelsX(range.Left);
+        var top = (int)window.PointsToScreenPixelsY(range.Top);
+        const double pointToScreenScale = 2.0;
+        var clickX = (int)(left + (range.Width * pointToScreenScale) - 8);
+        var clickY = (int)(top + (range.Height * pointToScreenScale / 2.0));
+
+        NativeMethods.SetCursorPos(clickX, clickY);
+        Thread.Sleep(100);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+    }
+
+    private static void SendCtrl1()
+    {
+        NativeMethods.KeybdEvent(NativeMethods.VK_CONTROL, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.KeybdEvent(NativeMethods.VK_1, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.KeybdEvent(NativeMethods.VK_1, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.KeybdEvent(NativeMethods.VK_CONTROL, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
     }
 
     private static bool TryOpenExcelAutoFilterWithUia(IntPtr excelWindowHandle)
@@ -922,7 +1294,10 @@ internal sealed record CaptureOptions(
           freex-open-dialog
           freex-save-as-dialog
           freex-status-zoom-in-click
+          freex-status-zoom-out-click
           freex-status-zoom-slider-drag
+          freex-status-zoom-slider-rangevalue-set
+          freex-status-ctrl-wheel-grid-zoom
           freex-sheet-tab-context-menu
           freex-grid-drag-select
 
@@ -986,7 +1361,7 @@ internal static class RemainingSlices
         new("S3", "Native Open/Save/Background picker dialogs", "foreground harness"),
         new("S4", "Grid pointer mechanics: drag select, autofill, resize, split panes", "foreground harness plus mouse drags"),
         new("S5", "Sheet-tab pointer mechanics: rename, reorder, grouping, overflow/context", "foreground harness plus mouse drags"),
-        new("S6", "Status/footer pointer mechanics: zoom slider, wheel, Ctrl/Shift wheel", "foreground harness plus wheel input"),
+        new("S6", "Status/footer pointer mechanics: zoom buttons, zoom slider, Ctrl/Shift wheel", "foreground harness plus wheel input"),
         new("S7", "Excel-paired popup/dialog captures for comparison", "foreground harness")
     ];
 }
@@ -1005,6 +1380,7 @@ internal sealed record CaptureResult(
     DateTimeOffset CapturedAtUtc)
 {
     public string? ManifestPath { get; init; }
+    public string? ResultValidation { get; init; }
 
     public static CaptureResult Blocked(
         string scenario,
@@ -1343,6 +1719,10 @@ internal static class NativeMethods
     public const int MOUSEEVENTF_LEFTUP = 0x0004;
     public const int MOUSEEVENTF_RIGHTDOWN = 0x0008;
     public const int MOUSEEVENTF_RIGHTUP = 0x0010;
+    public const int MOUSEEVENTF_WHEEL = 0x0800;
+    public const int KEYEVENTF_KEYUP = 0x0002;
+    public const byte VK_CONTROL = 0x11;
+    public const byte VK_1 = 0x31;
     public static readonly IntPtr HWND_TOPMOST = new(-1);
     public static readonly IntPtr HWND_NOTOPMOST = new(-2);
 
@@ -1403,6 +1783,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", EntryPoint = "mouse_event")]
     public static extern void MouseEvent(int dwFlags, int dx, int dy, int dwData, UIntPtr dwExtraInfo);
+
+    [DllImport("user32.dll", EntryPoint = "keybd_event")]
+    public static extern void KeybdEvent(byte bVk, byte bScan, int dwFlags, UIntPtr dwExtraInfo);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
