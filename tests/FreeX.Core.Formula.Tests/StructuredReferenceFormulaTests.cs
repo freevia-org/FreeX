@@ -94,6 +94,36 @@ public sealed class StructuredReferenceFormulaTests
         result.Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("=SUBTOTAL(109,[Amount])", 30)] // 109 = visible SUM over the Amount data body
+    [InlineData("=SUM([Amount])", 30)]
+    public void UnqualifiedStructuredReference_InTotalsRow_ResolvesToDataColumn(string formula, double expected)
+    {
+        // A SUBTOTAL/aggregate in the table's totals row commonly uses the bare [Column] form. The totals
+        // row belongs to the table, so [Amount] must parse (not throw) and resolve to the Amount data column.
+        var (workbook, sheet) = CreateSalesWorkbookWithTotals();
+        var evaluator = new FormulaEvaluator();
+        var totalsRowCell = new CellAddress(sheet.Id, 4, 2); // B4: totals row, Amount column
+
+        var result = evaluator.Evaluate(formula, sheet, workbook, totalsRowCell);
+
+        result.Should().Be(new NumberValue(expected));
+    }
+
+    [Fact]
+    public void UnqualifiedStructuredReference_InDataBody_ParsesAndResolvesToColumn()
+    {
+        // A bare [Column] inside the table's data body resolves to that column (SUM over the whole Amount
+        // column). Confirms the bare-[Column] parse fix applies beyond the totals row.
+        var (workbook, sheet) = CreateSalesWorkbook();
+        var evaluator = new FormulaEvaluator();
+        var dataBodyCell = new CellAddress(sheet.Id, 2, 2); // B2, in the data body
+
+        var result = evaluator.Evaluate("=SUM([Amount])", sheet, workbook, dataBodyCell);
+
+        result.Should().Be(new NumberValue(30));
+    }
+
     [Fact]
     public void StructuredReferenceColumnNames_AreMatchedCaseInsensitivelyAndMayContainSpaces()
     {
