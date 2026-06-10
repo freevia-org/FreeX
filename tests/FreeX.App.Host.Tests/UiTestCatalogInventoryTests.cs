@@ -286,6 +286,30 @@ public sealed partial class UiTestCatalogInventoryTests
         lines.Single(line => line.TrimStart().StartsWith($"| {rowId} |", StringComparison.Ordinal));
 
     [Fact]
+    public void DataCatalogRows_DocumentWhatIfWorkflowsTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-DATA-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-DIALOG-001A |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-DATA-006 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(3);
+        rows.Should().OnlyContain(row => row.Contains("data-what-if-workflows-tour"));
+
+        catalog.Should().Contain("FREEX_DATA_WHAT_IF_WORKFLOWS_TOUR=1");
+        catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
+        catalog.Should().Contain("data_what_if_workflows_tour_manifest.json");
+        catalog.Should().Contain("freex_data_what_if_workflows_goal_seek_status_success.png");
+        catalog.Should().Contain("freex_data_what_if_workflows_scenario_summary_report.png");
+        catalog.Should().Contain("freex_data_what_if_workflows_data_table_one_variable_result.png");
+        catalog.Should().Contain("foreground-only");
+    }
+
+    [Fact]
     public void ViewCatalogRows_DocumentViewPanesZoomTourEvidence()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
