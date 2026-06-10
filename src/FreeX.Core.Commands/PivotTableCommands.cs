@@ -242,6 +242,7 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly string _pivotTableName;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
+    private GridRange? _lastRenderedRangeSnapshot;
 
     public RefreshPivotTableCommand(SheetId sheetId, string pivotTableName)
     {
@@ -260,7 +261,8 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
         if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
+        _lastRenderedRangeSnapshot = pivotTable.LastRenderedRange;
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
         var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
         foreach (var chart in sheet.Charts.Where(chart =>
@@ -275,8 +277,18 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        AddPivotTableCommand.Restore(ctx.GetSheet(_sheetId), _targetSnapshot);
+        if (_targetSnapshot is null)
+            return;
+
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
+        {
+            PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
+            pivotTable.LastRenderedRange = _lastRenderedRangeSnapshot;
+        }
+        AddPivotTableCommand.Restore(sheet, _targetSnapshot);
         _targetSnapshot = null;
+        _lastRenderedRangeSnapshot = null;
     }
 }
 
