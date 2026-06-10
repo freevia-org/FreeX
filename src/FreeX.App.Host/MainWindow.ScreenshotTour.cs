@@ -66,6 +66,9 @@ public partial class MainWindow
     private const string QatUndoRedoTourOutputDirectoryName = "qat-undo-redo-tour";
     private const string SheetTabTourManifestFileName = "sheet_tabs_tour_manifest.json";
     private const string SheetTabTourOutputDirectoryName = "sheet-tabs-tour";
+    private const string SheetTabWorkflowsTourManifestFileName = "sheet_tab_workflows_tour_manifest.json";
+    private const string SheetTabWorkflowsTourOutputDirectoryName = "sheet-tab-workflows-tour";
+    private const string SheetTabWorkflowsTourSavedWorkbookFileName = "freex_sheet_tab_workflows_persisted.xlsx";
     private const string TitlebarWindowChromeTourManifestFileName = "titlebar_window_chrome_tour_manifest.json";
     private const string TitlebarWindowChromeTourOutputDirectoryName = "titlebar-window-chrome-tour";
     private const string TitlebarWindowChromeTourSavedWorkbookFileName = "freex_titlebar_renamed_workbook.xlsx";
@@ -12855,6 +12858,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(KeyTipOverlayTourManifest))]
     [JsonSerializable(typeof(QatUndoRedoTourManifest))]
     [JsonSerializable(typeof(SheetTabTourManifest))]
+    [JsonSerializable(typeof(SheetTabWorkflowsTourManifest))]
     [JsonSerializable(typeof(TitlebarWindowChromeTourManifest))]
     [JsonSerializable(typeof(FormulaBarNameBoxTourManifest))]
     [JsonSerializable(typeof(GridSelectionEditingTourManifest))]
