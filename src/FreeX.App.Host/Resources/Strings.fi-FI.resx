@@ -15810,5 +15810,15 @@ ja {0} muuta.</value>
   </data>
   <data name="MainWindow_Text_Type" xml:space="preserve">
     <value>Type</value>
+  </data>  <data name="MainWindowMessage_AutoSumTargetOutOfBounds" xml:space="preserve">
+    <value>AutoSum target is outside the worksheet bounds.</value>
   </data>
-</root>
+  <data name="MainWindowMessage_FlashFillNoBlankAdjacentCells" xml:space="preserve">
+    <value>Flash Fill found examples, but there are no blank adjacent cells to fill.</value>
+  </data>
+  <data name="MainWindowMessage_FlashFillNoExamples" xml:space="preserve">
+    <value>No examples found. Type at least one value in the fill column.</value>
+  </data>
+  <data name="MainWindowMessage_FlashFillTitle" xml:space="preserve">
+    <value>Flash Fill</value>
+  </data></root>

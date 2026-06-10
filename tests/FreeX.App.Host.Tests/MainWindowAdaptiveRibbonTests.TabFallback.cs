@@ -37,7 +37,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     {
         StaTestRunner.Run(() =>
         {
-            using var harness = MainWindowHarness.Create();
+            using var harness = MainWindowHarness.CreateIsolated();
 
             harness.SelectRibbonTab("Insert", 1465);
             if (harness.CanUseRequestedRibbonWidth(1465))

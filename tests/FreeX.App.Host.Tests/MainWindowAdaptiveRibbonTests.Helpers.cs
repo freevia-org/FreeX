@@ -57,15 +57,21 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         private static MainWindow? SharedWindow;
 
         private readonly MainWindow _window;
+        private readonly bool _ownsWindow;
         private readonly MethodInfo _updateRibbonCompactMode;
+        private readonly MethodInfo _invalidateRibbonAdaptiveMeasurementCaches;
         private readonly MethodInfo _normalizeRibbonSurface;
 
-        private MainWindowHarness(MainWindow window)
+        private MainWindowHarness(MainWindow window, bool ownsWindow = false)
         {
             _window = window;
+            _ownsWindow = ownsWindow;
             _updateRibbonCompactMode = typeof(MainWindow)
                 .GetMethod("UpdateRibbonCompactMode", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateRibbonCompactMode");
+            _invalidateRibbonAdaptiveMeasurementCaches = typeof(MainWindow)
+                .GetMethod("InvalidateRibbonAdaptiveMeasurementCaches", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "InvalidateRibbonAdaptiveMeasurementCaches");
             _normalizeRibbonSurface = typeof(MainWindow)
                 .GetMethod("NormalizeRibbonSurface", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "NormalizeRibbonSurface");
@@ -758,6 +764,14 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             return harness;
         }
 
+        public static MainWindowHarness CreateIsolated()
+        {
+            var window = CreateSharedWindow();
+            var harness = new MainWindowHarness(window, ownsWindow: true);
+            harness.ResetUiState();
+            return harness;
+        }
+
         private static MainWindow CreateSharedWindow()
         {
             var workbook = new Workbook("Book1");
@@ -785,6 +799,11 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         public void Dispose()
         {
             ResetUiState();
+            if (!_ownsWindow)
+                return;
+
+            _window.Close();
+            PumpDispatcher();
         }
 
         private void ResetUiState()
@@ -805,6 +824,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 pivotDesignTab.Visibility = Visibility.Collapsed;
             if (_window.FindName("RibbonTabs") is TabControl tabs)
                 tabs.SelectedIndex = 1;
+            _invalidateRibbonAdaptiveMeasurementCaches.Invoke(_window, []);
             _window.UpdateLayout();
             PumpDispatcher();
         }

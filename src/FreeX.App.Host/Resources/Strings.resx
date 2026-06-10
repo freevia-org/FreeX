@@ -14064,6 +14064,9 @@ Changing cell value: {2}</value>
   <data name="MainWindowMessage_AboutFreeXTitle" xml:space="preserve">
     <value>About FreeX</value>
   </data>
+  <data name="MainWindowMessage_AutoSumTargetOutOfBounds" xml:space="preserve">
+    <value>AutoSum target is outside the worksheet bounds.</value>
+  </data>
   <data name="MainWindowMessage_AllowEditRangeAdded" xml:space="preserve">
     <value>{0} can now be edited while this sheet is protected.</value>
   </data>
@@ -14316,6 +14319,15 @@ Changing cell value: {2}</value>
   </data>
   <data name="MainWindowMessage_FeedbackTitle" xml:space="preserve">
     <value>Feedback</value>
+  </data>
+  <data name="MainWindowMessage_FlashFillNoBlankAdjacentCells" xml:space="preserve">
+    <value>Flash Fill found examples, but there are no blank adjacent cells to fill.</value>
+  </data>
+  <data name="MainWindowMessage_FlashFillNoExamples" xml:space="preserve">
+    <value>No examples found. Type at least one value in the fill column.</value>
+  </data>
+  <data name="MainWindowMessage_FlashFillTitle" xml:space="preserve">
+    <value>Flash Fill</value>
   </data>
   <data name="MainWindowMessage_ForecastSheetSelectRange" xml:space="preserve">
     <value>Select a two-column range with headers and at least two data rows.</value>
