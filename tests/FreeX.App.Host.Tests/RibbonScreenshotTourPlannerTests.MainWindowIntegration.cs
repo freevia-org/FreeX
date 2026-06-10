@@ -504,6 +504,48 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void MainWindowScreenshotTour_CapturesDataSortFilterOutlineVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_DATA_SORT_FILTER_OUTLINE_TOUR");
+        source.Should().Contain("data-sort-filter-outline-tour");
+        source.Should().Contain("EnsureDataSortFilterOutlineTourContext");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"Data\"))");
+        source.Should().Contain("new SortDialog(");
+        source.Should().Contain("new SortOptionsDialog(new SortDialogOptions(");
+        source.Should().Contain("CreateAutoFilterFlyoutDialog(context.Sheet, context.FilterHeaderCell");
+        source.Should().Contain("searchBox.Text = \"Open\"");
+        source.Should().Contain("new SubtotalDialog(SubtotalDialog.BuildColumnChoices(context.Sheet, context.TableRange))");
+        source.Should().Contain("GroupRowsBtn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("CollapseGroupBtn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("ExpandGroupBtn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("CaptureDataSortFilterOutlineRibbonMenuAsync");
+        source.Should().Contain("freex_data_sort_filter_outline_data_tab_surface");
+        source.Should().Contain("freex_data_sort_filter_outline_sort_dialog");
+        source.Should().Contain("freex_data_sort_filter_outline_sort_options_dialog");
+        source.Should().Contain("freex_data_sort_filter_outline_autofilter_search_open");
+        source.Should().Contain("freex_data_sort_filter_outline_subtotal_dialog");
+        source.Should().Contain("freex_data_sort_filter_outline_group_expanded");
+        source.Should().Contain("freex_data_sort_filter_outline_hide_detail_collapsed");
+        source.Should().Contain("freex_data_sort_filter_outline_show_detail_expanded");
+        source.Should().Contain("freex_data_sort_filter_outline_group_dropdown");
+        source.Should().Contain("freex_data_sort_filter_outline_ungroup_dropdown");
+        source.Should().Contain("UI-CMD-DATA-001");
+        source.Should().Contain("UI-CMD-DATA-002");
+        source.Should().Contain("UI-CMD-DATA-007");
+        source.Should().Contain("UI-CMD-DATA-008");
+        source.Should().Contain("RenderTargetBitmap-window-dialog-menu");
+        source.Should().Contain("Get Data is represented by the Data tab command surface only");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.DataSortFilterOutlineTourManifest");
+
+        catalog.Should().Contain("FREEX_DATA_SORT_FILTER_OUTLINE_TOUR=1");
+        catalog.Should().Contain("screenshots/data-sort-filter-outline-tour/");
+        catalog.Should().Contain("data_sort_filter_outline_tour_manifest.json");
+    }
+
+    [Fact]
     public void MainWindowScreenshotTour_CapturesViewPanesZoomVisualEvidence()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
