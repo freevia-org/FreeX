@@ -1,5 +1,6 @@
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -65,11 +66,19 @@ public sealed partial class ObjectDialogTests
                 AutomationProperties.GetName(startColorButton).Should().Be("Choose start gradient color");
                 AutomationProperties.GetAutomationId(startColorButton).Should().Be("ShapeGradientStartColorButton");
                 AutomationProperties.GetHelpText(startColorButton).Should().Be("Open the color picker for the first gradient stop.");
+                startColorButton.Background.Should()
+                    .BeOfType<SolidColorBrush>()
+                    .Which.Color.Should()
+                    .Be(Color.FromRgb(31, 119, 180));
 
                 var endColorButton = GetField<Button>(dialog, "_endColorButton");
                 AutomationProperties.GetName(endColorButton).Should().Be("Choose end gradient color");
                 AutomationProperties.GetAutomationId(endColorButton).Should().Be("ShapeGradientEndColorButton");
                 AutomationProperties.GetHelpText(endColorButton).Should().Be("Open the color picker for the second gradient stop.");
+                endColorButton.Background.Should()
+                    .BeOfType<SolidColorBrush>()
+                    .Which.Color.Should()
+                    .Be(Color.FromRgb(180, 210, 240));
 
                 var directionBox = GetField<ComboBox>(dialog, "_directionBox");
                 AutomationProperties.GetName(directionBox).Should().Be("Direction");
@@ -78,6 +87,14 @@ public sealed partial class ObjectDialogTests
                     .BeOfType<ShapeGradientDirectionOption>()
                     .Which.Direction.Should()
                     .Be(DrawingShapeGradientDirection.Vertical);
+
+                var preview = GetField<Border>(dialog, "_gradientPreview");
+                AutomationProperties.GetAutomationId(preview).Should().Be("ShapeGradientPreviewSwatch");
+                preview.Background.Should()
+                    .BeOfType<LinearGradientBrush>()
+                    .Which.GradientStops.Select(stop => stop.Color)
+                    .Should()
+                    .Equal(Color.FromRgb(31, 119, 180), Color.FromRgb(180, 210, 240));
             }
             finally
             {
@@ -209,12 +226,21 @@ public sealed partial class ObjectDialogTests
 
         source.Should().Contain("_startColorButton");
         source.Should().Contain("_endColorButton");
-        source.Should().Contain("Content = UiText.Get(\"ShapeGradient_StartColorButton\")");
-        source.Should().Contain("Content = UiText.Get(\"ShapeGradient_EndColorButton\")");
+        source.Should().Contain("ConfigureSwatchButton(_startColorButton");
+        source.Should().Contain("ConfigureSwatchButton(_endColorButton");
+        source.Should().Contain("UpdateColorSwatches()");
+        source.Should().Contain("ApplySwatch(_startColorButton, _startColor)");
         source.Should().Contain("new ColorPickerDialog(_startColor)");
         source.Should().Contain("new ColorPickerDialog(_endColor)");
         source.Should().Contain("_startColorBox.TextChanged += (_, _) => SyncGradientTextFromInputs()");
         source.Should().Contain("_endColorBox.TextChanged += (_, _) => SyncGradientTextFromInputs()");
-        source.Should().Contain("UpdateColorText()");
+        source.Should().Contain("UpdateColorVisuals()");
+        source.Should().Contain("ShapeGradientPreviewSwatch");
+        source.Should().Contain("CreateGradientBrush(_startColor, _endColor, SelectedDirection)");
+        source.Should().Contain("SizeToContent = SizeToContent.Height");
+        source.Should().Contain("DialogButtonRowFactory.Create(Accept, 76, rowMargin");
+        source.Should().NotContain("Height = 280");
+        source.Should().NotContain("Content = UiText.Get(\"ShapeGradient_StartColorButton\")");
+        source.Should().NotContain("Content = UiText.Get(\"ShapeGradient_EndColorButton\")");
     }
 }
