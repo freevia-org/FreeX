@@ -1105,4 +1105,34 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         catalog.Should().Contain("screenshots/review-comments-protection-tour/");
         catalog.Should().Contain("review_comments_protection_tour_manifest.json");
     }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesReviewStatsShareVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "MainWindow.ScreenshotTour.cs",
+            "MainWindow.ScreenshotTour.ReviewStatsShare.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_REVIEW_STATS_SHARE_TOUR");
+        source.Should().Contain("review-stats-share-tour");
+        source.Should().Contain("EnsureReviewStatsShareTourContext");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"Review\"))");
+        source.Should().Contain("new WorkbookStatisticsDialog(WorkbookStatisticsService.GetStatistics(_workbook))");
+        source.Should().Contain("WorkbookStatisticsDialog.CreateMessage(WorkbookStatisticsService.GetStatistics(_workbook))");
+        source.Should().Contain("ShareWorkbookPlanner.CreatePlan(null)");
+        source.Should().Contain("ShareWorkbookPlanner.FormatStatus(savedSharePlan)");
+        source.Should().Contain("ReviewShareButton");
+        source.Should().Contain("freex_review_workbook_statistics_dialog");
+        source.Should().Contain("freex_review_share_unsaved_guard_status");
+        source.Should().Contain("freex_review_share_saved_ready_status");
+        source.Should().Contain("UI-CAT-REVIEW-001");
+        source.Should().Contain("UI-CMD-REVIEW-002");
+        source.Should().Contain("UI-CMD-REVIEW-005");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.ReviewStatsShareTourManifest");
+
+        catalog.Should().Contain("FREEX_REVIEW_STATS_SHARE_TOUR=1");
+        catalog.Should().Contain("screenshots/review-stats-share-tour/");
+        catalog.Should().Contain("review_stats_share_tour_manifest.json");
+    }
 }
