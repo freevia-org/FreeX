@@ -37,6 +37,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_STYLES_CF_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_AUTHORING_NAMES_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PIVOT_OPTIONS_SLICER_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
@@ -65,6 +66,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureHomeStylesConditionalFormattingTourAsync");
         source.Should().Contain("CaptureHomeClipboardCellsEditingTourAsync");
         source.Should().Contain("CaptureFormulaAuthoringNamesTourAsync");
+        source.Should().Contain("CapturePivotOptionsSlicerTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
@@ -113,6 +115,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("home_styles_conditional_formatting_tour_manifest.json");
         source.Should().Contain("home_clipboard_cells_editing_tour_manifest.json");
         source.Should().Contain("formula_authoring_names_tour_manifest.json");
+        source.Should().Contain("pivot_options_slicer_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
