@@ -9,6 +9,12 @@ public static class SparklineValuePlanner
         var values = new Dictionary<Guid, IReadOnlyList<double>>();
         foreach (var sparkline in sheet.Sparklines)
         {
+            if (!SparklineRangeLimits.IsSupportedDataRange(sparkline.DataRange))
+            {
+                values[sparkline.Id] = [];
+                continue;
+            }
+
             var series = new List<double>();
             for (var row = sparkline.DataRange.Start.Row; row <= sparkline.DataRange.End.Row; row++)
             {
