@@ -190,7 +190,9 @@ public partial class MainWindow : Window, IWorkbookWindow
     private ColumnResizeSnapshot? _columnResizeSnapshot;
     private RowResizeSnapshot? _rowResizeSnapshot;
     private Action<CommandOutcome>? _repeatPostAction;
-    private string? _pivotChartContextFieldCaption;
+    private string? _pivotFieldMenuContextCaption;
+    private IReadOnlyDictionary<(uint Row, uint Col), PivotHeaderDropdownTarget> _pivotHeaderDropdownTargets =
+        new Dictionary<(uint Row, uint Col), PivotHeaderDropdownTarget>();
     private bool _slicerTimelinePaneDismissed;
     private readonly WorkbookWindowRegistry? _windowRegistry;
     private string _windowTitleSuffix = string.Empty;
@@ -267,6 +269,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
         SheetGrid.HeaderContextMenuRequested += OnGridHeaderContextMenuRequested;
         SheetGrid.AutoFilterDropdownRequested += OnAutoFilterDropdownRequested;
+        SheetGrid.PivotHeaderDropdownRequested += OnPivotHeaderDropdownRequested;
         SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested;
         SheetGrid.WaterfallChartPointContextMenuRequested += OnWaterfallChartPointContextMenuRequested;
         SheetGrid.PageMarginsChanged += OnPageMarginsChanged;

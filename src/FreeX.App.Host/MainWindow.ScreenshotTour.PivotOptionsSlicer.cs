@@ -376,7 +376,7 @@ public partial class MainWindow
         PivotOptionsSlicerTourContext context)
     {
         var headers = ReadPivotSourceHeaders(context.Sheet, context.PivotTable);
-        _pivotChartContextFieldCaption = PivotUiPlanner.ResolvePivotChartFieldButtonCaption(context.PivotTable, headers, "Axis Fields");
+        _pivotFieldMenuContextCaption = PivotUiPlanner.ResolvePivotChartFieldButtonCaption(context.PivotTable, headers, "Axis Fields");
         var menu = CreatePivotFieldContextMenu();
         try
         {
@@ -404,7 +404,7 @@ public partial class MainWindow
         finally
         {
             menu.IsOpen = false;
-            _pivotChartContextFieldCaption = null;
+            _pivotFieldMenuContextCaption = null;
         }
     }
 

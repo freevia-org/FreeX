@@ -44,6 +44,9 @@ public partial class GridView
     /// <summary>Fired when the user activates a rendered worksheet AutoFilter dropdown button.</summary>
     public event Action<CellAddress, System.Windows.Point>? AutoFilterDropdownRequested;
 
+    /// <summary>Fired when the user activates a rendered PivotTable row/column header dropdown button.</summary>
+    public event Action<CellAddress, System.Windows.Point>? PivotHeaderDropdownRequested;
+
     /// <summary>Fired when the user activates a rendered PivotChart field button.</summary>
     public event Action<ChartModel, string, System.Windows.Point>? PivotChartFieldButtonRequested;
 

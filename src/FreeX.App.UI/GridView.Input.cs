@@ -399,6 +399,13 @@ public partial class GridView
             return;
         }
 
+        if (TryHitTestPivotHeaderDropdownButton(pos, out var pivotHeaderCell))
+        {
+            PivotHeaderDropdownRequested?.Invoke(pivotHeaderCell, pos);
+            e.Handled = true;
+            return;
+        }
+
         if (TryBeginShapePlacement(pos))
         {
             e.Handled = true;

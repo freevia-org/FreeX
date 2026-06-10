@@ -131,15 +131,15 @@ public partial class MainWindow
             return;
 
         var headers = ReadPivotSourceHeaders(sheet, pivotTable);
-        _pivotChartContextFieldCaption = PivotUiPlanner.ResolvePivotChartFieldButtonCaption(pivotTable, headers, fieldButton);
-        if (string.IsNullOrWhiteSpace(_pivotChartContextFieldCaption))
+        _pivotFieldMenuContextCaption = PivotUiPlanner.ResolvePivotChartFieldButtonCaption(pivotTable, headers, fieldButton);
+        if (string.IsNullOrWhiteSpace(_pivotFieldMenuContextCaption))
             return;
 
         SetActiveCell(pivotTable.TargetRange.Start);
         RefreshPivotFieldListPane();
 
         var menu = CreatePivotFieldContextMenu();
-        menu.Closed += (_, _) => _pivotChartContextFieldCaption = null;
+        menu.Closed += (_, _) => _pivotFieldMenuContextCaption = null;
         menu.PlacementTarget = SheetGrid;
         menu.Placement = PlacementMode.RelativePoint;
         menu.HorizontalOffset = position.X;
@@ -174,6 +174,12 @@ public partial class MainWindow
         Add("Label Filter...", PivotFieldLabelFilterMenuItem_Click);
         Add("Value Filter...", PivotFieldValueFilterMenuItem_Click);
         Add("Clear Filter", PivotFieldClearFilterMenuItem_Click);
+        menu.Items.Add(new MenuItem
+        {
+            Header = "More Sort Options...",
+            IsEnabled = false,
+            ToolTip = "Custom sort lists and manual PivotTable ordering are not yet supported."
+        });
         menu.Items.Add(new Separator());
         Add("Value Field Settings...", PivotFieldValueSettingsMenuItem_Click);
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
