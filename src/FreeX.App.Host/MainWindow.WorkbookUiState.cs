@@ -177,6 +177,8 @@ public partial class MainWindow
 
     private void RefreshToolbarAfterSelectionChange()
     {
+        RefreshPivotFieldListPaneAfterSelectionChange();
+
         if (CanSkipSelectionToolbarRefresh())
             return;
 

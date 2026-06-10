@@ -855,6 +855,8 @@ public partial class MainWindow
             new CellAddress(_currentSheetId,
                 Math.Max(anchor.Row, to.Row), Math.Max(anchor.Col, to.Col)));
         SetCellAddressBoxSelectionText(FormatRangeReference(anchor, to));
+        if (!_dragSelectActive)
+            RefreshPivotFieldListPaneAfterSelectionChange();
         RefreshStatusBarAfterDragSelectionChange();
     }
 
@@ -945,6 +947,8 @@ public partial class MainWindow
 
     private void CompleteDragSelectionToolbarRefresh()
     {
+        RefreshPivotFieldListPaneAfterSelectionChange();
+
         if (!_dragSelectToolbarRefreshPending)
             return;
 
