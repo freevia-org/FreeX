@@ -362,6 +362,29 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void InsertCatalogRows_DocumentChartDataLayoutTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-INSERT-002B |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-INSERT-002C |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-INSERT-016 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(3);
+        rows.Should().OnlyContain(row => row.Contains("chart-data-layout-tour"));
+
+        catalog.Should().Contain("FREEX_CHART_DATA_LAYOUT_TOUR=1");
+        catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
+        catalog.Should().Contain("chart_data_layout_tour_manifest.json");
+        catalog.Should().Contain("freex_chart_data_layout_select_data_dialog.png");
+        catalog.Should().Contain("freex_chart_data_layout_change_chart_type_dialog.png");
+        catalog.Should().Contain("freex_chart_data_layout_waterfall_point_context_menu.png");
+    }
+
+    [Fact]
     public void PageCatalogRows_DocumentPageLayoutSetupTourEvidence()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
@@ -416,6 +439,34 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().Contain("draw_object_formatting_tour_manifest.json");
         catalog.Should().Contain("freex_draw_object_formatting_shape_effects_dialog.png");
         catalog.Should().Contain("freex_draw_object_formatting_selection_pane_rename_visibility.png");
+    }
+
+    [Fact]
+    public void RibbonOverflowKeytipRows_DocumentOverflowAndCancellationTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-RIBBON-002A |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-RIBBON-002B |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-KEYTIP-001 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(3);
+        foreach (var row in rows)
+        {
+            row.Should().Contain("ribbon-overflow-keytip-tour");
+        }
+
+        catalog.Should().Contain("FREEX_RIBBON_OVERFLOW_KEYTIP_TOUR=1");
+        catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
+        catalog.Should().Contain("ribbon_overflow_keytip_tour_manifest.json");
+        catalog.Should().Contain("freex_ribbon_overflow_home_editing_menu.png");
+        catalog.Should().Contain("freex_ribbon_overflow_insert_charts_menu.png");
+        catalog.Should().Contain("freex_ribbon_overflow_view_window_menu.png");
+        catalog.Should().Contain("freex_keytip_escape_after_cancel.png");
+        catalog.Should().Contain("freex_keytip_narrow_home_collapsed_badges.png");
     }
 
     [Theory]
