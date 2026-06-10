@@ -8,6 +8,8 @@ using OxyPlot.Annotations;
 using OxyPlot.Axes;
 using OxyPlot.Legends;
 using OxyPlot.Series;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace FreeX.App.UI.Tests;
 
@@ -84,9 +86,100 @@ public sealed partial class ChartRendererTests
             source.IndexOf("public static ImageSource? Render(ChartModel chart, ViewportModel viewport, WorkbookTheme? theme, double renderScale)", StringComparison.Ordinal)..
             source.IndexOf("private static PlotModel? BuildPlotModel", StringComparison.Ordinal)];
 
-        render.Should().Contain("Math.Clamp(renderScale, 0.25, 4.0)");
+        render.Should().Contain("renderScale = NormalizeRenderScale(renderScale);");
         render.Should().Contain("chart.Width * renderScale");
         render.Should().Contain("chart.Height * renderScale");
+        render.Should().Contain("IsVisiblyBlank(bitmap)");
+        render.Should().Contain("RenderDirectFallback(chart, viewport, resolvedTheme, renderScale)");
+        source.Should().Contain("private static double NormalizeRenderScale(double renderScale)");
+        source.Should().Contain("Math.Ceiling(renderScale)");
+        source.Should().Contain("Math.Max(2.0");
+
+        var fallbackSource = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.DirectFallback.cs");
+        fallbackSource.Should().Contain("internal static ImageSource? RenderDirectFallback");
+        fallbackSource.Should().Contain("BuildDirectChartData(chart, viewport, theme)");
+    }
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(1.5)]
+    [InlineData(2.0)]
+    public void Render_ColumnChartWithVisibleDataProducesNonBlankBitmap(double renderScale)
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var chart = new ChartModel
+            {
+                Type = ChartType.Column,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 2)),
+                Width = 400,
+                Height = 300
+            };
+
+            var image = ChartRenderer.Render(chart, new ViewportModel(
+                [
+                    new DisplayCell(1, 1, new TextValue("Quarter"), "Quarter", null, StyleId.Default, null),
+                    new DisplayCell(1, 2, new TextValue("Revenue"), "Revenue", null, StyleId.Default, null),
+                    new DisplayCell(2, 1, new TextValue("Q1"), "Q1", null, StyleId.Default, null),
+                    new DisplayCell(2, 2, new NumberValue(10), "10", null, StyleId.Default, null),
+                    new DisplayCell(3, 1, new TextValue("Q2"), "Q2", null, StyleId.Default, null),
+                    new DisplayCell(3, 2, new NumberValue(18), "18", null, StyleId.Default, null),
+                    new DisplayCell(4, 1, new TextValue("Q3"), "Q3", null, StyleId.Default, null),
+                    new DisplayCell(4, 2, new NumberValue(14), "14", null, StyleId.Default, null),
+                    new DisplayCell(5, 1, new TextValue("Q4"), "Q4", null, StyleId.Default, null),
+                    new DisplayCell(5, 2, new NumberValue(26), "26", null, StyleId.Default, null)
+                ],
+                [],
+                []),
+                WorkbookTheme.Office,
+                renderScale);
+
+            var bitmap = image.Should().BeAssignableTo<BitmapSource>().Subject;
+            CountVisiblePixels(bitmap).Should().BeGreaterThan(750);
+        });
+    }
+
+    [Fact]
+    public void RenderDirectFallback_ColumnChartWithVisibleDataProducesNonBlankBitmap()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var chart = new ChartModel
+            {
+                Type = ChartType.Column,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 2)),
+                Title = "Chart",
+                Width = 400,
+                Height = 300
+            };
+
+            var image = ChartRenderer.RenderDirectFallback(chart, new ViewportModel(
+                [],
+                [],
+                [],
+                ChartDataCells:
+                [
+                    ChartCell(sheetId, 1, 1, "Quarter", new TextValue("Quarter")),
+                    ChartCell(sheetId, 1, 2, "Revenue", new TextValue("Revenue")),
+                    ChartCell(sheetId, 2, 1, "Q1", new TextValue("Q1")),
+                    ChartCell(sheetId, 2, 2, "10", new NumberValue(10)),
+                    ChartCell(sheetId, 3, 1, "Q2", new TextValue("Q2")),
+                    ChartCell(sheetId, 3, 2, "18", new NumberValue(18)),
+                    ChartCell(sheetId, 4, 1, "Q3", new TextValue("Q3")),
+                    ChartCell(sheetId, 4, 2, "14", new NumberValue(14)),
+                    ChartCell(sheetId, 5, 1, "Q4", new TextValue("Q4")),
+                    ChartCell(sheetId, 5, 2, "26", new NumberValue(26))
+                ]),
+                WorkbookTheme.Office,
+                renderScale: 2.0);
+
+            var bitmap = image.Should().BeAssignableTo<BitmapSource>().Subject;
+            bitmap.PixelWidth.Should().Be(800);
+            bitmap.PixelHeight.Should().Be(600);
+            CountVisiblePixels(bitmap).Should().BeGreaterThan(4_000);
+        });
     }
 
     [Fact]
@@ -105,6 +198,29 @@ public sealed partial class ChartRendererTests
             []));
 
         model.Should().BeNull();
+    }
+
+    private static int CountVisiblePixels(BitmapSource bitmap)
+    {
+        var source = bitmap.Format == PixelFormats.Bgra32
+            ? bitmap
+            : new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0);
+        var stride = source.PixelWidth * 4;
+        var pixels = new byte[stride * source.PixelHeight];
+        source.CopyPixels(pixels, stride, 0);
+
+        var visible = 0;
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            var blue = pixels[i];
+            var green = pixels[i + 1];
+            var red = pixels[i + 2];
+            var alpha = pixels[i + 3];
+            if (alpha > 10 && (red < 245 || green < 245 || blue < 245))
+                visible++;
+        }
+
+        return visible;
     }
 
     [Fact]

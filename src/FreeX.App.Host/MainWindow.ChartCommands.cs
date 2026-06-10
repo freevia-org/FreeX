@@ -63,6 +63,7 @@ public partial class MainWindow
         }
 
         if (SheetGrid.SelectedRange is not { } range) return;
+        AddChartCommand? command = null;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Insert Chart",
                 range,
@@ -72,13 +73,42 @@ public partial class MainWindow
                     var dataRange = sheet is null
                         ? currentRange
                         : ChartDataSourcePlanner.ResolveInsertionRange(sheet, currentRange);
-                    return new AddChartCommand(_currentSheetId, dataRange, type, "Chart");
+                    var placement = sheet is null
+                        ? new ChartInsertionPlacement(
+                            20,
+                            20,
+                            ChartInsertionPlacementPlanner.DefaultChartWidth,
+                            ChartInsertionPlacementPlanner.DefaultChartHeight)
+                        : ChartInsertionPlacementPlanner.CreatePlacement(
+                            sheet,
+                            dataRange,
+                            SheetGrid.Viewport,
+                            CalculateViewportAvailableWidth(SheetGrid.ActualWidth, SheetGrid.ActualRowHeaderWidth, _zoomLevel),
+                            Math.Max(0, (SheetGrid.ActualHeight - SheetGrid.EffectiveColHeaderHeight) / _zoomLevel));
+                    command = new AddChartCommand(
+                        _currentSheetId,
+                        dataRange,
+                        type,
+                        "Chart",
+                        placement.Left,
+                        placement.Top,
+                        placement.Width,
+                        placement.Height);
+                    return command;
                 }))
             return;
 
         UpdateViewport();
+        if (command is not null)
+            SelectInsertedChart(command.ChartId);
     }
 
+    private void SelectInsertedChart(Guid chartId)
+    {
+        SheetGrid.SelectedObjectId = chartId;
+        SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.Chart;
+        SheetGrid.InvalidateVisual();
+    }
 
     private void InsertChartPickerBtn_Click(object sender, RoutedEventArgs e)
     {

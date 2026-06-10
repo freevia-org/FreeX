@@ -39,10 +39,39 @@ public sealed partial class ChartCommandTests
         sheet.Charts[0].Type.Should().Be(type);
         sheet.Charts[0].DataRange.Should().Be(range);
         sheet.Charts[0].Title.Should().Be("Sales");
+        sheet.Charts[0].Id.Should().Be(command.ChartId);
 
         command.Revert(ctx);
 
         sheet.Charts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddChartCommand_UsesRequestedEmbeddedPlacement()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var range = CreateChartRange(sheet);
+
+        var command = new AddChartCommand(
+            sheet.Id,
+            range,
+            ChartType.Column,
+            "Sales",
+            left: 640,
+            top: 1200,
+            width: 420,
+            height: 260);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var chart = sheet.Charts.Should().ContainSingle().Subject;
+        chart.Id.Should().Be(command.ChartId);
+        chart.Left.Should().Be(640);
+        chart.Top.Should().Be(1200);
+        chart.Width.Should().Be(420);
+        chart.Height.Should().Be(260);
     }
 
     [Fact]
