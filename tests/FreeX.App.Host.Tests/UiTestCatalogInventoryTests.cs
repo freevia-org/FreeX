@@ -246,10 +246,7 @@ public sealed partial class UiTestCatalogInventoryTests
             .ToArray();
 
         rows.Should().HaveCount(6);
-        foreach (var row in rows)
-        {
-            row.Should().Contain("review-comments-protection-tour");
-        }
+        rows.Should().OnlyContain(row => row.Contains("review-comments-protection-tour"));
 
         catalog.Should().Contain("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR=1");
         catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
@@ -257,6 +254,56 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().Contain("review_comments_protection_tour_manifest.json");
         catalog.Should().Contain("freex_review_allow_edit_ranges_dialog.png");
         catalog.Should().Contain("Thesaurus is documented as not currently surfaced");
+    }
+
+    [Fact]
+    public void InsertCatalogRows_DocumentTablesChartsTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-INSERT-001 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-INSERT-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-INSERT-001A |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-INSERT-001D |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-INSERT-002A |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(5);
+        rows.Should().OnlyContain(row => row.Contains("insert-tables-charts-tour"));
+
+        catalog.Should().Contain("FREEX_INSERT_TABLES_CHARTS_TOUR=1");
+        catalog.Should().Contain("insert_tables_charts_tour_manifest.json");
+        catalog.Should().Contain("freex_insert_tables_charts_create_table_dialog.png");
+        catalog.Should().Contain("freex_insert_tables_charts_recommended_charts_dialog.png");
+        catalog.Should().Contain("freex_insert_tables_charts_sparkline_result.png");
+    }
+
+    [Fact]
+    public void PageCatalogRows_DocumentPageLayoutSetupTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-PAGE-001A |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-001 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-003 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-005 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-006 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(6);
+        foreach (var row in rows)
+        {
+            row.Should().Contain("page-layout-setup-tour");
+        }
+
+        catalog.Should().Contain("FREEX_PAGE_LAYOUT_SETUP_TOUR=1");
+        catalog.Should().Contain("page_layout_setup_tour_manifest.json");
+        catalog.Should().Contain("freex_page_layout_setup_dialog_sheet_tab_print_titles.png");
     }
 
     [Theory]

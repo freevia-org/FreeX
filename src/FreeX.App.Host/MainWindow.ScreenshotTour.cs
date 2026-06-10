@@ -64,9 +64,13 @@ public partial class MainWindow
     private const string InsertObjectsLinksTourOutputDirectoryName = "insert-objects-links-tour";
     private const string DataToolsDialogsTourManifestFileName = "data_tools_dialogs_tour_manifest.json";
     private const string DataToolsDialogsTourOutputDirectoryName = "data-tools-dialogs-tour";
+    private const string InsertTablesChartsTourManifestFileName = "insert_tables_charts_tour_manifest.json";
+    private const string InsertTablesChartsTourOutputDirectoryName = "insert-tables-charts-tour";
     private const string ViewPanesZoomTourManifestFileName = "view_panes_zoom_tour_manifest.json";
     private const string ViewPanesZoomTourOutputDirectoryName = "view-panes-zoom-tour";
     private const string ViewPanesZoomTourCustomViewName = "View Panes Zoom Tour";
+    private const string PageLayoutSetupTourManifestFileName = "page_layout_setup_tour_manifest.json";
+    private const string PageLayoutSetupTourOutputDirectoryName = "page-layout-setup-tour";
     private const string FormulaDiagnosticsTourManifestFileName = "formula_diagnostics_tour_manifest.json";
     private const string FormulaDiagnosticsTourOutputDirectoryName = "formula-diagnostics-tour";
     private const string ReviewCommentsProtectionTourManifestFileName = "review_comments_protection_tour_manifest.json";
@@ -149,10 +153,12 @@ public partial class MainWindow
         var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
         var insertObjectsLinksTour = Environment.GetEnvironmentVariable("FREEX_INSERT_OBJECTS_LINKS_TOUR") == "1";
         var dataToolsDialogsTour = Environment.GetEnvironmentVariable("FREEX_DATA_TOOLS_DIALOGS_TOUR") == "1";
+        var insertTablesChartsTour = Environment.GetEnvironmentVariable("FREEX_INSERT_TABLES_CHARTS_TOUR") == "1";
         var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
+        var pageLayoutSetupTour = Environment.GetEnvironmentVariable("FREEX_PAGE_LAYOUT_SETUP_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !viewPanesZoomTour && !formulaDiagnosticsTour && !reviewCommentsProtectionTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !formulaDiagnosticsTour && !reviewCommentsProtectionTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -169,7 +175,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, viewPanesZoomTour, formulaDiagnosticsTour, reviewCommentsProtectionTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, formulaDiagnosticsTour, reviewCommentsProtectionTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -211,7 +217,9 @@ public partial class MainWindow
         bool formulaBarNameBoxTour,
         bool insertObjectsLinksTour,
         bool dataToolsDialogsTour,
+        bool insertTablesChartsTour,
         bool viewPanesZoomTour,
+        bool pageLayoutSetupTour,
         bool formulaDiagnosticsTour,
         bool reviewCommentsProtectionTour)
     {
@@ -266,8 +274,12 @@ public partial class MainWindow
             await CaptureInsertObjectsLinksTourAsync(Path.Combine(outputDir, InsertObjectsLinksTourOutputDirectoryName));
         if (dataToolsDialogsTour)
             await CaptureDataToolsDialogsTourAsync(Path.Combine(outputDir, DataToolsDialogsTourOutputDirectoryName));
+        if (insertTablesChartsTour)
+            await CaptureInsertTablesChartsTourAsync(Path.Combine(outputDir, InsertTablesChartsTourOutputDirectoryName));
         if (viewPanesZoomTour)
             await CaptureViewPanesZoomTourAsync(Path.Combine(outputDir, ViewPanesZoomTourOutputDirectoryName));
+        if (pageLayoutSetupTour)
+            await CapturePageLayoutSetupTourAsync(Path.Combine(outputDir, PageLayoutSetupTourOutputDirectoryName));
         if (formulaDiagnosticsTour)
             await CaptureFormulaDiagnosticsTourAsync(Path.Combine(outputDir, FormulaDiagnosticsTourOutputDirectoryName));
 
@@ -4266,6 +4278,358 @@ public partial class MainWindow
         }
     }
 
+    private async Task CapturePageLayoutSetupTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeletePageLayoutSetupTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1240;
+        Height = 768;
+        await Task.Delay(700);
+
+        var sheet = EnsurePageLayoutSetupTourContext();
+        var captures = new List<PageLayoutSetupTourManifestCapture>();
+
+        try
+        {
+            captures.Add(await CapturePageLayoutSetupWindowStateAsync(
+                outputDir,
+                "ribbon-baseline",
+                "freex_page_layout_setup_ribbon_baseline",
+                "Page Layout tab shows Themes, Page Setup, Scale to Fit, Sheet Options, and Arrange groups with a seeded print area and print-title state."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "margins-menu-opened",
+                "freex_page_layout_setup_margins_menu_opened",
+                "Margins",
+                "Margins menu exposes Normal, Wide, Narrow, and Custom Margins choices."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "orientation-menu-opened",
+                "freex_page_layout_setup_orientation_menu_opened",
+                "Page Orientation",
+                "Orientation menu exposes Portrait and Landscape choices."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "size-menu-opened",
+                "freex_page_layout_setup_size_menu_opened",
+                "Paper Size",
+                "Size menu exposes implemented paper-size choices plus dialog-backed larger paper entries."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "print-area-menu-opened",
+                "freex_page_layout_setup_print_area_menu_opened",
+                "Print Area",
+                "Print Area menu exposes Set, disabled Add to Print Area, and Clear choices against the selected range."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "breaks-menu-opened",
+                "freex_page_layout_setup_breaks_menu_opened",
+                "Breaks",
+                "Breaks menu exposes Insert Page Break, Remove Page Break, and Reset All Page Breaks."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "background-menu-opened",
+                "freex_page_layout_setup_background_menu_opened",
+                "Background",
+                "Background menu exposes Choose Background and Delete Background without opening the native file picker."));
+
+            var pageSetupDialog = new PageSetupDialog(sheet, SheetGrid.SelectedRange, null, PageSetupInitialFocusTarget.PageOrientation)
+            {
+                Owner = this
+            };
+            try
+            {
+                pageSetupDialog.Show();
+                await Task.Delay(350);
+                pageSetupDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(pageSetupDialog, outputDir, "freex_page_layout_setup_dialog_page_tab");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "page-setup-dialog-page-tab",
+                    "freex_page_layout_setup_dialog_page_tab",
+                    "Page Setup dialog Page tab shows orientation, paper size, scaling, first-page number, print quality, and Print/Preview/Options/OK/Cancel buttons.",
+                    "Page Setup",
+                    "RenderTargetBitmap-page-setup-dialog-window",
+                    []));
+
+                pageSetupDialog.PageSetupTabs.SelectedItem = pageSetupDialog.MarginsTab;
+                await Task.Delay(250);
+                pageSetupDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(pageSetupDialog, outputDir, "freex_page_layout_setup_dialog_margins_tab");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "page-setup-dialog-margins-tab",
+                    "freex_page_layout_setup_dialog_margins_tab",
+                    "Page Setup dialog Margins tab shows left/right/top/bottom, header/footer margins, and center-on-page options.",
+                    "Page Setup",
+                    "RenderTargetBitmap-page-setup-dialog-window",
+                    []));
+
+                pageSetupDialog.PageSetupTabs.SelectedItem = pageSetupDialog.SheetTab;
+                await Task.Delay(250);
+                pageSetupDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(pageSetupDialog, outputDir, "freex_page_layout_setup_dialog_sheet_tab_print_titles");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "page-setup-dialog-sheet-tab-print-titles",
+                    "freex_page_layout_setup_dialog_sheet_tab_print_titles",
+                    "Page Setup dialog Sheet tab captures Print Titles fields, print area, print gridlines/headings, page order, comments, and error display options.",
+                    "Page Setup",
+                    "RenderTargetBitmap-page-setup-dialog-window",
+                    []));
+            }
+            finally
+            {
+                pageSetupDialog.Close();
+            }
+
+            ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(null, 1, 2));
+            PageLayoutScaleWidthBox.Text = "1 page";
+            PageLayoutScaleHeightBox.Text = "2 pages";
+            PageLayoutScalePercentBox.Text = "85%";
+            captures.Add(await CapturePageLayoutSetupWindowStateAsync(
+                outputDir,
+                "scale-to-fit-state",
+                "freex_page_layout_setup_scale_to_fit_state",
+                "Scale to Fit ribbon fields show fit-to-pages width/height and percent controls after applying the production scale command."));
+
+            PageLayoutViewGridlinesChk.IsChecked = false;
+            PageLayoutViewHeadingsChk.IsChecked = false;
+            PageLayoutPrintGridlinesChk.IsChecked = true;
+            PageLayoutPrintHeadingsChk.IsChecked = true;
+            sheet.ShowGridlines = false;
+            sheet.ShowHeadings = false;
+            sheet.PrintGridlines = true;
+            sheet.PrintHeadings = true;
+            UpdateViewport();
+            captures.Add(await CapturePageLayoutSetupWindowStateAsync(
+                outputDir,
+                "sheet-options-toggled",
+                "freex_page_layout_setup_sheet_options_toggled",
+                "Sheet Options shows display gridlines/headings off and print gridlines/headings on for the active sheet."));
+
+            var selectionPaneDialog = new SelectionPaneDialog(CreatePageLayoutSetupSelectionPaneItems())
+            {
+                Owner = this
+            };
+            try
+            {
+                selectionPaneDialog.Show();
+                await Task.Delay(350);
+                selectionPaneDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(selectionPaneDialog, outputDir, "freex_page_layout_setup_arrange_selection_pane_dialog");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "arrange-selection-pane-dialog",
+                    "freex_page_layout_setup_arrange_selection_pane_dialog",
+                    "Arrange group representative Selection Pane dialog shows object list, search/filter, visibility, rename, and move controls.",
+                    "Selection Pane",
+                    "RenderTargetBitmap-selection-pane-dialog-window",
+                    []));
+            }
+            finally
+            {
+                selectionPaneDialog.Close();
+            }
+
+            ValidatePageLayoutSetupTourEvidence(outputDir, captures);
+            await WritePageLayoutSetupTourManifestAsync(outputDir, captures);
+        }
+        catch
+        {
+            DeletePageLayoutSetupTourEvidence(outputDir);
+            throw;
+        }
+    }
+
+    private Sheet EnsurePageLayoutSetupTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Page Layout/Page Setup tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        for (uint row = 1; row <= 28; row++)
+        {
+            for (uint col = 1; col <= 8; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                if (row == 1)
+                    sheet.SetCell(address, new TextValue($"Print Field {col}"));
+                else if (col == 1)
+                    sheet.SetCell(address, new TextValue($"Page Row {row - 1}"));
+                else
+                    sheet.SetCell(address, new NumberValue(row * 10 + col));
+            }
+        }
+
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PaperSize = WorksheetPaperSize.Letter;
+        sheet.PageMargins = WorksheetPageMargins.Narrow;
+        sheet.PrintArea = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 18, 6));
+        sheet.PrintTitleRows = new WorksheetRepeatRange(1, 1);
+        sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
+        sheet.RowPageBreaks.Clear();
+        sheet.RowPageBreaks.Add(12);
+        sheet.ColumnPageBreaks.Clear();
+        sheet.ColumnPageBreaks.Add(5);
+        sheet.ScaleToFit = new WorksheetScaleToFit(90, null, null);
+        sheet.PrintGridlines = false;
+        sheet.PrintHeadings = false;
+        sheet.ShowGridlines = true;
+        sheet.ShowHeadings = true;
+        sheet.CenterHorizontallyOnPage = true;
+        sheet.PageOrder = WorksheetPageOrder.OverThenDown;
+        sheet.PageHeader = new WorksheetHeaderFooter("", "Page Layout Tour", "");
+        sheet.PageFooter = new WorksheetHeaderFooter("", "Page &[Page] of &[Pages]", "");
+
+        SelectViewPanesZoomTourRange(sheet, sheet.PrintArea.Value);
+        SetWorksheetViewMode(WorksheetViewMode.PageLayout);
+        SelectPageLayoutRibbonTabForTour();
+        SyncPageLayoutSetupTourControls(sheet);
+        UpdateViewport();
+        RefreshStatusBar();
+        return sheet;
+    }
+
+    private void SelectPageLayoutRibbonTabForTour()
+    {
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Page Layout"));
+    }
+
+    private void SyncPageLayoutSetupTourControls(Sheet sheet)
+    {
+        _suppressToolbarSync = true;
+        try
+        {
+            PageLayoutScaleWidthBox.Text = sheet.ScaleToFit.FitToPagesWide is { } wide ? $"{wide} page" : "Automatic";
+            PageLayoutScaleHeightBox.Text = sheet.ScaleToFit.FitToPagesTall is { } tall ? $"{tall} page" : "Automatic";
+            PageLayoutScalePercentBox.Text = $"{sheet.ScaleToFit.ScalePercent ?? 100}%";
+            PageLayoutViewGridlinesChk.IsChecked = sheet.ShowGridlines;
+            PageLayoutViewHeadingsChk.IsChecked = sheet.ShowHeadings;
+            PageLayoutPrintGridlinesChk.IsChecked = sheet.PrintGridlines;
+            PageLayoutPrintHeadingsChk.IsChecked = sheet.PrintHeadings;
+        }
+        finally
+        {
+            _suppressToolbarSync = false;
+        }
+    }
+
+    private async Task<PageLayoutSetupTourManifestCapture> CapturePageLayoutSetupWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string evidencePurpose)
+    {
+        SelectPageLayoutRibbonTabForTour();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 768);
+        return CreatePageLayoutSetupCapture(state, fileName, evidencePurpose, "Page Layout ribbon", "RenderTargetBitmap-window-full", []);
+    }
+
+    private async Task<PageLayoutSetupTourManifestCapture> CapturePageLayoutSetupMenuAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string commandName,
+        string evidencePurpose)
+    {
+        SelectPageLayoutRibbonTabForTour();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)
+            ?? throw new InvalidOperationException($"Page Layout/Page Setup tour could not find '{commandName}' ribbon button.");
+        var menu = button.ContextMenu
+            ?? throw new InvalidOperationException($"Page Layout/Page Setup tour could not find '{commandName}' context menu.");
+
+        OpenRibbonContextMenu(button, menu);
+        await Task.Delay(350);
+        menu.UpdateLayout();
+        await CaptureElementAsync(menu, outputDir, fileName);
+        var headers = new List<string>();
+        AddMenuHeaders(menu, headers);
+        menu.IsOpen = false;
+        return CreatePageLayoutSetupCapture(state, fileName, evidencePurpose, commandName, "RenderTargetBitmap-page-layout-context-menu", headers);
+    }
+
+    private PageLayoutSetupTourManifestCapture CreatePageLayoutSetupCapture(
+        string state,
+        string fileName,
+        string evidencePurpose,
+        string surface,
+        string captureMethod,
+        IReadOnlyList<string> menuHeaders)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return new PageLayoutSetupTourManifestCapture(
+            CaptureKey: $"interactive:page-layout-setup:{state}",
+            PairKey: $"interactive:page-layout-setup:{state}",
+            ScenarioId: "page-layout-setup:visual-evidence",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: captureMethod.Contains("window-full", StringComparison.Ordinal) ? ActualWidth : 0,
+            CaptureLogicalHeight: captureMethod.Contains("window-full", StringComparison.Ordinal) ? Math.Min(ActualHeight, 768) : 0,
+            SheetName: sheet?.Name ?? string.Empty,
+            ActiveRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
+            ViewMode: (sheet?.ViewMode ?? WorksheetViewMode.Normal).ToString(),
+            PageOrientation: (sheet?.PageOrientation ?? WorksheetPageOrientation.Portrait).ToString(),
+            PaperSize: (sheet?.PaperSize ?? WorksheetPaperSize.A4).ToString(),
+            PrintArea: sheet?.PrintArea?.ToString() ?? string.Empty,
+            PrintTitleRows: sheet?.PrintTitleRows?.ToString() ?? string.Empty,
+            PrintTitleColumns: sheet?.PrintTitleColumns?.ToString() ?? string.Empty,
+            RowPageBreaks: sheet?.RowPageBreaks.ToArray() ?? [],
+            ColumnPageBreaks: sheet?.ColumnPageBreaks.ToArray() ?? [],
+            ScaleToFit: sheet?.ScaleToFit.ToString() ?? WorksheetScaleToFit.Default.ToString(),
+            ShowGridlines: sheet?.ShowGridlines ?? true,
+            ShowHeadings: sheet?.ShowHeadings ?? true,
+            PrintGridlines: sheet?.PrintGridlines ?? false,
+            PrintHeadings: sheet?.PrintHeadings ?? false,
+            ScaleWidthText: PageLayoutScaleWidthBox.Text,
+            ScaleHeightText: PageLayoutScaleHeightBox.Text,
+            ScalePercentText: PageLayoutScalePercentBox.Text,
+            MenuHeaders: menuHeaders,
+            EvidencePurpose: evidencePurpose);
+    }
+
+    private static IReadOnlyList<SelectionPaneItem> CreatePageLayoutSetupSelectionPaneItems() =>
+    [
+        new(SelectionPaneObjectKind.Shape, Guid.Parse("11111111-1111-1111-1111-111111111111"), "Rectangle 1", true, false, true),
+        new(SelectionPaneObjectKind.TextBox, Guid.Parse("22222222-2222-2222-2222-222222222222"), "Text Box 1", true, true, true),
+        new(SelectionPaneObjectKind.Picture, Guid.Parse("33333333-3333-3333-3333-333333333333"), "Picture 1", false, true, false)
+    ];
+
+    private static void DeletePageLayoutSetupTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_page_layout_setup_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, PageLayoutSetupTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidatePageLayoutSetupTourEvidence(
+        string outputDir,
+        IReadOnlyList<PageLayoutSetupTourManifestCapture> captures)
+    {
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Page Layout/Page Setup tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
+    }
+
     private static T? FindDescendantByRibbonCommandName<T>(DependencyObject root, string commandName)
         where T : DependencyObject
     {
@@ -5010,6 +5374,424 @@ public partial class MainWindow
         if (missing.Length > 0)
             throw new InvalidOperationException(
                 $"Insert objects/links/text tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
+    }
+
+    private async Task CaptureInsertTablesChartsTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteInsertTablesChartsTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 768;
+        await Task.Delay(700);
+
+        var context = EnsureInsertTablesChartsTourContext();
+        var captures = new List<InsertTablesChartsTourManifestCapture>();
+        Window? openDialog = null;
+
+        try
+        {
+            SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Insert"));
+            UpdateViewport();
+            RefreshToolbar();
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(250);
+            captures.Add(await CaptureInsertTablesChartsWindowStateAsync(
+                outputDir,
+                "UI-CAT-INSERT-001,UI-CAT-INSERT-002",
+                "insert-tab-command-surface",
+                "Insert ribbon",
+                "freex_insert_tables_charts_insert_tab",
+                "Insert tab command surface with Tables, Charts, and Sparklines groups visible; object/link/text flows are intentionally only incidental if present in the ribbon."));
+
+            openDialog = new CreateTableDialog(
+                context.Sheet.Id,
+                context.SourceRange.ToString(),
+                context.TableStyleName)
+            {
+                Owner = this
+            };
+            await ShowInsertTablesChartsTourDialogAsync(openDialog);
+            captures.Add(await CaptureInsertTablesChartsDialogAsync(
+                openDialog,
+                outputDir,
+                "UI-CAT-INSERT-001D",
+                "create-table-dialog",
+                "Create Table",
+                "freex_insert_tables_charts_create_table_dialog",
+                "Create Table dialog shows the seeded source range, headers checkbox, range picker affordance, and OK/Cancel command row."));
+            CloseInsertTablesChartsTourDialog(openDialog);
+            openDialog = null;
+
+            CreateTourStructuredTable(context);
+            SetSelectionRange(new GridRange(new CellAddress(context.Sheet.Id, 2, 2), new CellAddress(context.Sheet.Id, 2, 2)), new CellAddress(context.Sheet.Id, 2, 2));
+            SelectRibbonTourTab(new RibbonScreenshotTourTab("Table Design", "Table_Design", "TableDesignTab"));
+            UpdateViewport();
+            RefreshToolbar();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(250);
+            captures.Add(await CaptureInsertTablesChartsWindowStateAsync(
+                outputDir,
+                "UI-CAT-INSERT-001D",
+                "table-result-table-design",
+                "Table result",
+                "freex_insert_tables_charts_table_result_table_design",
+                "Created structured table result with Table Design contextual tab selected, visible table style, row striping, and active table selection."));
+
+            openDialog = new RecommendedPivotTablesDialog { Owner = this };
+            await ShowInsertTablesChartsTourDialogAsync(openDialog);
+            captures.Add(await CaptureInsertTablesChartsDialogAsync(
+                openDialog,
+                outputDir,
+                "UI-CAT-INSERT-001A",
+                "recommended-pivottables-dialog",
+                "Recommended PivotTables",
+                "freex_insert_tables_charts_recommended_pivottables_dialog",
+                "Recommended PivotTables dialog shows the deterministic no-recommendations state and Blank PivotTable default action."));
+            CloseInsertTablesChartsTourDialog(openDialog);
+            openDialog = null;
+
+            EnsurePivotTableScreenshotTourContext();
+            SelectRibbonTourTab(new RibbonScreenshotTourTab("PivotTable Analyze", "PivotTable_Analyze", "PivotTableAnalyzeTab"));
+            UpdateViewport();
+            RefreshToolbar();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(250);
+            captures.Add(await CaptureInsertTablesChartsWindowStateAsync(
+                outputDir,
+                "UI-CAT-INSERT-001A",
+                "pivot-result-analyze",
+                "PivotTable result",
+                "freex_insert_tables_charts_pivot_result_analyze",
+                "Created PivotTable result with PivotTable Analyze contextual tab and Field List surface visible for the active pivot target."));
+
+            SeedInsertTablesChartsTourSourceData(context.Sheet);
+            SetSelectionRange(context.SourceRange, context.SourceRange.Start);
+            openDialog = new InsertChartDialog { Owner = this };
+            await ShowInsertTablesChartsTourDialogAsync(openDialog);
+            captures.Add(await CaptureInsertTablesChartsDialogAsync(
+                openDialog,
+                outputDir,
+                "UI-CAT-INSERT-002A",
+                "recommended-charts-dialog",
+                "Insert Chart",
+                "freex_insert_tables_charts_recommended_charts_dialog",
+                "Insert Chart dialog opens to Recommended Charts with a seeded gallery choice and recommended layout checkbox."));
+            CloseInsertTablesChartsTourDialog(openDialog);
+            openDialog = null;
+
+            CreateTourChart(context);
+            _options.ObjectsDisplay = FreeXObjectDisplay.Placeholders;
+            SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Insert"));
+            UpdateViewport();
+            RefreshToolbar();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(250);
+            captures.Add(await CaptureInsertTablesChartsWindowStateAsync(
+                outputDir,
+                "UI-CAT-INSERT-002A",
+                "chart-result",
+                "Chart result",
+                "freex_insert_tables_charts_chart_result",
+                "Created embedded column chart target from the selected source range, shown through the existing chart placeholder display mode for deterministic visual evidence."));
+
+            openDialog = new SparklineDialog(
+                "B2:C2",
+                context.SparklineLocation.ToA1(),
+                SparklineKindChoice.Line,
+                sheetId: context.Sheet.Id)
+            {
+                Owner = this
+            };
+            await ShowInsertTablesChartsTourDialogAsync(openDialog);
+            captures.Add(await CaptureInsertTablesChartsDialogAsync(
+                openDialog,
+                outputDir,
+                "UI-CAT-INSERT-002",
+                "sparkline-dialog",
+                "Insert Sparkline",
+                "freex_insert_tables_charts_sparkline_dialog",
+                "Insert Sparkline dialog shows data range, location range, line/column/win-loss type selector, and both range picker buttons."));
+            CloseInsertTablesChartsTourDialog(openDialog);
+            openDialog = null;
+
+            CreateTourSparklines(context);
+            SetSelectionRange(new GridRange(context.SparklineLocation, context.SparklineLocation), context.SparklineLocation);
+            UpdateViewport();
+            RefreshToolbar();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(250);
+            captures.Add(await CaptureInsertTablesChartsWindowStateAsync(
+                outputDir,
+                "UI-CAT-INSERT-002",
+                "sparkline-result",
+                "Sparkline result",
+                "freex_insert_tables_charts_sparkline_result",
+                "Produced line, column, and win/loss sparkline cells next to the seeded source rows, with the first sparkline cell selected."));
+
+            ValidateInsertTablesChartsTourEvidence(outputDir, captures);
+            await WriteInsertTablesChartsTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteInsertTablesChartsTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (openDialog is { IsVisible: true })
+                CloseInsertTablesChartsTourDialog(openDialog);
+        }
+    }
+
+    private InsertTablesChartsTourContext EnsureInsertTablesChartsTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Insert tables/charts tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        sheet.StructuredTables.RemoveAll(table => string.Equals(table.Name, ScreenshotTourTableName, StringComparison.OrdinalIgnoreCase));
+        sheet.PivotTables.RemoveAll(pivot => string.Equals(pivot.Name, ScreenshotTourPivotTableName, StringComparison.OrdinalIgnoreCase));
+        sheet.Charts.Clear();
+        sheet.Sparklines.Clear();
+
+        for (uint row = 1; row <= 12; row++)
+        {
+            for (uint col = 1; col <= 10; col++)
+                sheet.ClearCell(new CellAddress(sheet.Id, row, col));
+        }
+
+        SeedInsertTablesChartsTourSourceData(sheet);
+
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 3));
+        SetSelectionRange(sourceRange, sourceRange.Start);
+        EnsureCellVisible(sourceRange.Start);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+
+        return new InsertTablesChartsTourContext(
+            sheet,
+            sourceRange,
+            new GridRange(new CellAddress(sheet.Id, 2, 5), new CellAddress(sheet.Id, 8, 8)),
+            new CellAddress(sheet.Id, 2, 4),
+            "TableStyleMedium2");
+    }
+
+    private static void SeedInsertTablesChartsTourSourceData(Sheet sheet)
+    {
+        var cells = new (uint Row, uint Col, ScalarValue Value)[]
+        {
+            (1, 1, new TextValue("Region")),
+            (1, 2, new TextValue("Q1")),
+            (1, 3, new TextValue("Q2")),
+            (1, 4, new TextValue("Trend")),
+            (2, 1, new TextValue("North")),
+            (2, 2, new NumberValue(1280)),
+            (2, 3, new NumberValue(1510)),
+            (3, 1, new TextValue("South")),
+            (3, 2, new NumberValue(960)),
+            (3, 3, new NumberValue(1120)),
+            (4, 1, new TextValue("West")),
+            (4, 2, new NumberValue(1140)),
+            (4, 3, new NumberValue(1030)),
+            (5, 1, new TextValue("East")),
+            (5, 2, new NumberValue(1410)),
+            (5, 3, new NumberValue(1680))
+        };
+
+        foreach (var (row, col, value) in cells)
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), value);
+    }
+
+    private void CreateTourStructuredTable(InsertTablesChartsTourContext context)
+    {
+        if (FindScreenshotTourTable(context.Sheet) is not null)
+            return;
+
+        if (!TableStyleGalleryPlanner.TryGetOption(context.TableStyleName, _workbook.Theme, out var option))
+            option = TableStyleGalleryPlanner.GetOption(0, _workbook.Theme);
+
+        if (!TryExecuteCommand(
+                new CreateStyledStructuredTableCommand(
+                    context.Sheet.Id,
+                    context.SourceRange,
+                    context.TableStyleName,
+                    firstRowHasHeaders: true,
+                    option.Banding),
+                "Create Table",
+                out var outcome))
+        {
+            throw new InvalidOperationException(outcome.ErrorMessage ?? "Insert tables/charts tour could not create the structured table.");
+        }
+
+        if (!context.Sheet.StructuredTables.Any(table => table.Range.Equals(context.SourceRange)))
+            throw new InvalidOperationException("Insert tables/charts tour created no structured table on the planned source range.");
+    }
+
+    private void CreateTourChart(InsertTablesChartsTourContext context)
+    {
+        if (context.Sheet.Charts.Count > 0)
+            return;
+
+        if (!TryExecuteCommand(
+                new AddChartCommand(
+                    context.Sheet.Id,
+                    context.SourceRange,
+                    ChartType.Column,
+                    "Quarterly Sales",
+                    left: 430,
+                    top: 150,
+                    width: 440,
+                    height: 270),
+                "Insert Chart",
+                out var outcome))
+        {
+            throw new InvalidOperationException(outcome.ErrorMessage ?? "Insert tables/charts tour could not create the chart.");
+        }
+    }
+
+    private void CreateTourSparklines(InsertTablesChartsTourContext context)
+    {
+        if (context.Sheet.Sparklines.Count > 0)
+            return;
+
+        var sparklineSpecs = new[]
+        {
+            (Row: 2u, Kind: SparklineKind.Line),
+            (Row: 3u, Kind: SparklineKind.Column),
+            (Row: 4u, Kind: SparklineKind.WinLoss)
+        };
+
+        foreach (var (row, kind) in sparklineSpecs)
+        {
+            var dataRange = new GridRange(new CellAddress(context.Sheet.Id, row, 2), new CellAddress(context.Sheet.Id, row, 3));
+            var location = new CellAddress(context.Sheet.Id, row, 4);
+            if (!TryExecuteCommand(
+                    new AddSparklineCommand(context.Sheet.Id, dataRange, location, kind),
+                    "Insert Sparkline",
+                    out var outcome))
+            {
+                throw new InvalidOperationException(outcome.ErrorMessage ?? "Insert tables/charts tour could not create a sparkline.");
+            }
+        }
+    }
+
+    private static async Task ShowInsertTablesChartsTourDialogAsync(Window dialog)
+    {
+        dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        dialog.Show();
+        dialog.Activate();
+        dialog.UpdateLayout();
+        await Task.Delay(450);
+        await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+    }
+
+    private static void CloseInsertTablesChartsTourDialog(Window dialog)
+    {
+        if (dialog.IsVisible)
+            dialog.Close();
+    }
+
+    private async Task<InsertTablesChartsTourManifestCapture> CaptureInsertTablesChartsDialogAsync(
+        Window dialog,
+        string outputDir,
+        string catalogId,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        dialog.UpdateLayout();
+        await Task.Delay(250);
+        await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+        await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+        return CreateInsertTablesChartsCapture(
+            catalogId,
+            state,
+            surface,
+            fileName,
+            "RenderTargetBitmap-insert-dialog-window",
+            dialog.ActualWidth,
+            dialog.ActualHeight,
+            evidenceSummary);
+    }
+
+    private async Task<InsertTablesChartsTourManifestCapture> CaptureInsertTablesChartsWindowStateAsync(
+        string outputDir,
+        string catalogId,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateInsertTablesChartsCapture(
+            catalogId,
+            state,
+            surface,
+            fileName,
+            "RenderTargetBitmap-window",
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            evidenceSummary);
+    }
+
+    private InsertTablesChartsTourManifestCapture CreateInsertTablesChartsCapture(
+        string catalogId,
+        string state,
+        string surface,
+        string fileName,
+        string captureMethod,
+        double captureLogicalWidth,
+        double captureLogicalHeight,
+        string evidenceSummary)
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet();
+        return new InsertTablesChartsTourManifestCapture(
+            CaptureKey: $"insert-tables-charts:{state}",
+            PairKey: $"interactive:insert-tables-charts:{state}",
+            CatalogId: catalogId,
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: captureLogicalWidth,
+            CaptureLogicalHeight: captureLogicalHeight,
+            SelectedRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
+            StructuredTableCount: sheet?.StructuredTables.Count ?? 0,
+            PivotTableCount: sheet?.PivotTables.Count ?? 0,
+            ChartCount: sheet?.Charts.Count ?? 0,
+            SparklineCount: sheet?.Sparklines.Count ?? 0,
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private static void DeleteInsertTablesChartsTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_insert_tables_charts_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, InsertTablesChartsTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateInsertTablesChartsTourEvidence(
+        string outputDir,
+        IReadOnlyList<InsertTablesChartsTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Insert tables/charts tour did not create planned capture '{capture.OutputFileName}'.");
+        }
     }
 
     private async Task CaptureKeyTipOverlayTourAsync(string outputDir)
@@ -6318,6 +7100,72 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.ViewPanesZoomTourManifest);
     }
 
+    private static async Task WritePageLayoutSetupTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<PageLayoutSetupTourManifestCapture> captures)
+    {
+        var manifest = new PageLayoutSetupTourManifest(
+            Tool: "FREEX_PAGE_LAYOUT_SETUP_TOUR",
+            EvidenceFamily: "page-layout-setup",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "page-layout-setup:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_page_layout_setup_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds:
+            [
+                "UI-CAT-PAGE-001",
+                "UI-CAT-PAGE-001A",
+                "UI-CAT-DIALOG-001B",
+                "UI-CMD-PAGE-001",
+                "UI-CMD-PAGE-002",
+                "UI-CMD-PAGE-003",
+                "UI-CMD-PAGE-004",
+                "UI-CMD-PAGE-005",
+                "UI-CMD-PAGE-006",
+                "UI-CMD-DRAW-002"
+            ],
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new PageLayoutSetupTourManifestPairing(
+                "interactive:page-layout-setup:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no foreground mouse, keyboard, native file dialog, or screen capture input was used."
+                    : "Abort before file write unless the expected FreeX window/dialog owns foreground focus for each capture."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Page Layout ribbon baseline with Page Setup, Scale to Fit, Sheet Options, and Arrange groups visible.",
+                "Margins, Orientation, Size, Print Area, Breaks, and Background menu surfaces.",
+                "Page Setup dialog Page, Margins, and Sheet tabs, including Print Titles fields.",
+                "Scale to Fit field state and Sheet Options print/display checkbox state.",
+                "Arrange representative Selection Pane dialog surface."
+            ],
+            Limitations:
+            [
+                "RenderTargetBitmap evidence only; it is not foreground CopyFromScreen proof.",
+                "The tour drives FreeX in process and captures WPF windows/menus without physical mouse, keyboard, keytip, or UIA invocation.",
+                "Background captures the supported menu surface only; the native image picker, image tiling display, replacement, clear foreground proof, and persistence remain open.",
+                "Page Setup dialog captures are visual states only; OK/Cancel/Escape/default-button execution, range-picker collapse/restore, Print/Preview/Options actions, and printer options are not executed.",
+                "Arrange evidence uses a deterministic representative Selection Pane dialog item list rather than live overlapping drawing objects on the sheet.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, PageLayoutSetupTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.PageLayoutSetupTourManifest);
+    }
+
     private static async Task WriteFormulaDiagnosticsTourManifestAsync(
         string outputDir,
         FormulaDiagnosticsTourContext context,
@@ -6773,6 +7621,66 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, DataToolsDialogsTourManifestFileName);
         await using var stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.DataToolsDialogsTourManifest);
+    }
+
+    private static async Task WriteInsertTablesChartsTourManifestAsync(
+        string outputDir,
+        InsertTablesChartsTourContext context,
+        IReadOnlyList<InsertTablesChartsTourManifestCapture> captures)
+    {
+        var manifest = new InsertTablesChartsTourManifest(
+            Tool: "FREEX_INSERT_TABLES_CHARTS_TOUR",
+            EvidenceFamily: "insert-tables-charts",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "insert-tables-charts:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_insert_tables_charts_<Surface>_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#UI-CAT-INSERT-001",
+            CatalogIds: ["UI-CAT-INSERT-001", "UI-CAT-INSERT-002", "UI-CAT-INSERT-001A", "UI-CAT-INSERT-001D", "UI-CAT-INSERT-002A"],
+            SheetName: context.Sheet.Name,
+            SourceRange: context.SourceRange.ToString(),
+            PivotTargetRange: context.PivotTargetRange.ToString(),
+            SparklineLocation: context.SparklineLocation.ToA1(),
+            TableName: context.Sheet.StructuredTables.FirstOrDefault(table => table.Range.Equals(context.SourceRange))?.Name
+                ?? ScreenshotTourTableName,
+            PivotTableName: ScreenshotTourPivotTableName,
+            TableStyleName: context.TableStyleName,
+            CaptureStatus: "complete",
+            CaptureMode: "RenderTargetBitmap-in-process",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, keytip, range-picker, or screen capture input is used."
+                    : "Window and dialog captures abort unless the expected FreeX WPF surface owns foreground focus immediately before render and file write."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Insert tab Tables/Charts/Sparklines command surface",
+                "Create Table dialog",
+                "Created structured table with Table Design contextual tab",
+                "Recommended PivotTables dialog",
+                "Created PivotTable with PivotTable Analyze contextual tab and Field List",
+                "Insert Chart dialog on Recommended Charts",
+                "Created embedded column chart target",
+                "Insert Sparkline dialog",
+                "Produced line, column, and win/loss sparklines"
+            ],
+            Limitations:
+            [
+                "This bounded tour opens production FreeX WPF dialog surfaces in process and captures them with RenderTargetBitmap.",
+                "The tour seeds table, pivot, chart, and sparkline workbook state deterministically; it does not synthesize physical mouse/keytip/range-picker/Enter/Escape input.",
+                "Picture, shape, hyperlink, text box, header/footer, symbol, object, comment, slicer, and timeline workflows are intentionally outside this slice.",
+                "Recommended PivotTables currently captures the production no-recommendations dialog plus Blank PivotTable action surface rather than an Excel-style generated recommendation gallery.",
+                "The chart-result capture uses FreeX's existing object-placeholder display mode for a visible created chart target; full embedded chart renderer proof remains with the broader chart visual/persistence lane.",
+                "No Microsoft Excel counterpart screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, InsertTablesChartsTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.InsertTablesChartsTourManifest);
     }
 
     private static async Task WriteKeyTipOverlayTourManifestAsync(
@@ -7255,6 +8163,57 @@ public partial class MainWindow
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
 
+    private sealed record InsertTablesChartsTourContext(
+        Sheet Sheet,
+        GridRange SourceRange,
+        GridRange PivotTargetRange,
+        CellAddress SparklineLocation,
+        string TableStyleName);
+
+    private sealed record InsertTablesChartsTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string SheetName,
+        string SourceRange,
+        string PivotTargetRange,
+        string SparklineLocation,
+        string TableName,
+        string PivotTableName,
+        string TableStyleName,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<InsertTablesChartsTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record InsertTablesChartsTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string CatalogId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SelectedRange,
+        int StructuredTableCount,
+        int PivotTableCount,
+        int ChartCount,
+        int SparklineCount,
+        string EvidenceSummary);
+
     [StructLayout(LayoutKind.Sequential)]
     private readonly struct NativeRect
     {
@@ -7665,6 +8624,64 @@ public partial class MainWindow
         bool ViewFormulaBarChecked,
         bool SplitButtonChecked);
 
+    private sealed record PageLayoutSetupTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        PageLayoutSetupTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<PageLayoutSetupTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record PageLayoutSetupTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record PageLayoutSetupTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SheetName,
+        string ActiveRange,
+        string ViewMode,
+        string PageOrientation,
+        string PaperSize,
+        string PrintArea,
+        string PrintTitleRows,
+        string PrintTitleColumns,
+        IReadOnlyList<uint> RowPageBreaks,
+        IReadOnlyList<uint> ColumnPageBreaks,
+        string ScaleToFit,
+        bool ShowGridlines,
+        bool ShowHeadings,
+        bool PrintGridlines,
+        bool PrintHeadings,
+        string ScaleWidthText,
+        string ScaleHeightText,
+        string ScalePercentText,
+        IReadOnlyList<string> MenuHeaders,
+        string EvidencePurpose);
+
     private sealed record FormulaDiagnosticsTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -7785,7 +8802,9 @@ public partial class MainWindow
     [JsonSerializable(typeof(StatusFooterTourManifest))]
     [JsonSerializable(typeof(InsertObjectsLinksTourManifest))]
     [JsonSerializable(typeof(DataToolsDialogsTourManifest))]
+    [JsonSerializable(typeof(InsertTablesChartsTourManifest))]
     [JsonSerializable(typeof(ViewPanesZoomTourManifest))]
+    [JsonSerializable(typeof(PageLayoutSetupTourManifest))]
     [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
     [JsonSerializable(typeof(ReviewCommentsProtectionTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
