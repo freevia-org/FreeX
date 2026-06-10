@@ -159,12 +159,19 @@ public static partial class PivotTableRefreshService
     {
         for (var currentCol = col + 1; currentCol <= lastRowLabelCol; currentCol++)
         {
-            if (sheet.GetCell(row, currentCol)?.Value is not null)
+            if (sheet.GetCell(row, currentCol)?.Value is { } value &&
+                !IsBlankPivotLabelValue(value))
+            {
                 return true;
+            }
         }
 
         return false;
     }
+
+    private static bool IsBlankPivotLabelValue(ScalarValue value) =>
+        value is BlankValue ||
+        value is TextValue text && string.IsNullOrWhiteSpace(text.Value);
 
     private static void MergeLabelSpan(Workbook workbook, Sheet sheet, uint startRow, uint endRow, uint col)
     {
