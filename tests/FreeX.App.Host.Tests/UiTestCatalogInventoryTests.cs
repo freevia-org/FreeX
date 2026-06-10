@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -154,6 +154,9 @@ public sealed partial class UiTestCatalogInventoryTests
         row.Should().Contain("FREEX_TITLEBAR_WINDOW_CHROME_TOUR=1");
         row.Should().Contain("titlebar-window-chrome-tour");
         row.Should().Contain("titlebar_window_chrome_tour_manifest.json");
+        row.Should().Contain("FREEX_HELP_ABOUT_LEGAL_TOUR=1");
+        row.Should().Contain("help-about-legal-tour");
+        row.Should().Contain("help_about_legal_tour_manifest.json");
         row.Should().Contain($"{plannedCaptureCount} planned captures");
         row.Should().Contain($"{plannedCaptureCount * RibbonScreenshotTourPlanner.BurstPhases.Count} burst-phase captures");
         row.Should().Contain("ribbon_screenshot_tour_manifest.json");
@@ -169,6 +172,37 @@ public sealed partial class UiTestCatalogInventoryTests
         row.Should().Contain("ribbon:<WidthLabel>:<TabFileName>");
         row.Should().Contain("counterpart file names");
     }
+
+    [Fact]
+    public void InsertObjectsLinksCatalogRows_DocumentFreeXVisualEvidenceTour()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var lines = catalog.Split('\n');
+        var categoryRow = FindCatalogRow(lines, "UI-CAT-INSERT-003");
+        var objectsRow = FindCatalogRow(lines, "UI-CMD-INSERT-008");
+        var hyperlinkSymbolRow = FindCatalogRow(lines, "UI-CMD-INSERT-009");
+        var commentNoteRow = FindCatalogRow(lines, "UI-CMD-INSERT-010");
+
+        categoryRow.Should().Contain("FREEX_INSERT_OBJECTS_LINKS_TOUR=1");
+        categoryRow.Should().Contain("screenshots/insert-objects-links-tour/");
+        categoryRow.Should().Contain("insert_objects_links_tour_manifest.json");
+        categoryRow.Should().Contain("Hyperlink dialog");
+        categoryRow.Should().Contain("Symbol picker");
+        categoryRow.Should().Contain("picture placeholder");
+        categoryRow.Should().Contain("comment/note");
+
+        objectsRow.Should().Contain("freex_insert_objects_grid_visuals.png");
+        objectsRow.Should().Contain("shape/text box/picture placeholder");
+        hyperlinkSymbolRow.Should().Contain("freex_insert_hyperlink_dialog_address_focus.png");
+        hyperlinkSymbolRow.Should().Contain("freex_insert_symbol_picker_opened.png");
+        commentNoteRow.Should().Contain("freex_insert_new_comment_dialog.png");
+        commentNoteRow.Should().Contain("freex_insert_new_note_dialog.png");
+        commentNoteRow.Should().Contain("freex_insert_comments_list_surface.png");
+        commentNoteRow.Should().Contain("freex_insert_notes_list_surface.png");
+    }
+
+    private static string FindCatalogRow(IEnumerable<string> lines, string rowId) =>
+        lines.Single(line => line.TrimStart().StartsWith($"| {rowId} |", StringComparison.Ordinal));
 
     [Fact]
     public void ViewCatalogRows_DocumentViewPanesZoomTourEvidence()
@@ -218,6 +252,32 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().Contain("freex_insert_tables_charts_create_table_dialog.png");
         catalog.Should().Contain("freex_insert_tables_charts_recommended_charts_dialog.png");
         catalog.Should().Contain("freex_insert_tables_charts_sparkline_result.png");
+    }
+
+    [Fact]
+    public void PageCatalogRows_DocumentPageLayoutSetupTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-PAGE-001A |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-001 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-003 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-005 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-006 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(6);
+        foreach (var row in rows)
+        {
+            row.Should().Contain("page-layout-setup-tour");
+        }
+
+        catalog.Should().Contain("FREEX_PAGE_LAYOUT_SETUP_TOUR=1");
+        catalog.Should().Contain("page_layout_setup_tour_manifest.json");
+        catalog.Should().Contain("freex_page_layout_setup_dialog_sheet_tab_print_titles.png");
     }
 
     [Theory]

@@ -47,6 +47,8 @@ public partial class MainWindow
     private const string PrintPreviewTourManifestFileName = "print_preview_tour_manifest.json";
     private const string OptionsAccountTourManifestFileName = "options_account_tour_manifest.json";
     private const string OptionsAccountTourOutputDirectoryName = "options-account-tour";
+    private const string HelpAboutLegalTourManifestFileName = "help_about_legal_tour_manifest.json";
+    private const string HelpAboutLegalTourOutputDirectoryName = "help-about-legal-tour";
     private const string QatUndoRedoTourManifestFileName = "qat_undo_redo_tour_manifest.json";
     private const string QatUndoRedoTourOutputDirectoryName = "qat-undo-redo-tour";
     private const string SheetTabTourManifestFileName = "sheet_tabs_tour_manifest.json";
@@ -58,6 +60,8 @@ public partial class MainWindow
     private const string FormulaBarNameBoxTourOutputDirectoryName = "formula-bar-name-box-tour";
     private const string StatusFooterTourManifestFileName = "status_footer_tour_manifest.json";
     private const string StatusFooterTourOutputDirectoryName = "status-footer-tour";
+    private const string InsertObjectsLinksTourManifestFileName = "insert_objects_links_tour_manifest.json";
+    private const string InsertObjectsLinksTourOutputDirectoryName = "insert-objects-links-tour";
     private const string DataToolsDialogsTourManifestFileName = "data_tools_dialogs_tour_manifest.json";
     private const string DataToolsDialogsTourOutputDirectoryName = "data-tools-dialogs-tour";
     private const string InsertTablesChartsTourManifestFileName = "insert_tables_charts_tour_manifest.json";
@@ -65,6 +69,8 @@ public partial class MainWindow
     private const string ViewPanesZoomTourManifestFileName = "view_panes_zoom_tour_manifest.json";
     private const string ViewPanesZoomTourOutputDirectoryName = "view-panes-zoom-tour";
     private const string ViewPanesZoomTourCustomViewName = "View Panes Zoom Tour";
+    private const string PageLayoutSetupTourManifestFileName = "page_layout_setup_tour_manifest.json";
+    private const string PageLayoutSetupTourOutputDirectoryName = "page-layout-setup-tour";
     private const string FormulaDiagnosticsTourManifestFileName = "formula_diagnostics_tour_manifest.json";
     private const string FormulaDiagnosticsTourOutputDirectoryName = "formula-diagnostics-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
@@ -138,15 +144,18 @@ public partial class MainWindow
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
         var optionsAccountTour = Environment.GetEnvironmentVariable("FREEX_OPTIONS_ACCOUNT_TOUR") == "1";
+        var helpAboutLegalTour = Environment.GetEnvironmentVariable("FREEX_HELP_ABOUT_LEGAL_TOUR") == "1";
         var qatUndoRedoTour = Environment.GetEnvironmentVariable("FREEX_QAT_UNDO_REDO_TOUR") == "1";
         var titlebarWindowChromeTour = Environment.GetEnvironmentVariable("FREEX_TITLEBAR_WINDOW_CHROME_TOUR") == "1";
         var formulaBarNameBoxTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_BAR_NAME_BOX_TOUR") == "1";
         var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
+        var insertObjectsLinksTour = Environment.GetEnvironmentVariable("FREEX_INSERT_OBJECTS_LINKS_TOUR") == "1";
         var dataToolsDialogsTour = Environment.GetEnvironmentVariable("FREEX_DATA_TOOLS_DIALOGS_TOUR") == "1";
         var insertTablesChartsTour = Environment.GetEnvironmentVariable("FREEX_INSERT_TABLES_CHARTS_TOUR") == "1";
         var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
+        var pageLayoutSetupTour = Environment.GetEnvironmentVariable("FREEX_PAGE_LAYOUT_SETUP_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !dataToolsDialogsTour && !insertTablesChartsTour && !viewPanesZoomTour && !formulaDiagnosticsTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !formulaDiagnosticsTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -163,7 +172,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, dataToolsDialogsTour, insertTablesChartsTour, viewPanesZoomTour, formulaDiagnosticsTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, formulaDiagnosticsTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -198,13 +207,16 @@ public partial class MainWindow
         bool keyTipOverlayTour,
         bool printPreviewTour,
         bool optionsAccountTour,
+        bool helpAboutLegalTour,
         bool qatUndoRedoTour,
         bool titlebarWindowChromeTour,
         bool statusFooterTour,
         bool formulaBarNameBoxTour,
+        bool insertObjectsLinksTour,
         bool dataToolsDialogsTour,
         bool insertTablesChartsTour,
         bool viewPanesZoomTour,
+        bool pageLayoutSetupTour,
         bool formulaDiagnosticsTour)
     {
         if (ribbonPlan is not null)
@@ -240,6 +252,9 @@ public partial class MainWindow
         if (optionsAccountTour)
             await CaptureOptionsAccountTourAsync(Path.Combine(outputDir, OptionsAccountTourOutputDirectoryName));
 
+        if (helpAboutLegalTour)
+            await CaptureHelpAboutLegalTourAsync(Path.Combine(outputDir, HelpAboutLegalTourOutputDirectoryName));
+
         if (qatUndoRedoTour)
             await CaptureQatUndoRedoTourAsync(Path.Combine(outputDir, QatUndoRedoTourOutputDirectoryName));
 
@@ -251,12 +266,16 @@ public partial class MainWindow
         if (formulaBarNameBoxTour)
             await CaptureFormulaBarNameBoxTourAsync(Path.Combine(outputDir, FormulaBarNameBoxTourOutputDirectoryName));
 
+        if (insertObjectsLinksTour)
+            await CaptureInsertObjectsLinksTourAsync(Path.Combine(outputDir, InsertObjectsLinksTourOutputDirectoryName));
         if (dataToolsDialogsTour)
             await CaptureDataToolsDialogsTourAsync(Path.Combine(outputDir, DataToolsDialogsTourOutputDirectoryName));
         if (insertTablesChartsTour)
             await CaptureInsertTablesChartsTourAsync(Path.Combine(outputDir, InsertTablesChartsTourOutputDirectoryName));
         if (viewPanesZoomTour)
             await CaptureViewPanesZoomTourAsync(Path.Combine(outputDir, ViewPanesZoomTourOutputDirectoryName));
+        if (pageLayoutSetupTour)
+            await CapturePageLayoutSetupTourAsync(Path.Combine(outputDir, PageLayoutSetupTourOutputDirectoryName));
         if (formulaDiagnosticsTour)
             await CaptureFormulaDiagnosticsTourAsync(Path.Combine(outputDir, FormulaDiagnosticsTourOutputDirectoryName));
 
@@ -1852,6 +1871,277 @@ public partial class MainWindow
         "freex_options_quick_access_toolbar_category_navigation.png",
         "freex_options_view_category_navigation.png",
         "freex_options_cancel_focus_return.png"
+    ];
+
+    private async Task CaptureHelpAboutLegalTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteHelpAboutLegalTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1120;
+        Height = 768;
+        await Task.Delay(700);
+
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Help"));
+        HelpOnlineButton.Focus();
+        Keyboard.Focus(HelpOnlineButton);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+
+        var captures = new List<HelpAboutLegalTourManifestCapture>
+        {
+            new(
+                CaptureKey: "help:ribbon-command-context",
+                PairKey: "interactive:help:ribbon-command-context",
+                ScenarioId: "help-about-legal:ribbon",
+                State: "ribbon-command-context",
+                Surface: "Help ribbon tab",
+                FileName: "freex_help_ribbon_command_context",
+                OutputFileName: "freex_help_ribbon_command_context.png",
+                CaptureMethod: "RenderTargetBitmap-main-window-top-band",
+                EntryPath: "Help tab",
+                EvidenceSummary: "Help tab command context shows Help Online, Feedback, Copy Diagnostics, Check for Updates, About FreeX, and Legal Notices.",
+                Url: null,
+                FocusedElementAutomationId: AutomationProperties.GetAutomationId(HelpOnlineButton),
+                CaptureLogicalWidth: ActualWidth,
+                CaptureLogicalHeight: ScreenshotTourCaptureHeight)
+        };
+        await CaptureCurrentWindowAsync(outputDir, "freex_help_ribbon_command_context", ScreenshotTourCaptureHeight);
+
+        captures.Add(await CaptureGuardedExternalHelpMessageForTourAsync(
+            outputDir,
+            "help-online-guarded-message",
+            "freex_help_online_guarded_message",
+            "Help > Help Online guarded external-link warning",
+            AppInfo.HelpUrl,
+            UiText.Get("MainWindowMessage_HelpOnlineTitle")));
+
+        captures.Add(await CaptureGuardedExternalHelpMessageForTourAsync(
+            outputDir,
+            "feedback-guarded-message",
+            "freex_feedback_guarded_message",
+            "Help > Feedback guarded external-link warning with diagnostics-aware issue URL",
+            AppIssueReporter.CreateIssueUrl(CreateDeterministicIssueReportContextForHelpTour()),
+            UiText.Get("MainWindowMessage_FeedbackTitle")));
+
+        captures.Add(await CaptureGuardedExternalHelpMessageForTourAsync(
+            outputDir,
+            "updates-guarded-message",
+            "freex_updates_guarded_message",
+            "Help > Check for Updates guarded external-link warning",
+            AppUpdateSource.CreateDefault().ReleasePageUrl,
+            UiText.Get("MainWindowMessage_CheckForUpdatesTitle")));
+
+        captures.Add(await CaptureAboutDialogForTourAsync(outputDir));
+        captures.Add(await CaptureLegalNoticesDialogForTourAsync(outputDir));
+
+        ValidateHelpAboutLegalTourEvidence(outputDir);
+        await WriteHelpAboutLegalTourManifestAsync(outputDir, captures);
+    }
+
+    private async Task<HelpAboutLegalTourManifestCapture> CaptureGuardedExternalHelpMessageForTourAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string evidenceSummary,
+        string url,
+        string title)
+    {
+        var messageCapture = CaptureOwnedNativeDialogWhenShownForHelpTourAsync(
+            title,
+            outputDir,
+            fileName,
+            state,
+            evidenceSummary,
+            url);
+        ShowOwnedMessage(
+            CreateExternalLinkOpenFailedMessageForHelpTour(url),
+            title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+
+        return await messageCapture;
+    }
+
+    private async Task<HelpAboutLegalTourManifestCapture> CaptureAboutDialogForTourAsync(string outputDir)
+    {
+        var dialog = new AboutDialog
+        {
+            Owner = this,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowActivated = true
+        };
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            dialog.UpdateLayout();
+            await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await Task.Delay(350);
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_about_dialog");
+
+            return new HelpAboutLegalTourManifestCapture(
+                CaptureKey: "help:about-dialog:opened",
+                PairKey: "interactive:help:about-dialog:opened",
+                ScenarioId: "help-about-legal:about-dialog",
+                State: "about-dialog-opened",
+                Surface: "About FreeX dialog",
+                FileName: "freex_about_dialog",
+                OutputFileName: "freex_about_dialog.png",
+                CaptureMethod: "RenderTargetBitmap-about-dialog-window",
+                EntryPath: "Help > About FreeX",
+                EvidenceSummary: "About FreeX dialog is the production owned WPF dialog with read-only version/license text and OK close path.",
+                Url: null,
+                FocusedElementAutomationId: Keyboard.FocusedElement is DependencyObject focusedElement
+                    ? AutomationProperties.GetAutomationId(focusedElement)
+                    : null,
+                CaptureLogicalWidth: dialog.ActualWidth,
+                CaptureLogicalHeight: dialog.ActualHeight);
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private async Task<HelpAboutLegalTourManifestCapture> CaptureLegalNoticesDialogForTourAsync(string outputDir)
+    {
+        var dialog = new LegalNoticesDialog
+        {
+            Owner = this,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowActivated = true
+        };
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            dialog.UpdateLayout();
+            await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await Task.Delay(350);
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_legal_notices_dialog");
+
+            return new HelpAboutLegalTourManifestCapture(
+                CaptureKey: "help:legal-notices-dialog:opened",
+                PairKey: "interactive:help:legal-notices-dialog:opened",
+                ScenarioId: "help-about-legal:legal-notices-dialog",
+                State: "legal-notices-dialog-opened",
+                Surface: "Legal Notices dialog",
+                FileName: "freex_legal_notices_dialog",
+                OutputFileName: "freex_legal_notices_dialog.png",
+                CaptureMethod: "RenderTargetBitmap-legal-notices-dialog-window",
+                EntryPath: "Help > Legal Notices",
+                EvidenceSummary: "Legal Notices dialog is the production owned WPF dialog with packaged legal/privacy/third-party tabs and copyable read-only text.",
+                Url: null,
+                FocusedElementAutomationId: Keyboard.FocusedElement is DependencyObject focusedElement
+                    ? AutomationProperties.GetAutomationId(focusedElement)
+                    : null,
+                CaptureLogicalWidth: dialog.ActualWidth,
+                CaptureLogicalHeight: dialog.ActualHeight);
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private static string CreateExternalLinkOpenFailedMessageForHelpTour(string url)
+    {
+        var reason = UiText.Get("MainWindowMessage_ExternalLinkCouldNotBeOpened");
+        return UiText.Format("MainWindowMessage_ExternalLinkOpenFailed", url, reason);
+    }
+
+    private static AppIssueReportContext CreateDeterministicIssueReportContextForHelpTour() =>
+        new(
+            AppInfo.FeedbackUrl,
+            new AppDiagnosticsMetadata(
+                AppInfo.VersionText,
+                "visual-evidence-session",
+                ".NET visual evidence runtime",
+                "Windows visual evidence runner",
+                "X64"),
+            "visual-evidence",
+            DiagnosticsEnabled: false);
+
+    private async Task<HelpAboutLegalTourManifestCapture> CaptureOwnedNativeDialogWhenShownForHelpTourAsync(
+        string caption,
+        string outputDir,
+        string fileName,
+        string state,
+        string evidenceSummary,
+        string url)
+    {
+        var owner = new WindowInteropHelper(this).Handle;
+        if (owner == IntPtr.Zero)
+            throw new InvalidOperationException("Help/About/Legal tour could not resolve the FreeX owner window handle.");
+
+        return await Task.Run(() =>
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            IntPtr dialogHandle;
+            do
+            {
+                dialogHandle = FindOwnedNativeWindow(owner, caption);
+                if (dialogHandle != IntPtr.Zero)
+                    break;
+
+                Task.Delay(100).GetAwaiter().GetResult();
+            }
+            while (DateTime.UtcNow < deadline);
+
+            if (dialogHandle == IntPtr.Zero)
+                throw new InvalidOperationException($"Help/About/Legal tour did not find the owned native dialog '{caption}'.");
+
+            var size = CaptureNativeWindow(dialogHandle, outputDir, fileName);
+            PostMessage(dialogHandle, 0x0010, IntPtr.Zero, IntPtr.Zero);
+
+            return new HelpAboutLegalTourManifestCapture(
+                CaptureKey: $"help:{state}",
+                PairKey: $"interactive:help:{state}",
+                ScenarioId: "help-about-legal:external-link-guard",
+                State: state,
+                Surface: "Owned guarded external-link warning",
+                FileName: fileName,
+                OutputFileName: $"{fileName}.png",
+                CaptureMethod: "PrintWindow-owned-native-dialog",
+                EntryPath: caption,
+                EvidenceSummary: evidenceSummary,
+                Url: url,
+                FocusedElementAutomationId: null,
+                CaptureLogicalWidth: size.Width,
+                CaptureLogicalHeight: size.Height);
+        });
+    }
+
+    private static void DeleteHelpAboutLegalTourEvidence(string outputDir)
+    {
+        foreach (var fileName in HelpAboutLegalTourExpectedFileNames().Append(HelpAboutLegalTourManifestFileName))
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static void ValidateHelpAboutLegalTourEvidence(string outputDir)
+    {
+        var missing = HelpAboutLegalTourExpectedFileNames()
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+        if (missing.Length > 0)
+            throw new InvalidOperationException($"Help/About/Legal tour did not capture expected evidence: {string.Join(", ", missing)}.");
+    }
+
+    private static IReadOnlyList<string> HelpAboutLegalTourExpectedFileNames() =>
+    [
+        "freex_help_ribbon_command_context.png",
+        "freex_help_online_guarded_message.png",
+        "freex_feedback_guarded_message.png",
+        "freex_updates_guarded_message.png",
+        "freex_about_dialog.png",
+        "freex_legal_notices_dialog.png"
     ];
 
     private static T? FindDescendantByAutomationId<T>(DependencyObject root, string automationId)
@@ -3655,6 +3945,358 @@ public partial class MainWindow
         }
     }
 
+    private async Task CapturePageLayoutSetupTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeletePageLayoutSetupTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1240;
+        Height = 768;
+        await Task.Delay(700);
+
+        var sheet = EnsurePageLayoutSetupTourContext();
+        var captures = new List<PageLayoutSetupTourManifestCapture>();
+
+        try
+        {
+            captures.Add(await CapturePageLayoutSetupWindowStateAsync(
+                outputDir,
+                "ribbon-baseline",
+                "freex_page_layout_setup_ribbon_baseline",
+                "Page Layout tab shows Themes, Page Setup, Scale to Fit, Sheet Options, and Arrange groups with a seeded print area and print-title state."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "margins-menu-opened",
+                "freex_page_layout_setup_margins_menu_opened",
+                "Margins",
+                "Margins menu exposes Normal, Wide, Narrow, and Custom Margins choices."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "orientation-menu-opened",
+                "freex_page_layout_setup_orientation_menu_opened",
+                "Page Orientation",
+                "Orientation menu exposes Portrait and Landscape choices."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "size-menu-opened",
+                "freex_page_layout_setup_size_menu_opened",
+                "Paper Size",
+                "Size menu exposes implemented paper-size choices plus dialog-backed larger paper entries."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "print-area-menu-opened",
+                "freex_page_layout_setup_print_area_menu_opened",
+                "Print Area",
+                "Print Area menu exposes Set, disabled Add to Print Area, and Clear choices against the selected range."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "breaks-menu-opened",
+                "freex_page_layout_setup_breaks_menu_opened",
+                "Breaks",
+                "Breaks menu exposes Insert Page Break, Remove Page Break, and Reset All Page Breaks."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "background-menu-opened",
+                "freex_page_layout_setup_background_menu_opened",
+                "Background",
+                "Background menu exposes Choose Background and Delete Background without opening the native file picker."));
+
+            var pageSetupDialog = new PageSetupDialog(sheet, SheetGrid.SelectedRange, null, PageSetupInitialFocusTarget.PageOrientation)
+            {
+                Owner = this
+            };
+            try
+            {
+                pageSetupDialog.Show();
+                await Task.Delay(350);
+                pageSetupDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(pageSetupDialog, outputDir, "freex_page_layout_setup_dialog_page_tab");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "page-setup-dialog-page-tab",
+                    "freex_page_layout_setup_dialog_page_tab",
+                    "Page Setup dialog Page tab shows orientation, paper size, scaling, first-page number, print quality, and Print/Preview/Options/OK/Cancel buttons.",
+                    "Page Setup",
+                    "RenderTargetBitmap-page-setup-dialog-window",
+                    []));
+
+                pageSetupDialog.PageSetupTabs.SelectedItem = pageSetupDialog.MarginsTab;
+                await Task.Delay(250);
+                pageSetupDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(pageSetupDialog, outputDir, "freex_page_layout_setup_dialog_margins_tab");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "page-setup-dialog-margins-tab",
+                    "freex_page_layout_setup_dialog_margins_tab",
+                    "Page Setup dialog Margins tab shows left/right/top/bottom, header/footer margins, and center-on-page options.",
+                    "Page Setup",
+                    "RenderTargetBitmap-page-setup-dialog-window",
+                    []));
+
+                pageSetupDialog.PageSetupTabs.SelectedItem = pageSetupDialog.SheetTab;
+                await Task.Delay(250);
+                pageSetupDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(pageSetupDialog, outputDir, "freex_page_layout_setup_dialog_sheet_tab_print_titles");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "page-setup-dialog-sheet-tab-print-titles",
+                    "freex_page_layout_setup_dialog_sheet_tab_print_titles",
+                    "Page Setup dialog Sheet tab captures Print Titles fields, print area, print gridlines/headings, page order, comments, and error display options.",
+                    "Page Setup",
+                    "RenderTargetBitmap-page-setup-dialog-window",
+                    []));
+            }
+            finally
+            {
+                pageSetupDialog.Close();
+            }
+
+            ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(null, 1, 2));
+            PageLayoutScaleWidthBox.Text = "1 page";
+            PageLayoutScaleHeightBox.Text = "2 pages";
+            PageLayoutScalePercentBox.Text = "85%";
+            captures.Add(await CapturePageLayoutSetupWindowStateAsync(
+                outputDir,
+                "scale-to-fit-state",
+                "freex_page_layout_setup_scale_to_fit_state",
+                "Scale to Fit ribbon fields show fit-to-pages width/height and percent controls after applying the production scale command."));
+
+            PageLayoutViewGridlinesChk.IsChecked = false;
+            PageLayoutViewHeadingsChk.IsChecked = false;
+            PageLayoutPrintGridlinesChk.IsChecked = true;
+            PageLayoutPrintHeadingsChk.IsChecked = true;
+            sheet.ShowGridlines = false;
+            sheet.ShowHeadings = false;
+            sheet.PrintGridlines = true;
+            sheet.PrintHeadings = true;
+            UpdateViewport();
+            captures.Add(await CapturePageLayoutSetupWindowStateAsync(
+                outputDir,
+                "sheet-options-toggled",
+                "freex_page_layout_setup_sheet_options_toggled",
+                "Sheet Options shows display gridlines/headings off and print gridlines/headings on for the active sheet."));
+
+            var selectionPaneDialog = new SelectionPaneDialog(CreatePageLayoutSetupSelectionPaneItems())
+            {
+                Owner = this
+            };
+            try
+            {
+                selectionPaneDialog.Show();
+                await Task.Delay(350);
+                selectionPaneDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(selectionPaneDialog, outputDir, "freex_page_layout_setup_arrange_selection_pane_dialog");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "arrange-selection-pane-dialog",
+                    "freex_page_layout_setup_arrange_selection_pane_dialog",
+                    "Arrange group representative Selection Pane dialog shows object list, search/filter, visibility, rename, and move controls.",
+                    "Selection Pane",
+                    "RenderTargetBitmap-selection-pane-dialog-window",
+                    []));
+            }
+            finally
+            {
+                selectionPaneDialog.Close();
+            }
+
+            ValidatePageLayoutSetupTourEvidence(outputDir, captures);
+            await WritePageLayoutSetupTourManifestAsync(outputDir, captures);
+        }
+        catch
+        {
+            DeletePageLayoutSetupTourEvidence(outputDir);
+            throw;
+        }
+    }
+
+    private Sheet EnsurePageLayoutSetupTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Page Layout/Page Setup tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        for (uint row = 1; row <= 28; row++)
+        {
+            for (uint col = 1; col <= 8; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                if (row == 1)
+                    sheet.SetCell(address, new TextValue($"Print Field {col}"));
+                else if (col == 1)
+                    sheet.SetCell(address, new TextValue($"Page Row {row - 1}"));
+                else
+                    sheet.SetCell(address, new NumberValue(row * 10 + col));
+            }
+        }
+
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PaperSize = WorksheetPaperSize.Letter;
+        sheet.PageMargins = WorksheetPageMargins.Narrow;
+        sheet.PrintArea = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 18, 6));
+        sheet.PrintTitleRows = new WorksheetRepeatRange(1, 1);
+        sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
+        sheet.RowPageBreaks.Clear();
+        sheet.RowPageBreaks.Add(12);
+        sheet.ColumnPageBreaks.Clear();
+        sheet.ColumnPageBreaks.Add(5);
+        sheet.ScaleToFit = new WorksheetScaleToFit(90, null, null);
+        sheet.PrintGridlines = false;
+        sheet.PrintHeadings = false;
+        sheet.ShowGridlines = true;
+        sheet.ShowHeadings = true;
+        sheet.CenterHorizontallyOnPage = true;
+        sheet.PageOrder = WorksheetPageOrder.OverThenDown;
+        sheet.PageHeader = new WorksheetHeaderFooter("", "Page Layout Tour", "");
+        sheet.PageFooter = new WorksheetHeaderFooter("", "Page &[Page] of &[Pages]", "");
+
+        SelectViewPanesZoomTourRange(sheet, sheet.PrintArea.Value);
+        SetWorksheetViewMode(WorksheetViewMode.PageLayout);
+        SelectPageLayoutRibbonTabForTour();
+        SyncPageLayoutSetupTourControls(sheet);
+        UpdateViewport();
+        RefreshStatusBar();
+        return sheet;
+    }
+
+    private void SelectPageLayoutRibbonTabForTour()
+    {
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Page Layout"));
+    }
+
+    private void SyncPageLayoutSetupTourControls(Sheet sheet)
+    {
+        _suppressToolbarSync = true;
+        try
+        {
+            PageLayoutScaleWidthBox.Text = sheet.ScaleToFit.FitToPagesWide is { } wide ? $"{wide} page" : "Automatic";
+            PageLayoutScaleHeightBox.Text = sheet.ScaleToFit.FitToPagesTall is { } tall ? $"{tall} page" : "Automatic";
+            PageLayoutScalePercentBox.Text = $"{sheet.ScaleToFit.ScalePercent ?? 100}%";
+            PageLayoutViewGridlinesChk.IsChecked = sheet.ShowGridlines;
+            PageLayoutViewHeadingsChk.IsChecked = sheet.ShowHeadings;
+            PageLayoutPrintGridlinesChk.IsChecked = sheet.PrintGridlines;
+            PageLayoutPrintHeadingsChk.IsChecked = sheet.PrintHeadings;
+        }
+        finally
+        {
+            _suppressToolbarSync = false;
+        }
+    }
+
+    private async Task<PageLayoutSetupTourManifestCapture> CapturePageLayoutSetupWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string evidencePurpose)
+    {
+        SelectPageLayoutRibbonTabForTour();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 768);
+        return CreatePageLayoutSetupCapture(state, fileName, evidencePurpose, "Page Layout ribbon", "RenderTargetBitmap-window-full", []);
+    }
+
+    private async Task<PageLayoutSetupTourManifestCapture> CapturePageLayoutSetupMenuAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string commandName,
+        string evidencePurpose)
+    {
+        SelectPageLayoutRibbonTabForTour();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)
+            ?? throw new InvalidOperationException($"Page Layout/Page Setup tour could not find '{commandName}' ribbon button.");
+        var menu = button.ContextMenu
+            ?? throw new InvalidOperationException($"Page Layout/Page Setup tour could not find '{commandName}' context menu.");
+
+        OpenRibbonContextMenu(button, menu);
+        await Task.Delay(350);
+        menu.UpdateLayout();
+        await CaptureElementAsync(menu, outputDir, fileName);
+        var headers = new List<string>();
+        AddMenuHeaders(menu, headers);
+        menu.IsOpen = false;
+        return CreatePageLayoutSetupCapture(state, fileName, evidencePurpose, commandName, "RenderTargetBitmap-page-layout-context-menu", headers);
+    }
+
+    private PageLayoutSetupTourManifestCapture CreatePageLayoutSetupCapture(
+        string state,
+        string fileName,
+        string evidencePurpose,
+        string surface,
+        string captureMethod,
+        IReadOnlyList<string> menuHeaders)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return new PageLayoutSetupTourManifestCapture(
+            CaptureKey: $"interactive:page-layout-setup:{state}",
+            PairKey: $"interactive:page-layout-setup:{state}",
+            ScenarioId: "page-layout-setup:visual-evidence",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: captureMethod.Contains("window-full", StringComparison.Ordinal) ? ActualWidth : 0,
+            CaptureLogicalHeight: captureMethod.Contains("window-full", StringComparison.Ordinal) ? Math.Min(ActualHeight, 768) : 0,
+            SheetName: sheet?.Name ?? string.Empty,
+            ActiveRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
+            ViewMode: (sheet?.ViewMode ?? WorksheetViewMode.Normal).ToString(),
+            PageOrientation: (sheet?.PageOrientation ?? WorksheetPageOrientation.Portrait).ToString(),
+            PaperSize: (sheet?.PaperSize ?? WorksheetPaperSize.A4).ToString(),
+            PrintArea: sheet?.PrintArea?.ToString() ?? string.Empty,
+            PrintTitleRows: sheet?.PrintTitleRows?.ToString() ?? string.Empty,
+            PrintTitleColumns: sheet?.PrintTitleColumns?.ToString() ?? string.Empty,
+            RowPageBreaks: sheet?.RowPageBreaks.ToArray() ?? [],
+            ColumnPageBreaks: sheet?.ColumnPageBreaks.ToArray() ?? [],
+            ScaleToFit: sheet?.ScaleToFit.ToString() ?? WorksheetScaleToFit.Default.ToString(),
+            ShowGridlines: sheet?.ShowGridlines ?? true,
+            ShowHeadings: sheet?.ShowHeadings ?? true,
+            PrintGridlines: sheet?.PrintGridlines ?? false,
+            PrintHeadings: sheet?.PrintHeadings ?? false,
+            ScaleWidthText: PageLayoutScaleWidthBox.Text,
+            ScaleHeightText: PageLayoutScaleHeightBox.Text,
+            ScalePercentText: PageLayoutScalePercentBox.Text,
+            MenuHeaders: menuHeaders,
+            EvidencePurpose: evidencePurpose);
+    }
+
+    private static IReadOnlyList<SelectionPaneItem> CreatePageLayoutSetupSelectionPaneItems() =>
+    [
+        new(SelectionPaneObjectKind.Shape, Guid.Parse("11111111-1111-1111-1111-111111111111"), "Rectangle 1", true, false, true),
+        new(SelectionPaneObjectKind.TextBox, Guid.Parse("22222222-2222-2222-2222-222222222222"), "Text Box 1", true, true, true),
+        new(SelectionPaneObjectKind.Picture, Guid.Parse("33333333-3333-3333-3333-333333333333"), "Picture 1", false, true, false)
+    ];
+
+    private static void DeletePageLayoutSetupTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_page_layout_setup_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, PageLayoutSetupTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidatePageLayoutSetupTourEvidence(
+        string outputDir,
+        IReadOnlyList<PageLayoutSetupTourManifestCapture> captures)
+    {
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Page Layout/Page Setup tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
+    }
+
     private static T? FindDescendantByRibbonCommandName<T>(DependencyObject root, string commandName)
         where T : DependencyObject
     {
@@ -4126,6 +4768,279 @@ public partial class MainWindow
             if (!File.Exists(path))
                 throw new InvalidOperationException($"Data tools dialogs tour did not create planned capture '{capture.OutputFileName}'.");
         }
+    }
+
+    private async Task CaptureInsertObjectsLinksTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteInsertObjectsLinksTourEvidence(outputDir);
+
+        var captures = new List<InsertObjectsLinksTourManifestCapture>();
+
+        try
+        {
+            await ApplyScreenshotTourWidthAsync(new RibbonScreenshotTourWidth("1100", 1100));
+            EnsureInsertObjectsLinksTourContext();
+
+            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
+                outputDir,
+                new HyperlinkDialog("https://freex.example/insert-objects", "FreeX visual evidence") { Owner = this },
+                "freex_insert_hyperlink_dialog_address_focus",
+                "hyperlink-dialog-address-focus",
+                "Insert Hyperlink dialog opened with the address box as the initial focused/select-all target.",
+                "RenderTargetBitmap-hyperlink-dialog-window",
+                "UI-CMD-INSERT-009"));
+
+            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
+                outputDir,
+                new SymbolPickerDialog { Owner = this },
+                "freex_insert_symbol_picker_opened",
+                "symbol-picker-opened",
+                "Symbol picker opened on the production Symbols tab/grid with insert/cancel actions visible.",
+                "RenderTargetBitmap-symbol-picker-dialog-window",
+                "UI-CMD-INSERT-009"));
+
+            await ApplyInsertObjectsLinksTourModelEvidenceAsync();
+            captures.Add(await CaptureInsertObjectsLinksWindowStateAsync(
+                outputDir,
+                "freex_insert_objects_grid_visuals",
+                "inserted-objects-grid-visuals",
+                "Worksheet visual state after applying model-backed hyperlink, rectangle shape, text box, picture placeholder, threaded comment, and note evidence.",
+                "UI-CMD-INSERT-008"));
+
+            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
+                outputDir,
+                new ThreadedCommentDialog("D6", null) { Owner = this },
+                "freex_insert_new_comment_dialog",
+                "new-threaded-comment-dialog",
+                "New Comment dialog opened for D6 with the threaded-comment text box focused.",
+                "RenderTargetBitmap-threaded-comment-dialog-window",
+                "UI-CMD-INSERT-010"));
+
+            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
+                outputDir,
+                new TextEntryDialog(
+                    UiText.Get("MainWindowMessage_CommentTitle"),
+                    UiText.Format("MainWindowMessage_CommentForCellLabel", "E6"),
+                    "Note evidence") { Owner = this },
+                "freex_insert_new_note_dialog",
+                "new-note-dialog",
+                "New Note dialog opened for E6 with the note text box focused.",
+                "RenderTargetBitmap-note-dialog-window",
+                "UI-CMD-INSERT-010"));
+
+            ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());
+            if (_reviewCommentsWindow is null)
+                throw new InvalidOperationException("Insert objects/links/text tour could not open the threaded comments list surface.");
+
+            captures.Add(await CaptureInsertObjectsLinksOwnedWindowAsync(
+                outputDir,
+                _reviewCommentsWindow,
+                "freex_insert_comments_list_surface",
+                "comments-list-surface",
+                "Review/Insert comments list surface showing the seeded threaded comment.",
+                "RenderTargetBitmap-comment-list-window",
+                "UI-CMD-INSERT-010"));
+            _reviewCommentsWindow.Close();
+            _reviewCommentsWindow = null;
+
+            ReviewShowNotesBtn_Click(this, new RoutedEventArgs());
+            if (_reviewNotesWindow is null)
+                throw new InvalidOperationException("Insert objects/links/text tour could not open the notes list surface.");
+
+            captures.Add(await CaptureInsertObjectsLinksOwnedWindowAsync(
+                outputDir,
+                _reviewNotesWindow,
+                "freex_insert_notes_list_surface",
+                "notes-list-surface",
+                "Review/Insert notes list surface showing the seeded note.",
+                "RenderTargetBitmap-note-list-window",
+                "UI-CMD-INSERT-010"));
+            _reviewNotesWindow.Close();
+            _reviewNotesWindow = null;
+
+            ValidateInsertObjectsLinksTourEvidence(outputDir, captures);
+            await WriteInsertObjectsLinksTourManifestAsync(outputDir, captures);
+        }
+        catch
+        {
+            DeleteInsertObjectsLinksTourEvidence(outputDir);
+            throw;
+        }
+    }
+
+    private async Task<InsertObjectsLinksTourManifestCapture> CaptureInsertObjectsLinksDialogAsync(
+        string outputDir,
+        Window dialog,
+        string fileName,
+        string state,
+        string evidenceSummary,
+        string captureMethod,
+        string commandRow)
+    {
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            await Task.Delay(300);
+            dialog.UpdateLayout();
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+            return CreateInsertObjectsLinksTourCapture(
+                state,
+                fileName,
+                evidenceSummary,
+                captureMethod,
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                commandRow);
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private async Task<InsertObjectsLinksTourManifestCapture> CaptureInsertObjectsLinksOwnedWindowAsync(
+        string outputDir,
+        Window window,
+        string fileName,
+        string state,
+        string evidenceSummary,
+        string captureMethod,
+        string commandRow)
+    {
+        window.Activate();
+        await Task.Delay(250);
+        window.UpdateLayout();
+        await CaptureWindowElementForScreenshotTourAsync(window, outputDir, fileName);
+        return CreateInsertObjectsLinksTourCapture(
+            state,
+            fileName,
+            evidenceSummary,
+            captureMethod,
+            window.ActualWidth,
+            window.ActualHeight,
+            commandRow);
+    }
+
+    private async Task<InsertObjectsLinksTourManifestCapture> CaptureInsertObjectsLinksWindowStateAsync(
+        string outputDir,
+        string fileName,
+        string state,
+        string evidenceSummary,
+        string commandRow)
+    {
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateInsertObjectsLinksTourCapture(
+            state,
+            fileName,
+            evidenceSummary,
+            "RenderTargetBitmap-window-full",
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            commandRow);
+    }
+
+    private InsertObjectsLinksTourManifestCapture CreateInsertObjectsLinksTourCapture(
+        string state,
+        string fileName,
+        string evidenceSummary,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        string commandRow) =>
+        new(
+            CaptureKey: $"insert-objects-links:{state}",
+            PairKey: $"interactive:insert-objects-links:{state}",
+            ScenarioId: "insert:objects-links-text",
+            State: state,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CounterpartFileName: $"interactive_insert_objects_links_{state.Replace("-", "_", StringComparison.Ordinal)}.png",
+            EvidenceSummary: evidenceSummary,
+            CommandRow: commandRow,
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight);
+
+    private void EnsureInsertObjectsLinksTourContext()
+    {
+        SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshReviewCommentNoteCommandStates();
+    }
+
+    private async Task ApplyInsertObjectsLinksTourModelEvidenceAsync()
+    {
+        var sheetId = _currentSheetId;
+        ExecuteInsertObjectsLinksTourCommand(new SetHyperlinkCommand(
+            sheetId,
+            new CellAddress(sheetId, 2, 2),
+            "https://freex.example/insert-objects",
+            "FreeX hyperlink",
+            new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage, "FreeX visual evidence", "")), "Insert Hyperlink");
+        ExecuteInsertObjectsLinksTourCommand(
+            new AddDrawingShapeCommand(sheetId, new CellAddress(sheetId, 4, 2), DrawingShapeKind.Rectangle),
+            "Insert Shape");
+        ExecuteInsertObjectsLinksTourCommand(
+            new AddTextBoxCommand(sheetId, new CellAddress(sheetId, 4, 5), "Text Box evidence"),
+            "Insert Text Box");
+        ExecuteInsertObjectsLinksTourCommand(
+            InsertObjectPlacementPlanner.CreateInsertPictureCommand(
+                sheetId,
+                new CellAddress(sheetId, 8, 2),
+                [1, 2, 3, 4],
+                "image/png"),
+            "Insert Picture");
+        ExecuteInsertObjectsLinksTourCommand(
+            new SetThreadedCommentCommand(sheetId, new CellAddress(sheetId, 6, 4), "Threaded comment evidence"),
+            "Threaded Comment");
+        ExecuteInsertObjectsLinksTourCommand(
+            new SetCommentCommand(sheetId, new CellAddress(sheetId, 6, 5), "Note evidence"),
+            "Comment");
+
+        SetActiveCell(new CellAddress(sheetId, 4, 2));
+        EnsureCellVisible(new CellAddress(sheetId, 8, 2));
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshReviewCommentNoteCommandStates();
+        await Task.Delay(350);
+    }
+
+    private void ExecuteInsertObjectsLinksTourCommand(IWorkbookCommand command, string title)
+    {
+        if (!TryExecuteCommand(command, title, out var outcome))
+            throw new InvalidOperationException($"Insert objects/links/text tour failed to apply '{title}': {outcome.ErrorMessage}");
+    }
+
+    private static void DeleteInsertObjectsLinksTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, InsertObjectsLinksTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateInsertObjectsLinksTourEvidence(
+        string outputDir,
+        IReadOnlyList<InsertObjectsLinksTourManifestCapture> captures)
+    {
+        if (captures.Count != 7)
+            throw new InvalidOperationException($"Insert objects/links/text tour expected 7 captures but created {captures.Count}.");
+
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Insert objects/links/text tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
     }
 
     private async Task CaptureInsertTablesChartsTourAsync(string outputDir)
@@ -5728,6 +6643,67 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest);
     }
 
+    private static async Task WriteInsertObjectsLinksTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<InsertObjectsLinksTourManifestCapture> captures)
+    {
+        var manifest = new InsertObjectsLinksTourManifest(
+            Tool: "FREEX_INSERT_OBJECTS_LINKS_TOUR",
+            EvidenceFamily: "insert-objects-links-text",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "insert:objects-links-text",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_insert_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds:
+            [
+                "UI-CAT-INSERT-003",
+                "UI-CMD-INSERT-008",
+                "UI-CMD-INSERT-009",
+                "UI-CMD-INSERT-010"
+            ],
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new InsertObjectsLinksTourManifestPairing(
+                "interactive:insert-objects-links:<State>",
+                "manual-or-excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, or screen capture input is used."
+                    : "FreeX WPF window/dialog must own foreground focus before RenderTargetBitmap capture."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Insert Hyperlink dialog with address box default focus/select-all behavior",
+                "Symbol picker dialog with Symbols tab/grid and Insert/Cancel controls",
+                "Model-backed worksheet visuals for hyperlink, rectangle shape, text box, picture placeholder, threaded comment, and note",
+                "New Comment threaded-comment dialog",
+                "New Note text-entry dialog",
+                "Threaded comments list surface",
+                "Notes list surface"
+            ],
+            Limitations:
+            [
+                "This tour renders FreeX WPF surfaces in process with RenderTargetBitmap; it is not foreground CopyFromScreen or physical mouse/keytip/UIA proof.",
+                "The picture evidence uses the production InsertPictureCommand sizing/fallback path with deterministic placeholder bytes rather than opening the native Windows file picker.",
+                "Dialog captures show production initial states and focus targets but do not submit hyperlink, symbol, comment, or note dialogs through keyboard/mouse input.",
+                "The inserted worksheet object evidence is applied through command model calls so save/reload persistence and selection-handle drag evidence remain separate.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, InsertObjectsLinksTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.InsertObjectsLinksTourManifest);
+    }
+
     private static async Task WriteViewPanesZoomTourManifestAsync(
         string outputDir,
         IReadOnlyList<ViewPanesZoomTourManifestCapture> captures)
@@ -5789,6 +6765,72 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, ViewPanesZoomTourManifestFileName);
         await using var stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.ViewPanesZoomTourManifest);
+    }
+
+    private static async Task WritePageLayoutSetupTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<PageLayoutSetupTourManifestCapture> captures)
+    {
+        var manifest = new PageLayoutSetupTourManifest(
+            Tool: "FREEX_PAGE_LAYOUT_SETUP_TOUR",
+            EvidenceFamily: "page-layout-setup",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "page-layout-setup:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_page_layout_setup_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds:
+            [
+                "UI-CAT-PAGE-001",
+                "UI-CAT-PAGE-001A",
+                "UI-CAT-DIALOG-001B",
+                "UI-CMD-PAGE-001",
+                "UI-CMD-PAGE-002",
+                "UI-CMD-PAGE-003",
+                "UI-CMD-PAGE-004",
+                "UI-CMD-PAGE-005",
+                "UI-CMD-PAGE-006",
+                "UI-CMD-DRAW-002"
+            ],
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new PageLayoutSetupTourManifestPairing(
+                "interactive:page-layout-setup:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no foreground mouse, keyboard, native file dialog, or screen capture input was used."
+                    : "Abort before file write unless the expected FreeX window/dialog owns foreground focus for each capture."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Page Layout ribbon baseline with Page Setup, Scale to Fit, Sheet Options, and Arrange groups visible.",
+                "Margins, Orientation, Size, Print Area, Breaks, and Background menu surfaces.",
+                "Page Setup dialog Page, Margins, and Sheet tabs, including Print Titles fields.",
+                "Scale to Fit field state and Sheet Options print/display checkbox state.",
+                "Arrange representative Selection Pane dialog surface."
+            ],
+            Limitations:
+            [
+                "RenderTargetBitmap evidence only; it is not foreground CopyFromScreen proof.",
+                "The tour drives FreeX in process and captures WPF windows/menus without physical mouse, keyboard, keytip, or UIA invocation.",
+                "Background captures the supported menu surface only; the native image picker, image tiling display, replacement, clear foreground proof, and persistence remain open.",
+                "Page Setup dialog captures are visual states only; OK/Cancel/Escape/default-button execution, range-picker collapse/restore, Print/Preview/Options actions, and printer options are not executed.",
+                "Arrange evidence uses a deterministic representative Selection Pane dialog item list rather than live overlapping drawing objects on the sheet.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, PageLayoutSetupTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.PageLayoutSetupTourManifest);
     }
 
     private static async Task WriteFormulaDiagnosticsTourManifestAsync(
@@ -6064,6 +7106,53 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, OptionsAccountTourManifestFileName);
         await using var stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.OptionsAccountTourManifest);
+    }
+
+    private static async Task WriteHelpAboutLegalTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<HelpAboutLegalTourManifestCapture> captures)
+    {
+        var manifest = new HelpAboutLegalTourManifest(
+            Tool: "FREEX_HELP_ABOUT_LEGAL_TOUR",
+            EvidenceFamily: "help-about-legal",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "help-about-legal:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_<Surface>_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#UI-CMD-HELP-001",
+            EntryPaths:
+            [
+                "Help tab",
+                "Help > Help Online",
+                "Help > Feedback",
+                "Help > Check for Updates",
+                "Help > About FreeX",
+                "Help > Legal Notices"
+            ],
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-WPF-windows-and-PrintWindow-owned-native-dialogs",
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process WPF RenderTargetBitmap captures plus owned native guarded-message PrintWindow captures; no global mouse, keyboard, UIA input, or external browser launch is used."
+                    : "Abort before WPF window file writes unless the expected FreeX window owns foreground focus; owned native guarded messages are captured by HWND ownership and caption."),
+            ExternalBrowserLaunched: false,
+            PlannedCaptureCount: HelpAboutLegalTourExpectedFileNames().Count,
+            ActualCaptureCount: captures.Count,
+            Captures: captures,
+            Limitations:
+            [
+                "This in-app tour captures real FreeX WPF Help, About, and Legal Notices surfaces with RenderTargetBitmap.",
+                "The Help Online, Feedback, and Check for Updates captures intentionally render FreeX-owned guarded failure messages instead of launching a browser or external process.",
+                "The tour does not synthesize foreground mouse clicks, keytips, or UI Automation invoke; those interaction paths remain separate from this visual evidence.",
+                "The About and Legal Notices dialogs are shown as owned WPF windows for deterministic capture, then closed directly by the tour.",
+                "No Microsoft Excel counterpart capture is produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, HelpAboutLegalTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HelpAboutLegalTourManifest);
     }
 
     private static async Task WriteDataToolsDialogsTourManifestAsync(
@@ -6587,6 +7676,41 @@ public partial class MainWindow
 
     private sealed record OptionsAccountTourNativeCaptureSize(int Width, int Height);
 
+    private sealed record HelpAboutLegalTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> EntryPaths,
+        string CaptureStatus,
+        string CaptureMethod,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        bool ExternalBrowserLaunched,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        IReadOnlyList<HelpAboutLegalTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record HelpAboutLegalTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        string EntryPath,
+        string EvidenceSummary,
+        string? Url,
+        string? FocusedElementAutomationId,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
+
     private sealed record DataToolsDialogsTourContext(
         Sheet Sheet,
         GridRange TextToColumnsRange,
@@ -6984,6 +8108,46 @@ public partial class MainWindow
         bool ZoomInButtonEnabled,
         string FormulaBarText);
 
+    private sealed record InsertObjectsLinksTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        InsertObjectsLinksTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<InsertObjectsLinksTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record InsertObjectsLinksTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record InsertObjectsLinksTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string FileName,
+        string OutputFileName,
+        string CounterpartFileName,
+        string EvidenceSummary,
+        string CommandRow,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
+
     private sealed record ViewPanesZoomTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -7045,6 +8209,64 @@ public partial class MainWindow
         bool ViewFormulaBarChecked,
         bool SplitButtonChecked);
 
+    private sealed record PageLayoutSetupTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        PageLayoutSetupTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<PageLayoutSetupTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record PageLayoutSetupTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record PageLayoutSetupTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SheetName,
+        string ActiveRange,
+        string ViewMode,
+        string PageOrientation,
+        string PaperSize,
+        string PrintArea,
+        string PrintTitleRows,
+        string PrintTitleColumns,
+        IReadOnlyList<uint> RowPageBreaks,
+        IReadOnlyList<uint> ColumnPageBreaks,
+        string ScaleToFit,
+        bool ShowGridlines,
+        bool ShowHeadings,
+        bool PrintGridlines,
+        bool PrintHeadings,
+        string ScaleWidthText,
+        string ScaleHeightText,
+        string ScalePercentText,
+        IReadOnlyList<string> MenuHeaders,
+        string EvidencePurpose);
+
     private sealed record FormulaDiagnosticsTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -7104,15 +8326,18 @@ public partial class MainWindow
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(OptionsAccountTourManifest))]
+    [JsonSerializable(typeof(HelpAboutLegalTourManifest))]
     [JsonSerializable(typeof(KeyTipOverlayTourManifest))]
     [JsonSerializable(typeof(QatUndoRedoTourManifest))]
     [JsonSerializable(typeof(SheetTabTourManifest))]
     [JsonSerializable(typeof(TitlebarWindowChromeTourManifest))]
     [JsonSerializable(typeof(FormulaBarNameBoxTourManifest))]
     [JsonSerializable(typeof(StatusFooterTourManifest))]
+    [JsonSerializable(typeof(InsertObjectsLinksTourManifest))]
     [JsonSerializable(typeof(DataToolsDialogsTourManifest))]
     [JsonSerializable(typeof(InsertTablesChartsTourManifest))]
     [JsonSerializable(typeof(ViewPanesZoomTourManifest))]
+    [JsonSerializable(typeof(PageLayoutSetupTourManifest))]
     [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
