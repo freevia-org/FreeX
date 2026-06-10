@@ -76,6 +76,8 @@ public partial class MainWindow
     private const string PageLayoutSetupTourOutputDirectoryName = "page-layout-setup-tour";
     private const string FormulaDiagnosticsTourManifestFileName = "formula_diagnostics_tour_manifest.json";
     private const string FormulaDiagnosticsTourOutputDirectoryName = "formula-diagnostics-tour";
+    private const string FormulaAuthoringNamesTourManifestFileName = "formula_authoring_names_tour_manifest.json";
+    private const string FormulaAuthoringNamesTourOutputDirectoryName = "formula-authoring-names-tour";
     private const string ReviewCommentsProtectionTourManifestFileName = "review_comments_protection_tour_manifest.json";
     private const string ReviewCommentsProtectionTourOutputDirectoryName = "review-comments-protection-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
@@ -161,8 +163,9 @@ public partial class MainWindow
         var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
         var pageLayoutSetupTour = Environment.GetEnvironmentVariable("FREEX_PAGE_LAYOUT_SETUP_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
+        var formulaAuthoringNamesTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_AUTHORING_NAMES_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !formulaDiagnosticsTour && !reviewCommentsProtectionTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -179,7 +182,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, formulaDiagnosticsTour, reviewCommentsProtectionTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -226,6 +229,7 @@ public partial class MainWindow
         bool viewPanesZoomTour,
         bool pageLayoutSetupTour,
         bool formulaDiagnosticsTour,
+        bool formulaAuthoringNamesTour,
         bool reviewCommentsProtectionTour)
     {
         if (ribbonPlan is not null)
@@ -289,6 +293,9 @@ public partial class MainWindow
             await CapturePageLayoutSetupTourAsync(Path.Combine(outputDir, PageLayoutSetupTourOutputDirectoryName));
         if (formulaDiagnosticsTour)
             await CaptureFormulaDiagnosticsTourAsync(Path.Combine(outputDir, FormulaDiagnosticsTourOutputDirectoryName));
+
+        if (formulaAuthoringNamesTour)
+            await CaptureFormulaAuthoringNamesTourAsync(Path.Combine(outputDir, FormulaAuthoringNamesTourOutputDirectoryName));
 
         if (reviewCommentsProtectionTour)
             await CaptureReviewCommentsProtectionTourAsync(Path.Combine(outputDir, ReviewCommentsProtectionTourOutputDirectoryName));
@@ -4679,6 +4686,439 @@ public partial class MainWindow
                 $"Formula diagnostics tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
     }
 
+    private async Task CaptureFormulaAuthoringNamesTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteFormulaAuthoringNamesTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 768;
+        await Task.Delay(700);
+
+        var context = EnsureFormulaAuthoringNamesTourContext();
+        var captures = new List<FormulaAuthoringNamesTourManifestCapture>();
+        InsertFunctionDialog? insertFunctionDialog = null;
+        NamedRangeDialog? nameManagerDialog = null;
+        NameDefinitionDialog? defineNameDialog = null;
+        CreateNamesFromSelectionDialog? createFromSelectionDialog = null;
+        ContextMenu? openMenu = null;
+
+        try
+        {
+            SelectFormulaAuthoringNamesRibbonTabForTour();
+            SetSelectionRange(context.AuthoringRange, context.AuthoringRange.Start);
+            UpdateViewport();
+            RefreshToolbar();
+            RefreshStatusBar();
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(350);
+
+            captures.Add(await CaptureFormulaAuthoringNamesWindowStateAsync(
+                outputDir,
+                "formulas-tab-seeded",
+                "freex_formula_authoring_names_formulas_tab",
+                "Formulas ribbon baseline over seeded revenue/cost/profit cells with workbook names already defined."));
+
+            captures.Add(await CaptureFormulaAuthoringNamesMenuAsync(
+                outputDir,
+                "autosum-menu-opened",
+                "freex_formula_authoring_names_autosum_menu_opened",
+                "AutoSum",
+                "Formulas tab AutoSum split-menu showing Sum, Average, Count, Max/Min, and More Functions."));
+
+            captures.Add(await CaptureFormulaAuthoringNamesFunctionMenuAsync(
+                outputDir,
+                "logical-functions-menu-opened",
+                "freex_formula_authoring_names_logical_functions_menu_opened",
+                "Logical Functions",
+                FormulaLogicalBtn_Click,
+                "Logical Functions category menu opened from the Formulas Function Library group."));
+
+            captures.Add(await CaptureFormulaAuthoringNamesFunctionMenuAsync(
+                outputDir,
+                "use-in-formula-menu-opened",
+                "freex_formula_authoring_names_use_in_formula_menu_opened",
+                "Use in Formula",
+                UseInFormulaBtn_Click,
+                "Use in Formula menu listing seeded workbook defined names that can be inserted into the active formula."));
+
+            insertFunctionDialog = new InsertFunctionDialog
+            {
+                Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+            insertFunctionDialog.Show();
+            insertFunctionDialog.Activate();
+            insertFunctionDialog.UpdateLayout();
+            await ConfigureInsertFunctionDialogForFormulaAuthoringTourAsync(insertFunctionDialog);
+            await CaptureWindowElementForScreenshotTourAsync(insertFunctionDialog, outputDir, "freex_formula_authoring_names_insert_function_lookup_xlookup");
+            captures.Add(CreateFormulaAuthoringNamesCapture(
+                "insert-function-lookup-xlookup",
+                "freex_formula_authoring_names_insert_function_lookup_xlookup",
+                "Insert Function dialog",
+                "RenderTargetBitmap-insert-function-dialog",
+                insertFunctionDialog.ActualWidth,
+                insertFunctionDialog.ActualHeight,
+                "Production Insert Function dialog with Lookup & Reference selected and XLOOKUP highlighted."));
+            insertFunctionDialog.Close();
+            insertFunctionDialog = null;
+
+            nameManagerDialog = new NamedRangeDialog(_workbook, _commandBus, context.AuthoringRange)
+            {
+                Owner = this
+            };
+            nameManagerDialog.Show();
+            nameManagerDialog.Activate();
+            nameManagerDialog.UpdateLayout();
+            await Task.Delay(450);
+            await CaptureWindowElementForScreenshotTourAsync(nameManagerDialog, outputDir, "freex_formula_authoring_names_name_manager_dialog");
+            captures.Add(CreateFormulaAuthoringNamesCapture(
+                "name-manager-dialog",
+                "freex_formula_authoring_names_name_manager_dialog",
+                "Name Manager dialog",
+                "RenderTargetBitmap-name-manager-dialog",
+                nameManagerDialog.ActualWidth,
+                nameManagerDialog.ActualHeight,
+                "Production Name Manager dialog showing seeded Revenue, Cost, Profit, and RegionLabels names."));
+            nameManagerDialog.Close();
+            nameManagerDialog = null;
+
+            defineNameDialog = new NameDefinitionDialog(
+                new NameDefinitionDialogResult(
+                    "ProfitMargin",
+                    "Workbook",
+                    "Formula authoring tour calculated margin range.",
+                    FormatFormulaAuthoringNamesRangeReference(context.Sheet, context.MarginRange)),
+                GetFormulaAuthoringNamesScopeOptions(),
+                isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _),
+                validateName: _workbook.ValidateNamedRangeName)
+            {
+                Owner = this
+            };
+            defineNameDialog.Show();
+            defineNameDialog.Activate();
+            defineNameDialog.UpdateLayout();
+            await Task.Delay(450);
+            await CaptureWindowElementForScreenshotTourAsync(defineNameDialog, outputDir, "freex_formula_authoring_names_define_name_dialog");
+            captures.Add(CreateFormulaAuthoringNamesCapture(
+                "define-name-dialog",
+                "freex_formula_authoring_names_define_name_dialog",
+                "Define Name dialog",
+                "RenderTargetBitmap-define-name-dialog",
+                defineNameDialog.ActualWidth,
+                defineNameDialog.ActualHeight,
+                "Production Define Name dialog with the name box focused/select-all and Refers To seeded from the selected formula range."));
+            defineNameDialog.Close();
+            defineNameDialog = null;
+
+            createFromSelectionDialog = new CreateNamesFromSelectionDialog
+            {
+                Owner = this
+            };
+            createFromSelectionDialog.Show();
+            createFromSelectionDialog.Activate();
+            createFromSelectionDialog.UpdateLayout();
+            await Task.Delay(450);
+            await CaptureWindowElementForScreenshotTourAsync(createFromSelectionDialog, outputDir, "freex_formula_authoring_names_create_from_selection_dialog");
+            captures.Add(CreateFormulaAuthoringNamesCapture(
+                "create-from-selection-dialog",
+                "freex_formula_authoring_names_create_from_selection_dialog",
+                "Create from Selection dialog",
+                "RenderTargetBitmap-create-from-selection-dialog",
+                createFromSelectionDialog.ActualWidth,
+                createFromSelectionDialog.ActualHeight,
+                "Production Create from Selection dialog with Top row and Left column defaults visible."));
+            createFromSelectionDialog.Close();
+            createFromSelectionDialog = null;
+
+            ValidateFormulaAuthoringNamesTourEvidence(outputDir, captures);
+            await WriteFormulaAuthoringNamesTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteFormulaAuthoringNamesTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (openMenu is { IsOpen: true })
+                openMenu.IsOpen = false;
+            if (insertFunctionDialog is { IsVisible: true })
+                insertFunctionDialog.Close();
+            if (nameManagerDialog is { IsVisible: true })
+                nameManagerDialog.Close();
+            if (defineNameDialog is { IsVisible: true })
+                defineNameDialog.Close();
+            if (createFromSelectionDialog is { IsVisible: true })
+                createFromSelectionDialog.Close();
+        }
+
+        async Task<FormulaAuthoringNamesTourManifestCapture> CaptureFormulaAuthoringNamesMenuAsync(
+            string captureOutputDir,
+            string state,
+            string fileName,
+            string commandName,
+            string evidenceSummary)
+        {
+            SelectFormulaAuthoringNamesRibbonTabForTour();
+            var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)
+                ?? throw new InvalidOperationException($"Formula authoring/names tour could not find '{commandName}' ribbon button.");
+            var menu = button.ContextMenu
+                ?? throw new InvalidOperationException($"Formula authoring/names tour could not find '{commandName}' context menu.");
+
+            OpenRibbonContextMenu(button, menu);
+            openMenu = menu;
+            await Task.Delay(350);
+            menu.UpdateLayout();
+            await CaptureElementAsync(menu, captureOutputDir, fileName);
+            var headers = new List<string>();
+            AddMenuHeaders(menu, headers);
+            var capture = CreateFormulaAuthoringNamesCapture(
+                state,
+                fileName,
+                $"{commandName} menu",
+                "RenderTargetBitmap-formulas-context-menu",
+                menu.ActualWidth,
+                menu.ActualHeight,
+                evidenceSummary,
+                headers);
+            menu.IsOpen = false;
+            openMenu = null;
+            return capture;
+        }
+
+        async Task<FormulaAuthoringNamesTourManifestCapture> CaptureFormulaAuthoringNamesFunctionMenuAsync(
+            string captureOutputDir,
+            string state,
+            string fileName,
+            string commandName,
+            RoutedEventHandler openHandler,
+            string evidenceSummary)
+        {
+            SelectFormulaAuthoringNamesRibbonTabForTour();
+            var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)
+                ?? throw new InvalidOperationException($"Formula authoring/names tour could not find '{commandName}' ribbon button.");
+
+            openHandler(button, new RoutedEventArgs(ButtonBase.ClickEvent, button));
+            var menu = button.ContextMenu
+                ?? throw new InvalidOperationException($"Formula authoring/names tour did not open the '{commandName}' context menu.");
+            openMenu = menu;
+            await Task.Delay(350);
+            menu.UpdateLayout();
+            await CaptureElementAsync(menu, captureOutputDir, fileName);
+            var headers = new List<string>();
+            AddMenuHeaders(menu, headers);
+            var capture = CreateFormulaAuthoringNamesCapture(
+                state,
+                fileName,
+                $"{commandName} menu",
+                "RenderTargetBitmap-formulas-context-menu",
+                menu.ActualWidth,
+                menu.ActualHeight,
+                evidenceSummary,
+                headers);
+            menu.IsOpen = false;
+            openMenu = null;
+            return capture;
+        }
+    }
+
+    private FormulaAuthoringNamesTourContext EnsureFormulaAuthoringNamesTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Formula authoring/names tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        for (uint row = 1; row <= 8; row++)
+        {
+            for (uint col = 1; col <= 6; col++)
+                sheet.ClearCell(new CellAddress(sheet.Id, row, col));
+        }
+
+        var values = new (uint Row, uint Col, ScalarValue Value)[]
+        {
+            (1, 1, new TextValue("Region")),
+            (1, 2, new TextValue("Revenue")),
+            (1, 3, new TextValue("Cost")),
+            (1, 4, new TextValue("Profit")),
+            (1, 5, new TextValue("Margin")),
+            (2, 1, new TextValue("North")),
+            (3, 1, new TextValue("South")),
+            (4, 1, new TextValue("East")),
+            (5, 1, new TextValue("West")),
+            (2, 2, new NumberValue(4200)),
+            (3, 2, new NumberValue(3900)),
+            (4, 2, new NumberValue(5100)),
+            (5, 2, new NumberValue(4700)),
+            (2, 3, new NumberValue(2600)),
+            (3, 3, new NumberValue(2400)),
+            (4, 3, new NumberValue(3150)),
+            (5, 3, new NumberValue(2950))
+        };
+
+        foreach (var (row, col, value) in values)
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), value);
+
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 4), "B2-C2");
+        sheet.SetFormula(new CellAddress(sheet.Id, 3, 4), "B3-C3");
+        sheet.SetFormula(new CellAddress(sheet.Id, 4, 4), "B4-C4");
+        sheet.SetFormula(new CellAddress(sheet.Id, 5, 4), "B5-C5");
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 5), "D2/B2");
+        sheet.SetFormula(new CellAddress(sheet.Id, 3, 5), "D3/B3");
+        sheet.SetFormula(new CellAddress(sheet.Id, 4, 5), "D4/B4");
+        sheet.SetFormula(new CellAddress(sheet.Id, 5, 5), "D5/B5");
+        sheet.SetFormula(new CellAddress(sheet.Id, 7, 2), "SUM(Revenue)");
+        sheet.SetFormula(new CellAddress(sheet.Id, 7, 4), "SUM(Profit)");
+
+        var regionLabels = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 5, 1));
+        var revenueRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 5, 2));
+        var costRange = new GridRange(new CellAddress(sheet.Id, 2, 3), new CellAddress(sheet.Id, 5, 3));
+        var profitRange = new GridRange(new CellAddress(sheet.Id, 2, 4), new CellAddress(sheet.Id, 5, 4));
+        var marginRange = new GridRange(new CellAddress(sheet.Id, 2, 5), new CellAddress(sheet.Id, 5, 5));
+        var authoringRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 5));
+
+        _workbook.DefineNamedRange("RegionLabels", regionLabels);
+        _workbook.DefineNamedRange("Revenue", revenueRange);
+        _workbook.DefineNamedRange("Cost", costRange);
+        _workbook.DefineNamedRange("Profit", profitRange);
+
+        SetSelectionRange(authoringRange, new CellAddress(sheet.Id, 2, 5));
+        EnsureCellVisible(authoringRange.Start);
+        RecalculateWorkbook();
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+
+        return new FormulaAuthoringNamesTourContext(
+            Sheet: sheet,
+            AuthoringRange: authoringRange,
+            RevenueRange: revenueRange,
+            CostRange: costRange,
+            ProfitRange: profitRange,
+            MarginRange: marginRange,
+            DefinedNames: ["Cost", "Profit", "RegionLabels", "Revenue"],
+            SummaryFormulaCell: new CellAddress(sheet.Id, 7, 2),
+            ProfitFormulaCell: new CellAddress(sheet.Id, 2, 4));
+    }
+
+    private void SelectFormulaAuthoringNamesRibbonTabForTour()
+    {
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Formulas"));
+        UpdateLayout();
+    }
+
+    private IReadOnlyList<string> GetFormulaAuthoringNamesScopeOptions() =>
+        new[] { "Workbook" }
+            .Concat(_workbook.Sheets.Select(sheet => sheet.Name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    private static string FormatFormulaAuthoringNamesRangeReference(Sheet sheet, GridRange range) =>
+        $"{sheet.Name}!{range.Start.ToA1()}:{range.End.ToA1()}";
+
+    private async Task ConfigureInsertFunctionDialogForFormulaAuthoringTourAsync(InsertFunctionDialog dialog)
+    {
+        await Task.Delay(250);
+        var categoryBox = FindDescendant<ComboBox>(dialog)
+            ?? throw new InvalidOperationException("Formula authoring/names tour could not find Insert Function category box.");
+        categoryBox.SelectedItem = "Lookup & Reference";
+        categoryBox.UpdateLayout();
+        await Task.Delay(250);
+
+        var functionList = FindDescendant<ListBox>(dialog)
+            ?? throw new InvalidOperationException("Formula authoring/names tour could not find Insert Function function list.");
+        foreach (var item in functionList.Items)
+        {
+            if (item is InsertFunctionCatalogEntry { Name: "XLOOKUP" })
+            {
+                functionList.SelectedItem = item;
+                functionList.ScrollIntoView(item);
+                break;
+            }
+        }
+
+        dialog.UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+    }
+
+    private async Task<FormulaAuthoringNamesTourManifestCapture> CaptureFormulaAuthoringNamesWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string evidenceSummary)
+    {
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 768);
+        return CreateFormulaAuthoringNamesCapture(
+            state,
+            fileName,
+            "Formulas ribbon and worksheet",
+            "RenderTargetBitmap-window-full",
+            ActualWidth,
+            Math.Min(ActualHeight, 768),
+            evidenceSummary);
+    }
+
+    private FormulaAuthoringNamesTourManifestCapture CreateFormulaAuthoringNamesCapture(
+        string state,
+        string fileName,
+        string surface,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        string evidenceSummary,
+        IReadOnlyList<string>? menuHeaders = null)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return new FormulaAuthoringNamesTourManifestCapture(
+            CaptureKey: $"interactive:formula-authoring-names:{state}",
+            PairKey: $"interactive:formula-authoring-names:{state}",
+            ScenarioId: "formula-authoring-names:visual-evidence",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            SheetName: sheet?.Name ?? string.Empty,
+            SelectedRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
+            FormulaBarText: FormulaBar.Text,
+            NameCount: _workbook.NamedRanges.Count,
+            DefinedNames: _workbook.NamedRanges.Keys.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToArray(),
+            MenuHeaders: menuHeaders ?? [],
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private static void DeleteFormulaAuthoringNamesTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_formula_authoring_names_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, FormulaAuthoringNamesTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateFormulaAuthoringNamesTourEvidence(
+        string outputDir,
+        IReadOnlyList<FormulaAuthoringNamesTourManifestCapture> captures)
+    {
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Formula authoring/names tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
+    }
+
     private async Task CaptureDataToolsDialogsTourAsync(string outputDir)
     {
         Directory.CreateDirectory(outputDir);
@@ -7676,6 +8116,72 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.FormulaDiagnosticsTourManifest);
     }
 
+    private static async Task WriteFormulaAuthoringNamesTourManifestAsync(
+        string outputDir,
+        FormulaAuthoringNamesTourContext context,
+        IReadOnlyList<FormulaAuthoringNamesTourManifestCapture> captures)
+    {
+        var manifest = new FormulaAuthoringNamesTourManifest(
+            Tool: "FREEX_FORMULA_AUTHORING_NAMES_TOUR",
+            EvidenceFamily: "formula-authoring-names",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "formula-authoring-names:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_formula_authoring_names_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds: ["UI-CAT-FORMULAS-001", "UI-CMD-FORM-001", "UI-CMD-FORM-002", "UI-CAT-DIALOG-001C"],
+            SheetName: context.Sheet.Name,
+            AuthoringRange: context.AuthoringRange.ToString(),
+            RevenueRange: context.RevenueRange.ToString(),
+            CostRange: context.CostRange.ToString(),
+            ProfitRange: context.ProfitRange.ToString(),
+            MarginRange: context.MarginRange.ToString(),
+            DefinedNames: context.DefinedNames,
+            SummaryFormulaCell: context.SummaryFormulaCell.ToA1(),
+            ProfitFormulaCell: context.ProfitFormulaCell.ToA1(),
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new FormulaAuthoringNamesTourManifestPairing(
+                "interactive:formula-authoring-names:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no foreground mouse, keyboard, keytip, UIA, or screen capture input was used."
+                    : "Abort before file write unless the expected FreeX window/dialog owns foreground focus for each capture."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Formulas ribbon Function Library and Defined Names groups over a seeded formula/names worksheet.",
+                "AutoSum split-menu state.",
+                "Logical Functions function-library menu state.",
+                "Use in Formula menu populated by seeded workbook defined names.",
+                "Insert Function dialog with a non-default category and selected function.",
+                "Name Manager dialog with seeded workbook names.",
+                "Define Name dialog with name, scope, comment, and Refers To fields.",
+                "Create from Selection dialog with default Top row/Left column choices."
+            ],
+            Limitations:
+            [
+                "This tour drives FreeX in process and captures WPF windows/menus with RenderTargetBitmap; it is not foreground CopyFromScreen proof.",
+                "Ribbon menus are opened through production handlers or context-menu state without physical mouse, keytip, shortcut, or UIA invocation.",
+                "Dialog captures show production visual/default-focus states but do not submit OK/Cancel, create/delete names, insert a function, or persist/save/reload the defined-name model.",
+                "Use in Formula evidence covers menu population and active formula text only; committing the selected name into formulas and undo/redo remain separate workflow proof.",
+                "Formula diagnostics, formula-bar/name-box, and Excel-paired screenshot evidence are intentionally outside this bounded slice."
+            ]);
+
+        var path = Path.Combine(outputDir, FormulaAuthoringNamesTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.FormulaAuthoringNamesTourManifest);
+    }
+
     private static async Task WriteReviewCommentsProtectionTourManifestAsync(
         string outputDir,
         ReviewCommentsProtectionTourContext context,
@@ -8962,6 +9468,17 @@ public partial class MainWindow
         string ResultFormula,
         string ErrorFormula);
 
+    private sealed record FormulaAuthoringNamesTourContext(
+        Sheet Sheet,
+        GridRange AuthoringRange,
+        GridRange RevenueRange,
+        GridRange CostRange,
+        GridRange ProfitRange,
+        GridRange MarginRange,
+        IReadOnlyList<string> DefinedNames,
+        CellAddress SummaryFormulaCell,
+        CellAddress ProfitFormulaCell);
+
     private sealed record ReviewCommentsProtectionTourContext(
         Sheet Sheet,
         CellAddress SpellingCell,
@@ -9284,6 +9801,60 @@ public partial class MainWindow
         int WatchCount,
         string EvidenceSummary);
 
+    private sealed record FormulaAuthoringNamesTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string SheetName,
+        string AuthoringRange,
+        string RevenueRange,
+        string CostRange,
+        string ProfitRange,
+        string MarginRange,
+        IReadOnlyList<string> DefinedNames,
+        string SummaryFormulaCell,
+        string ProfitFormulaCell,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        FormulaAuthoringNamesTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<FormulaAuthoringNamesTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record FormulaAuthoringNamesTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record FormulaAuthoringNamesTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SheetName,
+        string SelectedRange,
+        string FormulaBarText,
+        int NameCount,
+        IReadOnlyList<string> DefinedNames,
+        IReadOnlyList<string> MenuHeaders,
+        string EvidenceSummary);
+
     private sealed record ReviewCommentsProtectionTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -9360,6 +9931,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(ViewPanesZoomTourManifest))]
     [JsonSerializable(typeof(PageLayoutSetupTourManifest))]
     [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
+    [JsonSerializable(typeof(FormulaAuthoringNamesTourManifest))]
     [JsonSerializable(typeof(ReviewCommentsProtectionTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
