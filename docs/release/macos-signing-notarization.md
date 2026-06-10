@@ -46,7 +46,7 @@ Quick retrieval checklist:
 
 1. Pick `osx-arm64` for Apple Silicon Macs or `osx-x64` for Intel Macs.
 2. Download the matching Actions artifact wrapper from the completed workflow run.
-3. Preserve each `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory under the artifact root. Also preserve the matching `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics` and `freex-<run-id>-<run-attempt>-macos-preview-readiness` wrapper directories there. For distribution candidates, also preserve `freex-<run-id>-<run-attempt>-macos-release-assets`, then unzip the wrapper contents there so stale or mixed-run downloads can be detected.
+3. Preserve each `freex-<run-id>-<run-attempt>-<runtime>-macos-app`, `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics`, and `freex-<run-id>-<run-attempt>-macos-preview-readiness` wrapper directory under the artifact root. For distribution candidates, also preserve `freex-<run-id>-<run-attempt>-macos-release-assets`, then unzip the wrapper contents there so stale or mixed-run downloads can be detected.
 4. Keep `freex-<runtime>-macos-evidence.txt` and the smoke/notarization logs with any tester report.
 
 With the GitHub CLI, the same artifacts can be retrieved with:

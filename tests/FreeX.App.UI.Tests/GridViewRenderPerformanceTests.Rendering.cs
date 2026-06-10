@@ -266,10 +266,10 @@ public sealed partial class GridViewRenderPerformanceTests
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var continuation = source[
-            source.IndexOf("private void RenderLiveResizeRowContinuation", StringComparison.Ordinal)..
-            source.IndexOf("private void DrawLiveResizeHorizontalGridLines", StringComparison.Ordinal)];
+            source.IndexOf("private void RenderViewportRowContinuation", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawViewportContinuationHorizontalGridLines", StringComparison.Ordinal)];
 
-        continuation.Should().Contain("var height = Math.Min(rowHeight, ActualHeight - y);");
+        continuation.Should().Contain("var height = Math.Min(rowHeight, viewportHeight - y);");
         continuation.Should().Contain("lastRow++;");
         continuation.Should().Contain("if (height >= rowHeight)");
         continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatRowHeader(lastRow), headerRect, pixelsPerDip);");
@@ -326,19 +326,19 @@ public sealed partial class GridViewRenderPerformanceTests
 
         source.Should().Contain("private DrawingGroup? _headerBaseLayerCache;");
         source.Should().Contain("private HeaderBaseLayerCacheKey _headerBaseLayerCacheKey;");
-        renderHeaders.Should().Contain("RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
-        renderHeaders.Should().Contain("RenderSelectedHeaderLayer(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
+        renderHeaders.Should().Contain("RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);");
+        renderHeaders.Should().Contain("RenderSelectedHeaderLayer(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);");
         renderHeaderBaseLayer.Should().Contain("_headerBaseLayerCache is { } cached && _headerBaseLayerCacheKey == key");
         renderHeaderBaseLayer.Should().Contain("dc.DrawDrawing(cached);");
         renderHeaderBaseLayer.Should().NotContain("SelectedRange");
         renderHeaderBaseLayer.Should().NotContain("SelectedRanges");
-        buildHeaderBaseLayer.Should().Contain("RenderHeaderBase(groupContext, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
+        buildHeaderBaseLayer.Should().Contain("RenderHeaderBase(groupContext, viewport, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);");
         buildHeaderBaseLayer.Should().Contain("group.Freeze();");
         source.Should().Contain("private DrawingGroup? _selectedHeaderLayerCache;");
         source.Should().Contain("private SelectedHeaderLayerCacheKey _selectedHeaderLayerCacheKey;");
         renderSelectedHeaderLayer.Should().Contain("_selectedHeaderLayerCache is { } cached && _selectedHeaderLayerCacheKey == key");
         renderSelectedHeaderLayer.Should().Contain("ShouldBuildSelectedHeaderLayerCache(key)");
-        renderSelectedHeaderLayer.Should().Contain("RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
+        renderSelectedHeaderLayer.Should().Contain("RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);");
         source.Should().Contain("_hasLastSelectedHeaderLayerRenderKey && _lastSelectedHeaderLayerRenderKey == key");
         source.Should().Contain("BuildSelectedHeaderLayerCache(");
         source.Should().Contain("CalculateGridRangeListSignature(selectedRanges)");
@@ -479,7 +479,8 @@ public sealed partial class GridViewRenderPerformanceTests
         continuation.Should().Contain("RenderViewportColumnContinuation(dc, gridRight, gridTop, viewportWidth, viewportHeight, pixelsPerDip);");
         continuation.Should().Contain("RenderViewportRowContinuation(dc, gridLeft, gridRight, gridBottom, viewportHeight, pixelsPerDip);");
         continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatColumnHeader(++lastColumn, UseR1C1ReferenceStyle), headerRect, pixelsPerDip);");
-        continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatRowHeader(++lastRow), headerRect, pixelsPerDip);");
+        continuation.Should().Contain("lastRow++;");
+        continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatRowHeader(lastRow), headerRect, pixelsPerDip);");
         continuation.Should().NotContain("(++lastRow).ToString");
         continuation.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip);");
     }

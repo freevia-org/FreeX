@@ -27,7 +27,7 @@ public partial class MainWindow
                 currentRange =>
                 {
                     if (!AutoSumFormulaPlanner.TryCreatePlan(_workbook.GetSheet(_currentSheetId), func, currentRange, out var plan))
-                        return new FailedWorkbookCommand("AutoSum target is outside the worksheet bounds.");
+                        return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_AutoSumTargetOutOfBounds"));
 
                     var edits = new List<(CellAddress Address, Cell NewCell)> { (plan.Target, Cell.FromFormula(plan.Formula)) };
                     var targetSheetIds = CurrentGroupedEditSheetIds();
@@ -152,14 +152,14 @@ public partial class MainWindow
             if (!hasExamples)
             {
                 _messageService.ShowWarning(
-                    "No examples found. Type at least one value in the fill column.",
-                    "Flash Fill");
+                    UiText.Get("MainWindowMessage_FlashFillNoExamples"),
+                    UiText.Get("MainWindowMessage_FlashFillTitle"));
             }
             else if (!hasFillTargets)
             {
                 _messageService.ShowInfo(
-                    "Flash Fill found examples, but there are no blank adjacent cells to fill.",
-                    "Flash Fill");
+                    UiText.Get("MainWindowMessage_FlashFillNoBlankAdjacentCells"),
+                    UiText.Get("MainWindowMessage_FlashFillTitle"));
             }
 
             return;
@@ -168,7 +168,7 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Flash Fill",
                 range.Value,
-                currentRange => CreateFlashFillCommand(currentRange, out _, out _) ?? new FailedWorkbookCommand("Flash Fill could not find blank adjacent cells to fill."),
+                currentRange => CreateFlashFillCommand(currentRange, out _, out _) ?? new FailedWorkbookCommand(UiText.Get("MainWindowMessage_FlashFillNoBlankAdjacentCells")),
                 out var outcome))
             return;
 

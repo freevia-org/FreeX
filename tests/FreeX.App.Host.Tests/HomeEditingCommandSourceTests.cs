@@ -92,9 +92,9 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("UiText.Get(\"FillSeriesStep_Title\")");
         source.Should().Contain("private void FlashFillMenuItem_Click(object sender, RoutedEventArgs e) => TryFlashFill();");
         source.Should().Contain("var command = CreateFlashFillCommand(range.Value, out var hasExamples, out var hasFillTargets);");
-        source.Should().Contain("No examples found. Type at least one value in the fill column.");
-        source.Should().Contain("Flash Fill found examples, but there are no blank adjacent cells to fill.");
-        source.Should().Contain("currentRange => CreateFlashFillCommand(currentRange, out _, out _) ?? new FailedWorkbookCommand(\"Flash Fill could not find blank adjacent cells to fill.\")");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_FlashFillNoExamples\")");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_FlashFillNoBlankAdjacentCells\")");
+        source.Should().Contain("currentRange => CreateFlashFillCommand(currentRange, out _, out _) ?? new FailedWorkbookCommand(UiText.Get(\"MainWindowMessage_FlashFillNoBlankAdjacentCells\"))");
         source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId)");
         source.Should().Contain("new CompositeWorkbookCommand(\"Flash Fill\", commands)");
         source.Should().Contain("FlashFillRangePlanner.Plan(sheet, sheetRange)");

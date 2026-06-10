@@ -27,12 +27,12 @@ https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos
 
 Latest verified tester release:
 
-- Release: [FreeX (Test Release) v0.8.108](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-108-2026-06-08-21-29-21-run108-attempt1%2B7938b213)
-- Tag: `v0-8-108-2026-06-08-21-29-21-run108-attempt1+7938b213`
-- GitHub Actions run: [27167619271](https://github.com/tony-xmelon/FreeX/actions/runs/27167619271), run number 108 attempt 1, completed successfully
-- Target commit: `7938b213a91d84ff33afae105e9785572379c37b`
+- Release: [FreeX (Test Release) v0.8.110](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-110-2026-06-10-13-12-28-run110-attempt1%2Bcc294d2e)
+- Tag: `v0-8-110-2026-06-10-13-12-28-run110-attempt1+cc294d2e`
+- GitHub Actions run: [27278046896](https://github.com/tony-xmelon/FreeX/actions/runs/27278046896), run number 110 attempt 1, completed successfully
+- Target commit: `cc294d2e6d4178c17982dc695976e803dcf22687`
 - Release posture: internal-only tester pre-release; not a public-preview candidate because live keyboard-only, screen-reader, UIA catalog, and known-issues accessibility gate evidence was not recorded
-- Asset check: versioned Windows `.exe`, stable-name Windows `.exe`, versioned MSIX, stable-name MSIX, and matching checksum assets were published by the workflow after successful hosted release-gate verification. This dispatch used `include_macos_preview=false`, so macOS assets were not attached to v0.8.108. Because v0.8.108 is a prerelease, GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build.
+- Asset check: versioned Windows `.exe`, stable-name Windows `.exe`, versioned MSIX, stable-name MSIX, and matching checksum assets were published by the workflow after successful hosted release-gate verification. This dispatch used `include_macos_preview=false`, so macOS assets were not attached to v0.8.110. Because v0.8.110 is a prerelease, GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build.
 
 The `Tester Release` GitHub Actions workflow runs repository preflight, restore, build, the default test lane, and the UI test lane before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. When `include_macos_preview=true`, it also finds or uses the requested successful `macOS App Preview` run for the same commit, downloads both runtime app artifacts, and attaches stable macOS internal-preview assets to the same GitHub Release. It uses normal .NET restore/build caching and parallelism for speed, preserves `default-tests.trx` and `ui-tests.trx` results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
 
