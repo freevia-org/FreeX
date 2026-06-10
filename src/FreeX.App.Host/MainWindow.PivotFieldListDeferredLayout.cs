@@ -61,6 +61,16 @@ public partial class MainWindow
             : null;
     }
 
+    private PendingPivotLayout GetDisplayedOrCurrentPivotLayout(PivotTableModel pivotTable)
+    {
+        return GetDisplayedPivotLayout(pivotTable) ?? new PendingPivotLayout(
+            pivotTable.Name,
+            pivotTable.RowFields.ToList(),
+            pivotTable.ColumnFields.ToList(),
+            pivotTable.PageFields.ToList(),
+            pivotTable.DataFields.ToList());
+    }
+
     private sealed record PendingPivotLayout(
         string PivotTableName,
         IReadOnlyList<PivotFieldModel> RowFields,

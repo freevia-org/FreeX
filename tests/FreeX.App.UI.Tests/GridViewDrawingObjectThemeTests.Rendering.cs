@@ -268,6 +268,63 @@ public sealed partial class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void ChartRendererLayer_DrawsInsertedSelectedChartContent()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var chart = new ChartModel
+            {
+                Type = ChartType.Column,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 2)),
+                Left = 120,
+                Top = 24,
+                Width = 400,
+                Height = 300
+            };
+            var grid = new GridView
+            {
+                Width = 640,
+                Height = 380,
+                ShowHeaders = false,
+                Viewport = new ViewportModel(
+                    [
+                        new DisplayCell(1, 1, new TextValue("Quarter"), "Quarter", null, StyleId.Default, null),
+                        new DisplayCell(1, 2, new TextValue("Revenue"), "Revenue", null, StyleId.Default, null),
+                        new DisplayCell(2, 1, new TextValue("Q1"), "Q1", null, StyleId.Default, null),
+                        new DisplayCell(2, 2, new NumberValue(10), "10", null, StyleId.Default, null),
+                        new DisplayCell(3, 1, new TextValue("Q2"), "Q2", null, StyleId.Default, null),
+                        new DisplayCell(3, 2, new NumberValue(18), "18", null, StyleId.Default, null),
+                        new DisplayCell(4, 1, new TextValue("Q3"), "Q3", null, StyleId.Default, null),
+                        new DisplayCell(4, 2, new NumberValue(14), "14", null, StyleId.Default, null),
+                        new DisplayCell(5, 1, new TextValue("Q4"), "Q4", null, StyleId.Default, null),
+                        new DisplayCell(5, 2, new NumberValue(26), "26", null, StyleId.Default, null)
+                    ],
+                    [new RowMetric(1, 24, 0), new RowMetric(2, 24, 24), new RowMetric(3, 24, 48), new RowMetric(4, 24, 72), new RowMetric(5, 24, 96)],
+                    [new ColMetric(1, 80, 0), new ColMetric(2, 80, 80), new ColMetric(3, 80, 160)]),
+                Charts = [chart],
+                SelectedObjectId = chart.Id,
+                SelectedObjectKind = ObjectKind.Chart
+            };
+
+            grid.Measure(new Size(640, 380));
+            grid.Arrange(new Rect(0, 0, 640, 380));
+            grid.UpdateLayout();
+
+            var bitmap = new RenderTargetBitmap(
+                640,
+                380,
+                96,
+                96,
+                PixelFormats.Pbgra32);
+            bitmap.Render(grid);
+
+            CountNonWhitePixels(bitmap, new Int32Rect(150, 54, 330, 230))
+                .Should().BeGreaterThan(500, "inserted charts should render axes or data marks inside the selected chart frame");
+        });
+    }
+
+    [Fact]
     public void DrawingObjectRendering_DrawsAuthoredThreeDRotationAsPerspectiveCue()
     {
         WpfTestThread.Run(() =>
@@ -523,5 +580,25 @@ public sealed partial class GridViewDrawingObjectThemeTests
         propertiesSource.Should().Contain("ObjectDisplayModeProperty");
         source.Should().Contain("RenderObjectPlaceholders(dc)");
         source.Should().Contain("RenderCharts(dc)");
+    }
+
+    private static int CountNonWhitePixels(BitmapSource bitmap, Int32Rect rect)
+    {
+        var stride = rect.Width * 4;
+        var pixels = new byte[stride * rect.Height];
+        bitmap.CopyPixels(rect, pixels, stride, 0);
+
+        var count = 0;
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            var blue = pixels[i];
+            var green = pixels[i + 1];
+            var red = pixels[i + 2];
+            var alpha = pixels[i + 3];
+            if (alpha > 10 && (red < 245 || green < 245 || blue < 245))
+                count++;
+        }
+
+        return count;
     }
 }
