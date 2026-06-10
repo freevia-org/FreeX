@@ -84,6 +84,60 @@ public sealed partial class PivotTableCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotTableFieldFiltersCommand_ClearsReportFilterSelectionAndFieldFiltersRefreshesAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotFieldFilterCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new TestCommandContext(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8")
+        };
+        pivot.PageFields.Add(new PivotFieldModel(0, SelectedItem: "B", SelectedItems: ["B"]));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        pivot.LabelFilters.Add(new PivotLabelFilterModel(0, PivotLabelFilterKind.Contains, "B"));
+        pivot.ValueFilters.Add(new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, ComparisonValue: 5, SourceFieldIndex: 0));
+        pivot.Sorts.Add(new PivotSortModel(PivotSortTarget.Label, PivotSortDirection.Descending, FieldIndex: 0));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        sheet.GetCell(Addr(sheet, "E3"))!.Value.Should().Be(new TextValue("B"));
+        sheet.GetCell(Addr(sheet, "D6"))!.Value.Should().Be(new NumberValue(20));
+
+        var command = new ConfigurePivotTableFieldFiltersCommand(
+            sheet.Id,
+            "PivotTable1",
+            rowFields: [],
+            columnFields: [],
+            pageFields: [new PivotFieldModel(0)],
+            labelFilters: [],
+            valueFilters: [],
+            sorts: pivot.Sorts.ToList());
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.PageFields.Should().ContainSingle().Which.SelectedItems.Should().BeNull();
+        pivot.LabelFilters.Should().BeEmpty();
+        pivot.ValueFilters.Should().BeEmpty();
+        pivot.Sorts.Should().ContainSingle().Which.Direction.Should().Be(PivotSortDirection.Descending);
+        sheet.GetCell(Addr(sheet, "E3"))!.Value.Should().Be(new TextValue("(All)"));
+        sheet.GetCell(Addr(sheet, "D6"))!.Value.Should().Be(new NumberValue(30));
+
+        command.Revert(ctx);
+
+        pivot.PageFields.Should().ContainSingle().Which.SelectedItems.Should().Equal("B");
+        pivot.LabelFilters.Should().ContainSingle();
+        pivot.ValueFilters.Should().ContainSingle();
+        pivot.Sorts.Should().ContainSingle();
+        sheet.GetCell(Addr(sheet, "E3"))!.Value.Should().Be(new TextValue("B"));
+        sheet.GetCell(Addr(sheet, "D6"))!.Value.Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
     public void ConfigurePivotTableViewCommand_RejectsProtectedSheetWithoutUsePivotReportsPermission()
     {
         var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotViewCommandTest");

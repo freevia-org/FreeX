@@ -24,17 +24,39 @@ public partial class PivotLabelFilterDialog : Window
 
     private readonly int _sourceFieldIndex;
 
-    public PivotLabelFilterDialog(int sourceFieldIndex)
+    public PivotLabelFilterDialog(int sourceFieldIndex, PivotLabelFilterModel? existingFilter = null)
     {
         _sourceFieldIndex = sourceFieldIndex;
         InitializeComponent();
         LabelFilterKindBox.ItemsSource = Options.Select(option => option.Label);
-        LabelFilterKindBox.SelectedIndex = 4;
+        LoadFilter(existingFilter);
         UpdateSecondValueState();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public PivotLabelFilterModel? ResultFilter { get; private set; }
+
+    private void LoadFilter(PivotLabelFilterModel? filter)
+    {
+        if (filter is null)
+        {
+            LabelFilterKindBox.SelectedIndex = 4;
+            return;
+        }
+
+        LabelFilterKindBox.SelectedIndex = 4;
+        for (var index = 0; index < Options.Length; index++)
+        {
+            if (Options[index].Kind == filter.Kind)
+            {
+                LabelFilterKindBox.SelectedIndex = index;
+                break;
+            }
+        }
+
+        LabelFilterValueBox.Text = filter.Value;
+        LabelFilterValue2Box.Text = filter.Value2 ?? "";
+    }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {

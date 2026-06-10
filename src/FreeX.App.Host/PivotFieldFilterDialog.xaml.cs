@@ -11,20 +11,33 @@ public partial class PivotFieldFilterDialog : Window
 {
     private readonly ObservableCollection<PivotFilterItem> _items;
     private readonly ICollectionView _view;
+    private readonly PivotFieldFilterState? _filterState;
+    private readonly PivotFieldFilterDialogTab _initialTab;
 
-    public PivotFieldFilterDialog(IEnumerable<string> items, IEnumerable<string>? selectedItems = null, bool canUseValueFilters = true)
+    public PivotFieldFilterDialog(
+        IEnumerable<string> items,
+        IEnumerable<string>? selectedItems = null,
+        bool canUseValueFilters = true,
+        PivotFieldFilterState? filterState = null,
+        PivotFieldFilterDialogTab initialTab = PivotFieldFilterDialogTab.SelectItems)
         : this(
             items.Select(item => new AutoFilterChecklistItem(item, item)),
             selectedItems,
-            canUseValueFilters)
+            canUseValueFilters,
+            filterState,
+            initialTab)
     {
     }
 
     public PivotFieldFilterDialog(
         IEnumerable<AutoFilterChecklistItem> items,
         IEnumerable<string>? selectedItems = null,
-        bool canUseValueFilters = true)
+        bool canUseValueFilters = true,
+        PivotFieldFilterState? filterState = null,
+        PivotFieldFilterDialogTab initialTab = PivotFieldFilterDialogTab.SelectItems)
     {
+        _filterState = filterState;
+        _initialTab = initialTab;
         var selected = selectedItems?.ToHashSet(StringComparer.CurrentCultureIgnoreCase) ?? [];
         var hasExplicitSelection = selected.Count > 0;
         _items = new ObservableCollection<PivotFilterItem>(
@@ -38,9 +51,12 @@ public partial class PivotFieldFilterDialog : Window
         InitializeComponent();
         FilterItemsList.ItemsSource = _items;
         ValueFilterButton.IsEnabled = canUseValueFilters;
+        RemoveValueFilterButton.IsEnabled = canUseValueFilters && filterState?.HasValueFilter == true;
         ValueFilterUnavailableText.Visibility = canUseValueFilters ? Visibility.Collapsed : Visibility.Visible;
         _view = CollectionViewSource.GetDefaultView(FilterItemsList.ItemsSource);
         _view.Filter = FilterItem;
+        ApplyFilterState();
+        SelectInitialTab();
         UpdateSelectAllState();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -92,6 +108,63 @@ public partial class PivotFieldFilterDialog : Window
         DialogResult = true;
     }
 
+    private void ClearItemFilterButton_Click(object sender, RoutedEventArgs e)
+    {
+        RequestedAction = PivotFieldFilterDialogAction.ClearItemFilter;
+        DialogResult = true;
+    }
+
+    private void ClearFieldFiltersButton_Click(object sender, RoutedEventArgs e)
+    {
+        RequestedAction = PivotFieldFilterDialogAction.ClearFieldFilters;
+        DialogResult = true;
+    }
+
+    private void RemoveLabelFilterButton_Click(object sender, RoutedEventArgs e)
+    {
+        RequestedAction = PivotFieldFilterDialogAction.RemoveLabelFilter;
+        DialogResult = true;
+    }
+
+    private void RemoveValueFilterButton_Click(object sender, RoutedEventArgs e)
+    {
+        RequestedAction = PivotFieldFilterDialogAction.RemoveValueFilter;
+        DialogResult = true;
+    }
+
+    private void ApplyFilterState()
+    {
+        var state = _filterState;
+        ItemFilterSummaryText.Text = state?.ItemSummary ?? "No item filter";
+        LabelFilterSummaryText.Text = state?.LabelSummary ?? "No label filter";
+        ValueFilterSummaryText.Text = state?.ValueSummary ?? "No value filter";
+
+        ClearItemFilterButton.IsEnabled = state?.HasItemFilter == true;
+        ClearFieldFiltersButton.IsEnabled = state?.HasAnyFilter == true;
+        if (state is not null)
+            ClearFieldFiltersButton.Content = PivotFieldFilterSummary.FormatClearFilterHeader(state);
+
+        LabelFilterButton.Content = state?.HasLabelFilter == true
+            ? "Edit Label Filter..."
+            : "Add Label Filter...";
+        RemoveLabelFilterButton.IsEnabled = state?.HasLabelFilter == true;
+
+        ValueFilterButton.Content = state?.HasValueFilter == true
+            ? "Edit Value Filter..."
+            : "Add Value Filter...";
+        RemoveValueFilterButton.IsEnabled = ValueFilterButton.IsEnabled && state?.HasValueFilter == true;
+    }
+
+    private void SelectInitialTab()
+    {
+        FilterTabs.SelectedItem = _initialTab switch
+        {
+            PivotFieldFilterDialogTab.LabelFilters => LabelFiltersTab,
+            PivotFieldFilterDialogTab.ValueFilters => ValueFiltersTab,
+            _ => SelectItemsTab
+        };
+    }
+
     private void UpdateSelectAllState()
     {
         var visible = _items.Where(item => FilterItem(item)).ToList();
@@ -106,6 +179,20 @@ public partial class PivotFieldFilterDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
+        if (ReferenceEquals(FilterTabs.SelectedItem, LabelFiltersTab))
+        {
+            LabelFilterButton.Focus();
+            Keyboard.Focus(LabelFilterButton);
+            return;
+        }
+
+        if (ReferenceEquals(FilterTabs.SelectedItem, ValueFiltersTab))
+        {
+            ValueFilterButton.Focus();
+            Keyboard.Focus(ValueFilterButton);
+            return;
+        }
+
         FilterSearchBox.Focus();
         Keyboard.Focus(FilterSearchBox);
     }
@@ -122,5 +209,16 @@ public enum PivotFieldFilterDialogAction
 {
     SelectItems,
     LabelFilter,
-    ValueFilter
+    ValueFilter,
+    ClearItemFilter,
+    ClearFieldFilters,
+    RemoveLabelFilter,
+    RemoveValueFilter
+}
+
+public enum PivotFieldFilterDialogTab
+{
+    SelectItems,
+    LabelFilters,
+    ValueFilters
 }

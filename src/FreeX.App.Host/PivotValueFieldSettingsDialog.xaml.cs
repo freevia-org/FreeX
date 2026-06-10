@@ -68,6 +68,7 @@ public partial class PivotValueFieldSettingsDialog : Window
 
         ResultDataField = PivotValueFieldSettingsDialogPlanner.CreateResult(
             _initialField,
+            _sourceHeaders,
             CustomNameBox.Text,
             SummaryFunctionBox.SelectedIndex,
             ShowValuesAsBox.SelectedIndex,
