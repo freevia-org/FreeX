@@ -54,6 +54,8 @@ public partial class MainWindow
     private const string FormulaBarNameBoxTourOutputDirectoryName = "formula-bar-name-box-tour";
     private const string StatusFooterTourManifestFileName = "status_footer_tour_manifest.json";
     private const string StatusFooterTourOutputDirectoryName = "status-footer-tour";
+    private const string FormulaDiagnosticsTourManifestFileName = "formula_diagnostics_tour_manifest.json";
+    private const string FormulaDiagnosticsTourOutputDirectoryName = "formula-diagnostics-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -128,7 +130,8 @@ public partial class MainWindow
         var titlebarWindowChromeTour = Environment.GetEnvironmentVariable("FREEX_TITLEBAR_WINDOW_CHROME_TOUR") == "1";
         var formulaBarNameBoxTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_BAR_NAME_BOX_TOUR") == "1";
         var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour)
+        var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !formulaDiagnosticsTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -145,7 +148,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, formulaDiagnosticsTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -182,7 +185,8 @@ public partial class MainWindow
         bool qatUndoRedoTour,
         bool titlebarWindowChromeTour,
         bool statusFooterTour,
-        bool formulaBarNameBoxTour)
+        bool formulaBarNameBoxTour,
+        bool formulaDiagnosticsTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -224,6 +228,9 @@ public partial class MainWindow
 
         if (formulaBarNameBoxTour)
             await CaptureFormulaBarNameBoxTourAsync(Path.Combine(outputDir, FormulaBarNameBoxTourOutputDirectoryName));
+
+        if (formulaDiagnosticsTour)
+            await CaptureFormulaDiagnosticsTourAsync(Path.Combine(outputDir, FormulaDiagnosticsTourOutputDirectoryName));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -1456,6 +1463,23 @@ public partial class MainWindow
         return null;
     }
 
+    private static Button? FindDescendantButtonByContent(DependencyObject root, string content)
+    {
+        if (root is Button button && string.Equals(button.Content?.ToString(), content, StringComparison.Ordinal))
+            return button;
+
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            var match = FindDescendantButtonByContent(child, content);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
+    }
+
     private async Task CaptureQatUndoRedoTourAsync(string outputDir)
     {
         Directory.CreateDirectory(outputDir);
@@ -2473,6 +2497,387 @@ public partial class MainWindow
             if (!File.Exists(path))
                 throw new InvalidOperationException($"Status/footer tour did not create planned capture '{capture.OutputFileName}'.");
         }
+    }
+
+    private async Task CaptureFormulaDiagnosticsTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteFormulaDiagnosticsTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 760;
+        await Task.Delay(700);
+
+        var context = EnsureFormulaDiagnosticsTourContext();
+        var captures = new List<FormulaDiagnosticsTourManifestCapture>();
+        ErrorCheckingDialog? errorCheckingDialog = null;
+        EvaluateFormulaDialog? evaluateFormulaDialog = null;
+        AddWatchDialog? addWatchDialog = null;
+        WatchWindowDialog? watchWindowDialog = null;
+
+        try
+        {
+            SetFormulaDiagnosticsTourSelection(context.ResultCell);
+            TracePrecedentsForCell(context.ResultCell, "Trace Precedents");
+            captures.Add(await CaptureFormulaDiagnosticsWindowStateAsync(
+                outputDir,
+                "trace-precedents-visible",
+                "freex_formula_diagnostics_trace_precedents",
+                "window-full",
+                "Trace Precedents draws visible formula auditing arrows from A2/A3 into B2."));
+
+            SetFormulaDiagnosticsTourSelection(context.InputCell);
+            TraceDependentsBtn_Click(this, new RoutedEventArgs());
+            captures.Add(await CaptureFormulaDiagnosticsWindowStateAsync(
+                outputDir,
+                "trace-dependents-visible",
+                "freex_formula_diagnostics_trace_dependents",
+                "window-full",
+                "Trace Dependents adds a visible auditing arrow from A2 toward B2 without clearing the existing precedent arrows."));
+
+            SetFormulaDiagnosticsTourSelection(context.ResultCell);
+            ShowFormulasBtn_Click(ShowFormulasButton, new RoutedEventArgs(ButtonBase.ClickEvent, ShowFormulasButton));
+            captures.Add(await CaptureFormulaDiagnosticsWindowStateAsync(
+                outputDir,
+                "show-formulas-enabled",
+                "freex_formula_diagnostics_show_formulas_enabled",
+                "window-full",
+                "Show Formulas toggles the active sheet to display formula text such as =A2+A3 and =B2/0 in the grid."));
+
+            ShowFormulasBtn_Click(ShowFormulasButton, new RoutedEventArgs(ButtonBase.ClickEvent, ShowFormulasButton));
+            RemoveTraceArrows(kind: null, "Remove Arrows");
+            captures.Add(await CaptureFormulaDiagnosticsWindowStateAsync(
+                outputDir,
+                "remove-arrows-cleared",
+                "freex_formula_diagnostics_remove_arrows_cleared",
+                "window-full",
+                "Remove Arrows clears the in-memory formula trace arrows and returns the sheet to value display mode."));
+
+            var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId);
+            if (issues.Count == 0)
+                throw new InvalidOperationException("Formula diagnostics tour expected at least one formula error issue.");
+
+            errorCheckingDialog = new ErrorCheckingDialog(
+                issues,
+                address =>
+                {
+                    NavigateToCell(address);
+                    RefreshSheetTabs();
+                    UpdateViewport();
+                    RefreshStatusBar();
+                },
+                issue => true,
+                issue => TracePrecedentsForCell(issue.Address, "Trace Error"),
+                issue =>
+                {
+                    var summary = FormulaEvaluationSummaryService.GetSummary(_workbook, issue.Address)
+                        ?? throw new InvalidOperationException("Formula diagnostics tour expected an evaluation summary for the selected error issue.");
+                    var stepsDialog = new EvaluateFormulaDialog(summary) { Owner = this };
+                    stepsDialog.Show();
+                },
+                openOptions: null)
+            {
+                Owner = this
+            };
+            errorCheckingDialog.Show();
+            errorCheckingDialog.Activate();
+            errorCheckingDialog.UpdateLayout();
+            await Task.Delay(450);
+            await CaptureWindowElementForScreenshotTourAsync(errorCheckingDialog, outputDir, "freex_formula_diagnostics_error_checking_dialog");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "error-checking-dialog-list",
+                "freex_formula_diagnostics_error_checking_dialog",
+                "error-checking-dialog",
+                "RenderTargetBitmap-error-checking-dialog",
+                errorCheckingDialog.ActualWidth,
+                errorCheckingDialog.ActualHeight,
+                "Error Checking dialog opens with the issue list, selected first error, side actions, bottom navigation, Ignore, Trace Error, Options, and Close controls."));
+            errorCheckingDialog.Close();
+            errorCheckingDialog = null;
+
+            var resultSummary = FormulaEvaluationSummaryService.GetSummary(_workbook, context.ResultCell)
+                ?? throw new InvalidOperationException("Formula diagnostics tour expected an evaluation summary for the result cell.");
+            evaluateFormulaDialog = new EvaluateFormulaDialog(resultSummary) { Owner = this };
+            evaluateFormulaDialog.Show();
+            evaluateFormulaDialog.Activate();
+            evaluateFormulaDialog.UpdateLayout();
+            await Task.Delay(450);
+            await CaptureWindowElementForScreenshotTourAsync(evaluateFormulaDialog, outputDir, "freex_formula_diagnostics_evaluate_default");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "evaluate-formula-default-button",
+                "freex_formula_diagnostics_evaluate_default",
+                "evaluate-formula-dialog",
+                "RenderTargetBitmap-evaluate-formula-dialog",
+                evaluateFormulaDialog.ActualWidth,
+                evaluateFormulaDialog.ActualHeight,
+                "Evaluate Formula dialog opens on B2 with the Evaluate command as the focused/default command and Close as the cancel command."));
+
+            var evaluateButton = FindDescendantButtonByContent(evaluateFormulaDialog, UiText.Get("EvaluateFormula_EvaluateButton"))
+                ?? throw new InvalidOperationException("Formula diagnostics tour could not find the Evaluate Formula default button.");
+            evaluateButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, evaluateButton));
+            await Task.Delay(250);
+            evaluateFormulaDialog.UpdateLayout();
+            await CaptureWindowElementForScreenshotTourAsync(evaluateFormulaDialog, outputDir, "freex_formula_diagnostics_evaluate_after_step");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "evaluate-formula-after-step",
+                "freex_formula_diagnostics_evaluate_after_step",
+                "evaluate-formula-dialog",
+                "RenderTargetBitmap-evaluate-formula-dialog",
+                evaluateFormulaDialog.ActualWidth,
+                evaluateFormulaDialog.ActualHeight,
+                "Evaluate advances one deterministic calculation step while preserving the Evaluate/Step In/Step Out/Restart/Close/Help command row."));
+            evaluateFormulaDialog.Close();
+            evaluateFormulaDialog = null;
+
+            SetFormulaDiagnosticsTourSelection(context.ResultCell);
+            addWatchDialog = new AddWatchDialog(FormatRangeReference(context.ResultCell, context.ResultCell)) { Owner = this };
+            addWatchDialog.Show();
+            addWatchDialog.Activate();
+            addWatchDialog.UpdateLayout();
+            await Task.Delay(350);
+            await CaptureWindowElementForScreenshotTourAsync(addWatchDialog, outputDir, "freex_formula_diagnostics_watch_add_dialog");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "watch-window-add-dialog",
+                "freex_formula_diagnostics_watch_add_dialog",
+                "watch-window-add-dialog",
+                "RenderTargetBitmap-add-watch-dialog",
+                addWatchDialog.ActualWidth,
+                addWatchDialog.ActualHeight,
+                "Add Watch dialog shows the selected B2 range, Add default button, Cancel button, and stable AddWatch automation IDs."));
+            addWatchDialog.Close();
+            addWatchDialog = null;
+
+            WatchWindowService.AddWatches(_workbook, new GridRange(context.ResultCell, context.ResultCell));
+            WatchWindowService.AddWatches(_workbook, new GridRange(context.ErrorCell, context.ErrorCell));
+            watchWindowDialog = CreateFormulaDiagnosticsWatchWindowDialog();
+            watchWindowDialog.Show();
+            watchWindowDialog.Activate();
+            watchWindowDialog.UpdateLayout();
+            await Task.Delay(450);
+            await CaptureWindowElementForScreenshotTourAsync(watchWindowDialog, outputDir, "freex_formula_diagnostics_watch_window_list");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "watch-window-list",
+                "freex_formula_diagnostics_watch_window_list",
+                "watch-window-dialog",
+                "RenderTargetBitmap-watch-window-dialog",
+                watchWindowDialog.ActualWidth,
+                watchWindowDialog.ActualHeight,
+                "Watch Window lists B2 and D2 with workbook, sheet, cell, value, and formula columns plus Add Watch, Refresh, Delete Watch, and Close controls."));
+
+            var refreshButton = FindDescendantByAutomationId<Button>(watchWindowDialog, "WatchWindowRefreshButton")
+                ?? throw new InvalidOperationException("Formula diagnostics tour could not find the Watch Window Refresh button.");
+            refreshButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, refreshButton));
+            await Task.Delay(250);
+            await CaptureWindowElementForScreenshotTourAsync(watchWindowDialog, outputDir, "freex_formula_diagnostics_watch_window_after_refresh");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "watch-window-after-refresh",
+                "freex_formula_diagnostics_watch_window_after_refresh",
+                "watch-window-dialog",
+                "RenderTargetBitmap-watch-window-dialog",
+                watchWindowDialog.ActualWidth,
+                watchWindowDialog.ActualHeight,
+                "Refresh rehydrates the watched rows while preserving the selected watched cell when possible."));
+
+            var watchList = FindDescendantByAutomationId<ListView>(watchWindowDialog, "WatchWindowList")
+                ?? throw new InvalidOperationException("Formula diagnostics tour could not find the Watch Window list.");
+            if (watchList.Items.Count > 0)
+                watchList.SelectedIndex = 0;
+            var deleteButton = FindDescendantByAutomationId<Button>(watchWindowDialog, "WatchWindowDeleteButton")
+                ?? throw new InvalidOperationException("Formula diagnostics tour could not find the Watch Window Delete Watch button.");
+            deleteButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, deleteButton));
+            await Task.Delay(250);
+            await CaptureWindowElementForScreenshotTourAsync(watchWindowDialog, outputDir, "freex_formula_diagnostics_watch_window_after_delete");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "watch-window-after-delete",
+                "freex_formula_diagnostics_watch_window_after_delete",
+                "watch-window-dialog",
+                "RenderTargetBitmap-watch-window-dialog",
+                watchWindowDialog.ActualWidth,
+                watchWindowDialog.ActualHeight,
+                "Delete Watch removes the selected watched row and leaves the remaining watched formula visible."));
+            watchWindowDialog.Close();
+            watchWindowDialog = null;
+
+            ValidateFormulaDiagnosticsTourEvidence(outputDir, captures);
+            await WriteFormulaDiagnosticsTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteFormulaDiagnosticsTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (errorCheckingDialog is { IsVisible: true })
+                errorCheckingDialog.Close();
+            if (evaluateFormulaDialog is { IsVisible: true })
+                evaluateFormulaDialog.Close();
+            if (addWatchDialog is { IsVisible: true })
+                addWatchDialog.Close();
+            if (watchWindowDialog is { IsVisible: true })
+                watchWindowDialog.Close();
+
+            _formulaTraceArrows.Clear();
+            UpdateViewport();
+        }
+    }
+
+    private FormulaDiagnosticsTourContext EnsureFormulaDiagnosticsTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Formula diagnostics tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        _formulaTraceArrows.Clear();
+        WatchWindowService.RemoveWatches(
+            _workbook,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 8, 6)));
+
+        for (uint row = 1; row <= 8; row++)
+        {
+            for (uint col = 1; col <= 6; col++)
+                sheet.ClearCell(new CellAddress(sheet.Id, row, col));
+        }
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Input"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Result"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new TextValue("Error"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(8));
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "A2+A3");
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 4), "B2/0");
+        sheet.SetFormula(new CellAddress(sheet.Id, 3, 4), "B2+A2");
+
+        RecalculateWorkbook();
+        var resultCell = new CellAddress(sheet.Id, 2, 2);
+        SetFormulaDiagnosticsTourSelection(resultCell);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+
+        return new FormulaDiagnosticsTourContext(
+            SheetName: sheet.Name,
+            InputCell: new CellAddress(sheet.Id, 2, 1),
+            ResultCell: resultCell,
+            ErrorCell: new CellAddress(sheet.Id, 2, 4),
+            ResultFormula: sheet.GetCell(resultCell)?.FormulaText ?? "",
+            ErrorFormula: sheet.GetCell(new CellAddress(sheet.Id, 2, 4))?.FormulaText ?? "");
+    }
+
+    private void SetFormulaDiagnosticsTourSelection(CellAddress address)
+    {
+        var range = new GridRange(address, address);
+        SetSelectionRange(range, address);
+        EnsureCellVisible(address);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private WatchWindowDialog CreateFormulaDiagnosticsWatchWindowDialog() =>
+        new(
+            () =>
+            {
+                RecalculateWorkbook();
+                return WatchWindowService.GetEntries(_workbook);
+            },
+            () => AddWatchFromSelection(showMessage: false),
+            () => SheetGrid.SelectedRange is { } range
+                ? FormatRangeReference(range.Start, range.End)
+                : "",
+            address =>
+            {
+                NavigateToCell(address);
+                RefreshSheetTabs();
+                UpdateViewport();
+                RefreshStatusBar();
+            },
+            address =>
+            {
+                WatchWindowService.RemoveWatch(_workbook, address);
+                UpdateViewport();
+            })
+        {
+            Owner = this
+        };
+
+    private async Task<FormulaDiagnosticsTourManifestCapture> CaptureFormulaDiagnosticsWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string surface,
+        string evidenceSummary)
+    {
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(150);
+
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateFormulaDiagnosticsCapture(
+            state,
+            fileName,
+            surface,
+            "RenderTargetBitmap-window-full",
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            evidenceSummary);
+    }
+
+    private FormulaDiagnosticsTourManifestCapture CreateFormulaDiagnosticsCapture(
+        string state,
+        string fileName,
+        string surface,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        string evidenceSummary)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var selectedRange = SheetGrid.SelectedRange;
+        return new FormulaDiagnosticsTourManifestCapture(
+            CaptureKey: $"formula-diagnostics:{state}",
+            PairKey: $"interactive:formula-diagnostics:{state}",
+            ScenarioId: "formula-diagnostics:visual-evidence",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            SelectedRange: selectedRange?.ToString() ?? string.Empty,
+            ShowFormulas: sheet?.ShowFormulas == true,
+            FormulaTraceArrowCount: _formulaTraceArrows.Count,
+            WatchCount: WatchWindowService.GetEntries(_workbook).Count,
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private static void DeleteFormulaDiagnosticsTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_formula_diagnostics_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, FormulaDiagnosticsTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateFormulaDiagnosticsTourEvidence(
+        string outputDir,
+        IReadOnlyList<FormulaDiagnosticsTourManifestCapture> captures)
+    {
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Formula diagnostics tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
     }
 
     private async Task CaptureKeyTipOverlayTourAsync(string outputDir)
@@ -3592,6 +3997,69 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest);
     }
 
+    private static async Task WriteFormulaDiagnosticsTourManifestAsync(
+        string outputDir,
+        FormulaDiagnosticsTourContext context,
+        IReadOnlyList<FormulaDiagnosticsTourManifestCapture> captures)
+    {
+        var manifest = new FormulaDiagnosticsTourManifest(
+            Tool: "FREEX_FORMULA_DIAGNOSTICS_TOUR",
+            EvidenceFamily: "formula-diagnostics",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "formula-diagnostics:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_formula_diagnostics_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds: ["UI-CAT-FORMULAS-002", "UI-CMD-FORM-003", "UI-CMD-FORM-005"],
+            SheetName: context.SheetName,
+            InputCell: context.InputCell.ToA1(),
+            ResultCell: context.ResultCell.ToA1(),
+            ErrorCell: context.ErrorCell.ToA1(),
+            ResultFormula: context.ResultFormula,
+            ErrorFormula: context.ErrorFormula,
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new FormulaDiagnosticsTourManifestPairing(
+                "interactive:formula-diagnostics:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no foreground mouse, keyboard, or screen capture input was used."
+                    : "Abort before file write unless the expected FreeX window/dialog owns foreground focus for each capture."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Trace Precedents visible arrows",
+                "Trace Dependents visible arrows",
+                "Remove Arrows cleared state",
+                "Show Formulas enabled sheet state",
+                "Error Checking dialog/list",
+                "Evaluate Formula default button and one-step advance",
+                "Add Watch dialog",
+                "Watch Window list, refresh, and delete states"
+            ],
+            Limitations:
+            [
+                "This tour drives FreeX in process and captures WPF windows with RenderTargetBitmap; it is not foreground CopyFromScreen proof.",
+                "No global mouse or keyboard input is synthesized; command handlers and WPF button events are invoked in process for deterministic capture.",
+                "The Add Watch surface is captured by showing the production AddWatchDialog directly; the actual watch insertion then uses the same AddWatchFromSelection/WatchWindowService path as the command.",
+                "The Evaluate Formula dialog is shown modeless so the tour can capture the default command and a stepped state without blocking on ShowDialog.",
+                "The trace-arrow and show-formulas captures are FreeX-only visual states; no paired Microsoft Excel evidence is produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, FormulaDiagnosticsTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.FormulaDiagnosticsTourManifest);
+    }
+
     private static async Task WritePrintPreviewTourManifestAsync(
         string outputDir,
         Sheet sheet,
@@ -4342,6 +4810,14 @@ public partial class MainWindow
         string NamedRangeAddress,
         string StartCell);
 
+    private sealed record FormulaDiagnosticsTourContext(
+        string SheetName,
+        CellAddress InputCell,
+        CellAddress ResultCell,
+        CellAddress ErrorCell,
+        string ResultFormula,
+        string ErrorFormula);
+
     private sealed record FormulaBarNameBoxTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -4445,6 +4921,56 @@ public partial class MainWindow
         bool ZoomOutButtonEnabled,
         bool ZoomInButtonEnabled,
         string FormulaBarText);
+
+    private sealed record FormulaDiagnosticsTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string SheetName,
+        string InputCell,
+        string ResultCell,
+        string ErrorCell,
+        string ResultFormula,
+        string ErrorFormula,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        FormulaDiagnosticsTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<FormulaDiagnosticsTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record FormulaDiagnosticsTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record FormulaDiagnosticsTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SelectedRange,
+        bool ShowFormulas,
+        int FormulaTraceArrowCount,
+        int WatchCount,
+        string EvidenceSummary);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
@@ -4460,6 +4986,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(TitlebarWindowChromeTourManifest))]
     [JsonSerializable(typeof(FormulaBarNameBoxTourManifest))]
     [JsonSerializable(typeof(StatusFooterTourManifest))]
+    [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.
