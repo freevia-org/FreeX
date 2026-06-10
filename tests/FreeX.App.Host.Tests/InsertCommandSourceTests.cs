@@ -127,6 +127,31 @@ public sealed class InsertCommandSourceTests
     }
 
     [Fact]
+    public void InsertTablesChartsScreenshotTour_StaysBoundedToVisualEvidenceSlice()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var tourStart = source.IndexOf("private async Task CaptureInsertTablesChartsTourAsync", StringComparison.Ordinal);
+        var tourEnd = source.IndexOf("private async Task CaptureKeyTipOverlayTourAsync", tourStart, StringComparison.Ordinal);
+
+        tourStart.Should().BeGreaterThanOrEqualTo(0);
+        tourEnd.Should().BeGreaterThan(tourStart);
+        var tourSource = source[tourStart..tourEnd];
+
+        source.Should().Contain("FREEX_INSERT_TABLES_CHARTS_TOUR");
+        tourSource.Should().Contain("CreateTableDialog");
+        tourSource.Should().Contain("RecommendedPivotTablesDialog");
+        tourSource.Should().Contain("InsertChartDialog");
+        tourSource.Should().Contain("SparklineDialog");
+        tourSource.Should().Contain("CreateStyledStructuredTableCommand");
+        tourSource.Should().Contain("AddChartCommand");
+        tourSource.Should().Contain("AddSparklineCommand");
+        tourSource.Should().NotContain("InsertPicture");
+        tourSource.Should().NotContain("Hyperlink");
+        tourSource.Should().NotContain("SymbolPicker");
+        tourSource.Should().NotContain("TextBox");
+    }
+
+    [Fact]
     public void InsertHandlers_RouteThroughExpectedDialogsCommandsAndReviewDelegate()
     {
         var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
