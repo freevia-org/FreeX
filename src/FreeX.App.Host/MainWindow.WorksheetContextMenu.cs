@@ -24,17 +24,7 @@ public partial class MainWindow
         var state = GetWorksheetContextMenuState(actualAddr);
         var menu = new ContextMenu();
         foreach (var command in WorksheetContextMenuPlanner.BuildCommands(targetKind, state))
-        {
-            if (command.IsSeparator)
-            {
-                menu.Items.Add(new Separator());
-                continue;
-            }
-
-            var item = new MenuItem { Header = command.AccessHeader, IsEnabled = command.IsEnabled };
-            item.Click += (_, _) => ExecuteWorksheetContextMenuAction(command.Action, actualAddr);
-            menu.Items.Add(item);
-        }
+            AddWorksheetContextMenuItem(menu.Items, command, actualAddr);
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = SheetGrid;
@@ -47,6 +37,28 @@ public partial class MainWindow
         SheetGrid.ContextMenu = menu;
         PositionWorksheetContextMenu(menu, gridPos);
         menu.IsOpen = true;
+    }
+
+    private void AddWorksheetContextMenuItem(ItemCollection items, WorksheetContextMenuCommand command, CellAddress address)
+    {
+        if (command.IsSeparator)
+        {
+            items.Add(new Separator());
+            return;
+        }
+
+        var item = new MenuItem { Header = command.AccessHeader, IsEnabled = command.IsEnabled };
+        if (command.HasChildren)
+        {
+            foreach (var child in command.Children)
+                AddWorksheetContextMenuItem(item.Items, child, address);
+        }
+        else
+        {
+            item.Click += (_, _) => ExecuteWorksheetContextMenuAction(command.Action, address);
+        }
+
+        items.Add(item);
     }
 
     private void OnWaterfallChartPointContextMenuRequested(ChartModel chart, int pointIndex, System.Windows.Point gridPos)

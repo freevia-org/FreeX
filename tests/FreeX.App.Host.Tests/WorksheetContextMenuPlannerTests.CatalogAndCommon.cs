@@ -9,8 +9,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
     public void UiTestCatalog_WorksheetContextMenuCommandCountMatchesPlanner()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
-        var commandCount = WorksheetContextMenuPlanner.BuildCommands()
-            .Count(command => !command.IsSeparator);
+        var commandCount = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands()).Count;
 
         catalog.Should().Contain(
             $"| Worksheet context menu commands | {commandCount} | From `WorksheetContextMenuPlanner.BuildCommands()`. |");
@@ -22,9 +21,88 @@ public sealed partial class WorksheetContextMenuPlannerTests
     }
 
     [Fact]
-    public void BuildCommands_IncludesCommonExcelWorksheetContextActions()
+    public void BuildCommands_GroupsNormalWorksheetContextMenuIntoUsableTopLevelShape()
     {
         var commands = WorksheetContextMenuPlanner.BuildCommands();
+        var topLevelHeaders = commands
+            .Where(command => !command.IsSeparator)
+            .Select(command => command.Header)
+            .ToList();
+
+        topLevelHeaders.Should().ContainInOrder(
+            "Cut",
+            "Copy",
+            "Paste",
+            "Paste Options",
+            "Insert and Delete",
+            "Sort and Filter",
+            "Quick Analysis",
+            "Data Tools",
+            "Rows and Columns",
+            "Comments and Notes",
+            "Hyperlink...",
+            "Format Cells...",
+            "Clear");
+        topLevelHeaders.Should().HaveCount(13);
+        topLevelHeaders.Should().NotContain([
+            "Paste Special...",
+            "Insert Row Above",
+            "Delete Row(s)",
+            "Data Validation...",
+            "Row Height...",
+            "New Comment",
+            "Clear Contents"
+        ]);
+
+        SingleSubmenu(commands, "Paste Options").Children.Select(command => command.Header).Should().ContainInOrder(
+            "Paste Special...",
+            "Insert Copied Cells...");
+        SingleSubmenu(commands, "Insert and Delete").Children.Select(command => command.Header).Should().ContainInOrder(
+            "Insert...",
+            "Insert Row Above",
+            "Insert Row Below",
+            "Insert Column Left",
+            "Insert Column Right",
+            "Delete...",
+            "Delete Row(s)",
+            "Delete Column(s)");
+        SingleSubmenu(commands, "Sort and Filter").Children.Select(command => command.Header).Should().ContainInOrder(
+            "Sort A to Z",
+            "Sort Z to A",
+            "Custom Sort...",
+            "Filter...",
+            "Clear Filter",
+            "Reapply Filter",
+            "Pick From Drop-down List...");
+        SingleSubmenu(commands, "Data Tools").Children.Select(command => command.Header).Should().ContainInOrder(
+            "Define Name...",
+            "Create Table...",
+            "Format as Table...",
+            "Text to Columns...",
+            "Remove Duplicates...",
+            "Data Validation...");
+        SingleSubmenu(commands, "Rows and Columns").Children.Select(command => command.Header).Should().ContainInOrder(
+            "Hide Rows",
+            "AutoFit Row Height",
+            "Hide Columns",
+            "AutoFit Column Width");
+        SingleSubmenu(commands, "Comments and Notes").Children.Select(command => command.Header).Should().ContainInOrder(
+            "New Comment",
+            "Delete Comment",
+            "New Note",
+            "Show Notes");
+        SingleSubmenu(commands, "Clear").Children.Select(command => command.Header).Should().ContainInOrder(
+            "Clear Contents",
+            "Clear All",
+            "Clear Formats",
+            "Clear Comments and Notes",
+            "Clear Hyperlinks");
+    }
+
+    [Fact]
+    public void BuildCommands_IncludesCommonExcelWorksheetContextActions()
+    {
+        var commands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands());
 
         commands.Select(command => command.Header).Should().ContainInOrder(
             "Cut",
@@ -67,11 +145,11 @@ public sealed partial class WorksheetContextMenuPlannerTests
             "Show Notes",
             "Hyperlink...",
             "Format Cells...",
+            "Clear Contents",
             "Clear All",
             "Clear Formats",
             "Clear Comments and Notes",
-            "Clear Hyperlinks",
-            "Clear Contents");
+            "Clear Hyperlinks");
 
         commands.Single(command => command.Header == "Clear Filter")
             .Action.Should().Be(WorksheetContextMenuAction.ClearFilter);
@@ -126,9 +204,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
     [Fact]
     public void BuildCommands_ExposesInsertDeleteGroupInExcelLikeOrder()
     {
-        var commands = WorksheetContextMenuPlanner.BuildCommands()
-            .Where(command => !command.IsSeparator)
-            .ToList();
+        var commands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands());
 
         commands.Select(command => command.Header).Should().ContainInOrder(
             "Insert...",
@@ -212,8 +288,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
     [InlineData("Clear Contents", "Clear C_ontents")]
     public void BuildCommands_ProvidesKeyboardAccessHeaders(string header, string expectedAccessHeader)
     {
-        var command = WorksheetContextMenuPlanner.BuildCommands()
-            .Single(command => command.Header == header);
+        var command = SingleActionCommand(WorksheetContextMenuPlanner.BuildCommands(), header);
 
         command.AccessHeader.Should().Be(expectedAccessHeader);
     }
