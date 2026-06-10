@@ -23,6 +23,7 @@ public sealed class AddSheetCommand : IWorkbookCommand
             return new CommandOutcome(false, validationError);
 
         var sheet = ctx.Workbook.AddSheet(_name);
+        sheet.ResetViewStateToA1();
         _addedSheetId = sheet.Id;
         return new CommandOutcome(true);
     }

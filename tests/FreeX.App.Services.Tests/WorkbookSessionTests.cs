@@ -7053,6 +7053,11 @@ public sealed class WorkbookSessionTests
             "Book.fxl",
             "Opened .fxl.",
             IsFallback: false));
+        var originalSelection = new GridRange(
+            new CellAddress(original.Id, 4, 3),
+            new CellAddress(original.Id, 5, 4));
+        session.SelectRange(originalSelection);
+        session.SetViewportOrigin(8, 3).Should().BeTrue();
 
         var result = session.AddSheet();
 
@@ -7064,6 +7069,10 @@ public sealed class WorkbookSessionTests
         workbook.ActiveSheetIndex.Should().Be(1);
         session.ActiveCell.Should().Be(new CellAddress(session.ActiveSheet.Id, 1, 1));
         session.SelectedRange.Should().Be(new GridRange(session.ActiveCell, session.ActiveCell));
+        session.ActiveSheet.ActiveRow.Should().Be(1);
+        session.ActiveSheet.ActiveCol.Should().Be(1);
+        session.ActiveSheet.ViewTopRow.Should().Be(1);
+        session.ActiveSheet.ViewLeftCol.Should().Be(1);
         session.SheetTabs.Should().Equal(
             new WorkbookSheetTab(original.Id, "Sheet1", IsActive: false),
             new WorkbookSheetTab(session.ActiveSheet.Id, "Sheet2", IsActive: true));
@@ -7073,7 +7082,8 @@ public sealed class WorkbookSessionTests
         undo.Success.Should().BeTrue();
         workbook.Sheets.Should().ContainSingle().Which.Id.Should().Be(original.Id);
         session.ActiveSheet.Should().BeSameAs(original);
-        session.ActiveCell.Should().Be(new CellAddress(original.Id, 1, 1));
+        session.ActiveCell.Should().Be(originalSelection.Start);
+        session.SelectedRange.Should().Be(originalSelection);
         session.CanRedo.Should().BeTrue();
 
         var redo = session.RedoLastEdit();
@@ -7082,6 +7092,8 @@ public sealed class WorkbookSessionTests
         workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Sheet2");
         session.ActiveSheet.Name.Should().Be("Sheet2");
         workbook.ActiveSheetIndex.Should().Be(1);
+        session.ActiveCell.Should().Be(new CellAddress(session.ActiveSheet.Id, 1, 1));
+        session.SelectedRange.Should().Be(new GridRange(session.ActiveCell, session.ActiveCell));
     }
 
     [Fact]

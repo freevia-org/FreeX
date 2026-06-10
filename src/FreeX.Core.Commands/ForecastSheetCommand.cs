@@ -30,6 +30,7 @@ public sealed class ForecastSheetCommand : IWorkbookCommand
             return new CommandOutcome(false, "Forecast Sheet source range must belong to this workbook.");
 
         var forecastSheet = ctx.Workbook.AddSheet(GetForecastSheetName(ctx.Workbook));
+        forecastSheet.ResetViewStateToA1();
         _addedSheetId = forecastSheet.Id;
 
         var timelineHeader = sourceSheet.GetCell(_sourceRange.Start)?.Clone()

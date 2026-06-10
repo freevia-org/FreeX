@@ -81,6 +81,12 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
             harness.SetFormulaBarText("first sheet");
             harness.CommitEdit().Should().BeTrue();
+            harness.SelectActiveCell(100, 20);
+            var firstSheetSelection = new GridRange(
+                new CellAddress(firstSheetId, 100, 20),
+                new CellAddress(firstSheetId, 100, 20));
+            harness.SelectedRange.Should().Be(firstSheetSelection);
+
             harness.InsertNewSheet();
 
             harness.CurrentSheetId.Should().NotBe(firstSheetId);
@@ -88,12 +94,17 @@ public sealed partial class MainWindowFormulaBarSyncTests
                 new CellAddress(harness.CurrentSheetId, 1, 1),
                 new CellAddress(harness.CurrentSheetId, 1, 1)));
             harness.CellAddressBoxText.Should().Be("A1");
+            harness.VerticalScrollValue.Should().Be(1);
+            harness.HorizontalScrollValue.Should().Be(1);
 
             harness.SetFormulaBarText("second sheet");
             harness.CommitEdit().Should().BeTrue();
 
             harness.CellText(1, 1, firstSheetId).Should().Be("first sheet");
             harness.CellText(1, 1, harness.CurrentSheetId).Should().Be("second sheet");
+
+            harness.SelectSheet(firstSheetId);
+            harness.SelectedRange.Should().Be(firstSheetSelection);
         });
     }
 

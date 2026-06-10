@@ -56,15 +56,7 @@ public partial class MainWindow
                 return;
 
             if (command.CreatedSheetId is { } createdSheetId)
-            {
-                _currentSheetId = createdSheetId;
-                _groupedSheetIds.Clear();
-                _groupedSheetIds.Add(_currentSheetId);
-                SetActiveCell(new CellAddress(
-                    _currentSheetId,
-                    AddPivotTableToNewWorksheetCommand.InitialTargetRow,
-                    AddPivotTableToNewWorksheetCommand.InitialTargetColumn));
-            }
+                ActivateNewWorksheetAtA1(createdSheetId);
 
             RefreshSheetTabs();
             UpdateViewport();
