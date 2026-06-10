@@ -580,6 +580,28 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void InsertCatalogRows_DocumentPivotAdvancedWorkflowsTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var lines = Regex.Split(catalog, "\\r?\\n");
+        var rows = new[]
+        {
+            lines.Single(line => line.StartsWith("| UI-CAT-INSERT-001 |", StringComparison.Ordinal)),
+            lines.Single(line => line.StartsWith("| UI-CAT-CONTEXT-003 |", StringComparison.Ordinal))
+        };
+
+        rows.Should().OnlyContain(row => row.Contains("pivot-advanced-workflows-tour"));
+
+        catalog.Should().Contain("FREEX_PIVOT_ADVANCED_WORKFLOWS_TOUR=1");
+        catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
+        catalog.Should().Contain("pivot_advanced_workflows_tour_manifest.json");
+        catalog.Should().Contain("freex_pivot_advanced_label_value_filters_submitted.png");
+        catalog.Should().Contain("freex_pivot_advanced_value_field_settings_result.png");
+        catalog.Should().Contain("freex_pivot_advanced_reopened_persisted_pivot.png");
+        catalog.Should().Contain("freex_pivot_advanced_workflows_saved.xlsx");
+    }
+
+    [Fact]
     public void InsertCatalogRows_DocumentChartDataLayoutTourEvidence()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
