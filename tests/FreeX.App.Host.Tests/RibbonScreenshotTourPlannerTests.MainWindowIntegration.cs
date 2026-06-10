@@ -8,7 +8,10 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     [Fact]
     public void MainWindowScreenshotTour_UsesPlannerForEnvironmentFilters()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "MainWindow.ScreenshotTour.cs",
+            "MainWindow.ScreenshotTour.ChartDataLayout.cs",
+            "MainWindow.ScreenshotTour.RibbonOverflowKeytip.cs");
 
         source.Should().Contain("RibbonScreenshotTourPlanner.CreatePlan");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_BURST\")");
@@ -29,6 +32,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_STATUS_FOOTER_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_INSERT_OBJECTS_LINKS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DATA_TOOLS_DIALOGS_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_CHART_DATA_LAYOUT_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_VIEW_PANES_ZOOM_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_REVIEW_COMMENTS_PROTECTION_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PAGE_LAYOUT_SETUP_TOUR\")");
@@ -36,7 +40,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_FONT_COLORS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_STYLES_CF_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_RIBBON_OVERFLOW_KEYTIP_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_AUTHORING_NAMES_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PIVOT_OPTIONS_SLICER_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
@@ -61,10 +67,13 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureReviewCommentsProtectionTourAsync");
         source.Should().Contain("CapturePageLayoutSetupTourAsync");
         source.Should().Contain("CaptureDrawObjectFormattingTourAsync");
+        source.Should().Contain("CaptureChartDataLayoutTourAsync");
         source.Should().Contain("CaptureHomeFontColorsTourAsync");
         source.Should().Contain("CaptureHomeStylesConditionalFormattingTourAsync");
         source.Should().Contain("CaptureHomeClipboardCellsEditingTourAsync");
+        source.Should().Contain("CaptureRibbonOverflowKeytipTourAsync");
         source.Should().Contain("CaptureFormulaAuthoringNamesTourAsync");
+        source.Should().Contain("CapturePivotOptionsSlicerTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
@@ -109,16 +118,39 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("review_comments_protection_tour_manifest.json");
         source.Should().Contain("page_layout_setup_tour_manifest.json");
         source.Should().Contain("draw_object_formatting_tour_manifest.json");
+        source.Should().Contain("chart_data_layout_tour_manifest.json");
         source.Should().Contain("home_font_colors_tour_manifest.json");
         source.Should().Contain("home_styles_conditional_formatting_tour_manifest.json");
         source.Should().Contain("home_clipboard_cells_editing_tour_manifest.json");
+        source.Should().Contain("ribbon_overflow_keytip_tour_manifest.json");
         source.Should().Contain("formula_authoring_names_tour_manifest.json");
+        source.Should().Contain("pivot_options_slicer_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
         source.Should().Contain("GetForegroundWindow");
         source.Should().Contain("_suppressClosePrompt = true;");
         source.Should().Contain("throw new InvalidOperationException");
+    }
+
+    [Fact]
+    public void RibbonOverflowKeytipTour_CapturesCollapsedMenusAndEscapeCancellation()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "MainWindow.ScreenshotTour.cs",
+            "MainWindow.ScreenshotTour.RibbonOverflowKeytip.cs");
+
+        source.Should().Contain("RibbonOverflowKeytipTourOutputDirectoryName = \"ribbon-overflow-keytip-tour\"");
+        source.Should().Contain("HomeEditingGroup");
+        source.Should().Contain("InsertChartsGroup");
+        source.Should().Contain("ViewWindowGroup");
+        source.Should().Contain("OpenRibbonContextMenu(collapsedButton, menu)");
+        source.Should().Contain("HandleActiveRibbonKeyTip(Key.Escape)");
+        source.Should().Contain("freex_keytip_escape_after_cancel");
+        source.Should().Contain("IsNonBlankPng");
+        source.Should().Contain("UI-CAT-RIBBON-002A");
+        source.Should().Contain("UI-CAT-RIBBON-002B");
+        source.Should().Contain("UI-CMD-KEYTIP-001");
     }
 
     [Fact]
@@ -773,6 +805,46 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         catalog.Should().Contain("screenshots/draw-object-formatting-tour/");
         catalog.Should().Contain("draw_object_formatting_tour_manifest.json");
         catalog.Should().Contain("freex_draw_object_formatting_selection_pane_rename_visibility.png");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesChartDataLayoutVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs", "MainWindow.ScreenshotTour.ChartDataLayout.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_CHART_DATA_LAYOUT_TOUR");
+        source.Should().Contain("chart-data-layout-tour");
+        source.Should().Contain("EnsureChartDataLayoutTourContext");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.ChartContextTabs.Single(tab => tab.Header == \"Chart Design\"))");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.ChartContextTabs.Single(tab => tab.Header == \"Format\"))");
+        source.Should().Contain("new SelectDataSourceDialog(");
+        source.Should().Contain("new MoveChartDialog(context.Sheet.Name)");
+        source.Should().Contain("new ChangeChartTypeDialog(context.Chart.Type)");
+        source.Should().Contain("new ChartStyleDialog(context.Chart)");
+        source.Should().Contain("new ChartTitlesDialog(context.Chart.Title, context.Chart.XAxisTitle, context.Chart.YAxisTitle)");
+        source.Should().Contain("new ChartAreaLegendDialog(context.Chart)");
+        source.Should().Contain("OnWaterfallChartPointContextMenuRequested(context.WaterfallChart, pointIndex: 1");
+        source.Should().Contain("freex_chart_data_layout_selected_chart_design_context");
+        source.Should().Contain("freex_chart_data_layout_select_data_dialog");
+        source.Should().Contain("freex_chart_data_layout_move_chart_dialog");
+        source.Should().Contain("freex_chart_data_layout_change_chart_type_dialog");
+        source.Should().Contain("freex_chart_data_layout_chart_styles_dialog");
+        source.Should().Contain("freex_chart_data_layout_chart_titles_dialog");
+        source.Should().Contain("freex_chart_data_layout_format_chart_area_dialog");
+        source.Should().Contain("freex_chart_data_layout_waterfall_point_context_menu");
+        source.Should().Contain("UI-CAT-INSERT-002B");
+        source.Should().Contain("UI-CAT-INSERT-002C");
+        source.Should().Contain("UI-CMD-INSERT-016");
+        source.Should().Contain("ChartDataLayoutTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.ChartDataLayoutTourManifest");
+        source.Should().Contain("physical chart selection handles");
+
+        catalog.Should().Contain("FREEX_CHART_DATA_LAYOUT_TOUR=1");
+        catalog.Should().Contain("screenshots/chart-data-layout-tour/");
+        catalog.Should().Contain("chart_data_layout_tour_manifest.json");
+        catalog.Should().Contain("freex_chart_data_layout_select_data_dialog.png");
+        catalog.Should().Contain("freex_chart_data_layout_waterfall_point_context_menu.png");
     }
 
     [Fact]
