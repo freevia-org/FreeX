@@ -47,6 +47,8 @@ public partial class MainWindow
     private const string PrintPreviewTourManifestFileName = "print_preview_tour_manifest.json";
     private const string OptionsAccountTourManifestFileName = "options_account_tour_manifest.json";
     private const string OptionsAccountTourOutputDirectoryName = "options-account-tour";
+    private const string HelpAboutLegalTourManifestFileName = "help_about_legal_tour_manifest.json";
+    private const string HelpAboutLegalTourOutputDirectoryName = "help-about-legal-tour";
     private const string QatUndoRedoTourManifestFileName = "qat_undo_redo_tour_manifest.json";
     private const string QatUndoRedoTourOutputDirectoryName = "qat-undo-redo-tour";
     private const string SheetTabTourManifestFileName = "sheet_tabs_tour_manifest.json";
@@ -138,6 +140,7 @@ public partial class MainWindow
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
         var optionsAccountTour = Environment.GetEnvironmentVariable("FREEX_OPTIONS_ACCOUNT_TOUR") == "1";
+        var helpAboutLegalTour = Environment.GetEnvironmentVariable("FREEX_HELP_ABOUT_LEGAL_TOUR") == "1";
         var qatUndoRedoTour = Environment.GetEnvironmentVariable("FREEX_QAT_UNDO_REDO_TOUR") == "1";
         var titlebarWindowChromeTour = Environment.GetEnvironmentVariable("FREEX_TITLEBAR_WINDOW_CHROME_TOUR") == "1";
         var formulaBarNameBoxTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_BAR_NAME_BOX_TOUR") == "1";
@@ -146,7 +149,7 @@ public partial class MainWindow
         var dataToolsDialogsTour = Environment.GetEnvironmentVariable("FREEX_DATA_TOOLS_DIALOGS_TOUR") == "1";
         var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !viewPanesZoomTour && !formulaDiagnosticsTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !viewPanesZoomTour && !formulaDiagnosticsTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -163,7 +166,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, viewPanesZoomTour, formulaDiagnosticsTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, viewPanesZoomTour, formulaDiagnosticsTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -198,6 +201,7 @@ public partial class MainWindow
         bool keyTipOverlayTour,
         bool printPreviewTour,
         bool optionsAccountTour,
+        bool helpAboutLegalTour,
         bool qatUndoRedoTour,
         bool titlebarWindowChromeTour,
         bool statusFooterTour,
@@ -239,6 +243,9 @@ public partial class MainWindow
 
         if (optionsAccountTour)
             await CaptureOptionsAccountTourAsync(Path.Combine(outputDir, OptionsAccountTourOutputDirectoryName));
+
+        if (helpAboutLegalTour)
+            await CaptureHelpAboutLegalTourAsync(Path.Combine(outputDir, HelpAboutLegalTourOutputDirectoryName));
 
         if (qatUndoRedoTour)
             await CaptureQatUndoRedoTourAsync(Path.Combine(outputDir, QatUndoRedoTourOutputDirectoryName));
@@ -1852,6 +1859,277 @@ public partial class MainWindow
         "freex_options_quick_access_toolbar_category_navigation.png",
         "freex_options_view_category_navigation.png",
         "freex_options_cancel_focus_return.png"
+    ];
+
+    private async Task CaptureHelpAboutLegalTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteHelpAboutLegalTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1120;
+        Height = 768;
+        await Task.Delay(700);
+
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Help"));
+        HelpOnlineButton.Focus();
+        Keyboard.Focus(HelpOnlineButton);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+
+        var captures = new List<HelpAboutLegalTourManifestCapture>
+        {
+            new(
+                CaptureKey: "help:ribbon-command-context",
+                PairKey: "interactive:help:ribbon-command-context",
+                ScenarioId: "help-about-legal:ribbon",
+                State: "ribbon-command-context",
+                Surface: "Help ribbon tab",
+                FileName: "freex_help_ribbon_command_context",
+                OutputFileName: "freex_help_ribbon_command_context.png",
+                CaptureMethod: "RenderTargetBitmap-main-window-top-band",
+                EntryPath: "Help tab",
+                EvidenceSummary: "Help tab command context shows Help Online, Feedback, Copy Diagnostics, Check for Updates, About FreeX, and Legal Notices.",
+                Url: null,
+                FocusedElementAutomationId: AutomationProperties.GetAutomationId(HelpOnlineButton),
+                CaptureLogicalWidth: ActualWidth,
+                CaptureLogicalHeight: ScreenshotTourCaptureHeight)
+        };
+        await CaptureCurrentWindowAsync(outputDir, "freex_help_ribbon_command_context", ScreenshotTourCaptureHeight);
+
+        captures.Add(await CaptureGuardedExternalHelpMessageForTourAsync(
+            outputDir,
+            "help-online-guarded-message",
+            "freex_help_online_guarded_message",
+            "Help > Help Online guarded external-link warning",
+            AppInfo.HelpUrl,
+            UiText.Get("MainWindowMessage_HelpOnlineTitle")));
+
+        captures.Add(await CaptureGuardedExternalHelpMessageForTourAsync(
+            outputDir,
+            "feedback-guarded-message",
+            "freex_feedback_guarded_message",
+            "Help > Feedback guarded external-link warning with diagnostics-aware issue URL",
+            AppIssueReporter.CreateIssueUrl(CreateDeterministicIssueReportContextForHelpTour()),
+            UiText.Get("MainWindowMessage_FeedbackTitle")));
+
+        captures.Add(await CaptureGuardedExternalHelpMessageForTourAsync(
+            outputDir,
+            "updates-guarded-message",
+            "freex_updates_guarded_message",
+            "Help > Check for Updates guarded external-link warning",
+            AppUpdateSource.CreateDefault().ReleasePageUrl,
+            UiText.Get("MainWindowMessage_CheckForUpdatesTitle")));
+
+        captures.Add(await CaptureAboutDialogForTourAsync(outputDir));
+        captures.Add(await CaptureLegalNoticesDialogForTourAsync(outputDir));
+
+        ValidateHelpAboutLegalTourEvidence(outputDir);
+        await WriteHelpAboutLegalTourManifestAsync(outputDir, captures);
+    }
+
+    private async Task<HelpAboutLegalTourManifestCapture> CaptureGuardedExternalHelpMessageForTourAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string evidenceSummary,
+        string url,
+        string title)
+    {
+        var messageCapture = CaptureOwnedNativeDialogWhenShownForHelpTourAsync(
+            title,
+            outputDir,
+            fileName,
+            state,
+            evidenceSummary,
+            url);
+        ShowOwnedMessage(
+            CreateExternalLinkOpenFailedMessageForHelpTour(url),
+            title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+
+        return await messageCapture;
+    }
+
+    private async Task<HelpAboutLegalTourManifestCapture> CaptureAboutDialogForTourAsync(string outputDir)
+    {
+        var dialog = new AboutDialog
+        {
+            Owner = this,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowActivated = true
+        };
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            dialog.UpdateLayout();
+            await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await Task.Delay(350);
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_about_dialog");
+
+            return new HelpAboutLegalTourManifestCapture(
+                CaptureKey: "help:about-dialog:opened",
+                PairKey: "interactive:help:about-dialog:opened",
+                ScenarioId: "help-about-legal:about-dialog",
+                State: "about-dialog-opened",
+                Surface: "About FreeX dialog",
+                FileName: "freex_about_dialog",
+                OutputFileName: "freex_about_dialog.png",
+                CaptureMethod: "RenderTargetBitmap-about-dialog-window",
+                EntryPath: "Help > About FreeX",
+                EvidenceSummary: "About FreeX dialog is the production owned WPF dialog with read-only version/license text and OK close path.",
+                Url: null,
+                FocusedElementAutomationId: Keyboard.FocusedElement is DependencyObject focusedElement
+                    ? AutomationProperties.GetAutomationId(focusedElement)
+                    : null,
+                CaptureLogicalWidth: dialog.ActualWidth,
+                CaptureLogicalHeight: dialog.ActualHeight);
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private async Task<HelpAboutLegalTourManifestCapture> CaptureLegalNoticesDialogForTourAsync(string outputDir)
+    {
+        var dialog = new LegalNoticesDialog
+        {
+            Owner = this,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowActivated = true
+        };
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            dialog.UpdateLayout();
+            await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await Task.Delay(350);
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_legal_notices_dialog");
+
+            return new HelpAboutLegalTourManifestCapture(
+                CaptureKey: "help:legal-notices-dialog:opened",
+                PairKey: "interactive:help:legal-notices-dialog:opened",
+                ScenarioId: "help-about-legal:legal-notices-dialog",
+                State: "legal-notices-dialog-opened",
+                Surface: "Legal Notices dialog",
+                FileName: "freex_legal_notices_dialog",
+                OutputFileName: "freex_legal_notices_dialog.png",
+                CaptureMethod: "RenderTargetBitmap-legal-notices-dialog-window",
+                EntryPath: "Help > Legal Notices",
+                EvidenceSummary: "Legal Notices dialog is the production owned WPF dialog with packaged legal/privacy/third-party tabs and copyable read-only text.",
+                Url: null,
+                FocusedElementAutomationId: Keyboard.FocusedElement is DependencyObject focusedElement
+                    ? AutomationProperties.GetAutomationId(focusedElement)
+                    : null,
+                CaptureLogicalWidth: dialog.ActualWidth,
+                CaptureLogicalHeight: dialog.ActualHeight);
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private static string CreateExternalLinkOpenFailedMessageForHelpTour(string url)
+    {
+        var reason = UiText.Get("MainWindowMessage_ExternalLinkCouldNotBeOpened");
+        return UiText.Format("MainWindowMessage_ExternalLinkOpenFailed", url, reason);
+    }
+
+    private static AppIssueReportContext CreateDeterministicIssueReportContextForHelpTour() =>
+        new(
+            AppInfo.FeedbackUrl,
+            new AppDiagnosticsMetadata(
+                AppInfo.VersionText,
+                "visual-evidence-session",
+                ".NET visual evidence runtime",
+                "Windows visual evidence runner",
+                "X64"),
+            "visual-evidence",
+            DiagnosticsEnabled: false);
+
+    private async Task<HelpAboutLegalTourManifestCapture> CaptureOwnedNativeDialogWhenShownForHelpTourAsync(
+        string caption,
+        string outputDir,
+        string fileName,
+        string state,
+        string evidenceSummary,
+        string url)
+    {
+        var owner = new WindowInteropHelper(this).Handle;
+        if (owner == IntPtr.Zero)
+            throw new InvalidOperationException("Help/About/Legal tour could not resolve the FreeX owner window handle.");
+
+        return await Task.Run(() =>
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            IntPtr dialogHandle;
+            do
+            {
+                dialogHandle = FindOwnedNativeWindow(owner, caption);
+                if (dialogHandle != IntPtr.Zero)
+                    break;
+
+                Task.Delay(100).GetAwaiter().GetResult();
+            }
+            while (DateTime.UtcNow < deadline);
+
+            if (dialogHandle == IntPtr.Zero)
+                throw new InvalidOperationException($"Help/About/Legal tour did not find the owned native dialog '{caption}'.");
+
+            var size = CaptureNativeWindow(dialogHandle, outputDir, fileName);
+            PostMessage(dialogHandle, 0x0010, IntPtr.Zero, IntPtr.Zero);
+
+            return new HelpAboutLegalTourManifestCapture(
+                CaptureKey: $"help:{state}",
+                PairKey: $"interactive:help:{state}",
+                ScenarioId: "help-about-legal:external-link-guard",
+                State: state,
+                Surface: "Owned guarded external-link warning",
+                FileName: fileName,
+                OutputFileName: $"{fileName}.png",
+                CaptureMethod: "PrintWindow-owned-native-dialog",
+                EntryPath: caption,
+                EvidenceSummary: evidenceSummary,
+                Url: url,
+                FocusedElementAutomationId: null,
+                CaptureLogicalWidth: size.Width,
+                CaptureLogicalHeight: size.Height);
+        });
+    }
+
+    private static void DeleteHelpAboutLegalTourEvidence(string outputDir)
+    {
+        foreach (var fileName in HelpAboutLegalTourExpectedFileNames().Append(HelpAboutLegalTourManifestFileName))
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static void ValidateHelpAboutLegalTourEvidence(string outputDir)
+    {
+        var missing = HelpAboutLegalTourExpectedFileNames()
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+        if (missing.Length > 0)
+            throw new InvalidOperationException($"Help/About/Legal tour did not capture expected evidence: {string.Join(", ", missing)}.");
+    }
+
+    private static IReadOnlyList<string> HelpAboutLegalTourExpectedFileNames() =>
+    [
+        "freex_help_ribbon_command_context.png",
+        "freex_help_online_guarded_message.png",
+        "freex_feedback_guarded_message.png",
+        "freex_updates_guarded_message.png",
+        "freex_about_dialog.png",
+        "freex_legal_notices_dialog.png"
     ];
 
     private static T? FindDescendantByAutomationId<T>(DependencyObject root, string automationId)
@@ -5982,6 +6260,53 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.OptionsAccountTourManifest);
     }
 
+    private static async Task WriteHelpAboutLegalTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<HelpAboutLegalTourManifestCapture> captures)
+    {
+        var manifest = new HelpAboutLegalTourManifest(
+            Tool: "FREEX_HELP_ABOUT_LEGAL_TOUR",
+            EvidenceFamily: "help-about-legal",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "help-about-legal:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_<Surface>_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#UI-CMD-HELP-001",
+            EntryPaths:
+            [
+                "Help tab",
+                "Help > Help Online",
+                "Help > Feedback",
+                "Help > Check for Updates",
+                "Help > About FreeX",
+                "Help > Legal Notices"
+            ],
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-WPF-windows-and-PrintWindow-owned-native-dialogs",
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process WPF RenderTargetBitmap captures plus owned native guarded-message PrintWindow captures; no global mouse, keyboard, UIA input, or external browser launch is used."
+                    : "Abort before WPF window file writes unless the expected FreeX window owns foreground focus; owned native guarded messages are captured by HWND ownership and caption."),
+            ExternalBrowserLaunched: false,
+            PlannedCaptureCount: HelpAboutLegalTourExpectedFileNames().Count,
+            ActualCaptureCount: captures.Count,
+            Captures: captures,
+            Limitations:
+            [
+                "This in-app tour captures real FreeX WPF Help, About, and Legal Notices surfaces with RenderTargetBitmap.",
+                "The Help Online, Feedback, and Check for Updates captures intentionally render FreeX-owned guarded failure messages instead of launching a browser or external process.",
+                "The tour does not synthesize foreground mouse clicks, keytips, or UI Automation invoke; those interaction paths remain separate from this visual evidence.",
+                "The About and Legal Notices dialogs are shown as owned WPF windows for deterministic capture, then closed directly by the tour.",
+                "No Microsoft Excel counterpart capture is produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, HelpAboutLegalTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HelpAboutLegalTourManifest);
+    }
+
     private static async Task WriteDataToolsDialogsTourManifestAsync(
         string outputDir,
         DataToolsDialogsTourContext context,
@@ -6442,6 +6767,41 @@ public partial class MainWindow
         double CaptureLogicalHeight);
 
     private sealed record OptionsAccountTourNativeCaptureSize(int Width, int Height);
+
+    private sealed record HelpAboutLegalTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> EntryPaths,
+        string CaptureStatus,
+        string CaptureMethod,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        bool ExternalBrowserLaunched,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        IReadOnlyList<HelpAboutLegalTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record HelpAboutLegalTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        string EntryPath,
+        string EvidenceSummary,
+        string? Url,
+        string? FocusedElementAutomationId,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
 
     private sealed record DataToolsDialogsTourContext(
         Sheet Sheet,
@@ -6949,6 +7309,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(OptionsAccountTourManifest))]
+    [JsonSerializable(typeof(HelpAboutLegalTourManifest))]
     [JsonSerializable(typeof(KeyTipOverlayTourManifest))]
     [JsonSerializable(typeof(QatUndoRedoTourManifest))]
     [JsonSerializable(typeof(SheetTabTourManifest))]
