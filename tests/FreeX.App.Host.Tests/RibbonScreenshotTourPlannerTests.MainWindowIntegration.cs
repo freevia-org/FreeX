@@ -24,6 +24,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_TITLEBAR_WINDOW_CHROME_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_BAR_NAME_BOX_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_STATUS_FOOTER_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DATA_TOOLS_DIALOGS_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
@@ -36,6 +37,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureTitlebarWindowChromeTourAsync");
         source.Should().Contain("CaptureFormulaBarNameBoxTourAsync");
         source.Should().Contain("CaptureStatusFooterTourAsync");
+        source.Should().Contain("CaptureDataToolsDialogsTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
@@ -52,6 +54,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WriteTitlebarWindowChromeTourManifestAsync");
         source.Should().Contain("WriteFormulaBarNameBoxTourManifestAsync");
         source.Should().Contain("WriteStatusFooterTourManifestAsync");
+        source.Should().Contain("WriteDataToolsDialogsTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
         source.Should().Contain("print_preview_tour_manifest.json");
@@ -60,6 +63,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("titlebar_window_chrome_tour_manifest.json");
         source.Should().Contain("formula_bar_name_box_tour_manifest.json");
         source.Should().Contain("status_footer_tour_manifest.json");
+        source.Should().Contain("data_tools_dialogs_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
@@ -323,5 +327,53 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("PageBreakPreviewChecked");
         source.Should().Contain("FormulaBarText");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesDataToolsDialogsVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_DATA_TOOLS_DIALOGS_TOUR");
+        source.Should().Contain("data-tools-dialogs-tour");
+        source.Should().Contain("EnsureDataToolsDialogsTourContext");
+        source.Should().Contain("AdvancedFilterDialog(");
+        source.Should().Contain("TextToColumnsDialog(");
+        source.Should().Contain("RemoveDuplicatesDialog(");
+        source.Should().Contain("CreateDataValidationTourDialog");
+        source.Should().Contain("GoalSeekDialog(");
+        source.Should().Contain("GoalSeekStatusDialog(new GoalSeekResult(true, 125d, 5000d, 7), 5000d)");
+        source.Should().Contain("ScenarioManagerDialog(_workbook, context.Sheet.Id, ResolveSheetIdByName)");
+        source.Should().Contain("DataTableDialog(context.Sheet.Id, context.DataTableRange");
+        source.Should().Contain("ConsolidateDialog(context.Sheet.Id, context.ConsolidateSourceRange.ToString(), \"H2\"");
+        source.Should().Contain("ForecastSheetDialog(6)");
+        source.Should().Contain("freex_data_tools_advanced_filter_dialog");
+        source.Should().Contain("freex_data_tools_text_to_columns_step1_original_data_type");
+        source.Should().Contain("freex_data_tools_text_to_columns_step2_delimited");
+        source.Should().Contain("freex_data_tools_text_to_columns_step2_fixed_width");
+        source.Should().Contain("freex_data_tools_text_to_columns_step3_column_format_destination");
+        source.Should().Contain("freex_data_tools_remove_duplicates_headers_columns");
+        source.Should().Contain("freex_data_tools_data_validation_settings_tab");
+        source.Should().Contain("freex_data_tools_data_validation_input_message_tab");
+        source.Should().Contain("freex_data_tools_data_validation_error_alert_tab");
+        source.Should().Contain("freex_data_tools_goal_seek_dialog");
+        source.Should().Contain("freex_data_tools_goal_seek_status_dialog");
+        source.Should().Contain("freex_data_tools_scenario_manager_dialog");
+        source.Should().Contain("freex_data_tools_data_table_dialog");
+        source.Should().Contain("freex_data_tools_consolidate_dialog");
+        source.Should().Contain("freex_data_tools_forecast_sheet_dialog");
+        source.Should().Contain("UI-CMD-DATA-003");
+        source.Should().Contain("UI-CMD-DATA-004");
+        source.Should().Contain("UI-CMD-DATA-005");
+        source.Should().Contain("UI-CMD-DATA-006");
+        source.Should().Contain("RenderTargetBitmap-data-tools-dialog-window");
+        source.Should().Contain("no global mouse, keyboard, keytip, range-picker, or screen capture input is used");
+        source.Should().Contain("Goal Seek status is seeded with a deterministic converged result");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.DataToolsDialogsTourManifest");
+
+        catalog.Should().Contain("FREEX_DATA_TOOLS_DIALOGS_TOUR=1");
+        catalog.Should().Contain("screenshots/data-tools-dialogs-tour/");
+        catalog.Should().Contain("data_tools_dialogs_tour_manifest.json");
     }
 }

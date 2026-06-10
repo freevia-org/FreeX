@@ -17,6 +17,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -52,6 +53,8 @@ public partial class MainWindow
     private const string FormulaBarNameBoxTourOutputDirectoryName = "formula-bar-name-box-tour";
     private const string StatusFooterTourManifestFileName = "status_footer_tour_manifest.json";
     private const string StatusFooterTourOutputDirectoryName = "status-footer-tour";
+    private const string DataToolsDialogsTourManifestFileName = "data_tools_dialogs_tour_manifest.json";
+    private const string DataToolsDialogsTourOutputDirectoryName = "data-tools-dialogs-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -125,7 +128,8 @@ public partial class MainWindow
         var titlebarWindowChromeTour = Environment.GetEnvironmentVariable("FREEX_TITLEBAR_WINDOW_CHROME_TOUR") == "1";
         var formulaBarNameBoxTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_BAR_NAME_BOX_TOUR") == "1";
         var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour)
+        var dataToolsDialogsTour = Environment.GetEnvironmentVariable("FREEX_DATA_TOOLS_DIALOGS_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !dataToolsDialogsTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -142,7 +146,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, dataToolsDialogsTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -178,7 +182,8 @@ public partial class MainWindow
         bool qatUndoRedoTour,
         bool titlebarWindowChromeTour,
         bool statusFooterTour,
-        bool formulaBarNameBoxTour)
+        bool formulaBarNameBoxTour,
+        bool dataToolsDialogsTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -217,6 +222,9 @@ public partial class MainWindow
 
         if (formulaBarNameBoxTour)
             await CaptureFormulaBarNameBoxTourAsync(Path.Combine(outputDir, FormulaBarNameBoxTourOutputDirectoryName));
+
+        if (dataToolsDialogsTour)
+            await CaptureDataToolsDialogsTourAsync(Path.Combine(outputDir, DataToolsDialogsTourOutputDirectoryName));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -1157,6 +1165,42 @@ public partial class MainWindow
         {
             var child = VisualTreeHelper.GetChild(root, index);
             var match = FindDescendantByAutomationId<T>(child, automationId);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
+    }
+
+    private static T? FindDescendantByContent<T>(DependencyObject root, string content)
+        where T : ContentControl
+    {
+        if (root is T element && string.Equals(element.Content?.ToString(), content, StringComparison.Ordinal))
+            return element;
+
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            var match = FindDescendantByContent<T>(child, content);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
+    }
+
+    private static T? FindDescendant<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        if (root is T element)
+            return element;
+
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            var match = FindDescendant<T>(child);
             if (match is not null)
                 return match;
         }
@@ -2180,6 +2224,437 @@ public partial class MainWindow
             var path = Path.Combine(outputDir, capture.OutputFileName);
             if (!File.Exists(path))
                 throw new InvalidOperationException($"Status/footer tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
+    private async Task CaptureDataToolsDialogsTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteDataToolsDialogsTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 768;
+        await Task.Delay(700);
+
+        var context = EnsureDataToolsDialogsTourContext();
+        var captures = new List<DataToolsDialogsTourManifestCapture>();
+        Window? openDialog = null;
+
+        try
+        {
+            openDialog = new AdvancedFilterDialog(
+                _currentSheetId,
+                context.RemoveDuplicatesRange.ToString(),
+                ResolveSheetIdByName,
+                _ => { })
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-003",
+                "advanced-filter-dialog",
+                "Advanced Filter",
+                "freex_data_tools_advanced_filter_dialog",
+                "Advanced Filter dialog shows action choices, list range, criteria range, copy-to range, unique records, and range picker buttons."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new TextToColumnsDialog(
+                TextToColumnsDialog.BuildPreviewRows(context.Sheet, context.TextToColumnsRange),
+                context.TextToColumnsRange.Start,
+                _ => { })
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-004",
+                "text-to-columns-step-1-original-data-type",
+                "Text to Columns",
+                "freex_data_tools_text_to_columns_step1_original_data_type",
+                "Text to Columns wizard step 1 shows delimited/fixed-width original data type choices and a seeded preview."));
+
+            ClickDataToolsDialogButton(openDialog, UiText.Get("TextToColumns_NextButton"));
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-004",
+                "text-to-columns-step-2-delimited",
+                "Text to Columns",
+                "freex_data_tools_text_to_columns_step2_delimited",
+                "Text to Columns wizard step 2 shows delimiter choices, text qualifier, consecutive delimiter option, and split preview."));
+
+            SetDataToolsDialogRadio(openDialog, UiText.Get("TextToColumns_FixedWidth"));
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-004",
+                "text-to-columns-step-2-fixed-width",
+                "Text to Columns",
+                "freex_data_tools_text_to_columns_step2_fixed_width",
+                "Text to Columns wizard step 2 fixed-width mode shows break-position entry, ruler surface, and preview."));
+
+            SetDataToolsDialogRadio(openDialog, UiText.Get("TextToColumns_Delimited"));
+            ClickDataToolsDialogButton(openDialog, UiText.Get("TextToColumns_NextButton"));
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-004",
+                "text-to-columns-step-3-column-format-destination",
+                "Text to Columns",
+                "freex_data_tools_text_to_columns_step3_column_format_destination",
+                "Text to Columns wizard step 3 shows column data format choices, destination editor, advanced separators, and final preview."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new RemoveDuplicatesDialog(
+                RemoveDuplicatesDialog.BuildColumnChoices(context.Sheet, context.RemoveDuplicatesRange),
+                RemoveDuplicatesDialog.BuildColumnChoices(context.Sheet, context.RemoveDuplicatesRange, hasHeaders: false),
+                hasHeaders: true)
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-005",
+                "remove-duplicates-header-column-list",
+                "Remove Duplicates",
+                "freex_data_tools_remove_duplicates_headers_columns",
+                "Remove Duplicates dialog shows My data has headers enabled plus header-derived column checkboxes and Select All/Unselect All controls."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = CreateDataValidationTourDialog();
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-005",
+                "data-validation-settings-tab",
+                "Data Validation",
+                "freex_data_tools_data_validation_settings_tab",
+                "Data Validation Settings tab shows list validation criteria, source editor, in-cell dropdown, ignore blank, and same-settings controls."));
+
+            SelectDataToolsTab(openDialog, 1);
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-005",
+                "data-validation-input-message-tab",
+                "Data Validation",
+                "freex_data_tools_data_validation_input_message_tab",
+                "Data Validation Input Message tab shows title and message editors with show-input-message enabled."));
+
+            SelectDataToolsTab(openDialog, 2);
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-005",
+                "data-validation-error-alert-tab",
+                "Data Validation",
+                "freex_data_tools_data_validation_error_alert_tab",
+                "Data Validation Error Alert tab shows alert style, title, and error message editors with show-error-alert enabled."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new GoalSeekDialog(context.Sheet.Id, context.GoalSeekSetCell, _ => { }) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            FindDescendantByAutomationId<TextBox>(openDialog, "GoalSeekToValueBox")!.Text = "5000";
+            FindDescendantByAutomationId<TextBox>(openDialog, "GoalSeekChangingCellBox")!.Text = context.GoalSeekChangingCell.ToA1();
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-006",
+                "goal-seek-dialog",
+                "Goal Seek",
+                "freex_data_tools_goal_seek_dialog",
+                "Goal Seek dialog shows Set cell, To value, By changing cell, range picker buttons, and OK/Cancel controls."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new GoalSeekStatusDialog(new GoalSeekResult(true, 125d, 5000d, 7), 5000d) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-006",
+                "goal-seek-status-dialog",
+                "Goal Seek Status",
+                "freex_data_tools_goal_seek_status_dialog",
+                "Goal Seek Status dialog shows a converged result message with Keep Result and Restore Original Values default actions."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new ScenarioManagerDialog(_workbook, context.Sheet.Id, ResolveSheetIdByName) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-006",
+                "scenario-manager-dialog",
+                "Scenario Manager",
+                "freex_data_tools_scenario_manager_dialog",
+                "Scenario Manager dialog shows existing scenario list, add/edit fields, changing/result cells, comment, hidden/locked options, and action buttons."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new DataTableDialog(context.Sheet.Id, context.DataTableRange, _ => { }) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            FindDescendantByAutomationId<TextBox>(openDialog, "DataTableRowInputCellBox")!.Text = "E2";
+            FindDescendantByAutomationId<TextBox>(openDialog, "DataTableColumnInputCellBox")!.Text = "F2";
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-006",
+                "data-table-dialog",
+                "Data Table",
+                "freex_data_tools_data_table_dialog",
+                "Data Table dialog shows row and column input cell editors with range picker buttons for a seeded two-variable table range."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new ConsolidateDialog(context.Sheet.Id, context.ConsolidateSourceRange.ToString(), "H2", _ => { }) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-006",
+                "consolidate-dialog",
+                "Consolidate",
+                "freex_data_tools_consolidate_dialog",
+                "Consolidate dialog shows source reference, all references list, destination cell, function selector, label options, and create-links option."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new ForecastSheetDialog(6) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-006",
+                "forecast-sheet-dialog",
+                "Forecast Sheet",
+                "freex_data_tools_forecast_sheet_dialog",
+                "Forecast Sheet dialog shows forecast periods input and Create/Cancel command row."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            ValidateDataToolsDialogsTourEvidence(outputDir, captures);
+            await WriteDataToolsDialogsTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteDataToolsDialogsTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (openDialog is { IsVisible: true })
+                CloseDataToolsTourDialog(openDialog);
+        }
+    }
+
+    private DataToolsDialogsTourContext EnsureDataToolsDialogsTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Data tools dialogs tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        var cells = new (uint Row, uint Col, ScalarValue Value)[]
+        {
+            (1, 1, new TextValue("Region")),
+            (1, 2, new TextValue("Sales Rep")),
+            (1, 3, new TextValue("Amount")),
+            (1, 4, new TextValue("Status")),
+            (2, 1, new TextValue("North")),
+            (2, 2, new TextValue("Ada")),
+            (2, 3, new NumberValue(4200)),
+            (2, 4, new TextValue("Open")),
+            (3, 1, new TextValue("South")),
+            (3, 2, new TextValue("Beth")),
+            (3, 3, new NumberValue(3150)),
+            (3, 4, new TextValue("Closed")),
+            (4, 1, new TextValue("North")),
+            (4, 2, new TextValue("Ada")),
+            (4, 3, new NumberValue(4200)),
+            (4, 4, new TextValue("Open")),
+            (6, 1, new TextValue("East,125,Open")),
+            (7, 1, new TextValue("West,98,Closed")),
+            (8, 1, new TextValue("North,143,Open")),
+            (10, 1, new TextValue("Year")),
+            (10, 2, new TextValue("Revenue")),
+            (11, 1, new NumberValue(2023)),
+            (11, 2, new NumberValue(1200)),
+            (12, 1, new NumberValue(2024)),
+            (12, 2, new NumberValue(1420)),
+            (13, 1, new NumberValue(2025)),
+            (13, 2, new NumberValue(1630)),
+            (2, 5, new NumberValue(125)),
+            (2, 6, new NumberValue(42))
+        };
+
+        foreach (var (row, col, value) in cells)
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), value);
+
+        if (!_workbook.Scenarios.Any(scenario => string.Equals(scenario.Name, "Tour Base Case", StringComparison.Ordinal)))
+        {
+            _workbook.Scenarios.Add(new WorkbookScenario(
+                "Tour Base Case",
+                [
+                    new ScenarioCellValue(new CellAddress(sheet.Id, 2, 3), new NumberValue(4200)),
+                    new ScenarioCellValue(new CellAddress(sheet.Id, 3, 3), new NumberValue(3150))
+                ],
+                "Seeded scenario for deterministic Data Tools dialog visual evidence.",
+                Hidden: false,
+                Locked: true));
+        }
+
+        var removeDuplicatesRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 4));
+        var textToColumnsRange = new GridRange(new CellAddress(sheet.Id, 6, 1), new CellAddress(sheet.Id, 8, 1));
+        var dataTableRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 4, 4));
+        var consolidateSourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3));
+        SetSelectionRange(removeDuplicatesRange, removeDuplicatesRange.Start);
+        EnsureCellVisible(removeDuplicatesRange.Start);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+
+        return new DataToolsDialogsTourContext(
+            sheet,
+            textToColumnsRange,
+            removeDuplicatesRange,
+            dataTableRange,
+            consolidateSourceRange,
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 2, 5));
+    }
+
+    private DataValidationDialog CreateDataValidationTourDialog()
+    {
+        var validation = new DataValidation
+        {
+            Type = DvType.List,
+            Formula1 = "\"North,South,West\"",
+            AllowBlank = true,
+            ShowDropdown = true,
+            ShowInputMessage = true,
+            PromptTitle = "Choose a region",
+            PromptMessage = "Pick a region from the approved sales territories.",
+            ShowErrorMessage = true,
+            AlertStyle = DvAlertStyle.Stop,
+            ErrorTitle = "Invalid region",
+            ErrorMessage = "Use one of the listed region names."
+        };
+
+        return new DataValidationDialog(validation, _ => { })
+        {
+            Owner = this,
+            SelectionSource = "$A$2:$A$4"
+        };
+    }
+
+    private static async Task ShowDataToolsTourDialogAsync(Window dialog)
+    {
+        dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        dialog.Show();
+        dialog.Activate();
+        dialog.UpdateLayout();
+        await Task.Delay(450);
+        await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+    }
+
+    private static void CloseDataToolsTourDialog(Window dialog)
+    {
+        if (dialog.IsVisible)
+            dialog.Close();
+    }
+
+    private static void ClickDataToolsDialogButton(Window dialog, string content)
+    {
+        var button = FindDescendantByContent<Button>(dialog, content)
+            ?? throw new InvalidOperationException($"Data tools dialogs tour could not find button '{content}'.");
+        button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+    }
+
+    private static void SetDataToolsDialogRadio(Window dialog, string content)
+    {
+        var radio = FindDescendantByContent<RadioButton>(dialog, content)
+            ?? throw new InvalidOperationException($"Data tools dialogs tour could not find radio button '{content}'.");
+        radio.IsChecked = true;
+    }
+
+    private static void SelectDataToolsTab(Window dialog, int index)
+    {
+        var tabs = FindDescendant<TabControl>(dialog)
+            ?? throw new InvalidOperationException("Data tools dialogs tour could not find a tab control.");
+        tabs.SelectedIndex = index;
+    }
+
+    private static async Task WaitForDataToolsDialogRenderAsync(Window dialog)
+    {
+        dialog.UpdateLayout();
+        await Task.Delay(250);
+        await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+    }
+
+    private async Task<DataToolsDialogsTourManifestCapture> CaptureDataToolsDialogWindowAsync(
+        Window dialog,
+        string outputDir,
+        string commandRow,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        await WaitForDataToolsDialogRenderAsync(dialog);
+        await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+        return new DataToolsDialogsTourManifestCapture(
+            CaptureKey: $"data-tools-dialogs:{state}",
+            PairKey: $"interactive:data-tools-dialogs:{state}",
+            CatalogCommandRow: commandRow,
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: "RenderTargetBitmap-data-tools-dialog-window",
+            EvidenceSummary: evidenceSummary,
+            CaptureLogicalWidth: dialog.ActualWidth,
+            CaptureLogicalHeight: dialog.ActualHeight);
+    }
+
+    private static void DeleteDataToolsDialogsTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_data_tools_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, DataToolsDialogsTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateDataToolsDialogsTourEvidence(string outputDir, IReadOnlyList<DataToolsDialogsTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Data tools dialogs tour did not create planned capture '{capture.OutputFileName}'.");
         }
     }
 
@@ -3474,6 +3949,69 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.OptionsAccountTourManifest);
     }
 
+    private static async Task WriteDataToolsDialogsTourManifestAsync(
+        string outputDir,
+        DataToolsDialogsTourContext context,
+        IReadOnlyList<DataToolsDialogsTourManifestCapture> captures)
+    {
+        var manifest = new DataToolsDialogsTourManifest(
+            Tool: "FREEX_DATA_TOOLS_DIALOGS_TOUR",
+            EvidenceFamily: "data-tools-dialogs",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "data-tools-dialogs:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_data_tools_<Surface>_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#UI-CAT-DATA-002",
+            CatalogCategoryId: "UI-CAT-DATA-002",
+            CatalogCommandRows: ["UI-CMD-DATA-003", "UI-CMD-DATA-004", "UI-CMD-DATA-005", "UI-CMD-DATA-006"],
+            SheetName: context.Sheet.Name,
+            TextToColumnsRange: context.TextToColumnsRange.ToString(),
+            RemoveDuplicatesRange: context.RemoveDuplicatesRange.ToString(),
+            DataTableRange: context.DataTableRange.ToString(),
+            ConsolidateSourceRange: context.ConsolidateSourceRange.ToString(),
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-data-tools-dialog-window",
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, keytip, range-picker, or screen capture input is used."
+                    : "Dialog captures abort unless the expected FreeX WPF dialog owns foreground focus immediately before render and file write."),
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Captures: captures,
+            CoveredStates:
+            [
+                "Advanced Filter dialog",
+                "Text to Columns wizard step 1 original data type",
+                "Text to Columns wizard step 2 delimited choices",
+                "Text to Columns wizard step 2 fixed-width ruler choices",
+                "Text to Columns wizard step 3 column format/destination choices",
+                "Remove Duplicates header checkbox and column list",
+                "Data Validation Settings tab",
+                "Data Validation Input Message tab",
+                "Data Validation Error Alert tab",
+                "Goal Seek dialog",
+                "Goal Seek Status dialog",
+                "Scenario Manager dialog",
+                "Data Table dialog",
+                "Consolidate dialog",
+                "Forecast Sheet dialog"
+            ],
+            Limitations:
+            [
+                "This bounded first tour opens production FreeX WPF dialog surfaces in process and captures them with RenderTargetBitmap.",
+                "The tour does not synthesize physical mouse/keytip/range-picker/Enter/Escape input; those interaction paths remain separate UI evidence gaps.",
+                "The tour avoids native import/open/save dialogs and does not submit data-tool mutations to the workbook.",
+                "Goal Seek status is seeded with a deterministic converged result instead of running iterative recalculation during screenshot capture.",
+                "No Microsoft Excel counterpart screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, DataToolsDialogsTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.DataToolsDialogsTourManifest);
+    }
+
     private static async Task WriteKeyTipOverlayTourManifestAsync(
         string outputDir,
         IReadOnlyList<KeyTipOverlayTourManifestCapture> captures)
@@ -3780,6 +4318,53 @@ public partial class MainWindow
 
     private sealed record OptionsAccountTourNativeCaptureSize(int Width, int Height);
 
+    private sealed record DataToolsDialogsTourContext(
+        Sheet Sheet,
+        GridRange TextToColumnsRange,
+        GridRange RemoveDuplicatesRange,
+        GridRange DataTableRange,
+        GridRange ConsolidateSourceRange,
+        CellAddress GoalSeekSetCell,
+        CellAddress GoalSeekChangingCell);
+
+    private sealed record DataToolsDialogsTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string CatalogCategoryId,
+        IReadOnlyList<string> CatalogCommandRows,
+        string SheetName,
+        string TextToColumnsRange,
+        string RemoveDuplicatesRange,
+        string DataTableRange,
+        string ConsolidateSourceRange,
+        string CaptureStatus,
+        string CaptureMethod,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        IReadOnlyList<DataToolsDialogsTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record DataToolsDialogsTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string CatalogCommandRow,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        string EvidenceSummary,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
+
     [StructLayout(LayoutKind.Sequential)]
     private readonly struct NativeRect
     {
@@ -4084,6 +4669,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(TitlebarWindowChromeTourManifest))]
     [JsonSerializable(typeof(FormulaBarNameBoxTourManifest))]
     [JsonSerializable(typeof(StatusFooterTourManifest))]
+    [JsonSerializable(typeof(DataToolsDialogsTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.
