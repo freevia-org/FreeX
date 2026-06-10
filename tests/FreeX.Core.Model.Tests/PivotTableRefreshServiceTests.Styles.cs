@@ -93,6 +93,95 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_AppliesGrandTotalRowStyleAcrossBlankRowFieldCells()
+    {
+        var workbook = new Workbook("PivotGrandTotalRowFootprintStyleTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesWithUnitsData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D5"),
+            TargetRange = Range(sheet, "E2", "H8"),
+            StyleName = "PivotStyleMedium9"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Units", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E7").Should().Be("Grand Total");
+        sheet.GetCell(Addr(sheet, "F7"))!.Value.Should().Be(BlankValue.Instance);
+        AssertPivotTotalStyle(workbook, sheet, "E7", new CellColor(221, 235, 247));
+        AssertPivotTotalStyle(workbook, sheet, "F7", new CellColor(221, 235, 247));
+        AssertPivotTotalStyle(workbook, sheet, "G7", new CellColor(221, 235, 247));
+        AssertPivotTotalStyle(workbook, sheet, "H7", new CellColor(221, 235, 247));
+    }
+
+    [Fact]
+    public void Refresh_AppliesSubtotalRowStyleAcrossBlankRowFieldCells()
+    {
+        var workbook = new Workbook("PivotSubtotalRowFootprintStyleTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesWithUnitsData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D5"),
+            TargetRange = Range(sheet, "E2", "H10"),
+            StyleName = "PivotStyleMedium9",
+            ShowSubtotals = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Units", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E5").Should().Be("East Total");
+        sheet.GetCell(Addr(sheet, "F5"))!.Value.Should().Be(BlankValue.Instance);
+        AssertPivotTotalStyle(workbook, sheet, "E5", new CellColor(221, 235, 247));
+        AssertPivotTotalStyle(workbook, sheet, "F5", new CellColor(221, 235, 247));
+        AssertPivotTotalStyle(workbook, sheet, "G5", new CellColor(221, 235, 247));
+        AssertPivotTotalStyle(workbook, sheet, "H5", new CellColor(221, 235, 247));
+    }
+
+    [Fact]
+    public void Refresh_AppliesHeaderStyleAcrossBlankGrandTotalColumnHeaderCells()
+    {
+        var workbook = new Workbook("PivotGrandTotalColumnHeaderFootprintStyleTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "E2", "J8"),
+            StyleName = "PivotStyleMedium9"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "J2").Should().Be("Grand Total");
+        sheet.GetCell(Addr(sheet, "J3"))!.Value.Should().Be(BlankValue.Instance);
+        var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "J3"))!.StyleId);
+        headerStyle.Bold.Should().BeTrue();
+        headerStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        headerStyle.FontColor.Should().Be(CellColor.White);
+        headerStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin);
+    }
+
+    [Fact]
     public void Refresh_AppliesPivotStyleHeaderFlagsToRowAndColumnHeadersSeparately()
     {
         var workbook = new Workbook("PivotStyleHeaderFlagRenderTest");
@@ -518,4 +607,14 @@ public sealed partial class PivotTableRefreshServiceTests
             .WithColor(WorkbookThemeColorSlot.Accent5, new CellColor(150, 45, 140))
             .WithColor(WorkbookThemeColorSlot.Accent6, new CellColor(80, 145, 35));
 
+    private static void AssertPivotTotalStyle(Workbook workbook, Sheet sheet, string a1, CellColor expectedFill)
+    {
+        var cell = sheet.GetCell(Addr(sheet, a1));
+        cell.Should().NotBeNull();
+        var style = workbook.GetStyle(cell!.StyleId);
+        style.Bold.Should().BeTrue();
+        style.FillColor.Should().Be(expectedFill);
+        style.BorderTop.Style.Should().Be(BorderStyle.Thin);
+        style.BorderBottom.Style.Should().Be(BorderStyle.Thin);
+    }
 }

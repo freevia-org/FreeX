@@ -22,7 +22,10 @@ public static partial class BuiltInFunctions
                 cells[r, c] = value is ErrorValue e ? e : map(value);
             }
 
-        return new RangeValue(cells);
+        // Preserve the source range's absolute origin so a legacy (Implicit) formula that broadcasts a scalar
+        // function over a range — e.g. =ABS(K1:N1), =ACOS(K8:N8) — can implicitly intersect the result to the
+        // cell sharing the formula's row/column. Without the origin the intersection looks off-axis (#VALUE!).
+        return new RangeValue(cells, range.StartRow, range.StartCol);
     }
 
     private static ScalarValue MapTernaryTextArgs(
