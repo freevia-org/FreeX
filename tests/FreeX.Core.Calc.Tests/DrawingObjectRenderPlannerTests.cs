@@ -117,6 +117,28 @@ public sealed class DrawingObjectRenderPlannerTests
     }
 
     [Fact]
+    public void Plan_SupportedDrawingShapeKinds_UseShapePrimitive()
+    {
+        foreach (var kind in Enum.GetValues<DrawingShapeKind>().Where(DrawingShapeKindSupport.IsRenderable))
+        {
+            var plan = DrawingObjectRenderPlanner.Plan(new DrawingObjectBounds(
+                SelectionPaneObjectKind.Shape,
+                Guid.NewGuid(),
+                kind.ToString(),
+                1,
+                1,
+                0,
+                0,
+                80,
+                40,
+                ShapeKind: kind));
+
+            plan.IsReady.Should().BeTrue(kind.ToString());
+            plan.PrimitiveKind.Should().Be(DrawingObjectRenderPrimitiveKind.Shape, kind.ToString());
+        }
+    }
+
+    [Fact]
     public void GetViewport_PictureBoundsExposePlannerPayloads()
     {
         var workbook = new Workbook("test");

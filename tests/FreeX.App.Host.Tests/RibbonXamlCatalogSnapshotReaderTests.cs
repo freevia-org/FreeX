@@ -137,10 +137,7 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
 
         var shapes = Command(catalog, "Insert", "Illustrations", "Shapes");
-        shapes.MenuItems.Select(item => item.Header).Should().Equal("Rectangle", "Ellipse", "Line");
-        shapes.MenuItems.Should().Contain(item => item.Header == "Rectangle" &&
-                                                  item.KeyTip == "R" &&
-                                                  item.ClickHandler == "DrawRectBtn_Click");
+        shapes.MenuItems.Should().BeEmpty("the expanded shape gallery is generated from InsertShapeGalleryCatalog at runtime");
 
         Group(catalog, "Insert", "Illustrations").Commands.Select(command => command.Title)
             .Should()

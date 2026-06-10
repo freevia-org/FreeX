@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
@@ -8,7 +9,7 @@ public sealed class InsertCommandSourceTests
     [InlineData("PivotTable", "PivotTable", "PT", "PivotTableBtn_Click")]
     [InlineData("Table", "Table", "TB", "TableBtn_Click")]
     [InlineData("Pictures", "Pictures", "IP", "InsertPictureBtn_Click")]
-    [InlineData("Shapes", "Shapes", "SH", "DrawRectBtn_Click")]
+    [InlineData("Shapes", "Shapes", "SH", "ShapesBtn_Click")]
     [InlineData("Line Sparkline", "Line", "SL", "SparklineLineBtn_Click")]
     [InlineData("Column Sparkline", "Column", "SK", "SparklineColumnBtn_Click")]
     [InlineData("Win/Loss Sparkline", "Win/Loss", "SW", "SparklineWinLossBtn_Click")]
@@ -71,22 +72,38 @@ public sealed class InsertCommandSourceTests
     }
 
     [Fact]
-    public void InsertShapesButton_ExposesExpectedShapeMenuRoutes()
+    public void InsertShapesCatalog_ExposesExcelLikeGroupedRenderableShapeGallery()
     {
         var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
             .ExtractButtonElementByInvariantCommandName("Shapes");
 
-        var rectangle = button.ExtractMenuItemElementByClickHandler("DrawRectBtn_Click");
-        rectangle.ShouldContainLocalizedAttribute("Header", "Rectangle");
-        rectangle.Should().Contain("local:RibbonTooltip.KeyTip=\"R\"");
+        button.Should().Contain("x:Name=\"ShapesBtn\"");
+        button.Should().NotContain("<Button.ContextMenu>");
 
-        var ellipse = button.ExtractMenuItemElementByClickHandler("DrawEllipseBtn_Click");
-        ellipse.ShouldContainLocalizedAttribute("Header", "Ellipse");
-        ellipse.Should().Contain("local:RibbonTooltip.KeyTip=\"E\"");
+        InsertShapeGalleryCatalog.Groups.Select(group => group.Label).Should().Equal(
+            "Lines",
+            "Rectangles",
+            "Basic Shapes",
+            "Block Arrows",
+            "Equation Shapes",
+            "Flowchart",
+            "Stars and Banners",
+            "Callouts");
 
-        var line = button.ExtractMenuItemElementByClickHandler("DrawLineBtn_Click");
-        line.ShouldContainLocalizedAttribute("Header", "Line");
-        line.Should().Contain("local:RibbonTooltip.KeyTip=\"L\"");
+        var items = InsertShapeGalleryCatalog.Items.ToArray();
+        items.Should().HaveCountGreaterThan(35);
+        items.Select(item => item.Kind).Should().OnlyHaveUniqueItems();
+        items.Select(item => item.Kind).Should().Contain([
+            DrawingShapeKind.RoundedRectangle,
+            DrawingShapeKind.RightArrow,
+            DrawingShapeKind.NotEqualSign,
+            DrawingShapeKind.FlowchartDecision,
+            DrawingShapeKind.Star5,
+            DrawingShapeKind.OvalCallout
+        ]);
+        items.Select(item => item.Kind)
+            .Should()
+            .OnlyContain(kind => DrawingShapeKindSupport.IsRenderable(kind));
     }
 
     [Fact]
@@ -115,6 +132,10 @@ public sealed class InsertCommandSourceTests
         drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Ellipse)");
         drawingSource.Should().Contain("DrawLineBtn_Click(object sender, RoutedEventArgs e)");
         drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Line)");
+        DialogSourceTestSupport.ReadHostSources("MainWindow.ShapeGallery.cs")
+            .Should()
+            .Contain("ShapeGalleryMenuItem_Click")
+            .And.Contain("InsertDrawingShape(kind)");
 
         pivotSource.Should().Contain("private void PivotTableBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("PivotTableSourceRangePlanner.CreatePlan(sheet, SheetGrid.SelectedRange)");

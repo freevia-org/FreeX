@@ -1285,18 +1285,10 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <Button Content="{local:Loc Key=MainWindow_Content_Shapes}" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShapesBtn_Click"
+                                <Button x:Name="ShapesBtn" Content="{local:Loc Key=MainWindow_Content_Shapes}" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShapesBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Shapes}"
                                         local:RibbonTooltip.KeyTip="SH"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertADrawingShapeOnTheSheet}" local:RibbonMetadata.CommandName="Shapes">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_Rectangle}" local:RibbonTooltip.KeyTip="R" Click="DrawRectBtn_Click" local:RibbonMetadata.CommandName="Rectangle"/>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_Ellipse}" local:RibbonTooltip.KeyTip="E" Click="DrawEllipseBtn_Click" local:RibbonMetadata.CommandName="Ellipse"/>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_Line}" local:RibbonTooltip.KeyTip="L" Click="DrawLineBtn_Click" local:RibbonMetadata.CommandName="Line"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertADrawingShapeOnTheSheet}" local:RibbonMetadata.CommandName="Shapes"/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Illustrations}" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>

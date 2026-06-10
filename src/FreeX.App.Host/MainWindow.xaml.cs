@@ -237,6 +237,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         _recentFiles = RecentFilesStore.Load();
 
         InitializeComponent();
+        InitializeInsertShapeGalleryContextMenu();
         if (_commandStackChangeNotifier is not null)
             _commandStackChangeNotifier.StackChanged += CommandStackChangeNotifier_StackChanged;
 

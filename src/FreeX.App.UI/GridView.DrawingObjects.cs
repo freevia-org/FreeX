@@ -331,18 +331,7 @@ public partial class GridView
         var fill = CreateDrawingShapeFill(shape, colors.Fill);
         DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);
         DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape, colors);
-        switch (shape.Kind)
-        {
-            case DrawingShapeKind.Rectangle:
-                dc.DrawRectangle(fill, pen, rect);
-                break;
-            case DrawingShapeKind.Ellipse:
-                dc.DrawEllipse(fill, pen, new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2), rect.Width / 2, rect.Height / 2);
-                break;
-            case DrawingShapeKind.Line:
-                dc.DrawLine(pen, rect.TopLeft, rect.BottomRight);
-                break;
-        }
+        DrawShapeGeometry(dc, shape.Kind, rect, DrawingShapeKindSupport.IsLineLike(shape.Kind) ? null : fill, pen);
         DrawShapeAuthoredBevelEffect(dc, shape.Kind, rect, shape);
         DrawShapeThemeBevelEffect(dc, shape.Kind, rect, themeEffect);
         DrawShapeAuthoredInnerShadow(dc, shape.Kind, rect, shape);
@@ -617,11 +606,19 @@ public partial class GridView
 
     private Brush CreateDrawingShapeFill(DrawingShapeModel shape, CellColor startColor)
     {
-        if (shape.GradientFillEndColor is { } endColor && shape.Kind != DrawingShapeKind.Line)
+        if (shape.GradientFillEndColor is { } endColor && !DrawingShapeKindSupport.IsLineLike(shape.Kind))
             return GetDrawingObjectGradientBrush(startColor, endColor, shape.GetEffectiveGradientFillDirection());
 
         return GetDrawingObjectBrush(32, startColor);
     }
+
+    private static void DrawShapeGeometry(
+        DrawingContext dc,
+        DrawingShapeKind kind,
+        Rect rect,
+        Brush? brush,
+        Pen? pen) =>
+        dc.DrawGeometry(brush, pen, DrawingShapeGeometryFactory.Create(kind, rect));
 
     private void DrawShapeAuthoredEffect(
         DrawingContext dc,
@@ -663,32 +660,15 @@ public partial class GridView
         var pen = GetDrawingObjectPen(130, colors.Outline, 1.25);
         var faceBrush = GetDrawingObjectBrush(26, colors.Fill);
 
-        switch (kind)
+        if (!DrawingShapeKindSupport.IsLineLike(kind))
         {
-            case DrawingShapeKind.Rectangle:
-                DrawPerspectiveFace(dc, faceBrush, pen, rect.TopLeft, rect.TopRight, rearRect.TopRight, rearRect.TopLeft);
-                DrawPerspectiveFace(dc, faceBrush, pen, rect.TopRight, rect.BottomRight, rearRect.BottomRight, rearRect.TopRight);
-                dc.DrawRectangle(null, pen, rearRect);
-                dc.DrawLine(pen, rect.TopLeft, rearRect.TopLeft);
-                dc.DrawLine(pen, rect.BottomRight, rearRect.BottomRight);
-                break;
-            case DrawingShapeKind.Ellipse:
-                dc.DrawEllipse(
-                    null,
-                    pen,
-                    new Point(rearRect.Left + rearRect.Width / 2, rearRect.Top + rearRect.Height / 2),
-                    rearRect.Width / 2,
-                    rearRect.Height / 2);
-                dc.DrawLine(pen, new Point(rect.Right, rect.Top + rect.Height * 0.35), new Point(rearRect.Right, rearRect.Top + rearRect.Height * 0.35));
-                dc.DrawLine(pen, new Point(rect.Right, rect.Top + rect.Height * 0.65), new Point(rearRect.Right, rearRect.Top + rearRect.Height * 0.65));
-                dc.DrawLine(pen, new Point(rect.Left + rect.Width * 0.25, rect.Top), new Point(rearRect.Left + rearRect.Width * 0.25, rearRect.Top));
-                break;
-            case DrawingShapeKind.Line:
-                dc.DrawLine(pen, rearRect.TopLeft, rearRect.BottomRight);
-                dc.DrawLine(pen, rect.TopLeft, rearRect.TopLeft);
-                dc.DrawLine(pen, rect.BottomRight, rearRect.BottomRight);
-                break;
+            DrawPerspectiveFace(dc, faceBrush, pen, rect.TopLeft, rect.TopRight, rearRect.TopRight, rearRect.TopLeft);
+            DrawPerspectiveFace(dc, faceBrush, pen, rect.TopRight, rect.BottomRight, rearRect.BottomRight, rearRect.TopRight);
         }
+
+        DrawShapeGeometry(dc, kind, rearRect, DrawingShapeKindSupport.IsLineLike(kind) ? null : faceBrush, pen);
+        dc.DrawLine(pen, rect.TopLeft, rearRect.TopLeft);
+        dc.DrawLine(pen, rect.BottomRight, rearRect.BottomRight);
     }
 
     private static void DrawPerspectiveFace(
@@ -740,40 +720,13 @@ public partial class GridView
             Math.Max(1, rect.Height - thickness));
         var highlightPen = GetDrawingObjectPen(170, 255, 255, 255, thickness);
         var shadowPen = GetDrawingObjectPen(118, 0, 0, 0, thickness);
+        var highlightRect = bevelRect;
+        highlightRect.Offset(-inset / 3, -inset / 3);
+        var shadowRect = bevelRect;
+        shadowRect.Offset(inset / 3, inset / 3);
 
-        switch (kind)
-        {
-            case DrawingShapeKind.Rectangle:
-                dc.DrawLine(highlightPen, bevelRect.TopLeft, bevelRect.TopRight);
-                dc.DrawLine(highlightPen, bevelRect.TopLeft, bevelRect.BottomLeft);
-                dc.DrawLine(shadowPen, bevelRect.BottomLeft, bevelRect.BottomRight);
-                dc.DrawLine(shadowPen, bevelRect.TopRight, bevelRect.BottomRight);
-                break;
-            case DrawingShapeKind.Ellipse:
-                dc.DrawEllipse(
-                    null,
-                    highlightPen,
-                    new Point(bevelRect.Left + bevelRect.Width / 2 - inset / 3, bevelRect.Top + bevelRect.Height / 2 - inset / 3),
-                    bevelRect.Width / 2,
-                    bevelRect.Height / 2);
-                dc.DrawEllipse(
-                    null,
-                    shadowPen,
-                    new Point(bevelRect.Left + bevelRect.Width / 2 + inset / 3, bevelRect.Top + bevelRect.Height / 2 + inset / 3),
-                    bevelRect.Width / 2,
-                    bevelRect.Height / 2);
-                break;
-            case DrawingShapeKind.Line:
-                dc.DrawLine(
-                    highlightPen,
-                    new Point(rect.Left, rect.Top - inset),
-                    new Point(rect.Right, rect.Bottom - inset));
-                dc.DrawLine(
-                    shadowPen,
-                    new Point(rect.Left, rect.Top + inset),
-                    new Point(rect.Right, rect.Bottom + inset));
-                break;
-        }
+        DrawShapeGeometry(dc, kind, highlightRect, null, highlightPen);
+        DrawShapeGeometry(dc, kind, shadowRect, null, shadowPen);
     }
 
     private void DrawShapeAuthoredInnerShadow(DrawingContext dc, DrawingShapeKind kind, Rect rect, DrawingShapeModel shape)
@@ -785,18 +738,7 @@ public partial class GridView
         var shadowRect = GetInnerShadowRect(rect, thickness, offsetX: 1.5, offsetY: 1.5);
         var pen = GetDrawingObjectPen(alpha: 112, r: 0, g: 0, b: 0, thickness);
 
-        switch (kind)
-        {
-            case DrawingShapeKind.Rectangle:
-                dc.DrawRectangle(null, pen, shadowRect);
-                break;
-            case DrawingShapeKind.Ellipse:
-                dc.DrawEllipse(null, pen, new Point(shadowRect.Left + shadowRect.Width / 2, shadowRect.Top + shadowRect.Height / 2), shadowRect.Width / 2, shadowRect.Height / 2);
-                break;
-            case DrawingShapeKind.Line:
-                dc.DrawLine(pen, shadowRect.TopLeft, shadowRect.BottomRight);
-                break;
-        }
+        DrawShapeGeometry(dc, kind, shadowRect, null, pen);
     }
 
     private void DrawShapeShadowEffect(
@@ -812,18 +754,7 @@ public partial class GridView
         var shadowBrush = GetDrawingObjectBrush(alpha, 0, 0, 0);
         var shadowPen = GetDrawingObjectPen(alpha, 0, 0, 0, 2);
 
-        switch (kind)
-        {
-            case DrawingShapeKind.Rectangle:
-                dc.DrawRectangle(shadowBrush, null, shadowRect);
-                break;
-            case DrawingShapeKind.Ellipse:
-                dc.DrawEllipse(shadowBrush, null, new Point(shadowRect.Left + shadowRect.Width / 2, shadowRect.Top + shadowRect.Height / 2), shadowRect.Width / 2, shadowRect.Height / 2);
-                break;
-            case DrawingShapeKind.Line:
-                dc.DrawLine(shadowPen, shadowRect.TopLeft, shadowRect.BottomRight);
-                break;
-        }
+        DrawShapeGeometry(dc, kind, shadowRect, DrawingShapeKindSupport.IsLineLike(kind) ? null : shadowBrush, shadowPen);
     }
 
     private void DrawShapeOutlineEffect(
@@ -841,18 +772,7 @@ public partial class GridView
         effectRect.Inflate(inflate, inflate);
         var pen = GetDrawingObjectPen(alpha, r, g, b, thickness);
 
-        switch (kind)
-        {
-            case DrawingShapeKind.Rectangle:
-                dc.DrawRectangle(null, pen, effectRect);
-                break;
-            case DrawingShapeKind.Ellipse:
-                dc.DrawEllipse(null, pen, new Point(effectRect.Left + effectRect.Width / 2, effectRect.Top + effectRect.Height / 2), effectRect.Width / 2, effectRect.Height / 2);
-                break;
-            case DrawingShapeKind.Line:
-                dc.DrawLine(pen, effectRect.TopLeft, effectRect.BottomRight);
-                break;
-        }
+        DrawShapeGeometry(dc, kind, effectRect, null, pen);
     }
 
     private void DrawShapeReflectionEffect(
@@ -865,23 +785,7 @@ public partial class GridView
         var fill = GetDrawingObjectBrush(36, colors.Fill);
         var pen = GetDrawingObjectPen(70, colors.Outline, 1);
 
-        switch (kind)
-        {
-            case DrawingShapeKind.Rectangle:
-                dc.DrawRectangle(fill, pen, reflectionRect);
-                break;
-            case DrawingShapeKind.Ellipse:
-                dc.DrawEllipse(
-                    fill,
-                    pen,
-                    new Point(reflectionRect.Left + reflectionRect.Width / 2, reflectionRect.Top + reflectionRect.Height / 2),
-                    reflectionRect.Width / 2,
-                    reflectionRect.Height / 2);
-                break;
-            case DrawingShapeKind.Line:
-                dc.DrawLine(pen, reflectionRect.BottomLeft, reflectionRect.TopRight);
-                break;
-        }
+        DrawShapeGeometry(dc, kind, reflectionRect, DrawingShapeKindSupport.IsLineLike(kind) ? null : fill, pen);
     }
 
     private static Rect GetReflectionRect(Rect rect)
@@ -960,19 +864,7 @@ public partial class GridView
             var alpha = (byte)Math.Clamp(Math.Round(255 * effect.ShadowOpacity), 0, 255);
             var shadowBrush = GetDrawingObjectBrush(alpha, 0, 0, 0);
             var shadowPen = GetDrawingObjectPen(alpha, 0, 0, 0, 2);
-
-            switch (kind)
-            {
-                case DrawingShapeKind.Rectangle:
-                    dc.DrawRectangle(shadowBrush, null, shadowRect);
-                    break;
-                case DrawingShapeKind.Ellipse:
-                    dc.DrawEllipse(shadowBrush, null, new Point(shadowRect.Left + shadowRect.Width / 2, shadowRect.Top + shadowRect.Height / 2), shadowRect.Width / 2, shadowRect.Height / 2);
-                    break;
-                case DrawingShapeKind.Line:
-                    dc.DrawLine(shadowPen, shadowRect.TopLeft, shadowRect.BottomRight);
-                    break;
-            }
+            DrawShapeGeometry(dc, kind, shadowRect, DrawingShapeKindSupport.IsLineLike(kind) ? null : shadowBrush, shadowPen);
         }
 
         if (effect.HasGlow)
@@ -1020,19 +912,7 @@ public partial class GridView
         var thickness = GetInnerShadowThickness(effect.InnerShadowBlurRadius);
         var shadowRect = GetInnerShadowRect(rect, thickness, effect.InnerShadowOffsetX, effect.InnerShadowOffsetY);
         var pen = GetDrawingObjectPen(alpha, 0, 0, 0, thickness);
-
-        switch (kind)
-        {
-            case DrawingShapeKind.Rectangle:
-                dc.DrawRectangle(null, pen, shadowRect);
-                break;
-            case DrawingShapeKind.Ellipse:
-                dc.DrawEllipse(null, pen, new Point(shadowRect.Left + shadowRect.Width / 2, shadowRect.Top + shadowRect.Height / 2), shadowRect.Width / 2, shadowRect.Height / 2);
-                break;
-            case DrawingShapeKind.Line:
-                dc.DrawLine(pen, shadowRect.TopLeft, shadowRect.BottomRight);
-                break;
-        }
+        DrawShapeGeometry(dc, kind, shadowRect, null, pen);
     }
 
     private static byte GetInnerShadowAlpha(double opacity) =>

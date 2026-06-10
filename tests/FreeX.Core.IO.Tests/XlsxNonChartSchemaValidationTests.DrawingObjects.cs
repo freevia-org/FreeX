@@ -59,6 +59,52 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertWorksheetDrawingObjectsModel(adapter.Load(saved).GetSheetAt(0));
     }
 
+    [Fact]
+    public void WorksheetDrawingShapes_RoundTripExpandedPresetKinds()
+    {
+        var workbook = new Workbook("ExpandedShapeKinds");
+        var sheet = workbook.AddSheet("Shapes");
+        var cases = new (DrawingShapeKind Kind, string Preset)[]
+        {
+            (DrawingShapeKind.RoundedRectangle, "roundRect"),
+            (DrawingShapeKind.ElbowConnector, "bentConnector2"),
+            (DrawingShapeKind.RightArrow, "rightArrow"),
+            (DrawingShapeKind.NotEqualSign, "mathNotEqual"),
+            (DrawingShapeKind.FlowchartDecision, "flowChartDecision"),
+            (DrawingShapeKind.Star5, "star5"),
+            (DrawingShapeKind.OvalCallout, "wedgeEllipseCallout")
+        };
+
+        for (var i = 0; i < cases.Length; i++)
+        {
+            sheet.DrawingShapes.Add(new DrawingShapeModel
+            {
+                Name = cases[i].Kind.ToString(),
+                Anchor = new CellAddress(sheet.Id, (uint)(i + 1), 1),
+                Kind = cases[i].Kind,
+                Width = 96,
+                Height = 56
+            });
+        }
+
+        using var stream = Save(workbook);
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        ReadPackageRootElement(stream, "xl/drawings/drawing1.xml")
+            .Descendants(drawingNs + "prstGeom")
+            .Select(element => element.Attribute("prst")?.Value)
+            .Should()
+            .Contain(cases.Select(item => item.Preset));
+
+        stream.Position = 0;
+        var loadedKinds = new XlsxFileAdapter()
+            .Load(stream)
+            .GetSheetAt(0)
+            .DrawingShapes
+            .Select(shape => shape.Kind);
+
+        loadedKinds.Should().Equal(cases.Select(item => item.Kind));
+    }
+
     private static Workbook CreateWorksheetDrawingObjectsSourceWorkbook()
     {
         var workbook = new Workbook("WorksheetDrawingObjectsPatchSave");

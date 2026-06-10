@@ -18,10 +18,18 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
             harness.SelectedRibbonTabHeader.Should().Be("Insert");
             harness.KeyTipScope.Should().Be("Menu");
-            harness.ActiveMenuItemGestureText("Rectangle").Should().Be("R");
-            harness.ActiveMenuItemGestureText("Ellipse").Should().Be("E");
-            harness.ActiveMenuItemGestureText("Line").Should().Be("L");
+            harness.ActiveMenuItemGestureText("Lines").Should().Be("1");
+            harness.ActiveMenuItemGestureText("Rectangles").Should().Be("2");
+            harness.ActiveMenuItemGestureText("Basic Shapes").Should().Be("3");
+            harness.ActiveMenuItemGestureText("Block Arrows").Should().Be("4");
+            harness.ActiveMenuItemGestureText("Equation Shapes").Should().Be("5");
+            harness.ActiveMenuItemGestureText("Flowchart").Should().Be("6");
+            harness.ActiveMenuItemGestureText("Stars and Banners").Should().Be("7");
+            harness.ActiveMenuItemGestureText("Callouts").Should().Be("8");
 
+            harness.HandleKeyTip(Key.D2);
+            harness.ActiveMenuItemGestureText("Rectangle").Should().Be("R");
+            harness.ActiveMenuItemGestureText("Rounded Rectangle").Should().Be("O");
             harness.HandleKeyTip(Key.R);
 
             harness.KeyTipScope.Should().Be("None");
@@ -78,9 +86,17 @@ public sealed partial class MainWindowRibbonKeyTipTests
     }
 
     [Theory]
-    [InlineData(Key.E, DrawingShapeKind.Ellipse)]
-    [InlineData(Key.L, DrawingShapeKind.Line)]
-    public void InsertShapesMenuKeyTips_InsertVisibleDrawingCommands(Key shapeKeyTip, DrawingShapeKind expectedKind)
+    [InlineData(Key.D1, Key.E, DrawingShapeKind.ElbowConnector)]
+    [InlineData(Key.D3, Key.O, DrawingShapeKind.Ellipse)]
+    [InlineData(Key.D4, Key.R, DrawingShapeKind.RightArrow)]
+    [InlineData(Key.D5, Key.N, DrawingShapeKind.NotEqualSign)]
+    [InlineData(Key.D6, Key.D, DrawingShapeKind.FlowchartDecision)]
+    [InlineData(Key.D7, Key.D5, DrawingShapeKind.Star5)]
+    [InlineData(Key.D8, Key.V, DrawingShapeKind.OvalCallout)]
+    public void InsertShapesMenuKeyTips_InsertVisibleDrawingCommands(
+        Key groupKeyTip,
+        Key shapeKeyTip,
+        DrawingShapeKind expectedKind)
     {
         RunSta(() =>
         {
@@ -88,6 +104,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
             harness.SelectRange(4, 3, 4, 3);
 
             harness.OpenRibbonMenu(Key.N, Key.S, Key.H);
+            harness.HandleKeyTip(groupKeyTip);
             harness.HandleKeyTip(shapeKeyTip);
 
             harness.KeyTipScope.Should().Be("None");

@@ -28,7 +28,7 @@ public static class DrawingObjectRenderPlanner
         };
 
     private static DrawingObjectRenderPlan PlanShape(DrawingObjectBounds drawingObject) =>
-        drawingObject.ShapeKind is DrawingShapeKind.Rectangle or DrawingShapeKind.Ellipse or DrawingShapeKind.Line
+        drawingObject.ShapeKind is { } shapeKind && DrawingShapeKindSupport.IsRenderable(shapeKind)
             ? new DrawingObjectRenderPlan(drawingObject, DrawingObjectRenderPrimitiveKind.Shape)
             : Fallback(drawingObject, "Unsupported drawing shape kind.");
 
