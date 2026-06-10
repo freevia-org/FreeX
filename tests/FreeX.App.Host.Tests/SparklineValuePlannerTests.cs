@@ -67,4 +67,26 @@ public sealed class SparklineValuePlannerTests
         values.Should().ContainKey(sparklineId);
         values[sparklineId].Should().Equal(1, 4);
     }
+
+    [Fact]
+    public void BuildValues_SkipsOversizedSourceRanges()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var sparklineId = Guid.NewGuid();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.Sparklines.Add(new SparklineModel
+        {
+            Id = sparklineId,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, (uint)(SparklineRangeLimits.MaxDataCellCount + 1), 1)),
+            Location = new CellAddress(sheet.Id, 1, 3),
+            Kind = SparklineKind.Line
+        });
+
+        var values = SparklineValuePlanner.BuildValues(sheet);
+
+        values.Should().ContainKey(sparklineId);
+        values[sparklineId].Should().BeEmpty();
+    }
 }
