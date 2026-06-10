@@ -109,6 +109,50 @@ public sealed partial class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void SelectedPictureHandleHitTesting_HonorsPictureRotation()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var picture = new PictureModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = new CellAddress(sheetId, 1, 1),
+                Width = 80,
+                Height = 40,
+                RotationDegrees = 45,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                Viewport = GridViewTestHelpers.CreateTwoByTwoViewport(),
+                SelectedObjectId = picture.Id,
+                SelectedObjectKind = ObjectKind.Picture,
+                Pictures = [picture]
+            };
+
+            grid.TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect)
+                .Should().BeTrue();
+
+            var rotatedResizeHandle = GridObjectDragPlanner.RotateHandleCenter(
+                ObjectDragKind.ResizeSE,
+                rect,
+                picture.RotationDegrees);
+            var rotatedGrip = GridObjectDragPlanner.RotateHandleCenter(
+                ObjectDragKind.Rotate,
+                rect,
+                picture.RotationDegrees);
+
+            GridViewTestHelpers.HitTestObjectHandle(grid, rotatedResizeHandle, rect)
+                .Should()
+                .Match<object>(value => value.ToString() == "ResizeSE");
+            GridViewTestHelpers.HitTestObjectHandle(grid, rotatedGrip, rect)
+                .Should()
+                .Match<object>(value => value.ToString() == "Rotate");
+        });
+    }
+
+    [Fact]
     public void DrawingObjectHitTesting_ChoosesTopmostRenderedObject()
     {
         WpfTestThread.Run(() =>
