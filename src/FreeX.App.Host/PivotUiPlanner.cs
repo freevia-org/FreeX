@@ -9,6 +9,11 @@ public sealed record PendingPivotLayoutUpdate(
     string? AvailableFieldsSearchText,
     IReadOnlyList<PivotFieldListItem> Fields);
 
+public sealed record PivotFieldListPanePlan(PivotTableModel? PivotTable)
+{
+    public bool ShouldShow => PivotTable is not null;
+}
+
 public sealed record PivotShowDetailsTarget(string PivotTableName, CellAddress PivotCell);
 
 public static class PivotUiPlanner
@@ -64,6 +69,45 @@ public static class PivotUiPlanner
             return null;
 
         return FindPivotTableIntersectingSelection(sheet, range);
+    }
+
+    public static GridRange VisiblePivotRange(PivotTableModel pivotTable) =>
+        pivotTable.LastRenderedRange is { } renderedRange &&
+        renderedRange.Start.Sheet == pivotTable.TargetRange.Start.Sheet
+            ? renderedRange
+            : pivotTable.TargetRange;
+
+    public static PivotFieldListPanePlan CreateFieldListPanePlan(Sheet? sheet, GridRange? selectedRange)
+    {
+        if (sheet is null || selectedRange is not { } range)
+            return new PivotFieldListPanePlan(null);
+
+        return new PivotFieldListPanePlan(FindPivotTableContainingCell(sheet, range.Start));
+    }
+
+    public static CellAddress? ReconcileSelectionAfterPivotResize(
+        GridRange previousVisibleRange,
+        GridRange updatedVisibleRange,
+        GridRange? selectedRange)
+    {
+        if (selectedRange is not { } range)
+            return updatedVisibleRange.Start;
+
+        var activeCell = range.Start;
+        if (updatedVisibleRange.Contains(activeCell))
+            return null;
+        if (!previousVisibleRange.Contains(activeCell))
+            return null;
+
+        if (previousVisibleRange.Start.Sheet != updatedVisibleRange.Start.Sheet)
+            return updatedVisibleRange.Start;
+
+        var rowOffset = activeCell.Row - previousVisibleRange.Start.Row;
+        var colOffset = activeCell.Col - previousVisibleRange.Start.Col;
+        return new CellAddress(
+            updatedVisibleRange.Start.Sheet,
+            updatedVisibleRange.Start.Row + Math.Min(rowOffset, updatedVisibleRange.RowCount - 1),
+            updatedVisibleRange.Start.Col + Math.Min(colOffset, updatedVisibleRange.ColCount - 1));
     }
 
     public static PivotShowDetailsTarget? ResolveShowDetailsTarget(Sheet? sheet, GridRange? selectedRange)
@@ -403,10 +447,10 @@ public static class PivotUiPlanner
         FindFirstPivotTable(sheet, pivotTable => PivotTableContainsCell(pivotTable, cell));
 
     private static bool PivotTableIntersectsSelection(PivotTableModel pivotTable, GridRange range) =>
-        PivotTableContainsCell(pivotTable, range.Start) || pivotTable.TargetRange.Overlaps(range);
+        PivotTableContainsCell(pivotTable, range.Start) || VisiblePivotRange(pivotTable).Overlaps(range);
 
     private static bool PivotTableContainsCell(PivotTableModel pivotTable, CellAddress cell) =>
-        pivotTable.TargetRange.Contains(cell);
+        VisiblePivotRange(pivotTable).Contains(cell);
 
     private static bool PivotTableNameEquals(PivotTableModel pivotTable, string name) =>
         string.Equals(pivotTable.Name, name, StringComparison.OrdinalIgnoreCase);
