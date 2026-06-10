@@ -859,14 +859,7 @@ public sealed partial class ViewportService : IViewportService
         Math.Max(1, ColumnWidthToPixels(sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth)));
 
     private static double ColumnWidthToPixels(double width)
-    {
-        if (!double.IsFinite(width) || width <= 0)
-            return 0;
-
-        return width < 1
-            ? Math.Round(width * 12.0, MidpointRounding.AwayFromZero)
-            : Math.Round(width * 7.0 + 5.0, MidpointRounding.AwayFromZero);
-    }
+        => ColumnWidthPixelMapper.ColumnWidthToPixels(width);
 
     private static int EstimateCharacterWidth(double pixelWidth)
     {

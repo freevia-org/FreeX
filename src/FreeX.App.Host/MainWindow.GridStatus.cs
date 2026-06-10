@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -256,7 +257,11 @@ public partial class MainWindow
 
         var (startCol, endCol) = GetColumnResizeRange(sheet, col);
         CaptureColumnResizeSnapshot(sheet, startCol, endCol);
-        ApplyColumnResizePreview(sheet, startCol, endCol, newWidthPx / 8.0);
+        ApplyColumnResizePreview(
+            sheet,
+            startCol,
+            endCol,
+            ColumnWidthPixelMapper.PixelsToColumnWidth(newWidthPx));
         UpdateViewport();
     }
 
@@ -268,7 +273,13 @@ public partial class MainWindow
             ? (snap.StartCol, snap.EndCol)
             : GetColumnResizeRange(sheet, col);
         var restoredPreview = RestoreColumnResizePreview(sheet);
-        if (!TryExecuteGroupedSheetCommand("Column Width", sheetId => new SetColumnWidthCommand(sheetId, startCol, endCol, newWidthPx / 8.0)))
+        if (!TryExecuteGroupedSheetCommand(
+                "Column Width",
+                sheetId => new SetColumnWidthCommand(
+                    sheetId,
+                    startCol,
+                    endCol,
+                    ColumnWidthPixelMapper.PixelsToColumnWidth(newWidthPx))))
         {
             if (restoredPreview)
                 UpdateViewport();
