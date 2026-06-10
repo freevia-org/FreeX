@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -34,8 +35,9 @@ public sealed class ShapeGradientDialog : Window
     private readonly TextBox _startColorBox = new();
     private readonly TextBox _endColorBox = new();
     private readonly ComboBox _directionBox = new();
-    private readonly Button _startColorButton = new() { Content = UiText.Get("ShapeGradient_StartColorButton") };
-    private readonly Button _endColorButton = new() { Content = UiText.Get("ShapeGradient_EndColorButton") };
+    private readonly Button _startColorButton = new();
+    private readonly Button _endColorButton = new();
+    private readonly Border _gradientPreview = new();
     private readonly TextBlock _startColorText = new();
     private readonly TextBlock _endColorText = new();
     private readonly IReadOnlyList<ShapeGradientDirectionOption> _directionOptions;
@@ -51,8 +53,8 @@ public sealed class ShapeGradientDialog : Window
         var normalizedDirection = ShapeGradientDialogPlanner.NormalizeDirection(direction);
         Result = new ShapeGradientDialogResult(_startColor, _endColor, normalizedDirection);
         Title = UiText.Get("ShapeGradient_Title");
-        Width = 420;
-        Height = 280;
+        Width = 500;
+        SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -61,6 +63,7 @@ public sealed class ShapeGradientDialog : Window
         _directionBox.ItemsSource = _directionOptions;
         _directionBox.DisplayMemberPath = nameof(ShapeGradientDirectionOption.Label);
         _directionBox.SelectedItem = FindDirectionOption(normalizedDirection);
+        _directionBox.SelectionChanged += (_, _) => UpdateGradientPreview();
         AutomationProperties.SetName(_startColorBox, UiText.Get("ShapeGradient_StartColorAutomationName"));
         AutomationProperties.SetAutomationId(_startColorBox, "ShapeGradientStartColorBox");
         AutomationProperties.SetHelpText(_startColorBox, UiText.Get("ShapeGradient_StartColorHelpText"));
@@ -76,11 +79,15 @@ public sealed class ShapeGradientDialog : Window
         AutomationProperties.SetName(_directionBox, UiText.CreateAutomationName(UiText.Get("Options_Direction")).TrimEnd(':'));
         AutomationProperties.SetAutomationId(_directionBox, "ShapeGradientDirectionBox");
         AutomationProperties.SetHelpText(_directionBox, UiText.Get("MainWindow_TooltipDescription_ApplyATwoColorGradientFillToTheSelectedShape"));
+        AutomationProperties.SetName(_gradientPreview, UiText.Get("ShapeGradient_GradientStopsGroup"));
+        AutomationProperties.SetAutomationId(_gradientPreview, "ShapeGradientPreviewSwatch");
+        ConfigureSwatchButton(_startColorButton, UiText.Get("ShapeGradient_StartColorButton"));
+        ConfigureSwatchButton(_endColorButton, UiText.Get("ShapeGradient_EndColorButton"));
         _startColorButton.Click += StartColorButton_Click;
         _endColorButton.Click += EndColorButton_Click;
         _startColorBox.TextChanged += (_, _) => SyncGradientTextFromInputs();
         _endColorBox.TextChanged += (_, _) => SyncGradientTextFromInputs();
-        UpdateColorText();
+        UpdateColorVisuals();
         Content = CreateContent();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -129,15 +136,22 @@ public sealed class ShapeGradientDialog : Window
         DialogFocus.FocusAndSelect(colorBox);
     }
 
-    private StackPanel CreateContent()
+    private DockPanel CreateContent()
     {
-        var stack = new StackPanel { Margin = new Thickness(16) };
+        var root = new DockPanel { Margin = new Thickness(18) };
+        var buttons = DialogButtonRowFactory.Create(Accept, 76, rowMargin: new Thickness(0, 16, 0, 0));
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
 
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        var stack = new StackPanel();
+        root.Children.Add(stack);
+
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(136) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(104) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(54) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -145,6 +159,7 @@ public sealed class ShapeGradientDialog : Window
         AddStopRow(grid, 0, UiText.Get("ShapeGradient_Stop1ColorLabel"), _startColorBox, "0%", _startColorButton);
         AddStopRow(grid, 1, UiText.Get("ShapeGradient_Stop2ColorLabel"), _endColorBox, "100%", _endColorButton);
         AddDirectionRow(grid, 2);
+        AddPreviewRow(grid, 3);
         stack.Children.Add(new GroupBox
         {
             Header = UiText.Get("ShapeGradient_GradientStopsGroup"),
@@ -153,12 +168,12 @@ public sealed class ShapeGradientDialog : Window
         });
 
         _startColorText.Margin = new Thickness(0, 0, 0, 4);
-        _endColorText.Margin = new Thickness(0, 0, 0, 12);
+        _startColorText.Foreground = SystemColors.GrayTextBrush;
+        _endColorText.Foreground = SystemColors.GrayTextBrush;
         stack.Children.Add(_startColorText);
         stack.Children.Add(_endColorText);
 
-        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
-        return stack;
+        return root;
     }
 
     private ShapeGradientDirectionOption FindDirectionOption(DrawingShapeGradientDirection direction)
@@ -201,7 +216,7 @@ public sealed class ShapeGradientDialog : Window
 
     private void SyncGradientTextFromPickers()
     {
-        UpdateColorText();
+        UpdateColorVisuals();
     }
 
     private void SyncGradientTextFromInputs()
@@ -211,13 +226,31 @@ public sealed class ShapeGradientDialog : Window
         if (DrawingInputParser.TryParseRgbColor(_endColorBox.Text, out var endColor))
             _endColor = endColor;
 
+        UpdateColorVisuals();
+    }
+
+    private void UpdateColorVisuals()
+    {
         UpdateColorText();
+        UpdateColorSwatches();
+        UpdateGradientPreview();
     }
 
     private void UpdateColorText()
     {
         _startColorText.Text = UiText.Format("ShapeGradient_StartColorSummary", FormatColor(_startColor));
         _endColorText.Text = UiText.Format("ShapeGradient_EndColorSummary", FormatColor(_endColor));
+    }
+
+    private void UpdateColorSwatches()
+    {
+        ApplySwatch(_startColorButton, _startColor);
+        ApplySwatch(_endColorButton, _endColor);
+    }
+
+    private void UpdateGradientPreview()
+    {
+        _gradientPreview.Background = CreateGradientBrush(_startColor, _endColor, SelectedDirection);
     }
 
     private static string FormatColor(CellColor color) =>
@@ -236,25 +269,26 @@ public sealed class ShapeGradientDialog : Window
         Grid.SetRow(grid.Children[^1], row);
         Grid.SetColumn(grid.Children[^1], 0);
 
+        colorButton.Margin = new Thickness(0, 0, 8, 8);
+        grid.Children.Add(colorButton);
+        Grid.SetRow(colorButton, row);
+        Grid.SetColumn(colorButton, 1);
+
         box.Margin = new Thickness(0, 0, 8, 8);
+        box.MinWidth = 110;
         grid.Children.Add(box);
         Grid.SetRow(box, row);
-        Grid.SetColumn(box, 1);
+        Grid.SetColumn(box, 2);
 
         grid.Children.Add(new TextBlock
         {
             Text = position,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 8)
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 0, 0, 8)
         });
         Grid.SetRow(grid.Children[^1], row);
-        Grid.SetColumn(grid.Children[^1], 2);
-
-        colorButton.Width = 96;
-        colorButton.Margin = new Thickness(0, 0, 0, 8);
-        grid.Children.Add(colorButton);
-        Grid.SetRow(colorButton, row);
-        Grid.SetColumn(colorButton, 3);
+        Grid.SetColumn(grid.Children[^1], 3);
     }
 
     private void AddDirectionRow(Grid grid, int row)
@@ -276,4 +310,55 @@ public sealed class ShapeGradientDialog : Window
         Grid.SetColumn(_directionBox, 1);
         Grid.SetColumnSpan(_directionBox, 3);
     }
+
+    private void AddPreviewRow(Grid grid, int row)
+    {
+        _gradientPreview.Height = 42;
+        _gradientPreview.Margin = new Thickness(0, 4, 0, 8);
+        _gradientPreview.BorderBrush = SystemColors.ControlDarkBrush;
+        _gradientPreview.BorderThickness = new Thickness(1);
+        _gradientPreview.CornerRadius = new CornerRadius(2);
+        grid.Children.Add(_gradientPreview);
+        Grid.SetRow(_gradientPreview, row);
+        Grid.SetColumn(_gradientPreview, 0);
+        Grid.SetColumnSpan(_gradientPreview, 4);
+    }
+
+    private static void ConfigureSwatchButton(Button button, string toolTip)
+    {
+        button.Width = 30;
+        button.MinWidth = 30;
+        button.Height = 24;
+        button.Padding = new Thickness(0);
+        button.BorderBrush = Brushes.Gray;
+        button.BorderThickness = new Thickness(1);
+        button.ToolTip = UiText.CreateAutomationName(toolTip);
+    }
+
+    private static void ApplySwatch(Button button, CellColor color)
+    {
+        button.Background = ToBrush(color);
+    }
+
+    private static LinearGradientBrush CreateGradientBrush(
+        CellColor startColor,
+        CellColor endColor,
+        DrawingShapeGradientDirection direction)
+    {
+        var (startPoint, endPoint) = direction switch
+        {
+            DrawingShapeGradientDirection.Horizontal => (new Point(0, 0.5), new Point(1, 0.5)),
+            DrawingShapeGradientDirection.Vertical => (new Point(0.5, 0), new Point(0.5, 1)),
+            DrawingShapeGradientDirection.DiagonalUp => (new Point(0, 1), new Point(1, 0)),
+            _ => (new Point(0, 0), new Point(1, 1))
+        };
+
+        return new LinearGradientBrush(ToMediaColor(startColor), ToMediaColor(endColor), startPoint, endPoint);
+    }
+
+    private static SolidColorBrush ToBrush(CellColor color) =>
+        new(ToMediaColor(color));
+
+    private static Color ToMediaColor(CellColor color) =>
+        Color.FromRgb(color.R, color.G, color.B);
 }
