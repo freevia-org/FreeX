@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -17,6 +17,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -33,8 +34,12 @@ public partial class MainWindow
     private const string AutoFilterFlyoutTourCaptureFileName = "freex_table_autofilter_dropdown";
     private const string HomeNumberFormatDropdownTourManifestFileName = "home_number_format_dropdown_tour_manifest.json";
     private const string HomeNumberFormatDropdownTourCaptureFileName = "freex_dropdown_home_number_format_opened";
+    private const string HomeAlignmentNumberTourManifestFileName = "home_alignment_number_tour_manifest.json";
+    private const string HomeAlignmentNumberTourOutputDirectoryName = "home-alignment-number-tour";
     private const string HomeBordersDropdownTourManifestFileName = "home_borders_dropdown_tour_manifest.json";
     private const string HomeBordersDropdownTourCaptureFileName = "freex_dropdown_home_borders_opened";
+    private const string HomeFontColorsTourManifestFileName = "home_font_colors_tour_manifest.json";
+    private const string HomeFontColorsTourOutputDirectoryName = "home-font-colors-tour";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
     private const string KeyTipOverlayTourManifestFileName = "keytip_overlay_tour_manifest.json";
@@ -55,6 +60,8 @@ public partial class MainWindow
     private const string ViewPanesZoomTourManifestFileName = "view_panes_zoom_tour_manifest.json";
     private const string ViewPanesZoomTourOutputDirectoryName = "view-panes-zoom-tour";
     private const string ViewPanesZoomTourCustomViewName = "View Panes Zoom Tour";
+    private const string FormulaDiagnosticsTourManifestFileName = "formula_diagnostics_tour_manifest.json";
+    private const string FormulaDiagnosticsTourOutputDirectoryName = "formula-diagnostics-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -119,7 +126,9 @@ public partial class MainWindow
         var backstageTour = Environment.GetEnvironmentVariable("FREEX_BACKSTAGE_TOUR") == "1";
         var autoFilterFlyoutTour = Environment.GetEnvironmentVariable("FREEX_AUTOFILTER_FLYOUT_TOUR") == "1";
         var homeNumberFormatDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR") == "1";
+        var homeAlignmentNumberTour = Environment.GetEnvironmentVariable("FREEX_HOME_ALIGNMENT_NUMBER_TOUR") == "1";
         var homeBordersDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_BORDERS_DROPDOWN_TOUR") == "1";
+        var homeFontColorsTour = Environment.GetEnvironmentVariable("FREEX_HOME_FONT_COLORS_TOUR") == "1";
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
@@ -129,7 +138,8 @@ public partial class MainWindow
         var formulaBarNameBoxTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_BAR_NAME_BOX_TOUR") == "1";
         var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
         var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !viewPanesZoomTour)
+        var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !viewPanesZoomTour && !formulaDiagnosticsTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -146,7 +156,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, viewPanesZoomTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, viewPanesZoomTour, formulaDiagnosticsTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -174,7 +184,9 @@ public partial class MainWindow
         bool backstageTour,
         bool autoFilterFlyoutTour,
         bool homeNumberFormatDropdownTour,
+        bool homeAlignmentNumberTour,
         bool homeBordersDropdownTour,
+        bool homeFontColorsTour,
         bool worksheetContextMenuTour,
         bool keyTipOverlayTour,
         bool printPreviewTour,
@@ -183,7 +195,8 @@ public partial class MainWindow
         bool titlebarWindowChromeTour,
         bool statusFooterTour,
         bool formulaBarNameBoxTour,
-        bool viewPanesZoomTour)
+        bool viewPanesZoomTour,
+        bool formulaDiagnosticsTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -197,8 +210,14 @@ public partial class MainWindow
         if (homeNumberFormatDropdownTour)
             await CaptureHomeNumberFormatDropdownTourAsync(Path.Combine(outputDir, "home-number-format-dropdown-tour"));
 
+        if (homeAlignmentNumberTour)
+            await CaptureHomeAlignmentNumberTourAsync(Path.Combine(outputDir, HomeAlignmentNumberTourOutputDirectoryName));
+
         if (homeBordersDropdownTour)
             await CaptureHomeBordersDropdownTourAsync(Path.Combine(outputDir, "home-borders-dropdown-tour"));
+
+        if (homeFontColorsTour)
+            await CaptureHomeFontColorsTourAsync(Path.Combine(outputDir, HomeFontColorsTourOutputDirectoryName));
 
         if (worksheetContextMenuTour)
             await CaptureWorksheetContextMenuTourAsync(Path.Combine(outputDir, "worksheet-context-menu-tour"));
@@ -225,6 +244,8 @@ public partial class MainWindow
 
         if (viewPanesZoomTour)
             await CaptureViewPanesZoomTourAsync(Path.Combine(outputDir, ViewPanesZoomTourOutputDirectoryName));
+        if (formulaDiagnosticsTour)
+            await CaptureFormulaDiagnosticsTourAsync(Path.Combine(outputDir, FormulaDiagnosticsTourOutputDirectoryName));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -463,6 +484,291 @@ public partial class MainWindow
             throw new InvalidOperationException("Home number format dropdown tour did not create the planned FreeX dropdown capture.");
     }
 
+    private async Task CaptureHomeAlignmentNumberTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteHomeAlignmentNumberTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 768;
+        await Task.Delay(700);
+
+        var context = EnsureHomeAlignmentNumberTourContext();
+        var captures = new List<HomeAlignmentNumberTourManifestCapture>();
+        FormatCellsDialog? alignmentDialog = null;
+        FormatCellsDialog? numberDialog = null;
+
+        try
+        {
+            captures.Add(await CaptureHomeAlignmentNumberWindowStateAsync(
+                outputDir,
+                "alignment-grid",
+                "freex_home_alignment_grid_commands",
+                "window-full",
+                "Home Alignment group focused with rendered left/center/right, top/middle/bottom, wrap, indent, rotation, and merged-center worksheet examples."));
+
+            OpenRibbonContextMenu(OrientationPickerButton, OrientationPickerButton.ContextMenu);
+            OrientationPickerButton.ContextMenu!.UpdateLayout();
+            await Task.Delay(350);
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await CaptureElementAsync(OrientationPickerButton.ContextMenu!, outputDir, "freex_home_alignment_orientation_menu_opened");
+            captures.Add(CreateHomeAlignmentNumberTourCapture(
+                "orientation-menu-opened",
+                "freex_home_alignment_orientation_menu_opened",
+                "orientation-menu",
+                "RenderTargetBitmap-context-menu",
+                OrientationPickerButton.ContextMenu!.ActualWidth,
+                OrientationPickerButton.ContextMenu!.ActualHeight,
+                "Production Orientation menu opened from the Home Alignment group."));
+            OrientationPickerButton.ContextMenu!.IsOpen = false;
+
+            SetSelectionRange(context.NumberRange, context.NumberRange.Start);
+            RefreshToolbar();
+            UpdateLayout();
+            await Task.Delay(250);
+            captures.Add(await CaptureHomeAlignmentNumberWindowStateAsync(
+                outputDir,
+                "number-format-grid",
+                "freex_home_number_format_grid_commands",
+                "window-full",
+                "Home Number group focused with rendered Accounting, Percent, Short Date, and custom number format examples."));
+
+            alignmentDialog = new FormatCellsDialog(
+                new CellStyle
+                {
+                    HorizontalAlignment = FreeX.Core.Model.HorizontalAlignment.Distributed,
+                    VerticalAlignment = FreeX.Core.Model.VerticalAlignment.Center,
+                    WrapText = true,
+                    ShrinkToFit = true,
+                    IndentLevel = 2,
+                    TextRotation = 45
+                },
+                FormatCellsDialogTab.Alignment)
+            {
+                Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+            alignmentDialog.Show();
+            alignmentDialog.Activate();
+            alignmentDialog.UpdateLayout();
+            await Task.Delay(450);
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await CaptureWindowElementForScreenshotTourAsync(alignmentDialog, outputDir, "freex_home_alignment_format_cells_dialog");
+            captures.Add(CreateHomeAlignmentNumberTourCapture(
+                "format-cells-alignment-dialog",
+                "freex_home_alignment_format_cells_dialog",
+                "format-cells-dialog",
+                "RenderTargetBitmap-format-cells-dialog",
+                alignmentDialog.ActualWidth,
+                alignmentDialog.ActualHeight,
+                "Format Cells dialog opened directly to the Alignment tab with wrap, shrink, indent, rotation, and distributed alignment state."));
+            alignmentDialog.Close();
+            alignmentDialog = null;
+
+            numberDialog = new FormatCellsDialog(
+                new CellStyle
+                {
+                    NumberFormat = "[$-409]mmmm d, yyyy;@"
+                },
+                FormatCellsDialogTab.Number)
+            {
+                Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+            numberDialog.Show();
+            numberDialog.Activate();
+            numberDialog.UpdateLayout();
+            await Task.Delay(450);
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await CaptureWindowElementForScreenshotTourAsync(numberDialog, outputDir, "freex_home_number_format_cells_dialog");
+            captures.Add(CreateHomeAlignmentNumberTourCapture(
+                "format-cells-number-dialog",
+                "freex_home_number_format_cells_dialog",
+                "format-cells-dialog",
+                "RenderTargetBitmap-format-cells-dialog",
+                numberDialog.ActualWidth,
+                numberDialog.ActualHeight,
+                "Format Cells dialog opened directly to the Number tab with a locale/custom date format scenario."));
+            numberDialog.Close();
+            numberDialog = null;
+
+            ValidateHomeAlignmentNumberTourEvidence(outputDir, captures);
+            await WriteHomeAlignmentNumberTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteHomeAlignmentNumberTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (OrientationPickerButton.ContextMenu is { IsOpen: true } menu)
+                menu.IsOpen = false;
+            alignmentDialog?.Close();
+            numberDialog?.Close();
+        }
+    }
+
+    private HomeAlignmentNumberTourContext EnsureHomeAlignmentNumberTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Home alignment/number tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        for (uint row = 1; row <= 9; row++)
+        {
+            for (uint col = 1; col <= 6; col++)
+                sheet.ClearCell(new CellAddress(sheet.Id, row, col));
+        }
+
+        sheet.ColumnWidths[1] = 18;
+        sheet.ColumnWidths[2] = 20;
+        sheet.ColumnWidths[3] = 18;
+        sheet.ColumnWidths[4] = 17;
+        sheet.ColumnWidths[5] = 18;
+        sheet.ColumnWidths[6] = 18;
+        sheet.RowHeights[2] = 42;
+        sheet.RowHeights[3] = 38;
+        sheet.RowHeights[4] = 44;
+
+        SetTourCell(sheet, 1, 1, new TextValue("Alignment"));
+        SetTourCell(sheet, 1, 4, new TextValue("Number formats"));
+        SetTourCell(sheet, 2, 1, new TextValue("Left / top"));
+        SetTourCell(sheet, 2, 2, new TextValue("Centered with wrap text"));
+        SetTourCell(sheet, 2, 3, new TextValue("Right / bottom"));
+        SetTourCell(sheet, 3, 1, new TextValue("Indented text"));
+        SetTourCell(sheet, 3, 2, new TextValue("Rotated"));
+        SetTourCell(sheet, 4, 1, new TextValue("Merged & Centered"));
+        SetTourCell(sheet, 2, 4, new NumberValue(1234.5));
+        SetTourCell(sheet, 3, 4, new NumberValue(0.425));
+        SetTourCell(sheet, 4, 4, new NumberValue(new DateTime(2026, 6, 10).ToOADate()));
+        SetTourCell(sheet, 5, 4, new NumberValue(-1200.34));
+
+        var headerRange = Range(sheet.Id, 1, 1, 1, 6);
+        ApplyHomeAlignmentNumberTourStyle(headerRange, new StyleDiff(Bold: true, FillColor: new CellColor(217, 225, 242)));
+        ApplyHomeAlignmentNumberTourStyle(Range(sheet.Id, 2, 1, 2, 1), new StyleDiff(HAlign: FreeX.Core.Model.HorizontalAlignment.Left, VAlign: FreeX.Core.Model.VerticalAlignment.Top));
+        ApplyHomeAlignmentNumberTourStyle(Range(sheet.Id, 2, 2, 2, 2), new StyleDiff(HAlign: FreeX.Core.Model.HorizontalAlignment.Center, VAlign: FreeX.Core.Model.VerticalAlignment.Center, WrapText: true));
+        ApplyHomeAlignmentNumberTourStyle(Range(sheet.Id, 2, 3, 2, 3), new StyleDiff(HAlign: FreeX.Core.Model.HorizontalAlignment.Right, VAlign: FreeX.Core.Model.VerticalAlignment.Bottom));
+        ApplyHomeAlignmentNumberTourStyle(Range(sheet.Id, 3, 1, 3, 1), new StyleDiff(IndentLevel: 2));
+        ApplyHomeAlignmentNumberTourStyle(Range(sheet.Id, 3, 2, 3, 2), new StyleDiff(TextRotation: 45));
+        ApplyHomeAlignmentNumberTourStyle(Range(sheet.Id, 2, 4, 2, 4), new StyleDiff(NumberFormat: HomeNumberFormatDropdownPlanner.AccountingNumberFormatCode));
+        ApplyHomeAlignmentNumberTourStyle(Range(sheet.Id, 3, 4, 3, 4), new StyleDiff(NumberFormat: "0%"));
+        ApplyHomeAlignmentNumberTourStyle(Range(sheet.Id, 4, 4, 4, 4), new StyleDiff(NumberFormat: "m/d/yyyy"));
+        ApplyHomeAlignmentNumberTourStyle(Range(sheet.Id, 5, 4, 5, 4), new StyleDiff(NumberFormat: "[Red]#,##0.00;[Blue]-#,##0.00;0"));
+
+        var mergeRange = Range(sheet.Id, 4, 1, 4, 3);
+        if (!TryExecuteCommand(CreateMergeAndCenterCommand(mergeRange), "Merge & Center"))
+            throw new InvalidOperationException("Home alignment/number tour could not create the Merge & Center sample.");
+
+        var alignmentRange = Range(sheet.Id, 2, 1, 4, 3);
+        var numberRange = Range(sheet.Id, 2, 4, 5, 4);
+        SetSelectionRange(alignmentRange, alignmentRange.Start);
+        EnsureCellVisible(alignmentRange.Start);
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateViewport();
+        UpdateLayout();
+
+        return new HomeAlignmentNumberTourContext(
+            SheetName: sheet.Name,
+            AlignmentRange: alignmentRange,
+            NumberRange: numberRange,
+            SampleFormats:
+            [
+                HomeNumberFormatDropdownPlanner.AccountingNumberFormatCode,
+                "0%",
+                "m/d/yyyy",
+                "[Red]#,##0.00;[Blue]-#,##0.00;0"
+            ]);
+    }
+
+    private static GridRange Range(SheetId sheetId, uint startRow, uint startCol, uint endRow, uint endCol) =>
+        new(new CellAddress(sheetId, startRow, startCol), new CellAddress(sheetId, endRow, endCol));
+
+    private static void SetTourCell(Sheet sheet, uint row, uint col, ScalarValue value) =>
+        sheet.SetCell(new CellAddress(sheet.Id, row, col), value);
+
+    private void ApplyHomeAlignmentNumberTourStyle(GridRange range, StyleDiff diff)
+    {
+        if (!TryExecuteApplyStyle(range, diff, "Apply Style"))
+            throw new InvalidOperationException($"Home alignment/number tour could not apply style to {range}.");
+    }
+
+    private async Task<HomeAlignmentNumberTourManifestCapture> CaptureHomeAlignmentNumberWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string surface,
+        string evidencePurpose)
+    {
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateHomeAlignmentNumberTourCapture(
+            state,
+            fileName,
+            surface,
+            "RenderTargetBitmap-main-window",
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            evidencePurpose);
+    }
+
+    private static HomeAlignmentNumberTourManifestCapture CreateHomeAlignmentNumberTourCapture(
+        string state,
+        string fileName,
+        string surface,
+        string captureMethod,
+        double captureLogicalWidth,
+        double captureLogicalHeight,
+        string evidencePurpose) =>
+        new(
+            CaptureKey: $"interactive:home-alignment-number:{state}",
+            PairKey: $"interactive:home-alignment-number:{state}",
+            ScenarioId: "home:alignment-number",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CounterpartFileName: $"interactive_home_alignment_number_{state.Replace('-', '_')}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: captureLogicalWidth,
+            CaptureLogicalHeight: captureLogicalHeight,
+            EvidencePurpose: evidencePurpose);
+
+    private static void DeleteHomeAlignmentNumberTourEvidence(string outputDir)
+    {
+        foreach (var fileName in new[]
+        {
+            "freex_home_alignment_grid_commands.png",
+            "freex_home_alignment_orientation_menu_opened.png",
+            "freex_home_number_format_grid_commands.png",
+            "freex_home_alignment_format_cells_dialog.png",
+            "freex_home_number_format_cells_dialog.png",
+            HomeAlignmentNumberTourManifestFileName
+        })
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static void ValidateHomeAlignmentNumberTourEvidence(
+        string outputDir,
+        IReadOnlyCollection<HomeAlignmentNumberTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Home alignment/number tour did not create {capture.OutputFileName}.");
+        }
+    }
+
     private async Task CaptureHomeBordersDropdownTourAsync(string outputDir)
     {
         Directory.CreateDirectory(outputDir);
@@ -528,6 +834,387 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, $"{HomeBordersDropdownTourCaptureFileName}.png");
         if (!File.Exists(path))
             throw new InvalidOperationException("Home Borders dropdown tour did not create the planned FreeX dropdown capture.");
+    }
+
+    private async Task CaptureHomeFontColorsTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteHomeFontColorsTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 820;
+        await Task.Delay(700);
+
+        var sampleRange = EnsureHomeFontColorsTourContext();
+        var captures = new List<HomeFontColorsTourManifestCapture>();
+
+        try
+        {
+            var homeTab = RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home");
+            SelectRibbonTourTab(homeTab);
+            SetSelectionRange(sampleRange, sampleRange.Start);
+            UpdateViewport();
+            RefreshToolbar();
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(350);
+
+            await CaptureCurrentWindowAsync(outputDir, "freex_home_font_colors_grid_styled", 760);
+            captures.Add(CreateHomeFontColorsWindowCapture(
+                "styled-grid",
+                "freex_home_font_colors_grid_styled",
+                "Real grid render for font family/size, grow/shrink-sized rows, bold, italic, underline, double underline, strikethrough, font color, fill color, theme-backed colors, and representative borders."));
+
+            captures.Add(await CaptureHomeFontColorsComboPopupAsync(
+                outputDir,
+                FontNameBox,
+                "font-family-dropdown",
+                "freex_home_font_family_dropdown_opened",
+                "Font family dropdown opened from the production Home Font combo box."));
+
+            captures.Add(await CaptureHomeFontColorsComboPopupAsync(
+                outputDir,
+                FontSizeBox,
+                "font-size-dropdown",
+                "freex_home_font_size_dropdown_opened",
+                "Font size dropdown opened from the production Home Font Size combo box."));
+
+            captures.Add(await CaptureHomeFontColorsMenuAsync(
+                outputDir,
+                UnderlineButton,
+                "underline-menu",
+                "freex_home_underline_menu_opened",
+                "Underline split-menu with single and double underline choices."));
+
+            var borderMenuCapture = await CaptureHomeFontColorsMenuAsync(
+                outputDir,
+                BordersMenuButton,
+                "borders-menu",
+                "freex_home_borders_full_menu_opened",
+                "Full Home Borders menu with presets, draw/erase commands, line color, line style, and More Borders.");
+            captures.Add(borderMenuCapture);
+
+            captures.Add(await CaptureHomeFontColorsBorderLineColorSubmenuAsync(
+                outputDir,
+                "freex_home_borders_line_color_submenu_opened"));
+
+            ValidateHomeFontColorsTourEvidence(outputDir, captures);
+            await WriteHomeFontColorsTourManifestAsync(outputDir, sampleRange, captures);
+        }
+        catch
+        {
+            DeleteHomeFontColorsTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            FontNameBox.IsDropDownOpen = false;
+            FontSizeBox.IsDropDownOpen = false;
+            if (UnderlineButton.ContextMenu is { } underlineMenu)
+                underlineMenu.IsOpen = false;
+            if (BordersMenuButton.ContextMenu is { } bordersMenu)
+                bordersMenu.IsOpen = false;
+        }
+    }
+
+    private GridRange EnsureHomeFontColorsTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Home font/colors tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+
+        var labels = new[]
+        {
+            "Calibri 11",
+            "Aptos 14",
+            "Grow 18",
+            "Shrink 9",
+            "Bold",
+            "Italic",
+            "Underline",
+            "Double underline",
+            "Strikethrough",
+            "Font color",
+            "Fill color",
+            "Theme colors",
+            "All borders",
+            "Outside border",
+            "Bottom double"
+        };
+
+        for (uint row = 1; row <= 5; row++)
+        {
+            for (uint col = 1; col <= 5; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                sheet.ClearCell(address);
+                var index = (int)((row - 1) * 5 + (col - 1));
+                if (index < labels.Length)
+                    sheet.SetCell(address, new TextValue(labels[index]));
+            }
+        }
+
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 1), new StyleDiff(FontName: "Calibri", FontSize: 11));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 2), new StyleDiff(FontName: "Aptos", FontSize: 14));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 3), new StyleDiff(FontSize: FontSizePlanner.Increase(16)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 4), new StyleDiff(FontSize: FontSizePlanner.Decrease(10)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 5), new StyleDiff(Bold: true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 1), new StyleDiff(Italic: true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 2), CellStyleDiffPlanner.UnderlineDiff(true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 3), CellStyleDiffPlanner.DoubleUnderlineDiff(true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 4), CellStyleDiffPlanner.StrikethroughDiff(true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 5), new StyleDiff(FontColor: new CellColor(192, 0, 0)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 1), new StyleDiff(FillColor: new CellColor(255, 242, 204)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 2), new StyleDiff(
+            FontThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+            FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.6)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 3), BorderShortcutService.GetAllBorderDiff(BorderStyle.Thin, CellColor.Black));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 4), new StyleDiff(
+            BorderTop: new CellBorder(BorderStyle.Thick, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1)),
+            BorderRight: new CellBorder(BorderStyle.Thick, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1)),
+            BorderBottom: new CellBorder(BorderStyle.Thick, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1)),
+            BorderLeft: new CellBorder(BorderStyle.Thick, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1))));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 5), new StyleDiff(
+            BorderBottom: new CellBorder(BorderStyle.Double, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent2))));
+
+        var sampleRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 5));
+        SetActiveCell(sampleRange.Start);
+        SetSelectionRange(sampleRange, sampleRange.Start);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        return sampleRange;
+    }
+
+    private void ApplyHomeFontColorsTourStyle(CellAddress address, StyleDiff diff)
+    {
+        var range = new GridRange(address, address);
+        if (!TryExecuteApplyStyle(range, diff, "Apply Style"))
+            throw new InvalidOperationException($"Home font/colors tour could not apply style to {address}.");
+    }
+
+    private async Task<HomeFontColorsTourManifestCapture> CaptureHomeFontColorsComboPopupAsync(
+        string outputDir,
+        ComboBox comboBox,
+        string state,
+        string fileName,
+        string evidencePurpose)
+    {
+        comboBox.Focus();
+        comboBox.ApplyTemplate();
+        comboBox.IsDropDownOpen = true;
+        comboBox.UpdateLayout();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(350);
+
+        try
+        {
+            var popupChild = FindOpenPopupChild(comboBox)
+                ?? throw new InvalidOperationException($"Home font/colors tour could not locate the open {state} popup.");
+
+            await CaptureElementAsync(popupChild, outputDir, fileName);
+            return CreateHomeFontColorsElementCapture(state, fileName, evidencePurpose, popupChild.ActualWidth, popupChild.ActualHeight);
+        }
+        finally
+        {
+            comboBox.IsDropDownOpen = false;
+        }
+    }
+
+    private async Task<HomeFontColorsTourManifestCapture> CaptureHomeFontColorsMenuAsync(
+        string outputDir,
+        ButtonBase placementTarget,
+        string state,
+        string fileName,
+        string evidencePurpose)
+    {
+        var menu = placementTarget.ContextMenu
+            ?? throw new InvalidOperationException($"Home font/colors tour could not locate the {state} context menu.");
+
+        menu.PlacementTarget = placementTarget;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+        menu.UpdateLayout();
+        await Task.Delay(350);
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        await CaptureElementAsync(menu, outputDir, fileName);
+        var capture = CreateHomeFontColorsElementCapture(state, fileName, evidencePurpose, menu.ActualWidth, menu.ActualHeight);
+        menu.IsOpen = false;
+        return capture;
+    }
+
+    private async Task<HomeFontColorsTourManifestCapture> CaptureHomeFontColorsBorderLineColorSubmenuAsync(string outputDir, string fileName)
+    {
+        var menu = BordersMenuButton.ContextMenu
+            ?? throw new InvalidOperationException("Home font/colors tour could not locate the Borders context menu.");
+
+        menu.PlacementTarget = BordersMenuButton;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+        menu.UpdateLayout();
+        await Task.Delay(250);
+
+        var lineColorItem = FindMenuItemByHeader(menu.Items, UiText.Get("MainWindow_Header_LineColor"))
+            ?? throw new InvalidOperationException("Home font/colors tour could not locate the Borders Line Color submenu.");
+        lineColorItem.IsSubmenuOpen = true;
+        lineColorItem.UpdateLayout();
+        await Task.Delay(350);
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        try
+        {
+            var popupChild = FindOpenPopupChild(lineColorItem)
+                ?? throw new InvalidOperationException("Home font/colors tour could not locate the open Borders Line Color submenu popup.");
+            await CaptureElementAsync(popupChild, outputDir, fileName);
+            return CreateHomeFontColorsElementCapture(
+                "borders-line-color-submenu",
+                fileName,
+                "Borders Line Color submenu showing implemented black, gray, Accent 1, and Accent 2 theme color choices.",
+                popupChild.ActualWidth,
+                popupChild.ActualHeight);
+        }
+        finally
+        {
+            lineColorItem.IsSubmenuOpen = false;
+            menu.IsOpen = false;
+        }
+    }
+
+    private static MenuItem? FindMenuItemByHeader(ItemCollection items, string header)
+    {
+        foreach (var item in items)
+        {
+            if (item is not MenuItem menuItem)
+                continue;
+
+            if (string.Equals(menuItem.Header?.ToString(), header, StringComparison.Ordinal))
+                return menuItem;
+
+            var nested = FindMenuItemByHeader(menuItem.Items, header);
+            if (nested is not null)
+                return nested;
+        }
+
+        return null;
+    }
+
+    private HomeFontColorsTourManifestCapture CreateHomeFontColorsWindowCapture(string state, string fileName, string evidencePurpose)
+    {
+        var activeCell = SheetGrid.SelectedRange?.Start;
+        var style = activeCell is { } address
+            ? ResolveHomeFontColorsTourStyle(address)
+            : CellStyle.Default;
+        return new HomeFontColorsTourManifestCapture(
+            State: state,
+            FileName: $"{fileName}.png",
+            CaptureKey: $"interactive:home-font-colors:{state}",
+            EvidencePurpose: evidencePurpose,
+            CaptureMethod: IsScreenshotTourBackgroundRenderAllowed()
+                ? "RenderTargetBitmap-window-full"
+                : "CopyFromScreen-window-full",
+            LogicalWidth: ActualWidth,
+            LogicalHeight: Math.Min(ActualHeight, 760),
+            ActiveCell: activeCell?.ToString() ?? string.Empty,
+            ActiveCellFontName: style.FontName,
+            ActiveCellFontSize: style.FontSize,
+            ActiveCellBold: style.Bold,
+            ActiveCellItalic: style.Italic,
+            ActiveCellUnderline: style.Underline,
+            ActiveCellDoubleUnderline: style.DoubleUnderline,
+            ActiveCellStrikethrough: style.Strikethrough,
+            ActiveCellFontColor: FormatQatUndoRedoTourColor(style.ResolveFontColor(_workbook.Theme)),
+            ActiveCellFillColor: FormatQatUndoRedoTourColor(style.ResolveFillColor(_workbook.Theme)),
+            MenuHeaders: []);
+    }
+
+    private HomeFontColorsTourManifestCapture CreateHomeFontColorsElementCapture(
+        string state,
+        string fileName,
+        string evidencePurpose,
+        double width,
+        double height)
+    {
+        return new HomeFontColorsTourManifestCapture(
+            State: state,
+            FileName: $"{fileName}.png",
+            CaptureKey: $"interactive:home-font-colors:{state}",
+            EvidencePurpose: evidencePurpose,
+            CaptureMethod: "RenderTargetBitmap-wpf-element",
+            LogicalWidth: width,
+            LogicalHeight: height,
+            ActiveCell: SheetGrid.SelectedRange?.Start.ToString() ?? string.Empty,
+            ActiveCellFontName: string.Empty,
+            ActiveCellFontSize: 0,
+            ActiveCellBold: false,
+            ActiveCellItalic: false,
+            ActiveCellUnderline: false,
+            ActiveCellDoubleUnderline: false,
+            ActiveCellStrikethrough: false,
+            ActiveCellFontColor: null,
+            ActiveCellFillColor: null,
+            MenuHeaders: CaptureOpenMenuHeaders());
+    }
+
+    private IReadOnlyList<string> CaptureOpenMenuHeaders()
+    {
+        var headers = new List<string>();
+        AddMenuHeaders(UnderlineButton.ContextMenu, headers);
+        AddMenuHeaders(BordersMenuButton.ContextMenu, headers);
+        return headers;
+    }
+
+    private static void AddMenuHeaders(ContextMenu? menu, List<string> headers)
+    {
+        if (menu is not { IsOpen: true })
+            return;
+
+        foreach (var header in menu.Items.OfType<MenuItem>().Select(item => item.Header?.ToString()).Where(header => !string.IsNullOrWhiteSpace(header)))
+            headers.Add(header!);
+    }
+
+    private CellStyle ResolveHomeFontColorsTourStyle(CellAddress address)
+    {
+        var sheet = _workbook.GetSheet(address.Sheet)
+            ?? throw new InvalidOperationException("Home font/colors tour could not resolve the active worksheet.");
+        var cell = sheet.GetCell(address);
+        return _workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
+    }
+
+    private static void DeleteHomeFontColorsTourEvidence(string outputDir)
+    {
+        foreach (var fileName in HomeFontColorsTourExpectedFileNames().Append(HomeFontColorsTourManifestFileName))
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static IReadOnlyList<string> HomeFontColorsTourExpectedFileNames() =>
+    [
+        "freex_home_font_colors_grid_styled.png",
+        "freex_home_font_family_dropdown_opened.png",
+        "freex_home_font_size_dropdown_opened.png",
+        "freex_home_underline_menu_opened.png",
+        "freex_home_borders_full_menu_opened.png",
+        "freex_home_borders_line_color_submenu_opened.png"
+    ];
+
+    private static void ValidateHomeFontColorsTourEvidence(string outputDir, IReadOnlyList<HomeFontColorsTourManifestCapture> captures)
+    {
+        if (captures.Count != HomeFontColorsTourExpectedFileNames().Count)
+            throw new InvalidOperationException("Home font/colors tour did not create the planned capture count.");
+
+        foreach (var fileName in HomeFontColorsTourExpectedFileNames())
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Home font/colors tour did not create {fileName}.");
+        }
     }
 
     private async Task CaptureWorksheetContextMenuTourAsync(string outputDir)
@@ -1165,6 +1852,23 @@ public partial class MainWindow
         {
             var child = VisualTreeHelper.GetChild(root, index);
             var match = FindDescendantByAutomationId<T>(child, automationId);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
+    }
+
+    private static Button? FindDescendantButtonByContent(DependencyObject root, string content)
+    {
+        if (root is Button button && string.Equals(button.Content?.ToString(), content, StringComparison.Ordinal))
+            return button;
+
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            var match = FindDescendantButtonByContent(child, content);
             if (match is not null)
                 return match;
         }
@@ -2161,6 +2865,403 @@ public partial class MainWindow
             File.Delete(manifestPath);
     }
 
+    private static void ValidateTitlebarWindowChromeTourEvidence(string outputDir, IReadOnlyList<TitlebarWindowChromeTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Titlebar/window chrome tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
+    private static void ValidateFormulaBarNameBoxTourEvidence(string outputDir, IReadOnlyList<FormulaBarNameBoxTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Formula bar/name box tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
+    private static void ValidateStatusFooterTourEvidence(string outputDir, IReadOnlyList<StatusFooterTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Status/footer tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
+    private async Task CaptureFormulaDiagnosticsTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteFormulaDiagnosticsTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 760;
+        await Task.Delay(700);
+
+        var context = EnsureFormulaDiagnosticsTourContext();
+        var captures = new List<FormulaDiagnosticsTourManifestCapture>();
+        ErrorCheckingDialog? errorCheckingDialog = null;
+        EvaluateFormulaDialog? evaluateFormulaDialog = null;
+        AddWatchDialog? addWatchDialog = null;
+        WatchWindowDialog? watchWindowDialog = null;
+
+        try
+        {
+            SetFormulaDiagnosticsTourSelection(context.ResultCell);
+            TracePrecedentsForCell(context.ResultCell, "Trace Precedents");
+            captures.Add(await CaptureFormulaDiagnosticsWindowStateAsync(
+                outputDir,
+                "trace-precedents-visible",
+                "freex_formula_diagnostics_trace_precedents",
+                "window-full",
+                "Trace Precedents draws visible formula auditing arrows from A2/A3 into B2."));
+
+            SetFormulaDiagnosticsTourSelection(context.InputCell);
+            TraceDependentsBtn_Click(this, new RoutedEventArgs());
+            captures.Add(await CaptureFormulaDiagnosticsWindowStateAsync(
+                outputDir,
+                "trace-dependents-visible",
+                "freex_formula_diagnostics_trace_dependents",
+                "window-full",
+                "Trace Dependents adds a visible auditing arrow from A2 toward B2 without clearing the existing precedent arrows."));
+
+            SetFormulaDiagnosticsTourSelection(context.ResultCell);
+            ShowFormulasBtn_Click(ShowFormulasButton, new RoutedEventArgs(ButtonBase.ClickEvent, ShowFormulasButton));
+            captures.Add(await CaptureFormulaDiagnosticsWindowStateAsync(
+                outputDir,
+                "show-formulas-enabled",
+                "freex_formula_diagnostics_show_formulas_enabled",
+                "window-full",
+                "Show Formulas toggles the active sheet to display formula text such as =A2+A3 and =B2/0 in the grid."));
+
+            ShowFormulasBtn_Click(ShowFormulasButton, new RoutedEventArgs(ButtonBase.ClickEvent, ShowFormulasButton));
+            RemoveTraceArrows(kind: null, "Remove Arrows");
+            captures.Add(await CaptureFormulaDiagnosticsWindowStateAsync(
+                outputDir,
+                "remove-arrows-cleared",
+                "freex_formula_diagnostics_remove_arrows_cleared",
+                "window-full",
+                "Remove Arrows clears the in-memory formula trace arrows and returns the sheet to value display mode."));
+
+            var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId);
+            if (issues.Count == 0)
+                throw new InvalidOperationException("Formula diagnostics tour expected at least one formula error issue.");
+
+            errorCheckingDialog = new ErrorCheckingDialog(
+                issues,
+                address =>
+                {
+                    NavigateToCell(address);
+                    RefreshSheetTabs();
+                    UpdateViewport();
+                    RefreshStatusBar();
+                },
+                issue => true,
+                issue => TracePrecedentsForCell(issue.Address, "Trace Error"),
+                issue =>
+                {
+                    var summary = FormulaEvaluationSummaryService.GetSummary(_workbook, issue.Address)
+                        ?? throw new InvalidOperationException("Formula diagnostics tour expected an evaluation summary for the selected error issue.");
+                    var stepsDialog = new EvaluateFormulaDialog(summary) { Owner = this };
+                    stepsDialog.Show();
+                },
+                openOptions: null)
+            {
+                Owner = this
+            };
+            errorCheckingDialog.Show();
+            errorCheckingDialog.Activate();
+            errorCheckingDialog.UpdateLayout();
+            await Task.Delay(450);
+            await CaptureWindowElementForScreenshotTourAsync(errorCheckingDialog, outputDir, "freex_formula_diagnostics_error_checking_dialog");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "error-checking-dialog-list",
+                "freex_formula_diagnostics_error_checking_dialog",
+                "error-checking-dialog",
+                "RenderTargetBitmap-error-checking-dialog",
+                errorCheckingDialog.ActualWidth,
+                errorCheckingDialog.ActualHeight,
+                "Error Checking dialog opens with the issue list, selected first error, side actions, bottom navigation, Ignore, Trace Error, Options, and Close controls."));
+            errorCheckingDialog.Close();
+            errorCheckingDialog = null;
+
+            var resultSummary = FormulaEvaluationSummaryService.GetSummary(_workbook, context.ResultCell)
+                ?? throw new InvalidOperationException("Formula diagnostics tour expected an evaluation summary for the result cell.");
+            evaluateFormulaDialog = new EvaluateFormulaDialog(resultSummary) { Owner = this };
+            evaluateFormulaDialog.Show();
+            evaluateFormulaDialog.Activate();
+            evaluateFormulaDialog.UpdateLayout();
+            await Task.Delay(450);
+            await CaptureWindowElementForScreenshotTourAsync(evaluateFormulaDialog, outputDir, "freex_formula_diagnostics_evaluate_default");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "evaluate-formula-default-button",
+                "freex_formula_diagnostics_evaluate_default",
+                "evaluate-formula-dialog",
+                "RenderTargetBitmap-evaluate-formula-dialog",
+                evaluateFormulaDialog.ActualWidth,
+                evaluateFormulaDialog.ActualHeight,
+                "Evaluate Formula dialog opens on B2 with the Evaluate command as the focused/default command and Close as the cancel command."));
+
+            var evaluateButton = FindDescendantButtonByContent(evaluateFormulaDialog, UiText.Get("EvaluateFormula_EvaluateButton"))
+                ?? throw new InvalidOperationException("Formula diagnostics tour could not find the Evaluate Formula default button.");
+            evaluateButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, evaluateButton));
+            await Task.Delay(250);
+            evaluateFormulaDialog.UpdateLayout();
+            await CaptureWindowElementForScreenshotTourAsync(evaluateFormulaDialog, outputDir, "freex_formula_diagnostics_evaluate_after_step");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "evaluate-formula-after-step",
+                "freex_formula_diagnostics_evaluate_after_step",
+                "evaluate-formula-dialog",
+                "RenderTargetBitmap-evaluate-formula-dialog",
+                evaluateFormulaDialog.ActualWidth,
+                evaluateFormulaDialog.ActualHeight,
+                "Evaluate advances one deterministic calculation step while preserving the Evaluate/Step In/Step Out/Restart/Close/Help command row."));
+            evaluateFormulaDialog.Close();
+            evaluateFormulaDialog = null;
+
+            SetFormulaDiagnosticsTourSelection(context.ResultCell);
+            addWatchDialog = new AddWatchDialog(FormatRangeReference(context.ResultCell, context.ResultCell)) { Owner = this };
+            addWatchDialog.Show();
+            addWatchDialog.Activate();
+            addWatchDialog.UpdateLayout();
+            await Task.Delay(350);
+            await CaptureWindowElementForScreenshotTourAsync(addWatchDialog, outputDir, "freex_formula_diagnostics_watch_add_dialog");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "watch-window-add-dialog",
+                "freex_formula_diagnostics_watch_add_dialog",
+                "watch-window-add-dialog",
+                "RenderTargetBitmap-add-watch-dialog",
+                addWatchDialog.ActualWidth,
+                addWatchDialog.ActualHeight,
+                "Add Watch dialog shows the selected B2 range, Add default button, Cancel button, and stable AddWatch automation IDs."));
+            addWatchDialog.Close();
+            addWatchDialog = null;
+
+            WatchWindowService.AddWatches(_workbook, new GridRange(context.ResultCell, context.ResultCell));
+            WatchWindowService.AddWatches(_workbook, new GridRange(context.ErrorCell, context.ErrorCell));
+            watchWindowDialog = CreateFormulaDiagnosticsWatchWindowDialog();
+            watchWindowDialog.Show();
+            watchWindowDialog.Activate();
+            watchWindowDialog.UpdateLayout();
+            await Task.Delay(450);
+            await CaptureWindowElementForScreenshotTourAsync(watchWindowDialog, outputDir, "freex_formula_diagnostics_watch_window_list");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "watch-window-list",
+                "freex_formula_diagnostics_watch_window_list",
+                "watch-window-dialog",
+                "RenderTargetBitmap-watch-window-dialog",
+                watchWindowDialog.ActualWidth,
+                watchWindowDialog.ActualHeight,
+                "Watch Window lists B2 and D2 with workbook, sheet, cell, value, and formula columns plus Add Watch, Refresh, Delete Watch, and Close controls."));
+
+            var refreshButton = FindDescendantByAutomationId<Button>(watchWindowDialog, "WatchWindowRefreshButton")
+                ?? throw new InvalidOperationException("Formula diagnostics tour could not find the Watch Window Refresh button.");
+            refreshButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, refreshButton));
+            await Task.Delay(250);
+            await CaptureWindowElementForScreenshotTourAsync(watchWindowDialog, outputDir, "freex_formula_diagnostics_watch_window_after_refresh");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "watch-window-after-refresh",
+                "freex_formula_diagnostics_watch_window_after_refresh",
+                "watch-window-dialog",
+                "RenderTargetBitmap-watch-window-dialog",
+                watchWindowDialog.ActualWidth,
+                watchWindowDialog.ActualHeight,
+                "Refresh rehydrates the watched rows while preserving the selected watched cell when possible."));
+
+            var watchList = FindDescendantByAutomationId<ListView>(watchWindowDialog, "WatchWindowList")
+                ?? throw new InvalidOperationException("Formula diagnostics tour could not find the Watch Window list.");
+            if (watchList.Items.Count > 0)
+                watchList.SelectedIndex = 0;
+            var deleteButton = FindDescendantByAutomationId<Button>(watchWindowDialog, "WatchWindowDeleteButton")
+                ?? throw new InvalidOperationException("Formula diagnostics tour could not find the Watch Window Delete Watch button.");
+            deleteButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, deleteButton));
+            await Task.Delay(250);
+            await CaptureWindowElementForScreenshotTourAsync(watchWindowDialog, outputDir, "freex_formula_diagnostics_watch_window_after_delete");
+            captures.Add(CreateFormulaDiagnosticsCapture(
+                "watch-window-after-delete",
+                "freex_formula_diagnostics_watch_window_after_delete",
+                "watch-window-dialog",
+                "RenderTargetBitmap-watch-window-dialog",
+                watchWindowDialog.ActualWidth,
+                watchWindowDialog.ActualHeight,
+                "Delete Watch removes the selected watched row and leaves the remaining watched formula visible."));
+            watchWindowDialog.Close();
+            watchWindowDialog = null;
+
+            ValidateFormulaDiagnosticsTourEvidence(outputDir, captures);
+            await WriteFormulaDiagnosticsTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteFormulaDiagnosticsTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (errorCheckingDialog is { IsVisible: true })
+                errorCheckingDialog.Close();
+            if (evaluateFormulaDialog is { IsVisible: true })
+                evaluateFormulaDialog.Close();
+            if (addWatchDialog is { IsVisible: true })
+                addWatchDialog.Close();
+            if (watchWindowDialog is { IsVisible: true })
+                watchWindowDialog.Close();
+
+            _formulaTraceArrows.Clear();
+            UpdateViewport();
+        }
+    }
+
+    private FormulaDiagnosticsTourContext EnsureFormulaDiagnosticsTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Formula diagnostics tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        _formulaTraceArrows.Clear();
+        WatchWindowService.RemoveWatches(
+            _workbook,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 8, 6)));
+
+        for (uint row = 1; row <= 8; row++)
+        {
+            for (uint col = 1; col <= 6; col++)
+                sheet.ClearCell(new CellAddress(sheet.Id, row, col));
+        }
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Input"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Result"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new TextValue("Error"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(8));
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "A2+A3");
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 4), "B2/0");
+        sheet.SetFormula(new CellAddress(sheet.Id, 3, 4), "B2+A2");
+
+        RecalculateWorkbook();
+        var resultCell = new CellAddress(sheet.Id, 2, 2);
+        SetFormulaDiagnosticsTourSelection(resultCell);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+
+        return new FormulaDiagnosticsTourContext(
+            SheetName: sheet.Name,
+            InputCell: new CellAddress(sheet.Id, 2, 1),
+            ResultCell: resultCell,
+            ErrorCell: new CellAddress(sheet.Id, 2, 4),
+            ResultFormula: sheet.GetCell(resultCell)?.FormulaText ?? "",
+            ErrorFormula: sheet.GetCell(new CellAddress(sheet.Id, 2, 4))?.FormulaText ?? "");
+    }
+
+    private void SetFormulaDiagnosticsTourSelection(CellAddress address)
+    {
+        var range = new GridRange(address, address);
+        SetSelectionRange(range, address);
+        EnsureCellVisible(address);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private WatchWindowDialog CreateFormulaDiagnosticsWatchWindowDialog() =>
+        new(
+            () =>
+            {
+                RecalculateWorkbook();
+                return WatchWindowService.GetEntries(_workbook);
+            },
+            () => AddWatchFromSelection(showMessage: false),
+            () => SheetGrid.SelectedRange is { } range
+                ? FormatRangeReference(range.Start, range.End)
+                : "",
+            address =>
+            {
+                NavigateToCell(address);
+                RefreshSheetTabs();
+                UpdateViewport();
+                RefreshStatusBar();
+            },
+            address =>
+            {
+                WatchWindowService.RemoveWatch(_workbook, address);
+                UpdateViewport();
+            })
+        {
+            Owner = this
+        };
+
+    private async Task<FormulaDiagnosticsTourManifestCapture> CaptureFormulaDiagnosticsWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string surface,
+        string evidenceSummary)
+    {
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(150);
+
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateFormulaDiagnosticsCapture(
+            state,
+            fileName,
+            surface,
+            "RenderTargetBitmap-window-full",
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            evidenceSummary);
+    }
+
+    private FormulaDiagnosticsTourManifestCapture CreateFormulaDiagnosticsCapture(
+        string state,
+        string fileName,
+        string surface,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        string evidenceSummary)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var selectedRange = SheetGrid.SelectedRange;
+        return new FormulaDiagnosticsTourManifestCapture(
+            CaptureKey: $"formula-diagnostics:{state}",
+            PairKey: $"interactive:formula-diagnostics:{state}",
+            ScenarioId: "formula-diagnostics:visual-evidence",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            SelectedRange: selectedRange?.ToString() ?? string.Empty,
+            ShowFormulas: sheet?.ShowFormulas == true,
+            FormulaTraceArrowCount: _formulaTraceArrows.Count,
+            WatchCount: WatchWindowService.GetEntries(_workbook).Count,
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private static void DeleteFormulaDiagnosticsTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_formula_diagnostics_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, FormulaDiagnosticsTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
     private async Task CaptureViewPanesZoomTourAsync(string outputDir)
     {
         Directory.CreateDirectory(outputDir);
@@ -2533,34 +3634,18 @@ public partial class MainWindow
         return null;
     }
 
-    private static void ValidateTitlebarWindowChromeTourEvidence(string outputDir, IReadOnlyList<TitlebarWindowChromeTourManifestCapture> captures)
+    private static void ValidateFormulaDiagnosticsTourEvidence(
+        string outputDir,
+        IReadOnlyList<FormulaDiagnosticsTourManifestCapture> captures)
     {
-        foreach (var capture in captures)
-        {
-            var path = Path.Combine(outputDir, capture.OutputFileName);
-            if (!File.Exists(path))
-                throw new InvalidOperationException($"Titlebar/window chrome tour did not create planned capture '{capture.OutputFileName}'.");
-        }
-    }
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
 
-    private static void ValidateFormulaBarNameBoxTourEvidence(string outputDir, IReadOnlyList<FormulaBarNameBoxTourManifestCapture> captures)
-    {
-        foreach (var capture in captures)
-        {
-            var path = Path.Combine(outputDir, capture.OutputFileName);
-            if (!File.Exists(path))
-                throw new InvalidOperationException($"Formula bar/name box tour did not create planned capture '{capture.OutputFileName}'.");
-        }
-    }
-
-    private static void ValidateStatusFooterTourEvidence(string outputDir, IReadOnlyList<StatusFooterTourManifestCapture> captures)
-    {
-        foreach (var capture in captures)
-        {
-            var path = Path.Combine(outputDir, capture.OutputFileName);
-            if (!File.Exists(path))
-                throw new InvalidOperationException($"Status/footer tour did not create planned capture '{capture.OutputFileName}'.");
-        }
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Formula diagnostics tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
     }
 
     private async Task CaptureKeyTipOverlayTourAsync(string outputDir)
@@ -3355,6 +4440,44 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeNumberFormatDropdownTourManifest);
     }
 
+    private static async Task WriteHomeAlignmentNumberTourManifestAsync(
+        string outputDir,
+        HomeAlignmentNumberTourContext context,
+        IReadOnlyList<HomeAlignmentNumberTourManifestCapture> captures)
+    {
+        var manifest = new HomeAlignmentNumberTourManifest(
+            Tool: "FREEX_HOME_ALIGNMENT_NUMBER_TOUR",
+            EvidenceFamily: "home-ribbon",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "home:alignment-number",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_home_alignment_*.png, freex_home_number_*.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            SheetName: context.SheetName,
+            AlignmentRange: context.AlignmentRange.ToString(),
+            NumberRange: context.NumberRange.ToString(),
+            SampleFormats: context.SampleFormats,
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-main-window-context-menu-and-dialogs",
+            Pairing: new HomeAlignmentNumberTourManifestPairing(
+                "interactive:home-alignment-number:<State>",
+                "excel",
+                "screenshot_excel.ps1",
+                "interactive_home_alignment_number_<state>.png"),
+            Captures: captures,
+            Limitations:
+            [
+                "This in-app tour seeds worksheet cells, executes the production FreeX style command path, and captures WPF output with RenderTargetBitmap.",
+                "The paired Microsoft Excel transient captures remain a separate foreground-guarded capture set.",
+                "The tour covers visible Home Alignment and Number group command rendering, Orientation menu shape, and Format Cells Alignment/Number entry states; save/reload and locale-specific number-format fidelity remain follow-up verification."
+            ]);
+
+        var path = Path.Combine(outputDir, HomeAlignmentNumberTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeAlignmentNumberTourManifest);
+    }
+
     private static async Task WriteWorksheetContextMenuTourManifestAsync(
         string outputDir,
         ContextMenu menu,
@@ -3457,6 +4580,71 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, HomeBordersDropdownTourManifestFileName);
         await using var stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeBordersDropdownTourManifest);
+    }
+
+    private static async Task WriteHomeFontColorsTourManifestAsync(
+        string outputDir,
+        GridRange sampleRange,
+        IReadOnlyList<HomeFontColorsTourManifestCapture> captures)
+    {
+        var manifest = new HomeFontColorsTourManifest(
+            Tool: "FREEX_HOME_FONT_COLORS_TOUR",
+            EvidenceFamily: "home-formatting",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "UI-CAT-HOME-002A-M",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_home_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            SampleRange: sampleRange.ToString(),
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "RenderTargetBitmap; no global mouse, keyboard, or screen capture input is used"
+                : "foreground CopyFromScreen",
+            CaptureLogicalHeight: 760,
+            PlannedCaptureCount: HomeFontColorsTourExpectedFileNames().Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new HomeFontColorsTourManifestPairing(
+                "interactive:home-font-colors:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1 permits deterministic in-process WPF rendering; foreground mouse/keytip/input ownership remains a separate gap."
+                    : "FreeX main window owns foreground focus for screen captures."),
+            CoveredFeatures:
+            [
+                "font family",
+                "font size",
+                "grow font",
+                "shrink font",
+                "bold",
+                "italic",
+                "underline",
+                "double underline",
+                "strikethrough",
+                "font color",
+                "fill color",
+                "theme-backed font/fill colors",
+                "border presets",
+                "full implemented Borders menu",
+                "implemented Borders Line Color theme choices"
+            ],
+            RemainingGaps:
+            [
+                "foreground mouse/keytip evidence for Home font/color/border commands",
+                "Excel-paired Home font/color/border screenshots",
+                "full LCID/theme matrix",
+                "font/fill color gallery parity beyond the current custom color picker and swatch buttons",
+                "persistence breadth across save/reload and native JSON state"
+            ],
+            Captures: captures);
+
+        var path = Path.Combine(outputDir, HomeFontColorsTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeFontColorsTourManifest);
     }
 
     private static async Task WriteQatUndoRedoTourManifestAsync(
@@ -3703,6 +4891,69 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, ViewPanesZoomTourManifestFileName);
         await using var stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.ViewPanesZoomTourManifest);
+    }
+
+    private static async Task WriteFormulaDiagnosticsTourManifestAsync(
+        string outputDir,
+        FormulaDiagnosticsTourContext context,
+        IReadOnlyList<FormulaDiagnosticsTourManifestCapture> captures)
+    {
+        var manifest = new FormulaDiagnosticsTourManifest(
+            Tool: "FREEX_FORMULA_DIAGNOSTICS_TOUR",
+            EvidenceFamily: "formula-diagnostics",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "formula-diagnostics:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_formula_diagnostics_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds: ["UI-CAT-FORMULAS-002", "UI-CMD-FORM-003", "UI-CMD-FORM-005"],
+            SheetName: context.SheetName,
+            InputCell: context.InputCell.ToA1(),
+            ResultCell: context.ResultCell.ToA1(),
+            ErrorCell: context.ErrorCell.ToA1(),
+            ResultFormula: context.ResultFormula,
+            ErrorFormula: context.ErrorFormula,
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new FormulaDiagnosticsTourManifestPairing(
+                "interactive:formula-diagnostics:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no foreground mouse, keyboard, or screen capture input was used."
+                    : "Abort before file write unless the expected FreeX window/dialog owns foreground focus for each capture."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Trace Precedents visible arrows",
+                "Trace Dependents visible arrows",
+                "Remove Arrows cleared state",
+                "Show Formulas enabled sheet state",
+                "Error Checking dialog/list",
+                "Evaluate Formula default button and one-step advance",
+                "Add Watch dialog",
+                "Watch Window list, refresh, and delete states"
+            ],
+            Limitations:
+            [
+                "This tour drives FreeX in process and captures WPF windows with RenderTargetBitmap; it is not foreground CopyFromScreen proof.",
+                "No global mouse or keyboard input is synthesized; command handlers and WPF button events are invoked in process for deterministic capture.",
+                "The Add Watch surface is captured by showing the production AddWatchDialog directly; the actual watch insertion then uses the same AddWatchFromSelection/WatchWindowService path as the command.",
+                "The Evaluate Formula dialog is shown modeless so the tour can capture the default command and a stepped state without blocking on ShowDialog.",
+                "The trace-arrow and show-formulas captures are FreeX-only visual states; no paired Microsoft Excel evidence is produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, FormulaDiagnosticsTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.FormulaDiagnosticsTourManifest);
     }
 
     private static async Task WritePrintPreviewTourManifestAsync(
@@ -4081,6 +5332,51 @@ public partial class MainWindow
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
 
+    private sealed record HomeAlignmentNumberTourContext(
+        string SheetName,
+        GridRange AlignmentRange,
+        GridRange NumberRange,
+        IReadOnlyList<string> SampleFormats);
+
+    private sealed record HomeAlignmentNumberTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string SheetName,
+        string AlignmentRange,
+        string NumberRange,
+        IReadOnlyList<string> SampleFormats,
+        string CaptureStatus,
+        string CaptureMethod,
+        HomeAlignmentNumberTourManifestPairing Pairing,
+        IReadOnlyList<HomeAlignmentNumberTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record HomeAlignmentNumberTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record HomeAlignmentNumberTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CounterpartFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string EvidencePurpose);
+
     private sealed record HomeBordersDropdownTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -4114,6 +5410,53 @@ public partial class MainWindow
         string CounterpartFileName,
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
+
+    private sealed record HomeFontColorsTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string SampleRange,
+        string CaptureStatus,
+        string CaptureMode,
+        double CaptureLogicalHeight,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        HomeFontColorsTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<string> CoveredFeatures,
+        IReadOnlyList<string> RemainingGaps,
+        IReadOnlyList<HomeFontColorsTourManifestCapture> Captures);
+
+    private sealed record HomeFontColorsTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record HomeFontColorsTourManifestCapture(
+        string State,
+        string FileName,
+        string CaptureKey,
+        string EvidencePurpose,
+        string CaptureMethod,
+        double LogicalWidth,
+        double LogicalHeight,
+        string ActiveCell,
+        string ActiveCellFontName,
+        double ActiveCellFontSize,
+        bool ActiveCellBold,
+        bool ActiveCellItalic,
+        bool ActiveCellUnderline,
+        bool ActiveCellDoubleUnderline,
+        bool ActiveCellStrikethrough,
+        string? ActiveCellFontColor,
+        string? ActiveCellFillColor,
+        IReadOnlyList<string> MenuHeaders);
 
     private sealed record WorksheetContextMenuTourManifest(
         string Tool,
@@ -4410,6 +5753,14 @@ public partial class MainWindow
         string NamedRangeAddress,
         string StartCell);
 
+    private sealed record FormulaDiagnosticsTourContext(
+        string SheetName,
+        CellAddress InputCell,
+        CellAddress ResultCell,
+        CellAddress ErrorCell,
+        string ResultFormula,
+        string ErrorFormula);
+
     private sealed record FormulaBarNameBoxTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -4575,11 +5926,62 @@ public partial class MainWindow
         bool ViewFormulaBarChecked,
         bool SplitButtonChecked);
 
+    private sealed record FormulaDiagnosticsTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string SheetName,
+        string InputCell,
+        string ResultCell,
+        string ErrorCell,
+        string ResultFormula,
+        string ErrorFormula,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        FormulaDiagnosticsTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<FormulaDiagnosticsTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record FormulaDiagnosticsTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record FormulaDiagnosticsTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SelectedRange,
+        bool ShowFormulas,
+        int FormulaTraceArrowCount,
+        int WatchCount,
+        string EvidenceSummary);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
     [JsonSerializable(typeof(HomeNumberFormatDropdownTourManifest))]
+    [JsonSerializable(typeof(HomeAlignmentNumberTourManifest))]
     [JsonSerializable(typeof(HomeBordersDropdownTourManifest))]
+    [JsonSerializable(typeof(HomeFontColorsTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(OptionsAccountTourManifest))]
@@ -4590,6 +5992,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(FormulaBarNameBoxTourManifest))]
     [JsonSerializable(typeof(StatusFooterTourManifest))]
     [JsonSerializable(typeof(ViewPanesZoomTourManifest))]
+    [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.
