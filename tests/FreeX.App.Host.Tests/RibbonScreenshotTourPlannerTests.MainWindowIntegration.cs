@@ -18,6 +18,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("ScreenshotTourOutputSubdirectoryEnvVar = \"FREEX_SS_TOUR_OUTPUT_SUBDIR\"");
         source.Should().Contain("Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar)");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_AUTOFILTER_FLYOUT_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_ALIGNMENT_NUMBER_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PRINT_PREVIEW_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_OPTIONS_ACCOUNT_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_QAT_UNDO_REDO_TOUR\")");
@@ -31,6 +32,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("EnsureTableDesignScreenshotTourContext");
         source.Should().Contain("EnsurePivotTableScreenshotTourContext");
         source.Should().Contain("CaptureAutoFilterFlyoutTourAsync");
+        source.Should().Contain("CaptureHomeAlignmentNumberTourAsync");
         source.Should().Contain("CapturePrintPreviewTourAsync");
         source.Should().Contain("CaptureOptionsAccountTourAsync");
         source.Should().Contain("CaptureQatUndoRedoTourAsync");
@@ -48,6 +50,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("DeleteOptionsAccountTourEvidence");
         source.Should().Contain("WriteRibbonScreenshotTourManifestAsync");
         source.Should().Contain("WriteAutoFilterFlyoutTourManifestAsync");
+        source.Should().Contain("WriteHomeAlignmentNumberTourManifestAsync");
         source.Should().Contain("WritePrintPreviewTourManifestAsync");
         source.Should().Contain("WriteOptionsAccountTourManifestAsync");
         source.Should().Contain("WriteQatUndoRedoTourManifestAsync");
@@ -56,6 +59,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WriteStatusFooterTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
+        source.Should().Contain("home_alignment_number_tour_manifest.json");
         source.Should().Contain("print_preview_tour_manifest.json");
         source.Should().Contain("options_account_tour_manifest.json");
         source.Should().Contain("qat_undo_redo_tour_manifest.json");
@@ -122,6 +126,31 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Path.GetFullPath(Path.Combine(root, requestedSubdirectory))");
         source.Should().Contain("resolved.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("must stay under screenshots");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesHomeAlignmentAndNumberEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_HOME_ALIGNMENT_NUMBER_TOUR");
+        source.Should().Contain("home-alignment-number-tour");
+        source.Should().Contain("EnsureHomeAlignmentNumberTourContext");
+        source.Should().Contain("ApplyHomeAlignmentNumberTourStyle");
+        source.Should().Contain("TryExecuteApplyStyle(range, diff, \"Apply Style\")");
+        source.Should().Contain("CreateMergeAndCenterCommand(mergeRange)");
+        source.Should().Contain("OpenRibbonContextMenu(OrientationPickerButton, OrientationPickerButton.ContextMenu)");
+        source.Should().Contain("new FormatCellsDialog(");
+        source.Should().Contain("FormatCellsDialogTab.Alignment");
+        source.Should().Contain("FormatCellsDialogTab.Number");
+        source.Should().Contain("freex_home_alignment_grid_commands");
+        source.Should().Contain("freex_home_alignment_orientation_menu_opened");
+        source.Should().Contain("freex_home_number_format_grid_commands");
+        source.Should().Contain("freex_home_alignment_format_cells_dialog");
+        source.Should().Contain("freex_home_number_format_cells_dialog");
+        source.Should().Contain("interactive:home-alignment-number:<State>");
+        source.Should().Contain("HomeAlignmentNumberTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.HomeAlignmentNumberTourManifest");
     }
 
     [Fact]
@@ -360,5 +389,50 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("persistence breadth across save/reload and native JSON state");
         source.Should().Contain("HomeFontColorsTourManifest");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.HomeFontColorsTourManifest");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesFormulaDiagnosticsVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_FORMULA_DIAGNOSTICS_TOUR");
+        source.Should().Contain("formula-diagnostics-tour");
+        source.Should().Contain("EnsureFormulaDiagnosticsTourContext");
+        source.Should().Contain("sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), \"A2+A3\")");
+        source.Should().Contain("sheet.SetFormula(new CellAddress(sheet.Id, 2, 4), \"B2/0\")");
+        source.Should().Contain("TracePrecedentsForCell(context.ResultCell, \"Trace Precedents\")");
+        source.Should().Contain("TraceDependentsBtn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("ShowFormulasBtn_Click(ShowFormulasButton");
+        source.Should().Contain("RemoveTraceArrows(kind: null, \"Remove Arrows\")");
+        source.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId)");
+        source.Should().Contain("new ErrorCheckingDialog(");
+        source.Should().Contain("new EvaluateFormulaDialog(resultSummary)");
+        source.Should().Contain("FindDescendantButtonByContent(evaluateFormulaDialog, UiText.Get(\"EvaluateFormula_EvaluateButton\"))");
+        source.Should().Contain("new AddWatchDialog(FormatRangeReference(context.ResultCell, context.ResultCell))");
+        source.Should().Contain("CreateFormulaDiagnosticsWatchWindowDialog");
+        source.Should().Contain("WatchWindowService.AddWatches(_workbook, new GridRange(context.ResultCell, context.ResultCell))");
+        source.Should().Contain("FindDescendantByAutomationId<Button>(watchWindowDialog, \"WatchWindowRefreshButton\")");
+        source.Should().Contain("FindDescendantByAutomationId<ListView>(watchWindowDialog, \"WatchWindowList\")");
+        source.Should().Contain("FindDescendantByAutomationId<Button>(watchWindowDialog, \"WatchWindowDeleteButton\")");
+        source.Should().Contain("freex_formula_diagnostics_trace_precedents");
+        source.Should().Contain("freex_formula_diagnostics_trace_dependents");
+        source.Should().Contain("freex_formula_diagnostics_show_formulas_enabled");
+        source.Should().Contain("freex_formula_diagnostics_remove_arrows_cleared");
+        source.Should().Contain("freex_formula_diagnostics_error_checking_dialog");
+        source.Should().Contain("freex_formula_diagnostics_evaluate_default");
+        source.Should().Contain("freex_formula_diagnostics_evaluate_after_step");
+        source.Should().Contain("freex_formula_diagnostics_watch_add_dialog");
+        source.Should().Contain("freex_formula_diagnostics_watch_window_list");
+        source.Should().Contain("freex_formula_diagnostics_watch_window_after_refresh");
+        source.Should().Contain("freex_formula_diagnostics_watch_window_after_delete");
+        source.Should().Contain("FormulaDiagnosticsTourManifest");
+        source.Should().Contain("UI-CAT-FORMULAS-002");
+        source.Should().Contain("UI-CMD-FORM-003");
+        source.Should().Contain("UI-CMD-FORM-005");
+        source.Should().Contain("RenderTargetBitmap; it is not foreground CopyFromScreen proof");
+        source.Should().Contain("No global mouse or keyboard input is synthesized");
+        source.Should().Contain("The trace-arrow and show-formulas captures are FreeX-only visual states; no paired Microsoft Excel evidence is produced by this tool.");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.FormulaDiagnosticsTourManifest");
     }
 }
