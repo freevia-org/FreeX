@@ -46,6 +46,8 @@ public partial class MainWindow
     private const string HomeStylesConditionalFormattingTourOutputDirectoryName = "home-styles-cf-tour";
     private const string HomeClipboardCellsEditingTourManifestFileName = "home_clipboard_cells_editing_tour_manifest.json";
     private const string HomeClipboardCellsEditingTourOutputDirectoryName = "home-clipboard-cells-editing-tour";
+    private const string RibbonOverflowKeytipTourManifestFileName = "ribbon_overflow_keytip_tour_manifest.json";
+    private const string RibbonOverflowKeytipTourOutputDirectoryName = "ribbon-overflow-keytip-tour";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
     private const string KeyTipOverlayTourManifestFileName = "keytip_overlay_tour_manifest.json";
@@ -162,6 +164,7 @@ public partial class MainWindow
         var homeFontColorsTour = Environment.GetEnvironmentVariable("FREEX_HOME_FONT_COLORS_TOUR") == "1";
         var homeStylesConditionalFormattingTour = Environment.GetEnvironmentVariable("FREEX_HOME_STYLES_CF_TOUR") == "1";
         var homeClipboardCellsEditingTour = Environment.GetEnvironmentVariable("FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR") == "1";
+        var ribbonOverflowKeytipTour = Environment.GetEnvironmentVariable("FREEX_RIBBON_OVERFLOW_KEYTIP_TOUR") == "1";
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
@@ -184,7 +187,7 @@ public partial class MainWindow
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
         var formulaAuthoringNamesTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_AUTHORING_NAMES_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeStylesConditionalFormattingTour && !homeClipboardCellsEditingTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !backstageRecentExportShareTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !pivotFieldListContextTour && !viewPanesZoomTour && !pageLayoutSetupTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeStylesConditionalFormattingTour && !homeClipboardCellsEditingTour && !ribbonOverflowKeytipTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !backstageRecentExportShareTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !pivotFieldListContextTour && !viewPanesZoomTour && !pageLayoutSetupTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -201,7 +204,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeStylesConditionalFormattingTour, homeClipboardCellsEditingTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, backstageRecentExportShareTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, pivotFieldListContextTour, viewPanesZoomTour, pageLayoutSetupTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeStylesConditionalFormattingTour, homeClipboardCellsEditingTour, ribbonOverflowKeytipTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, backstageRecentExportShareTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, pivotFieldListContextTour, viewPanesZoomTour, pageLayoutSetupTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -234,6 +237,7 @@ public partial class MainWindow
         bool homeFontColorsTour,
         bool homeStylesConditionalFormattingTour,
         bool homeClipboardCellsEditingTour,
+        bool ribbonOverflowKeytipTour,
         bool worksheetContextMenuTour,
         bool keyTipOverlayTour,
         bool printPreviewTour,
@@ -283,6 +287,9 @@ public partial class MainWindow
 
         if (homeClipboardCellsEditingTour)
             await CaptureHomeClipboardCellsEditingTourAsync(Path.Combine(outputDir, HomeClipboardCellsEditingTourOutputDirectoryName));
+
+        if (ribbonOverflowKeytipTour)
+            await CaptureRibbonOverflowKeytipTourAsync(Path.Combine(outputDir, RibbonOverflowKeytipTourOutputDirectoryName));
 
         if (worksheetContextMenuTour)
             await CaptureWorksheetContextMenuTourAsync(Path.Combine(outputDir, "worksheet-context-menu-tour"));
@@ -12783,6 +12790,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(HomeFontColorsTourManifest))]
     [JsonSerializable(typeof(HomeStylesConditionalFormattingTourManifest))]
     [JsonSerializable(typeof(HomeClipboardCellsEditingTourManifest))]
+    [JsonSerializable(typeof(RibbonOverflowKeytipTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(BackstageRecentExportShareTourManifest))]
