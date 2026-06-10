@@ -760,6 +760,49 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void MainWindowScreenshotTour_CapturesPageLayoutOutputVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "MainWindow.ScreenshotTour.cs",
+            "MainWindow.ScreenshotTour.PageLayoutOutput.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_PAGE_LAYOUT_OUTPUT_TOUR");
+        source.Should().Contain("page-layout-output-tour");
+        source.Should().Contain("CapturePageLayoutOutputTourAsync");
+        source.Should().Contain("EnsurePageLayoutOutputTourContext");
+        source.Should().Contain("sheet.BackgroundImage = new WorksheetBackgroundImage");
+        source.Should().Contain("sheet.PrintArea = Range(sheet.Id, 1, 1, 24, 6)");
+        source.Should().Contain("sheet.PrintTitleRows = new WorksheetRepeatRange(1, 2)");
+        source.Should().Contain("sheet.RowPageBreaks.Add(12)");
+        source.Should().Contain("sheet.RowPageBreaks.Add(24)");
+        source.Should().Contain("new WorksheetScaleToFit(null, 1, 2)");
+        source.Should().Contain("PageSetupInitialFocusTarget.RepeatRows");
+        source.Should().Contain("RowsRepeatPickerButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent))");
+        source.Should().Contain("PrintRenderer.RenderWorksheet(_workbook, sheet.Id, _viewportService)");
+        source.Should().Contain("PdfDocumentExporter.Save(");
+        source.Should().Contain("PdfReader.Open(pdfPath, PdfDocumentOpenMode.Import)");
+        source.Should().Contain("SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, xlsxSaveAdapter))");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.PageLayoutOutputTourManifest");
+        source.Should().Contain("freex_page_layout_output_background_native_picker_guard");
+        source.Should().Contain("freex_page_layout_output_print_titles_defaults");
+        source.Should().Contain("freex_page_layout_output_print_titles_range_picker_result");
+        source.Should().Contain("freex_page_layout_output_print_area_menu_status");
+        source.Should().Contain("freex_page_layout_output_breaks_menu_status");
+        source.Should().Contain("freex_page_layout_output_scale_to_fit_result_status");
+        source.Should().Contain("freex_page_layout_output_print_preview_summary");
+        source.Should().Contain("freex_page_layout_output_saved.xlsx");
+        source.Should().Contain("freex_page_layout_output_print_titles.pdf");
+        source.Should().Contain("native image picker is intentionally not opened");
+        source.Should().Contain("PlannedCaptureCount: 7");
+
+        catalog.Should().Contain("FREEX_PAGE_LAYOUT_OUTPUT_TOUR=1");
+        catalog.Should().Contain("screenshots/page-layout-output-tour/");
+        catalog.Should().Contain("page_layout_output_tour_manifest.json");
+        catalog.Should().Contain("freex_page_layout_output_print_preview_summary.png");
+    }
+
+    [Fact]
     public void MainWindowScreenshotTour_CapturesDrawObjectFormattingVisualEvidence()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
