@@ -309,6 +309,12 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().Contain("FREEX_VIEW_PANES_ZOOM_TOUR=1");
         catalog.Should().Contain("view_panes_zoom_tour_manifest.json");
         catalog.Should().Contain("freex_view_panes_zoom_custom_views_dialog.png");
+        catalog.Should().Contain("FREEX_VIEW_WORKFLOWS_TOUR=1");
+        catalog.Should().Contain("screenshots/view-workflows-tour/");
+        catalog.Should().Contain("view_workflows_tour_manifest.json");
+        catalog.Should().Contain("freex_view_workflows_reopened_view_toggle_persistence.png");
+        catalog.Should().Contain("freex_view_workflows_saved.fxl");
+        catalog.Should().Contain("planned-but-blocked");
     }
 
     [Fact]
