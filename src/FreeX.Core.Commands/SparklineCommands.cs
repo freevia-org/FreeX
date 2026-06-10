@@ -33,6 +33,12 @@ public sealed class AddSparklineCommand : IWorkbookCommand
         {
             return new CommandOutcome(false, "Sparkline data range and location must be on the target sheet.");
         }
+        if (!SparklineRangeLimits.IsSupportedDataRange(_sparkline.DataRange))
+        {
+            return new CommandOutcome(
+                false,
+                $"Sparkline data range must contain {SparklineRangeLimits.MaxDataCellCount:N0} cells or fewer.");
+        }
         if (!Enum.IsDefined(_sparkline.Kind))
             return new CommandOutcome(false, "Sparkline type is not supported.");
 

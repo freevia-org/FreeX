@@ -9,6 +9,9 @@ public sealed class SparklineInputParserTests
 
     [Theory]
     [InlineData("A1:E1", true, 1, 1, 1, 5)]
+    [InlineData("A1:A4096", true, 1, 1, 4096, 1)]
+    [InlineData("A1:A4097", false, 0, 0, 0, 0)]
+    [InlineData("A1:XFD1048576", false, 0, 0, 0, 0)]
     [InlineData("bad", false, 0, 0, 0, 0)]
     public void TryParseDataRange_ParsesSparklineSourceRange(string input, bool expected, uint startRow, uint startCol, uint endRow, uint endCol)
     {
