@@ -98,6 +98,11 @@ public sealed class PivotHeaderDropdownPlannerTests
 
         var targets = PivotHeaderDropdownPlanner.BuildTargets(workbook, sheet);
 
+        targets.Should().Contain(target =>
+            target.Axis == PivotHeaderDropdownAxis.Page &&
+            target.FieldCaption == "Quarter" &&
+            target.HeaderCell == new CellAddress(sheet.Id, 2, 5) &&
+            target.IsActive);
         targets.Should().ContainSingle(target =>
             target.Axis == PivotHeaderDropdownAxis.Row &&
             target.FieldCaption == "Region" &&

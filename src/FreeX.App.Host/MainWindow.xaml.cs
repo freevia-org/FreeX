@@ -191,6 +191,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private RowResizeSnapshot? _rowResizeSnapshot;
     private Action<CommandOutcome>? _repeatPostAction;
     private string? _pivotFieldMenuContextCaption;
+    private PivotFieldDropZone? _pivotFieldMenuContextZone;
     private IReadOnlyDictionary<(uint Row, uint Col), PivotHeaderDropdownTarget> _pivotHeaderDropdownTargets =
         new Dictionary<(uint Row, uint Col), PivotHeaderDropdownTarget>();
     private bool _slicerTimelinePaneDismissed;

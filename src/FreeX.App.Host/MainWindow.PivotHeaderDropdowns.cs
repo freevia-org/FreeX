@@ -20,11 +20,17 @@ public partial class MainWindow
             return;
 
         _pivotFieldMenuContextCaption = target.FieldCaption;
+        _pivotFieldMenuContextZone = target.Axis switch
+        {
+            PivotHeaderDropdownAxis.Column => PivotFieldDropZone.Columns,
+            PivotHeaderDropdownAxis.Page => PivotFieldDropZone.Filters,
+            _ => PivotFieldDropZone.Rows
+        };
         SetActiveCell(headerCell);
         RefreshPivotFieldListPane();
 
         var menu = CreatePivotFieldContextMenu();
-        menu.Closed += (_, _) => _pivotFieldMenuContextCaption = null;
+        menu.Closed += (_, _) => ClearPivotFieldMenuContext();
         menu.PlacementTarget = SheetGrid;
         menu.Placement = PlacementMode.RelativePoint;
         menu.HorizontalOffset = position.X;

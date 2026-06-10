@@ -134,17 +134,42 @@ public partial class MainWindow
         _pivotFieldMenuContextCaption = PivotUiPlanner.ResolvePivotChartFieldButtonCaption(pivotTable, headers, fieldButton);
         if (string.IsNullOrWhiteSpace(_pivotFieldMenuContextCaption))
             return;
+        _pivotFieldMenuContextZone = ResolvePivotChartFieldButtonZone(pivotTable, headers, fieldButton, _pivotFieldMenuContextCaption);
 
         SetActiveCell(pivotTable.TargetRange.Start);
         RefreshPivotFieldListPane();
 
         var menu = CreatePivotFieldContextMenu();
-        menu.Closed += (_, _) => _pivotFieldMenuContextCaption = null;
+        menu.Closed += (_, _) => ClearPivotFieldMenuContext();
         menu.PlacementTarget = SheetGrid;
         menu.Placement = PlacementMode.RelativePoint;
         menu.HorizontalOffset = position.X;
         menu.VerticalOffset = position.Y;
         menu.IsOpen = true;
+    }
+
+    private static PivotFieldDropZone? ResolvePivotChartFieldButtonZone(
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        string fieldButton,
+        string caption)
+    {
+        if (string.Equals(fieldButton, "Values", StringComparison.OrdinalIgnoreCase) ||
+            PivotUiPlanner.FindDataFieldIndex(pivotTable, caption) is not null)
+        {
+            return PivotFieldDropZone.Values;
+        }
+
+        var sourceIndex = PivotUiPlanner.FindSourceFieldIndex(headers, caption);
+        if (sourceIndex is null)
+            return null;
+
+        if (pivotTable.PageFields.Any(field => field.SourceFieldIndex == sourceIndex.Value))
+            return PivotFieldDropZone.Filters;
+        if (pivotTable.ColumnFields.Any(field => field.SourceFieldIndex == sourceIndex.Value))
+            return PivotFieldDropZone.Columns;
+
+        return PivotFieldDropZone.Rows;
     }
 
     private static PivotTableModel? FindPivotTableByName(Sheet sheet, string name)
@@ -161,27 +186,58 @@ public partial class MainWindow
     private ContextMenu CreatePivotFieldContextMenu()
     {
         var menu = new ContextMenu();
-        void Add(string header, RoutedEventHandler handler)
+        var context = TryResolvePivotFieldMenuContext();
+        var filterState = context is { SourceFieldIndex: { } sourceIndex }
+            ? PivotFieldFilterSummary.CreateState(
+                context.PivotTable,
+                sourceIndex,
+                PivotUiPlanner.FieldCaption(context.Headers, sourceIndex),
+                ReadPivotFieldItems(context.Sheet, context.PivotTable, sourceIndex))
+            : null;
+        var valueFieldIndex = context is null
+            ? null
+            : ResolveValueFieldSettingsIndex(context.PivotTable, context.Caption, context.Zone);
+
+        void Add(string header, RoutedEventHandler handler, bool isEnabled = true, string? toolTip = null)
         {
-            var item = new MenuItem { Header = header };
+            var item = new MenuItem { Header = header, IsEnabled = isEnabled };
+            if (!string.IsNullOrWhiteSpace(toolTip))
+                item.ToolTip = toolTip;
             item.Click += handler;
             menu.Items.Add(item);
         }
 
+        if (filterState is not null)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = filterState.OverallSummary,
+                IsEnabled = false,
+                ToolTip = "Current filter state for this PivotTable field."
+            });
+            menu.Items.Add(new Separator());
+        }
+
         Add("Sort A to Z", PivotFieldSortAscendingMenuItem_Click);
         Add("Sort Z to A", PivotFieldSortDescendingMenuItem_Click);
-        Add("Select Items...", PivotFieldSelectItemsMenuItem_Click);
-        Add("Label Filter...", PivotFieldLabelFilterMenuItem_Click);
-        Add("Value Filter...", PivotFieldValueFilterMenuItem_Click);
-        Add("Clear Filter", PivotFieldClearFilterMenuItem_Click);
-        menu.Items.Add(new MenuItem
-        {
-            Header = "More Sort Options...",
-            IsEnabled = false,
-            ToolTip = "Custom sort lists and manual PivotTable ordering are not yet supported."
-        });
+        Add("More Sort Options...", PivotFieldMoreSortOptionsMenuItem_Click, filterState is not null, "Open PivotTable sort options for this field.");
         menu.Items.Add(new Separator());
-        Add("Value Field Settings...", PivotFieldValueSettingsMenuItem_Click);
+        Add(filterState is null ? "Select Items..." : PivotFieldFilterSummary.FormatSelectItemsHeader(filterState), PivotFieldSelectItemsMenuItem_Click, filterState is not null);
+        Add(filterState is null ? "Label Filter..." : PivotFieldFilterSummary.FormatLabelFilterHeader(filterState), PivotFieldLabelFilterMenuItem_Click, filterState is not null);
+        Add(filterState is null ? "Value Filter..." : PivotFieldFilterSummary.FormatValueFilterHeader(filterState), PivotFieldValueFilterMenuItem_Click, filterState is not null && context?.PivotTable.DataFields.Count > 0);
+        Add(
+            filterState is null ? "Clear Filters from Field" : PivotFieldFilterSummary.FormatClearFilterHeader(filterState),
+            PivotFieldClearFilterMenuItem_Click,
+            filterState?.HasAnyFilter == true,
+            filterState?.HasAnyFilter == true ? null : "No item, label, or value filters are active for this field.");
+        menu.Items.Add(new Separator());
+        Add(
+            "Value Field Settings...",
+            PivotFieldValueSettingsMenuItem_Click,
+            valueFieldIndex is not null,
+            valueFieldIndex is null
+                ? "Select a value field, the PivotChart Values button, or a PivotTable with one value field."
+                : "Open settings for the relevant PivotTable value field.");
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         return menu;
     }
