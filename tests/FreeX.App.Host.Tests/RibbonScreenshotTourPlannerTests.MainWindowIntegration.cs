@@ -8,7 +8,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     [Fact]
     public void MainWindowScreenshotTour_UsesPlannerForEnvironmentFilters()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs", "MainWindow.ScreenshotTour.ChartDataLayout.cs");
 
         source.Should().Contain("RibbonScreenshotTourPlanner.CreatePlan");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_BURST\")");
@@ -29,6 +29,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_STATUS_FOOTER_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_INSERT_OBJECTS_LINKS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DATA_TOOLS_DIALOGS_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_CHART_DATA_LAYOUT_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_VIEW_PANES_ZOOM_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_REVIEW_COMMENTS_PROTECTION_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PAGE_LAYOUT_SETUP_TOUR\")");
@@ -61,6 +62,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureReviewCommentsProtectionTourAsync");
         source.Should().Contain("CapturePageLayoutSetupTourAsync");
         source.Should().Contain("CaptureDrawObjectFormattingTourAsync");
+        source.Should().Contain("CaptureChartDataLayoutTourAsync");
         source.Should().Contain("CaptureHomeFontColorsTourAsync");
         source.Should().Contain("CaptureHomeStylesConditionalFormattingTourAsync");
         source.Should().Contain("CaptureHomeClipboardCellsEditingTourAsync");
@@ -109,6 +111,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("review_comments_protection_tour_manifest.json");
         source.Should().Contain("page_layout_setup_tour_manifest.json");
         source.Should().Contain("draw_object_formatting_tour_manifest.json");
+        source.Should().Contain("chart_data_layout_tour_manifest.json");
         source.Should().Contain("home_font_colors_tour_manifest.json");
         source.Should().Contain("home_styles_conditional_formatting_tour_manifest.json");
         source.Should().Contain("home_clipboard_cells_editing_tour_manifest.json");
@@ -773,6 +776,46 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         catalog.Should().Contain("screenshots/draw-object-formatting-tour/");
         catalog.Should().Contain("draw_object_formatting_tour_manifest.json");
         catalog.Should().Contain("freex_draw_object_formatting_selection_pane_rename_visibility.png");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesChartDataLayoutVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs", "MainWindow.ScreenshotTour.ChartDataLayout.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_CHART_DATA_LAYOUT_TOUR");
+        source.Should().Contain("chart-data-layout-tour");
+        source.Should().Contain("EnsureChartDataLayoutTourContext");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.ChartContextTabs.Single(tab => tab.Header == \"Chart Design\"))");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.ChartContextTabs.Single(tab => tab.Header == \"Format\"))");
+        source.Should().Contain("new SelectDataSourceDialog(");
+        source.Should().Contain("new MoveChartDialog(context.Sheet.Name)");
+        source.Should().Contain("new ChangeChartTypeDialog(context.Chart.Type)");
+        source.Should().Contain("new ChartStyleDialog(context.Chart)");
+        source.Should().Contain("new ChartTitlesDialog(context.Chart.Title, context.Chart.XAxisTitle, context.Chart.YAxisTitle)");
+        source.Should().Contain("new ChartAreaLegendDialog(context.Chart)");
+        source.Should().Contain("OnWaterfallChartPointContextMenuRequested(context.WaterfallChart, pointIndex: 1");
+        source.Should().Contain("freex_chart_data_layout_selected_chart_design_context");
+        source.Should().Contain("freex_chart_data_layout_select_data_dialog");
+        source.Should().Contain("freex_chart_data_layout_move_chart_dialog");
+        source.Should().Contain("freex_chart_data_layout_change_chart_type_dialog");
+        source.Should().Contain("freex_chart_data_layout_chart_styles_dialog");
+        source.Should().Contain("freex_chart_data_layout_chart_titles_dialog");
+        source.Should().Contain("freex_chart_data_layout_format_chart_area_dialog");
+        source.Should().Contain("freex_chart_data_layout_waterfall_point_context_menu");
+        source.Should().Contain("UI-CAT-INSERT-002B");
+        source.Should().Contain("UI-CAT-INSERT-002C");
+        source.Should().Contain("UI-CMD-INSERT-016");
+        source.Should().Contain("ChartDataLayoutTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.ChartDataLayoutTourManifest");
+        source.Should().Contain("physical chart selection handles");
+
+        catalog.Should().Contain("FREEX_CHART_DATA_LAYOUT_TOUR=1");
+        catalog.Should().Contain("screenshots/chart-data-layout-tour/");
+        catalog.Should().Contain("chart_data_layout_tour_manifest.json");
+        catalog.Should().Contain("freex_chart_data_layout_select_data_dialog.png");
+        catalog.Should().Contain("freex_chart_data_layout_waterfall_point_context_menu.png");
     }
 
     [Fact]

@@ -362,6 +362,29 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void InsertCatalogRows_DocumentChartDataLayoutTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-INSERT-002B |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-INSERT-002C |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-INSERT-016 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(3);
+        rows.Should().OnlyContain(row => row.Contains("chart-data-layout-tour"));
+
+        catalog.Should().Contain("FREEX_CHART_DATA_LAYOUT_TOUR=1");
+        catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
+        catalog.Should().Contain("chart_data_layout_tour_manifest.json");
+        catalog.Should().Contain("freex_chart_data_layout_select_data_dialog.png");
+        catalog.Should().Contain("freex_chart_data_layout_change_chart_type_dialog.png");
+        catalog.Should().Contain("freex_chart_data_layout_waterfall_point_context_menu.png");
+    }
+
+    [Fact]
     public void PageCatalogRows_DocumentPageLayoutSetupTourEvidence()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
