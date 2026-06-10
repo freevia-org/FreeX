@@ -987,8 +987,7 @@ internal static class RemainingSlices
         new("S4", "Grid pointer mechanics: drag select, autofill, resize, split panes", "foreground harness plus mouse drags"),
         new("S5", "Sheet-tab pointer mechanics: rename, reorder, grouping, overflow/context", "foreground harness plus mouse drags"),
         new("S6", "Status/footer pointer mechanics: zoom slider, wheel, Ctrl/Shift wheel", "foreground harness plus wheel input"),
-        new("S7", "Excel-paired popup/dialog captures for comparison", "foreground harness"),
-        new("S8", "Non-visual model-depth tail: cross-target matrix, locale/accounting, Flash Fill, accessibility/formula breadth", "model/test work")
+        new("S7", "Excel-paired popup/dialog captures for comparison", "foreground harness")
     ];
 }
 
