@@ -296,6 +296,40 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void MainWindowScreenshotTour_CapturesBackstageRecentExportShareVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_BACKSTAGE_RECENT_EXPORT_SHARE_TOUR");
+        source.Should().Contain("BackstageRecentExportShareTourOutputDirectoryName = \"backstage-recent-export-share-tour\"");
+        source.Should().Contain("freex_backstage_open_recent_list");
+        source.Should().Contain("freex_backstage_open_pinned_list");
+        source.Should().Contain("freex_backstage_info_unsaved_status");
+        source.Should().Contain("freex_backstage_info_unsupported_feature_save_warning");
+        source.Should().Contain("freex_backstage_export_entry_focused");
+        source.Should().Contain("freex_backstage_export_pdf_options");
+        source.Should().Contain("freex_backstage_export_xps_options");
+        source.Should().Contain("freex_backstage_share_unsaved_guard_status");
+        source.Should().Contain("freex_backstage_share_saved_ready_status");
+        source.Should().Contain("freex_backstage_back_to_workbook_focus_return");
+        source.Should().Contain("SwitchToPinnedTab();");
+        source.Should().Contain("new ExportOptionsDialog(");
+        source.Should().Contain("ExportPlanner.DescribeRequest(request)");
+        source.Should().Contain("ShareWorkbookPlanner.CreatePlan(null)");
+        source.Should().Contain("SaveBackstageRecentExportShareTourWorkbookAsync");
+        source.Should().Contain("ConfirmUnsupportedXlsxFeatureSave();");
+        source.Should().Contain("CaptureBackstageOwnedNativeDialogWhenShownAsync");
+        source.Should().Contain("BackstageRecentExportShareTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.BackstageRecentExportShareTourManifest");
+        source.Should().Contain("The native Open dialog, native Export Save As dialog, and Windows Share UI are intentionally not launched");
+
+        catalog.Should().Contain("FREEX_BACKSTAGE_RECENT_EXPORT_SHARE_TOUR=1");
+        catalog.Should().Contain("screenshots/backstage-recent-export-share-tour/");
+        catalog.Should().Contain("backstage_recent_export_share_tour_manifest.json");
+    }
+
+    [Fact]
     public void MainWindowScreenshotTour_CapturesOptionsAndAccountVisualEvidence()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");

@@ -46,6 +46,9 @@ public partial class MainWindow
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
     private const string KeyTipOverlayTourManifestFileName = "keytip_overlay_tour_manifest.json";
     private const string PrintPreviewTourManifestFileName = "print_preview_tour_manifest.json";
+    private const string BackstageRecentExportShareTourManifestFileName = "backstage_recent_export_share_tour_manifest.json";
+    private const string BackstageRecentExportShareTourOutputDirectoryName = "backstage-recent-export-share-tour";
+    private const string BackstageRecentExportShareTourSavedWorkbookFileName = "freex_backstage_share_ready_saved.xlsx";
     private const string OptionsAccountTourManifestFileName = "options_account_tour_manifest.json";
     private const string OptionsAccountTourOutputDirectoryName = "options-account-tour";
     private const string HelpAboutLegalTourManifestFileName = "help_about_legal_tour_manifest.json";
@@ -150,6 +153,7 @@ public partial class MainWindow
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
+        var backstageRecentExportShareTour = Environment.GetEnvironmentVariable("FREEX_BACKSTAGE_RECENT_EXPORT_SHARE_TOUR") == "1";
         var optionsAccountTour = Environment.GetEnvironmentVariable("FREEX_OPTIONS_ACCOUNT_TOUR") == "1";
         var helpAboutLegalTour = Environment.GetEnvironmentVariable("FREEX_HELP_ABOUT_LEGAL_TOUR") == "1";
         var qatUndoRedoTour = Environment.GetEnvironmentVariable("FREEX_QAT_UNDO_REDO_TOUR") == "1";
@@ -165,7 +169,7 @@ public partial class MainWindow
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
         var formulaAuthoringNamesTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_AUTHORING_NAMES_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !backstageRecentExportShareTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -182,7 +186,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, backstageRecentExportShareTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -216,6 +220,7 @@ public partial class MainWindow
         bool worksheetContextMenuTour,
         bool keyTipOverlayTour,
         bool printPreviewTour,
+        bool backstageRecentExportShareTour,
         bool optionsAccountTour,
         bool helpAboutLegalTour,
         bool qatUndoRedoTour,
@@ -261,6 +266,9 @@ public partial class MainWindow
 
         if (printPreviewTour)
             await CapturePrintPreviewTourAsync(Path.Combine(outputDir, "print-preview-tour"));
+
+        if (backstageRecentExportShareTour)
+            await CaptureBackstageRecentExportShareTourAsync(Path.Combine(outputDir, BackstageRecentExportShareTourOutputDirectoryName));
 
         if (optionsAccountTour)
             await CaptureOptionsAccountTourAsync(Path.Combine(outputDir, OptionsAccountTourOutputDirectoryName));
@@ -1549,6 +1557,463 @@ public partial class MainWindow
         closeButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         return !dialog.IsVisible;
     }
+
+    private async Task CaptureBackstageRecentExportShareTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteBackstageRecentExportShareTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 768;
+        await Task.Delay(700);
+
+        var context = await EnsureBackstageRecentExportShareTourContextAsync(outputDir);
+        var captures = new List<BackstageRecentExportShareTourManifestCapture>();
+
+        ShowStartScreen();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(300);
+
+        SsOpenNavBtn.Focus();
+        Keyboard.Focus(SsOpenNavBtn);
+        captures.Add(await CaptureBackstageRecentExportShareStateAsync(
+            outputDir,
+            "open-recent-list",
+            "Backstage Home/Open recent list",
+            "File > Open / Recent",
+            "freex_backstage_open_recent_list",
+            "Backstage Home shows seeded recent workbooks while the Open navigation command is focused; the native Open dialog is not launched.",
+            "main-window"));
+
+        SwitchToPinnedTab();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+        captures.Add(await CaptureBackstageRecentExportShareStateAsync(
+            outputDir,
+            "open-pinned-list",
+            "Backstage Home/Pinned list",
+            "File > Open / Pinned",
+            "freex_backstage_open_pinned_list",
+            "Pinned tab shows seeded pinned workbooks with unpin/remove command surfaces.",
+            "main-window"));
+
+        ShowInfoView();
+        SsInfoNavBtn.Focus();
+        Keyboard.Focus(SsInfoNavBtn);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+        captures.Add(await CaptureBackstageRecentExportShareStateAsync(
+            outputDir,
+            "info-unsaved-status",
+            "Backstage Info",
+            "File > Info",
+            "freex_backstage_info_unsaved_status",
+            "Info view shows unsaved workbook file path, share readiness, and export readiness without launching external UI.",
+            "main-window"));
+
+        var previousFeatureReport = _currentXlsxFeatureReport;
+        _currentXlsxFeatureReport = new XlsxFeatureReport(
+        [
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin"),
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.SmartArtDiagrams, "xl/diagrams/data1.xml")
+        ]);
+        var unsupportedMessage = DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport);
+        var unsupportedCaptureTask = CaptureBackstageOwnedNativeDialogWhenShownAsync(
+            unsupportedMessage.Title,
+            outputDir,
+            "freex_backstage_info_unsupported_feature_save_warning",
+            "unsupported-feature:save-warning",
+            "unsupported-feature-save-warning",
+            "Owned unsupported XLSX feature warning",
+            "File > Info / Save warning",
+            "Saving an XLSX with unsupported package features opens the real FreeX-owned warning dialog before save continues.");
+        _ = ConfirmUnsupportedXlsxFeatureSave();
+        captures.Add(await unsupportedCaptureTask);
+        _currentXlsxFeatureReport = previousFeatureReport;
+
+        ShowStartScreen();
+        SsExportNavBtn.Focus();
+        Keyboard.Focus(SsExportNavBtn);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+        captures.Add(await CaptureBackstageRecentExportShareStateAsync(
+            outputDir,
+            "export-entry-focused",
+            "Backstage Export entry",
+            "File > Export",
+            "freex_backstage_export_entry_focused",
+            "Export PDF/XPS navigation command is focused without opening the native Save As dialog.",
+            "main-window"));
+
+        captures.Add(await CaptureBackstageExportOptionsDialogAsync(
+            outputDir,
+            ExportFormat.Pdf,
+            "export-options-pdf",
+            "freex_backstage_export_pdf_options",
+            "PDF/XPS Options dialog for PDF shows publish scope, page range, PDF-only options, quality, and open-after-publish controls."));
+
+        captures.Add(await CaptureBackstageExportOptionsDialogAsync(
+            outputDir,
+            ExportFormat.Xps,
+            "export-options-xps",
+            "freex_backstage_export_xps_options",
+            "PDF/XPS Options dialog for XPS shows PDF-only choices disabled with explanatory help text."));
+
+        _currentFilePath = null;
+        ShowStartScreen();
+        ShowInfoView();
+        SsShareNavBtn.Focus();
+        Keyboard.Focus(SsShareNavBtn);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+        captures.Add(await CaptureBackstageRecentExportShareStateAsync(
+            outputDir,
+            "share-unsaved-guard-status",
+            "Backstage Share unsaved guard",
+            "File > Share",
+            "freex_backstage_share_unsaved_guard_status",
+            "Info/share status records the unsaved-workbook guard that requires Save As before Windows Share can open.",
+            "main-window"));
+
+        var savedWorkbookPath = Path.Combine(outputDir, BackstageRecentExportShareTourSavedWorkbookFileName);
+        await SaveBackstageRecentExportShareTourWorkbookAsync(savedWorkbookPath);
+        ShowStartScreen();
+        ShowInfoView();
+        SsShareNavBtn.Focus();
+        Keyboard.Focus(SsShareNavBtn);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+        captures.Add(await CaptureBackstageRecentExportShareStateAsync(
+            outputDir,
+            "share-saved-ready-status",
+            "Backstage Share saved-ready state",
+            "File > Share",
+            "freex_backstage_share_saved_ready_status",
+            "Info/share status records the saved local workbook state before Windows Share; the external OS share UI is intentionally not launched.",
+            "main-window"));
+
+        SsBackBtn_Click(SsBackBtn, new RoutedEventArgs(ButtonBase.ClickEvent, SsBackBtn));
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+        captures.Add(await CaptureBackstageRecentExportShareStateAsync(
+            outputDir,
+            "back-to-workbook-focus-return",
+            "Workbook focus return",
+            "File > Back",
+            "freex_backstage_back_to_workbook_focus_return",
+            "Back exits Backstage and returns focus to the worksheet grid.",
+            "main-window"));
+
+        ValidateBackstageRecentExportShareTourEvidence(outputDir);
+        await WriteBackstageRecentExportShareTourManifestAsync(outputDir, context, captures, savedWorkbookPath);
+    }
+
+    private async Task<BackstageRecentExportShareTourContext> EnsureBackstageRecentExportShareTourContextAsync(string outputDir)
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Backstage recent/export/share tour requires an active worksheet.");
+        _currentSheetId = sheet.Id;
+        _currentFilePath = null;
+        _currentXlsxFeatureReport = null;
+
+        var headers = new[] { "Backstage state", "Evidence", "Value" };
+        var rows = new[]
+        {
+            new object[] { "Recent", "Open list", 3d },
+            new object[] { "Pinned", "Pinned list", 2d },
+            new object[] { "Export", "PDF/XPS options", 1d },
+            new object[] { "Share", "Unsaved guard", 1d }
+        };
+        for (var col = 0; col < headers.Length; col++)
+            sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)(col + 1)), new TextValue(headers[col]));
+        for (var row = 0; row < rows.Length; row++)
+        {
+            for (var col = 0; col < rows[row].Length; col++)
+            {
+                var address = new CellAddress(sheet.Id, (uint)(row + 2), (uint)(col + 1));
+                if (rows[row][col] is double number)
+                    sheet.SetCell(address, new NumberValue(number));
+                else
+                    sheet.SetCell(address, new TextValue(rows[row][col].ToString() ?? ""));
+            }
+        }
+
+        var activeCell = new CellAddress(sheet.Id, 1, 1);
+        SetActiveCell(activeCell);
+        if (SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = new GridRange(activeCell, activeCell);
+            SheetGrid.SelectedRanges = null;
+        }
+
+        var recentDir = Path.Combine(outputDir, "recent-source-files");
+        Directory.CreateDirectory(recentDir);
+        var now = new DateTimeOffset(2026, 6, 10, 12, 0, 0, TimeSpan.Zero);
+        var recentPaths = new[]
+        {
+            Path.Combine(recentDir, "Freight Forecast.xlsx"),
+            Path.Combine(recentDir, "Quarterly Budget.xlsx"),
+            Path.Combine(recentDir, "Operations Scorecard.xlsx")
+        };
+        var pinnedPaths = new[]
+        {
+            Path.Combine(recentDir, "Pinned Investor Model.xlsx"),
+            Path.Combine(recentDir, "Pinned Launch Plan.xlsx")
+        };
+
+        foreach (var path in recentPaths.Concat(pinnedPaths))
+            File.WriteAllText(path, "FreeX screenshot tour recent-file placeholder");
+
+        _recentFiles.Entries.Clear();
+        _recentFiles.Entries.AddRange(recentPaths.Select((path, index) => new RecentFileEntry
+        {
+            Path = path,
+            LastOpened = now.AddMinutes(-index - 1),
+            IsPinned = false
+        }));
+        _recentFiles.Entries.AddRange(pinnedPaths.Select((path, index) => new RecentFileEntry
+        {
+            Path = path,
+            LastOpened = now.AddHours(-index - 1),
+            IsPinned = true
+        }));
+
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        MarkWorkbookDirty();
+
+        var unsavedSharePlan = ShareWorkbookPlanner.CreatePlan(null);
+        var exportReadiness = ExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null);
+        return new BackstageRecentExportShareTourContext(
+            SheetName: sheet.Name,
+            ActiveRange: SheetGrid?.SelectedRange?.ToString() ?? activeCell.ToA1(),
+            RecentFileNames: recentPaths.Select(Path.GetFileName).OfType<string>().ToArray(),
+            PinnedFileNames: pinnedPaths.Select(Path.GetFileName).OfType<string>().ToArray(),
+            UnsavedShareStatus: ShareWorkbookPlanner.FormatStatus(unsavedSharePlan),
+            ExportStatus: exportReadiness.StatusText);
+    }
+
+    private async Task SaveBackstageRecentExportShareTourWorkbookAsync(string savedWorkbookPath)
+    {
+        if (File.Exists(savedWorkbookPath))
+            File.Delete(savedWorkbookPath);
+
+        var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
+            ?? throw new InvalidOperationException("Backstage recent/export/share tour could not find an XLSX save adapter.");
+        var saved = await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter));
+        if (!saved)
+            throw new InvalidOperationException("Backstage recent/export/share tour could not save the share-ready workbook.");
+    }
+
+    private async Task<BackstageRecentExportShareTourManifestCapture> CaptureBackstageExportOptionsDialogAsync(
+        string outputDir,
+        ExportFormat format,
+        string state,
+        string fileName,
+        string evidenceSummary)
+    {
+        var dialog = new ExportOptionsDialog(
+            SheetGrid?.SelectedRange is not null,
+            _options.PdfExportLanguage,
+            format)
+        {
+            Owner = this,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowActivated = true
+        };
+
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            dialog.UpdateLayout();
+            await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await Task.Delay(450);
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+            var options = ExportPlanner.CreateEffectiveOptionsForFormat(ExportOptions.ExcelLikeDefault, format);
+            var request = ExportPlanner.PlanExport(
+                Path.Combine(outputDir, format == ExportFormat.Xps ? "tour-export.xps" : "tour-export.pdf"),
+                format,
+                options);
+            return CreateBackstageRecentExportShareCapture(
+                state,
+                "Export Options dialog",
+                "File > Export > PDF/XPS Options",
+                fileName,
+                "RenderTargetBitmap-export-options-dialog",
+                evidenceSummary,
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                ExportPlanner.DescribeRequest(request));
+        }
+        finally
+        {
+            if (dialog.IsVisible)
+                dialog.Close();
+        }
+    }
+
+    private async Task<BackstageRecentExportShareTourManifestCapture> CaptureBackstageRecentExportShareStateAsync(
+        string outputDir,
+        string state,
+        string surface,
+        string entryPath,
+        string fileName,
+        string evidenceSummary,
+        string captureMethod)
+    {
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateBackstageRecentExportShareCapture(
+            state,
+            surface,
+            entryPath,
+            fileName,
+            $"RenderTargetBitmap-{captureMethod}",
+            evidenceSummary,
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            null);
+    }
+
+    private BackstageRecentExportShareTourManifestCapture CreateBackstageRecentExportShareCapture(
+        string state,
+        string surface,
+        string entryPath,
+        string fileName,
+        string captureMethod,
+        string evidenceSummary,
+        double captureLogicalWidth,
+        double captureLogicalHeight,
+        string? exportRequestSummary)
+    {
+        var sharePlan = ShareWorkbookPlanner.CreatePlan(_currentFilePath);
+        var focusedAutomationId = Keyboard.FocusedElement is DependencyObject focusedElement
+            ? AutomationProperties.GetAutomationId(focusedElement)
+            : null;
+        return new BackstageRecentExportShareTourManifestCapture(
+            CaptureKey: $"backstage-recent-export-share:{state}",
+            PairKey: $"interactive:backstage-recent-export-share:{state}",
+            ScenarioId: "backstage:recent-export-share",
+            State: state,
+            Surface: surface,
+            EntryPath: entryPath,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: captureLogicalWidth,
+            CaptureLogicalHeight: captureLogicalHeight,
+            FocusedElementAutomationId: focusedAutomationId,
+            SelectedRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
+            CurrentFilePath: _currentFilePath,
+            SharePlanKind: sharePlan.Kind.ToString(),
+            ShareStatus: ShareWorkbookPlanner.FormatStatus(sharePlan),
+            ExportStatus: ExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null).StatusText,
+            ExportRequestSummary: exportRequestSummary,
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private async Task<BackstageRecentExportShareTourManifestCapture> CaptureBackstageOwnedNativeDialogWhenShownAsync(
+        string caption,
+        string outputDir,
+        string fileName,
+        string captureKey,
+        string state,
+        string surface,
+        string entryPath,
+        string evidenceSummary)
+    {
+        var owner = new WindowInteropHelper(this).Handle;
+        if (owner == IntPtr.Zero)
+            throw new InvalidOperationException("Backstage recent/export/share tour could not resolve the FreeX owner window handle.");
+
+        var size = await Task.Run(() =>
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            IntPtr dialogHandle;
+            do
+            {
+                dialogHandle = FindOwnedNativeWindow(owner, caption);
+                if (dialogHandle != IntPtr.Zero)
+                    break;
+
+                Task.Delay(100).GetAwaiter().GetResult();
+            }
+            while (DateTime.UtcNow < deadline);
+
+            if (dialogHandle == IntPtr.Zero)
+                throw new InvalidOperationException($"Backstage recent/export/share tour did not find the owned native dialog '{caption}'.");
+
+            var capturedSize = CaptureNativeWindow(dialogHandle, outputDir, fileName);
+            PostMessage(dialogHandle, 0x0111, new IntPtr(7), IntPtr.Zero);
+            return capturedSize;
+        });
+
+        var sharePlan = ShareWorkbookPlanner.CreatePlan(_currentFilePath);
+        return new BackstageRecentExportShareTourManifestCapture(
+            CaptureKey: captureKey,
+            PairKey: $"interactive:backstage-recent-export-share:{state}",
+            ScenarioId: "backstage:recent-export-share",
+            State: state,
+            Surface: surface,
+            EntryPath: entryPath,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: "PrintWindow-owned-native-dialog",
+            CaptureLogicalWidth: size.Width,
+            CaptureLogicalHeight: size.Height,
+            FocusedElementAutomationId: null,
+            SelectedRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
+            CurrentFilePath: _currentFilePath,
+            SharePlanKind: sharePlan.Kind.ToString(),
+            ShareStatus: ShareWorkbookPlanner.FormatStatus(sharePlan),
+            ExportStatus: ExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null).StatusText,
+            ExportRequestSummary: null,
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private static void DeleteBackstageRecentExportShareTourEvidence(string outputDir)
+    {
+        foreach (var fileName in BackstageRecentExportShareTourExpectedFileNames().Append(BackstageRecentExportShareTourManifestFileName))
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static void ValidateBackstageRecentExportShareTourEvidence(string outputDir)
+    {
+        var missing = BackstageRecentExportShareTourExpectedFileNames()
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+        if (missing.Length > 0)
+            throw new InvalidOperationException($"Backstage recent/export/share tour did not capture expected evidence: {string.Join(", ", missing)}.");
+    }
+
+    private static IReadOnlyList<string> BackstageRecentExportShareTourExpectedFileNames() =>
+    [
+        "freex_backstage_open_recent_list.png",
+        "freex_backstage_open_pinned_list.png",
+        "freex_backstage_info_unsaved_status.png",
+        "freex_backstage_info_unsupported_feature_save_warning.png",
+        "freex_backstage_export_entry_focused.png",
+        "freex_backstage_export_pdf_options.png",
+        "freex_backstage_export_xps_options.png",
+        "freex_backstage_share_unsaved_guard_status.png",
+        "freex_backstage_share_saved_ready_status.png",
+        "freex_backstage_back_to_workbook_focus_return.png"
+    ];
 
     private async Task CaptureOptionsAccountTourAsync(string outputDir)
     {
@@ -8364,6 +8829,81 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.PrintPreviewTourManifest);
     }
 
+    private static async Task WriteBackstageRecentExportShareTourManifestAsync(
+        string outputDir,
+        BackstageRecentExportShareTourContext context,
+        IReadOnlyList<BackstageRecentExportShareTourManifestCapture> captures,
+        string savedWorkbookPath)
+    {
+        var manifest = new BackstageRecentExportShareTourManifest(
+            Tool: "FREEX_BACKSTAGE_RECENT_EXPORT_SHARE_TOUR",
+            EvidenceFamily: "backstage-recent-export-share",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "backstage:recent-export-share",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_backstage_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds:
+            [
+                "UI-CAT-FILE-001",
+                "UI-CAT-FILE-002"
+            ],
+            EntryPaths:
+            [
+                "File > Open / Recent",
+                "File > Open / Pinned",
+                "File > Info",
+                "File > Export",
+                "File > Share",
+                "File > Back"
+            ],
+            SheetName: context.SheetName,
+            ActiveRange: context.ActiveRange,
+            RecentFileNames: context.RecentFileNames,
+            PinnedFileNames: context.PinnedFileNames,
+            UnsavedShareStatus: context.UnsavedShareStatus,
+            ExportStatus: context.ExportStatus,
+            SavedWorkbookOutputFileName: Path.GetFileName(savedWorkbookPath),
+            SavedWorkbookRetained: File.Exists(savedWorkbookPath),
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: BackstageRecentExportShareTourExpectedFileNames().Count,
+            ActualCaptureCount: captures.Count,
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process WPF RenderTargetBitmap captures plus owned native warning-dialog PrintWindow capture; no global mouse, keyboard, native Open/Save, or Windows Share UI input is used."
+                    : "Abort before WPF window file writes unless the expected FreeX window owns foreground focus; owned native warning dialog is captured by HWND ownership and caption."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Backstage Open navigation with Recent list populated from deterministic existing local files.",
+                "Backstage Pinned tab with deterministic existing pinned local files and row command surfaces.",
+                "Backstage Info saved/unsaved file, share readiness, and export readiness status text.",
+                "Owned unsupported XLSX feature save-warning dialog for an in-memory unsupported-feature report.",
+                "Backstage Export command focus without launching the native Save As dialog.",
+                "Production Export Options dialog surfaces for PDF and XPS, including disabled PDF-only XPS choices.",
+                "Share unsaved guard status requiring Save As before Windows Share.",
+                "Share saved-ready status after saving to a deterministic XLSX path without launching Windows Share.",
+                "Back exits Backstage and returns focus to the worksheet grid."
+            ],
+            Limitations:
+            [
+                "This tour is deterministic visual evidence and does not synthesize physical mouse, keytip, Tab/F6, or UIA invocation input.",
+                "The native Open dialog, native Export Save As dialog, and Windows Share UI are intentionally not launched; those remain foreground-guarded OS UI gaps.",
+                "The unsupported-feature evidence captures the production save-warning dialog from an in-memory feature report rather than opening a corpus workbook in the tour.",
+                "The Share saved-ready proof stops at the planner/status surface before invoking Windows Share to avoid external OS UI.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, BackstageRecentExportShareTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.BackstageRecentExportShareTourManifest);
+    }
+
     private static async Task WriteOptionsAccountTourManifestAsync(
         string outputDir,
         LocalAccountPlan accountPlan,
@@ -9095,6 +9635,63 @@ public partial class MainWindow
         double CaptureLogicalHeight);
 
     private sealed record OptionsAccountTourNativeCaptureSize(int Width, int Height);
+
+    private sealed record BackstageRecentExportShareTourContext(
+        string SheetName,
+        string ActiveRange,
+        IReadOnlyList<string> RecentFileNames,
+        IReadOnlyList<string> PinnedFileNames,
+        string UnsavedShareStatus,
+        string ExportStatus);
+
+    private sealed record BackstageRecentExportShareTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        IReadOnlyList<string> EntryPaths,
+        string SheetName,
+        string ActiveRange,
+        IReadOnlyList<string> RecentFileNames,
+        IReadOnlyList<string> PinnedFileNames,
+        string UnsavedShareStatus,
+        string ExportStatus,
+        string SavedWorkbookOutputFileName,
+        bool SavedWorkbookRetained,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<BackstageRecentExportShareTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record BackstageRecentExportShareTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string EntryPath,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string? FocusedElementAutomationId,
+        string SelectedRange,
+        string? CurrentFilePath,
+        string SharePlanKind,
+        string ShareStatus,
+        string ExportStatus,
+        string? ExportRequestSummary,
+        string EvidenceSummary);
 
     private sealed record HelpAboutLegalTourManifest(
         string Tool,
@@ -9916,6 +10513,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(HomeFontColorsTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
+    [JsonSerializable(typeof(BackstageRecentExportShareTourManifest))]
     [JsonSerializable(typeof(OptionsAccountTourManifest))]
     [JsonSerializable(typeof(HelpAboutLegalTourManifest))]
     [JsonSerializable(typeof(KeyTipOverlayTourManifest))]
