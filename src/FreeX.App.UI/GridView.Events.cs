@@ -65,6 +65,9 @@ public partial class GridView
     /// <summary>Fired when the user finishes dragging a drawing object to a new anchor cell.</summary>
     public event Action<Guid, ObjectKind, CellAddress>? ObjectMoved;
 
+    /// <summary>Fired when the user finishes moving or resizing an embedded chart object.</summary>
+    public event Action<Guid, double, double, double, double>? ChartBoundsChanged;
+
     /// <summary>Fired when the user finishes drag-resizing a drawing object.</summary>
     public event Action<Guid, ObjectKind, double, double>? ObjectResized;
 

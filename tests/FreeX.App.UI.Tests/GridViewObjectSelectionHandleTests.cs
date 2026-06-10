@@ -144,6 +144,24 @@ public sealed class GridViewObjectSelectionHandleTests
     }
 
     [Fact]
+    public void SelectedChart_ExposesMoveAndResizeHandleHitTesting()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var id = Guid.NewGuid();
+            var anchor = new CellAddress(sheetId, 1, 1);
+            var grid = CreateGridWithSelectedObject(ObjectKind.Chart, id, anchor, width: 80, height: 40, isVisible: true);
+            var rect = GridViewTestHelpers.GetSelectedObjectRect(grid);
+
+            GridViewTestHelpers.HitTestObjectHandle(grid, new Point(rect.Right, rect.Bottom), rect)
+                .Should().Be(ObjectDragKind.ResizeSE);
+            GridViewTestHelpers.HitTestObjectHandle(grid, new Point(rect.Left + 20, rect.Top + 20), rect)
+                .Should().Be(ObjectDragKind.Move);
+        });
+    }
+
+    [Fact]
     public void HitTestDrawingObject_PrioritizesDrawingObjectsAboveCharts()
     {
         WpfTestThread.Run(() =>

@@ -48,6 +48,20 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
         source.Should().Contain("ObjectFillBtn_Click(this, new RoutedEventArgs());");
         source.Should().Contain("case WorksheetContextMenuAction.ShapeOutline:");
         source.Should().Contain("ObjectOutlineBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.FormatChartArea:");
+        source.Should().Contain("FormatChartAreaBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.SelectChartData:");
+        source.Should().Contain("SelectChartDataSourceBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.ChangeChartType:");
+        source.Should().Contain("ChangeChartTypeBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.ChartStyles:");
+        source.Should().Contain("ChartStylesBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.ChartTitles:");
+        source.Should().Contain("ChartTitlesBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.ChartSizeAndProperties:");
+        source.Should().Contain("ResizeSelectedChartObject();");
+        source.Should().Contain("case WorksheetContextMenuAction.MoveChart:");
+        source.Should().Contain("MoveChartBtn_Click(this, new RoutedEventArgs());");
         source.Should().Contain("case WorksheetContextMenuAction.BringForward:");
         source.Should().Contain("BringForwardBtn_Click(this, new RoutedEventArgs());");
         source.Should().Contain("case WorksheetContextMenuAction.SendBackward:");
@@ -70,6 +84,9 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
         source.Should().Contain("includePictures: true");
         source.Should().Contain("target.Anchor.Row != address.Row");
         source.Should().Contain("DrawingObjectTargetKind.Picture => WorksheetContextMenuTargetKind.Picture");
+        source.Should().Contain("SheetGrid.SelectedObjectKind == FreeX.App.UI.ObjectKind.Chart");
+        source.Should().Contain("IsChartContextualRibbonTarget(selectedChart)");
+        source.Should().Contain("WorksheetContextMenuTargetKind.Chart");
     }
 
     [Fact]

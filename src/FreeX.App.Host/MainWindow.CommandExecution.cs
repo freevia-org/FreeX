@@ -258,12 +258,36 @@ public partial class MainWindow
 
     private ChartModel? GetFirstChartOnCurrentSheet()
     {
+        if (GetSelectedChartOnCurrentSheet() is { } selectedChart)
+            return selectedChart;
+
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
             return null;
 
         foreach (var chart in sheet.Charts)
             return chart;
+
+        return null;
+    }
+
+    private ChartModel? GetSelectedChartOnCurrentSheet()
+    {
+        if (SheetGrid.SelectedObjectKind != FreeX.App.UI.ObjectKind.Chart ||
+            SheetGrid.SelectedObjectId == Guid.Empty)
+        {
+            return null;
+        }
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return null;
+
+        foreach (var chart in sheet.Charts)
+        {
+            if (chart.Id == SheetGrid.SelectedObjectId)
+                return chart;
+        }
 
         return null;
     }

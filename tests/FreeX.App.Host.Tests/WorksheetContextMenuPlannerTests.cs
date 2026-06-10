@@ -104,6 +104,26 @@ public sealed partial class WorksheetContextMenuPlannerTests
                 "Bring Forward",
                 "Send Backward"
             ]
+        },
+        {
+            WorksheetContextMenuTargetKind.Chart,
+            [
+                "Format Chart Area...",
+                "Select Data...",
+                "Change Chart Type...",
+                "Chart Styles...",
+                "Chart Titles...",
+                "Size and Properties...",
+                "Move Chart...",
+                "Selection Pane..."
+            ],
+            [
+                "Insert...",
+                "Format Cells...",
+                "Format Picture...",
+                "Format Shape...",
+                "Edit Alt Text..."
+            ]
         }
     };
 
