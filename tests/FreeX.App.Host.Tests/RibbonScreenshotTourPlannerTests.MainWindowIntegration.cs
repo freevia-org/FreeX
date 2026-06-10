@@ -24,6 +24,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_TITLEBAR_WINDOW_CHROME_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_BAR_NAME_BOX_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_STATUS_FOOTER_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_INSERT_OBJECTS_LINKS_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
@@ -36,6 +37,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureTitlebarWindowChromeTourAsync");
         source.Should().Contain("CaptureFormulaBarNameBoxTourAsync");
         source.Should().Contain("CaptureStatusFooterTourAsync");
+        source.Should().Contain("CaptureInsertObjectsLinksTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
@@ -52,6 +54,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WriteTitlebarWindowChromeTourManifestAsync");
         source.Should().Contain("WriteFormulaBarNameBoxTourManifestAsync");
         source.Should().Contain("WriteStatusFooterTourManifestAsync");
+        source.Should().Contain("WriteInsertObjectsLinksTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
         source.Should().Contain("print_preview_tour_manifest.json");
@@ -60,6 +63,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("titlebar_window_chrome_tour_manifest.json");
         source.Should().Contain("formula_bar_name_box_tour_manifest.json");
         source.Should().Contain("status_footer_tour_manifest.json");
+        source.Should().Contain("insert_objects_links_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
@@ -323,5 +327,43 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("PageBreakPreviewChecked");
         source.Should().Contain("FormulaBarText");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesInsertObjectsLinksTextVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_INSERT_OBJECTS_LINKS_TOUR");
+        source.Should().Contain("insert-objects-links-tour");
+        source.Should().Contain("EnsureInsertObjectsLinksTourContext");
+        source.Should().Contain("new HyperlinkDialog(\"https://freex.example/insert-objects\"");
+        source.Should().Contain("freex_insert_hyperlink_dialog_address_focus");
+        source.Should().Contain("new SymbolPickerDialog");
+        source.Should().Contain("freex_insert_symbol_picker_opened");
+        source.Should().Contain("ApplyInsertObjectsLinksTourModelEvidenceAsync");
+        source.Should().Contain("new AddDrawingShapeCommand(sheetId, new CellAddress(sheetId, 4, 2), DrawingShapeKind.Rectangle)");
+        source.Should().Contain("new AddTextBoxCommand(sheetId, new CellAddress(sheetId, 4, 5), \"Text Box evidence\")");
+        source.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
+        source.Should().Contain("new SetThreadedCommentCommand(sheetId, new CellAddress(sheetId, 6, 4), \"Threaded comment evidence\")");
+        source.Should().Contain("new SetCommentCommand(sheetId, new CellAddress(sheetId, 6, 5), \"Note evidence\")");
+        source.Should().Contain("freex_insert_objects_grid_visuals");
+        source.Should().Contain("new ThreadedCommentDialog(\"D6\", null)");
+        source.Should().Contain("freex_insert_new_comment_dialog");
+        source.Should().Contain("freex_insert_new_note_dialog");
+        source.Should().Contain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("freex_insert_comments_list_surface");
+        source.Should().Contain("ReviewShowNotesBtn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("freex_insert_notes_list_surface");
+        source.Should().Contain("InsertObjectsLinksTourManifest");
+        source.Should().Contain("UI-CAT-INSERT-003");
+        source.Should().Contain("UI-CMD-INSERT-008");
+        source.Should().Contain("UI-CMD-INSERT-009");
+        source.Should().Contain("UI-CMD-INSERT-010");
+        source.Should().Contain("RenderTargetBitmap-hyperlink-dialog-window");
+        source.Should().Contain("RenderTargetBitmap-symbol-picker-dialog-window");
+        source.Should().Contain("RenderTargetBitmap-window-full");
+        source.Should().Contain("deterministic placeholder bytes rather than opening the native Windows file picker");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.InsertObjectsLinksTourManifest");
     }
 }

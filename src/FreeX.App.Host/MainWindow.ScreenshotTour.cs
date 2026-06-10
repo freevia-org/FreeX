@@ -52,6 +52,8 @@ public partial class MainWindow
     private const string FormulaBarNameBoxTourOutputDirectoryName = "formula-bar-name-box-tour";
     private const string StatusFooterTourManifestFileName = "status_footer_tour_manifest.json";
     private const string StatusFooterTourOutputDirectoryName = "status-footer-tour";
+    private const string InsertObjectsLinksTourManifestFileName = "insert_objects_links_tour_manifest.json";
+    private const string InsertObjectsLinksTourOutputDirectoryName = "insert-objects-links-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -125,7 +127,8 @@ public partial class MainWindow
         var titlebarWindowChromeTour = Environment.GetEnvironmentVariable("FREEX_TITLEBAR_WINDOW_CHROME_TOUR") == "1";
         var formulaBarNameBoxTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_BAR_NAME_BOX_TOUR") == "1";
         var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour)
+        var insertObjectsLinksTour = Environment.GetEnvironmentVariable("FREEX_INSERT_OBJECTS_LINKS_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -142,7 +145,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -178,7 +181,8 @@ public partial class MainWindow
         bool qatUndoRedoTour,
         bool titlebarWindowChromeTour,
         bool statusFooterTour,
-        bool formulaBarNameBoxTour)
+        bool formulaBarNameBoxTour,
+        bool insertObjectsLinksTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -217,6 +221,9 @@ public partial class MainWindow
 
         if (formulaBarNameBoxTour)
             await CaptureFormulaBarNameBoxTourAsync(Path.Combine(outputDir, FormulaBarNameBoxTourOutputDirectoryName));
+
+        if (insertObjectsLinksTour)
+            await CaptureInsertObjectsLinksTourAsync(Path.Combine(outputDir, InsertObjectsLinksTourOutputDirectoryName));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -2183,6 +2190,279 @@ public partial class MainWindow
         }
     }
 
+    private async Task CaptureInsertObjectsLinksTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteInsertObjectsLinksTourEvidence(outputDir);
+
+        var captures = new List<InsertObjectsLinksTourManifestCapture>();
+
+        try
+        {
+            await ApplyScreenshotTourWidthAsync(new RibbonScreenshotTourWidth("1100", 1100));
+            EnsureInsertObjectsLinksTourContext();
+
+            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
+                outputDir,
+                new HyperlinkDialog("https://freex.example/insert-objects", "FreeX visual evidence") { Owner = this },
+                "freex_insert_hyperlink_dialog_address_focus",
+                "hyperlink-dialog-address-focus",
+                "Insert Hyperlink dialog opened with the address box as the initial focused/select-all target.",
+                "RenderTargetBitmap-hyperlink-dialog-window",
+                "UI-CMD-INSERT-009"));
+
+            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
+                outputDir,
+                new SymbolPickerDialog { Owner = this },
+                "freex_insert_symbol_picker_opened",
+                "symbol-picker-opened",
+                "Symbol picker opened on the production Symbols tab/grid with insert/cancel actions visible.",
+                "RenderTargetBitmap-symbol-picker-dialog-window",
+                "UI-CMD-INSERT-009"));
+
+            await ApplyInsertObjectsLinksTourModelEvidenceAsync();
+            captures.Add(await CaptureInsertObjectsLinksWindowStateAsync(
+                outputDir,
+                "freex_insert_objects_grid_visuals",
+                "inserted-objects-grid-visuals",
+                "Worksheet visual state after applying model-backed hyperlink, rectangle shape, text box, picture placeholder, threaded comment, and note evidence.",
+                "UI-CMD-INSERT-008"));
+
+            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
+                outputDir,
+                new ThreadedCommentDialog("D6", null) { Owner = this },
+                "freex_insert_new_comment_dialog",
+                "new-threaded-comment-dialog",
+                "New Comment dialog opened for D6 with the threaded-comment text box focused.",
+                "RenderTargetBitmap-threaded-comment-dialog-window",
+                "UI-CMD-INSERT-010"));
+
+            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
+                outputDir,
+                new TextEntryDialog(
+                    UiText.Get("MainWindowMessage_CommentTitle"),
+                    UiText.Format("MainWindowMessage_CommentForCellLabel", "E6"),
+                    "Note evidence") { Owner = this },
+                "freex_insert_new_note_dialog",
+                "new-note-dialog",
+                "New Note dialog opened for E6 with the note text box focused.",
+                "RenderTargetBitmap-note-dialog-window",
+                "UI-CMD-INSERT-010"));
+
+            ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());
+            if (_reviewCommentsWindow is null)
+                throw new InvalidOperationException("Insert objects/links/text tour could not open the threaded comments list surface.");
+
+            captures.Add(await CaptureInsertObjectsLinksOwnedWindowAsync(
+                outputDir,
+                _reviewCommentsWindow,
+                "freex_insert_comments_list_surface",
+                "comments-list-surface",
+                "Review/Insert comments list surface showing the seeded threaded comment.",
+                "RenderTargetBitmap-comment-list-window",
+                "UI-CMD-INSERT-010"));
+            _reviewCommentsWindow.Close();
+            _reviewCommentsWindow = null;
+
+            ReviewShowNotesBtn_Click(this, new RoutedEventArgs());
+            if (_reviewNotesWindow is null)
+                throw new InvalidOperationException("Insert objects/links/text tour could not open the notes list surface.");
+
+            captures.Add(await CaptureInsertObjectsLinksOwnedWindowAsync(
+                outputDir,
+                _reviewNotesWindow,
+                "freex_insert_notes_list_surface",
+                "notes-list-surface",
+                "Review/Insert notes list surface showing the seeded note.",
+                "RenderTargetBitmap-note-list-window",
+                "UI-CMD-INSERT-010"));
+            _reviewNotesWindow.Close();
+            _reviewNotesWindow = null;
+
+            ValidateInsertObjectsLinksTourEvidence(outputDir, captures);
+            await WriteInsertObjectsLinksTourManifestAsync(outputDir, captures);
+        }
+        catch
+        {
+            DeleteInsertObjectsLinksTourEvidence(outputDir);
+            throw;
+        }
+    }
+
+    private async Task<InsertObjectsLinksTourManifestCapture> CaptureInsertObjectsLinksDialogAsync(
+        string outputDir,
+        Window dialog,
+        string fileName,
+        string state,
+        string evidenceSummary,
+        string captureMethod,
+        string commandRow)
+    {
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            await Task.Delay(300);
+            dialog.UpdateLayout();
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+            return CreateInsertObjectsLinksTourCapture(
+                state,
+                fileName,
+                evidenceSummary,
+                captureMethod,
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                commandRow);
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private async Task<InsertObjectsLinksTourManifestCapture> CaptureInsertObjectsLinksOwnedWindowAsync(
+        string outputDir,
+        Window window,
+        string fileName,
+        string state,
+        string evidenceSummary,
+        string captureMethod,
+        string commandRow)
+    {
+        window.Activate();
+        await Task.Delay(250);
+        window.UpdateLayout();
+        await CaptureWindowElementForScreenshotTourAsync(window, outputDir, fileName);
+        return CreateInsertObjectsLinksTourCapture(
+            state,
+            fileName,
+            evidenceSummary,
+            captureMethod,
+            window.ActualWidth,
+            window.ActualHeight,
+            commandRow);
+    }
+
+    private async Task<InsertObjectsLinksTourManifestCapture> CaptureInsertObjectsLinksWindowStateAsync(
+        string outputDir,
+        string fileName,
+        string state,
+        string evidenceSummary,
+        string commandRow)
+    {
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateInsertObjectsLinksTourCapture(
+            state,
+            fileName,
+            evidenceSummary,
+            "RenderTargetBitmap-window-full",
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            commandRow);
+    }
+
+    private InsertObjectsLinksTourManifestCapture CreateInsertObjectsLinksTourCapture(
+        string state,
+        string fileName,
+        string evidenceSummary,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        string commandRow) =>
+        new(
+            CaptureKey: $"insert-objects-links:{state}",
+            PairKey: $"interactive:insert-objects-links:{state}",
+            ScenarioId: "insert:objects-links-text",
+            State: state,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CounterpartFileName: $"interactive_insert_objects_links_{state.Replace("-", "_", StringComparison.Ordinal)}.png",
+            EvidenceSummary: evidenceSummary,
+            CommandRow: commandRow,
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight);
+
+    private void EnsureInsertObjectsLinksTourContext()
+    {
+        SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshReviewCommentNoteCommandStates();
+    }
+
+    private async Task ApplyInsertObjectsLinksTourModelEvidenceAsync()
+    {
+        var sheetId = _currentSheetId;
+        ExecuteInsertObjectsLinksTourCommand(new SetHyperlinkCommand(
+            sheetId,
+            new CellAddress(sheetId, 2, 2),
+            "https://freex.example/insert-objects",
+            "FreeX hyperlink",
+            new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage, "FreeX visual evidence", "")), "Insert Hyperlink");
+        ExecuteInsertObjectsLinksTourCommand(
+            new AddDrawingShapeCommand(sheetId, new CellAddress(sheetId, 4, 2), DrawingShapeKind.Rectangle),
+            "Insert Shape");
+        ExecuteInsertObjectsLinksTourCommand(
+            new AddTextBoxCommand(sheetId, new CellAddress(sheetId, 4, 5), "Text Box evidence"),
+            "Insert Text Box");
+        ExecuteInsertObjectsLinksTourCommand(
+            InsertObjectPlacementPlanner.CreateInsertPictureCommand(
+                sheetId,
+                new CellAddress(sheetId, 8, 2),
+                [1, 2, 3, 4],
+                "image/png"),
+            "Insert Picture");
+        ExecuteInsertObjectsLinksTourCommand(
+            new SetThreadedCommentCommand(sheetId, new CellAddress(sheetId, 6, 4), "Threaded comment evidence"),
+            "Threaded Comment");
+        ExecuteInsertObjectsLinksTourCommand(
+            new SetCommentCommand(sheetId, new CellAddress(sheetId, 6, 5), "Note evidence"),
+            "Comment");
+
+        SetActiveCell(new CellAddress(sheetId, 4, 2));
+        EnsureCellVisible(new CellAddress(sheetId, 8, 2));
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshReviewCommentNoteCommandStates();
+        await Task.Delay(350);
+    }
+
+    private void ExecuteInsertObjectsLinksTourCommand(IWorkbookCommand command, string title)
+    {
+        if (!TryExecuteCommand(command, title, out var outcome))
+            throw new InvalidOperationException($"Insert objects/links/text tour failed to apply '{title}': {outcome.ErrorMessage}");
+    }
+
+    private static void DeleteInsertObjectsLinksTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, InsertObjectsLinksTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateInsertObjectsLinksTourEvidence(
+        string outputDir,
+        IReadOnlyList<InsertObjectsLinksTourManifestCapture> captures)
+    {
+        if (captures.Count != 7)
+            throw new InvalidOperationException($"Insert objects/links/text tour expected 7 captures but created {captures.Count}.");
+
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Insert objects/links/text tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
+    }
+
     private async Task CaptureKeyTipOverlayTourAsync(string outputDir)
     {
         Directory.CreateDirectory(outputDir);
@@ -3262,6 +3542,67 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest);
     }
 
+    private static async Task WriteInsertObjectsLinksTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<InsertObjectsLinksTourManifestCapture> captures)
+    {
+        var manifest = new InsertObjectsLinksTourManifest(
+            Tool: "FREEX_INSERT_OBJECTS_LINKS_TOUR",
+            EvidenceFamily: "insert-objects-links-text",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "insert:objects-links-text",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_insert_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds:
+            [
+                "UI-CAT-INSERT-003",
+                "UI-CMD-INSERT-008",
+                "UI-CMD-INSERT-009",
+                "UI-CMD-INSERT-010"
+            ],
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new InsertObjectsLinksTourManifestPairing(
+                "interactive:insert-objects-links:<State>",
+                "manual-or-excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, or screen capture input is used."
+                    : "FreeX WPF window/dialog must own foreground focus before RenderTargetBitmap capture."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Insert Hyperlink dialog with address box default focus/select-all behavior",
+                "Symbol picker dialog with Symbols tab/grid and Insert/Cancel controls",
+                "Model-backed worksheet visuals for hyperlink, rectangle shape, text box, picture placeholder, threaded comment, and note",
+                "New Comment threaded-comment dialog",
+                "New Note text-entry dialog",
+                "Threaded comments list surface",
+                "Notes list surface"
+            ],
+            Limitations:
+            [
+                "This tour renders FreeX WPF surfaces in process with RenderTargetBitmap; it is not foreground CopyFromScreen or physical mouse/keytip/UIA proof.",
+                "The picture evidence uses the production InsertPictureCommand sizing/fallback path with deterministic placeholder bytes rather than opening the native Windows file picker.",
+                "Dialog captures show production initial states and focus targets but do not submit hyperlink, symbol, comment, or note dialogs through keyboard/mouse input.",
+                "The inserted worksheet object evidence is applied through command model calls so save/reload persistence and selection-handle drag evidence remain separate.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, InsertObjectsLinksTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.InsertObjectsLinksTourManifest);
+    }
+
     private static async Task WritePrintPreviewTourManifestAsync(
         string outputDir,
         Sheet sheet,
@@ -4070,6 +4411,47 @@ public partial class MainWindow
         bool ZoomOutButtonEnabled,
         bool ZoomInButtonEnabled,
         string FormulaBarText);
+
+    private sealed record InsertObjectsLinksTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        InsertObjectsLinksTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<InsertObjectsLinksTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record InsertObjectsLinksTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record InsertObjectsLinksTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string FileName,
+        string OutputFileName,
+        string CounterpartFileName,
+        string EvidenceSummary,
+        string CommandRow,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
@@ -4084,6 +4466,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(TitlebarWindowChromeTourManifest))]
     [JsonSerializable(typeof(FormulaBarNameBoxTourManifest))]
     [JsonSerializable(typeof(StatusFooterTourManifest))]
+    [JsonSerializable(typeof(InsertObjectsLinksTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.
