@@ -25,6 +25,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_QAT_UNDO_REDO_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_TITLEBAR_WINDOW_CHROME_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_BAR_NAME_BOX_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_GRID_SELECTION_EDITING_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_STATUS_FOOTER_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_INSERT_OBJECTS_LINKS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DATA_TOOLS_DIALOGS_TOUR\")");
@@ -52,6 +53,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureQatUndoRedoTourAsync");
         source.Should().Contain("CaptureTitlebarWindowChromeTourAsync");
         source.Should().Contain("CaptureFormulaBarNameBoxTourAsync");
+        source.Should().Contain("CaptureGridSelectionEditingTourAsync");
         source.Should().Contain("CaptureStatusFooterTourAsync");
         source.Should().Contain("CaptureInsertObjectsLinksTourAsync");
         source.Should().Contain("CaptureDataToolsDialogsTourAsync");
@@ -81,6 +83,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WriteQatUndoRedoTourManifestAsync");
         source.Should().Contain("WriteTitlebarWindowChromeTourManifestAsync");
         source.Should().Contain("WriteFormulaBarNameBoxTourManifestAsync");
+        source.Should().Contain("WriteGridSelectionEditingTourManifestAsync");
         source.Should().Contain("WriteStatusFooterTourManifestAsync");
         source.Should().Contain("WriteInsertObjectsLinksTourManifestAsync");
         source.Should().Contain("WriteDataToolsDialogsTourManifestAsync");
@@ -98,6 +101,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("qat_undo_redo_tour_manifest.json");
         source.Should().Contain("titlebar_window_chrome_tour_manifest.json");
         source.Should().Contain("formula_bar_name_box_tour_manifest.json");
+        source.Should().Contain("grid_selection_editing_tour_manifest.json");
         source.Should().Contain("status_footer_tour_manifest.json");
         source.Should().Contain("insert_objects_links_tour_manifest.json");
         source.Should().Contain("data_tools_dialogs_tour_manifest.json");
@@ -278,6 +282,50 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void MainWindowScreenshotTour_CapturesGridSelectionEditingVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_GRID_SELECTION_EDITING_TOUR");
+        source.Should().Contain("grid-selection-editing-tour");
+        source.Should().Contain("EnsureGridSelectionEditingTourContext");
+        source.Should().Contain("sheet.AutoFilter = new WorksheetAutoFilterModel(\"A1:E8\", null);");
+        source.Should().Contain("sheet.FilterHiddenRows.Add(6);");
+        source.Should().Contain("sheet.HiddenRows.Add(8);");
+        source.Should().Contain("SetActiveCell(context.SelectedCell);");
+        source.Should().Contain("SetSelectionRange(context.SelectedRange, context.SelectedRange.Start);");
+        source.Should().Contain("SelectRow(context.RowSelectionIndex);");
+        source.Should().Contain("SelectColumn(context.ColumnSelectionIndex);");
+        source.Should().Contain("ShowInlineEditor(context.EditCell);");
+        source.Should().Contain("CommitEdit();");
+        source.Should().Contain("new FillCellsCommand(_currentSheetId, currentRange, FillCellsDirection.Down)");
+        source.Should().Contain("new ClearContentsCommand(_currentSheetId, currentRange)");
+        source.Should().Contain("freex_grid_selection_editing_selected_cell");
+        source.Should().Contain("freex_grid_selection_editing_selected_range");
+        source.Should().Contain("freex_grid_selection_editing_whole_row");
+        source.Should().Contain("freex_grid_selection_editing_whole_column");
+        source.Should().Contain("freex_grid_selection_editing_inline_edit_mode");
+        source.Should().Contain("freex_grid_selection_editing_committed_value");
+        source.Should().Contain("freex_grid_selection_editing_filtered_hidden_rows");
+        source.Should().Contain("freex_grid_selection_editing_fill_down_result");
+        source.Should().Contain("freex_grid_selection_editing_clear_contents_result");
+        source.Should().Contain("NameBoxText: CellAddressBox.Text");
+        source.Should().Contain("StatusAverageText: StatusAvgText.Text");
+        source.Should().Contain("VisibleRows: visibleRows");
+        source.Should().Contain("GridSelectionEditingTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.GridSelectionEditingTourManifest");
+        source.Should().Contain("Whole-row and whole-column states are supported");
+        source.Should().Contain("Mouse drag, Shift+click, Ctrl+multi-area, keyboard navigation shortcuts");
+
+        catalog.Should().Contain("FREEX_GRID_SELECTION_EDITING_TOUR=1");
+        catalog.Should().Contain("screenshots/grid-selection-editing-tour/");
+        catalog.Should().Contain("grid_selection_editing_tour_manifest.json");
+        catalog.Should().Contain("freex_grid_selection_editing_selected_range.png");
+        catalog.Should().Contain("foreground mouse/keyboard and Excel-paired proof remain");
+    }
+
+    [Fact]
     public void MainWindowScreenshotTour_CapturesRealPrintPreviewEvidence()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
@@ -303,6 +351,40 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("PrintPreviewTourManifest");
         source.Should().Contain("RenderTargetBitmap-print-preview-dialog-and-main-window");
         source.Should().Contain("The native Windows print dialog is not opened during this tour");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesBackstageRecentExportShareVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_BACKSTAGE_RECENT_EXPORT_SHARE_TOUR");
+        source.Should().Contain("BackstageRecentExportShareTourOutputDirectoryName = \"backstage-recent-export-share-tour\"");
+        source.Should().Contain("freex_backstage_open_recent_list");
+        source.Should().Contain("freex_backstage_open_pinned_list");
+        source.Should().Contain("freex_backstage_info_unsaved_status");
+        source.Should().Contain("freex_backstage_info_unsupported_feature_save_warning");
+        source.Should().Contain("freex_backstage_export_entry_focused");
+        source.Should().Contain("freex_backstage_export_pdf_options");
+        source.Should().Contain("freex_backstage_export_xps_options");
+        source.Should().Contain("freex_backstage_share_unsaved_guard_status");
+        source.Should().Contain("freex_backstage_share_saved_ready_status");
+        source.Should().Contain("freex_backstage_back_to_workbook_focus_return");
+        source.Should().Contain("SwitchToPinnedTab();");
+        source.Should().Contain("new ExportOptionsDialog(");
+        source.Should().Contain("ExportPlanner.DescribeRequest(request)");
+        source.Should().Contain("ShareWorkbookPlanner.CreatePlan(null)");
+        source.Should().Contain("SaveBackstageRecentExportShareTourWorkbookAsync");
+        source.Should().Contain("ConfirmUnsupportedXlsxFeatureSave();");
+        source.Should().Contain("CaptureBackstageOwnedNativeDialogWhenShownAsync");
+        source.Should().Contain("BackstageRecentExportShareTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.BackstageRecentExportShareTourManifest");
+        source.Should().Contain("The native Open dialog, native Export Save As dialog, and Windows Share UI are intentionally not launched");
+
+        catalog.Should().Contain("FREEX_BACKSTAGE_RECENT_EXPORT_SHARE_TOUR=1");
+        catalog.Should().Contain("screenshots/backstage-recent-export-share-tour/");
+        catalog.Should().Contain("backstage_recent_export_share_tour_manifest.json");
     }
 
     [Fact]
