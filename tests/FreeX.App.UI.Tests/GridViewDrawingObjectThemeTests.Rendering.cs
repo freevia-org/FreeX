@@ -495,8 +495,8 @@ public sealed partial class GridViewDrawingObjectThemeTests
         renderDrawingShape.Should().Contain("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);");
         renderDrawingShape.Should().Contain("DrawShapeThemeBevelEffect(dc, shape.Kind, rect, themeEffect);");
         renderDrawingShape.IndexOf("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);", StringComparison.Ordinal)
-            .Should().BeLessThan(renderDrawingShape.IndexOf("switch (shape.Kind)", StringComparison.Ordinal));
-        renderDrawingShape.IndexOf("switch (shape.Kind)", StringComparison.Ordinal)
+            .Should().BeLessThan(renderDrawingShape.IndexOf("DrawShapeGeometry(dc, shape.Kind, rect", StringComparison.Ordinal));
+        renderDrawingShape.IndexOf("DrawShapeGeometry(dc, shape.Kind, rect", StringComparison.Ordinal)
             .Should().BeLessThan(renderDrawingShape.IndexOf("DrawShapeThemeBevelEffect(dc, shape.Kind, rect, themeEffect);", StringComparison.Ordinal));
         shapeThemeEffect.Should().Contain("effect.HasThreeDRotation");
         shapeThemeEffect.Should().Contain("DrawShapeThreeDRotationEffect(dc, kind, rect, colors);");
@@ -534,8 +534,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
         textBoxThemeInnerShadow.Should().Contain("GetInnerShadowThickness(effect.InnerShadowBlurRadius)");
         textBoxThemeInnerShadow.Should().Contain("GetInnerShadowRect(rect, thickness, effect.InnerShadowOffsetX, effect.InnerShadowOffsetY)");
         shapeThemeInnerShadow.Should().Contain("effect.HasInnerShadow");
-        shapeThemeInnerShadow.Should().Contain("dc.DrawRectangle(null, pen, shadowRect);");
-        shapeThemeInnerShadow.Should().Contain("dc.DrawEllipse(null, pen");
+        shapeThemeInnerShadow.Should().Contain("DrawShapeGeometry(dc, kind, shadowRect, null, pen);");
         pictures.Should().NotContain("WorkbookThemeEffectStyle");
         pictures.Should().NotContain("HasInnerShadow");
         pictures.Should().NotContain("InnerShadow");
