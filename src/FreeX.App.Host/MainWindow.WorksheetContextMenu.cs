@@ -315,6 +315,9 @@ public partial class MainWindow
             case WorksheetContextMenuAction.Hyperlink:
                 InsertLinkBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.PivotTableOptions:
+                ShowPivotTableOptionsDialog(address);
+                break;
             case WorksheetContextMenuAction.FormatCells:
                 OpenFormatCellsDialog();
                 break;
@@ -485,12 +488,14 @@ public partial class MainWindow
             sheet.DataValidations.Count > 0 &&
             DataValidationService.GetApplicable(sheet, address)
                 .Any(rule => rule.Type == DvType.List && rule.ShowDropdown);
+        var hasPivotTableTarget = PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null;
         return new WorksheetContextMenuState(
             HasThreadedComment: threadedComment is not null,
             IsThreadedCommentResolved: threadedComment?.IsResolved == true,
             HasNote: sheet.Comments.ContainsKey(address),
             HasHyperlink: sheet.Hyperlinks.ContainsKey(address),
             HasAutoFilterHeaderTarget: hasAutoFilterHeaderTarget,
-            HasDropdownTarget: hasAutoFilterHeaderTarget || hasValidationDropdown);
+            HasDropdownTarget: hasAutoFilterHeaderTarget || hasValidationDropdown,
+            HasPivotTableTarget: hasPivotTableTarget);
     }
 }

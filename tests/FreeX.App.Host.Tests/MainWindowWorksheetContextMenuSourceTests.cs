@@ -104,4 +104,30 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
             .Should()
             .BeLessThan(stateMethod.IndexOf("DataValidationService.GetApplicable(sheet, address)", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void PivotTableContextMenuStateUsesClickedCell()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+
+        var stateMethod = source[
+            source.IndexOf("private WorksheetContextMenuState GetWorksheetContextMenuState", StringComparison.Ordinal)..];
+
+        stateMethod.Should().Contain("PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null");
+        stateMethod.Should().Contain("HasPivotTableTarget: hasPivotTableTarget");
+    }
+
+    [Fact]
+    public void PivotTableOptionsContextMenuActionRoutesToClickedPivotDialog()
+    {
+        var contextSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var designSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
+
+        contextSource.Should().Contain("case WorksheetContextMenuAction.PivotTableOptions:");
+        contextSource.Should().Contain("ShowPivotTableOptionsDialog(address);");
+        designSource.Should().Contain("private void ShowPivotTableOptionsDialog(CellAddress address)");
+        designSource.Should().Contain("PivotUiPlanner.FindPivotTableContainingCell(sheet, address)");
+        designSource.Should().Contain("private void ShowPivotTableOptionsDialog(PivotTableModel pivotTable)");
+        designSource.Should().Contain("new PivotTableOptionsDialog(pivotTable, cache)");
+    }
 }

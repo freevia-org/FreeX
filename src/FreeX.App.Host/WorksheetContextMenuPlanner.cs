@@ -2,7 +2,7 @@ namespace FreeX.App.Host;
 
 public static class WorksheetContextMenuPlanner
 {
-    private const int WorksheetStateCacheSize = 1 << 6;
+    private const int WorksheetStateCacheSize = 1 << 7;
 
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> PictureCommands =
         BuildPictureCommands();
@@ -55,7 +55,8 @@ public static class WorksheetContextMenuPlanner
             HasNote: (index & (1 << 2)) != 0,
             HasHyperlink: (index & (1 << 3)) != 0,
             HasAutoFilterHeaderTarget: (index & (1 << 4)) != 0,
-            HasDropdownTarget: (index & (1 << 5)) != 0);
+            HasDropdownTarget: (index & (1 << 5)) != 0,
+            HasPivotTableTarget: (index & (1 << 6)) != 0);
 
     private static int GetStateCacheIndex(WorksheetContextMenuState state)
     {
@@ -72,6 +73,8 @@ public static class WorksheetContextMenuPlanner
             index |= 1 << 4;
         if (state.HasDropdownTarget)
             index |= 1 << 5;
+        if (state.HasPivotTableTarget)
+            index |= 1 << 6;
 
         return index;
     }
@@ -124,6 +127,7 @@ public static class WorksheetContextMenuPlanner
         new("Delete Note", WorksheetContextMenuAction.DeleteNote, AccessHeader: "De_lete Note", IsEnabled: state.HasNote),
         new("Show Notes", WorksheetContextMenuAction.ShowNotes, AccessHeader: "_Show Notes", IsEnabled: state.HasNote),
         .. BuildHyperlinkCommands(state),
+        .. BuildPivotTableCommands(state),
         WorksheetContextMenuCommand.Separator,
         new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
         WorksheetContextMenuCommand.Separator,
@@ -253,6 +257,13 @@ public static class WorksheetContextMenuPlanner
             : Freeze([
                 new("Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Hyperlink...")
             ]);
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildPivotTableCommands(WorksheetContextMenuState state) =>
+        state.HasPivotTableTarget
+            ? Freeze([
+                new("PivotTable Options...", WorksheetContextMenuAction.PivotTableOptions, AccessHeader: "PivotTable _Options...")
+            ])
+            : [];
 }
 
 public sealed record WorksheetContextMenuCommand(
@@ -274,7 +285,8 @@ public sealed record WorksheetContextMenuState(
     bool HasNote = false,
     bool HasHyperlink = false,
     bool HasAutoFilterHeaderTarget = false,
-    bool HasDropdownTarget = false)
+    bool HasDropdownTarget = false,
+    bool HasPivotTableTarget = false)
 {
     public static WorksheetContextMenuState Default { get; } = new();
 }
@@ -330,6 +342,7 @@ public enum WorksheetContextMenuAction
     ShowNotes,
     OpenHyperlink,
     Hyperlink,
+    PivotTableOptions,
     FormatCells,
     ClearAll,
     ClearFormats,

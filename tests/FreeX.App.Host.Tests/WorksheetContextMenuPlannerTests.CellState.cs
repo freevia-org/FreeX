@@ -24,6 +24,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
         commands.Single(command => command.Action == WorksheetContextMenuAction.ClearFilter).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ReapplyFilter).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.PickFromDropDown).IsEnabled.Should().BeFalse();
+        commands.Select(command => command.Action).Should().NotContain(WorksheetContextMenuAction.PivotTableOptions);
     }
 
     [Fact]
@@ -133,5 +134,30 @@ public sealed partial class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.Hyperlink);
         withLink.Single(command => command.Header == "Remove Hyperlink")
             .Action.Should().Be(WorksheetContextMenuAction.RemoveHyperlinks);
+    }
+
+    [Fact]
+    public void BuildCommands_ShowsPivotTableOptionsOnlyForPivotTableCells()
+    {
+        var normalCellCommands = WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasPivotTableTarget: false));
+
+        normalCellCommands.Select(command => command.Header)
+            .Should()
+            .NotContain("PivotTable Options...");
+
+        var pivotCellCommands = WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasPivotTableTarget: true));
+
+        pivotCellCommands.Select(command => command.Header).Should().ContainInOrder(
+            "Hyperlink...",
+            "PivotTable Options...",
+            "Format Cells...");
+        pivotCellCommands.Single(command => command.Header == "PivotTable Options...")
+            .Should()
+            .BeEquivalentTo(new WorksheetContextMenuCommand(
+                "PivotTable Options...",
+                WorksheetContextMenuAction.PivotTableOptions,
+                AccessHeader: "PivotTable _Options..."));
     }
 }
