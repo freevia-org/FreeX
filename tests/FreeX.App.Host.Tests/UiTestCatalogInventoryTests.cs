@@ -268,6 +268,43 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void FileCatalogRows_DocumentBackstageWorkflowEvidenceArtifacts()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var evidencePaths = new[]
+        {
+            "screenshots/file-backstage-workflows-tour/freex_file_backstage_new_entry_focused.png",
+            "screenshots/file-backstage-workflows-tour/freex_file_backstage_new_workbook_result.png",
+            "screenshots/file-backstage-workflows-tour/freex_file_backstage_open_recent_filtered_list.png",
+            "screenshots/file-backstage-workflows-tour/freex_file_backstage_open_pinned_list.png",
+            "screenshots/file-backstage-workflows-tour/freex_file_backstage_save_as_native_dialog_guard.png",
+            "screenshots/file-backstage-workflows-tour/freex_file_backstage_saved_title_path_info.png",
+            "screenshots/file-backstage-workflows-tour/freex_file_backstage_reopened_workbook_title_path.png",
+            "screenshots/file-backstage-workflows-tour/freex_file_backstage_print_entry_settings.png",
+            "screenshots/file-backstage-workflows-tour/freex_file_backstage_print_preview_summary.png",
+            "screenshots/file-backstage-workflows-tour/freex_file_backstage_export_entry_output_ready.png",
+            "screenshots/file-backstage-workflows-tour/file_backstage_workflows_tour_manifest.json",
+            "screenshots/file-backstage-workflows-tour/freex_file_backstage_workflows_saved.xlsx",
+            "screenshots/file-backstage-workflows-tour/freex_file_backstage_workflows_export.pdf",
+        };
+
+        catalog.Should().Contain("screenshots/file-backstage-workflows-tour/");
+        foreach (var evidencePath in evidencePaths)
+        {
+            catalog.Should().Contain(Path.GetFileName(evidencePath));
+            File.Exists(WorkspaceFileLocator.Find(evidencePath.Split('/'))).Should().BeTrue(evidencePath);
+        }
+
+        var manifest = WorkspaceFileLocator.ReadAllText(
+            "screenshots",
+            "file-backstage-workflows-tour",
+            "file_backstage_workflows_tour_manifest.json");
+        manifest.Should().Contain("interactive:file-backstage-workflows:reopened-workbook-title-path");
+        manifest.Should().Contain("MissingRecentFiltered");
+        manifest.Should().Contain("ExportedPdfPageCount");
+    }
+
+    [Fact]
     public void ContextualObjectCatalogRow_DocumentsChartScreenshotEvidenceAndObjectTabGap()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
