@@ -18,17 +18,13 @@ public partial class GridView
     private const double HandleHitPad = 4.0;
 
     private const double RotationGripDiameter = 10.0;
-    private const double PictureCropHandleSize = GridPictureCropPlanner.DefaultHandleSize;
 
     private static readonly Brush HandleFill = new SolidColorBrush(Colors.White);
     private static readonly Pen HandlePen = new(new SolidColorBrush(Color.FromRgb(0x20, 0x7A, 0xC5)), 1.0);
     private static readonly Pen SelectionBorderPen = new(new SolidColorBrush(Color.FromRgb(0x20, 0x7A, 0xC5)), 1.5);
     private static readonly Brush RotationGripFill = new SolidColorBrush(Colors.White);
     private static readonly Pen RotationGripPen = new(new SolidColorBrush(Color.FromRgb(0x20, 0x7A, 0xC5)), 1.0);
-    private static readonly Brush PictureCropHandleFill = new SolidColorBrush(Colors.Black);
-    private static readonly Pen PictureCropHandlePen = new(new SolidColorBrush(Colors.White), 1.0);
-    private static readonly Brush PictureCropPreviewFill;
-    private static readonly Pen PictureCropPreviewPen;
+    private static readonly Pen RotationGlyphPen = new(new SolidColorBrush(Color.FromRgb(0x20, 0x7A, 0xC5)), 1.5);
 
     static GridView()
     {
@@ -40,9 +36,8 @@ public partial class GridView
         RotationGripFill.Freeze();
         ((SolidColorBrush)((Pen)RotationGripPen).Brush).Freeze();
         RotationGripPen.Freeze();
-        PictureCropHandleFill.Freeze();
-        ((SolidColorBrush)((Pen)PictureCropHandlePen).Brush).Freeze();
-        PictureCropHandlePen.Freeze();
+        ((SolidColorBrush)((Pen)RotationGlyphPen).Brush).Freeze();
+        RotationGlyphPen.Freeze();
 
         var dragFillBrush = new SolidColorBrush(Color.FromArgb(40, 0x20, 0x7A, 0xC5));
         dragFillBrush.Freeze();
@@ -52,15 +47,6 @@ public partial class GridView
         dragPenBrush.Freeze();
         DragPreviewPen = new Pen(dragPenBrush, 1.5) { DashStyle = DashStyles.Dash };
         DragPreviewPen.Freeze();
-
-        var cropPreviewFill = new SolidColorBrush(Color.FromArgb(24, 0, 0, 0));
-        cropPreviewFill.Freeze();
-        PictureCropPreviewFill = cropPreviewFill;
-
-        var cropPreviewPenBrush = new SolidColorBrush(Colors.Black);
-        cropPreviewPenBrush.Freeze();
-        PictureCropPreviewPen = new Pen(cropPreviewPenBrush, 1.5) { DashStyle = DashStyles.Dash };
-        PictureCropPreviewPen.Freeze();
     }
 
     // Returns the Rect of the selected object if it is currently selected, else Rect.Empty
@@ -121,6 +107,27 @@ public partial class GridView
         };
     }
 
+    private double GetSelectedObjectRotationDegrees()
+    {
+        if (ObjectDisplayMode == GridObjectDisplayMode.Nothing ||
+            SelectedObjectId == Guid.Empty ||
+            SelectedObjectKind == ObjectKind.None)
+        {
+            return 0;
+        }
+
+        return SelectedObjectKind switch
+        {
+            ObjectKind.Picture when Pictures is not null =>
+                TryGetObjectRotation(Pictures, p => p.Id == SelectedObjectId && p.IsVisible, p => p.RotationDegrees),
+            ObjectKind.Shape when DrawingShapes is not null =>
+                TryGetObjectRotation(DrawingShapes, s => s.Id == SelectedObjectId && s.IsVisible, s => s.RotationDegrees),
+            ObjectKind.TextBox when TextBoxes is not null =>
+                TryGetObjectRotation(TextBoxes, t => t.Id == SelectedObjectId && t.IsVisible, t => t.RotationDegrees),
+            _ => 0
+        };
+    }
+
     private Rect TryGetObjectRect<T>(
         IEnumerable<T> items,
         Func<T, bool> match,
@@ -149,17 +156,34 @@ public partial class GridView
         return null;
     }
 
-    // The selection frame and handles stay axis-aligned around the object's
-    // unrotated bounding box; body hit-testing still honors RotationDegrees.
-    internal void DrawObjectSelectionHandles(DrawingContext dc, Rect r)
+    private static double TryGetObjectRotation<T>(IEnumerable<T> items, Func<T, bool> match, Func<T, double> rotation)
     {
+        foreach (var item in items)
+        {
+            if (match(item))
+                return rotation(item);
+        }
+
+        return 0;
+    }
+
+    internal void DrawObjectSelectionHandles(DrawingContext dc, Rect r, double rotationDegrees)
+    {
+        var rotated = Math.Abs(rotationDegrees) > 0.0001;
+        if (rotated)
+        {
+            dc.PushTransform(new RotateTransform(
+                rotationDegrees,
+                r.Left + r.Width / 2,
+                r.Top + r.Height / 2));
+        }
+
         dc.DrawRectangle(null, SelectionBorderPen, r);
 
-        // Office-style rotation grip: a small circle above the top-center handle with a connector line.
         var topCenter = new Point(r.Left + r.Width / 2, r.Top);
         var gripCenter = new Point(topCenter.X, r.Top - GridObjectDragPlanner.RotationGripOffset);
         dc.DrawLine(HandlePen, topCenter, new Point(gripCenter.X, gripCenter.Y + RotationGripDiameter / 2));
-        dc.DrawEllipse(RotationGripFill, RotationGripPen, gripCenter, RotationGripDiameter / 2, RotationGripDiameter / 2);
+        DrawRotationGrip(dc, gripCenter);
 
         double hs = HandleSize;
         double hh = hs / 2;
@@ -174,85 +198,51 @@ public partial class GridView
         DrawObjectSelectionHandle(dc, centerX - hh, r.Bottom - hh, hs);
         DrawObjectSelectionHandle(dc, r.Left - hh, r.Bottom - hh, hs);
         DrawObjectSelectionHandle(dc, r.Left - hh, centerY - hh, hs);
+
+        if (rotated)
+            dc.Pop();
     }
 
     private static void DrawObjectSelectionHandle(DrawingContext dc, double x, double y, double size) =>
         dc.DrawRectangle(HandleFill, HandlePen, new Rect(x, y, size, size));
 
+    private static void DrawRotationGrip(DrawingContext dc, Point center)
+    {
+        var radius = RotationGripDiameter / 2;
+        dc.DrawEllipse(RotationGripFill, RotationGripPen, center, radius, radius);
+
+        var glyph = new StreamGeometry();
+        using (var context = glyph.Open())
+        {
+            var arcRadius = radius - 2.5;
+            var start = new Point(center.X - arcRadius * 0.65, center.Y + arcRadius * 0.75);
+            var end = new Point(center.X + arcRadius * 0.85, center.Y - arcRadius * 0.35);
+            context.BeginFigure(start, isFilled: false, isClosed: false);
+            context.ArcTo(
+                end,
+                new Size(arcRadius, arcRadius),
+                rotationAngle: 0,
+                isLargeArc: true,
+                sweepDirection: SweepDirection.Clockwise,
+                isStroked: true,
+                isSmoothJoin: true);
+
+            context.BeginFigure(end, isFilled: true, isClosed: true);
+            context.LineTo(new Point(end.X - 0.5, end.Y + 3.0), isStroked: true, isSmoothJoin: false);
+            context.LineTo(new Point(end.X + 2.7, end.Y + 1.2), isStroked: true, isSmoothJoin: false);
+        }
+
+        glyph.Freeze();
+        dc.DrawGeometry(null, RotationGlyphPen, glyph);
+    }
+
     private ObjectDragKind HitTestObjectHandle(Point pos, Rect objRect)
-        => GridObjectDragPlanner.HitTestHandle(pos, objRect, HandleSize, HandleHitPad);
-
-    private PictureCropHandle HitTestPictureCropHandle(Point pos)
-    {
-        return TryGetSelectedImagePicture(out _, out var rect)
-            ? GridPictureCropPlanner.HitTestHandle(pos, rect)
-            : PictureCropHandle.None;
-    }
-
-    private bool TryGetSelectedImagePicture(out PictureModel? picture, out Rect rect)
-    {
-        picture = null;
-        rect = Rect.Empty;
-        if (ObjectDisplayMode == GridObjectDisplayMode.Nothing ||
-            SelectedObjectId == Guid.Empty ||
-            SelectedObjectKind != ObjectKind.Picture ||
-            Pictures is null)
-        {
-            return false;
-        }
-
-        foreach (var candidate in Pictures)
-        {
-            if (candidate.Id != SelectedObjectId ||
-                !candidate.IsVisible ||
-                candidate.Kind != PictureKind.Image)
-            {
-                continue;
-            }
-
-            if (!TryCreateAnchoredObjectRect(
-                    candidate.Anchor,
-                    candidate.Width,
-                    candidate.Height,
-                    MinimumPictureObjectWidth,
-                    MinimumPictureObjectHeight,
-                    out rect))
-            {
-                return false;
-            }
-
-            picture = candidate;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static PictureCropRatios GetPictureCropRatios(PictureModel picture) =>
-        new(picture.CropLeft, picture.CropTop, picture.CropRight, picture.CropBottom);
-
-    internal void DrawSelectedPictureCropHandles(DrawingContext dc, Rect rect)
-    {
-        foreach (var (_, center) in GridPictureCropPlanner.GetHandleCenters(rect))
-        {
-            var handleRect = new Rect(
-                center.X - PictureCropHandleSize / 2,
-                center.Y - PictureCropHandleSize / 2,
-                PictureCropHandleSize,
-                PictureCropHandleSize);
-            dc.DrawRectangle(PictureCropHandleFill, PictureCropHandlePen, handleRect);
-        }
-    }
-
-    internal void RenderPictureCropPreview(DrawingContext dc, Rect pictureRect)
-    {
-        if (_pictureCropDragHandle == PictureCropHandle.None)
-            return;
-
-        var cropRect = GridPictureCropPlanner.CalculateVisibleCropRect(pictureRect, _pictureCropCurrentCrop);
-        dc.DrawRectangle(PictureCropPreviewFill, PictureCropPreviewPen, cropRect);
-        DrawSelectedPictureCropHandles(dc, pictureRect);
-    }
+        => GridObjectDragPlanner.HitTestHandle(
+            pos,
+            objRect,
+            HandleSize,
+            HandleHitPad,
+            GetSelectedObjectRotationDegrees());
 
     // Returns the cell address closest to the given screen coordinates (for anchor snapping)
     private CellAddress? HitTestAnchorCell(Point pos) =>
@@ -307,19 +297,6 @@ public partial class GridView
         ObjectDragKind.ResizeE   => Cursors.SizeWE,
         ObjectDragKind.ResizeW   => Cursors.SizeWE,
         ObjectDragKind.Rotate    => Cursors.Cross,
-        _ => Cursors.Arrow
-    };
-
-    private static Cursor PictureCropCursor(PictureCropHandle handle) => handle switch
-    {
-        PictureCropHandle.CropNW => Cursors.SizeNWSE,
-        PictureCropHandle.CropSE => Cursors.SizeNWSE,
-        PictureCropHandle.CropNE => Cursors.SizeNESW,
-        PictureCropHandle.CropSW => Cursors.SizeNESW,
-        PictureCropHandle.CropN  => Cursors.SizeNS,
-        PictureCropHandle.CropS  => Cursors.SizeNS,
-        PictureCropHandle.CropE  => Cursors.SizeWE,
-        PictureCropHandle.CropW  => Cursors.SizeWE,
         _ => Cursors.Arrow
     };
 

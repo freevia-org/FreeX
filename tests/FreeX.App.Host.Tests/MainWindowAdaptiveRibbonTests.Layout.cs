@@ -62,7 +62,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
             var expectations = new[]
             {
-                new RibbonFallbackExpectation("Insert", 900, Expanded: [], Collapsed: ["Tables", "Charts"]),
+                new RibbonFallbackExpectation("Insert", 900, Expanded: ["Tables", "Illustrations"], Collapsed: ["Charts", "Sparklines"]),
                 new RibbonFallbackExpectation("Data", 1120, Expanded: ["Data Tools", "Forecast"], Collapsed: ["Sort & Filter"]),
                 new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup", "Arrange"], Collapsed: []),
                 new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show", "Zoom"], Collapsed: ["Window"]),

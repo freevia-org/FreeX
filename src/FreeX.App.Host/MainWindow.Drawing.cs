@@ -652,11 +652,4 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void OnPictureCropped(Guid id, double left, double top, double right, double bottom)
-    {
-        TryExecuteCommand(
-            new SetPictureCropCommand(_currentSheetId, id, left, top, right, bottom),
-            "Crop Picture");
-        UpdateViewport();
-    }
 }
