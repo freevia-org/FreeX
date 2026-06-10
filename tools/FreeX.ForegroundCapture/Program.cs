@@ -107,6 +107,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-sheet-tab-overflow-nav-click" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-overflow-nav-click", SheetTabOverflowNavClick()),
             "freex-sheet-tab-overflow-activate-dialog" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-overflow-activate-dialog", SheetTabOverflowActivateDialog()),
             "freex-grid-drag-select" => RunFreeXMainWindowPointerScenario("freex-grid-drag-select", DragRelative(0.14, 0.56, 0.37, 0.69)),
+            "freex-s4-grid-drag-select-validated" => RunFreeXMainWindowPointerScenario("freex-s4-grid-drag-select-validated", DragCellRangeSelectValidated("A1", "D5")),
+            "freex-s4-grid-autofill-handle-drag" => RunFreeXMainWindowPointerScenario("freex-s4-grid-autofill-handle-drag", AutofillHandleDragValidated()),
+            "freex-s4-grid-double-click-autofit" => RunFreeXMainWindowPointerScenario("freex-s4-grid-double-click-autofit", DoubleClickAutoFitValidated()),
             "freex-grid-row-column-resize" => RunFreeXMainWindowPointerScenario("freex-grid-row-column-resize", DragColumnAndRowResizeHandles()),
             "freex-grid-wheel-scroll" => RunFreeXMainWindowPointerScenario("freex-grid-wheel-scroll", WheelVerticalThenShiftHorizontal()),
             _ => CaptureResult.Blocked(options.Scenario, "unsupported-scenario", $"Unsupported scenario '{options.Scenario}'.", options.OutputRoot, options.Subject)
@@ -1233,6 +1236,197 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return GuardedClickElement(options.Scenario, processId, handle, element, MouseButtonKind.Right);
         };
 
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragCellRangeSelectValidated(
+        string startCell,
+        string endCell)
+        => (handle, processId, _, guard) =>
+        {
+            if (!TryGetCellBounds(handle, CellAutomationId(startCell), out var startBounds) ||
+                !TryGetCellBounds(handle, CellAutomationId(endCell), out var endBounds))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", $"Could not resolve {startCell}/{endCell} bounds for drag selection.", options.OutputRoot, "freex", guard);
+            }
+
+            var blocked = GuardedDrag(
+                options.Scenario,
+                processId,
+                handle,
+                CenterX(startBounds),
+                CenterY(startBounds),
+                CenterX(endBounds),
+                CenterY(endBounds));
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryGetSelectedCellIds(handle, out var selectedIds))
+            {
+                return CaptureResult.Blocked(options.Scenario, "selection-validation-unavailable", "Could not read worksheet grid SelectionPattern after drag selection.", options.OutputRoot, "freex", guard);
+            }
+
+            var expectedIds = ExpectedCellIds(startCell, endCell).ToArray();
+            var missing = expectedIds.Where(id => !selectedIds.Contains(id)).ToArray();
+            if (missing.Length > 0)
+            {
+                return CaptureResult.Blocked(options.Scenario, "selection-validation-failed", $"Drag selection missed expected cells: {string.Join(", ", missing)}. Selected: {string.Join(", ", selectedIds.OrderBy(id => id))}.", options.OutputRoot, "freex", guard);
+            }
+
+            _lastResultValidation = $"foreground cell-range drag select {startCell}:{endCell}; UIA SelectionPattern includes {expectedIds.Length} expected cells ({string.Join(", ", expectedIds.Take(4))}...).";
+            return null;
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> AutofillHandleDragValidated()
+        => (handle, processId, _, guard) =>
+        {
+            if (!TryGetCellBounds(handle, "Cell_A1", out var a1) ||
+                !TryGetCellBounds(handle, "Cell_A4", out var a4))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve A1/A4 bounds for autofill drag.", options.OutputRoot, "freex", guard);
+            }
+
+            var blocked = PasteCellText(handle, processId, a1, "11");
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryGetCellValue(handle, "Cell_A1", out var a1Value) ||
+                !a1Value.Equals("11", StringComparison.Ordinal))
+            {
+                return CaptureResult.Blocked(options.Scenario, "cell-seed-validation-failed", $"Expected A1 to contain '11' before autofill; UIA reported '{a1Value}'.", options.OutputRoot, "freex", guard);
+            }
+
+            blocked = GuardedClickPoint(options.Scenario, processId, handle, CenterX(a1), CenterY(a1), MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryGetCellBounds(handle, "Cell_A1", out a1) ||
+                !TryGetCellBounds(handle, "Cell_A4", out a4))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not refresh A1/A4 bounds after seed paste.", options.OutputRoot, "freex", guard);
+            }
+
+            blocked = GuardedDrag(
+                options.Scenario,
+                processId,
+                handle,
+                (int)(a1.Right - 2),
+                (int)(a1.Bottom - 2),
+                (int)(a4.Right - 2),
+                (int)(a4.Bottom - 2));
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var filled = new[] { "Cell_A2", "Cell_A3", "Cell_A4" };
+            var unexpected = new List<string>();
+            foreach (var id in filled)
+            {
+                if (!TryGetCellValue(handle, id, out var value) ||
+                    !value.Equals("11", StringComparison.Ordinal))
+                {
+                    unexpected.Add($"{id}='{value}'");
+                }
+            }
+
+            if (unexpected.Count > 0)
+            {
+                return CaptureResult.Blocked(options.Scenario, "autofill-validation-failed", $"Expected autofill to copy '11' into A2:A4; observed {string.Join(", ", unexpected)}.", options.OutputRoot, "freex", guard);
+            }
+
+            _lastResultValidation = "foreground autofill handle drag from A1 to A4; UIA ValuePattern confirms A2:A4 copied '11'.";
+            return null;
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DoubleClickAutoFitValidated()
+        => (handle, processId, _, guard) =>
+        {
+            if (!TryGetCellBounds(handle, "Cell_A1", out var originalA1))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve A1 bounds before AutoFit.", options.OutputRoot, "freex", guard);
+            }
+
+            var blocked = PasteCellText(handle, processId, originalA1, "A very long foreground AutoFit validation value for S4");
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryGetCellBounds(handle, "Cell_A1", out originalA1))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not refresh A1 bounds before column AutoFit.", options.OutputRoot, "freex", guard);
+            }
+
+            blocked = GuardedDoubleClickPoint(
+                options.Scenario,
+                processId,
+                handle,
+                (int)originalA1.Right,
+                (int)(originalA1.Top - 9));
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryGetCellBounds(handle, "Cell_A1", out var autoFitColumnA1))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve A1 bounds after column AutoFit.", options.OutputRoot, "freex", guard);
+            }
+
+            var columnDelta = autoFitColumnA1.Width - originalA1.Width;
+            if (columnDelta < 30)
+            {
+                return CaptureResult.Blocked(options.Scenario, "column-autofit-validation-failed", $"Expected column A width to grow after double-click AutoFit; before {originalA1.Width:0.###}, after {autoFitColumnA1.Width:0.###}.", options.OutputRoot, "freex", guard);
+            }
+
+            blocked = GuardedDrag(
+                options.Scenario,
+                processId,
+                handle,
+                (int)(autoFitColumnA1.Left - 15),
+                (int)autoFitColumnA1.Bottom,
+                (int)(autoFitColumnA1.Left - 15),
+                (int)(autoFitColumnA1.Bottom + 24));
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryGetCellBounds(handle, "Cell_A1", out var tallA1))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve A1 bounds after row height resize.", options.OutputRoot, "freex", guard);
+            }
+
+            blocked = GuardedDoubleClickPoint(
+                options.Scenario,
+                processId,
+                handle,
+                (int)(tallA1.Left - 15),
+                (int)tallA1.Bottom);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryGetCellBounds(handle, "Cell_A1", out var autoFitRowA1))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve A1 bounds after row AutoFit.", options.OutputRoot, "freex", guard);
+            }
+
+            var rowDelta = tallA1.Height - autoFitRowA1.Height;
+            if (rowDelta < 8)
+            {
+                return CaptureResult.Blocked(options.Scenario, "row-autofit-validation-failed", $"Expected row 1 height to shrink after double-click AutoFit; tall {tallA1.Height:0.###}, after {autoFitRowA1.Height:0.###}.", options.OutputRoot, "freex", guard);
+            }
+
+            _lastResultValidation = $"foreground double-click AutoFit; column A width {originalA1.Width:0.###}->{autoFitColumnA1.Width:0.###}, row 1 height {tallA1.Height:0.###}->{autoFitRowA1.Height:0.###}.";
+            return null;
+        };
+
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragColumnAndRowResizeHandles()
         => (handle, processId, _, guard) =>
         {
@@ -1594,6 +1788,23 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return null;
     }
 
+    private CaptureResult? GuardedClickPoint(string scenario, int processId, IntPtr handle, int x, int y, MouseButtonKind button)
+    {
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(scenario, guard, "before-pointer-click");
+        }
+
+        NativeMethods.SetCursorPos(x, y);
+        Thread.Sleep(100);
+        NativeMethods.MouseEvent(button == MouseButtonKind.Left ? NativeMethods.MOUSEEVENTF_LEFTDOWN : NativeMethods.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.MouseEvent(button == MouseButtonKind.Left ? NativeMethods.MOUSEEVENTF_LEFTUP : NativeMethods.MOUSEEVENTF_RIGHTUP, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(options.AfterInputDelay);
+        return null;
+    }
+
     private CaptureResult? GuardedWheel(string scenario, int processId, IntPtr handle, int x, int y, int wheelDelta, bool holdShift)
     {
         var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
@@ -1662,6 +1873,28 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return null;
     }
 
+    private CaptureResult? GuardedDoubleClickPoint(string scenario, int processId, IntPtr handle, int x, int y)
+    {
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(scenario, guard, "before-pointer-double-click");
+        }
+
+        NativeMethods.SetCursorPos(x, y);
+        Thread.Sleep(100);
+        for (var i = 0; i < 2; i++)
+        {
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(45);
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(90);
+        }
+
+        Thread.Sleep(options.AfterInputDelay);
+        return null;
+    }
+
     private CaptureResult? GuardedModifiedClickElement(string scenario, int processId, IntPtr handle, AutomationElement element, byte modifierKey)
     {
         var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
@@ -1706,6 +1939,32 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
         Thread.Sleep(80);
         NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(options.AfterInputDelay);
+        return null;
+    }
+
+    private CaptureResult? PasteCellText(IntPtr handle, int processId, System.Windows.Rect cellBounds, string text)
+    {
+        var blocked = GuardedClickPoint(options.Scenario, processId, handle, CenterX(cellBounds), CenterY(cellBounds), MouseButtonKind.Left);
+        if (blocked is not null)
+        {
+            return blocked;
+        }
+
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(options.Scenario, guard, "before-cell-paste");
+        }
+
+        Clipboard.SetText(text);
+        NativeMethods.KeybdEvent(NativeMethods.VK_CONTROL, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(50);
+        NativeMethods.KeybdEvent(NativeMethods.VK_V, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(50);
+        NativeMethods.KeybdEvent(NativeMethods.VK_V, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+        Thread.Sleep(50);
+        NativeMethods.KeybdEvent(NativeMethods.VK_CONTROL, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
         Thread.Sleep(options.AfterInputDelay);
         return null;
     }
@@ -1963,6 +2222,91 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
         bounds = cell.Current.BoundingRectangle;
         return !bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0;
+    }
+
+    private static bool TryGetCellValue(IntPtr handle, string cellId, out string value)
+    {
+        value = string.Empty;
+        var cell = FindElementByAutomationId(handle, cellId);
+        if (cell is null ||
+            !cell.TryGetCurrentPattern(ValuePattern.Pattern, out var patternObject) ||
+            patternObject is not ValuePattern valuePattern)
+        {
+            return false;
+        }
+
+        value = valuePattern.Current.Value ?? string.Empty;
+        return true;
+    }
+
+    private static bool TryGetSelectedCellIds(IntPtr handle, out HashSet<string> selectedIds)
+    {
+        selectedIds = [];
+        var grid = FindElementByAutomationId(handle, "SheetGrid");
+        if (grid is null ||
+            !grid.TryGetCurrentPattern(SelectionPattern.Pattern, out var patternObject) ||
+            patternObject is not SelectionPattern selectionPattern)
+        {
+            return false;
+        }
+
+        foreach (var selected in selectionPattern.Current.GetSelection())
+        {
+            var id = selected.Current.AutomationId;
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                selectedIds.Add(id);
+            }
+        }
+
+        return true;
+    }
+
+    private static string CellAutomationId(string address) => $"Cell_{address.ToUpperInvariant()}";
+
+    private static IEnumerable<string> ExpectedCellIds(string startAddress, string endAddress)
+    {
+        var (startColumn, startRow) = ParseCellAddress(startAddress);
+        var (endColumn, endRow) = ParseCellAddress(endAddress);
+        var minColumn = Math.Min(startColumn, endColumn);
+        var maxColumn = Math.Max(startColumn, endColumn);
+        var minRow = Math.Min(startRow, endRow);
+        var maxRow = Math.Max(startRow, endRow);
+
+        for (var row = minRow; row <= maxRow; row++)
+        {
+            for (var column = minColumn; column <= maxColumn; column++)
+            {
+                yield return $"Cell_{ColumnName(column)}{row}";
+            }
+        }
+    }
+
+    private static (int Column, int Row) ParseCellAddress(string address)
+    {
+        var column = 0;
+        var index = 0;
+        while (index < address.Length && char.IsLetter(address[index]))
+        {
+            column = column * 26 + char.ToUpperInvariant(address[index]) - 'A' + 1;
+            index++;
+        }
+
+        var row = int.Parse(address[index..], System.Globalization.CultureInfo.InvariantCulture);
+        return (column, row);
+    }
+
+    private static string ColumnName(int column)
+    {
+        var builder = new StringBuilder();
+        while (column > 0)
+        {
+            column--;
+            builder.Insert(0, (char)('A' + column % 26));
+            column /= 26;
+        }
+
+        return builder.ToString();
     }
 
     private static bool TryGetScrollBarValue(IntPtr handle, string nameContains, out double value)
@@ -2355,6 +2699,9 @@ internal sealed record CaptureOptions(
           freex-sheet-tab-overflow-nav-click
           freex-sheet-tab-overflow-activate-dialog
           freex-grid-drag-select
+          freex-s4-grid-drag-select-validated
+          freex-s4-grid-autofill-handle-drag
+          freex-s4-grid-double-click-autofit
           freex-grid-row-column-resize
           freex-grid-wheel-scroll
 
@@ -2782,6 +3129,7 @@ internal static class NativeMethods
     public const int KEYEVENTF_KEYUP = 0x0002;
     public const byte VK_CONTROL = 0x11;
     public const byte VK_1 = 0x31;
+    public const byte VK_V = 0x56;
     public const byte VK_SHIFT = 0x10;
     public static readonly IntPtr HWND_TOPMOST = new(-1);
     public static readonly IntPtr HWND_NOTOPMOST = new(-2);
