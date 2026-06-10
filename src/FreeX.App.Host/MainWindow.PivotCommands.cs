@@ -1207,8 +1207,8 @@ public partial class MainWindow
 
     private string? GetSelectedPivotFieldListItem()
     {
-        if (!string.IsNullOrWhiteSpace(_pivotChartContextFieldCaption))
-            return _pivotChartContextFieldCaption;
+        if (!string.IsNullOrWhiteSpace(_pivotFieldMenuContextCaption))
+            return _pivotFieldMenuContextCaption;
 
         foreach (var list in PivotFieldLists())
         {

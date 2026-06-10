@@ -388,6 +388,13 @@ public partial class MainWindow
                                     AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
             ? autoFilterRange
             : null;
+        IReadOnlyList<PivotHeaderDropdownTarget> pivotHeaderDropdownTargets = sheet is null
+            ? []
+            : PivotHeaderDropdownPlanner.BuildTargets(_workbook, sheet);
+        _pivotHeaderDropdownTargets = BuildPivotHeaderDropdownTargetLookup(pivotHeaderDropdownTargets);
+        SheetGrid.PivotHeaderDropdowns = pivotHeaderDropdownTargets
+            .Select(target => new FreeX.App.UI.PivotHeaderDropdownButton(target.HeaderCell, target.IsActive))
+            .ToList();
         SheetGrid.FormulaTraceSheetId = _currentSheetId;
         SheetGrid.FormulaTraceArrows = _formulaTraceArrows;
         SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch
@@ -473,6 +480,16 @@ public partial class MainWindow
         RefreshViewportChartContextualTabs(sheet);
         RefreshViewportPivotFieldListPane(sheet);
         RefreshViewportSlicerTimelinePane();
+    }
+
+    private static IReadOnlyDictionary<(uint Row, uint Col), PivotHeaderDropdownTarget> BuildPivotHeaderDropdownTargetLookup(
+        IReadOnlyList<PivotHeaderDropdownTarget> targets)
+    {
+        var lookup = new Dictionary<(uint Row, uint Col), PivotHeaderDropdownTarget>(targets.Count);
+        foreach (var target in targets)
+            lookup[(target.HeaderCell.Row, target.HeaderCell.Col)] = target;
+
+        return lookup;
     }
 
     private void RefreshViewportValidationDropdown(Sheet? sheet)

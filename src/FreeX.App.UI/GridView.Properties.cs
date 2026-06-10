@@ -268,6 +268,15 @@ public partial class GridView
         set => SetValue(ActiveAutoFilterColumnsProperty, value);
     }
 
+    public static readonly DependencyProperty PivotHeaderDropdownsProperty =
+        DependencyProperty.Register(nameof(PivotHeaderDropdowns), typeof(IReadOnlyList<PivotHeaderDropdownButton>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<PivotHeaderDropdownButton>? PivotHeaderDropdowns
+    {
+        get => (IReadOnlyList<PivotHeaderDropdownButton>?)GetValue(PivotHeaderDropdownsProperty);
+        set => SetValue(PivotHeaderDropdownsProperty, value);
+    }
+
     public static readonly DependencyProperty ShowGridLinesProperty =
         DependencyProperty.Register(nameof(ShowGridLines), typeof(bool), typeof(GridView),
             new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));

@@ -60,6 +60,7 @@ public partial class GridView
         RenderCells(dc);
         RenderSplitPaneCells(dc);
         RenderAutoFilterButtons(dc);
+        RenderPivotHeaderDropdownButtons(dc);
         RenderViewportContinuation(dc);
         if (!skipHeavyLayers)
         {

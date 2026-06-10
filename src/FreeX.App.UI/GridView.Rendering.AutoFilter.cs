@@ -63,6 +63,58 @@ public partial class GridView
         return false;
     }
 
+    private void RenderPivotHeaderDropdownButtons(DrawingContext dc)
+    {
+        if (Viewport is null || PivotHeaderDropdowns is not { Count: > 0 } buttons)
+            return;
+
+        foreach (var button in buttons)
+        {
+            if (GetDropdownButtonRect(button.HeaderCell) is not { } rect ||
+                rect.Width <= 0 ||
+                rect.Height <= 0)
+            {
+                continue;
+            }
+
+            dc.DrawRectangle(AutoFilterButtonBrush, AutoFilterButtonBorderPen, rect);
+            DrawAutoFilterGlyph(dc, rect, button.IsActive);
+        }
+    }
+
+    private bool TryHitTestPivotHeaderDropdownButton(Point pos, out CellAddress headerCell)
+    {
+        headerCell = default;
+        if (Viewport is null || PivotHeaderDropdowns is not { Count: > 0 } buttons)
+            return false;
+
+        foreach (var button in buttons)
+        {
+            if (GetDropdownButtonRect(button.HeaderCell) is not { } rect)
+                continue;
+
+            if (!RectHitTest.ContainsInclusive(rect, pos))
+                continue;
+
+            headerCell = button.HeaderCell;
+            return true;
+        }
+
+        return false;
+    }
+
+    private Rect? GetDropdownButtonRect(CellAddress cell)
+    {
+        if (Viewport is null)
+            return null;
+
+        var row = FindRowMetric(Viewport.RowMetrics, cell.Row);
+        var column = FindColMetric(Viewport.ColMetrics, cell.Col);
+        return row is null || column is null
+            ? null
+            : GetAutoFilterButtonRect(row, column);
+    }
+
     private Rect GetAutoFilterButtonRect(RowMetric row, ColMetric column)
     {
         var size = Math.Min(AutoFilterButtonSize, Math.Max(0, Math.Min(row.Height, column.Width) - AutoFilterButtonMargin * 2));
