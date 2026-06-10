@@ -31,7 +31,10 @@ public static class StructuredReferenceResolver
                 {
                     if (currentAddress is null || !sheet.Id.Equals(currentAddress.Value.Sheet))
                         continue;
-                    if (!IsDataBodyRow(table, currentAddress.Value.Row))
+                    // An unqualified [Column] resolves against the table the formula cell belongs to — which
+                    // includes the header and totals rows, not just the data body. A totals-row aggregate such
+                    // as =SUBTOTAL(109,[Amount]) must still find the Amount data column.
+                    if (currentAddress.Value.Row < table.Range.Start.Row || currentAddress.Value.Row > table.Range.End.Row)
                         continue;
                     if (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col)
                         continue;

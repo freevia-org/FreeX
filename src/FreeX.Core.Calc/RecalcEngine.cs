@@ -296,8 +296,14 @@ public sealed class RecalcEngine
     /// </summary>
     public void RegisterFormulaDependencies(CellAddress formulaCell, FormulaNode ast, SheetId sheetId, FreeX.Core.Model.Workbook? workbook = null)
     {
+        // SUBTOTAL/AGGREGATE ignore other SUBTOTAL/AGGREGATE cells (including themselves) within their range,
+        // so such a formula must not depend on its own cell — otherwise a totals-style =SUBTOTAL(109,B4:B12)
+        // placed inside B4:B12 is wrongly flagged circular. This exclusion is cell-specific, so these
+        // formulas bypass the (cell-independent) dependency-plan cache.
+        var excludeSelf = IsSubtotalOrAggregateRoot(ast);
+
         var cacheKey = new DependencyPlanCacheKey(ast, sheetId);
-        if (_dependencyPlanCache.TryGetValue(cacheKey, out var cachedPlan))
+        if (!excludeSelf && _dependencyPlanCache.TryGetValue(cacheKey, out var cachedPlan))
         {
             ApplyDependencyPlan(formulaCell, cachedPlan);
             return;
@@ -306,13 +312,22 @@ public sealed class RecalcEngine
         var refs = new FormulaDependencySet();
         var cacheableForDependencyPlan = true;
         var containsVolatileFunction = CollectReferences(ast, sheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan);
+
+        if (excludeSelf)
+            refs.ExcludeCell(formulaCell);
+
         _graph.SetDependencies(formulaCell, refs.Cells, refs.Ranges);
 
         SetVolatileTracking(formulaCell, containsVolatileFunction);
 
-        if (cacheableForDependencyPlan)
+        if (cacheableForDependencyPlan && !excludeSelf)
             AddDependencyPlanToCache(cacheKey, refs, containsVolatileFunction);
     }
+
+    private static bool IsSubtotalOrAggregateRoot(FormulaNode ast) =>
+        ast is FunctionCallNode func &&
+        (string.Equals(func.FunctionName, "SUBTOTAL", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(func.FunctionName, "AGGREGATE", StringComparison.OrdinalIgnoreCase));
 
     private void ApplyDependencyPlan(CellAddress formulaCell, FormulaDependencyPlan plan)
     {
@@ -731,6 +746,55 @@ public sealed class RecalcEngine
 
             foreach (var address in range.AllCells())
                 Cells.Add(address);
+        }
+
+        /// <summary>
+        /// Remove a single cell from this dependency set: drop it from the exact cells and split any range
+        /// precedent that contains it into the (≤4) rectangular sub-ranges around it. Used so a SUBTOTAL/
+        /// AGGREGATE cell does not depend on itself when it sits inside its own referenced range.
+        /// </summary>
+        public void ExcludeCell(CellAddress cell)
+        {
+            Cells.Remove(cell);
+
+            if (_ranges is null)
+                return;
+
+            var containsCell = false;
+            foreach (var range in _ranges)
+            {
+                if (range.Contains(cell)) { containsCell = true; break; }
+            }
+
+            if (!containsCell)
+                return;
+
+            var rebuilt = new List<GridRange>(_ranges.Count + 3);
+            foreach (var range in _ranges)
+            {
+                if (range.Contains(cell))
+                    AppendRangeMinusCell(range, cell, rebuilt);
+                else
+                    rebuilt.Add(range);
+            }
+
+            _ranges = rebuilt;
+        }
+
+        private static void AppendRangeMinusCell(GridRange range, CellAddress cell, List<GridRange> output)
+        {
+            var sheet = range.Start.Sheet;
+            uint r0 = range.Start.Row, r1 = range.End.Row, c0 = range.Start.Col, c1 = range.End.Col;
+            uint cr = cell.Row, cc = cell.Col;
+
+            if (cr > r0) // rows above the cell, full width
+                output.Add(new GridRange(new CellAddress(sheet, r0, c0), new CellAddress(sheet, cr - 1, c1)));
+            if (cr < r1) // rows below the cell, full width
+                output.Add(new GridRange(new CellAddress(sheet, cr + 1, c0), new CellAddress(sheet, r1, c1)));
+            if (cc > c0) // cells left of the cell, on its row
+                output.Add(new GridRange(new CellAddress(sheet, cr, c0), new CellAddress(sheet, cr, cc - 1)));
+            if (cc < c1) // cells right of the cell, on its row
+                output.Add(new GridRange(new CellAddress(sheet, cr, cc + 1), new CellAddress(sheet, cr, c1)));
         }
     }
 

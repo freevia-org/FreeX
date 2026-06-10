@@ -454,6 +454,11 @@ public sealed class Parser
                     return new StructuredCurrentRowReferenceNode(value[1..].Trim());
                 if (value.Contains("#This Row", StringComparison.OrdinalIgnoreCase))
                     return new StructuredReferenceNode("", value);
+                if (!string.IsNullOrWhiteSpace(value))
+                    // A bare [Column] (no @, no #This Row, no table name) is an unqualified structured
+                    // reference to the table the formula cell belongs to — e.g. =SUBTOTAL(109,[Sales]) in a
+                    // totals row. Resolve it against the owning table rather than failing to parse.
+                    return new StructuredReferenceNode("", value);
 
                 throw new FormulaParseException(
                     $"Expected current-row structured reference at position {selector.Position}");
