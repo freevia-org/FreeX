@@ -54,7 +54,7 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         AssertGroups(catalog, "Page Layout", "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange");
         AssertGroups(catalog, "Formulas", "Function Library", "Defined Names", "Formula Auditing", "Calculation");
         AssertGroups(catalog, "Data", "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline");
-        AssertGroups(catalog, "Review", "Proofing", "Accessibility", "Comments", "Notes", "Protect", "Changes");
+        AssertGroups(catalog, "Review", "Proofing", "Accessibility", "Comments", "Notes", "Protect");
         AssertGroups(catalog, "View", "Workbook Views", "Show", "Zoom", "Window");
         AssertGroups(catalog, "Chart Design", "Chart Layouts", "Chart Styles", "Data", "Type", "Location");
         AssertGroups(catalog, "Format", "Current Selection", "Shape Styles", "Text", "Axes");
@@ -77,7 +77,7 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             ["Page Layout"] = ("PageLayoutTab", ["PageLayoutThemesGroup", "PageLayoutPageSetupGroup", "PageLayoutScaleToFitGroup", "PageLayoutSheetOptionsGroup", "PageLayoutArrangeGroup"]),
             ["Formulas"] = ("FormulasTab", ["FormulasFunctionLibraryGroup", "FormulasDefinedNamesGroup", "FormulasFormulaAuditingGroup", "FormulasCalculationGroup"]),
             ["Data"] = ("DataTab", ["DataGetTransformGroup", "DataQueriesConnectionsGroup", "DataSortFilterGroup", "DataToolsGroup", "DataForecastGroup", "DataOutlineGroup"]),
-            ["Review"] = ("ReviewTab", ["ReviewProofingGroup", "ReviewAccessibilityGroup", "ReviewCommentsGroup", "ReviewNotesGroup", "ReviewProtectGroup", "ReviewChangesGroup"]),
+            ["Review"] = ("ReviewTab", ["ReviewProofingGroup", "ReviewAccessibilityGroup", "ReviewCommentsGroup", "ReviewNotesGroup", "ReviewProtectGroup"]),
             ["View"] = ("ViewTab", ["ViewWorkbookViewsGroup", "ViewShowGroup", "ViewZoomGroup", "ViewWindowGroup"]),
             ["Chart Design"] = ("ChartDesignTab", ["ChartDesignLayoutsGroup", "ChartDesignStylesGroup", "ChartDesignDataGroup", "ChartDesignTypeGroup", "ChartDesignLocationGroup"]),
             ["Format"] = ("ChartFormatTab", ["ChartFormatCurrentSelectionGroup", "ChartFormatShapeStylesGroup", "ChartFormatTextGroup", "ChartFormatAxesGroup"]),
@@ -105,11 +105,11 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
 
         Group(catalog, "Insert", "Tables").Commands.Select(command => command.Title)
             .Should()
-            .ContainInOrder("PivotTable", "Recommended PivotTables", "Table");
+            .ContainInOrder("PivotTable", "Table");
 
-        Command(catalog, "Insert", "Tables", "Recommended PivotTables").Should().Match<RibbonCommandDefinition>(
-            command => command.ClickHandler == "RecommendedPivotTablesMenuItem_Click" &&
-                       command.KeyTip == "RP");
+        Group(catalog, "Insert", "Tables").Commands.Select(command => command.Title)
+            .Should()
+            .NotContain("Recommended PivotTables");
 
         Group(catalog, "Insert", "Symbols").Commands.Select(command => command.Title)
             .Should()
@@ -410,7 +410,6 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         new("Home", "Find & Select", "Find"),
 
         new("Insert", "PivotTable", "PivotTable"),
-        new("Insert", "Recommended PivotTables", "Recommended PivotTables"),
         new("Insert", "Pictures", "Picture (from file)"),
         new("Insert", "Insert Link", "Hyperlink"),
         new("Insert", "Comment", "Comment/Note"),
@@ -494,7 +493,6 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         new("Review", "Show Notes", "Show Notes"),
         new("Review", "Previous Note", "Previous/Next Note"),
         new("Review", "Next Note", "Previous/Next Note"),
-        new("Review", "Show Changes", "Track Changes"),
         new("Review", "Share Workbook", "Share Workbook (legacy)"),
 
         new("View", "Page Break Preview", "Page Break Preview"),

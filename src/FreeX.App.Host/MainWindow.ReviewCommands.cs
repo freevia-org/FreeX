@@ -94,11 +94,6 @@ public partial class MainWindow
         dialog.ShowDialog();
     }
 
-    private void ReviewShowChangesBtn_Click(object sender, RoutedEventArgs e) =>
-        _messageService.ShowInfo(
-            DeferredCommandMessages.FormatUnsupportedXlsxFeatureKind(XlsxUnsupportedFeatureKind.TrackChanges),
-            UiText.Get("MainWindow_Content_ShowChanges"));
-
     private void AccessibilityCheckerBtn_Click(object sender, RoutedEventArgs e)
     {
         var issues = AccessibilityCheckerService.FindIssues(_workbook);

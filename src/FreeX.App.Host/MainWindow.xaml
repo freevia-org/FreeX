@@ -1259,17 +1259,7 @@
                                 <Button Content="{local:Loc Key=MainWindow_Content_PivotTable}" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PivotTable}"
                                         local:RibbonTooltip.KeyTip="PT"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CreateAPivotTableFromTheSelectedRange}" local:RibbonMetadata.CommandName="PivotTable">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_RecommendedPivotTables}" local:RibbonTooltip.KeyTip="RP" Click="RecommendedPivotTablesMenuItem_Click" local:RibbonMetadata.CommandName="Recommended PivotTables"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
-                                <Button Content="{local:Loc Key=MainWindow_Header_RecommendedPivotTables}" Width="150" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RecommendedPivotTablesMenuItem_Click"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RecommendedPivotTables}"
-                                        local:RibbonTooltip.KeyTip="RP"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PreviewRecommendedPivotTableLayoutsForTheSelectedRange}" local:RibbonMetadata.CommandName="Recommended PivotTables"/>
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CreateAPivotTableFromTheSelectedRange}" local:RibbonMetadata.CommandName="PivotTable"/>
                                 <Button Content="{local:Loc Key=MainWindow_Content_Table}" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Table}"
                                         local:RibbonTooltip.KeyTip="TB"
@@ -1289,15 +1279,8 @@
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertAPictureFromALocalImageFile}" local:RibbonMetadata.CommandName="Pictures">
                                     <Button.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_PicturePlaceInCell}" local:RibbonTooltip.KeyTip="I" local:RibbonMetadata.CommandName="Place in Cell">
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureThisDevice}" local:RibbonTooltip.KeyTip="D" IsEnabled="False" local:RibbonMetadata.CommandName="This Device Picture in Cell"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureStockImages}" local:RibbonTooltip.KeyTip="S" IsEnabled="False" local:RibbonMetadata.CommandName="Stock Images in Cell"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureOnlinePictures}" local:RibbonTooltip.KeyTip="O" IsEnabled="False" local:RibbonMetadata.CommandName="Online Pictures in Cell"/>
-                                            </MenuItem>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_PicturePlaceOverCells}" local:RibbonTooltip.KeyTip="V" local:RibbonMetadata.CommandName="Place over Cells">
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureThisDevice}" local:RibbonTooltip.KeyTip="D" Click="InsertPictureBtn_Click" local:RibbonMetadata.CommandName="This Device Picture over Cells"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureStockImages}" local:RibbonTooltip.KeyTip="S" IsEnabled="False" local:RibbonMetadata.CommandName="Stock Images over Cells"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureOnlinePictures}" local:RibbonTooltip.KeyTip="O" IsEnabled="False" local:RibbonMetadata.CommandName="Online Pictures over Cells"/>
                                             </MenuItem>
                                         </ContextMenu>
                                     </Button.ContextMenu>
@@ -2126,7 +2109,6 @@
                                     <Button.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_SetPrintArea}"   local:RibbonTooltip.KeyTip="S" Click="PrintAreaSetMenuItem_Click" local:RibbonMetadata.CommandName="Set Print Area"/>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_AddToPrintArea}" local:RibbonTooltip.KeyTip="A" IsEnabled="False" local:RibbonMetadata.CommandName="Add to Print Area"/>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearPrintArea}" local:RibbonTooltip.KeyTip="C" Click="PrintAreaClearMenuItem_Click" local:RibbonMetadata.CommandName="Clear Print Area"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
@@ -2674,9 +2656,6 @@
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Content_Group}" InputGestureText="G"
                                                           local:RibbonTooltip.KeyTip="G"
                                                           Click="GroupRowsMenuItem_Click" local:RibbonMetadata.CommandName="Group"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_AutoOutline}" InputGestureText="A"
-                                                          local:RibbonTooltip.KeyTip="A"
-                                                          IsEnabled="False" local:RibbonMetadata.CommandName="Auto Outline"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                     </Button>
@@ -2899,20 +2878,6 @@
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Protect}" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-
-                        <!-- Changes -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ReviewChangesGroup">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button x:Name="ReviewShowChangesButton" Content="{local:Loc Key=MainWindow_Content_ShowChanges}" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewShowChangesBtn_Click"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_Content_ShowChanges}"
-                                        local:RibbonTooltip.KeyTip="SG"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenWorkbookChangeHistoryPane}" local:RibbonMetadata.CommandName="Show Changes"/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Changes}" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-
                     </StackPanel>
                     </ScrollViewer>
                 </Border>
