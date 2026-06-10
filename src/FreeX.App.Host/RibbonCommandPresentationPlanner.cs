@@ -113,6 +113,8 @@ public static partial class RibbonCommandPresentationPlanner
         name == "pictures" ||
         name == "shapes" ||
         name == "insert link" ||
+        name == "comment" ||
+        name == "symbol" ||
         name.Contains("insert symbol") ||
         name.Contains("insert slicer") ||
         name.Contains("insert timeline") ||
