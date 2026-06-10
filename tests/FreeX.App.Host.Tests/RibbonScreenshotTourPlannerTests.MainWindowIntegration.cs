@@ -18,6 +18,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("ScreenshotTourOutputSubdirectoryEnvVar = \"FREEX_SS_TOUR_OUTPUT_SUBDIR\"");
         source.Should().Contain("Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar)");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_AUTOFILTER_FLYOUT_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_ALIGNMENT_NUMBER_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PRINT_PREVIEW_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_OPTIONS_ACCOUNT_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_QAT_UNDO_REDO_TOUR\")");
@@ -25,12 +26,15 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_BAR_NAME_BOX_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_STATUS_FOOTER_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DATA_TOOLS_DIALOGS_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_VIEW_PANES_ZOOM_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_FONT_COLORS_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
         source.Should().Contain("EnsureTableDesignScreenshotTourContext");
         source.Should().Contain("EnsurePivotTableScreenshotTourContext");
         source.Should().Contain("CaptureAutoFilterFlyoutTourAsync");
+        source.Should().Contain("CaptureHomeAlignmentNumberTourAsync");
         source.Should().Contain("CapturePrintPreviewTourAsync");
         source.Should().Contain("CaptureOptionsAccountTourAsync");
         source.Should().Contain("CaptureQatUndoRedoTourAsync");
@@ -38,6 +42,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureFormulaBarNameBoxTourAsync");
         source.Should().Contain("CaptureStatusFooterTourAsync");
         source.Should().Contain("CaptureDataToolsDialogsTourAsync");
+        source.Should().Contain("CaptureViewPanesZoomTourAsync");
+        source.Should().Contain("CaptureHomeFontColorsTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
@@ -48,6 +54,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("DeleteOptionsAccountTourEvidence");
         source.Should().Contain("WriteRibbonScreenshotTourManifestAsync");
         source.Should().Contain("WriteAutoFilterFlyoutTourManifestAsync");
+        source.Should().Contain("WriteHomeAlignmentNumberTourManifestAsync");
         source.Should().Contain("WritePrintPreviewTourManifestAsync");
         source.Should().Contain("WriteOptionsAccountTourManifestAsync");
         source.Should().Contain("WriteQatUndoRedoTourManifestAsync");
@@ -55,8 +62,10 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WriteFormulaBarNameBoxTourManifestAsync");
         source.Should().Contain("WriteStatusFooterTourManifestAsync");
         source.Should().Contain("WriteDataToolsDialogsTourManifestAsync");
+        source.Should().Contain("WriteViewPanesZoomTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
+        source.Should().Contain("home_alignment_number_tour_manifest.json");
         source.Should().Contain("print_preview_tour_manifest.json");
         source.Should().Contain("options_account_tour_manifest.json");
         source.Should().Contain("qat_undo_redo_tour_manifest.json");
@@ -64,6 +73,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("formula_bar_name_box_tour_manifest.json");
         source.Should().Contain("status_footer_tour_manifest.json");
         source.Should().Contain("data_tools_dialogs_tour_manifest.json");
+        source.Should().Contain("view_panes_zoom_tour_manifest.json");
+        source.Should().Contain("home_font_colors_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
@@ -123,6 +134,31 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Path.GetFullPath(Path.Combine(root, requestedSubdirectory))");
         source.Should().Contain("resolved.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("must stay under screenshots");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesHomeAlignmentAndNumberEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_HOME_ALIGNMENT_NUMBER_TOUR");
+        source.Should().Contain("home-alignment-number-tour");
+        source.Should().Contain("EnsureHomeAlignmentNumberTourContext");
+        source.Should().Contain("ApplyHomeAlignmentNumberTourStyle");
+        source.Should().Contain("TryExecuteApplyStyle(range, diff, \"Apply Style\")");
+        source.Should().Contain("CreateMergeAndCenterCommand(mergeRange)");
+        source.Should().Contain("OpenRibbonContextMenu(OrientationPickerButton, OrientationPickerButton.ContextMenu)");
+        source.Should().Contain("new FormatCellsDialog(");
+        source.Should().Contain("FormatCellsDialogTab.Alignment");
+        source.Should().Contain("FormatCellsDialogTab.Number");
+        source.Should().Contain("freex_home_alignment_grid_commands");
+        source.Should().Contain("freex_home_alignment_orientation_menu_opened");
+        source.Should().Contain("freex_home_number_format_grid_commands");
+        source.Should().Contain("freex_home_alignment_format_cells_dialog");
+        source.Should().Contain("freex_home_number_format_cells_dialog");
+        source.Should().Contain("interactive:home-alignment-number:<State>");
+        source.Should().Contain("HomeAlignmentNumberTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.HomeAlignmentNumberTourManifest");
     }
 
     [Fact]
@@ -375,5 +411,126 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         catalog.Should().Contain("FREEX_DATA_TOOLS_DIALOGS_TOUR=1");
         catalog.Should().Contain("screenshots/data-tools-dialogs-tour/");
         catalog.Should().Contain("data_tools_dialogs_tour_manifest.json");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesViewPanesZoomVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_VIEW_PANES_ZOOM_TOUR");
+        source.Should().Contain("view-panes-zoom-tour");
+        source.Should().Contain("EnsureViewPanesZoomTourContext");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"View\"))");
+        source.Should().Contain("SetWorksheetViewMode(WorksheetViewMode.PageLayout)");
+        source.Should().Contain("SetWorksheetViewMode(WorksheetViewMode.PageBreakPreview)");
+        source.Should().Contain("SetViewPanesZoomTourShowToggles(showGridlines: false, showHeadings: false, showRulers: false)");
+        source.Should().Contain("SetViewPanesZoomTourFormulaBarVisible(false)");
+        source.Should().Contain("FreezeAtSelectionMenuItem_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("SplitViewBtn_Click(SplitViewBtn, new RoutedEventArgs())");
+        source.Should().Contain("new ZoomDialog(125) { Owner = this }");
+        source.Should().Contain("Zoom100Btn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("ZoomSelectionBtn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("new SetWorkbookWindowArrangementCommand(WorkbookWindowArrangement.Horizontal)");
+        source.Should().Contain("FindDescendantByRibbonCommandName<Button>(RibbonTabs, \"Arrange All\")");
+        source.Should().Contain("new SaveCustomViewCommand(ViewPanesZoomTourCustomViewName)");
+        source.Should().Contain("new CustomViewsDialog(_workbook, _commandBus) { Owner = this }");
+        source.Should().Contain("freex_view_panes_zoom_view_tab_normal");
+        source.Should().Contain("freex_view_panes_zoom_page_layout_ruler_on");
+        source.Should().Contain("freex_view_panes_zoom_page_break_preview");
+        source.Should().Contain("freex_view_panes_zoom_show_toggles_hidden");
+        source.Should().Contain("freex_view_panes_zoom_freeze_panes_c4");
+        source.Should().Contain("freex_view_panes_zoom_split_panes_e6");
+        source.Should().Contain("freex_view_panes_zoom_dialog_custom_125");
+        source.Should().Contain("freex_view_panes_zoom_100_percent_command");
+        source.Should().Contain("freex_view_panes_zoom_to_selection");
+        source.Should().Contain("freex_view_panes_zoom_arrange_horizontal_state");
+        source.Should().Contain("freex_view_panes_zoom_custom_views_dialog");
+        source.Should().Contain("UI-CAT-VIEW-001");
+        source.Should().Contain("UI-CAT-VIEW-002");
+        source.Should().Contain("UI-CMD-VIEW-001");
+        source.Should().Contain("UI-CMD-VIEW-004");
+        source.Should().Contain("ViewPanesZoomTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.ViewPanesZoomTourManifest");
+        source.Should().Contain("Split divider drag, pane scrollbar interaction, Ctrl+wheel zoom, status slider drag, and native UIA RangeValue remain open.");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesHomeFontColorsVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_HOME_FONT_COLORS_TOUR");
+        source.Should().Contain("home-font-colors-tour");
+        source.Should().Contain("EnsureHomeFontColorsTourContext");
+        source.Should().Contain("FontSizePlanner.Increase(16)");
+        source.Should().Contain("FontSizePlanner.Decrease(10)");
+        source.Should().Contain("CellStyleDiffPlanner.UnderlineDiff(true)");
+        source.Should().Contain("CellStyleDiffPlanner.DoubleUnderlineDiff(true)");
+        source.Should().Contain("CellStyleDiffPlanner.StrikethroughDiff(true)");
+        source.Should().Contain("new StyleDiff(FontColor: new CellColor(192, 0, 0))");
+        source.Should().Contain("new StyleDiff(FillColor: new CellColor(255, 242, 204))");
+        source.Should().Contain("new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)");
+        source.Should().Contain("new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.6)");
+        source.Should().Contain("BorderShortcutService.GetAllBorderDiff(BorderStyle.Thin, CellColor.Black)");
+        source.Should().Contain("freex_home_font_colors_grid_styled");
+        source.Should().Contain("freex_home_font_family_dropdown_opened");
+        source.Should().Contain("freex_home_font_size_dropdown_opened");
+        source.Should().Contain("freex_home_underline_menu_opened");
+        source.Should().Contain("freex_home_borders_full_menu_opened");
+        source.Should().Contain("freex_home_borders_line_color_submenu_opened");
+        source.Should().Contain("FindMenuItemByHeader(menu.Items, UiText.Get(\"MainWindow_Header_LineColor\"))");
+        source.Should().Contain("foreground mouse/keytip evidence for Home font/color/border commands");
+        source.Should().Contain("Excel-paired Home font/color/border screenshots");
+        source.Should().Contain("full LCID/theme matrix");
+        source.Should().Contain("font/fill color gallery parity beyond the current custom color picker and swatch buttons");
+        source.Should().Contain("persistence breadth across save/reload and native JSON state");
+        source.Should().Contain("HomeFontColorsTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.HomeFontColorsTourManifest");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesFormulaDiagnosticsVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_FORMULA_DIAGNOSTICS_TOUR");
+        source.Should().Contain("formula-diagnostics-tour");
+        source.Should().Contain("EnsureFormulaDiagnosticsTourContext");
+        source.Should().Contain("sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), \"A2+A3\")");
+        source.Should().Contain("sheet.SetFormula(new CellAddress(sheet.Id, 2, 4), \"B2/0\")");
+        source.Should().Contain("TracePrecedentsForCell(context.ResultCell, \"Trace Precedents\")");
+        source.Should().Contain("TraceDependentsBtn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("ShowFormulasBtn_Click(ShowFormulasButton");
+        source.Should().Contain("RemoveTraceArrows(kind: null, \"Remove Arrows\")");
+        source.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId)");
+        source.Should().Contain("new ErrorCheckingDialog(");
+        source.Should().Contain("new EvaluateFormulaDialog(resultSummary)");
+        source.Should().Contain("FindDescendantButtonByContent(evaluateFormulaDialog, UiText.Get(\"EvaluateFormula_EvaluateButton\"))");
+        source.Should().Contain("new AddWatchDialog(FormatRangeReference(context.ResultCell, context.ResultCell))");
+        source.Should().Contain("CreateFormulaDiagnosticsWatchWindowDialog");
+        source.Should().Contain("WatchWindowService.AddWatches(_workbook, new GridRange(context.ResultCell, context.ResultCell))");
+        source.Should().Contain("FindDescendantByAutomationId<Button>(watchWindowDialog, \"WatchWindowRefreshButton\")");
+        source.Should().Contain("FindDescendantByAutomationId<ListView>(watchWindowDialog, \"WatchWindowList\")");
+        source.Should().Contain("FindDescendantByAutomationId<Button>(watchWindowDialog, \"WatchWindowDeleteButton\")");
+        source.Should().Contain("freex_formula_diagnostics_trace_precedents");
+        source.Should().Contain("freex_formula_diagnostics_trace_dependents");
+        source.Should().Contain("freex_formula_diagnostics_show_formulas_enabled");
+        source.Should().Contain("freex_formula_diagnostics_remove_arrows_cleared");
+        source.Should().Contain("freex_formula_diagnostics_error_checking_dialog");
+        source.Should().Contain("freex_formula_diagnostics_evaluate_default");
+        source.Should().Contain("freex_formula_diagnostics_evaluate_after_step");
+        source.Should().Contain("freex_formula_diagnostics_watch_add_dialog");
+        source.Should().Contain("freex_formula_diagnostics_watch_window_list");
+        source.Should().Contain("freex_formula_diagnostics_watch_window_after_refresh");
+        source.Should().Contain("freex_formula_diagnostics_watch_window_after_delete");
+        source.Should().Contain("FormulaDiagnosticsTourManifest");
+        source.Should().Contain("UI-CAT-FORMULAS-002");
+        source.Should().Contain("UI-CMD-FORM-003");
+        source.Should().Contain("UI-CMD-FORM-005");
+        source.Should().Contain("RenderTargetBitmap; it is not foreground CopyFromScreen proof");
+        source.Should().Contain("No global mouse or keyboard input is synthesized");
+        source.Should().Contain("The trace-arrow and show-formulas captures are FreeX-only visual states; no paired Microsoft Excel evidence is produced by this tool.");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.FormulaDiagnosticsTourManifest");
     }
 }
