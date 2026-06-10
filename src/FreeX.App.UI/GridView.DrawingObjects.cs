@@ -12,6 +12,8 @@ public partial class GridView
     private static readonly Brush ObjectPlaceholderFill = MakeBrushAlpha(48, 255, 255, 255);
     private static readonly Brush ObjectPlaceholderTextBrush = MakeBrush(89, 89, 89);
     private static readonly Pen ObjectPlaceholderPen = CreateFrozenPen(MakeBrush(120, 120, 120), 1);
+    private static readonly Brush ChartObjectBackgroundBrush = MakeBrush(255, 255, 255);
+    private static readonly Pen ChartObjectBorderPen = CreateFrozenPen(MakeBrush(166, 166, 166), 1);
     private static readonly Brush NativeControlHeaderBrush = MakeBrush(91, 155, 213);
     private static readonly Brush NativeControlBorderBrush = MakeBrush(68, 114, 196);
     private static readonly Brush NativeControlBodyBrush = MakeBrush(245, 248, 252);
@@ -191,16 +193,37 @@ public partial class GridView
         foreach (var chart in Charts)
         {
             if (!chart.IsVisible) continue;
-            var rect = new Rect(
-                chart.Left + ActualRowHeaderWidth, chart.Top + EffectiveColHeaderHeight,
-                chart.Width, chart.Height);
+            var rect = CreateChartRect(chart);
             if (!IntersectsDrawingViewport(rect, 0, visibleRight, visibleBottom))
                 continue;
 
+            DrawChartObjectBackground(dc, chart, rect);
             var img = GetCachedChartImage(chart, Viewport, WorkbookTheme, renderScale);
-            if (img == null) continue;
-            dc.DrawImage(img, rect);
+            if (img is not null)
+                dc.DrawImage(img, rect);
+            DrawChartObjectBorder(dc, chart, rect);
         }
+    }
+
+    private void DrawChartObjectBackground(DrawingContext dc, ChartModel chart, Rect rect)
+    {
+        var fill = chart.ResolveChartAreaFillColor(WorkbookTheme) is { } fillColor
+            ? GetDrawingObjectBrush(255, fillColor)
+            : ChartObjectBackgroundBrush;
+        dc.DrawRectangle(fill, null, rect);
+    }
+
+    private void DrawChartObjectBorder(DrawingContext dc, ChartModel chart, Rect rect)
+    {
+        var borderThickness = chart.ChartAreaBorderThickness is { } thickness &&
+            double.IsFinite(thickness) &&
+            thickness > 0
+                ? thickness
+                : 1.0;
+        var border = chart.ResolveChartAreaBorderColor(WorkbookTheme) is { } borderColor
+            ? GetDrawingObjectPen(255, borderColor, borderThickness)
+            : ChartObjectBorderPen;
+        dc.DrawRectangle(null, border, rect);
     }
 
     private void RenderTextBoxes(DrawingContext dc)

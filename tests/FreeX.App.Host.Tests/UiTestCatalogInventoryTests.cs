@@ -239,6 +239,35 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void FormulaCatalogRows_DocumentSubmittedPersistenceEvidenceArtifacts()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var evidencePaths = new[]
+        {
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_seeded_before_submit.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_formula_results.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_use_in_formula_inserted_reference.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_use_in_formula_menu.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_name_manager_submitted.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_saved_native_workbook.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_reopened_grid.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_name_manager_reopened.png",
+            "screenshots/formula-submitted-persistence-tour/formula_submitted_persistence_tour_manifest.json",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_saved.fxl",
+        };
+
+        foreach (var evidencePath in evidencePaths)
+        {
+            catalog.Should().Contain(evidencePath);
+            File.Exists(WorkspaceFileLocator.Find(evidencePath.Split('/'))).Should().BeTrue(evidencePath);
+        }
+
+        WorkspaceFileLocator
+            .ReadAllText("screenshots", "formula-submitted-persistence-tour", "formula_submitted_persistence_tour_manifest.json")
+            .Should().Contain("interactive:formula-submitted-persistence:reopened-persisted-formulas-names");
+    }
+
+    [Fact]
     public void ContextualObjectCatalogRow_DocumentsChartScreenshotEvidenceAndObjectTabGap()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
@@ -309,6 +338,12 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().Contain("FREEX_VIEW_PANES_ZOOM_TOUR=1");
         catalog.Should().Contain("view_panes_zoom_tour_manifest.json");
         catalog.Should().Contain("freex_view_panes_zoom_custom_views_dialog.png");
+        catalog.Should().Contain("FREEX_VIEW_WORKFLOWS_TOUR=1");
+        catalog.Should().Contain("screenshots/view-workflows-tour/");
+        catalog.Should().Contain("view_workflows_tour_manifest.json");
+        catalog.Should().Contain("freex_view_workflows_reopened_view_toggle_persistence.png");
+        catalog.Should().Contain("freex_view_workflows_saved.fxl");
+        catalog.Should().Contain("planned-but-blocked");
     }
 
     [Fact]

@@ -11,6 +11,7 @@ public sealed class GridViewObjectSelectionHandleTests
     [InlineData(ObjectKind.Picture, 24, 18)]
     [InlineData(ObjectKind.TextBox, 24, 18)]
     [InlineData(ObjectKind.Shape, 8, 8)]
+    [InlineData(ObjectKind.Chart, 24, 18)]
     public void SelectedObjectRect_UsesRenderedMinimumBounds(ObjectKind kind, double expectedWidth, double expectedHeight)
     {
         WpfTestThread.Run(() =>
@@ -108,6 +109,81 @@ public sealed class GridViewObjectSelectionHandleTests
         });
     }
 
+    [Fact]
+    public void HitTestDrawingObject_SelectsChartFromAbsoluteBounds()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var chart = new ChartModel
+            {
+                Id = Guid.NewGuid(),
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 3)),
+                Left = 12,
+                Top = 8,
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                Viewport = GridViewTestHelpers.CreateTwoByTwoViewport(),
+                Charts = [chart]
+            };
+
+            var hit = GridViewTestHelpers.HitTestDrawingObject(
+                grid,
+                new Point(GridView.RowHeaderWidth + chart.Left + 10, GridView.ColHeaderHeight + chart.Top + 10));
+
+            hit.Id.Should().Be(chart.Id);
+            hit.Kind.Should().Be(ObjectKind.Chart);
+            hit.Rect.Left.Should().Be(GridView.RowHeaderWidth + chart.Left);
+            hit.Rect.Top.Should().Be(GridView.ColHeaderHeight + chart.Top);
+            hit.Anchor.Should().Be(new CellAddress(sheetId, 1, 1));
+        });
+    }
+
+    [Fact]
+    public void HitTestDrawingObject_PrioritizesDrawingObjectsAboveCharts()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var anchor = new CellAddress(sheetId, 1, 1);
+            var chart = new ChartModel
+            {
+                Id = Guid.NewGuid(),
+                DataRange = new GridRange(anchor, new CellAddress(sheetId, 4, 3)),
+                Left = 0,
+                Top = 0,
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var shape = new DrawingShapeModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = anchor,
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                Viewport = GridViewTestHelpers.CreateTwoByTwoViewport(),
+                Charts = [chart],
+                DrawingShapes = [shape]
+            };
+
+            var hit = GridViewTestHelpers.HitTestDrawingObject(
+                grid,
+                new Point(GridView.RowHeaderWidth + 10, GridView.ColHeaderHeight + 10));
+
+            hit.Id.Should().Be(shape.Id);
+            hit.Kind.Should().Be(ObjectKind.Shape);
+        });
+    }
+
     private static GridView CreateGridWithSelectedObject(
         ObjectKind kind,
         Guid id,
@@ -158,6 +234,21 @@ public sealed class GridViewObjectSelectionHandleTests
                     {
                         Id = id,
                         Anchor = anchor,
+                        Width = width,
+                        Height = height,
+                        IsVisible = isVisible
+                    }
+                ];
+                break;
+            case ObjectKind.Chart:
+                grid.Charts =
+                [
+                    new ChartModel
+                    {
+                        Id = id,
+                        DataRange = new GridRange(anchor, new CellAddress(anchor.Sheet, anchor.Row + 1, anchor.Col + 1)),
+                        Left = 0,
+                        Top = 0,
                         Width = width,
                         Height = height,
                         IsVisible = isVisible

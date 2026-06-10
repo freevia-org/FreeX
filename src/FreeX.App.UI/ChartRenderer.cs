@@ -33,10 +33,11 @@ public static partial class ChartRenderer
 
     public static ImageSource? Render(ChartModel chart, ViewportModel viewport, WorkbookTheme? theme, double renderScale)
     {
-        var model = BuildPlotModel(chart, viewport, theme ?? WorkbookTheme.Office);
+        var resolvedTheme = theme ?? WorkbookTheme.Office;
+        var model = BuildPlotModel(chart, viewport, resolvedTheme);
         if (model == null) return null;
 
-        renderScale = double.IsFinite(renderScale) ? Math.Clamp(renderScale, 0.25, 4.0) : 1.0;
+        renderScale = NormalizeRenderScale(renderScale);
         var exporter = new PngExporter
         {
             Width  = Math.Max(1, (int)Math.Ceiling(chart.Width * renderScale)),
@@ -53,7 +54,22 @@ public static partial class ChartRenderer
         bitmap.CacheOption = BitmapCacheOption.OnLoad;
         bitmap.EndInit();
         bitmap.Freeze();
+        if (IsVisiblyBlank(bitmap) &&
+            RenderDirectFallback(chart, viewport, resolvedTheme, renderScale) is { } fallback)
+        {
+            return fallback;
+        }
+
         return bitmap;
+    }
+
+    private static double NormalizeRenderScale(double renderScale)
+    {
+        if (!double.IsFinite(renderScale))
+            return 2.0;
+
+        renderScale = Math.Clamp(renderScale, 0.25, 4.0);
+        return Math.Clamp(Math.Max(2.0, Math.Ceiling(renderScale)), 2.0, 4.0);
     }
 
     private static PlotModel? BuildPlotModel(ChartModel chart, ViewportModel viewport) =>
