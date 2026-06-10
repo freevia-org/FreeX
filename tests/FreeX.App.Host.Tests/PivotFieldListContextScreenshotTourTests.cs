@@ -14,7 +14,6 @@ public sealed class PivotFieldListContextScreenshotTourTests
         dispatcherSource.Should().Contain("FREEX_PIVOT_FIELD_LIST_CONTEXT_TOUR");
         dispatcherSource.Should().Contain("PivotFieldListContextTourOutputDirectoryName = \"pivot-field-list-context-tour\"");
         dispatcherSource.Should().Contain("CapturePivotFieldListContextTourAsync");
-        dispatcherSource.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.PivotFieldListContextTourManifest");
         dispatcherSource.Should().Contain("[JsonSerializable(typeof(PivotFieldListContextTourManifest))]");
 
         tourSource.Should().Contain("EnsurePivotFieldListContextTourContext");
@@ -37,6 +36,7 @@ public sealed class PivotFieldListContextScreenshotTourTests
         tourSource.Should().Contain("UI-CAT-CONTEXT-003B");
         tourSource.Should().Contain("UI-CAT-CONTEXT-003C");
         tourSource.Should().Contain("physical pointer drag evidence remains open");
+        tourSource.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.PivotFieldListContextTourManifest");
 
         catalog.Should().Contain("FREEX_PIVOT_FIELD_LIST_CONTEXT_TOUR=1");
         catalog.Should().Contain("screenshots/pivot-field-list-context-tour/");

@@ -61,6 +61,8 @@ public partial class MainWindow
     private const string TitlebarWindowChromeTourSavedWorkbookFileName = "freex_titlebar_renamed_workbook.xlsx";
     private const string FormulaBarNameBoxTourManifestFileName = "formula_bar_name_box_tour_manifest.json";
     private const string FormulaBarNameBoxTourOutputDirectoryName = "formula-bar-name-box-tour";
+    private const string GridSelectionEditingTourManifestFileName = "grid_selection_editing_tour_manifest.json";
+    private const string GridSelectionEditingTourOutputDirectoryName = "grid-selection-editing-tour";
     private const string StatusFooterTourManifestFileName = "status_footer_tour_manifest.json";
     private const string StatusFooterTourOutputDirectoryName = "status-footer-tour";
     private const string InsertObjectsLinksTourManifestFileName = "insert_objects_links_tour_manifest.json";
@@ -162,6 +164,7 @@ public partial class MainWindow
         var qatUndoRedoTour = Environment.GetEnvironmentVariable("FREEX_QAT_UNDO_REDO_TOUR") == "1";
         var titlebarWindowChromeTour = Environment.GetEnvironmentVariable("FREEX_TITLEBAR_WINDOW_CHROME_TOUR") == "1";
         var formulaBarNameBoxTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_BAR_NAME_BOX_TOUR") == "1";
+        var gridSelectionEditingTour = Environment.GetEnvironmentVariable("FREEX_GRID_SELECTION_EDITING_TOUR") == "1";
         var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
         var insertObjectsLinksTour = Environment.GetEnvironmentVariable("FREEX_INSERT_OBJECTS_LINKS_TOUR") == "1";
         var dataToolsDialogsTour = Environment.GetEnvironmentVariable("FREEX_DATA_TOOLS_DIALOGS_TOUR") == "1";
@@ -174,7 +177,7 @@ public partial class MainWindow
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
         var formulaAuthoringNamesTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_AUTHORING_NAMES_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeClipboardCellsEditingTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !pivotFieldListContextTour && !viewPanesZoomTour && !pageLayoutSetupTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeClipboardCellsEditingTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !pivotFieldListContextTour && !viewPanesZoomTour && !pageLayoutSetupTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -191,7 +194,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeClipboardCellsEditingTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, pivotFieldListContextTour, viewPanesZoomTour, pageLayoutSetupTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeClipboardCellsEditingTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, pivotFieldListContextTour, viewPanesZoomTour, pageLayoutSetupTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -232,6 +235,7 @@ public partial class MainWindow
         bool titlebarWindowChromeTour,
         bool statusFooterTour,
         bool formulaBarNameBoxTour,
+        bool gridSelectionEditingTour,
         bool insertObjectsLinksTour,
         bool dataToolsDialogsTour,
         bool dataSortFilterOutlineTour,
@@ -293,6 +297,9 @@ public partial class MainWindow
 
         if (formulaBarNameBoxTour)
             await CaptureFormulaBarNameBoxTourAsync(Path.Combine(outputDir, FormulaBarNameBoxTourOutputDirectoryName));
+
+        if (gridSelectionEditingTour)
+            await CaptureGridSelectionEditingTourAsync(Path.Combine(outputDir, GridSelectionEditingTourOutputDirectoryName));
 
         if (insertObjectsLinksTour)
             await CaptureInsertObjectsLinksTourAsync(Path.Combine(outputDir, InsertObjectsLinksTourOutputDirectoryName));
@@ -3446,6 +3453,335 @@ public partial class MainWindow
         var manifestPath = Path.Combine(outputDir, FormulaBarNameBoxTourManifestFileName);
         if (File.Exists(manifestPath))
             File.Delete(manifestPath);
+    }
+
+    private async Task CaptureGridSelectionEditingTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteGridSelectionEditingTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 768;
+        await Task.Delay(700);
+
+        var context = EnsureGridSelectionEditingTourContext();
+        var captures = new List<GridSelectionEditingTourManifestCapture>();
+
+        try
+        {
+            SetActiveCell(context.SelectedCell);
+            EnsureCellVisible(context.SelectedCell);
+            captures.Add(await CaptureGridSelectionEditingWindowStateAsync(
+                outputDir,
+                "selected-cell",
+                "freex_grid_selection_editing_selected_cell",
+                "grid-window",
+                "Single selected value cell shows the active-cell border, Name Box B2, formula bar value, and Ready/status agreement."));
+
+            SetSelectionRange(context.SelectedRange, context.SelectedRange.Start);
+            EnsureCellVisible(context.SelectedRange.Start);
+            captures.Add(await CaptureGridSelectionEditingWindowStateAsync(
+                outputDir,
+                "selected-range",
+                "freex_grid_selection_editing_selected_range",
+                "grid-window",
+                "Selected B2:D4 range shows the range highlight, active cell B2, Name Box B2:D4, and aggregate status stats."));
+
+            SelectRow(context.RowSelectionIndex);
+            EnsureCellVisible(new CellAddress(context.Sheet.Id, context.RowSelectionIndex, 1));
+            captures.Add(await CaptureGridSelectionEditingWindowStateAsync(
+                outputDir,
+                "whole-row-selection",
+                "freex_grid_selection_editing_whole_row",
+                "grid-window",
+                "Whole row 5 selection uses the row-header path and Name Box 5:5 while the grid highlights the row."));
+
+            SelectColumn(context.ColumnSelectionIndex);
+            EnsureCellVisible(new CellAddress(context.Sheet.Id, 1, context.ColumnSelectionIndex));
+            captures.Add(await CaptureGridSelectionEditingWindowStateAsync(
+                outputDir,
+                "whole-column-selection",
+                "freex_grid_selection_editing_whole_column",
+                "grid-window",
+                "Whole column C selection uses the column-header path and Name Box C:C while the grid highlights the column."));
+
+            SetActiveCell(context.EditCell);
+            EnsureCellVisible(context.EditCell);
+            ShowInlineEditor(context.EditCell);
+            if (_inlineEditor is not null)
+            {
+                _inlineEditor.Text = "Draft inline edit";
+                _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
+                FormulaBar.Text = _inlineEditor.Text;
+            }
+            captures.Add(await CaptureGridSelectionEditingWindowStateAsync(
+                outputDir,
+                "inline-edit-mode",
+                "freex_grid_selection_editing_inline_edit_mode",
+                "grid-window",
+                "Inline grid edit mode shows the active editor chrome and caret, formula bar draft text, and Edit status mode."));
+
+            FormulaBar.Text = "Committed grid edit";
+            var editCommitted = CommitEdit();
+            HideInlineEditor(commit: false);
+            if (!editCommitted)
+                throw new InvalidOperationException("Grid selection/editing tour could not commit the seeded inline edit.");
+            SetActiveCell(context.EditCell);
+            EnsureCellVisible(context.EditCell);
+            captures.Add(await CaptureGridSelectionEditingWindowStateAsync(
+                outputDir,
+                "committed-edit-value",
+                "freex_grid_selection_editing_committed_value",
+                "grid-window",
+                "Committed inline edit updates the workbook cell, formula bar, grid cell value, and Ready status."));
+
+            SetSelectionRange(context.FilterVisibleRange, context.FilterVisibleRange.Start);
+            EnsureCellVisible(context.FilterVisibleRange.Start);
+            captures.Add(await CaptureGridSelectionEditingWindowStateAsync(
+                outputDir,
+                "filtered-hidden-visible-rows",
+                "freex_grid_selection_editing_filtered_hidden_rows",
+                "grid-window",
+                "Filtered row 6 and manually hidden row 8 are omitted from visible row headers while the AutoFilter range remains active."));
+
+            SetSelectionRange(context.FillRange, context.FillRange.Start);
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Fill Down",
+                    context.FillRange,
+                    currentRange => new FillCellsCommand(_currentSheetId, currentRange, FillCellsDirection.Down),
+                    out var fillOutcome) ||
+                fillOutcome.AffectedCells is not { Count: > 0 })
+            {
+                throw new InvalidOperationException("Grid selection/editing tour could not execute Fill Down.");
+            }
+            RecalculateIfAutomatic(fillOutcome.AffectedCells);
+            UpdateViewport();
+            captures.Add(await CaptureGridSelectionEditingWindowStateAsync(
+                outputDir,
+                "fill-down-result",
+                "freex_grid_selection_editing_fill_down_result",
+                "grid-window",
+                "Fill Down result shows B10:B12 populated from the source cell while the selection remains on the fill range."));
+
+            SetSelectionRange(context.ClearRange, context.ClearRange.Start);
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Clear Contents",
+                    context.ClearRange,
+                    currentRange => new ClearContentsCommand(_currentSheetId, currentRange),
+                    out var clearOutcome) ||
+                clearOutcome.AffectedCells is not { Count: > 0 })
+            {
+                throw new InvalidOperationException("Grid selection/editing tour could not execute Clear Contents.");
+            }
+            RecalculateIfAutomatic(clearOutcome.AffectedCells);
+            UpdateViewport();
+            SetSelectionRange(context.ClearRange, context.ClearRange.Start);
+            captures.Add(await CaptureGridSelectionEditingWindowStateAsync(
+                outputDir,
+                "clear-contents-result",
+                "freex_grid_selection_editing_clear_contents_result",
+                "grid-window",
+                "Clear Contents result shows C10:C12 blanked while style/grid selection and Name Box remain coherent."));
+
+            ValidateGridSelectionEditingTourEvidence(outputDir, captures);
+            await WriteGridSelectionEditingTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteGridSelectionEditingTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (_inlineEditor?.IsVisible == true)
+                HideInlineEditor(commit: false);
+        }
+    }
+
+    private GridSelectionEditingTourContext EnsureGridSelectionEditingTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Grid selection/editing tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        for (uint row = 1; row <= 14; row++)
+        {
+            for (uint col = 1; col <= 6; col++)
+                sheet.ClearCell(new CellAddress(sheet.Id, row, col));
+        }
+
+        sheet.RowHeights.Clear();
+        sheet.ColumnWidths[1] = 16;
+        sheet.ColumnWidths[2] = 18;
+        sheet.ColumnWidths[3] = 18;
+        sheet.ColumnWidths[4] = 18;
+        sheet.ColumnWidths[5] = 20;
+        sheet.HiddenRows.Clear();
+        sheet.FilterHiddenRows.Clear();
+        sheet.GroupHiddenRows.Clear();
+        sheet.HiddenCols.Clear();
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:E8", null);
+
+        SetTourCell(sheet, 1, 1, new TextValue("Region"));
+        SetTourCell(sheet, 1, 2, new TextValue("Q1"));
+        SetTourCell(sheet, 1, 3, new TextValue("Q2"));
+        SetTourCell(sheet, 1, 4, new TextValue("Q3"));
+        SetTourCell(sheet, 1, 5, new TextValue("Status"));
+        SetTourCell(sheet, 2, 1, new TextValue("North"));
+        SetTourCell(sheet, 2, 2, new NumberValue(14));
+        SetTourCell(sheet, 2, 3, new NumberValue(18));
+        SetTourCell(sheet, 2, 4, new NumberValue(21));
+        SetTourCell(sheet, 2, 5, new TextValue("Open"));
+        SetTourCell(sheet, 3, 1, new TextValue("South"));
+        SetTourCell(sheet, 3, 2, new NumberValue(12));
+        SetTourCell(sheet, 3, 3, new NumberValue(17));
+        SetTourCell(sheet, 3, 4, new NumberValue(19));
+        SetTourCell(sheet, 3, 5, new TextValue("Open"));
+        SetTourCell(sheet, 4, 1, new TextValue("East"));
+        SetTourCell(sheet, 4, 2, new NumberValue(11));
+        SetTourCell(sheet, 4, 3, new NumberValue(16));
+        SetTourCell(sheet, 4, 4, new NumberValue(20));
+        SetTourCell(sheet, 4, 5, new TextValue("Open"));
+        SetTourCell(sheet, 5, 1, new TextValue("West"));
+        SetTourCell(sheet, 5, 2, new NumberValue(15));
+        SetTourCell(sheet, 5, 3, new NumberValue(20));
+        SetTourCell(sheet, 5, 4, new NumberValue(24));
+        SetTourCell(sheet, 5, 5, new TextValue("Open"));
+        SetTourCell(sheet, 6, 1, new TextValue("Filtered row"));
+        SetTourCell(sheet, 6, 2, new NumberValue(99));
+        SetTourCell(sheet, 6, 5, new TextValue("Closed"));
+        SetTourCell(sheet, 7, 1, new TextValue("Visible after filter"));
+        SetTourCell(sheet, 7, 2, new NumberValue(22));
+        SetTourCell(sheet, 7, 5, new TextValue("Open"));
+        SetTourCell(sheet, 8, 1, new TextValue("Hidden row"));
+        SetTourCell(sheet, 8, 2, new NumberValue(77));
+        SetTourCell(sheet, 8, 5, new TextValue("Open"));
+        SetTourCell(sheet, 10, 1, new TextValue("Fill source"));
+        SetTourCell(sheet, 10, 2, new NumberValue(42));
+        SetTourCell(sheet, 10, 3, new TextValue("Clear source"));
+        SetTourCell(sheet, 11, 3, new TextValue("Clear me"));
+        SetTourCell(sheet, 12, 3, new TextValue("Clear me too"));
+
+        sheet.FilterHiddenRows.Add(6);
+        sheet.HiddenRows.Add(8);
+
+        var selectedCell = new CellAddress(sheet.Id, 2, 2);
+        var selectedRange = Range(sheet.Id, 2, 2, 4, 4);
+        var editCell = new CellAddress(sheet.Id, 4, 5);
+        var filterVisibleRange = Range(sheet.Id, 1, 1, 8, 5);
+        var fillRange = Range(sheet.Id, 10, 2, 12, 2);
+        var clearRange = Range(sheet.Id, 10, 3, 12, 3);
+
+        SetActiveCell(selectedCell);
+        EnsureCellVisible(selectedCell);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+
+        return new GridSelectionEditingTourContext(
+            Sheet: sheet,
+            SelectedCell: selectedCell,
+            SelectedRange: selectedRange,
+            RowSelectionIndex: 5,
+            ColumnSelectionIndex: 3,
+            EditCell: editCell,
+            FilterVisibleRange: filterVisibleRange,
+            FillRange: fillRange,
+            ClearRange: clearRange,
+            FilterHiddenRows: sheet.FilterHiddenRows.OrderBy(row => row).Select(row => row.ToString()).ToArray(),
+            ManualHiddenRows: sheet.HiddenRows.OrderBy(row => row).Select(row => row.ToString()).ToArray());
+    }
+
+    private async Task<GridSelectionEditingTourManifestCapture> CaptureGridSelectionEditingWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string surface,
+        string evidenceSummary)
+    {
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateViewport();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(150);
+
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateGridSelectionEditingCapture(
+            state,
+            fileName,
+            surface,
+            "RenderTargetBitmap-window-full",
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            evidenceSummary);
+    }
+
+    private GridSelectionEditingTourManifestCapture CreateGridSelectionEditingCapture(
+        string state,
+        string fileName,
+        string surface,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        string evidenceSummary)
+    {
+        var selectedRange = SheetGrid.SelectedRange;
+        var activeCell = _selectionAnchor ?? selectedRange?.Start;
+        var activeCellText = activeCell is { } address
+            ? FormatQatUndoRedoTourValue(_workbook.GetSheet(address.Sheet)?.GetCell(address)?.Value)
+            : string.Empty;
+        var visibleRows = SheetGrid.Viewport?.RowMetrics.Select(row => row.Row.ToString()).ToArray() ?? [];
+
+        return new GridSelectionEditingTourManifestCapture(
+            CaptureKey: $"grid-selection-editing:{state}",
+            PairKey: $"interactive:grid-selection-editing:{state}",
+            ScenarioId: "grid-selection-editing:visual-evidence",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            SelectedRange: selectedRange?.ToString() ?? string.Empty,
+            ActiveCell: activeCell?.ToA1() ?? string.Empty,
+            NameBoxText: CellAddressBox.Text,
+            FormulaBarText: FormulaBar.Text,
+            StatusReadyText: StatusReadyText.Text,
+            StatusAverageText: StatusAvgText.Text,
+            StatusCountText: StatusCountText.Text,
+            StatusNumericalCountText: StatusNumericalCountText.Text,
+            StatusSumText: StatusSumText.Text,
+            EditingCell: SheetGrid.EditingCell?.ToA1() ?? string.Empty,
+            InlineEditorVisible: _inlineEditor?.IsVisible == true,
+            ActiveCellText: activeCellText,
+            VisibleRows: visibleRows,
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private static void DeleteGridSelectionEditingTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_grid_selection_editing_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, GridSelectionEditingTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateGridSelectionEditingTourEvidence(
+        string outputDir,
+        IReadOnlyList<GridSelectionEditingTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Grid selection/editing tour expected capture '{capture.OutputFileName}' was not written.");
+        }
     }
 
     private async Task CaptureStatusFooterTourAsync(string outputDir)
@@ -8818,6 +9154,76 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.FormulaBarNameBoxTourManifest);
     }
 
+    private async Task WriteGridSelectionEditingTourManifestAsync(
+        string outputDir,
+        GridSelectionEditingTourContext context,
+        IReadOnlyList<GridSelectionEditingTourManifestCapture> captures)
+    {
+        var manifest = new GridSelectionEditingTourManifest(
+            Tool: "FREEX_GRID_SELECTION_EDITING_TOUR",
+            EvidenceFamily: "grid-selection-editing",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "grid-selection-editing:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_grid_selection_editing_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#UI-CAT-GRID-001",
+            CatalogRows: ["UI-CAT-GRID-001", "UI-CAT-GRID-002"],
+            SheetName: context.Sheet.Name,
+            SelectedCell: context.SelectedCell.ToA1(),
+            SelectedRange: context.SelectedRange.ToString(),
+            WholeRowSelection: $"{context.RowSelectionIndex}:{context.RowSelectionIndex}",
+            WholeColumnSelection: $"{FormatColumnReference(context.ColumnSelectionIndex)}:{FormatColumnReference(context.ColumnSelectionIndex)}",
+            EditCell: context.EditCell.ToA1(),
+            FilterVisibleRange: context.FilterVisibleRange.ToString(),
+            FillRange: context.FillRange.ToString(),
+            ClearRange: context.ClearRange.ToString(),
+            FilterHiddenRows: context.FilterHiddenRows,
+            ManualHiddenRows: context.ManualHiddenRows,
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, native dialog, range-picker, or screen capture input is used."
+                    : "Window captures abort unless the FreeX main window owns foreground focus immediately before render and file write."),
+            Pairing: new GridSelectionEditingTourManifestPairing(
+                "interactive:grid-selection-editing:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Single selected cell with Name Box/formula bar/status agreement",
+                "Selected rectangular range with status aggregate text",
+                "Whole row selection through the production row-selection helper",
+                "Whole column selection through the production column-selection helper",
+                "Inline edit mode with visible grid editor chrome/caret and Edit status mode",
+                "Committed inline edit value displayed in grid, formula bar, and workbook model",
+                "AutoFilter/manual-hidden row visual gap with filtered/manual rows omitted from the viewport",
+                "Fill Down result state through FillCellsCommand",
+                "Clear Contents result state through ClearContentsCommand"
+            ],
+            Limitations:
+            [
+                "This tour drives FreeX in process and captures WPF output with RenderTargetBitmap rather than OS CopyFromScreen.",
+                "Mouse drag, Shift+click, Ctrl+multi-area, keyboard navigation shortcuts, F2 physical key entry, Enter/Tab/Escape movement, and foreground UIA invocation remain open.",
+                "Whole-row and whole-column states are supported; whole-sheet selection and multi-area selection are not covered by this bounded slice.",
+                "Filtered/hidden row evidence seeds worksheet AutoFilter and hidden-row model state directly; it does not open the AutoFilter popup or prove filter criteria input.",
+                "Fill and clear evidence uses production workbook commands and visual result states, but not physical ribbon/menu activation.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, GridSelectionEditingTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.GridSelectionEditingTourManifest);
+    }
+
     private static async Task WriteStatusFooterTourManifestAsync(
         string outputDir,
         IReadOnlyList<StatusFooterTourManifestCapture> captures)
@@ -10583,6 +10989,19 @@ public partial class MainWindow
         string NamedRangeAddress,
         string StartCell);
 
+    private sealed record GridSelectionEditingTourContext(
+        Sheet Sheet,
+        CellAddress SelectedCell,
+        GridRange SelectedRange,
+        uint RowSelectionIndex,
+        uint ColumnSelectionIndex,
+        CellAddress EditCell,
+        GridRange FilterVisibleRange,
+        GridRange FillRange,
+        GridRange ClearRange,
+        IReadOnlyList<string> FilterHiddenRows,
+        IReadOnlyList<string> ManualHiddenRows);
+
     private sealed record FormulaDiagnosticsTourContext(
         string SheetName,
         CellAddress InputCell,
@@ -10665,6 +11084,69 @@ public partial class MainWindow
         string ActiveCellText,
         string FocusedAutomationId,
         int KeyTipBadgeCount,
+        string EvidenceSummary);
+
+    private sealed record GridSelectionEditingTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogRows,
+        string SheetName,
+        string SelectedCell,
+        string SelectedRange,
+        string WholeRowSelection,
+        string WholeColumnSelection,
+        string EditCell,
+        string FilterVisibleRange,
+        string FillRange,
+        string ClearRange,
+        IReadOnlyList<string> FilterHiddenRows,
+        IReadOnlyList<string> ManualHiddenRows,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        GridSelectionEditingTourManifestPairing Pairing,
+        IReadOnlyList<GridSelectionEditingTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record GridSelectionEditingTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record GridSelectionEditingTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SelectedRange,
+        string ActiveCell,
+        string NameBoxText,
+        string FormulaBarText,
+        string StatusReadyText,
+        string StatusAverageText,
+        string StatusCountText,
+        string StatusNumericalCountText,
+        string StatusSumText,
+        string EditingCell,
+        bool InlineEditorVisible,
+        string ActiveCellText,
+        IReadOnlyList<string> VisibleRows,
         string EvidenceSummary);
 
     private sealed record StatusFooterTourManifest(
@@ -11103,6 +11585,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(SheetTabTourManifest))]
     [JsonSerializable(typeof(TitlebarWindowChromeTourManifest))]
     [JsonSerializable(typeof(FormulaBarNameBoxTourManifest))]
+    [JsonSerializable(typeof(GridSelectionEditingTourManifest))]
     [JsonSerializable(typeof(StatusFooterTourManifest))]
     [JsonSerializable(typeof(InsertObjectsLinksTourManifest))]
     [JsonSerializable(typeof(DataToolsDialogsTourManifest))]
