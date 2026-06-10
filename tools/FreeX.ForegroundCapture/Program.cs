@@ -98,6 +98,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-status-zoom-slider-drag" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-drag", DragFirstSliderExpectChangedZoom("Zoom", 100)),
             "freex-status-zoom-slider-rangevalue-set" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-rangevalue-set", SetFirstSliderRangeValue("Zoom", 150)),
             "freex-status-ctrl-wheel-grid-zoom" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-wheel-grid-zoom", CtrlWheelRelativeExpectZoom(0.36, 0.56, 120, 110)),
+            "freex-status-view-shortcuts-click" => RunFreeXMainWindowPointerScenario("freex-status-view-shortcuts-click", ClickStatusViewShortcuts()),
             "freex-sheet-tab-context-menu" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-context-menu", RightClickNamedElement("Sheet1", ControlType.TabItem)),
             "freex-sheet-tab-click-select" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-click-select", SheetTabClickSelect()),
             "freex-sheet-tab-double-click-rename" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-double-click-rename", SheetTabDoubleClickRename()),
@@ -1217,6 +1218,50 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return ValidateZoomSliderValue(handle, expectedSliderValue, $"Ctrl+wheel delta {wheelDelta} over worksheet grid");
         };
 
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> ClickStatusViewShortcuts()
+        => (handle, processId, _, guard) =>
+        {
+            var sequence = new[]
+            {
+                ("StatusPageLayoutViewButton", "Page Layout"),
+                ("StatusPageBreakPreviewButton", "Page Break Preview"),
+                ("StatusNormalViewButton", "Normal")
+            };
+
+            var validations = new List<string>();
+            foreach (var (automationId, label) in sequence)
+            {
+                var element = FindElementByAutomationId(handle, automationId);
+                if (element is null)
+                {
+                    return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find AutomationId '{automationId}'.", options.OutputRoot, "freex", guard);
+                }
+
+                var blocked = GuardedClickElement(options.Scenario, processId, handle, element, MouseButtonKind.Left);
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+
+                Thread.Sleep(options.AfterInputDelay);
+                element = FindElementByAutomationId(handle, automationId);
+                if (element is null || !TryGetToggleState(element, out var state))
+                {
+                    return CaptureResult.Blocked(options.Scenario, "toggle-validation-unavailable", $"Could not read TogglePattern state for '{automationId}' after physical click.", options.OutputRoot, "freex", guard);
+                }
+
+                if (state != ToggleState.On)
+                {
+                    return CaptureResult.Blocked(options.Scenario, "toggle-validation-failed", $"Expected '{automationId}' to be checked after physical {label} footer click, but UIA reported {state}.", options.OutputRoot, "freex", guard);
+                }
+
+                validations.Add($"{label} checked");
+            }
+
+            _lastResultValidation = "Physical footer view shortcut clicks: " + string.Join("; ", validations) + ".";
+            return null;
+        };
+
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> RightClickNamedElement(string name, ControlType controlType)
         => (handle, processId, _, guard) =>
         {
@@ -2195,6 +2240,19 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return true;
     }
 
+    private static bool TryGetToggleState(AutomationElement element, out ToggleState state)
+    {
+        state = ToggleState.Off;
+        if (!element.TryGetCurrentPattern(TogglePattern.Pattern, out var patternObject) ||
+            patternObject is not TogglePattern togglePattern)
+        {
+            return false;
+        }
+
+        state = togglePattern.Current.ToggleState;
+        return true;
+    }
+
     private static double SliderToZoomPercent(double sliderValue)
     {
         sliderValue = Math.Max(0, Math.Min(200, sliderValue));
@@ -2690,6 +2748,7 @@ internal sealed record CaptureOptions(
           freex-status-zoom-slider-drag
           freex-status-zoom-slider-rangevalue-set
           freex-status-ctrl-wheel-grid-zoom
+          freex-status-view-shortcuts-click
           freex-sheet-tab-context-menu
           freex-sheet-tab-click-select
           freex-sheet-tab-double-click-rename
