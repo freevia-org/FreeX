@@ -145,6 +145,7 @@ public partial class MainWindow
             SheetGrid.NativeSlicers = null;
             SheetGrid.NativeTimelines = null;
             SheetGrid.WorksheetBackground = null;
+            SheetGrid.PivotHeaderDropdowns = null;
             SheetGrid.Sparklines = null;
             SheetGrid.SparklineValues = null;
             SheetGrid.MergedRegions = null;
@@ -164,6 +165,7 @@ public partial class MainWindow
 
         _pendingPivotLayout = null;
         _pivotFieldListAvailableItems = [];
+        _pivotHeaderDropdownTargets = new Dictionary<(uint Row, uint Col), PivotHeaderDropdownTarget>();
         if (PivotFieldListPane is not null)
             PivotFieldListPane.Visibility = Visibility.Collapsed;
         if (PivotAvailableFieldsList is not null)
