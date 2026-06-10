@@ -45,6 +45,42 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDialog_InitialLayoutKeepsActionButtonsVisible()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sales");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 20, 4));
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotTableDialog(workbook, sheet.Id, range);
+            dialog.Show();
+            try
+            {
+                dialog.SizeToContent.Should().Be(SizeToContent.Height);
+                dialog.UpdateLayout();
+                var content = dialog.Content.Should().BeAssignableTo<FrameworkElement>().Subject;
+                var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog)
+                    .Where(button => button.IsDefault || button.IsCancel)
+                    .ToList();
+
+                buttons.Should().HaveCount(2);
+                foreach (var button in buttons)
+                {
+                    var bottom = button.TransformToAncestor(content)
+                        .Transform(new Point(0, button.ActualHeight))
+                        .Y;
+                    bottom.Should().BeLessThanOrEqualTo(content.ActualHeight + 0.5);
+                }
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void PivotTableDialog_ExposesReferencePickersForSourceAndExistingLocation()
     {
         var source = DialogSourceTestSupport.ReadHostSources("PivotTableDialog.cs");

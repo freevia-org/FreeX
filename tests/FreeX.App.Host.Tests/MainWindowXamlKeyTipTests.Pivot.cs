@@ -316,6 +316,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var source = ReadPivotCommandSource();
+        var xamlSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -330,16 +331,24 @@ public sealed partial class MainWindowXamlKeyTipTests
             list.Attribute("AllowDrop")?.Value.Should().Be("True");
             list.Attribute("PreviewMouseMove")?.Value.Should().Be("PivotFieldList_PreviewMouseMove");
             list.Attribute("PreviewMouseRightButtonDown")?.Value.Should().Be("PivotFieldList_PreviewMouseRightButtonDown");
+            list.Attribute("GiveFeedback")?.Value.Should().Be("PivotFieldList_GiveFeedback");
             list.Attribute("DragOver")?.Value.Should().Be("PivotFieldList_DragOver");
             list.Attribute("Drop")?.Value.Should().Be("PivotFieldList_Drop");
         });
 
         source.Should().Contain("PivotFieldList_PreviewMouseMove");
+        source.Should().Contain("GetPivotFieldDragCaption(list, e.OriginalSource)");
         source.Should().Contain("PivotFieldDragPayload");
         source.Should().Contain("GetPivotFieldDropInsertIndex");
         source.Should().Contain("GetDisplayedOrCurrentPivotLayout");
         source.Should().Contain("PivotFieldList_Drop");
         source.Should().Contain("MovePivotFieldToZone");
+        source.Should().Contain("PivotFieldRemoveDropZone_DragOver");
+        source.Should().Contain("PivotFieldListRemoveZone_DragOver");
+        source.Should().Contain("Mouse.SetCursor(Cursors.No)");
+        source.Should().Contain("MovePivotFieldToZone(caption, PivotFieldDropZone.Available");
+        xamlSource.Should().Contain("DragOver=\"PivotFieldRemoveDropZone_DragOver\"");
+        xamlSource.Should().Contain("DragOver=\"PivotFieldListRemoveZone_DragOver\"");
     }
 
     [Fact]

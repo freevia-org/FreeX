@@ -22,8 +22,7 @@ public sealed class RecommendedPivotTablesDialog : Window
     {
         Result = RecommendedPivotTablesDialogResult.None;
         Title = UiText.Get("MainWindow_Header_RecommendedPivotTables");
-        Width = 560;
-        Height = 340;
+        DialogSizing.ApplyContentHeight(this, width: 560, minHeight: 340);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;

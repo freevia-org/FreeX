@@ -376,8 +376,8 @@ public sealed partial class MainWindowSourceHygieneTests
 
         pivotSource.Should().Contain("SetPivotContextualTabsVisible(false);");
         refreshFieldListSource.Should().Contain(
-            "FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange)",
-            "Excel only shows PivotTable contextual tabs and the field list when the selection is inside a PivotTable");
+            "PivotUiPlanner.CreateFieldListPanePlan(sheet, SheetGrid.SelectedRange)",
+            "Excel only shows PivotTable contextual tabs and the field list when the active selected cell is inside a PivotTable");
         refreshFieldListSource.Should().NotContain(
             "FindPivotTableForSelection(sheet, SheetGrid.SelectedRange)",
             "the workbook fallback would show contextual PivotTable tabs after selection leaves the PivotTable");
