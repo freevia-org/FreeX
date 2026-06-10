@@ -82,7 +82,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
 
         _snapshot = TimelineRangeSnapshot.Capture(timeline, pivotTable);
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
 
         timeline.SelectedStartDate = NormalizeSelectedDate(_selectedStartDate);
         timeline.SelectedEndDate = NormalizeSelectedDate(_selectedEndDate);
@@ -101,6 +101,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
         var target = timeline?.SourcePivotTableName is null ? null : PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, timeline.SourcePivotTableName);
         if (timeline is not null && target is { } connected && _snapshot is not null)
         {
+            PivotTableRefreshService.ClearRenderedRange(connected.Sheet, connected.PivotTable.LastRenderedRange);
             _snapshot.Restore(timeline, connected.PivotTable);
             AddPivotTableCommand.Restore(connected.Sheet, _targetSnapshot);
         }
@@ -117,7 +118,8 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
         string? SelectedEndDate,
         IReadOnlyList<PivotFieldModel> RowFields,
         IReadOnlyList<PivotFieldModel> ColumnFields,
-        IReadOnlyList<PivotFieldModel> PageFields)
+        IReadOnlyList<PivotFieldModel> PageFields,
+        GridRange? LastRenderedRange)
     {
         public static TimelineRangeSnapshot Capture(TimelineModel timeline, PivotTableModel pivotTable) =>
             new(
@@ -125,7 +127,8 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
                 timeline.SelectedEndDate,
                 pivotTable.RowFields.ToList(),
                 pivotTable.ColumnFields.ToList(),
-                pivotTable.PageFields.ToList());
+                pivotTable.PageFields.ToList(),
+                pivotTable.LastRenderedRange);
 
         public void Restore(TimelineModel timeline, PivotTableModel pivotTable)
         {
@@ -134,6 +137,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
             PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
             PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
+            pivotTable.LastRenderedRange = LastRenderedRange;
         }
     }
 }

@@ -59,6 +59,70 @@ public sealed partial class PivotTableCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotTableLayoutCommand_ClearsStaleCellsWhenRemovingColumnFieldShrinksOutput()
+    {
+        var workbook = new Workbook("PivotLayoutShrinkClearingCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Quarter"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B2"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B3"), new TextValue("Q2"));
+        sheet.SetCell(Addr(sheet, "C3"), new NumberValue(15));
+        sheet.SetCell(Addr(sheet, "A4"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B4"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C4"), new NumberValue(20));
+        sheet.SetCell(Addr(sheet, "A5"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B5"), new TextValue("Q2"));
+        sheet.SetCell(Addr(sheet, "C5"), new NumberValue(25));
+        var ctx = new TestCommandContext(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+        var originalRenderedRange = pivot.LastRenderedRange;
+        sheet.SetCell(Addr(sheet, "I7"), new TextValue("Outside pivot"));
+
+        var command = new ConfigurePivotTableLayoutCommand(
+            sheet.Id,
+            "PivotTable1",
+            rowFields: [new PivotFieldModel(0)],
+            columnFields: [],
+            pageFields: [],
+            dataFields: [new PivotDataFieldModel(2, "Sum of Amount", "sum")]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetCell(Addr(sheet, "E2"))!.Value.Should().Be(new TextValue("Region"));
+        sheet.GetCell(Addr(sheet, "F2"))!.Value.Should().Be(new TextValue("Sum of Amount"));
+        sheet.GetCell(Addr(sheet, "G2")).Should().BeNull();
+        sheet.GetCell(Addr(sheet, "H2")).Should().BeNull();
+        sheet.GetCell(Addr(sheet, "G5")).Should().BeNull();
+        sheet.GetCell(Addr(sheet, "H5")).Should().BeNull();
+        sheet.GetCell(Addr(sheet, "I7"))!.Value.Should().Be(new TextValue("Outside pivot"));
+        pivot.LastRenderedRange.Should().Be(Range(sheet, "E2", "F5"));
+
+        command.Revert(ctx);
+
+        pivot.ColumnFields.Should().ContainSingle().Which.SourceFieldIndex.Should().Be(1);
+        pivot.LastRenderedRange.Should().Be(originalRenderedRange);
+        sheet.GetCell(Addr(sheet, "H2"))!.Value.Should().Be(new TextValue("Grand Total"));
+        sheet.GetCell(Addr(sheet, "H5"))!.Value.Should().Be(new NumberValue(70));
+        sheet.GetCell(Addr(sheet, "I7"))!.Value.Should().Be(new TextValue("Outside pivot"));
+    }
+
+    [Fact]
     public void ConfigurePivotTableLayoutCommand_PreservesFieldDropDownMetadataAndUndoRestores()
     {
         var workbook = new Workbook("PivotFieldDropDownMetadataCommandTest");

@@ -163,6 +163,7 @@ public sealed partial class Sheet
             CacheId     = pt.CacheId,
             SourceRange = RemapRange(pt.SourceRange, newId),
             TargetRange = RemapRange(pt.TargetRange, newId),
+            LastRenderedRange = pt.LastRenderedRange is { } lastRenderedRange ? RemapRange(lastRenderedRange, newId) : null,
             PackagePart = pt.PackagePart,
             CreatedVersion = pt.CreatedVersion,
             UpdatedVersion = pt.UpdatedVersion,

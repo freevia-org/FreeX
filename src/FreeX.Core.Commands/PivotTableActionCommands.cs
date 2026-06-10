@@ -130,7 +130,7 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
             return CommandGuards.RejectPivotTableNotFound();
 
         _snapshot = PivotViewClearSnapshot.Capture(pivotTable);
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
 
         PivotTableCommandCollections.Replace(pivotTable.RowFields, ClearSelections(pivotTable.RowFields));
         PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ClearSelections(pivotTable.ColumnFields));
@@ -148,6 +148,7 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
         {
+            PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
             _snapshot.Restore(pivotTable);
         }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
@@ -168,7 +169,8 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
         IReadOnlyList<PivotFieldModel> PageFields,
         IReadOnlyList<PivotLabelFilterModel> LabelFilters,
         IReadOnlyList<PivotValueFilterModel> ValueFilters,
-        IReadOnlyList<PivotSortModel> Sorts)
+        IReadOnlyList<PivotSortModel> Sorts,
+        GridRange? LastRenderedRange)
     {
         public static PivotViewClearSnapshot Capture(PivotTableModel pivotTable) =>
             new(
@@ -177,7 +179,8 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
                 pivotTable.PageFields.ToList(),
                 pivotTable.LabelFilters.ToList(),
                 pivotTable.ValueFilters.ToList(),
-                pivotTable.Sorts.ToList());
+                pivotTable.Sorts.ToList(),
+                pivotTable.LastRenderedRange);
 
         public void Restore(PivotTableModel pivotTable)
         {
@@ -187,6 +190,7 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
             PivotTableCommandCollections.Replace(pivotTable.LabelFilters, LabelFilters);
             PivotTableCommandCollections.Replace(pivotTable.ValueFilters, ValueFilters);
             PivotTableCommandCollections.Replace(pivotTable.Sorts, Sorts);
+            pivotTable.LastRenderedRange = LastRenderedRange;
         }
     }
 
@@ -217,6 +221,7 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
     private readonly CellAddress _targetStart;
     private GridRange? _oldTargetRange;
     private GridRange? _newTargetRange;
+    private GridRange? _oldLastRenderedRange;
     private List<(CellAddress Address, Cell? Cell)>? _rangeSnapshot;
 
     public MovePivotTableCommand(SheetId sheetId, string pivotTableName, CellAddress targetStart)
@@ -244,6 +249,7 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
 
         _oldTargetRange = pivotTable.TargetRange;
         _newTargetRange = movedRange;
+        _oldLastRenderedRange = pivotTable.LastRenderedRange;
         _rangeSnapshot = SnapshotRanges(sheet, _oldTargetRange.Value, _newTargetRange.Value);
 
         if (_oldTargetRange.Value != _newTargetRange.Value)
@@ -263,13 +269,17 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
+        {
             pivotTable.TargetRange = _oldTargetRange.Value;
+            pivotTable.LastRenderedRange = _oldLastRenderedRange;
+        }
 
         AddPivotTableCommand.Restore(sheet, _rangeSnapshot);
         if (pivotTable is not null)
             UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         _oldTargetRange = null;
         _newTargetRange = null;
+        _oldLastRenderedRange = null;
         _rangeSnapshot = null;
     }
 
