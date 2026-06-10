@@ -4,7 +4,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
 
-public enum ObjectKind { None, Picture, Shape, TextBox }
+public enum ObjectKind { None, Picture, Shape, TextBox, Chart }
 
 public partial class GridView
 {

@@ -13,6 +13,8 @@ public partial class GridView
     private const double MinimumPictureObjectHeight = 18.0;
     private const double MinimumTextBoxObjectWidth = 24.0;
     private const double MinimumTextBoxObjectHeight = 18.0;
+    private const double MinimumChartObjectWidth = 24.0;
+    private const double MinimumChartObjectHeight = 18.0;
 
     private const double HandleSize = 8.0;
     private const double HandleHitPad = 4.0;
@@ -82,6 +84,10 @@ public partial class GridView
                     t => (t.Anchor, t.Width, t.Height),
                     MinimumTextBoxObjectWidth,
                     MinimumTextBoxObjectHeight),
+            ObjectKind.Chart when Charts is not null =>
+                TryGetChartRect(
+                    Charts,
+                    c => c.Id == SelectedObjectId && c.IsVisible),
             _ => Rect.Empty
         };
     }
@@ -103,6 +109,8 @@ public partial class GridView
                 TryGetObjectAnchor(DrawingShapes, s => s.Id == SelectedObjectId && s.IsVisible, s => s.Anchor),
             ObjectKind.TextBox when TextBoxes is not null =>
                 TryGetObjectAnchor(TextBoxes, t => t.Id == SelectedObjectId && t.IsVisible, t => t.Anchor),
+            ObjectKind.Chart when Charts is not null =>
+                TryGetChartAnchor(Charts, c => c.Id == SelectedObjectId && c.IsVisible),
             _ => null
         };
     }
@@ -154,6 +162,47 @@ public partial class GridView
         }
 
         return null;
+    }
+
+    private Rect TryGetChartRect(
+        IEnumerable<ChartModel> charts,
+        Func<ChartModel, bool> match)
+    {
+        foreach (var chart in charts)
+        {
+            if (match(chart))
+                return CreateChartRect(chart);
+        }
+
+        return Rect.Empty;
+    }
+
+    private CellAddress? TryGetChartAnchor(
+        IEnumerable<ChartModel> charts,
+        Func<ChartModel, bool> match)
+    {
+        foreach (var chart in charts)
+        {
+            if (match(chart))
+                return GetChartAnchor(chart);
+        }
+
+        return null;
+    }
+
+    private Rect CreateChartRect(ChartModel chart) =>
+        new(
+            chart.Left + ActualRowHeaderWidth,
+            chart.Top + EffectiveColHeaderHeight,
+            Math.Max(MinimumChartObjectWidth, chart.Width),
+            Math.Max(MinimumChartObjectHeight, chart.Height));
+
+    private CellAddress GetChartAnchor(ChartModel chart)
+    {
+        if (HitTestAnchorCell(new Point(chart.Left + ActualRowHeaderWidth, chart.Top + EffectiveColHeaderHeight)) is { } anchor)
+            return new CellAddress(chart.DataRange.Start.Sheet, anchor.Row, anchor.Col);
+
+        return chart.DataRange.Start;
     }
 
     private static double TryGetObjectRotation<T>(IEnumerable<T> items, Func<T, bool> match, Func<T, double> rotation)
@@ -333,6 +382,9 @@ public partial class GridView
                 }
             }
 
+            if (TryHitCharts(pos, out var orderedChartHit))
+                return orderedChartHit;
+
             return default;
         }
 
@@ -357,7 +409,27 @@ public partial class GridView
                     return hit;
             }
 
+        if (TryHitCharts(pos, out var chartHit))
+            return chartHit;
+
         return default;
+    }
+
+    private bool TryHitCharts(
+        Point pos,
+        out (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) hit)
+    {
+        if (Charts is not null)
+        {
+            for (var i = Charts.Count - 1; i >= 0; i--)
+            {
+                if (TryHitChart(Charts[i], pos, out hit))
+                    return true;
+            }
+        }
+
+        hit = default;
+        return false;
     }
 
     private bool TryHitTextBox(
@@ -429,6 +501,25 @@ public partial class GridView
         {
             hit = (shape.Id, ObjectKind.Shape, rect, shape.Anchor);
             return true;
+        }
+
+        hit = default;
+        return false;
+    }
+
+    private bool TryHitChart(
+        ChartModel chart,
+        Point pos,
+        out (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) hit)
+    {
+        if (chart.IsVisible)
+        {
+            var rect = CreateChartRect(chart);
+            if (ContainsInclusive(rect, pos))
+            {
+                hit = (chart.Id, ObjectKind.Chart, rect, GetChartAnchor(chart));
+                return true;
+            }
         }
 
         hit = default;
