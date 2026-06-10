@@ -51,7 +51,8 @@ public sealed class SparklineDialog : Window
         Result = CreateResult(dataRangeText, locationText, kind);
         Title = UiText.Get("Sparkline_InsertSparkline");
         Width = 380;
-        Height = 240;
+        MinHeight = 280;
+        SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;

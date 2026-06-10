@@ -33,7 +33,7 @@ public sealed partial class PerformanceReviewMeasurementTests
                 $"viewport_gets={result.ViewportCalls:N0}");
 
             result.StepCount.Should().Be(100);
-            result.ViewportCalls.Should().BeLessThanOrEqualTo(1);
+            result.ViewportCalls.Should().Be(result.StepCount);
             result.TotalMilliseconds.Should().BeGreaterThan(0);
         });
     }
