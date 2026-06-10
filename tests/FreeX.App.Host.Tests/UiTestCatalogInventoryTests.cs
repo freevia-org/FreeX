@@ -230,6 +230,32 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().Contain("freex_view_panes_zoom_custom_views_dialog.png");
     }
 
+    [Fact]
+    public void PageCatalogRows_DocumentPageLayoutSetupTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-PAGE-001A |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-001 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-003 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-005 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-PAGE-006 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(6);
+        foreach (var row in rows)
+        {
+            row.Should().Contain("page-layout-setup-tour");
+        }
+
+        catalog.Should().Contain("FREEX_PAGE_LAYOUT_SETUP_TOUR=1");
+        catalog.Should().Contain("page_layout_setup_tour_manifest.json");
+        catalog.Should().Contain("freex_page_layout_setup_dialog_sheet_tab_print_titles.png");
+    }
+
     [Theory]
     [InlineData("screenshot_excel.ps1")]
     [InlineData("screenshot_ribbon.ps1")]

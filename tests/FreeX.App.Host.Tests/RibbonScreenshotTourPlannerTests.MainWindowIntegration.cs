@@ -29,6 +29,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_INSERT_OBJECTS_LINKS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DATA_TOOLS_DIALOGS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_VIEW_PANES_ZOOM_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PAGE_LAYOUT_SETUP_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_FONT_COLORS_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
@@ -47,6 +48,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureInsertObjectsLinksTourAsync");
         source.Should().Contain("CaptureDataToolsDialogsTourAsync");
         source.Should().Contain("CaptureViewPanesZoomTourAsync");
+        source.Should().Contain("CapturePageLayoutSetupTourAsync");
         source.Should().Contain("CaptureHomeFontColorsTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
@@ -70,6 +72,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WriteInsertObjectsLinksTourManifestAsync");
         source.Should().Contain("WriteDataToolsDialogsTourManifestAsync");
         source.Should().Contain("WriteViewPanesZoomTourManifestAsync");
+        source.Should().Contain("WritePageLayoutSetupTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
         source.Should().Contain("home_alignment_number_tour_manifest.json");
@@ -83,6 +86,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("insert_objects_links_tour_manifest.json");
         source.Should().Contain("data_tools_dialogs_tour_manifest.json");
         source.Should().Contain("view_panes_zoom_tour_manifest.json");
+        source.Should().Contain("page_layout_setup_tour_manifest.json");
         source.Should().Contain("home_font_colors_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
@@ -528,6 +532,54 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("ViewPanesZoomTourManifest");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.ViewPanesZoomTourManifest");
         source.Should().Contain("Split divider drag, pane scrollbar interaction, Ctrl+wheel zoom, status slider drag, and native UIA RangeValue remain open.");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesPageLayoutSetupVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_PAGE_LAYOUT_SETUP_TOUR");
+        source.Should().Contain("page-layout-setup-tour");
+        source.Should().Contain("EnsurePageLayoutSetupTourContext");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"Page Layout\"))");
+        source.Should().Contain("sheet.PageOrientation = WorksheetPageOrientation.Landscape");
+        source.Should().Contain("sheet.PrintArea = new GridRange");
+        source.Should().Contain("sheet.PrintTitleRows = new WorksheetRepeatRange(1, 1)");
+        source.Should().Contain("sheet.RowPageBreaks.Add(12)");
+        source.Should().Contain("sheet.ScaleToFit = new WorksheetScaleToFit(90, null, null)");
+        source.Should().Contain("CapturePageLayoutSetupMenuAsync");
+        source.Should().Contain("FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)");
+        source.Should().Contain("new PageSetupDialog(sheet, SheetGrid.SelectedRange, null, PageSetupInitialFocusTarget.PageOrientation)");
+        source.Should().Contain("pageSetupDialog.PageSetupTabs.SelectedItem = pageSetupDialog.MarginsTab");
+        source.Should().Contain("pageSetupDialog.PageSetupTabs.SelectedItem = pageSetupDialog.SheetTab");
+        source.Should().Contain("ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(null, 1, 2))");
+        source.Should().Contain("new SelectionPaneDialog(CreatePageLayoutSetupSelectionPaneItems())");
+        source.Should().Contain("freex_page_layout_setup_ribbon_baseline");
+        source.Should().Contain("freex_page_layout_setup_margins_menu_opened");
+        source.Should().Contain("freex_page_layout_setup_orientation_menu_opened");
+        source.Should().Contain("freex_page_layout_setup_size_menu_opened");
+        source.Should().Contain("freex_page_layout_setup_print_area_menu_opened");
+        source.Should().Contain("freex_page_layout_setup_breaks_menu_opened");
+        source.Should().Contain("freex_page_layout_setup_background_menu_opened");
+        source.Should().Contain("freex_page_layout_setup_dialog_page_tab");
+        source.Should().Contain("freex_page_layout_setup_dialog_margins_tab");
+        source.Should().Contain("freex_page_layout_setup_dialog_sheet_tab_print_titles");
+        source.Should().Contain("freex_page_layout_setup_scale_to_fit_state");
+        source.Should().Contain("freex_page_layout_setup_sheet_options_toggled");
+        source.Should().Contain("freex_page_layout_setup_arrange_selection_pane_dialog");
+        source.Should().Contain("UI-CMD-PAGE-001");
+        source.Should().Contain("UI-CMD-PAGE-006");
+        source.Should().Contain("UI-CMD-DRAW-002");
+        source.Should().Contain("PageLayoutSetupTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.PageLayoutSetupTourManifest");
+        source.Should().Contain("Background captures the supported menu surface only");
+        source.Should().Contain("Arrange evidence uses a deterministic representative Selection Pane dialog item list");
+
+        catalog.Should().Contain("FREEX_PAGE_LAYOUT_SETUP_TOUR=1");
+        catalog.Should().Contain("screenshots/page-layout-setup-tour/");
+        catalog.Should().Contain("page_layout_setup_tour_manifest.json");
     }
 
     [Fact]
