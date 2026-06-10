@@ -53,13 +53,21 @@ public partial class GridView
                 MinimumPictureObjectHeight,
                 out var rect))
             return;
-        if (NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom) &&
-            !IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom))
+
+        var rotationDegrees = picture.RotationDegrees;
+        if (TryResolveLiveObjectTransform(picture.Id, ObjectKind.Picture, rect, rotationDegrees, out var previewRect, out var previewRotationDegrees))
+        {
+            rect = previewRect;
+            rotationDegrees = previewRotationDegrees;
+        }
+
+        if (NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom) &&
+            !IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom))
             return;
 
-        if (Math.Abs(picture.RotationDegrees) > 0.0001)
+        if (Math.Abs(rotationDegrees) > 0.0001)
             dc.PushTransform(new RotateTransform(
-                picture.RotationDegrees,
+                rotationDegrees,
                 rect.Left + rect.Width / 2,
                 rect.Top + rect.Height / 2));
 
@@ -77,7 +85,7 @@ public partial class GridView
                 dc.DrawImage(image, rect);
             }
             dc.DrawRectangle(null, PictureBorderPen, rect);
-            if (Math.Abs(picture.RotationDegrees) > 0.0001)
+            if (Math.Abs(rotationDegrees) > 0.0001)
                 dc.Pop();
             return;
         }
@@ -132,7 +140,7 @@ public partial class GridView
                 DrawPictureCellBorders(dc, cellRect, style);
         }
 
-        if (Math.Abs(picture.RotationDegrees) > 0.0001)
+        if (Math.Abs(rotationDegrees) > 0.0001)
             dc.Pop();
     }
 

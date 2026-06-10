@@ -2,7 +2,7 @@ namespace FreeX.App.Host;
 
 public static class WorksheetContextMenuPlanner
 {
-    private const int WorksheetStateCacheSize = 1 << 6;
+    private const int WorksheetStateCacheSize = 1 << 7;
 
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> PictureCommands =
         BuildPictureCommands();
@@ -12,6 +12,9 @@ public static class WorksheetContextMenuPlanner
 
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> TextBoxCommands =
         BuildDrawingObjectCommands("Format Text Box...", includeReorder: false);
+
+    private static readonly IReadOnlyList<WorksheetContextMenuCommand> ChartCommands =
+        BuildChartCommands();
 
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> RowSelectionCommands =
         BuildRowSelectionCommands();
@@ -33,6 +36,7 @@ public static class WorksheetContextMenuPlanner
             WorksheetContextMenuTargetKind.Picture => PictureCommands,
             WorksheetContextMenuTargetKind.Shape => ShapeCommands,
             WorksheetContextMenuTargetKind.TextBox => TextBoxCommands,
+            WorksheetContextMenuTargetKind.Chart => ChartCommands,
             WorksheetContextMenuTargetKind.RowSelection => RowSelectionCommands,
             WorksheetContextMenuTargetKind.ColumnSelection => ColumnSelectionCommands,
             _ => WorksheetCommandCache[GetStateCacheIndex(state)]
@@ -55,7 +59,8 @@ public static class WorksheetContextMenuPlanner
             HasNote: (index & (1 << 2)) != 0,
             HasHyperlink: (index & (1 << 3)) != 0,
             HasAutoFilterHeaderTarget: (index & (1 << 4)) != 0,
-            HasDropdownTarget: (index & (1 << 5)) != 0);
+            HasDropdownTarget: (index & (1 << 5)) != 0,
+            HasPivotTableTarget: (index & (1 << 6)) != 0);
 
     private static int GetStateCacheIndex(WorksheetContextMenuState state)
     {
@@ -72,6 +77,8 @@ public static class WorksheetContextMenuPlanner
             index |= 1 << 4;
         if (state.HasDropdownTarget)
             index |= 1 << 5;
+        if (state.HasPivotTableTarget)
+            index |= 1 << 6;
 
         return index;
     }
@@ -124,6 +131,7 @@ public static class WorksheetContextMenuPlanner
         new("Delete Note", WorksheetContextMenuAction.DeleteNote, AccessHeader: "De_lete Note", IsEnabled: state.HasNote),
         new("Show Notes", WorksheetContextMenuAction.ShowNotes, AccessHeader: "_Show Notes", IsEnabled: state.HasNote),
         .. BuildHyperlinkCommands(state),
+        .. BuildPivotTableCommands(state),
         WorksheetContextMenuCommand.Separator,
         new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
         WorksheetContextMenuCommand.Separator,
@@ -141,6 +149,19 @@ public static class WorksheetContextMenuPlanner
         new("Reset Crop", WorksheetContextMenuAction.ResetPictureCrop, AccessHeader: "_Reset Crop"),
         WorksheetContextMenuCommand.Separator,
         new("Edit Alt Text...", WorksheetContextMenuAction.EditAltText, AccessHeader: "Edit _Alt Text..."),
+        new("Selection Pane...", WorksheetContextMenuAction.SelectionPane, AccessHeader: "_Selection Pane...")
+    ]);
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildChartCommands() =>
+        Freeze([
+        new("Format Chart Area...", WorksheetContextMenuAction.FormatChartArea, AccessHeader: "_Format Chart Area..."),
+        new("Select Data...", WorksheetContextMenuAction.SelectChartData, AccessHeader: "Select _Data..."),
+        new("Change Chart Type...", WorksheetContextMenuAction.ChangeChartType, AccessHeader: "_Change Chart Type..."),
+        new("Chart Styles...", WorksheetContextMenuAction.ChartStyles, AccessHeader: "Chart _Styles..."),
+        new("Chart Titles...", WorksheetContextMenuAction.ChartTitles, AccessHeader: "Chart _Titles..."),
+        new("Size and Properties...", WorksheetContextMenuAction.ChartSizeAndProperties, AccessHeader: "Si_ze and Properties..."),
+        new("Move Chart...", WorksheetContextMenuAction.MoveChart, AccessHeader: "_Move Chart..."),
+        WorksheetContextMenuCommand.Separator,
         new("Selection Pane...", WorksheetContextMenuAction.SelectionPane, AccessHeader: "_Selection Pane...")
     ]);
 
@@ -253,6 +274,13 @@ public static class WorksheetContextMenuPlanner
             : Freeze([
                 new("Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Hyperlink...")
             ]);
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildPivotTableCommands(WorksheetContextMenuState state) =>
+        state.HasPivotTableTarget
+            ? Freeze([
+                new("PivotTable Options...", WorksheetContextMenuAction.PivotTableOptions, AccessHeader: "PivotTable _Options...")
+            ])
+            : [];
 }
 
 public sealed record WorksheetContextMenuCommand(
@@ -274,7 +302,8 @@ public sealed record WorksheetContextMenuState(
     bool HasNote = false,
     bool HasHyperlink = false,
     bool HasAutoFilterHeaderTarget = false,
-    bool HasDropdownTarget = false)
+    bool HasDropdownTarget = false,
+    bool HasPivotTableTarget = false)
 {
     public static WorksheetContextMenuState Default { get; } = new();
 }
@@ -330,6 +359,7 @@ public enum WorksheetContextMenuAction
     ShowNotes,
     OpenHyperlink,
     Hyperlink,
+    PivotTableOptions,
     FormatCells,
     ClearAll,
     ClearFormats,
@@ -345,6 +375,13 @@ public enum WorksheetContextMenuAction
     RotateDrawingObject,
     ShapeFill,
     ShapeOutline,
+    FormatChartArea,
+    SelectChartData,
+    ChangeChartType,
+    ChartStyles,
+    ChartTitles,
+    ChartSizeAndProperties,
+    MoveChart,
     BringForward,
     SendBackward,
     EditAltText,
@@ -357,6 +394,7 @@ public enum WorksheetContextMenuTargetKind
     Picture,
     Shape,
     TextBox,
+    Chart,
     RowSelection,
     ColumnSelection
 }

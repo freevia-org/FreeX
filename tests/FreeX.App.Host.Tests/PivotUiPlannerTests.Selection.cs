@@ -50,6 +50,24 @@ public sealed partial class PivotUiPlannerTests
     }
 
     [Fact]
+    public void FindPivotTableContainingCell_UsesRenderedPivotFootprint()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var pivot = CreatePivot("Pivot", 5, sheet.Id);
+        pivot.LastRenderedRange = new GridRange(
+            new CellAddress(sheet.Id, 5, 1),
+            new CellAddress(sheet.Id, 6, 2));
+        sheet.PivotTables.Add(pivot);
+
+        PivotUiPlanner.FindPivotTableContainingCell(sheet, new CellAddress(sheet.Id, 6, 2))
+            .Should()
+            .BeSameAs(pivot);
+        PivotUiPlanner.FindPivotTableContainingCell(sheet, new CellAddress(sheet.Id, 9, 4))
+            .Should()
+            .BeNull("the context menu should only expose PivotTable commands for rendered PivotTable cells");
+    }
+
+    [Fact]
     public void CreateFieldListPanePlan_ShowsOnlyWhenActiveCellIsInsidePivot()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");

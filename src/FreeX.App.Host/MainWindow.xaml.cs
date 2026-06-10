@@ -280,6 +280,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.SplitDividerMoved += OnSplitDividerMoved;
         SheetGrid.SplitPaneScrollbarScrolled += OnSplitPaneScrollbarScrolled;
         SheetGrid.ObjectMoved   += OnObjectMoved;
+        SheetGrid.ChartBoundsChanged += OnChartBoundsChanged;
         SheetGrid.ObjectResized += OnObjectResized;
         SheetGrid.ObjectResizedWithAnchor += OnObjectResizedWithAnchor;
         SheetGrid.ObjectRotated += OnObjectRotated;
