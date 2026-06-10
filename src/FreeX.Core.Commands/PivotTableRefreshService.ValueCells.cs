@@ -15,7 +15,7 @@ public static partial class PivotTableRefreshService
     {
         if (isEmptyIntersection && !string.IsNullOrWhiteSpace(pivotTable?.EmptyValueText))
         {
-            sheet.SetCell(address, new TextValue(pivotTable.EmptyValueText));
+            SetPivotCell(sheet, address, new TextValue(pivotTable.EmptyValueText));
             return;
         }
 
@@ -29,7 +29,7 @@ public static partial class PivotTableRefreshService
             cell.StyleId = workbook.RegisterStyle(style);
         }
 
-        sheet.SetCell(address, cell);
+        SetPivotCell(sheet, address, cell);
     }
 
     private static bool TryResolveNumberFormat(Workbook workbook, PivotDataFieldModel dataField, out string formatCode)

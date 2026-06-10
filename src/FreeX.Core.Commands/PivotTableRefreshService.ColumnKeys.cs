@@ -17,7 +17,7 @@ public static partial class PivotTableRefreshService
             var caption = columnKey.Values[level];
             if (!singleDataField && level == columnKey.Values.Count - 1)
                 caption = $"{caption} {dataField.Name}";
-            sheet.SetCell(new CellAddress(sheet.Id, startRow + (uint)level, outputColumn), new TextValue(caption));
+            SetPivotCell(sheet, new CellAddress(sheet.Id, startRow + (uint)level, outputColumn), new TextValue(caption));
         }
     }
 

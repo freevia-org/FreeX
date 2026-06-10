@@ -1,17 +1,20 @@
 using System.Globalization;
+using System.Threading;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
 public static partial class PivotTableRefreshService
 {
+    private static readonly AsyncLocal<PivotRenderFootprint?> CurrentRenderFootprint = new();
+
     public static void Refresh(Workbook workbook, Sheet targetSheet, PivotTableModel pivotTable)
     {
         var sourceSheet = workbook.GetSheet(pivotTable.SourceRange.Start.Sheet);
         if (sourceSheet is null || pivotTable.DataFields.Count == 0)
             return;
 
-        ClearTargetRange(targetSheet, pivotTable.TargetRange);
+        ClearRefreshRanges(targetSheet, pivotTable);
 
         var headers = ReadHeaders(sourceSheet, pivotTable.SourceRange);
         var columnFields = pivotTable.ColumnFields.ToList();
@@ -20,6 +23,7 @@ public static partial class PivotTableRefreshService
             !columnFields.All(field => IsValidField(field.SourceFieldIndex, headers.Count)) ||
             !pivotTable.DataFields.All(field => IsValidDataField(field, pivotTable, headers.Count)))
         {
+            pivotTable.LastRenderedRange = null;
             return;
         }
 
@@ -29,23 +33,47 @@ public static partial class PivotTableRefreshService
             .Where(row => MatchesFieldSelections(row, columnFields))
             .ToList();
 
-        WritePageFields(targetSheet, pivotTable, headers);
+        var previousFootprint = CurrentRenderFootprint.Value;
+        var footprint = new PivotRenderFootprint(targetSheet.Id);
+        CurrentRenderFootprint.Value = footprint;
+        try
+        {
+            WritePageFields(targetSheet, pivotTable, headers);
 
-        if (pivotTable.RowFields.Count == 0 && columnFields.Count == 0)
-            WriteValuesOnlyPivot(workbook, targetSheet, pivotTable, headers, rows);
-        else if (pivotTable.RowFields.Count == 0)
-            WriteColumnOnlyPivot(workbook, targetSheet, pivotTable, headers, rows, columnFields);
-        else if (columnFields.Count > 0)
-            WriteMatrixPivot(workbook, targetSheet, pivotTable, headers, rows, columnFields);
-        else
-            WriteRowPivot(workbook, targetSheet, pivotTable, headers, rows);
+            if (pivotTable.RowFields.Count == 0 && columnFields.Count == 0)
+                WriteValuesOnlyPivot(workbook, targetSheet, pivotTable, headers, rows);
+            else if (pivotTable.RowFields.Count == 0)
+                WriteColumnOnlyPivot(workbook, targetSheet, pivotTable, headers, rows, columnFields);
+            else if (columnFields.Count > 0)
+                WriteMatrixPivot(workbook, targetSheet, pivotTable, headers, rows, columnFields);
+            else
+                WriteRowPivot(workbook, targetSheet, pivotTable, headers, rows);
 
-        ApplyPivotTableStyle(workbook, targetSheet, pivotTable);
-        ApplyMergedRowLabels(workbook, targetSheet, pivotTable);
+            ApplyPivotTableStyle(workbook, targetSheet, pivotTable);
+            ApplyMergedRowLabels(workbook, targetSheet, pivotTable);
+            pivotTable.LastRenderedRange = footprint.ToGridRange() ??
+                new GridRange(pivotTable.TargetRange.Start, pivotTable.TargetRange.Start);
+        }
+        finally
+        {
+            CurrentRenderFootprint.Value = previousFootprint;
+        }
     }
 
     public static GridRange GetMaterializedOutputRange(Sheet sheet, PivotTableModel pivotTable)
     {
+        if (CurrentRenderFootprint.Value is { } footprint &&
+            footprint.TryGetRange(sheet.Id, out var trackedRange))
+        {
+            return trackedRange;
+        }
+
+        if (pivotTable.LastRenderedRange is { } lastRenderedRange &&
+            lastRenderedRange.Start.Sheet == sheet.Id)
+        {
+            return lastRenderedRange;
+        }
+
         uint? minRow = null;
         uint? minCol = null;
         uint? maxRow = null;
@@ -135,6 +163,89 @@ public static partial class PivotTableRefreshService
         for (var row = targetRange.Start.Row; row <= targetRange.End.Row; row++)
         for (var col = targetRange.Start.Col; col <= targetRange.End.Col; col++)
             sheet.ClearCell(row, col);
+    }
+
+    private static void ClearRefreshRanges(Sheet sheet, PivotTableModel pivotTable)
+    {
+        var previousRange = pivotTable.LastRenderedRange is { } previous &&
+            previous.Start.Sheet == sheet.Id
+            ? previous
+            : (GridRange?)null;
+
+        if (previousRange is { } previousOnSheet)
+            ClearRenderedRange(sheet, previousOnSheet);
+
+        if (previousRange is null ||
+            previousRange.Value != pivotTable.TargetRange &&
+            previousRange.Value.Start != pivotTable.TargetRange.Start)
+        {
+            ClearRenderedRange(sheet, pivotTable.TargetRange);
+        }
+    }
+
+    internal static void ClearRenderedRange(Sheet sheet, GridRange? range)
+    {
+        if (range is { } rangeOnSheet && rangeOnSheet.Start.Sheet == sheet.Id)
+            ClearTargetRange(sheet, rangeOnSheet);
+    }
+
+    private static void SetPivotCell(Sheet sheet, CellAddress address, ScalarValue value)
+    {
+        sheet.SetCell(address, value);
+        CurrentRenderFootprint.Value?.Include(address);
+    }
+
+    private static void SetPivotCell(Sheet sheet, CellAddress address, Cell cell)
+    {
+        sheet.SetCell(address, cell);
+        CurrentRenderFootprint.Value?.Include(address);
+    }
+
+    private sealed class PivotRenderFootprint
+    {
+        private readonly SheetId _sheetId;
+        private uint? _minRow;
+        private uint? _minCol;
+        private uint? _maxRow;
+        private uint? _maxCol;
+
+        public PivotRenderFootprint(SheetId sheetId)
+        {
+            _sheetId = sheetId;
+        }
+
+        public void Include(CellAddress address)
+        {
+            if (address.Sheet != _sheetId)
+                return;
+
+            _minRow = _minRow is null ? address.Row : Math.Min(_minRow.Value, address.Row);
+            _minCol = _minCol is null ? address.Col : Math.Min(_minCol.Value, address.Col);
+            _maxRow = _maxRow is null ? address.Row : Math.Max(_maxRow.Value, address.Row);
+            _maxCol = _maxCol is null ? address.Col : Math.Max(_maxCol.Value, address.Col);
+        }
+
+        public bool TryGetRange(SheetId sheetId, out GridRange range)
+        {
+            if (sheetId == _sheetId && ToGridRange() is { } gridRange)
+            {
+                range = gridRange;
+                return true;
+            }
+
+            range = default;
+            return false;
+        }
+
+        public GridRange? ToGridRange()
+        {
+            if (_minRow is null || _minCol is null || _maxRow is null || _maxCol is null)
+                return null;
+
+            return new GridRange(
+                new CellAddress(_sheetId, _minRow.Value, _minCol.Value),
+                new CellAddress(_sheetId, _maxRow.Value, _maxCol.Value));
+        }
     }
 
     private static bool IsValidField(int index, int fieldCount) => index >= 0 && index < fieldCount;
