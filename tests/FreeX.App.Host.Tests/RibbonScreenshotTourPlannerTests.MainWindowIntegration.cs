@@ -33,6 +33,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PAGE_LAYOUT_SETUP_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_FONT_COLORS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_AUTHORING_NAMES_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
@@ -57,6 +58,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CapturePageLayoutSetupTourAsync");
         source.Should().Contain("CaptureHomeFontColorsTourAsync");
         source.Should().Contain("CaptureHomeClipboardCellsEditingTourAsync");
+        source.Should().Contain("CaptureFormulaAuthoringNamesTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
@@ -81,6 +83,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WriteViewPanesZoomTourManifestAsync");
         source.Should().Contain("WriteReviewCommentsProtectionTourManifestAsync");
         source.Should().Contain("WritePageLayoutSetupTourManifestAsync");
+        source.Should().Contain("WriteFormulaAuthoringNamesTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
         source.Should().Contain("home_alignment_number_tour_manifest.json");
@@ -98,6 +101,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("page_layout_setup_tour_manifest.json");
         source.Should().Contain("home_font_colors_tour_manifest.json");
         source.Should().Contain("home_clipboard_cells_editing_tour_manifest.json");
+        source.Should().Contain("formula_authoring_names_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
@@ -723,6 +727,49 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         catalog.Should().Contain("FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR=1");
         catalog.Should().Contain("screenshots/home-clipboard-cells-editing-tour/");
         catalog.Should().Contain("home_clipboard_cells_editing_tour_manifest.json");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesFormulaAuthoringNamesVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_FORMULA_AUTHORING_NAMES_TOUR");
+        source.Should().Contain("formula-authoring-names-tour");
+        source.Should().Contain("EnsureFormulaAuthoringNamesTourContext");
+        source.Should().Contain("_workbook.DefineNamedRange(\"Revenue\", revenueRange);");
+        source.Should().Contain("_workbook.DefineNamedRange(\"Profit\", profitRange);");
+        source.Should().Contain("sheet.SetFormula(new CellAddress(sheet.Id, 7, 2), \"SUM(Revenue)\")");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"Formulas\"))");
+        source.Should().Contain("CaptureFormulaAuthoringNamesMenuAsync");
+        source.Should().Contain("CaptureFormulaAuthoringNamesFunctionMenuAsync");
+        source.Should().Contain("FormulaLogicalBtn_Click");
+        source.Should().Contain("UseInFormulaBtn_Click");
+        source.Should().Contain("new InsertFunctionDialog");
+        source.Should().Contain("categoryBox.SelectedItem = \"Lookup & Reference\";");
+        source.Should().Contain("InsertFunctionCatalogEntry { Name: \"XLOOKUP\" }");
+        source.Should().Contain("new NamedRangeDialog(_workbook, _commandBus, context.AuthoringRange)");
+        source.Should().Contain("new NameDefinitionDialog(");
+        source.Should().Contain("new CreateNamesFromSelectionDialog");
+        source.Should().Contain("freex_formula_authoring_names_formulas_tab");
+        source.Should().Contain("freex_formula_authoring_names_autosum_menu_opened");
+        source.Should().Contain("freex_formula_authoring_names_logical_functions_menu_opened");
+        source.Should().Contain("freex_formula_authoring_names_use_in_formula_menu_opened");
+        source.Should().Contain("freex_formula_authoring_names_insert_function_lookup_xlookup");
+        source.Should().Contain("freex_formula_authoring_names_name_manager_dialog");
+        source.Should().Contain("freex_formula_authoring_names_define_name_dialog");
+        source.Should().Contain("freex_formula_authoring_names_create_from_selection_dialog");
+        source.Should().Contain("UI-CAT-FORMULAS-001");
+        source.Should().Contain("UI-CMD-FORM-001");
+        source.Should().Contain("UI-CMD-FORM-002");
+        source.Should().Contain("RenderTargetBitmap-formulas-context-menu");
+        source.Should().Contain("Formula diagnostics, formula-bar/name-box, and Excel-paired screenshot evidence are intentionally outside this bounded slice.");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.FormulaAuthoringNamesTourManifest");
+
+        catalog.Should().Contain("FREEX_FORMULA_AUTHORING_NAMES_TOUR=1");
+        catalog.Should().Contain("screenshots/formula-authoring-names-tour/");
+        catalog.Should().Contain("formula_authoring_names_tour_manifest.json");
     }
 
     [Fact]
