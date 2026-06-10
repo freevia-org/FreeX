@@ -42,6 +42,8 @@ public partial class MainWindow
     private const string HomeBordersDropdownTourCaptureFileName = "freex_dropdown_home_borders_opened";
     private const string HomeFontColorsTourManifestFileName = "home_font_colors_tour_manifest.json";
     private const string HomeFontColorsTourOutputDirectoryName = "home-font-colors-tour";
+    private const string HomeStylesConditionalFormattingTourManifestFileName = "home_styles_conditional_formatting_tour_manifest.json";
+    private const string HomeStylesConditionalFormattingTourOutputDirectoryName = "home-styles-cf-tour";
     private const string HomeClipboardCellsEditingTourManifestFileName = "home_clipboard_cells_editing_tour_manifest.json";
     private const string HomeClipboardCellsEditingTourOutputDirectoryName = "home-clipboard-cells-editing-tour";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
@@ -151,6 +153,7 @@ public partial class MainWindow
         var homeAlignmentNumberTour = Environment.GetEnvironmentVariable("FREEX_HOME_ALIGNMENT_NUMBER_TOUR") == "1";
         var homeBordersDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_BORDERS_DROPDOWN_TOUR") == "1";
         var homeFontColorsTour = Environment.GetEnvironmentVariable("FREEX_HOME_FONT_COLORS_TOUR") == "1";
+        var homeStylesConditionalFormattingTour = Environment.GetEnvironmentVariable("FREEX_HOME_STYLES_CF_TOUR") == "1";
         var homeClipboardCellsEditingTour = Environment.GetEnvironmentVariable("FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR") == "1";
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
@@ -171,7 +174,7 @@ public partial class MainWindow
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
         var formulaAuthoringNamesTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_AUTHORING_NAMES_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeClipboardCellsEditingTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeStylesConditionalFormattingTour && !homeClipboardCellsEditingTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -188,7 +191,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeClipboardCellsEditingTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeStylesConditionalFormattingTour, homeClipboardCellsEditingTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -219,6 +222,7 @@ public partial class MainWindow
         bool homeAlignmentNumberTour,
         bool homeBordersDropdownTour,
         bool homeFontColorsTour,
+        bool homeStylesConditionalFormattingTour,
         bool homeClipboardCellsEditingTour,
         bool worksheetContextMenuTour,
         bool keyTipOverlayTour,
@@ -260,6 +264,9 @@ public partial class MainWindow
 
         if (homeFontColorsTour)
             await CaptureHomeFontColorsTourAsync(Path.Combine(outputDir, HomeFontColorsTourOutputDirectoryName));
+
+        if (homeStylesConditionalFormattingTour)
+            await CaptureHomeStylesConditionalFormattingTourAsync(Path.Combine(outputDir, HomeStylesConditionalFormattingTourOutputDirectoryName));
 
         if (homeClipboardCellsEditingTour)
             await CaptureHomeClipboardCellsEditingTourAsync(Path.Combine(outputDir, HomeClipboardCellsEditingTourOutputDirectoryName));
@@ -1280,6 +1287,480 @@ public partial class MainWindow
             var path = Path.Combine(outputDir, fileName);
             if (!File.Exists(path))
                 throw new InvalidOperationException($"Home font/colors tour did not create {fileName}.");
+        }
+    }
+
+    private async Task CaptureHomeStylesConditionalFormattingTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteHomeStylesConditionalFormattingTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1220;
+        Height = 820;
+        await Task.Delay(700);
+
+        var context = EnsureHomeStylesConditionalFormattingTourContext();
+        var captures = new List<HomeStylesConditionalFormattingTourManifestCapture>();
+        Window? openDialog = null;
+
+        try
+        {
+            SelectHomeStylesConditionalFormattingRibbonTab();
+            SetSelectionRange(context.ResultRange, context.ResultRange.Start);
+            UpdateViewport();
+            RefreshToolbar();
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(350);
+
+            await CaptureCurrentWindowAsync(outputDir, "freex_home_styles_cf_grid_result", 760);
+            captures.Add(CreateHomeStylesConditionalFormattingCapture(
+                "grid-result",
+                "Home Styles result",
+                "freex_home_styles_cf_grid_result",
+                "RenderTargetBitmap-window-full",
+                ActualWidth,
+                Math.Min(ActualHeight, 760),
+                [],
+                "Grid result showing a real structured table, seeded conditional-format rules, and representative Cell Style preset cells."));
+
+            captures.Add(await CaptureHomeStylesConditionalFormattingMenuAsync(
+                outputDir,
+                "Conditional Formatting",
+                "conditional-formatting-menu-opened",
+                "Conditional Formatting menu",
+                "freex_home_styles_cf_conditional_formatting_menu_opened",
+                "Production Home Conditional Formatting menu with highlight rules, top/bottom rules, data bars, color scales, icon sets, new/clear/manage rule commands."));
+
+            captures.Add(await CaptureHomeStylesConditionalFormattingDataBarsSubmenuAsync(
+                outputDir,
+                "freex_home_styles_cf_data_bars_submenu_opened"));
+
+            openDialog = new ManageConditionalFormatsDialog(
+                context.Sheet,
+                context.ConditionalFormatRange,
+                _ => { },
+                _ => { })
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureHomeStylesConditionalFormattingDialogAsync(
+                openDialog,
+                outputDir,
+                "conditional-formatting-manager",
+                "Conditional Formatting Rules Manager",
+                "freex_home_styles_cf_manage_rules_dialog",
+                "Conditional Formatting Rules Manager opened against the seeded score range with the real data bar and greater-than rules visible."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            captures.Add(await CaptureHomeStylesConditionalFormattingMenuAsync(
+                outputDir,
+                "Format as Table",
+                "format-as-table-gallery-opened",
+                "Format as Table gallery",
+                "freex_home_styles_cf_format_as_table_gallery_opened",
+                "Production Format as Table gallery populated from TableStyleGalleryPlanner with Light, Medium, and Dark style sections and theme-backed swatches."));
+
+            captures.Add(await CaptureHomeStylesConditionalFormattingMenuAsync(
+                outputDir,
+                "Cell Styles",
+                "cell-styles-gallery-opened",
+                "Cell Styles gallery",
+                "freex_home_styles_cf_cell_styles_gallery_opened",
+                "Production Cell Styles menu with Normal, Good/Bad/Neutral, data/model styles, headings, note/warning/total, and accent depth presets."));
+
+            ValidateHomeStylesConditionalFormattingTourEvidence(outputDir, captures);
+            await WriteHomeStylesConditionalFormattingTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteHomeStylesConditionalFormattingTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (openDialog is { IsVisible: true })
+                CloseDataToolsTourDialog(openDialog);
+
+            CloseHomeStylesConditionalFormattingMenus();
+        }
+    }
+
+    private HomeStylesConditionalFormattingTourContext EnsureHomeStylesConditionalFormattingTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Home Styles/Conditional Formatting tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        sheet.StructuredTables.Clear();
+        sheet.ConditionalFormats.Clear();
+
+        for (uint row = 1; row <= 12; row++)
+        {
+            for (uint col = 1; col <= 7; col++)
+                sheet.ClearCell(new CellAddress(sheet.Id, row, col));
+        }
+
+        var rows = new (string Region, string Owner, double Score, string Status)[]
+        {
+            ("North", "Ari", 1820, "Good"),
+            ("South", "Bo", 940, "Watch"),
+            ("East", "Cai", 1515, "Good"),
+            ("West", "Dee", 1280, "Neutral"),
+            ("Central", "Eli", 1688, "Good")
+        };
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Owner"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Score"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new TextValue("Status"));
+        for (var index = 0; index < rows.Length; index++)
+        {
+            var row = (uint)(index + 2);
+            var item = rows[index];
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue(item.Region));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(item.Owner));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(item.Score));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 4), new TextValue(item.Status));
+        }
+
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 1), new TextValue("Cell Styles"));
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 2), new TextValue("Good"));
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 3), new TextValue("Bad"));
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 4), new TextValue("Neutral"));
+        sheet.SetCell(new CellAddress(sheet.Id, 9, 2), new TextValue("Pass"));
+        sheet.SetCell(new CellAddress(sheet.Id, 9, 3), new TextValue("Risk"));
+        sheet.SetCell(new CellAddress(sheet.Id, 9, 4), new TextValue("Review"));
+
+        var tableRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 6, 4));
+        var conditionalFormatRange = new GridRange(new CellAddress(sheet.Id, 2, 3), new CellAddress(sheet.Id, 6, 3));
+        var styleRange = new GridRange(new CellAddress(sheet.Id, 8, 1), new CellAddress(sheet.Id, 9, 4));
+        var resultRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 9, 4));
+        const string tableStyleName = "TableStyleMedium4";
+
+        ApplyHomeStylesConditionalFormattingStyle(
+            new GridRange(new CellAddress(sheet.Id, 8, 1), new CellAddress(sheet.Id, 8, 4)),
+            CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Heading2, _workbook.Theme));
+        ApplyHomeStylesConditionalFormattingStyle(
+            new GridRange(new CellAddress(sheet.Id, 9, 2), new CellAddress(sheet.Id, 9, 2)),
+            CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Good, _workbook.Theme));
+        ApplyHomeStylesConditionalFormattingStyle(
+            new GridRange(new CellAddress(sheet.Id, 9, 3), new CellAddress(sheet.Id, 9, 3)),
+            CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Bad, _workbook.Theme));
+        ApplyHomeStylesConditionalFormattingStyle(
+            new GridRange(new CellAddress(sheet.Id, 9, 4), new CellAddress(sheet.Id, 9, 4)),
+            CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Neutral, _workbook.Theme));
+
+        if (!TableStyleGalleryPlanner.TryGetOption(tableStyleName, _workbook.Theme, out var tableStyle))
+            tableStyle = TableStyleGalleryPlanner.GetOption(0, _workbook.Theme);
+
+        ExecuteHomeStylesConditionalFormattingCommand(
+            new CreateStyledStructuredTableCommand(sheet.Id, tableRange, tableStyle.StyleName, firstRowHasHeaders: true, tableStyle.Banding),
+            "Format as Table");
+
+        var greaterThanRule = new ConditionalFormat
+        {
+            AppliesTo = conditionalFormatRange,
+            Priority = 1,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThanOrEqual,
+            Value1 = "1600",
+            FormatIfTrue = new CellStyle
+            {
+                Bold = true,
+                FontColor = new CellColor(156, 87, 0),
+                FillColor = new CellColor(255, 235, 156)
+            }
+        };
+        ExecuteHomeStylesConditionalFormattingCommand(
+            new ApplyConditionalFormatCommand(sheet.Id, greaterThanRule),
+            "Conditional Formatting");
+
+        var dataBarRule = ConditionalFormatPresetGalleryPlanner.CreateDataBarRule("SolidBlue", conditionalFormatRange)
+            ?? throw new InvalidOperationException("Home Styles/Conditional Formatting tour could not create the data bar rule.");
+        dataBarRule.Priority = 2;
+        ExecuteHomeStylesConditionalFormattingCommand(
+            new ApplyConditionalFormatCommand(sheet.Id, dataBarRule),
+            "Conditional Formatting");
+
+        SetSelectionRange(resultRange, resultRange.Start);
+        EnsureCellVisible(resultRange.Start);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+
+        return new HomeStylesConditionalFormattingTourContext(
+            sheet,
+            tableRange,
+            conditionalFormatRange,
+            styleRange,
+            resultRange,
+            tableStyle.StyleName);
+    }
+
+    private void ApplyHomeStylesConditionalFormattingStyle(GridRange range, StyleDiff diff)
+    {
+        if (!TryExecuteApplyStyle(range, diff, "Apply Style"))
+            throw new InvalidOperationException($"Home Styles/Conditional Formatting tour could not apply style to {range}.");
+    }
+
+    private void ExecuteHomeStylesConditionalFormattingCommand(IWorkbookCommand command, string title)
+    {
+        if (!TryExecuteCommand(command, title, out var outcome))
+            throw new InvalidOperationException($"Home Styles/Conditional Formatting tour failed to apply '{title}': {outcome.ErrorMessage}");
+    }
+
+    private void SelectHomeStylesConditionalFormattingRibbonTab()
+    {
+        var homeTab = RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home");
+        SelectRibbonTourTab(homeTab);
+    }
+
+    private async Task<HomeStylesConditionalFormattingTourManifestCapture> CaptureHomeStylesConditionalFormattingMenuAsync(
+        string outputDir,
+        string commandName,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        SelectHomeStylesConditionalFormattingRibbonTab();
+        if (string.Equals(commandName, "Format as Table", StringComparison.Ordinal))
+            PopulateFormatTableGalleryMenu();
+
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)
+            ?? throw new InvalidOperationException($"Home Styles/Conditional Formatting tour could not find '{commandName}' ribbon button.");
+        var menu = button.ContextMenu
+            ?? throw new InvalidOperationException($"Home Styles/Conditional Formatting tour could not find '{commandName}' context menu.");
+
+        OpenRibbonContextMenu(button, menu);
+        await Task.Delay(350);
+        menu.UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        await CaptureElementAsync(menu, outputDir, fileName);
+        var headers = CaptureHomeStylesConditionalFormattingMenuHeaders(menu.Items);
+        var capture = CreateHomeStylesConditionalFormattingCapture(
+            state,
+            surface,
+            fileName,
+            "RenderTargetBitmap-home-styles-context-menu",
+            menu.ActualWidth,
+            menu.ActualHeight,
+            headers,
+            evidenceSummary);
+        menu.IsOpen = false;
+        return capture;
+    }
+
+    private async Task<HomeStylesConditionalFormattingTourManifestCapture> CaptureHomeStylesConditionalFormattingDataBarsSubmenuAsync(
+        string outputDir,
+        string fileName)
+    {
+        SelectHomeStylesConditionalFormattingRibbonTab();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, "Conditional Formatting")
+            ?? throw new InvalidOperationException("Home Styles/Conditional Formatting tour could not find the Conditional Formatting ribbon button.");
+        var menu = button.ContextMenu
+            ?? throw new InvalidOperationException("Home Styles/Conditional Formatting tour could not find the Conditional Formatting context menu.");
+
+        OpenRibbonContextMenu(button, menu);
+        await Task.Delay(250);
+        var dataBarsItem = FindMenuItemByCommandName(menu.Items, "Data Bars")
+            ?? throw new InvalidOperationException("Home Styles/Conditional Formatting tour could not find the Data Bars submenu.");
+        PopulateConditionalFormatDataBarGallery(dataBarsItem);
+        dataBarsItem.IsSubmenuOpen = true;
+        dataBarsItem.UpdateLayout();
+        await Task.Delay(350);
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        try
+        {
+            var popupChild = FindOpenPopupChild(dataBarsItem)
+                ?? throw new InvalidOperationException("Home Styles/Conditional Formatting tour could not locate the open Data Bars submenu popup.");
+            await CaptureElementAsync(popupChild, outputDir, fileName);
+            return CreateHomeStylesConditionalFormattingCapture(
+                "data-bars-submenu-opened",
+                "Conditional Formatting Data Bars submenu",
+                fileName,
+                "RenderTargetBitmap-home-styles-context-submenu",
+                popupChild.ActualWidth,
+                popupChild.ActualHeight,
+                CaptureHomeStylesConditionalFormattingMenuHeaders(dataBarsItem.Items),
+                "Data Bars preset gallery with gradient, solid fill, swatches, keytip metadata, and More Rules entry populated by ConditionalFormatPresetGalleryPlanner.");
+        }
+        finally
+        {
+            dataBarsItem.IsSubmenuOpen = false;
+            menu.IsOpen = false;
+        }
+    }
+
+    private async Task<HomeStylesConditionalFormattingTourManifestCapture> CaptureHomeStylesConditionalFormattingDialogAsync(
+        Window dialog,
+        string outputDir,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+        return CreateHomeStylesConditionalFormattingCapture(
+            state,
+            surface,
+            fileName,
+            "RenderTargetBitmap-home-styles-dialog-window",
+            dialog.ActualWidth,
+            dialog.ActualHeight,
+            [],
+            evidenceSummary);
+    }
+
+    private HomeStylesConditionalFormattingTourManifestCapture CreateHomeStylesConditionalFormattingCapture(
+        string state,
+        string surface,
+        string fileName,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        IReadOnlyList<string> menuHeaders,
+        string evidenceSummary)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return new HomeStylesConditionalFormattingTourManifestCapture(
+            CaptureKey: $"interactive:home-styles-cf:{state}",
+            PairKey: $"interactive:home-styles-cf:{state}",
+            ScenarioId: "home-styles-cf:visual-evidence",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            SelectedRange: SheetGrid.SelectedRange?.ToString() ?? string.Empty,
+            StructuredTableCount: sheet?.StructuredTables.Count ?? 0,
+            ConditionalFormatRuleCount: sheet?.ConditionalFormats.Count ?? 0,
+            MenuHeaders: menuHeaders,
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private static MenuItem? FindMenuItemByCommandName(ItemCollection items, string commandName)
+    {
+        foreach (var item in items)
+        {
+            if (item is not MenuItem menuItem)
+                continue;
+
+            if (RibbonMetadata.TryGetCommandName(menuItem, out var candidate) &&
+                string.Equals(candidate, commandName, StringComparison.Ordinal))
+            {
+                return menuItem;
+            }
+
+            var nested = FindMenuItemByCommandName(menuItem.Items, commandName);
+            if (nested is not null)
+                return nested;
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<string> CaptureHomeStylesConditionalFormattingMenuHeaders(ItemCollection items)
+    {
+        var headers = new List<string>();
+        foreach (var item in items)
+        {
+            if (item is not MenuItem menuItem)
+                continue;
+
+            if (RibbonMetadata.TryGetCommandName(menuItem, out var commandName))
+            {
+                headers.Add(commandName);
+                continue;
+            }
+
+            var header = ExtractMenuHeaderText(menuItem.Header);
+            if (!string.IsNullOrWhiteSpace(header))
+                headers.Add(header);
+        }
+
+        return headers;
+    }
+
+    private static string ExtractMenuHeaderText(object? header)
+    {
+        if (header is null)
+            return string.Empty;
+
+        if (header is string text)
+            return text;
+
+        if (header is TextBlock textBlock)
+            return textBlock.Text;
+
+        if (header is Panel panel)
+        {
+            return string.Join(" ", panel.Children
+                .OfType<TextBlock>()
+                .Select(child => child.Text)
+                .Where(text => !string.IsNullOrWhiteSpace(text)));
+        }
+
+        return header.ToString() ?? string.Empty;
+    }
+
+    private void CloseHomeStylesConditionalFormattingMenus()
+    {
+        foreach (var commandName in new[] { "Conditional Formatting", "Format as Table", "Cell Styles" })
+        {
+            var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName);
+            if (button?.ContextMenu is { } menu)
+                menu.IsOpen = false;
+        }
+    }
+
+    private static void DeleteHomeStylesConditionalFormattingTourEvidence(string outputDir)
+    {
+        foreach (var fileName in HomeStylesConditionalFormattingTourExpectedFileNames().Append(HomeStylesConditionalFormattingTourManifestFileName))
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static IReadOnlyList<string> HomeStylesConditionalFormattingTourExpectedFileNames() =>
+    [
+        "freex_home_styles_cf_grid_result.png",
+        "freex_home_styles_cf_conditional_formatting_menu_opened.png",
+        "freex_home_styles_cf_data_bars_submenu_opened.png",
+        "freex_home_styles_cf_manage_rules_dialog.png",
+        "freex_home_styles_cf_format_as_table_gallery_opened.png",
+        "freex_home_styles_cf_cell_styles_gallery_opened.png"
+    ];
+
+    private static void ValidateHomeStylesConditionalFormattingTourEvidence(
+        string outputDir,
+        IReadOnlyList<HomeStylesConditionalFormattingTourManifestCapture> captures)
+    {
+        if (captures.Count != HomeStylesConditionalFormattingTourExpectedFileNames().Count)
+            throw new InvalidOperationException("Home Styles/Conditional Formatting tour did not create the planned capture count.");
+
+        foreach (var fileName in HomeStylesConditionalFormattingTourExpectedFileNames())
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Home Styles/Conditional Formatting tour did not create {fileName}.");
         }
     }
 
@@ -8608,6 +9089,75 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeFontColorsTourManifest);
     }
 
+    private static async Task WriteHomeStylesConditionalFormattingTourManifestAsync(
+        string outputDir,
+        HomeStylesConditionalFormattingTourContext context,
+        IReadOnlyList<HomeStylesConditionalFormattingTourManifestCapture> captures)
+    {
+        var manifest = new HomeStylesConditionalFormattingTourManifest(
+            Tool: "FREEX_HOME_STYLES_CF_TOUR",
+            EvidenceFamily: "home-styles-conditional-formatting",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "home-styles-cf:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_home_styles_cf_<Surface>_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#Home font/alignment/number/styles",
+            CatalogCommandRows:
+            [
+                "UI-CAT-HOME-003A-C",
+                "UI-CMD-HOME-STYLES-001",
+                "UI-CMD-HOME-STYLES-002",
+                "UI-CMD-HOME-STYLES-003"
+            ],
+            SheetName: context.Sheet.Name,
+            ResultRange: context.ResultRange.ToString(),
+            TableRange: context.TableRange.ToString(),
+            ConditionalFormatRange: context.ConditionalFormatRange.ToString(),
+            CellStyleRange: context.CellStyleRange.ToString(),
+            TableStyleName: context.TableStyleName,
+            ConditionalFormatRuleCount: context.Sheet.ConditionalFormats.Count,
+            StructuredTableCount: context.Sheet.StructuredTables.Count,
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "RenderTargetBitmap-in-process"
+                : "foreground CopyFromScreen",
+            PlannedCaptureCount: HomeStylesConditionalFormattingTourExpectedFileNames().Count,
+            ActualCaptureCount: captures.Count,
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, keytip, range-picker, native dialog, or screen capture input is used."
+                    : "Window, menu, and dialog captures abort unless the expected FreeX WPF surface owns foreground focus immediately before render and file write."),
+            Pairing: new HomeStylesConditionalFormattingTourManifestPairing(
+                "interactive:home-styles-cf:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Home Styles group grid result with a real structured table, conditional-format rules, and Cell Style preset cells",
+                "Conditional Formatting top-level menu",
+                "Conditional Formatting Data Bars preset submenu",
+                "Conditional Formatting Rules Manager dialog",
+                "Format as Table gallery",
+                "Cell Styles gallery"
+            ],
+            Limitations:
+            [
+                "This bounded tour drives FreeX commands and WPF menus/dialogs in process, then captures them with RenderTargetBitmap.",
+                "The tour does not synthesize physical mouse, Alt/keytip, menu keyboard navigation, range-picker collapse/selection, dialog OK/Apply workflows, or foreground CopyFromScreen input.",
+                "The Format as Table result uses the direct CreateStyledStructuredTableCommand path instead of clicking a gallery item and submitting the Create Table dialog.",
+                "Only representative Conditional Formatting rules are seeded; full highlight/top-bottom/color-scale/icon-set rule taxonomy, edit/duplicate/delete/reorder manager flows, and clear-rules workflows remain separate.",
+                "Excel-paired screenshots, save/reload persistence breadth, protected/table/formula target breadth, and LCID/theme matrix coverage remain open."
+            ]);
+
+        var path = Path.Combine(outputDir, HomeStylesConditionalFormattingTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeStylesConditionalFormattingTourManifest);
+    }
+
     private static async Task WriteHomeClipboardCellsEditingTourManifestAsync(
         string outputDir,
         HomeClipboardCellsEditingTourContext context,
@@ -10054,6 +10604,65 @@ public partial class MainWindow
         string? ActiveCellFillColor,
         IReadOnlyList<string> MenuHeaders);
 
+    private sealed record HomeStylesConditionalFormattingTourContext(
+        Sheet Sheet,
+        GridRange TableRange,
+        GridRange ConditionalFormatRange,
+        GridRange CellStyleRange,
+        GridRange ResultRange,
+        string TableStyleName);
+
+    private sealed record HomeStylesConditionalFormattingTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogCommandRows,
+        string SheetName,
+        string ResultRange,
+        string TableRange,
+        string ConditionalFormatRange,
+        string CellStyleRange,
+        string TableStyleName,
+        int ConditionalFormatRuleCount,
+        int StructuredTableCount,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        HomeStylesConditionalFormattingTourManifestPairing Pairing,
+        IReadOnlyList<HomeStylesConditionalFormattingTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record HomeStylesConditionalFormattingTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record HomeStylesConditionalFormattingTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SelectedRange,
+        int StructuredTableCount,
+        int ConditionalFormatRuleCount,
+        IReadOnlyList<string> MenuHeaders,
+        string EvidenceSummary);
+
     private sealed record HomeClipboardCellsEditingTourContext(
         Sheet Sheet,
         GridRange CopySourceRange,
@@ -11087,6 +11696,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(HomeAlignmentNumberTourManifest))]
     [JsonSerializable(typeof(HomeBordersDropdownTourManifest))]
     [JsonSerializable(typeof(HomeFontColorsTourManifest))]
+    [JsonSerializable(typeof(HomeStylesConditionalFormattingTourManifest))]
     [JsonSerializable(typeof(HomeClipboardCellsEditingTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
     [JsonSerializable(typeof(PrintPreviewTourManifest))]

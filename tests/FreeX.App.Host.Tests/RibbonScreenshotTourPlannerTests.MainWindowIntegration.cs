@@ -33,6 +33,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PAGE_LAYOUT_SETUP_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DRAW_OBJECT_FORMATTING_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_FONT_COLORS_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_STYLES_CF_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_AUTHORING_NAMES_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
@@ -59,6 +60,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CapturePageLayoutSetupTourAsync");
         source.Should().Contain("CaptureDrawObjectFormattingTourAsync");
         source.Should().Contain("CaptureHomeFontColorsTourAsync");
+        source.Should().Contain("CaptureHomeStylesConditionalFormattingTourAsync");
         source.Should().Contain("CaptureHomeClipboardCellsEditingTourAsync");
         source.Should().Contain("CaptureFormulaAuthoringNamesTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
@@ -104,6 +106,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("page_layout_setup_tour_manifest.json");
         source.Should().Contain("draw_object_formatting_tour_manifest.json");
         source.Should().Contain("home_font_colors_tour_manifest.json");
+        source.Should().Contain("home_styles_conditional_formatting_tour_manifest.json");
         source.Should().Contain("home_clipboard_cells_editing_tour_manifest.json");
         source.Should().Contain("formula_authoring_names_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
@@ -722,6 +725,44 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("persistence breadth across save/reload and native JSON state");
         source.Should().Contain("HomeFontColorsTourManifest");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.HomeFontColorsTourManifest");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesHomeStylesConditionalFormattingVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_HOME_STYLES_CF_TOUR");
+        source.Should().Contain("home-styles-cf-tour");
+        source.Should().Contain("EnsureHomeStylesConditionalFormattingTourContext");
+        source.Should().Contain("new CreateStyledStructuredTableCommand(sheet.Id, tableRange");
+        source.Should().Contain("new ApplyConditionalFormatCommand(sheet.Id, greaterThanRule)");
+        source.Should().Contain("ConditionalFormatPresetGalleryPlanner.CreateDataBarRule(\"SolidBlue\", conditionalFormatRange)");
+        source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Good, _workbook.Theme)");
+        source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Bad, _workbook.Theme)");
+        source.Should().Contain("PopulateFormatTableGalleryMenu();");
+        source.Should().Contain("PopulateConditionalFormatDataBarGallery(dataBarsItem);");
+        source.Should().Contain("new ManageConditionalFormatsDialog(");
+        source.Should().Contain("freex_home_styles_cf_grid_result");
+        source.Should().Contain("freex_home_styles_cf_conditional_formatting_menu_opened");
+        source.Should().Contain("freex_home_styles_cf_data_bars_submenu_opened");
+        source.Should().Contain("freex_home_styles_cf_manage_rules_dialog");
+        source.Should().Contain("freex_home_styles_cf_format_as_table_gallery_opened");
+        source.Should().Contain("freex_home_styles_cf_cell_styles_gallery_opened");
+        source.Should().Contain("UI-CAT-HOME-003A-C");
+        source.Should().Contain("UI-CMD-HOME-STYLES-001");
+        source.Should().Contain("UI-CMD-HOME-STYLES-002");
+        source.Should().Contain("UI-CMD-HOME-STYLES-003");
+        source.Should().Contain("full highlight/top-bottom/color-scale/icon-set rule taxonomy");
+        source.Should().Contain("Excel-paired screenshots");
+        source.Should().Contain("HomeStylesConditionalFormattingTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.HomeStylesConditionalFormattingTourManifest");
+
+        catalog.Should().Contain("FREEX_HOME_STYLES_CF_TOUR=1");
+        catalog.Should().Contain("screenshots/home-styles-cf-tour/");
+        catalog.Should().Contain("home_styles_conditional_formatting_tour_manifest.json");
+        catalog.Should().Contain("freex_home_styles_cf_manage_rules_dialog.png");
     }
 
     [Fact]
