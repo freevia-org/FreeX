@@ -2261,6 +2261,12 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return blocked;
             }
 
+            target = FindVisibleSheetTabElement(handle, targetSheetName);
+            if (target is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not re-resolve {targetSheetName} after selecting the Sheet1 grouping anchor.", options.OutputRoot, "freex");
+            }
+
             blocked = GuardedModifiedClickElement(options.Scenario, processId, handle, target, modifierKey);
             if (blocked is not null)
             {
