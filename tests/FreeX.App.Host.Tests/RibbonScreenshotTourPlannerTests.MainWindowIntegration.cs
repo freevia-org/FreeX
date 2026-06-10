@@ -29,6 +29,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_INSERT_OBJECTS_LINKS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DATA_TOOLS_DIALOGS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_VIEW_PANES_ZOOM_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_REVIEW_COMMENTS_PROTECTION_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PAGE_LAYOUT_SETUP_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_FONT_COLORS_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
@@ -48,6 +49,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureInsertObjectsLinksTourAsync");
         source.Should().Contain("CaptureDataToolsDialogsTourAsync");
         source.Should().Contain("CaptureViewPanesZoomTourAsync");
+        source.Should().Contain("CaptureReviewCommentsProtectionTourAsync");
         source.Should().Contain("CapturePageLayoutSetupTourAsync");
         source.Should().Contain("CaptureHomeFontColorsTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
@@ -72,6 +74,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WriteInsertObjectsLinksTourManifestAsync");
         source.Should().Contain("WriteDataToolsDialogsTourManifestAsync");
         source.Should().Contain("WriteViewPanesZoomTourManifestAsync");
+        source.Should().Contain("WriteReviewCommentsProtectionTourManifestAsync");
         source.Should().Contain("WritePageLayoutSetupTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
@@ -86,6 +89,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("insert_objects_links_tour_manifest.json");
         source.Should().Contain("data_tools_dialogs_tour_manifest.json");
         source.Should().Contain("view_panes_zoom_tour_manifest.json");
+        source.Should().Contain("review_comments_protection_tour_manifest.json");
         source.Should().Contain("page_layout_setup_tour_manifest.json");
         source.Should().Contain("home_font_colors_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
@@ -659,5 +663,50 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("No global mouse or keyboard input is synthesized");
         source.Should().Contain("The trace-arrow and show-formulas captures are FreeX-only visual states; no paired Microsoft Excel evidence is produced by this tool.");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.FormulaDiagnosticsTourManifest");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesReviewCommentsProtectionVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR");
+        source.Should().Contain("review-comments-protection-tour");
+        source.Should().Contain("EnsureReviewCommentsProtectionTourContext");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"Review\"))");
+        source.Should().Contain("new SpellCheckDialog(context.SpellingWord, context.SpellingSuggestion)");
+        source.Should().Contain("AccessibilityCheckerService.FindIssues(_workbook)");
+        source.Should().Contain("new ThreadedCommentDialog(context.NewThreadedCommentCell.ToA1(), existing: null)");
+        source.Should().Contain("CommentListWindow.CreateThreadedCommentItems(context.Sheet.ThreadedComments)");
+        source.Should().Contain("CommentListWindow.CreateNoteItems(context.Sheet.Comments)");
+        source.Should().Contain("new PasswordProtectionDialog(");
+        source.Should().Contain("new AllowEditRangeDialog(");
+        source.Should().Contain("sheet.ThreadedComments[threadedCell] = new ThreadedComment");
+        source.Should().Contain("sheet.Comments[noteCell] = \"Review seeded simple note.\"");
+        source.Should().Contain("sheet.AllowEditRanges.Add(allowEditRange);");
+        source.Should().Contain("sheet.AddMergedRegion(Range(sheet.Id, 4, 1, 4, 3));");
+        source.Should().Contain("freex_review_comments_protection_review_tab");
+        source.Should().Contain("freex_review_spell_check_dialog");
+        source.Should().Contain("freex_review_accessibility_checker_dialog");
+        source.Should().Contain("freex_review_new_threaded_comment_dialog");
+        source.Should().Contain("freex_review_show_comments_list");
+        source.Should().Contain("freex_review_show_notes_list");
+        source.Should().Contain("freex_review_protect_sheet_dialog");
+        source.Should().Contain("freex_review_protect_workbook_dialog");
+        source.Should().Contain("freex_review_allow_edit_ranges_dialog");
+        source.Should().Contain("UI-CAT-REVIEW-001");
+        source.Should().Contain("UI-CAT-REVIEW-002");
+        source.Should().Contain("UI-CMD-REVIEW-001");
+        source.Should().Contain("UI-CMD-REVIEW-002");
+        source.Should().Contain("UI-CMD-REVIEW-003");
+        source.Should().Contain("UI-CMD-REVIEW-004");
+        source.Should().Contain("Thesaurus is not currently a supported FreeX Review command");
+        source.Should().Contain("Protect/unprotect confirmation, wrong-password, Permissions, Share, Show Changes, foreground focus trapping, and paired Microsoft Excel screenshots remain open.");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.ReviewCommentsProtectionTourManifest");
+
+        catalog.Should().Contain("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR=1");
+        catalog.Should().Contain("screenshots/review-comments-protection-tour/");
+        catalog.Should().Contain("review_comments_protection_tour_manifest.json");
     }
 }
