@@ -173,6 +173,27 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void CreatePlan_WithChartContext_AllowsContextualChartTabCaptures()
+    {
+        var plan = RibbonScreenshotTourPlanner.CreatePlan("Chart Design,Chart_Format", "900", burstMode: false, context: "chart");
+
+        plan.Context.Should().Be("chart");
+        plan.Tabs.Should().Equal(
+        [
+            new("Chart Design", "Chart_Design", "ChartDesignTab"),
+            new("Format", "Chart_Format", "ChartFormatTab")
+        ]);
+        plan.Captures
+            .Select(capture => capture.OutputFileName)
+            .Should()
+            .Equal(
+            [
+                "900_Chart_Design.png",
+                "900_Chart_Format.png"
+            ]);
+    }
+
+    [Fact]
     public void CreatePlan_RejectsContextualTableTabWithoutSeedContext()
     {
         var act = () => RibbonScreenshotTourPlanner.CreatePlan("Table Design", "900");
@@ -190,5 +211,15 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         act.Should()
             .Throw<InvalidOperationException>()
             .WithMessage("*unknown tab(s): PivotTable Analyze*");
+    }
+
+    [Fact]
+    public void CreatePlan_RejectsContextualChartTabsWithoutSeedContext()
+    {
+        var act = () => RibbonScreenshotTourPlanner.CreatePlan("Chart Design", "900");
+
+        act.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*unknown tab(s): Chart Design*");
     }
 }
