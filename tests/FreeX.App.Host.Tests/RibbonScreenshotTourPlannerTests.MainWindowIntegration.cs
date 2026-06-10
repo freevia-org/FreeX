@@ -25,6 +25,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_TITLEBAR_WINDOW_CHROME_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_BAR_NAME_BOX_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_STATUS_FOOTER_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_FONT_COLORS_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
@@ -38,6 +39,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureTitlebarWindowChromeTourAsync");
         source.Should().Contain("CaptureFormulaBarNameBoxTourAsync");
         source.Should().Contain("CaptureStatusFooterTourAsync");
+        source.Should().Contain("CaptureHomeFontColorsTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
@@ -64,6 +66,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("titlebar_window_chrome_tour_manifest.json");
         source.Should().Contain("formula_bar_name_box_tour_manifest.json");
         source.Should().Contain("status_footer_tour_manifest.json");
+        source.Should().Contain("home_font_colors_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
@@ -352,6 +355,40 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("PageBreakPreviewChecked");
         source.Should().Contain("FormulaBarText");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesHomeFontColorsVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_HOME_FONT_COLORS_TOUR");
+        source.Should().Contain("home-font-colors-tour");
+        source.Should().Contain("EnsureHomeFontColorsTourContext");
+        source.Should().Contain("FontSizePlanner.Increase(16)");
+        source.Should().Contain("FontSizePlanner.Decrease(10)");
+        source.Should().Contain("CellStyleDiffPlanner.UnderlineDiff(true)");
+        source.Should().Contain("CellStyleDiffPlanner.DoubleUnderlineDiff(true)");
+        source.Should().Contain("CellStyleDiffPlanner.StrikethroughDiff(true)");
+        source.Should().Contain("new StyleDiff(FontColor: new CellColor(192, 0, 0))");
+        source.Should().Contain("new StyleDiff(FillColor: new CellColor(255, 242, 204))");
+        source.Should().Contain("new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)");
+        source.Should().Contain("new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.6)");
+        source.Should().Contain("BorderShortcutService.GetAllBorderDiff(BorderStyle.Thin, CellColor.Black)");
+        source.Should().Contain("freex_home_font_colors_grid_styled");
+        source.Should().Contain("freex_home_font_family_dropdown_opened");
+        source.Should().Contain("freex_home_font_size_dropdown_opened");
+        source.Should().Contain("freex_home_underline_menu_opened");
+        source.Should().Contain("freex_home_borders_full_menu_opened");
+        source.Should().Contain("freex_home_borders_line_color_submenu_opened");
+        source.Should().Contain("FindMenuItemByHeader(menu.Items, UiText.Get(\"MainWindow_Header_LineColor\"))");
+        source.Should().Contain("foreground mouse/keytip evidence for Home font/color/border commands");
+        source.Should().Contain("Excel-paired Home font/color/border screenshots");
+        source.Should().Contain("full LCID/theme matrix");
+        source.Should().Contain("font/fill color gallery parity beyond the current custom color picker and swatch buttons");
+        source.Should().Contain("persistence breadth across save/reload and native JSON state");
+        source.Should().Contain("HomeFontColorsTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.HomeFontColorsTourManifest");
     }
 
     [Fact]
