@@ -3,15 +3,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:FreeX.App.Host"
         Title="{local:Loc Key=WorkbookTheme_CustomizeTheme}"
-        Width="620"
-        Height="700"
+        Width="760"
+        Height="600"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
-    <DockPanel Margin="16">
+    <DockPanel Margin="14">
         <StackPanel DockPanel.Dock="Bottom"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
-                    Margin="0,14,0,0">
+                    Margin="0,12,0,0">
             <Button x:Name="SaveButton"
                     Content="{local:Loc Key=WorkbookTheme_Save}"
                     Width="86"
@@ -23,104 +23,188 @@
                     IsCancel="True"/>
         </StackPanel>
 
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <TextBlock Text="{local:Loc Key=WorkbookTheme_Theme}"
-                           FontSize="18"
-                           FontWeight="SemiBold"
-                           Margin="0,0,0,14"/>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-                <StackPanel Orientation="Horizontal"
-                            Margin="0,0,0,14">
-                    <Button x:Name="OfficePresetButton"
-                            Content="{local:Loc Key=WorkbookTheme_Office}"
-                            Width="92"
-                            Margin="0,0,8,0"
-                            Click="OfficePresetButton_Click"/>
-                    <Button x:Name="ColorfulPresetButton"
-                            Content="{local:Loc Key=WorkbookTheme_FreeXColorful}"
-                            Width="126"
-                            Margin="0,0,8,0"
-                            Click="ColorfulPresetButton_Click"/>
-                    <Button x:Name="GrayscalePresetButton"
-                            Content="{local:Loc Key=WorkbookTheme_Grayscale}"
-                            Width="92"
-                            Click="GrayscalePresetButton_Click"/>
-                </StackPanel>
+            <TextBlock x:Name="ThemeDialogTitle"
+                       Grid.Row="0"
+                       Text="{local:Loc Key=WorkbookTheme_Theme}"
+                       FontSize="18"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,10"/>
 
-                <Grid Margin="0,0,0,16">
+            <StackPanel x:Name="ThemePresetPanel"
+                        Grid.Row="1"
+                        Orientation="Horizontal"
+                        Margin="0,0,0,10">
+                <Button x:Name="OfficePresetButton"
+                        Content="{local:Loc Key=WorkbookTheme_Office}"
+                        Width="92"
+                        Margin="0,0,8,0"
+                        Click="OfficePresetButton_Click"/>
+                <Button x:Name="ColorfulPresetButton"
+                        Content="{local:Loc Key=WorkbookTheme_FreeXColorful}"
+                        Width="126"
+                        Margin="0,0,8,0"
+                        Click="ColorfulPresetButton_Click"/>
+                <Button x:Name="GrayscalePresetButton"
+                        Content="{local:Loc Key=WorkbookTheme_Grayscale}"
+                        Width="92"
+                        Click="GrayscalePresetButton_Click"/>
+            </StackPanel>
+
+            <Grid x:Name="ThemeMetadataPanel"
+                  Grid.Row="2"
+                  Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="94"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="94"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Label x:Name="ThemeNameLabel" Grid.Row="0" Grid.Column="0" Content="{local:Loc Key=WorkbookTheme_Name}" Target="{Binding ElementName=ThemeNameBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                <TextBox x:Name="ThemeNameBox"
+                         Grid.Row="0"
+                         Grid.Column="1"
+                         Margin="0,0,16,8"
+                         AutomationProperties.Name="{local:Loc Key=WorkbookTheme_ThemeName}"/>
+
+                <Label x:Name="EffectsLabel" Grid.Row="0" Grid.Column="2" Content="{local:Loc Key=WorkbookTheme_Effects}" Target="{Binding ElementName=EffectsBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                <ComboBox x:Name="EffectsBox"
+                          Grid.Row="0"
+                          Grid.Column="3"
+                          Margin="0,0,0,8"
+                          IsEditable="True"
+                          AutomationProperties.Name="{local:Loc Key=WorkbookTheme_Effects2}"/>
+
+                <Label x:Name="HeadingFontLabel" Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=WorkbookTheme_HeadingFont}" Target="{Binding ElementName=HeadingFontBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox x:Name="HeadingFontBox"
+                          Grid.Row="1"
+                          Grid.Column="1"
+                          Margin="0,0,16,0"
+                          IsEditable="True"
+                          AutomationProperties.Name="{local:Loc Key=WorkbookTheme_HeadingFont2}"/>
+
+                <Label x:Name="BodyFontLabel" Grid.Row="1" Grid.Column="2" Content="{local:Loc Key=WorkbookTheme_BodyFont}" Target="{Binding ElementName=BodyFontBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox x:Name="BodyFontBox"
+                          Grid.Row="1"
+                          Grid.Column="3"
+                          IsEditable="True"
+                          AutomationProperties.Name="{local:Loc Key=WorkbookTheme_BodyFont2}"/>
+            </Grid>
+
+            <Border x:Name="ThemePreviewPane"
+                    Grid.Row="3"
+                    BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                    BorderThickness="1"
+                    Padding="8"
+                    Margin="0,0,0,10"
+                    Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+                <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="130"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="1.1*"/>
+                        <ColumnDefinition Width="1*"/>
                     </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
 
-                    <Label Grid.Row="0" Grid.Column="0" Content="{local:Loc Key=WorkbookTheme_Name}" Target="{Binding ElementName=ThemeNameBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,10,8"/>
-                    <TextBox x:Name="ThemeNameBox"
-                             Grid.Row="0"
-                             Grid.Column="1"
-                             Margin="0,0,0,8"
-                             AutomationProperties.Name="{local:Loc Key=WorkbookTheme_ThemeName}"/>
-
-                    <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=WorkbookTheme_HeadingFont}" Target="{Binding ElementName=HeadingFontBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,10,8"/>
-                    <ComboBox x:Name="HeadingFontBox"
-                              Grid.Row="1"
-                              Grid.Column="1"
-                              Margin="0,0,0,8"
-                              IsEditable="True"
-                              AutomationProperties.Name="{local:Loc Key=WorkbookTheme_HeadingFont2}"/>
-
-                    <Label Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=WorkbookTheme_BodyFont}" Target="{Binding ElementName=BodyFontBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,10,8"/>
-                    <ComboBox x:Name="BodyFontBox"
-                              Grid.Row="2"
-                              Grid.Column="1"
-                              Margin="0,0,0,8"
-                              IsEditable="True"
-                              AutomationProperties.Name="{local:Loc Key=WorkbookTheme_BodyFont2}"/>
-
-                    <Label Grid.Row="3" Grid.Column="0" Content="{local:Loc Key=WorkbookTheme_Effects}" Target="{Binding ElementName=EffectsBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <ComboBox x:Name="EffectsBox"
-                              Grid.Row="3"
-                              Grid.Column="1"
-                              IsEditable="True"
-                              AutomationProperties.Name="{local:Loc Key=WorkbookTheme_Effects2}"/>
-                </Grid>
-
-                <TextBlock Text="{local:Loc Key=WorkbookTheme_ThemeColors}"
-                           FontWeight="SemiBold"
-                           Margin="0,0,0,8"/>
-
-                <Border x:Name="ThemePreviewPane"
-                        BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
-                        BorderThickness="1"
-                        Padding="10"
-                        Margin="0,0,0,14"
-                        Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
                     <StackPanel>
                         <TextBlock Text="{local:Loc Key=WorkbookTheme_Sample}"
                                    FontWeight="SemiBold"
-                                   Margin="0,0,0,8"/>
+                                   Margin="0,0,0,4"/>
                         <TextBlock x:Name="PreviewHeadingText"
                                    Text="{local:Loc Key=WorkbookTheme_Heading}"
-                                   FontSize="18"
+                                   FontSize="17"
                                    FontWeight="SemiBold"/>
                         <TextBlock x:Name="PreviewBodyText"
                                    Text="{local:Loc Key=WorkbookTheme_BodyTextAndHyperlinks}"
-                                   Margin="0,2,0,10"/>
+                                   Margin="0,1,0,8"/>
                         <UniformGrid x:Name="PreviewAccentStrip"
                                      Columns="6"
-                                     Height="22"/>
+                                     Height="20"/>
                     </StackPanel>
-                </Border>
 
-                <UniformGrid Columns="2">
-                    <StackPanel Margin="0,0,10,8">
-                        <Label Content="{local:Loc Key=WorkbookTheme_Dark1}" Target="{Binding ElementName=Dark1ColorBox}" Padding="0"/>
+                    <Grid Grid.Column="1"
+                          Margin="20,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="18"/>
+                            <RowDefinition Height="30"/>
+                            <RowDefinition Height="40"/>
+                        </Grid.RowDefinitions>
+
+                        <Border x:Name="PreviewSheetHeader"
+                                Grid.Row="0"
+                                Grid.ColumnSpan="3"
+                                BorderThickness="1"/>
+                        <Border x:Name="PreviewTableHeader"
+                                Grid.Row="1"
+                                Grid.Column="0"
+                                Margin="0,5,4,0"/>
+                        <Border x:Name="PreviewTableBand"
+                                Grid.Row="1"
+                                Grid.Column="1"
+                                Margin="0,5,4,0"/>
+                        <Border x:Name="PreviewShapeSample"
+                                Grid.Row="1"
+                                Grid.Column="2"
+                                Margin="0,5,0,0"/>
+                        <Grid Grid.Row="2"
+                              Grid.ColumnSpan="3"
+                              Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="PreviewChartBar1"
+                                    Grid.Column="0"
+                                    Height="16"
+                                    Margin="0,0,4,0"
+                                    VerticalAlignment="Bottom"/>
+                            <Border x:Name="PreviewChartBar2"
+                                    Grid.Column="1"
+                                    Height="26"
+                                    Margin="0,0,4,0"
+                                    VerticalAlignment="Bottom"/>
+                            <Border x:Name="PreviewChartBar3"
+                                    Grid.Column="2"
+                                    Height="34"
+                                    VerticalAlignment="Bottom"/>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="4">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock x:Name="ThemeColorsTitle"
+                           Text="{local:Loc Key=WorkbookTheme_ThemeColors}"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,6"/>
+
+                <UniformGrid x:Name="ThemeColorsPanel"
+                             Grid.Row="1"
+                             Columns="3">
+                    <StackPanel Margin="0,0,10,6">
+                        <Label Content="{local:Loc Key=WorkbookTheme_Dark1}" Target="{Binding ElementName=Dark1ColorBox}" Padding="0" Margin="0,0,0,1"/>
                         <DockPanel>
                             <Button x:Name="Dark1ColorPickerButton"
                                     Content=""
@@ -133,8 +217,8 @@
                             <TextBox x:Name="Dark1ColorBox"/>
                         </DockPanel>
                     </StackPanel>
-                    <StackPanel Margin="0,0,0,8">
-                        <Label Content="{local:Loc Key=WorkbookTheme_Light1}" Target="{Binding ElementName=Light1ColorBox}" Padding="0"/>
+                    <StackPanel Margin="0,0,10,6">
+                        <Label Content="{local:Loc Key=WorkbookTheme_Light1}" Target="{Binding ElementName=Light1ColorBox}" Padding="0" Margin="0,0,0,1"/>
                         <DockPanel>
                             <Button x:Name="Light1ColorPickerButton"
                                     Content=""
@@ -147,8 +231,8 @@
                             <TextBox x:Name="Light1ColorBox"/>
                         </DockPanel>
                     </StackPanel>
-                    <StackPanel Margin="0,0,10,8">
-                        <Label Content="{local:Loc Key=WorkbookTheme_Dark2}" Target="{Binding ElementName=Dark2ColorBox}" Padding="0"/>
+                    <StackPanel Margin="0,0,0,6">
+                        <Label Content="{local:Loc Key=WorkbookTheme_Dark2}" Target="{Binding ElementName=Dark2ColorBox}" Padding="0" Margin="0,0,0,1"/>
                         <DockPanel>
                             <Button x:Name="Dark2ColorPickerButton"
                                     Content=""
@@ -161,8 +245,8 @@
                             <TextBox x:Name="Dark2ColorBox"/>
                         </DockPanel>
                     </StackPanel>
-                    <StackPanel Margin="0,0,0,8">
-                        <Label Content="{local:Loc Key=WorkbookTheme_Light2}" Target="{Binding ElementName=Light2ColorBox}" Padding="0"/>
+                    <StackPanel Margin="0,0,10,6">
+                        <Label Content="{local:Loc Key=WorkbookTheme_Light2}" Target="{Binding ElementName=Light2ColorBox}" Padding="0" Margin="0,0,0,1"/>
                         <DockPanel>
                             <Button x:Name="Light2ColorPickerButton"
                                     Content=""
@@ -175,8 +259,8 @@
                             <TextBox x:Name="Light2ColorBox"/>
                         </DockPanel>
                     </StackPanel>
-                    <StackPanel Margin="0,0,10,8">
-                        <Label Content="{local:Loc Key=WorkbookTheme_Accent1}" Target="{Binding ElementName=Accent1ColorBox}" Padding="0"/>
+                    <StackPanel Margin="0,0,10,6">
+                        <Label Content="{local:Loc Key=WorkbookTheme_Accent1}" Target="{Binding ElementName=Accent1ColorBox}" Padding="0" Margin="0,0,0,1"/>
                         <DockPanel>
                             <Button x:Name="Accent1ColorPickerButton"
                                     Content=""
@@ -189,8 +273,8 @@
                             <TextBox x:Name="Accent1ColorBox"/>
                         </DockPanel>
                     </StackPanel>
-                    <StackPanel Margin="0,0,0,8">
-                        <Label Content="{local:Loc Key=WorkbookTheme_Accent2}" Target="{Binding ElementName=Accent2ColorBox}" Padding="0"/>
+                    <StackPanel Margin="0,0,0,6">
+                        <Label Content="{local:Loc Key=WorkbookTheme_Accent2}" Target="{Binding ElementName=Accent2ColorBox}" Padding="0" Margin="0,0,0,1"/>
                         <DockPanel>
                             <Button x:Name="Accent2ColorPickerButton"
                                     Content=""
@@ -203,8 +287,8 @@
                             <TextBox x:Name="Accent2ColorBox"/>
                         </DockPanel>
                     </StackPanel>
-                    <StackPanel Margin="0,0,10,8">
-                        <Label Content="{local:Loc Key=WorkbookTheme_Accent3}" Target="{Binding ElementName=Accent3ColorBox}" Padding="0"/>
+                    <StackPanel Margin="0,0,10,6">
+                        <Label Content="{local:Loc Key=WorkbookTheme_Accent3}" Target="{Binding ElementName=Accent3ColorBox}" Padding="0" Margin="0,0,0,1"/>
                         <DockPanel>
                             <Button x:Name="Accent3ColorPickerButton"
                                     Content=""
@@ -217,8 +301,8 @@
                             <TextBox x:Name="Accent3ColorBox"/>
                         </DockPanel>
                     </StackPanel>
-                    <StackPanel Margin="0,0,0,8">
-                        <Label Content="{local:Loc Key=WorkbookTheme_Accent4}" Target="{Binding ElementName=Accent4ColorBox}" Padding="0"/>
+                    <StackPanel Margin="0,0,10,6">
+                        <Label Content="{local:Loc Key=WorkbookTheme_Accent4}" Target="{Binding ElementName=Accent4ColorBox}" Padding="0" Margin="0,0,0,1"/>
                         <DockPanel>
                             <Button x:Name="Accent4ColorPickerButton"
                                     Content=""
@@ -231,8 +315,8 @@
                             <TextBox x:Name="Accent4ColorBox"/>
                         </DockPanel>
                     </StackPanel>
-                    <StackPanel Margin="0,0,10,8">
-                        <Label Content="{local:Loc Key=WorkbookTheme_Accent5}" Target="{Binding ElementName=Accent5ColorBox}" Padding="0"/>
+                    <StackPanel Margin="0,0,0,6">
+                        <Label Content="{local:Loc Key=WorkbookTheme_Accent5}" Target="{Binding ElementName=Accent5ColorBox}" Padding="0" Margin="0,0,0,1"/>
                         <DockPanel>
                             <Button x:Name="Accent5ColorPickerButton"
                                     Content=""
@@ -245,8 +329,8 @@
                             <TextBox x:Name="Accent5ColorBox"/>
                         </DockPanel>
                     </StackPanel>
-                    <StackPanel Margin="0,0,0,8">
-                        <Label Content="{local:Loc Key=WorkbookTheme_Accent6}" Target="{Binding ElementName=Accent6ColorBox}" Padding="0"/>
+                    <StackPanel Margin="0,0,10,0">
+                        <Label Content="{local:Loc Key=WorkbookTheme_Accent6}" Target="{Binding ElementName=Accent6ColorBox}" Padding="0" Margin="0,0,0,1"/>
                         <DockPanel>
                             <Button x:Name="Accent6ColorPickerButton"
                                     Content=""
@@ -259,8 +343,8 @@
                             <TextBox x:Name="Accent6ColorBox"/>
                         </DockPanel>
                     </StackPanel>
-                    <StackPanel Margin="0,0,10,8">
-                        <Label Content="{local:Loc Key=WorkbookTheme_Hyperlink}" Target="{Binding ElementName=HyperlinkColorBox}" Padding="0"/>
+                    <StackPanel Margin="0,0,10,0">
+                        <Label Content="{local:Loc Key=WorkbookTheme_Hyperlink}" Target="{Binding ElementName=HyperlinkColorBox}" Padding="0" Margin="0,0,0,1"/>
                         <DockPanel>
                             <Button x:Name="HyperlinkColorPickerButton"
                                     Content=""
@@ -273,8 +357,8 @@
                             <TextBox x:Name="HyperlinkColorBox"/>
                         </DockPanel>
                     </StackPanel>
-                    <StackPanel Margin="0,0,0,8">
-                        <Label Content="{local:Loc Key=WorkbookTheme_FollowedHyperlink}" Target="{Binding ElementName=FollowedHyperlinkColorBox}" Padding="0"/>
+                    <StackPanel Margin="0,0,0,0">
+                        <Label Content="{local:Loc Key=WorkbookTheme_FollowedHyperlink}" Target="{Binding ElementName=FollowedHyperlinkColorBox}" Padding="0" Margin="0,0,0,1"/>
                         <DockPanel>
                             <Button x:Name="FollowedHyperlinkColorPickerButton"
                                     Content=""
@@ -288,7 +372,7 @@
                         </DockPanel>
                     </StackPanel>
                 </UniformGrid>
-            </StackPanel>
-        </ScrollViewer>
+            </Grid>
+        </Grid>
     </DockPanel>
 </Window>
