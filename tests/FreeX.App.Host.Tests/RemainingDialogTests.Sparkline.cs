@@ -122,6 +122,34 @@ public sealed partial class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialog_SizesVerticallyToKeepButtonsReachable()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line);
+            try
+            {
+                dialog.SizeToContent.Should().Be(SizeToContent.Height);
+                dialog.MinHeight.Should().BeGreaterThanOrEqualTo(280);
+                double.IsNaN(dialog.Height).Should().BeTrue();
+
+                var stack = dialog.Content.Should().BeOfType<StackPanel>().Subject;
+                var buttonRow = stack.Children[stack.Children.Count - 1].Should().BeOfType<StackPanel>().Subject;
+                buttonRow.Children.OfType<Button>().Should().Contain(button => button.IsDefault);
+                buttonRow.Children.OfType<Button>().Should().Contain(button => button.IsCancel);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+
+        var source = DialogSourceTestSupport.ReadHostSources("SparklineDialog.cs");
+        source.Should().Contain("SizeToContent = SizeToContent.Height;");
+        source.Should().NotContain("Height = 240;");
+    }
+
+    [Fact]
     public void SparklineDialog_UsesExcelWinLossLabel()
     {
         SparklineDialogPlanner.GetKindLabel(SparklineKindChoice.Line).Should().Be("Line");
