@@ -1,0 +1,1061 @@
+using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Runtime.InteropServices;
+using Microsoft.CSharp.RuntimeBinder;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Windows.Forms;
+using System.Windows.Automation;
+
+namespace FreeX.ForegroundCapture;
+
+internal static class Program
+{
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    [STAThread]
+    private static int Main(string[] args)
+    {
+        Application.EnableVisualStyles();
+
+        var options = CaptureOptions.Parse(args);
+        if (options.ShowHelp)
+        {
+            Console.WriteLine(CaptureOptions.Usage);
+            return 0;
+        }
+
+        if (options.ListSlices)
+        {
+            foreach (var slice in RemainingSlices.All)
+            {
+                Console.WriteLine($"{slice.Id}: {slice.Name} ({slice.Status})");
+            }
+
+            return 0;
+        }
+
+        if (string.IsNullOrWhiteSpace(options.Scenario))
+        {
+            Console.Error.WriteLine("Missing --scenario. Use --help for usage.");
+            return 2;
+        }
+
+        try
+        {
+            var runner = new ScenarioRunner(options);
+            var result = runner.Run();
+            Console.WriteLine(JsonSerializer.Serialize(result, JsonOptions));
+            return result.CaptureStatus == "complete" ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            var result = CaptureResult.Blocked(
+                options.Scenario,
+                "exception",
+                ex.Message,
+                options.OutputRoot,
+                options.Subject);
+            Console.WriteLine(JsonSerializer.Serialize(result, JsonOptions));
+            return 1;
+        }
+    }
+}
+
+internal sealed class ScenarioRunner(CaptureOptions options)
+{
+    public CaptureResult Run()
+    {
+        Directory.CreateDirectory(options.OutputRoot);
+
+        return options.Scenario.ToLowerInvariant() switch
+        {
+            "excel-autofilter" => RunExcelAutoFilterScenario(),
+            "excel-number-format" => RunExcelNumberFormatScenario(),
+            "excel-borders" => RunExcelPopupScenario("excel-borders", PrepareExcelBlankWorkbook, "%hb", "Net UI Tool Window"),
+            "excel-context-menu" => RunExcelContextMenuScenario(),
+            "excel-open-dialog" => RunExcelDialogScenario("excel-open-dialog", PrepareExcelBlankWorkbook, "^{F12}", "#32770", "Open"),
+            "excel-save-as-dialog" => RunExcelDialogScenario("excel-save-as-dialog", PrepareExcelBlankWorkbook, "{F12}", "#32770", "Save As"),
+            "freex-open-dialog" => RunFreeXDialogScenario("freex-open-dialog", "^{F12}", "#32770", "Open"),
+            "freex-save-as-dialog" => RunFreeXDialogScenario("freex-save-as-dialog", "{F12}", "#32770", "Save As"),
+            _ => CaptureResult.Blocked(options.Scenario, "unsupported-scenario", $"Unsupported scenario '{options.Scenario}'.", options.OutputRoot, options.Subject)
+        };
+    }
+
+    private CaptureResult RunExcelAutoFilterScenario()
+    {
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            dynamic worksheet = PrepareExcelAutoFilter(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("excel-autofilter", guard, "before-input");
+            }
+
+            ClickExcelAutoFilterHeaderDropdown(excel, worksheet);
+            Thread.Sleep(options.AfterInputDelay);
+
+            var popup = WindowFinder.FindProcessPopup(pid.Value, hwnd.ToInt64(), options.PopupTimeout, 120, 80);
+            if (popup is null)
+            {
+                return CaptureResult.Blocked("excel-autofilter", "popup-not-found", "Did not detect foreground Excel AutoFilter popup after the guarded header-arrow click.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow("excel-autofilter", "excel", popup, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunExcelPopupScenario(
+        string scenario,
+        Action<dynamic> prepare,
+        string keys,
+        string expectedPopupClass)
+    {
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            prepare(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-input");
+            }
+
+            SendKeys.SendWait(keys);
+            Thread.Sleep(options.AfterInputDelay);
+
+            var popup = WindowFinder.FindOwnedOrForegroundPopup(pid.Value, expectedPopupClass, options.PopupTimeout);
+            if (popup is null)
+            {
+                return CaptureResult.Blocked(scenario, "popup-not-found", $"Did not detect foreground Excel popup class '{expectedPopupClass}'.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow(scenario, "excel", popup, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunExcelNumberFormatScenario()
+    {
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelBlankWorkbook(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("excel-number-format", guard, "before-input");
+            }
+
+            var expanded = TryExpandExcelNumberFormatGallery(hwnd);
+            if (!expanded)
+            {
+                return CaptureResult.Blocked("excel-number-format", "uia-expand-failed", "Could not find or expand Excel NumberFormatGallery through UI Automation.", options.OutputRoot, "excel", guard);
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+
+            var popup = WindowFinder.FindOwnedOrForegroundPopup(pid.Value, "Net UI Tool Window", options.PopupTimeout);
+            if (popup is null)
+            {
+                return CaptureResult.Blocked("excel-number-format", "popup-not-found", "Did not detect foreground Excel Number Format popup after UIA ExpandCollapse.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow("excel-number-format", "excel", popup, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunExcelContextMenuScenario()
+    {
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            dynamic worksheet = PrepareExcelContextMenuWorkbook(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("excel-context-menu", guard, "before-input");
+            }
+
+            RightClickExcelRangeCenter(excel, worksheet, "B2");
+            Thread.Sleep(options.AfterInputDelay);
+
+            var popup = WindowFinder.FindProcessPopup(pid.Value, hwnd.ToInt64(), options.PopupTimeout, 120, 120);
+            if (popup is null)
+            {
+                return CaptureResult.Blocked("excel-context-menu", "popup-not-found", "Did not detect foreground Excel worksheet context menu after guarded right-click.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow("excel-context-menu", "excel", popup, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunExcelDialogScenario(
+        string scenario,
+        Action<dynamic> prepare,
+        string keys,
+        string expectedClass,
+        string titleContains)
+    {
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            prepare(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-input");
+            }
+
+            SendKeys.SendWait(keys);
+            Thread.Sleep(options.AfterInputDelay);
+
+            var dialog = WindowFinder.FindProcessWindow(pid.Value, expectedClass, titleContains, options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked(scenario, "dialog-not-found", $"Did not detect Excel dialog class '{expectedClass}' title containing '{titleContains}'.", options.OutputRoot, "excel", guard);
+            }
+
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            return CaptureWindow(scenario, "excel", dialog, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunFreeXDialogScenario(
+        string scenario,
+        string keys,
+        string expectedClass,
+        string titleContains)
+    {
+        Process? process = null;
+
+        try
+        {
+            var exePath = ResolveFreeXExePath();
+            process = Process.Start(new ProcessStartInfo(exePath)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory
+            });
+
+            if (process is null)
+            {
+                return CaptureResult.Blocked(scenario, "launch-failed", $"Failed to launch '{exePath}'.", options.OutputRoot, "freex");
+            }
+
+            var window = WindowFinder.WaitForMainWindow(process.Id, options.LaunchTimeout);
+            if (window is null)
+            {
+                return CaptureResult.Blocked(scenario, "window-not-found", $"FreeX process {process.Id} did not expose a visible main window.", options.OutputRoot, "freex");
+            }
+
+            var guard = ForegroundGuard.FocusAndVerify(new IntPtr(window.Handle), process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-input");
+            }
+
+            SendKeys.SendWait(keys);
+            Thread.Sleep(options.AfterInputDelay);
+
+            var dialog = WindowFinder.FindProcessWindow(process.Id, expectedClass, titleContains, options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked(scenario, "dialog-not-found", $"Did not detect FreeX dialog class '{expectedClass}' title containing '{titleContains}'.", options.OutputRoot, "freex", guard);
+            }
+
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            return CaptureWindow(scenario, "freex", dialog, guard, "complete");
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
+    private CaptureResult CaptureWindow(string scenario, string subject, WindowInfo window, ForegroundGuardResult guard, string status)
+    {
+        var scenarioDir = Path.Combine(options.OutputRoot, scenario);
+        Directory.CreateDirectory(scenarioDir);
+
+        var fileName = $"{scenario}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.png";
+        var filePath = Path.Combine(scenarioDir, fileName);
+        ScreenshotCapture.Capture(window.Bounds, filePath);
+
+        var result = new CaptureResult(
+            scenario,
+            subject,
+            status,
+            "foreground-guarded-uia-win32",
+            filePath,
+            window,
+            guard,
+            null,
+            DateTimeOffset.UtcNow);
+
+        var manifestPath = Path.Combine(scenarioDir, $"{scenario}_manifest.json");
+        File.WriteAllText(manifestPath, JsonSerializer.Serialize(result with { ManifestPath = manifestPath }, ProgramAccessor.JsonOptions));
+        return result with { ManifestPath = manifestPath };
+    }
+
+    private CaptureResult BlockedWithGuard(string scenario, ForegroundGuardResult guard, string phase)
+        => CaptureResult.Blocked(scenario, "foreground-guard-failed", $"Foreground guard failed during {phase}.", options.OutputRoot, options.Subject, guard);
+
+    private static (dynamic Excel, dynamic Workbook) CreateExcel()
+    {
+        var excelType = Type.GetTypeFromProgID("Excel.Application")
+            ?? throw new InvalidOperationException("Excel.Application COM ProgID is not available.");
+        dynamic excel = Activator.CreateInstance(excelType)
+            ?? throw new InvalidOperationException("Failed to create Excel.Application.");
+        excel.Visible = true;
+        excel.DisplayAlerts = false;
+        dynamic workbook = excel.Workbooks.Add();
+        return (excel, workbook);
+    }
+
+    private static void PrepareExcelBlankWorkbook(dynamic excel)
+    {
+        dynamic worksheet = excel.ActiveSheet;
+        worksheet.Range["A1"].Value2 = "score";
+        worksheet.Range["A2"].Value2 = 1;
+        worksheet.Range["A3"].Value2 = 2;
+        worksheet.Range["A4"].Value2 = 3;
+        worksheet.Range["A1"].Select();
+    }
+
+    private static dynamic PrepareExcelAutoFilter(dynamic excel)
+    {
+        dynamic worksheet = excel.ActiveSheet;
+        worksheet.Range["A1"].Value2 = "score";
+        worksheet.Range["B1"].Value2 = "region";
+        worksheet.Range["C1"].Value2 = "item";
+        worksheet.Range["D1"].Value2 = "amount";
+        worksheet.Range["A2"].Value2 = 1;
+        worksheet.Range["B2"].Value2 = "East";
+        worksheet.Range["C2"].Value2 = "Alpha";
+        worksheet.Range["D2"].Value2 = 10;
+        worksheet.Range["A3"].Value2 = 2;
+        worksheet.Range["B3"].Value2 = "West";
+        worksheet.Range["C3"].Value2 = "Beta";
+        worksheet.Range["D3"].Value2 = 20;
+        worksheet.Range["A4"].Value2 = 3;
+        worksheet.Range["B4"].Value2 = "East";
+        worksheet.Range["C4"].Value2 = "Gamma";
+        worksheet.Range["D4"].Value2 = 30;
+        worksheet.Range["A5"].Value2 = 4;
+        worksheet.Range["B5"].Value2 = "West";
+        worksheet.Range["C5"].Value2 = "Delta";
+        worksheet.Range["D5"].Value2 = 40;
+        worksheet.Range["A6"].Value2 = string.Empty;
+        worksheet.Range["B6"].Value2 = "North";
+        worksheet.Range["C6"].Value2 = "Blank score";
+        worksheet.Range["D6"].Value2 = 50;
+        dynamic range = worksheet.Range["A1:D6"];
+        range.AutoFilter();
+        worksheet.Range["A:D"].EntireColumn.AutoFit();
+        worksheet.Range["A1"].Select();
+        return worksheet;
+    }
+
+    private static dynamic PrepareExcelContextMenuWorkbook(dynamic excel)
+    {
+        dynamic worksheet = excel.ActiveSheet;
+        worksheet.Range["A1"].Value2 = "Region";
+        worksheet.Range["B1"].Value2 = "Score";
+        worksheet.Range["C1"].Value2 = "Note";
+        worksheet.Range["A2"].Value2 = "North";
+        worksheet.Range["B2"].Value2 = 1234.56;
+        worksheet.Range["C2"].Value2 = "Worksheet context menu";
+        worksheet.Range["A:C"].EntireColumn.AutoFit();
+        worksheet.Range["B2"].Select();
+        return worksheet;
+    }
+
+    private static void ClickExcelAutoFilterHeaderDropdown(dynamic excel, dynamic worksheet)
+    {
+        dynamic header = worksheet.Range["A1"];
+        dynamic window = excel.ActiveWindow;
+        var left = (int)window.PointsToScreenPixelsX(header.Left);
+        var top = (int)window.PointsToScreenPixelsY(header.Top);
+        const double pointToScreenScale = 2.0;
+        var clickX = (int)(left + (header.Width * pointToScreenScale) - 12);
+        var clickY = (int)(top + (header.Height * pointToScreenScale / 2.0));
+
+        NativeMethods.SetCursorPos(clickX, clickY);
+        Thread.Sleep(100);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+    }
+
+    private static void RightClickExcelRangeCenter(dynamic excel, dynamic worksheet, string address)
+    {
+        dynamic range = worksheet.Range[address];
+        dynamic window = excel.ActiveWindow;
+        var left = (int)window.PointsToScreenPixelsX(range.Left);
+        var top = (int)window.PointsToScreenPixelsY(range.Top);
+        const double pointToScreenScale = 2.0;
+        var clickX = (int)(left + (range.Width * pointToScreenScale / 2.0));
+        var clickY = (int)(top + (range.Height * pointToScreenScale / 2.0));
+
+        NativeMethods.SetCursorPos(clickX, clickY);
+        Thread.Sleep(100);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_RIGHTUP, 0, 0, 0, UIntPtr.Zero);
+    }
+
+    private static bool TryExpandExcelNumberFormatGallery(IntPtr excelWindowHandle)
+    {
+        var root = AutomationElement.FromHandle(excelWindowHandle);
+        var condition = new PropertyCondition(AutomationElement.AutomationIdProperty, "NumberFormatGallery");
+        var combo = root.FindFirst(TreeScope.Descendants, condition);
+        if (combo is null)
+        {
+            return false;
+        }
+
+        if (!combo.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out var pattern) ||
+            pattern is not ExpandCollapsePattern expandCollapse)
+        {
+            return false;
+        }
+
+        expandCollapse.Expand();
+        return true;
+    }
+
+    private static void CloseExcel(dynamic? excel, dynamic? workbook)
+    {
+        try
+        {
+            workbook?.Close(false);
+        }
+        catch (RuntimeBinderException)
+        {
+        }
+        catch (COMException)
+        {
+        }
+
+        try
+        {
+            excel?.Quit();
+        }
+        catch (RuntimeBinderException)
+        {
+        }
+        catch (COMException)
+        {
+        }
+
+        ReleaseCom(workbook);
+        ReleaseCom(excel);
+    }
+
+    private static void ReleaseCom(object? value)
+    {
+        if (value is not null && Marshal.IsComObject(value))
+        {
+            Marshal.FinalReleaseComObject(value);
+        }
+    }
+
+    private static void KillProcess(int? processId)
+    {
+        if (processId is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(processId.Value);
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (ArgumentException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    private string ResolveFreeXExePath()
+    {
+        if (!string.IsNullOrWhiteSpace(options.FreeXExePath))
+        {
+            return options.FreeXExePath;
+        }
+
+        var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var candidate = Path.Combine(repoRoot, "src", "FreeX.App.Host", "bin", "Release", "net10.0-windows10.0.19041.0", "FreeX.App.Host.exe");
+        if (!File.Exists(candidate))
+        {
+            throw new FileNotFoundException($"FreeX host executable was not found. Build Release or pass --freex-exe. Expected: {candidate}", candidate);
+        }
+
+        return candidate;
+    }
+}
+
+internal sealed record CaptureOptions(
+    string Scenario,
+    string OutputRoot,
+    string? FreeXExePath,
+    bool ShowHelp,
+    bool ListSlices,
+    string Subject,
+    TimeSpan LaunchTimeout,
+    TimeSpan FocusTimeout,
+    TimeSpan PopupTimeout,
+    TimeSpan AfterInputDelay,
+    TimeSpan AfterDialogDetectedDelay)
+{
+    public const string Usage = """
+        FreeX.ForegroundCapture
+
+        Usage:
+          dotnet run --project tools/FreeX.ForegroundCapture -- --scenario <name>
+          dotnet run --project tools/FreeX.ForegroundCapture -- --list-slices
+
+        Scenarios:
+          excel-autofilter
+          excel-number-format
+          excel-borders
+          excel-context-menu
+          excel-open-dialog
+          excel-save-as-dialog
+          freex-open-dialog
+          freex-save-as-dialog
+
+        Options:
+          --output <path>       Default: tools/foreground-captures
+          --freex-exe <path>    FreeX.App.Host.exe path for FreeX scenarios
+        """;
+
+    public static CaptureOptions Parse(string[] args)
+    {
+        var scenario = string.Empty;
+        var output = Path.Combine("tools", "foreground-captures");
+        string? freexExe = null;
+        var showHelp = false;
+        var listSlices = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--help":
+                case "-h":
+                    showHelp = true;
+                    break;
+                case "--list-slices":
+                    listSlices = true;
+                    break;
+                case "--scenario" when i + 1 < args.Length:
+                    scenario = args[++i];
+                    break;
+                case "--output" when i + 1 < args.Length:
+                    output = args[++i];
+                    break;
+                case "--freex-exe" when i + 1 < args.Length:
+                    freexExe = args[++i];
+                    break;
+            }
+        }
+
+        return new CaptureOptions(
+            scenario,
+            Path.GetFullPath(output),
+            freexExe,
+            showHelp,
+            listSlices,
+            scenario.StartsWith("excel-", StringComparison.OrdinalIgnoreCase) ? "excel" : "freex",
+            TimeSpan.FromSeconds(20),
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(6),
+            TimeSpan.FromMilliseconds(900),
+            TimeSpan.FromMilliseconds(3000));
+    }
+}
+
+internal static class RemainingSlices
+{
+    public static readonly RemainingSlice[] All =
+    [
+        new("S1", "Excel/FreeX paired main ribbon capture matrix", "foreground harness"),
+        new("S2", "Popup, dropdown, and gallery captures", "foreground harness"),
+        new("S3", "Native Open/Save/Background picker dialogs", "foreground harness"),
+        new("S4", "Grid pointer mechanics: drag select, autofill, resize, split panes", "foreground harness plus mouse drags"),
+        new("S5", "Sheet-tab pointer mechanics: rename, reorder, grouping, overflow/context", "foreground harness plus mouse drags"),
+        new("S6", "Status/footer pointer mechanics: zoom slider, wheel, Ctrl/Shift wheel", "foreground harness plus wheel input"),
+        new("S7", "Excel-paired popup/dialog captures for comparison", "foreground harness"),
+        new("S8", "Non-visual model-depth tail: cross-target matrix, locale/accounting, Flash Fill, accessibility/formula breadth", "model/test work")
+    ];
+}
+
+internal sealed record RemainingSlice(string Id, string Name, string Status);
+
+internal sealed record CaptureResult(
+    string Scenario,
+    string Subject,
+    string CaptureStatus,
+    string CaptureMode,
+    string? ScreenshotPath,
+    WindowInfo? Window,
+    ForegroundGuardResult? ForegroundGuard,
+    string? BlockReason,
+    DateTimeOffset CapturedAtUtc)
+{
+    public string? ManifestPath { get; init; }
+
+    public static CaptureResult Blocked(
+        string scenario,
+        string reason,
+        string message,
+        string outputRoot,
+        string subject,
+        ForegroundGuardResult? guard = null)
+    {
+        var result = new CaptureResult(
+            scenario,
+            subject,
+            "blocked",
+            "foreground-guarded-uia-win32",
+            null,
+            null,
+            guard,
+            $"{reason}: {message}",
+            DateTimeOffset.UtcNow);
+
+        var scenarioDir = Path.Combine(outputRoot, string.IsNullOrWhiteSpace(scenario) ? "unknown" : scenario);
+        Directory.CreateDirectory(scenarioDir);
+        var manifestPath = Path.Combine(scenarioDir, $"{(string.IsNullOrWhiteSpace(scenario) ? "unknown" : scenario)}_manifest.json");
+        File.WriteAllText(manifestPath, JsonSerializer.Serialize(result with { ManifestPath = manifestPath }, ProgramAccessor.JsonOptions));
+        return result with { ManifestPath = manifestPath };
+    }
+}
+
+internal sealed record ForegroundGuardResult(
+    bool Success,
+    int ExpectedProcessId,
+    long ExpectedHandle,
+    WindowInfo? ForegroundWindow,
+    string? Reason);
+
+internal static class ForegroundGuard
+{
+    public static ForegroundGuardResult FocusAndVerify(IntPtr handle, int expectedProcessId, string titleContains, TimeSpan timeout)
+    {
+        ForceForeground(handle);
+
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var foreground = NativeMethods.GetForegroundWindow();
+            var info = WindowFinder.GetWindowInfo(foreground);
+            if (info is not null &&
+                info.ProcessId == expectedProcessId &&
+                info.Title.Contains(titleContains, StringComparison.OrdinalIgnoreCase))
+            {
+                return new ForegroundGuardResult(true, expectedProcessId, handle.ToInt64(), info, null);
+            }
+
+            Thread.Sleep(100);
+            ForceForeground(handle);
+        }
+
+        var current = WindowFinder.GetWindowInfo(NativeMethods.GetForegroundWindow());
+        var reason = current is null
+            ? "No foreground window detected."
+            : $"Foreground is PID {current.ProcessId} '{current.Title}' class '{current.ClassName}', expected PID {expectedProcessId} title containing '{titleContains}'.";
+        return new ForegroundGuardResult(false, expectedProcessId, handle.ToInt64(), current, reason);
+    }
+
+    private static void ForceForeground(IntPtr handle)
+    {
+        NativeMethods.ShowWindow(handle, NativeMethods.SW_RESTORE);
+
+        var foreground = NativeMethods.GetForegroundWindow();
+        var foregroundThread = NativeMethods.GetWindowThreadProcessId(foreground, out _);
+        var targetThread = NativeMethods.GetWindowThreadProcessId(handle, out _);
+        var currentThread = NativeMethods.GetCurrentThreadId();
+
+        var attachedForeground = foregroundThread != 0 && foregroundThread != currentThread &&
+            NativeMethods.AttachThreadInput(currentThread, foregroundThread, true);
+        var attachedTarget = targetThread != 0 && targetThread != currentThread &&
+            NativeMethods.AttachThreadInput(currentThread, targetThread, true);
+
+        try
+        {
+            NativeMethods.SetWindowPos(handle, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0, NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_SHOWWINDOW);
+            NativeMethods.SetWindowPos(handle, NativeMethods.HWND_NOTOPMOST, 0, 0, 0, 0, NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_SHOWWINDOW);
+            NativeMethods.BringWindowToTop(handle);
+            NativeMethods.SetActiveWindow(handle);
+            NativeMethods.SetFocus(handle);
+            NativeMethods.SetForegroundWindow(handle);
+        }
+        finally
+        {
+            if (attachedTarget)
+            {
+                NativeMethods.AttachThreadInput(currentThread, targetThread, false);
+            }
+
+            if (attachedForeground)
+            {
+                NativeMethods.AttachThreadInput(currentThread, foregroundThread, false);
+            }
+        }
+    }
+}
+
+internal static class ScreenshotCapture
+{
+    public static void Capture(Rectangle bounds, string filePath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath) ?? ".");
+        using var bitmap = new Bitmap(bounds.Width, bounds.Height);
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
+        bitmap.Save(filePath, ImageFormat.Png);
+    }
+}
+
+internal static class WindowFinder
+{
+    public static WindowInfo? WaitForMainWindow(int processId, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var window = EnumerateVisibleWindows()
+                .Where(candidate => candidate.ProcessId == processId)
+                .OrderByDescending(candidate => candidate.Bounds.Width * candidate.Bounds.Height)
+                .FirstOrDefault(candidate => candidate.Title.Length > 0);
+
+            if (window is not null)
+            {
+                return window;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return null;
+    }
+
+    public static WindowInfo? FindOwnedOrForegroundPopup(int processId, string className, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var foreground = GetWindowInfo(NativeMethods.GetForegroundWindow());
+            if (foreground is not null &&
+                foreground.ProcessId == processId &&
+                foreground.ClassName.Equals(className, StringComparison.OrdinalIgnoreCase))
+            {
+                return foreground;
+            }
+
+            var popup = EnumerateVisibleWindows()
+                .Where(window => window.ProcessId == processId)
+                .Where(window => window.ClassName.Equals(className, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(window => window.Bounds.Width * window.Bounds.Height)
+                .FirstOrDefault();
+
+            if (popup is not null)
+            {
+                return popup;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return null;
+    }
+
+    public static WindowInfo? FindProcessWindow(int processId, string className, string titleContains, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var window = EnumerateVisibleWindows()
+                .Where(candidate => candidate.ProcessId == processId)
+                .Where(candidate => candidate.ClassName.Equals(className, StringComparison.OrdinalIgnoreCase))
+                .Where(candidate => candidate.Title.Contains(titleContains, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(candidate => candidate.Bounds.Width * candidate.Bounds.Height)
+                .FirstOrDefault();
+
+            if (window is not null)
+            {
+                return window;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return null;
+    }
+
+    public static WindowInfo? FindProcessPopup(int processId, long ownerHandle, TimeSpan timeout, int minimumWidth, int minimumHeight)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var foreground = GetWindowInfo(NativeMethods.GetForegroundWindow());
+            if (foreground is not null &&
+                foreground.ProcessId == processId &&
+                foreground.Handle != ownerHandle &&
+                !foreground.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase) &&
+                foreground.Bounds.Width >= minimumWidth &&
+                foreground.Bounds.Height >= minimumHeight)
+            {
+                return foreground;
+            }
+
+            var popup = EnumerateVisibleWindows()
+                .Where(candidate => candidate.ProcessId == processId)
+                .Where(candidate => candidate.Handle != ownerHandle)
+                .Where(candidate => !candidate.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase))
+                .Where(candidate => candidate.Bounds.Width >= minimumWidth && candidate.Bounds.Height >= minimumHeight)
+                .OrderByDescending(candidate => candidate.Bounds.Width * candidate.Bounds.Height)
+                .FirstOrDefault();
+
+            if (popup is not null)
+            {
+                return popup;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return null;
+    }
+
+    public static WindowInfo? GetWindowInfo(IntPtr handle)
+    {
+        if (handle == IntPtr.Zero || !NativeMethods.IsWindowVisible(handle))
+        {
+            return null;
+        }
+
+        var title = new StringBuilder(512);
+        NativeMethods.GetWindowText(handle, title, title.Capacity);
+        var className = new StringBuilder(256);
+        NativeMethods.GetClassName(handle, className, className.Capacity);
+        _ = NativeMethods.GetWindowThreadProcessId(handle, out var processId);
+
+        var rect = new NativeMethods.RECT();
+        if (!NativeMethods.GetWindowRect(handle, ref rect))
+        {
+            return null;
+        }
+
+        return new WindowInfo(
+            handle.ToInt64(),
+            (int)processId,
+            title.ToString(),
+            className.ToString(),
+            new Rectangle(rect.Left, rect.Top, Math.Max(0, rect.Right - rect.Left), Math.Max(0, rect.Bottom - rect.Top)));
+    }
+
+    private static IEnumerable<WindowInfo> EnumerateVisibleWindows()
+    {
+        var windows = new List<WindowInfo>();
+        NativeMethods.EnumWindows((handle, _) =>
+        {
+            var info = GetWindowInfo(handle);
+            if (info is { Bounds.Width: > 0, Bounds.Height: > 0 })
+            {
+                windows.Add(info);
+            }
+
+            return true;
+        }, IntPtr.Zero);
+
+        return windows;
+    }
+}
+
+internal sealed record WindowInfo(
+    long Handle,
+    int ProcessId,
+    string Title,
+    string ClassName,
+    Rectangle Bounds);
+
+internal static class NativeMethods
+{
+    public const int SW_RESTORE = 9;
+    public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOMOVE = 0x0002;
+    public const uint SWP_SHOWWINDOW = 0x0040;
+    public const int MOUSEEVENTF_LEFTDOWN = 0x0002;
+    public const int MOUSEEVENTF_LEFTUP = 0x0004;
+    public const int MOUSEEVENTF_RIGHTDOWN = 0x0008;
+    public const int MOUSEEVENTF_RIGHTUP = 0x0010;
+    public static readonly IntPtr HWND_TOPMOST = new(-1);
+    public static readonly IntPtr HWND_NOTOPMOST = new(-2);
+
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetActiveWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetFocus(IntPtr hWnd);
+
+    [DllImport("kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, [MarshalAs(UnmanagedType.Bool)] bool fAttach);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll", EntryPoint = "mouse_event")]
+    public static extern void MouseEvent(int dwFlags, int dx, int dy, int dwData, UIntPtr dwExtraInfo);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetWindowRect(IntPtr hWnd, ref RECT lpRect);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    public static int GetProcessId(IntPtr handle)
+    {
+        _ = GetWindowThreadProcessId(handle, out var pid);
+        return (int)pid;
+    }
+}
+
+internal static class ProgramAccessor
+{
+    public static JsonSerializerOptions JsonOptions { get; } = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+}
