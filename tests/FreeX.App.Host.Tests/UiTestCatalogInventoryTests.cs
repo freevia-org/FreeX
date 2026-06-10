@@ -339,6 +339,38 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void HomeCatalogRows_DocumentStylePersistenceTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-HOME-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-HOME-003 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-HOME-FONT-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-HOME-FONT-003 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-HOME-FONT-004 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-HOME-ALIGN-001 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-HOME-NUM-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-HOME-NUM-003 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-HOME-STYLE-001 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-HOME-STYLE-003 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(10);
+        rows.Should().OnlyContain(row => row.Contains("home-style-persistence-tour"));
+
+        catalog.Should().Contain("FREEX_HOME_STYLE_PERSISTENCE_TOUR=1");
+        catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
+        catalog.Should().Contain("home_style_persistence_tour_manifest.json");
+        catalog.Should().Contain("freex_home_style_persistence_applied_home_style_result.png");
+        catalog.Should().Contain("freex_home_style_persistence_saved_native_workbook.png");
+        catalog.Should().Contain("freex_home_style_persistence_reopened_grid.png");
+        catalog.Should().Contain("freex_home_style_persistence_saved.fxl");
+        catalog.Should().Contain("foreground-only dropdown/keytip gaps");
+    }
+
+    [Fact]
     public void ViewCatalogRows_DocumentViewPanesZoomTourEvidence()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
