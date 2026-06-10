@@ -552,6 +552,31 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void MainWindowScreenshotTour_CapturesAccentBarVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs", "MainWindow.Startup.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_ACCENT_BAR_TOUR");
+        source.Should().Contain("TryStartAccentBarVisualTour();");
+        source.Should().Contain("screenshots\", \"accent-bars-tour");
+        source.Should().Contain("RunAccentBarVisualTourAsync");
+        source.Should().Contain("CaptureElementAsync(TitleBarRoot, outputDir, \"title-normal\")");
+        source.Should().Contain("CaptureElementAsync(StatusBarRoot, outputDir, \"status-normal\")");
+        source.Should().Contain("HoverAndCaptureElementAsync(saveQatButton, TitleBarRoot, outputDir, \"title-save-hover\")");
+        source.Should().Contain("HoverAndCaptureElementAsync(MaxRestoreBtn, TitleBarRoot, outputDir, \"title-system-hover\")");
+        source.Should().Contain("HoverAndCaptureElementAsync(CloseSysBtn, TitleBarRoot, outputDir, \"title-close-hover\")");
+        source.Should().Contain("HoverAndCaptureElementAsync(StatusZoomOutButton, StatusBarRoot, outputDir, \"status-minus-hover\")");
+        source.Should().Contain("HoverAndCaptureElementAsync(StatusZoomInButton, StatusBarRoot, outputDir, \"status-plus-hover\")");
+
+        catalog.Should().Contain("FREEX_ACCENT_BAR_TOUR=1");
+        catalog.Should().Contain("screenshots/accent-bars-tour/");
+        catalog.Should().Contain("title-save-hover.png");
+        catalog.Should().Contain("status-plus-hover.png");
+        catalog.Should().Contain("PNG-only legacy evidence");
+    }
+
+    [Fact]
     public void MainWindowScreenshotTour_CapturesInsertObjectsLinksTextVisualEvidence()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
