@@ -5,7 +5,8 @@ namespace FreeX.App.Host;
 public enum PivotHeaderDropdownAxis
 {
     Row,
-    Column
+    Column,
+    Page
 }
 
 public sealed record PivotHeaderDropdownTarget(
@@ -43,9 +44,33 @@ public static class PivotHeaderDropdownPlanner
         if (headers.Count == 0)
             return;
 
+        AddPageTargets(sheet, pivotTable, headers, targets);
         var bodyStart = GetPivotBodyStart(pivotTable);
         AddRowTargets(sheet, pivotTable, headers, bodyStart, targets);
         AddColumnTargets(sheet, pivotTable, headers, bodyStart, targets);
+    }
+
+    private static void AddPageTargets(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        List<PivotHeaderDropdownTarget> targets)
+    {
+        if (pivotTable.PageFields.Count == 0)
+            return;
+
+        var start = pivotTable.TargetRange.Start;
+        var wrap = Math.Max(0, pivotTable.PageWrap);
+        for (var index = 0; index < pivotTable.PageFields.Count; index++)
+        {
+            var (rowOffset, colPairOffset) = GetPageFieldOffset(
+                index,
+                pivotTable.PageFields.Count,
+                wrap,
+                pivotTable.PageOverThenDown);
+            var address = new CellAddress(sheet.Id, start.Row + rowOffset, start.Col + colPairOffset);
+            AddTarget(sheet, pivotTable, headers, pivotTable.PageFields[index], PivotHeaderDropdownAxis.Page, address, targets);
+        }
     }
 
     private static void AddRowTargets(
@@ -194,5 +219,21 @@ public static class PivotHeaderDropdownPlanner
             return (uint)(wrap <= 0 ? 1 : (int)Math.Ceiling(count / (double)wrap));
 
         return (uint)(wrap <= 0 ? count : Math.Min(count, wrap));
+    }
+
+    private static (uint RowOffset, uint ColPairOffset) GetPageFieldOffset(
+        int index,
+        int pageFieldCount,
+        int wrap,
+        bool overThenDown)
+    {
+        if (overThenDown)
+        {
+            var fieldsPerRow = wrap <= 0 ? pageFieldCount : wrap;
+            return ((uint)(index / fieldsPerRow), (uint)((index % fieldsPerRow) * 2));
+        }
+
+        var rowsPerColumn = wrap <= 0 ? pageFieldCount : wrap;
+        return ((uint)(index % rowsPerColumn), (uint)((index / rowsPerColumn) * 2));
     }
 }

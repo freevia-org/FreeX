@@ -42,6 +42,24 @@ public sealed class PivotValueFilterInputParserTests
     }
 
     [Fact]
+    public void TryCreateFilter_PreservesSelectedDataFieldIndex()
+    {
+        PivotValueFilterInputParser.TryCreateFilter(
+                PivotValueFilterKind.GreaterThan,
+                usesCount: false,
+                valueText: "10",
+                value2Text: "",
+                sourceFieldIndex: 2,
+                dataFieldIndex: 1,
+                out var filter,
+                out var error)
+            .Should().BeTrue(error);
+
+        filter.DataFieldIndex.Should().Be(1);
+        filter.SourceFieldIndex.Should().Be(2);
+    }
+
+    [Fact]
     public void TryCreateFilter_CreatesComparisonAndBetweenFilters()
     {
         PivotValueFilterInputParser.TryCreateFilter(
