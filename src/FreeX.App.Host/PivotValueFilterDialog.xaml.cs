@@ -24,19 +24,45 @@ public partial class PivotValueFilterDialog : Window
     ];
 
     private readonly int _sourceFieldIndex;
+    private readonly int _dataFieldIndex;
 
-    public PivotValueFilterDialog(int sourceFieldIndex)
+    public PivotValueFilterDialog(int sourceFieldIndex, PivotValueFilterModel? existingFilter = null)
     {
         _sourceFieldIndex = sourceFieldIndex;
+        _dataFieldIndex = existingFilter?.DataFieldIndex ?? 0;
         InitializeComponent();
         ValueFilterKindBox.ItemsSource = Options.Select(option => option.Label);
-        ValueFilterKindBox.SelectedIndex = 2;
-        ValueFilterValueBox.Text = "0";
+        LoadFilter(existingFilter);
         UpdateValueInputState();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public PivotValueFilterModel? ResultFilter { get; private set; }
+
+    private void LoadFilter(PivotValueFilterModel? filter)
+    {
+        if (filter is null)
+        {
+            ValueFilterKindBox.SelectedIndex = 2;
+            ValueFilterValueBox.Text = "0";
+            return;
+        }
+
+        ValueFilterKindBox.SelectedIndex = 2;
+        for (var index = 0; index < Options.Length; index++)
+        {
+            if (Options[index].Kind == filter.Kind)
+            {
+                ValueFilterKindBox.SelectedIndex = index;
+                break;
+            }
+        }
+
+        ValueFilterValueBox.Text = Options[Math.Max(0, ValueFilterKindBox.SelectedIndex)].UsesCount
+            ? filter.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : (filter.ComparisonValue ?? 0).ToString("0.########", System.Globalization.CultureInfo.InvariantCulture);
+        ValueFilterValue2Box.Text = filter.ComparisonValue2?.ToString("0.########", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+    }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
@@ -47,6 +73,7 @@ public partial class PivotValueFilterDialog : Window
                 ValueFilterValueBox.Text,
                 ValueFilterValue2Box.Text,
                 _sourceFieldIndex,
+                _dataFieldIndex,
                 out var filter,
                 out var error))
         {

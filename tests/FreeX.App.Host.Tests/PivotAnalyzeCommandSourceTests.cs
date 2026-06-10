@@ -94,7 +94,7 @@ public sealed class PivotAnalyzeCommandSourceTests
         pivotSource.Should().Contain("new AddSlicerCommand(dialog.Result.SlicerName, pivotTable.Name, dialog.Result.FieldName)");
         pivotSource.Should().Contain("new InsertTimelineDialog(headers, fieldName)");
         pivotSource.Should().Contain("new AddTimelineCommand(dialog.Result.TimelineName, pivotTable.Name, dialog.Result.DateFieldName)");
-        pivotSource.Should().Contain("new PivotValueFieldSettingsDialog(current, headers)");
+        pivotSource.Should().Contain("new PivotValueFieldSettingsDialog(current, context.Headers)");
 
         var designSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
         designSource.Should().Contain("private void PivotExpandCollapseButtonsBtn_Click(object sender, RoutedEventArgs e)");

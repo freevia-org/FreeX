@@ -264,7 +264,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-        mainWindowSource.Should().Contain("new PivotValueFieldSettingsDialog(current, headers)");
+        mainWindowSource.Should().Contain("new PivotValueFieldSettingsDialog(current, context.Headers)");
         mainWindowSource.Should().NotContain("Value Field Settings: name,function,show-values-as");
         var plannerSource = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialogPlanner.cs");
         var dialogSource = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialog.xaml.cs");
