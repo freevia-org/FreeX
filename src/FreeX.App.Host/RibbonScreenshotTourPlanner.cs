@@ -95,6 +95,13 @@ internal static class RibbonScreenshotTourPlanner
         new("Design", "PivotTable_Design", "PivotTableDesignTab")
     ];
 
+    public static IReadOnlyList<RibbonScreenshotTourTab> ChartContextTabs { get; } =
+    [
+        .. DefaultTabs,
+        new("Chart Design", "Chart_Design", "ChartDesignTab"),
+        new("Format", "Chart_Format", "ChartFormatTab")
+    ];
+
     public static IReadOnlyList<RibbonScreenshotTourWidth> DefaultWidths { get; } =
     [
         new("max", null),
@@ -147,8 +154,9 @@ internal static class RibbonScreenshotTourPlanner
             null => DefaultTabs,
             "table" => TableContextTabs,
             "pivot" => PivotContextTabs,
+            "chart" => ChartContextTabs,
             var unknown => throw new InvalidOperationException(
-                $"Ribbon screenshot tour context '{unknown}' is not supported. Valid contexts: table, pivot.")
+                $"Ribbon screenshot tour context '{unknown}' is not supported. Valid contexts: table, pivot, chart.")
         };
 
     public static string? NormalizeContext(string? context)
@@ -161,6 +169,7 @@ internal static class RibbonScreenshotTourPlanner
         {
             "table" or "table-design" or "structured-table" => "table",
             "pivot" or "pivot-table" or "pivottable" => "pivot",
+            "chart" or "chart-design" or "chart-format" or "embedded-chart" => "chart",
             _ => normalized
         };
     }

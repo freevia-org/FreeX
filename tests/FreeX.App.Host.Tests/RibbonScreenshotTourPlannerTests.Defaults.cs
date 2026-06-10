@@ -65,6 +65,19 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void ChartContextTabs_ExtendDefaultTourWithChartDesignAndFormatContextualTabs()
+    {
+        RibbonScreenshotTourPlanner.ChartContextTabs
+            .Should()
+            .Equal(
+            [
+                .. RibbonScreenshotTourPlanner.DefaultTabs,
+                new("Chart Design", "Chart_Design", "ChartDesignTab"),
+                new("Format", "Chart_Format", "ChartFormatTab")
+            ]);
+    }
+
+    [Fact]
     public void DefaultWidths_CoverRepresentativeRibbonWidths()
     {
         RibbonScreenshotTourPlanner.DefaultWidths

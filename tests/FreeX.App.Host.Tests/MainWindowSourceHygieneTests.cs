@@ -138,6 +138,29 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ScreenshotTour_ProvidesSheetTabEvidenceHook()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_SHEET_TAB_TOUR");
+        source.Should().Contain("sheet-tabs-tour");
+        source.Should().Contain("sheet_tabs_tour_manifest.json");
+        source.Should().Contain("freex_sheet_tabs_single_sheet");
+        source.Should().Contain("freex_sheet_tabs_after_add_sheet");
+        source.Should().Contain("freex_sheet_tabs_grouped_colored");
+        source.Should().Contain("freex_sheet_tabs_context_menu_opened");
+        source.Should().Contain("freex_sheet_tabs_rename_dialog_opened");
+        source.Should().Contain("freex_sheet_tabs_hidden_sheet_excluded");
+        source.Should().Contain("freex_sheet_tabs_unhide_dialog_opened");
+        source.Should().Contain("freex_sheet_tabs_overflow_start");
+        source.Should().Contain("freex_sheet_tabs_overflow_middle");
+        source.Should().Contain("freex_sheet_tabs_overflow_end");
+        source.Should().Contain("RenderTargetBitmap-sheet-tab-strip-context-menu-and-dialogs");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.SheetTabTourManifest");
+        source.Should().Contain("No Microsoft Excel counterpart or macOS/native-host capture is produced by this tool.");
+    }
+
+    [Fact]
     public void ScreenshotTour_ProvidesKeyTipOverlayEvidenceHook()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
