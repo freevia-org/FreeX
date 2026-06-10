@@ -3462,9 +3462,38 @@ public partial class MainWindow
 
         captures.Add(await CaptureAboutDialogForTourAsync(outputDir));
         captures.Add(await CaptureLegalNoticesDialogForTourAsync(outputDir));
+        captures.Add(await CaptureHelpAboutLegalFocusReturnForTourAsync(outputDir));
 
         ValidateHelpAboutLegalTourEvidence(outputDir);
         await WriteHelpAboutLegalTourManifestAsync(outputDir, captures);
+    }
+
+    private async Task<HelpAboutLegalTourManifestCapture> CaptureHelpAboutLegalFocusReturnForTourAsync(string outputDir)
+    {
+        Activate();
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Help"));
+        HelpOnlineButton.Focus();
+        Keyboard.Focus(HelpOnlineButton);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+        await CaptureCurrentWindowAsync(outputDir, "freex_help_focus_return_status", ActualHeight);
+
+        return new HelpAboutLegalTourManifestCapture(
+            CaptureKey: "help:focus-return-status",
+            PairKey: "interactive:help:focus-return-status",
+            ScenarioId: "help-about-legal:focus-return",
+            State: "focus-return-status",
+            Surface: "Help tab focus return and status bar",
+            FileName: "freex_help_focus_return_status",
+            OutputFileName: "freex_help_focus_return_status.png",
+            CaptureMethod: "RenderTargetBitmap-main-window-full",
+            EntryPath: "Help tab after owned dialog close",
+            EvidenceSummary: "Focus returns to the FreeX Help ribbon context after owned About/Legal dialogs close, with the Ready status bar still visible.",
+            Url: null,
+            FocusedElementAutomationId: AutomationProperties.GetAutomationId(HelpOnlineButton),
+            CaptureLogicalWidth: ActualWidth,
+            CaptureLogicalHeight: ActualHeight);
     }
 
     private async Task<HelpAboutLegalTourManifestCapture> CaptureGuardedExternalHelpMessageForTourAsync(
@@ -3667,7 +3696,8 @@ public partial class MainWindow
         "freex_feedback_guarded_message.png",
         "freex_updates_guarded_message.png",
         "freex_about_dialog.png",
-        "freex_legal_notices_dialog.png"
+        "freex_legal_notices_dialog.png",
+        "freex_help_focus_return_status.png"
     ];
 
     private static T? FindDescendantByAutomationId<T>(DependencyObject root, string automationId)
@@ -11147,7 +11177,8 @@ public partial class MainWindow
                 "Help > Feedback",
                 "Help > Check for Updates",
                 "Help > About FreeX",
-                "Help > Legal Notices"
+                "Help > Legal Notices",
+                "Help tab focus return / Ready status"
             ],
             CaptureStatus: "complete",
             CaptureMethod: "RenderTargetBitmap-WPF-windows-and-PrintWindow-owned-native-dialogs",
@@ -11166,6 +11197,7 @@ public partial class MainWindow
                 "The Help Online, Feedback, and Check for Updates captures intentionally render FreeX-owned guarded failure messages instead of launching a browser or external process.",
                 "The tour does not synthesize foreground mouse clicks, keytips, or UI Automation invoke; those interaction paths remain separate from this visual evidence.",
                 "The About and Legal Notices dialogs are shown as owned WPF windows for deterministic capture, then closed directly by the tour.",
+                "The final full-window capture records FreeX focus returned to the Help ribbon context and the Ready status bar after owned dialogs close.",
                 "No Microsoft Excel counterpart capture is produced by this tool."
             ]);
 
