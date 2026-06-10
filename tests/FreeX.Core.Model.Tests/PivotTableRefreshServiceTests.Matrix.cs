@@ -40,6 +40,38 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_ClearsPreviousPivotFootprintWhenMatrixShrinks()
+    {
+        var workbook = new Workbook("PivotShrinkClearingTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+        sheet.SetCell(Addr(sheet, "I7"), new TextValue("Outside pivot"));
+
+        pivot.ColumnFields.Clear();
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E2").Should().Be("Region");
+        Text(sheet, "F2").Should().Be("Sum of Amount");
+        sheet.GetCell(Addr(sheet, "G2")).Should().BeNull();
+        sheet.GetCell(Addr(sheet, "H2")).Should().BeNull();
+        sheet.GetCell(Addr(sheet, "G5")).Should().BeNull();
+        sheet.GetCell(Addr(sheet, "H5")).Should().BeNull();
+        Text(sheet, "I7").Should().Be("Outside pivot");
+        pivot.LastRenderedRange.Should().Be(Range(sheet, "E2", "F5"));
+    }
+
+    [Fact]
     public void Refresh_MatrixUsesCustomGrandTotalCaptionForHeadersRowsAndDetails()
     {
         var workbook = new Workbook("PivotMatrixCustomGrandTotalCaptionTest");

@@ -15,14 +15,14 @@ public static partial class PivotTableRefreshService
         var rowFields = pivotTable.RowFields.ToList();
         var rowFieldOutputColumns = RowFieldOutputColumnCount(pivotTable);
         if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
-            sheet.SetCell(new CellAddress(sheet.Id, start.Row, start.Col), new TextValue("Row Labels"));
+            SetPivotCell(sheet, new CellAddress(sheet.Id, start.Row, start.Col), new TextValue("Row Labels"));
         else
         {
             for (var index = 0; index < rowFields.Count; index++)
-                sheet.SetCell(new CellAddress(sheet.Id, start.Row, start.Col + (uint)index), new TextValue(headers[rowFields[index].SourceFieldIndex]));
+                SetPivotCell(sheet, new CellAddress(sheet.Id, start.Row, start.Col + (uint)index), new TextValue(headers[rowFields[index].SourceFieldIndex]));
         }
         for (var index = 0; index < pivotTable.DataFields.Count; index++)
-            sheet.SetCell(new CellAddress(sheet.Id, start.Row, start.Col + (uint)rowFieldOutputColumns + (uint)index), new TextValue(pivotTable.DataFields[index].Name));
+            SetPivotCell(sheet, new CellAddress(sheet.Id, start.Row, start.Col + (uint)rowFieldOutputColumns + (uint)index), new TextValue(pivotTable.DataFields[index].Name));
 
         var groups = BuildRowGroups(workbook, pivotTable, rows, rowFields);
         groups = ApplyLabelFilters(groups, pivotTable, rowFields);
@@ -72,7 +72,7 @@ public static partial class PivotTableRefreshService
 
             if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
             {
-                sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(string.Join(" ", group.Key.Values)));
+                SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(string.Join(" ", group.Key.Values)));
             }
             else
             {
@@ -80,7 +80,7 @@ public static partial class PivotTableRefreshService
                 {
                     var suppressRepeat = ShouldSuppressRepeatedRowLabel(pivotTable, group.Key, previousRowKey, index);
                     if (!suppressRepeat)
-                        sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col + (uint)index), new TextValue(group.Key.Values[index]));
+                        SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col + (uint)index), new TextValue(group.Key.Values[index]));
                 }
             }
             for (var index = 0; index < pivotTable.DataFields.Count; index++)
@@ -112,7 +112,7 @@ public static partial class PivotTableRefreshService
                          .Where(item => item.SourceFieldIndex == rowFields[0].SourceFieldIndex)
                          .OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase))
             {
-                sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(calculatedItem.Name));
+                SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(calculatedItem.Name));
                 for (var index = 0; index < pivotTable.DataFields.Count; index++)
                 {
                     var calculatedValue = EvaluateCalculatedItem(calculatedItem.Formula, groups, pivotTable.DataFields[index], pivotTable, headers);
@@ -140,7 +140,7 @@ public static partial class PivotTableRefreshService
 
         if (pivotTable.ShowColumnGrandTotals)
         {
-            sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(GrandTotalCaption(pivotTable)));
+            SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(GrandTotalCaption(pivotTable)));
             for (var index = 0; index < pivotTable.DataFields.Count; index++)
                 SetPivotValueCell(
                     workbook,
@@ -167,7 +167,7 @@ public static partial class PivotTableRefreshService
         var start = GetPivotBodyStart(pivotTable);
         for (var index = 0; index < pivotTable.DataFields.Count; index++)
         {
-            sheet.SetCell(new CellAddress(sheet.Id, start.Row, start.Col + (uint)index), new TextValue(pivotTable.DataFields[index].Name));
+            SetPivotCell(sheet, new CellAddress(sheet.Id, start.Row, start.Col + (uint)index), new TextValue(pivotTable.DataFields[index].Name));
             SetPivotValueCell(
                 workbook,
                 sheet,
@@ -215,7 +215,8 @@ public static partial class PivotTableRefreshService
         {
             foreach (var dataField in pivotTable.DataFields)
             {
-                sheet.SetCell(
+                SetPivotCell(
+                    sheet,
                     new CellAddress(sheet.Id, start.Row, outputColumn),
                     new TextValue(GrandTotalCaption(pivotTable, dataField, singleDataField)));
                 outputColumn++;
@@ -295,7 +296,7 @@ public static partial class PivotTableRefreshService
         var captionItem = subtotalKey.Values.Count == 0
             ? ""
             : subtotalKey.Values[^1];
-        sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue($"{captionItem} Total"));
+        SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue($"{captionItem} Total"));
         for (var index = 0; index < pivotTable.DataFields.Count; index++)
             SetPivotValueCell(
                 workbook,

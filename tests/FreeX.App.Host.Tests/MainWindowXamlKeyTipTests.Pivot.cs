@@ -186,6 +186,37 @@ public sealed partial class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void PivotTableFieldListPane_UsesCompactSearchRowAndGivesBucketsFlexibleSpace()
+    {
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var paneGrid = document
+            .Descendants(presentation + "Border")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "PivotFieldListPane")
+            .Elements(presentation + "Grid")
+            .Single();
+        var rowHeights = paneGrid
+            .Element(presentation + "Grid.RowDefinitions")!
+            .Elements(presentation + "RowDefinition")
+            .Select(row => row.Attribute("Height")?.Value ?? "Auto")
+            .ToArray();
+
+        rowHeights.Should().Equal("Auto", "Auto", "Auto", "0.85*", "Auto", "1.25*");
+
+        var searchBox = document
+            .Descendants(presentation + "TextBox")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "PivotFieldListSearchBox");
+        var availableFieldsList = document
+            .Descendants(presentation + "ListBox")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "PivotAvailableFieldsList");
+
+        searchBox.Attribute("Margin")?.Value.Should().Be("0,0,0,4");
+        availableFieldsList.Attribute("MinHeight")?.Value.Should().Be("96");
+    }
+
+    [Fact]
     public void PivotTableFieldListPane_RoutesThroughLayoutCommand()
     {
         var source = ReadPivotCommandSource();
@@ -298,12 +329,42 @@ public sealed partial class MainWindowXamlKeyTipTests
         {
             list.Attribute("AllowDrop")?.Value.Should().Be("True");
             list.Attribute("PreviewMouseMove")?.Value.Should().Be("PivotFieldList_PreviewMouseMove");
+            list.Attribute("PreviewMouseRightButtonDown")?.Value.Should().Be("PivotFieldList_PreviewMouseRightButtonDown");
+            list.Attribute("DragOver")?.Value.Should().Be("PivotFieldList_DragOver");
             list.Attribute("Drop")?.Value.Should().Be("PivotFieldList_Drop");
         });
 
         source.Should().Contain("PivotFieldList_PreviewMouseMove");
+        source.Should().Contain("PivotFieldDragPayload");
+        source.Should().Contain("GetPivotFieldDropInsertIndex");
+        source.Should().Contain("GetDisplayedOrCurrentPivotLayout");
         source.Should().Contain("PivotFieldList_Drop");
         source.Should().Contain("MovePivotFieldToZone");
+    }
+
+    [Fact]
+    public void PivotTableFieldListPane_BucketContextMenusExposeRemoveField()
+    {
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        foreach (var listName in new[] { "PivotFiltersList", "PivotColumnsList", "PivotRowsList", "PivotValuesList" })
+        {
+            var list = document
+                .Descendants(presentation + "ListBox")
+                .Single(element => element.Attribute(xaml + "Name")?.Value == listName);
+
+            list
+                .Descendants(presentation + "MenuItem")
+                .Where(item => item.Attribute("Click")?.Value == "PivotFieldRemoveBtn_Click")
+                .Should()
+                .ContainSingle()
+                .Which
+                .Attribute("Header")?.Value
+                .Should()
+                .Be("{local:Loc Key=MainWindow_Content_Remove}");
+        }
     }
 
     [Fact]

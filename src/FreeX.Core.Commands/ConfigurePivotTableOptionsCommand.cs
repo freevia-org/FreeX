@@ -155,7 +155,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
 
         var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
         _snapshot = PivotOptionsSnapshot.Capture(pivotTable, cache);
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
 
         pivotTable.ShowRowGrandTotals = _showRowGrandTotals;
         pivotTable.ShowColumnGrandTotals = _showColumnGrandTotals;
@@ -234,6 +234,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
         {
             var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
+            PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
             _snapshot.Restore(pivotTable, cache);
         }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
@@ -278,7 +279,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool PreserveFormattingOnUpdate,
         string? AltTextTitle,
         string? AltTextDescription,
-        bool EnableDrill)
+        bool EnableDrill,
+        GridRange? LastRenderedRange)
     {
         public static PivotOptionsSnapshot Capture(PivotTableModel pivotTable, PivotCacheModel? cache) =>
             new(
@@ -318,7 +320,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.PreserveFormattingOnUpdate,
                 pivotTable.AltTextTitle,
                 pivotTable.AltTextDescription,
-                pivotTable.EnableDrill);
+                pivotTable.EnableDrill,
+                pivotTable.LastRenderedRange);
 
         public void Restore(PivotTableModel pivotTable, PivotCacheModel? cache)
         {
@@ -354,6 +357,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.AltTextTitle = AltTextTitle;
             pivotTable.AltTextDescription = AltTextDescription;
             pivotTable.EnableDrill = EnableDrill;
+            pivotTable.LastRenderedRange = LastRenderedRange;
             if (cache is not null)
             {
                 if (RefreshOnLoad is { } refreshOnLoad)
