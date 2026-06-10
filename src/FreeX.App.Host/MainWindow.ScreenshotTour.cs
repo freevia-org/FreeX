@@ -65,6 +65,8 @@ public partial class MainWindow
     private const string ViewPanesZoomTourCustomViewName = "View Panes Zoom Tour";
     private const string FormulaDiagnosticsTourManifestFileName = "formula_diagnostics_tour_manifest.json";
     private const string FormulaDiagnosticsTourOutputDirectoryName = "formula-diagnostics-tour";
+    private const string ReviewCommentsProtectionTourManifestFileName = "review_comments_protection_tour_manifest.json";
+    private const string ReviewCommentsProtectionTourOutputDirectoryName = "review-comments-protection-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -143,7 +145,8 @@ public partial class MainWindow
         var dataToolsDialogsTour = Environment.GetEnvironmentVariable("FREEX_DATA_TOOLS_DIALOGS_TOUR") == "1";
         var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !dataToolsDialogsTour && !viewPanesZoomTour && !formulaDiagnosticsTour)
+        var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !dataToolsDialogsTour && !viewPanesZoomTour && !formulaDiagnosticsTour && !reviewCommentsProtectionTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -160,7 +163,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, dataToolsDialogsTour, viewPanesZoomTour, formulaDiagnosticsTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, dataToolsDialogsTour, viewPanesZoomTour, formulaDiagnosticsTour, reviewCommentsProtectionTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -201,7 +204,8 @@ public partial class MainWindow
         bool formulaBarNameBoxTour,
         bool dataToolsDialogsTour,
         bool viewPanesZoomTour,
-        bool formulaDiagnosticsTour)
+        bool formulaDiagnosticsTour,
+        bool reviewCommentsProtectionTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -253,6 +257,9 @@ public partial class MainWindow
             await CaptureViewPanesZoomTourAsync(Path.Combine(outputDir, ViewPanesZoomTourOutputDirectoryName));
         if (formulaDiagnosticsTour)
             await CaptureFormulaDiagnosticsTourAsync(Path.Combine(outputDir, FormulaDiagnosticsTourOutputDirectoryName));
+
+        if (reviewCommentsProtectionTour)
+            await CaptureReviewCommentsProtectionTourAsync(Path.Combine(outputDir, ReviewCommentsProtectionTourOutputDirectoryName));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -3305,6 +3312,332 @@ public partial class MainWindow
             File.Delete(manifestPath);
     }
 
+    private async Task CaptureReviewCommentsProtectionTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteReviewCommentsProtectionTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1220;
+        Height = 760;
+        await Task.Delay(700);
+
+        var context = EnsureReviewCommentsProtectionTourContext();
+        var captures = new List<ReviewCommentsProtectionTourManifestCapture>();
+        Window? openDialog = null;
+
+        try
+        {
+            SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Review"));
+            RefreshReviewCommentNoteCommandStates();
+            captures.Add(await CaptureReviewCommentsProtectionWindowStateAsync(
+                outputDir,
+                "review-tab-supported-surfaces",
+                "freex_review_comments_protection_review_tab",
+                "Review tab",
+                "Review tab shows supported FreeX proofing, accessibility, comments, notes, protection, sharing, and changes controls; no Thesaurus command is currently exposed."));
+
+            openDialog = new SpellCheckDialog(context.SpellingWord, context.SpellingSuggestion) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureReviewCommentsProtectionDialogAsync(
+                openDialog,
+                outputDir,
+                "spell-check-dialog",
+                "Spelling",
+                "freex_review_spell_check_dialog",
+                "Spell Check dialog shows the misspelled word, suggestion list, replacement editor, Ignore/Ignore All/Change/Change All/Add/Cancel command row, and production automation IDs."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            var accessibilityIssues = AccessibilityCheckerService.FindIssues(_workbook);
+            if (accessibilityIssues.Count == 0)
+                throw new InvalidOperationException("Review tour expected at least one accessibility issue.");
+            openDialog = new AccessibilityCheckerDialog(accessibilityIssues) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureReviewCommentsProtectionDialogAsync(
+                openDialog,
+                outputDir,
+                "accessibility-checker-dialog",
+                "Accessibility Checker",
+                "freex_review_accessibility_checker_dialog",
+                "Accessibility Checker dialog lists seeded merged-cell/default-sheet issues with Go To and Close controls."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new ThreadedCommentDialog(context.NewThreadedCommentCell.ToA1(), existing: null) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureReviewCommentsProtectionDialogAsync(
+                openDialog,
+                outputDir,
+                "new-threaded-comment-dialog",
+                "New Comment",
+                "freex_review_new_threaded_comment_dialog",
+                "New Comment dialog opens for a blank seeded cell with the comment editor, Add default button, Cancel button, and stable threaded-comment automation IDs."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new CommentListWindow(
+                UiText.Get("MainWindowMessage_CommentsTitle"),
+                CommentListWindow.CreateThreadedCommentItems(context.Sheet.ThreadedComments),
+                NavigateToCell)
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureReviewCommentsProtectionDialogAsync(
+                openDialog,
+                outputDir,
+                "show-comments-list",
+                "Show Comments",
+                "freex_review_show_comments_list",
+                "Show Comments opens the modeless threaded comments list with Cell/Text columns, Open, Close, and first-item selection."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new CommentListWindow(
+                UiText.Get("MainWindow_Text_Notes"),
+                CommentListWindow.CreateNoteItems(context.Sheet.Comments),
+                NavigateToCell)
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureReviewCommentsProtectionDialogAsync(
+                openDialog,
+                outputDir,
+                "show-notes-list",
+                "Show Notes",
+                "freex_review_show_notes_list",
+                "Show Notes opens the modeless simple notes list with Cell/Text columns, Open, Close, and first-item selection."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new PasswordProtectionDialog(
+                UiText.Get("MainWindowMessage_ProtectSheetTitle"),
+                UiText.Get("MainWindowMessage_OptionalPasswordLabel"))
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureReviewCommentsProtectionDialogAsync(
+                openDialog,
+                outputDir,
+                "protect-sheet-dialog",
+                "Protect Sheet",
+                "freex_review_protect_sheet_dialog",
+                "Protect Sheet dialog shows the optional password field, caution text, and sheet-permission checklist."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new PasswordProtectionDialog(
+                UiText.Get("MainWindowMessage_ProtectWorkbookTitle"),
+                UiText.Get("MainWindowMessage_OptionalPasswordLabel"))
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureReviewCommentsProtectionDialogAsync(
+                openDialog,
+                outputDir,
+                "protect-workbook-dialog",
+                "Protect Workbook",
+                "freex_review_protect_workbook_dialog",
+                "Protect Workbook dialog shows the workbook-structure optional password prompt and caution text."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new AllowEditRangeDialog(
+                context.Sheet.Id,
+                context.AllowEditRange.ToString(),
+                context.Sheet.AllowEditRanges,
+                request => { })
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureReviewCommentsProtectionDialogAsync(
+                openDialog,
+                outputDir,
+                "allow-edit-ranges-dialog",
+                "Allow Users to Edit Ranges",
+                "freex_review_allow_edit_ranges_dialog",
+                "Allow Users to Edit Ranges dialog shows the existing editable range list, New/Modify/Delete actions, disabled Permissions button, range editor, and picker."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            ValidateReviewCommentsProtectionTourEvidence(outputDir, captures);
+            await WriteReviewCommentsProtectionTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteReviewCommentsProtectionTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (openDialog is { IsVisible: true })
+                CloseDataToolsTourDialog(openDialog);
+        }
+    }
+
+    private ReviewCommentsProtectionTourContext EnsureReviewCommentsProtectionTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Review comments/protection tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        for (uint row = 1; row <= 10; row++)
+        {
+            for (uint col = 1; col <= 7; col++)
+                sheet.ClearCell(new CellAddress(sheet.Id, row, col));
+        }
+
+        sheet.Comments.Clear();
+        sheet.ThreadedComments.Clear();
+        sheet.AllowEditRanges.Clear();
+        sheet.ReplaceMergedRegions([]);
+        sheet.ColumnWidths[1] = 16;
+        sheet.ColumnWidths[2] = 24;
+        sheet.ColumnWidths[3] = 24;
+        sheet.ColumnWidths[4] = 22;
+
+        SetTourCell(sheet, 1, 1, new TextValue("Review tour"));
+        SetTourCell(sheet, 2, 1, new TextValue("mispelled total"));
+        SetTourCell(sheet, 2, 2, new TextValue("Threaded comment anchor"));
+        SetTourCell(sheet, 3, 2, new TextValue("Simple note anchor"));
+        SetTourCell(sheet, 4, 1, new TextValue("Merged accessibility issue"));
+        SetTourCell(sheet, 6, 1, new TextValue("Editable range"));
+        SetTourCell(sheet, 6, 2, new TextValue("Team-owned cells"));
+
+        var threadedCell = new CellAddress(sheet.Id, 2, 2);
+        var noteCell = new CellAddress(sheet.Id, 3, 2);
+        var newThreadedCell = new CellAddress(sheet.Id, 2, 4);
+        var allowEditRange = Range(sheet.Id, 6, 1, 6, 3);
+        sheet.ThreadedComments[threadedCell] = new ThreadedComment("Review seeded threaded comment", "FreeX")
+        {
+            Replies =
+            [
+                new CommentReply("Follow-up reply for list evidence", "FreeX QA")
+            ]
+        };
+        sheet.Comments[noteCell] = "Review seeded simple note.";
+        sheet.AllowEditRanges.Add(allowEditRange);
+        sheet.AddMergedRegion(Range(sheet.Id, 4, 1, 4, 3));
+
+        var selection = Range(sheet.Id, 2, 1, 6, 4);
+        SetSelectionRange(selection, selection.Start);
+        EnsureCellVisible(selection.Start);
+        RefreshReviewCommentNoteCommandStates();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateViewport();
+        UpdateLayout();
+
+        return new ReviewCommentsProtectionTourContext(
+            Sheet: sheet,
+            SpellingCell: new CellAddress(sheet.Id, 2, 1),
+            SpellingWord: "mispelled",
+            SpellingSuggestion: "misspelled",
+            ThreadedCommentCell: threadedCell,
+            NoteCell: noteCell,
+            NewThreadedCommentCell: newThreadedCell,
+            AllowEditRange: allowEditRange);
+    }
+
+    private async Task<ReviewCommentsProtectionTourManifestCapture> CaptureReviewCommentsProtectionWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string surface,
+        string evidenceSummary)
+    {
+        RefreshReviewCommentNoteCommandStates();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateReviewCommentsProtectionCapture(
+            state,
+            surface,
+            fileName,
+            "RenderTargetBitmap-main-window",
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            evidenceSummary);
+    }
+
+    private async Task<ReviewCommentsProtectionTourManifestCapture> CaptureReviewCommentsProtectionDialogAsync(
+        Window dialog,
+        string outputDir,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        await WaitForDataToolsDialogRenderAsync(dialog);
+        await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+        return CreateReviewCommentsProtectionCapture(
+            state,
+            surface,
+            fileName,
+            "RenderTargetBitmap-review-dialog-window",
+            dialog.ActualWidth,
+            dialog.ActualHeight,
+            evidenceSummary);
+    }
+
+    private ReviewCommentsProtectionTourManifestCapture CreateReviewCommentsProtectionCapture(
+        string state,
+        string surface,
+        string fileName,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        string evidenceSummary)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return new ReviewCommentsProtectionTourManifestCapture(
+            CaptureKey: $"review-comments-protection:{state}",
+            PairKey: $"interactive:review-comments-protection:{state}",
+            ScenarioId: "review-comments-protection:visual-evidence",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            SelectedRange: SheetGrid.SelectedRange?.ToString() ?? string.Empty,
+            ThreadedCommentCount: sheet?.ThreadedComments.Count ?? 0,
+            NoteCount: sheet?.Comments.Count ?? 0,
+            AllowEditRangeCount: sheet?.AllowEditRanges.Count ?? 0,
+            AccessibilityIssueCount: AccessibilityCheckerService.FindIssues(_workbook).Count,
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private static void DeleteReviewCommentsProtectionTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_review_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, ReviewCommentsProtectionTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateReviewCommentsProtectionTourEvidence(
+        string outputDir,
+        IReadOnlyList<ReviewCommentsProtectionTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Review comments/protection tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
     private async Task CaptureViewPanesZoomTourAsync(string outputDir)
     {
         Directory.CreateDirectory(outputDir);
@@ -5430,6 +5763,78 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.FormulaDiagnosticsTourManifest);
     }
 
+    private static async Task WriteReviewCommentsProtectionTourManifestAsync(
+        string outputDir,
+        ReviewCommentsProtectionTourContext context,
+        IReadOnlyList<ReviewCommentsProtectionTourManifestCapture> captures)
+    {
+        var manifest = new ReviewCommentsProtectionTourManifest(
+            Tool: "FREEX_REVIEW_COMMENTS_PROTECTION_TOUR",
+            EvidenceFamily: "review-comments-protection",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "review-comments-protection:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_review_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds:
+            [
+                "UI-CAT-REVIEW-001",
+                "UI-CAT-REVIEW-002",
+                "UI-CMD-REVIEW-001",
+                "UI-CMD-REVIEW-002",
+                "UI-CMD-REVIEW-003",
+                "UI-CMD-REVIEW-004"
+            ],
+            SheetName: context.Sheet.Name,
+            SpellingCell: context.SpellingCell.ToA1(),
+            SpellingWord: context.SpellingWord,
+            SpellingSuggestion: context.SpellingSuggestion,
+            ThreadedCommentCell: context.ThreadedCommentCell.ToA1(),
+            NoteCell: context.NoteCell.ToA1(),
+            NewThreadedCommentCell: context.NewThreadedCommentCell.ToA1(),
+            AllowEditRange: context.AllowEditRange.ToString(),
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new ReviewCommentsProtectionTourManifestPairing(
+                "interactive:review-comments-protection:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no foreground mouse, keyboard, or screen capture input was used."
+                    : "Abort before file write unless the expected FreeX main window or Review dialog owns foreground focus for each capture."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Review tab supported command groups and current Thesaurus gap",
+                "Spelling dialog",
+                "Accessibility Checker issue-list dialog",
+                "New threaded comment dialog",
+                "Show Comments and Show Notes list windows",
+                "Protect Sheet and Protect Workbook dialogs",
+                "Allow Users to Edit Ranges dialog"
+            ],
+            Limitations:
+            [
+                "This tour drives FreeX in process and captures WPF windows with RenderTargetBitmap; it is not foreground CopyFromScreen proof.",
+                "No global mouse, keytip, keyboard, native share UI, or range-picker input is synthesized.",
+                "The Spelling capture shows the production dialog with a deterministic word/suggestion pair; it does not run the full modal replacement loop.",
+                "Thesaurus is not currently a supported FreeX Review command, so the baseline Review tab capture documents the absence rather than a dialog.",
+                "Protect/unprotect confirmation, wrong-password, Permissions, Share, Show Changes, foreground focus trapping, and paired Microsoft Excel screenshots remain open."
+            ]);
+
+        var path = Path.Combine(outputDir, ReviewCommentsProtectionTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.ReviewCommentsProtectionTourManifest);
+    }
+
     private static async Task WritePrintPreviewTourManifestAsync(
         string outputDir,
         Sheet sheet,
@@ -6345,6 +6750,16 @@ public partial class MainWindow
         string ResultFormula,
         string ErrorFormula);
 
+    private sealed record ReviewCommentsProtectionTourContext(
+        Sheet Sheet,
+        CellAddress SpellingCell,
+        string SpellingWord,
+        string SpellingSuggestion,
+        CellAddress ThreadedCommentCell,
+        CellAddress NoteCell,
+        CellAddress NewThreadedCommentCell,
+        GridRange AllowEditRange);
+
     private sealed record FormulaBarNameBoxTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -6559,6 +6974,58 @@ public partial class MainWindow
         int WatchCount,
         string EvidenceSummary);
 
+    private sealed record ReviewCommentsProtectionTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string SheetName,
+        string SpellingCell,
+        string SpellingWord,
+        string SpellingSuggestion,
+        string ThreadedCommentCell,
+        string NoteCell,
+        string NewThreadedCommentCell,
+        string AllowEditRange,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        ReviewCommentsProtectionTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<ReviewCommentsProtectionTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record ReviewCommentsProtectionTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record ReviewCommentsProtectionTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SelectedRange,
+        int ThreadedCommentCount,
+        int NoteCount,
+        int AllowEditRangeCount,
+        int AccessibilityIssueCount,
+        string EvidenceSummary);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
@@ -6578,6 +7045,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(DataToolsDialogsTourManifest))]
     [JsonSerializable(typeof(ViewPanesZoomTourManifest))]
     [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
+    [JsonSerializable(typeof(ReviewCommentsProtectionTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.
