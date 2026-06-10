@@ -207,10 +207,7 @@ public partial class MainWindow
             return;
         }
 
-        _currentSheetId = _workbook.Sheets[^1].Id;
-        _groupedSheetIds.Clear();
-        _groupedSheetIds.Add(_currentSheetId);
-        _sheetGroupAnchor = _currentSheetId;
+        ActivateNewWorksheetAtA1(_workbook.Sheets[^1].Id);
         UpdateViewport();
         RefreshSheetTabs();
     }

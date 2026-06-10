@@ -263,11 +263,19 @@ public partial class GridView
                 MinimumTextBoxObjectHeight,
                 out var rect))
             return;
-        if (NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom) &&
-            !IntersectsDrawingViewport(rect, textBox.RotationDegrees, visibleRight, visibleBottom))
+
+        var rotationDegrees = textBox.RotationDegrees;
+        if (TryResolveLiveObjectTransform(textBox.Id, ObjectKind.TextBox, rect, rotationDegrees, out var previewRect, out var previewRotationDegrees))
+        {
+            rect = previewRect;
+            rotationDegrees = previewRotationDegrees;
+        }
+
+        if (NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom) &&
+            !IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom))
             return;
 
-        var rotationPushed = PushRotation(dc, textBox.RotationDegrees, rect);
+        var rotationPushed = PushRotation(dc, rotationDegrees, rect);
         var colors = ResolveTextBoxColors(textBox, WorkbookTheme);
         DrawTextBoxThemeEffect(dc, rect, themeEffect);
         var fillBrush = GetDrawingObjectBrush(242, colors.Fill);
@@ -321,11 +329,19 @@ public partial class GridView
                 MinimumShapeObjectHeight,
                 out var rect))
             return;
-        if (NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom) &&
-            !IntersectsDrawingViewport(rect, shape.RotationDegrees, visibleRight, visibleBottom))
+
+        var rotationDegrees = shape.RotationDegrees;
+        if (TryResolveLiveObjectTransform(shape.Id, ObjectKind.Shape, rect, rotationDegrees, out var previewRect, out var previewRotationDegrees))
+        {
+            rect = previewRect;
+            rotationDegrees = previewRotationDegrees;
+        }
+
+        if (NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom) &&
+            !IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom))
             return;
 
-        var rotationPushed = PushRotation(dc, shape.RotationDegrees, rect);
+        var rotationPushed = PushRotation(dc, rotationDegrees, rect);
         var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
         var pen = GetDrawingObjectPen(255, colors.Outline, 1.5);
         var fill = CreateDrawingShapeFill(shape, colors.Fill);

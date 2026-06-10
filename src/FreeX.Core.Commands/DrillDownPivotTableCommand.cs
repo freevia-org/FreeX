@@ -36,6 +36,7 @@ public sealed class DrillDownPivotTableCommand : IWorkbookCommand
             return new CommandOutcome(false, "No detail rows were found for this PivotTable cell.");
 
         var detailSheet = ctx.Workbook.AddSheet(GenerateDetailSheetName(ctx.Workbook));
+        detailSheet.ResetViewStateToA1();
         _detailSheetId = detailSheet.Id;
         for (var col = 0; col < details.Headers.Count; col++)
             detailSheet.SetCell(new CellAddress(detailSheet.Id, 1, (uint)col + 1), new TextValue(details.Headers[col]));

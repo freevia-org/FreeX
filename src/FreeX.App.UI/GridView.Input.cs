@@ -437,6 +437,7 @@ public partial class GridView
                 _objectDragStartPos = pos;
                 _objectDragStartRect = selRect;
                 _objectDragCurrentRect = selRect;
+                _objectRotationPreviewDegrees = GetSelectedObjectRotationDegrees();
                 _objectDragStartAnchor = GetSelectedObjectAnchor() ?? HitTestAnchorCell(pos) ?? default;
                 Cursor = ObjectDragCursor(dragKind);
                 InvalidateVisual();
@@ -469,6 +470,7 @@ public partial class GridView
             _objectDragStartPos = pos;
             _objectDragStartRect = hit.Rect;
             _objectDragCurrentRect = hit.Rect;
+            _objectRotationPreviewDegrees = GetSelectedObjectRotationDegrees();
             _objectDragStartAnchor = hit.Anchor;
             Cursor = Cursors.SizeAll;
             InvalidateVisual();

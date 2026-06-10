@@ -35,6 +35,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
 
         var copyId = SheetId.New();
         var copy = source.Clone(copyId, name);
+        copy.ResetViewStateToA1();
 
         DuplicateSheetDrawingCloner.CopyDrawingCollections(source, copy, copyId);
 

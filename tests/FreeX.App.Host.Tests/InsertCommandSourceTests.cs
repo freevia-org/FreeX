@@ -122,6 +122,7 @@ public sealed class InsertCommandSourceTests
         pivotSource.Should().Contain("new PivotTableDialog(");
         pivotSource.Should().Contain("new AddPivotTableCommand(");
         pivotSource.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
+        pivotSource.Should().Contain("ActivateNewWorksheetAtA1(createdSheetId)");
         pivotSource.Should().Contain("private void PivotInsertSlicerBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("new InsertSlicerDialog(headers, fieldName)");
         pivotSource.Should().Contain("new AddSlicerCommand(dialog.Result.SlicerName, pivotTable.Name, dialog.Result.FieldName)");

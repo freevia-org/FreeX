@@ -331,6 +331,47 @@ public partial class GridView
         return _objectDragCurrentRect.IsEmpty ? baseRect : _objectDragCurrentRect;
     }
 
+    private bool HasLiveObjectTransformPreview() =>
+        _objectDragKind != ObjectDragKind.None &&
+        _selectedObjectId != Guid.Empty &&
+        _selectedObjectKind is not ObjectKind.None and not ObjectKind.Chart;
+
+    private Rect GetSelectedObjectLiveRect(Rect committedRect)
+    {
+        if (!HasLiveObjectTransformPreview())
+            return committedRect;
+
+        return _objectDragCurrentRect.IsEmpty ? committedRect : _objectDragCurrentRect;
+    }
+
+    private double GetSelectedObjectLiveRotationDegrees(double committedRotationDegrees) =>
+        HasLiveObjectTransformPreview() && _objectDragKind == ObjectDragKind.Rotate
+            ? _objectRotationPreviewDegrees
+            : committedRotationDegrees;
+
+    private bool TryResolveLiveObjectTransform(
+        Guid id,
+        ObjectKind kind,
+        Rect committedRect,
+        double committedRotationDegrees,
+        out Rect renderRect,
+        out double renderRotationDegrees)
+    {
+        renderRect = committedRect;
+        renderRotationDegrees = committedRotationDegrees;
+
+        if (!HasLiveObjectTransformPreview() ||
+            id != _selectedObjectId ||
+            kind != _selectedObjectKind)
+        {
+            return false;
+        }
+
+        renderRect = GetSelectedObjectLiveRect(committedRect);
+        renderRotationDegrees = GetSelectedObjectLiveRotationDegrees(committedRotationDegrees);
+        return true;
+    }
+
     private Rect _objectDragCurrentRect;
     private double _objectRotationPreviewDegrees;
 

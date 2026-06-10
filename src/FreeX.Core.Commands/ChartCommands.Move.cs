@@ -102,6 +102,7 @@ public sealed class MoveChartToNewSheetCommand : IWorkbookCommand
             return ChartCommandGuards.SelectedChartIsPivotChart();
 
         var target = ctx.Workbook.AddSheet(_sheetName);
+        target.ResetViewStateToA1();
         source.Charts.Remove(chart);
         target.Charts.Add(chart);
         _createdSheetId = target.Id;

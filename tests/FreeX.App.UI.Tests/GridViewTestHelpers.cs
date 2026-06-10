@@ -63,10 +63,36 @@ internal static class GridViewTestHelpers
     public static CellAddress? GetSelectedObjectAnchor(GridView grid) =>
         InvokePrivate(grid, "GetSelectedObjectAnchor") is CellAddress anchor ? anchor : null;
 
+    public static void SetObjectTransformPreview(
+        GridView grid,
+        Guid id,
+        ObjectKind kind,
+        ObjectDragKind dragKind,
+        Rect startRect,
+        Rect currentRect,
+        double rotationDegrees = 0)
+    {
+        grid.SelectedObjectId = id;
+        grid.SelectedObjectKind = kind;
+        SetPrivateField(grid, "_selectedObjectId", id);
+        SetPrivateField(grid, "_selectedObjectKind", kind);
+        SetPrivateField(grid, "_objectDragKind", dragKind);
+        SetPrivateField(grid, "_objectDragStartRect", startRect);
+        SetPrivateField(grid, "_objectDragCurrentRect", currentRect);
+        SetPrivateField(grid, "_objectRotationPreviewDegrees", rotationDegrees);
+    }
+
     private static object InvokePrivate(GridView grid, string methodName, params object[] arguments)
     {
         var method = typeof(GridView).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         method.Should().NotBeNull();
         return method!.Invoke(grid, arguments)!;
+    }
+
+    private static void SetPrivateField(GridView grid, string fieldName, object value)
+    {
+        var field = typeof(GridView).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        field!.SetValue(grid, value);
     }
 }
