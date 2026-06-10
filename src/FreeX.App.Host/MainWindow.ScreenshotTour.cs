@@ -52,6 +52,9 @@ public partial class MainWindow
     private const string FormulaBarNameBoxTourOutputDirectoryName = "formula-bar-name-box-tour";
     private const string StatusFooterTourManifestFileName = "status_footer_tour_manifest.json";
     private const string StatusFooterTourOutputDirectoryName = "status-footer-tour";
+    private const string ViewPanesZoomTourManifestFileName = "view_panes_zoom_tour_manifest.json";
+    private const string ViewPanesZoomTourOutputDirectoryName = "view-panes-zoom-tour";
+    private const string ViewPanesZoomTourCustomViewName = "View Panes Zoom Tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -125,7 +128,8 @@ public partial class MainWindow
         var titlebarWindowChromeTour = Environment.GetEnvironmentVariable("FREEX_TITLEBAR_WINDOW_CHROME_TOUR") == "1";
         var formulaBarNameBoxTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_BAR_NAME_BOX_TOUR") == "1";
         var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour)
+        var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !viewPanesZoomTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -142,7 +146,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, viewPanesZoomTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -178,7 +182,8 @@ public partial class MainWindow
         bool qatUndoRedoTour,
         bool titlebarWindowChromeTour,
         bool statusFooterTour,
-        bool formulaBarNameBoxTour)
+        bool formulaBarNameBoxTour,
+        bool viewPanesZoomTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -217,6 +222,9 @@ public partial class MainWindow
 
         if (formulaBarNameBoxTour)
             await CaptureFormulaBarNameBoxTourAsync(Path.Combine(outputDir, FormulaBarNameBoxTourOutputDirectoryName));
+
+        if (viewPanesZoomTour)
+            await CaptureViewPanesZoomTourAsync(Path.Combine(outputDir, ViewPanesZoomTourOutputDirectoryName));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -2153,6 +2161,378 @@ public partial class MainWindow
             File.Delete(manifestPath);
     }
 
+    private async Task CaptureViewPanesZoomTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteViewPanesZoomTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 760;
+        await Task.Delay(700);
+
+        var originalFormulaBarVisible = _options.ShowFormulaBar;
+        var sheet = EnsureViewPanesZoomTourContext();
+        var captures = new List<ViewPanesZoomTourManifestCapture>();
+
+        try
+        {
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "view-tab-normal-baseline",
+                "freex_view_panes_zoom_view_tab_normal",
+                "View tab with Normal workbook view selected, Show toggles on, 100% zoom, and baseline grid geometry."));
+
+            SetWorksheetViewMode(WorksheetViewMode.PageLayout);
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "page-layout-ruler-on",
+                "freex_view_panes_zoom_page_layout_ruler_on",
+                "Page Layout workbook view with ruler toggle enabled and on."));
+
+            SetWorksheetViewMode(WorksheetViewMode.PageBreakPreview);
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "page-break-preview",
+                "freex_view_panes_zoom_page_break_preview",
+                "Page Break Preview workbook view selected through the same workbook-view command path."));
+
+            SetWorksheetViewMode(WorksheetViewMode.PageLayout);
+            SetViewPanesZoomTourShowToggles(showGridlines: false, showHeadings: false, showRulers: false);
+            SetViewPanesZoomTourFormulaBarVisible(false);
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "show-toggles-hidden",
+                "freex_view_panes_zoom_show_toggles_hidden",
+                "Gridlines, headings, ruler, and formula bar hidden with ribbon checkbox state visible."));
+
+            SetViewPanesZoomTourShowToggles(showGridlines: true, showHeadings: true, showRulers: true);
+            SetViewPanesZoomTourFormulaBarVisible(true);
+            SetWorksheetViewMode(WorksheetViewMode.Normal);
+            SelectViewPanesZoomTourRange(sheet, new GridRange(new CellAddress(sheet.Id, 4, 3), new CellAddress(sheet.Id, 4, 3)));
+            FreezeAtSelectionMenuItem_Click(this, new RoutedEventArgs());
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "freeze-panes-c4",
+                "freex_view_panes_zoom_freeze_panes_c4",
+                "Freeze Panes at C4, showing frozen rows and columns in the grid model and visible pane geometry."));
+
+            SelectViewPanesZoomTourRange(sheet, new GridRange(new CellAddress(sheet.Id, 6, 5), new CellAddress(sheet.Id, 6, 5)));
+            SplitViewBtn_Click(SplitViewBtn, new RoutedEventArgs());
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "split-panes-e6",
+                "freex_view_panes_zoom_split_panes_e6",
+                "Split panes at E6 after the Split command clears the previous frozen-pane state."));
+
+            var zoomDialog = new ZoomDialog(125) { Owner = this };
+            try
+            {
+                zoomDialog.Show();
+                await Task.Delay(350);
+                zoomDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(zoomDialog, outputDir, "freex_view_panes_zoom_dialog_custom_125");
+                captures.Add(CreateViewPanesZoomTourCapture(
+                    "zoom-dialog-custom-125",
+                    "freex_view_panes_zoom_dialog_custom_125",
+                    "Zoom dialog opened with a custom 125% value selected in the production ZoomDialog surface.",
+                    "RenderTargetBitmap-zoom-dialog-window"));
+            }
+            finally
+            {
+                zoomDialog.Close();
+            }
+
+            await SetViewPanesZoomTourZoomAsync(175);
+            Zoom100Btn_Click(this, new RoutedEventArgs());
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "zoom-100-command",
+                "freex_view_panes_zoom_100_percent_command",
+                "View ribbon 100% command resets the worksheet zoom and status zoom text to 100%."));
+
+            SelectViewPanesZoomTourRange(sheet, new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 18, 8)));
+            ZoomSelectionBtn_Click(this, new RoutedEventArgs());
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "zoom-to-selection",
+                "freex_view_panes_zoom_to_selection",
+                "Zoom to Selection fits the selected A1:H18 range to the visible grid viewport."));
+
+            if (TryExecuteCommand(new SetWorkbookWindowArrangementCommand(WorkbookWindowArrangement.Horizontal), "Arrange Windows"))
+            {
+                captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                    outputDir,
+                    "arrange-horizontal-state",
+                    "freex_view_panes_zoom_arrange_horizontal_state",
+                    "Arrange All command state set to Horizontal and reflected in the workbook window arrangement model."));
+            }
+
+            var arrangeButton = FindDescendantByRibbonCommandName<Button>(RibbonTabs, "Arrange All");
+            if (arrangeButton?.ContextMenu is { } arrangeMenu)
+            {
+                OpenRibbonContextMenu(arrangeButton, arrangeMenu);
+                await Task.Delay(350);
+                arrangeMenu.UpdateLayout();
+                await CaptureElementAsync(arrangeMenu, outputDir, "freex_view_panes_zoom_arrange_all_menu_opened");
+                captures.Add(CreateViewPanesZoomTourCapture(
+                    "arrange-all-menu-opened",
+                    "freex_view_panes_zoom_arrange_all_menu_opened",
+                    "Arrange All menu opened with live checked layout state.",
+                    "RenderTargetBitmap-arrange-all-context-menu"));
+                arrangeMenu.IsOpen = false;
+            }
+
+            if (_workbook.CustomViews.All(view => !string.Equals(view.Name, ViewPanesZoomTourCustomViewName, StringComparison.OrdinalIgnoreCase)))
+                TryExecuteCommand(new SaveCustomViewCommand(ViewPanesZoomTourCustomViewName), "Save Custom View");
+
+            var customViewsDialog = new CustomViewsDialog(_workbook, _commandBus) { Owner = this };
+            try
+            {
+                customViewsDialog.Show();
+                await Task.Delay(350);
+                customViewsDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(customViewsDialog, outputDir, "freex_view_panes_zoom_custom_views_dialog");
+                captures.Add(CreateViewPanesZoomTourCapture(
+                    "custom-views-dialog-opened",
+                    "freex_view_panes_zoom_custom_views_dialog",
+                    "Custom Views dialog opened with a saved tour view in the production list surface.",
+                    "RenderTargetBitmap-custom-views-dialog-window"));
+            }
+            finally
+            {
+                customViewsDialog.Close();
+            }
+
+            ValidateViewPanesZoomTourEvidence(outputDir, captures);
+            await WriteViewPanesZoomTourManifestAsync(outputDir, captures);
+        }
+        catch
+        {
+            DeleteViewPanesZoomTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            SetViewPanesZoomTourFormulaBarVisible(originalFormulaBarVisible);
+        }
+    }
+
+    private Sheet EnsureViewPanesZoomTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("View panes/zoom tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        for (uint row = 1; row <= 24; row++)
+        {
+            for (uint col = 1; col <= 10; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                if (row == 1)
+                    sheet.SetCell(address, new TextValue($"Metric {col}"));
+                else if (col == 1)
+                    sheet.SetCell(address, new TextValue($"Region {row - 1}"));
+                else
+                    sheet.SetCell(address, new NumberValue((row - 1) * 100 + col));
+            }
+        }
+
+        _options.ShowFormulaBar = true;
+        _suppressAppViewOptionSync = true;
+        try
+        {
+            if (ViewFormulaBarChk is not null)
+                ViewFormulaBarChk.IsChecked = true;
+        }
+        finally
+        {
+            _suppressAppViewOptionSync = false;
+        }
+
+        FormulaBarBorder.Visibility = Visibility.Visible;
+        SelectViewPanesZoomTourRange(sheet, new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 5, 4)));
+        SetWorksheetViewMode(WorksheetViewMode.Normal);
+        SetViewPanesZoomTourShowToggles(showGridlines: true, showHeadings: true, showRulers: true);
+        SetFreezePanes(0, 0);
+        if (sheet.SplitRow is not null || sheet.SplitColumn is not null)
+            SplitViewBtn_Click(SplitViewBtn, new RoutedEventArgs());
+        SyncZoomFromSheet(100);
+        SelectViewRibbonTabForTour();
+        UpdateViewport();
+        return sheet;
+    }
+
+    private void SelectViewPanesZoomTourRange(Sheet sheet, GridRange range)
+    {
+        _currentSheetId = sheet.Id;
+        SetActiveCell(range.Start);
+        if (SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = range;
+            SheetGrid.SelectedRanges = null;
+            SheetGrid.Focus();
+        }
+
+        var cell = sheet.GetCell(range.Start);
+        SetFormulaBarSelectionText(FormatFormulaBarText(cell, range.Start));
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    private void SelectViewRibbonTabForTour()
+    {
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "View"));
+    }
+
+    private void SetViewPanesZoomTourShowToggles(bool showGridlines, bool showHeadings, bool showRulers)
+    {
+        if (!TryExecuteGroupedSheetCommand(
+                "View Show",
+                sheetId => new SetWorksheetViewOptionsCommand(sheetId, showGridlines, showHeadings, showRulers)))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void SetViewPanesZoomTourFormulaBarVisible(bool isVisible)
+    {
+        _options.ShowFormulaBar = isVisible;
+        _suppressAppViewOptionSync = true;
+        try
+        {
+            if (ViewFormulaBarChk is not null)
+                ViewFormulaBarChk.IsChecked = isVisible;
+        }
+        finally
+        {
+            _suppressAppViewOptionSync = false;
+        }
+
+        FormulaBarBorder.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async Task SetViewPanesZoomTourZoomAsync(int zoomPercent)
+    {
+        ZoomSlider.Value = FreeX.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+        RefreshStatusBar();
+        UpdateViewport();
+        await Task.Delay(250);
+    }
+
+    private async Task<ViewPanesZoomTourManifestCapture> CaptureViewPanesZoomWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string evidencePurpose)
+    {
+        SelectViewRibbonTabForTour();
+        SyncViewPanesZoomTourWorkbookViewButtons();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateViewPanesZoomTourCapture(state, fileName, evidencePurpose, "RenderTargetBitmap-window-full");
+    }
+
+    private void SyncViewPanesZoomTourWorkbookViewButtons()
+    {
+        var viewMode = _workbook.GetSheet(_currentSheetId)?.ViewMode ?? WorksheetViewMode.Normal;
+        ViewNormalButton.IsChecked = viewMode == WorksheetViewMode.Normal;
+        ViewPageLayoutButton.IsChecked = viewMode == WorksheetViewMode.PageLayout;
+        ViewPageBreakPreviewButton.IsChecked = viewMode == WorksheetViewMode.PageBreakPreview;
+    }
+
+    private ViewPanesZoomTourManifestCapture CreateViewPanesZoomTourCapture(
+        string state,
+        string fileName,
+        string evidencePurpose,
+        string captureMethod)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return new ViewPanesZoomTourManifestCapture(
+            CaptureKey: $"interactive:view-panes-zoom:{state}",
+            PairKey: $"interactive:view-panes-zoom:{state}",
+            ScenarioId: "view-panes-zoom:visual-evidence",
+            State: state,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            EvidencePurpose: evidencePurpose,
+            CaptureLogicalWidth: captureMethod.Contains("window-full", StringComparison.Ordinal) ? ActualWidth : 0,
+            CaptureLogicalHeight: captureMethod.Contains("window-full", StringComparison.Ordinal) ? Math.Min(ActualHeight, 760) : 0,
+            SheetName: sheet?.Name ?? string.Empty,
+            ActiveRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
+            ViewMode: (sheet?.ViewMode ?? WorksheetViewMode.Normal).ToString(),
+            ShowGridlines: sheet?.ShowGridlines ?? true,
+            ShowHeadings: sheet?.ShowHeadings ?? true,
+            ShowRulers: sheet?.ShowRulers ?? true,
+            FormulaBarVisible: FormulaBarBorder.Visibility == Visibility.Visible,
+            FrozenRows: sheet?.FrozenRows ?? 0,
+            FrozenCols: sheet?.FrozenCols ?? 0,
+            SplitRow: sheet?.SplitRow,
+            SplitColumn: sheet?.SplitColumn,
+            ZoomText: StatusZoomText.Text,
+            ZoomSliderValue: ZoomSlider.Value,
+            WindowArrangement: _workbook.WindowArrangement.ToString(),
+            CustomViewCount: _workbook.CustomViews.Count,
+            ViewNormalChecked: ViewNormalButton.IsChecked == true,
+            ViewPageLayoutChecked: ViewPageLayoutButton.IsChecked == true,
+            ViewPageBreakPreviewChecked: ViewPageBreakPreviewButton.IsChecked == true,
+            ViewGridlinesChecked: ViewGridlinesChk.IsChecked == true,
+            ViewHeadingsChecked: ViewHeadersChk.IsChecked == true,
+            ViewRulerChecked: ViewRulerChk.IsChecked == true,
+            ViewFormulaBarChecked: ViewFormulaBarChk.IsChecked == true,
+            SplitButtonChecked: SplitViewBtn.IsChecked == true);
+    }
+
+    private static void DeleteViewPanesZoomTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_view_panes_zoom_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, ViewPanesZoomTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateViewPanesZoomTourEvidence(string outputDir, IReadOnlyList<ViewPanesZoomTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"View panes/zoom tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
+    private static T? FindDescendantByRibbonCommandName<T>(DependencyObject root, string commandName)
+        where T : DependencyObject
+    {
+        if (root is T typed &&
+            RibbonMetadata.TryGetCommandName(typed, out var candidate) &&
+            string.Equals(candidate, commandName, StringComparison.Ordinal))
+            return typed;
+
+        var visualCount = root is Visual or System.Windows.Media.Media3D.Visual3D
+            ? VisualTreeHelper.GetChildrenCount(root)
+            : 0;
+        for (var index = 0; index < visualCount; index++)
+        {
+            var match = FindDescendantByRibbonCommandName<T>(VisualTreeHelper.GetChild(root, index), commandName);
+            if (match is not null)
+                return match;
+        }
+
+        foreach (var logicalChild in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            var match = FindDescendantByRibbonCommandName<T>(logicalChild, commandName);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
+    }
+
     private static void ValidateTitlebarWindowChromeTourEvidence(string outputDir, IReadOnlyList<TitlebarWindowChromeTourManifestCapture> captures)
     {
         foreach (var capture in captures)
@@ -3262,6 +3642,69 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest);
     }
 
+    private static async Task WriteViewPanesZoomTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<ViewPanesZoomTourManifestCapture> captures)
+    {
+        var manifest = new ViewPanesZoomTourManifest(
+            Tool: "FREEX_VIEW_PANES_ZOOM_TOUR",
+            EvidenceFamily: "view-panes-zoom",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "view-panes-zoom:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_view_panes_zoom_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds:
+            [
+                "UI-CAT-VIEW-001",
+                "UI-CAT-VIEW-002",
+                "UI-CMD-VIEW-001",
+                "UI-CMD-VIEW-002",
+                "UI-CMD-VIEW-003",
+                "UI-CMD-VIEW-004"
+            ],
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new ViewPanesZoomTourManifestPairing(
+                "interactive:view-panes-zoom:<State>",
+                "manual-or-excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 was set; no global mouse, keyboard, or screen capture input is used."
+                    : "FreeX main window must own foreground focus before each RenderTargetBitmap window capture."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "View ribbon selected with Normal, Page Layout, and Page Break Preview workbook states.",
+                "Show toggles for gridlines, headings, ruler, and formula bar.",
+                "Freeze Panes and Split pane model/visual states.",
+                "Zoom dialog, View ribbon 100%, and Zoom to Selection states.",
+                "Arrange All model state plus menu capture when the View ribbon button is discoverable.",
+                "Custom Views dialog opened with a saved custom view when implemented."
+            ],
+            Limitations:
+            [
+                "RenderTargetBitmap evidence only; it is not foreground CopyFromScreen proof.",
+                "The tour drives production handlers in process rather than physical mouse/keytip/UIA invocation.",
+                "Split divider drag, pane scrollbar interaction, Ctrl+wheel zoom, status slider drag, and native UIA RangeValue remain open.",
+                "Arrange All evidence records the workbook arrangement state and menu check state; multi-window OS layout proof remains open.",
+                "Custom Views evidence opens the production dialog with a saved view, but add/show/delete keyboard and persistence round-trip proof remains open.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, ViewPanesZoomTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.ViewPanesZoomTourManifest);
+    }
+
     private static async Task WritePrintPreviewTourManifestAsync(
         string outputDir,
         Sheet sheet,
@@ -4070,6 +4513,68 @@ public partial class MainWindow
         bool ZoomOutButtonEnabled,
         bool ZoomInButtonEnabled,
         string FormulaBarText);
+
+    private sealed record ViewPanesZoomTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        ViewPanesZoomTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<ViewPanesZoomTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record ViewPanesZoomTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record ViewPanesZoomTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        string EvidencePurpose,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SheetName,
+        string ActiveRange,
+        string ViewMode,
+        bool ShowGridlines,
+        bool ShowHeadings,
+        bool ShowRulers,
+        bool FormulaBarVisible,
+        uint FrozenRows,
+        uint FrozenCols,
+        uint? SplitRow,
+        uint? SplitColumn,
+        string ZoomText,
+        double ZoomSliderValue,
+        string WindowArrangement,
+        int CustomViewCount,
+        bool ViewNormalChecked,
+        bool ViewPageLayoutChecked,
+        bool ViewPageBreakPreviewChecked,
+        bool ViewGridlinesChecked,
+        bool ViewHeadingsChecked,
+        bool ViewRulerChecked,
+        bool ViewFormulaBarChecked,
+        bool SplitButtonChecked);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
@@ -4084,6 +4589,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(TitlebarWindowChromeTourManifest))]
     [JsonSerializable(typeof(FormulaBarNameBoxTourManifest))]
     [JsonSerializable(typeof(StatusFooterTourManifest))]
+    [JsonSerializable(typeof(ViewPanesZoomTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.

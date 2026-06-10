@@ -24,6 +24,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_TITLEBAR_WINDOW_CHROME_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_BAR_NAME_BOX_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_STATUS_FOOTER_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_VIEW_PANES_ZOOM_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
@@ -36,6 +37,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureTitlebarWindowChromeTourAsync");
         source.Should().Contain("CaptureFormulaBarNameBoxTourAsync");
         source.Should().Contain("CaptureStatusFooterTourAsync");
+        source.Should().Contain("CaptureViewPanesZoomTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
@@ -52,6 +54,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("WriteTitlebarWindowChromeTourManifestAsync");
         source.Should().Contain("WriteFormulaBarNameBoxTourManifestAsync");
         source.Should().Contain("WriteStatusFooterTourManifestAsync");
+        source.Should().Contain("WriteViewPanesZoomTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
         source.Should().Contain("print_preview_tour_manifest.json");
@@ -60,6 +63,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("titlebar_window_chrome_tour_manifest.json");
         source.Should().Contain("formula_bar_name_box_tour_manifest.json");
         source.Should().Contain("status_footer_tour_manifest.json");
+        source.Should().Contain("view_panes_zoom_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
@@ -323,5 +327,47 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("PageBreakPreviewChecked");
         source.Should().Contain("FormulaBarText");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesViewPanesZoomVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_VIEW_PANES_ZOOM_TOUR");
+        source.Should().Contain("view-panes-zoom-tour");
+        source.Should().Contain("EnsureViewPanesZoomTourContext");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"View\"))");
+        source.Should().Contain("SetWorksheetViewMode(WorksheetViewMode.PageLayout)");
+        source.Should().Contain("SetWorksheetViewMode(WorksheetViewMode.PageBreakPreview)");
+        source.Should().Contain("SetViewPanesZoomTourShowToggles(showGridlines: false, showHeadings: false, showRulers: false)");
+        source.Should().Contain("SetViewPanesZoomTourFormulaBarVisible(false)");
+        source.Should().Contain("FreezeAtSelectionMenuItem_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("SplitViewBtn_Click(SplitViewBtn, new RoutedEventArgs())");
+        source.Should().Contain("new ZoomDialog(125) { Owner = this }");
+        source.Should().Contain("Zoom100Btn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("ZoomSelectionBtn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("new SetWorkbookWindowArrangementCommand(WorkbookWindowArrangement.Horizontal)");
+        source.Should().Contain("FindDescendantByRibbonCommandName<Button>(RibbonTabs, \"Arrange All\")");
+        source.Should().Contain("new SaveCustomViewCommand(ViewPanesZoomTourCustomViewName)");
+        source.Should().Contain("new CustomViewsDialog(_workbook, _commandBus) { Owner = this }");
+        source.Should().Contain("freex_view_panes_zoom_view_tab_normal");
+        source.Should().Contain("freex_view_panes_zoom_page_layout_ruler_on");
+        source.Should().Contain("freex_view_panes_zoom_page_break_preview");
+        source.Should().Contain("freex_view_panes_zoom_show_toggles_hidden");
+        source.Should().Contain("freex_view_panes_zoom_freeze_panes_c4");
+        source.Should().Contain("freex_view_panes_zoom_split_panes_e6");
+        source.Should().Contain("freex_view_panes_zoom_dialog_custom_125");
+        source.Should().Contain("freex_view_panes_zoom_100_percent_command");
+        source.Should().Contain("freex_view_panes_zoom_to_selection");
+        source.Should().Contain("freex_view_panes_zoom_arrange_horizontal_state");
+        source.Should().Contain("freex_view_panes_zoom_custom_views_dialog");
+        source.Should().Contain("UI-CAT-VIEW-001");
+        source.Should().Contain("UI-CAT-VIEW-002");
+        source.Should().Contain("UI-CMD-VIEW-001");
+        source.Should().Contain("UI-CMD-VIEW-004");
+        source.Should().Contain("ViewPanesZoomTourManifest");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.ViewPanesZoomTourManifest");
+        source.Should().Contain("Split divider drag, pane scrollbar interaction, Ctrl+wheel zoom, status slider drag, and native UIA RangeValue remain open.");
     }
 }
