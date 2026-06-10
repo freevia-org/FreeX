@@ -21,6 +21,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_ALIGNMENT_NUMBER_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PRINT_PREVIEW_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_OPTIONS_ACCOUNT_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HELP_ABOUT_LEGAL_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_QAT_UNDO_REDO_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_TITLEBAR_WINDOW_CHROME_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_BAR_NAME_BOX_TOUR\")");
@@ -34,6 +35,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureHomeAlignmentNumberTourAsync");
         source.Should().Contain("CapturePrintPreviewTourAsync");
         source.Should().Contain("CaptureOptionsAccountTourAsync");
+        source.Should().Contain("CaptureHelpAboutLegalTourAsync");
         source.Should().Contain("CaptureQatUndoRedoTourAsync");
         source.Should().Contain("CaptureTitlebarWindowChromeTourAsync");
         source.Should().Contain("CaptureFormulaBarNameBoxTourAsync");
@@ -46,11 +48,13 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("DeleteAutoFilterFlyoutTourEvidence");
         source.Should().Contain("DeletePrintPreviewTourEvidence");
         source.Should().Contain("DeleteOptionsAccountTourEvidence");
+        source.Should().Contain("DeleteHelpAboutLegalTourEvidence");
         source.Should().Contain("WriteRibbonScreenshotTourManifestAsync");
         source.Should().Contain("WriteAutoFilterFlyoutTourManifestAsync");
         source.Should().Contain("WriteHomeAlignmentNumberTourManifestAsync");
         source.Should().Contain("WritePrintPreviewTourManifestAsync");
         source.Should().Contain("WriteOptionsAccountTourManifestAsync");
+        source.Should().Contain("WriteHelpAboutLegalTourManifestAsync");
         source.Should().Contain("WriteQatUndoRedoTourManifestAsync");
         source.Should().Contain("WriteTitlebarWindowChromeTourManifestAsync");
         source.Should().Contain("WriteFormulaBarNameBoxTourManifestAsync");
@@ -60,6 +64,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("home_alignment_number_tour_manifest.json");
         source.Should().Contain("print_preview_tour_manifest.json");
         source.Should().Contain("options_account_tour_manifest.json");
+        source.Should().Contain("help_about_legal_tour_manifest.json");
         source.Should().Contain("qat_undo_redo_tour_manifest.json");
         source.Should().Contain("titlebar_window_chrome_tour_manifest.json");
         source.Should().Contain("formula_bar_name_box_tour_manifest.json");
@@ -287,6 +292,34 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("FocusReturnedToBackstageOptionsCommand");
         source.Should().Contain("AccountMicrosoft365Exclusion");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.OptionsAccountTourManifest");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesHelpAboutLegalVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_HELP_ABOUT_LEGAL_TOUR");
+        source.Should().Contain("help-about-legal-tour");
+        source.Should().Contain("freex_help_ribbon_command_context");
+        source.Should().Contain("freex_help_online_guarded_message");
+        source.Should().Contain("freex_feedback_guarded_message");
+        source.Should().Contain("freex_updates_guarded_message");
+        source.Should().Contain("freex_about_dialog");
+        source.Should().Contain("freex_legal_notices_dialog");
+        source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"Help\"))");
+        source.Should().Contain("HelpOnlineButton.Focus();");
+        source.Should().Contain("CreateExternalLinkOpenFailedMessageForHelpTour");
+        source.Should().Contain("AppIssueReporter.CreateIssueUrl(CreateDeterministicIssueReportContextForHelpTour())");
+        source.Should().Contain("visual-evidence-session");
+        source.Should().Contain("AppUpdateSource.CreateDefault().ReleasePageUrl");
+        source.Should().Contain("new AboutDialog");
+        source.Should().Contain("new LegalNoticesDialog");
+        source.Should().Contain("CaptureOwnedNativeDialogWhenShownForHelpTourAsync");
+        source.Should().Contain("PrintWindow-owned-native-dialog");
+        source.Should().Contain("ExternalBrowserLaunched: false");
+        source.Should().Contain("no global mouse, keyboard, UIA input, or external browser launch is used");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.HelpAboutLegalTourManifest");
     }
 
     [Fact]
