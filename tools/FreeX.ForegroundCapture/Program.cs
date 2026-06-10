@@ -100,6 +100,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-status-ctrl-wheel-grid-zoom" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-wheel-grid-zoom", CtrlWheelRelativeExpectZoom(0.36, 0.56, 120, 110)),
             "freex-sheet-tab-context-menu" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-context-menu", RightClickNamedElement("Sheet1", ControlType.TabItem)),
             "freex-grid-drag-select" => RunFreeXMainWindowPointerScenario("freex-grid-drag-select", DragRelative(0.14, 0.56, 0.37, 0.69)),
+            "freex-grid-row-column-resize" => RunFreeXMainWindowPointerScenario("freex-grid-row-column-resize", DragColumnAndRowResizeHandles()),
+            "freex-grid-wheel-scroll" => RunFreeXMainWindowPointerScenario("freex-grid-wheel-scroll", WheelVerticalThenShiftHorizontal()),
             _ => CaptureResult.Blocked(options.Scenario, "unsupported-scenario", $"Unsupported scenario '{options.Scenario}'.", options.OutputRoot, options.Subject)
         };
     }
@@ -1224,6 +1226,113 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return GuardedClickElement(options.Scenario, processId, handle, element, MouseButtonKind.Right);
         };
 
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragColumnAndRowResizeHandles()
+        => (handle, processId, _, guard) =>
+        {
+            if (!TryGetCellBounds(handle, "Cell_A1", out var originalA1) ||
+                !TryGetCellBounds(handle, "Cell_A2", out var ignoredA2Bounds))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve initial A1/A2 bounds for resize drag.", options.OutputRoot, "freex", guard);
+            }
+
+            var columnBlocked = GuardedDrag(
+                options.Scenario,
+                processId,
+                handle,
+                (int)originalA1.Right,
+                (int)(originalA1.Top - 9),
+                (int)(originalA1.Right + 48),
+                (int)(originalA1.Top - 9));
+            if (columnBlocked is not null)
+            {
+                return columnBlocked;
+            }
+
+            if (!TryGetCellBounds(handle, "Cell_A1", out var widenedA1))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve A1 bounds after column resize.", options.OutputRoot, "freex", guard);
+            }
+
+            var rowBlocked = GuardedDrag(
+                options.Scenario,
+                processId,
+                handle,
+                (int)(widenedA1.Left - 15),
+                (int)widenedA1.Bottom,
+                (int)(widenedA1.Left - 15),
+                (int)(widenedA1.Bottom + 18));
+            if (rowBlocked is not null)
+            {
+                return rowBlocked;
+            }
+
+            if (!TryGetCellBounds(handle, "Cell_A1", out var resizedA1))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve A1 bounds after row resize.", options.OutputRoot, "freex", guard);
+            }
+
+            var widthDelta = resizedA1.Width - originalA1.Width;
+            var heightDelta = resizedA1.Height - originalA1.Height;
+            if (widthDelta < 20 || heightDelta < 8)
+            {
+                return CaptureResult.Blocked(
+                    options.Scenario,
+                    "resize-validation-failed",
+                    $"Expected A1 bounds to grow after header drags; width delta {widthDelta:0.###}, height delta {heightDelta:0.###}.",
+                    options.OutputRoot,
+                    "freex");
+            }
+
+            _lastResultValidation = $"foreground row/column resize drags; A1 width {originalA1.Width:0.###}->{resizedA1.Width:0.###}, height {originalA1.Height:0.###}->{resizedA1.Height:0.###}";
+            return null;
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> WheelVerticalThenShiftHorizontal()
+        => (handle, processId, _, guard) =>
+        {
+            if (!TryGetCellBounds(handle, "Cell_C12", out var wheelTarget))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve C12 bounds for wheel target.", options.OutputRoot, "freex", guard);
+            }
+
+            if (!TryGetScrollBarValue(handle, "Vertical", out var verticalBefore))
+            {
+                return CaptureResult.Blocked(options.Scenario, "scrollbar-validation-unavailable", "Could not read the vertical worksheet scrollbar before wheel input.", options.OutputRoot, "freex", guard);
+            }
+
+            var blocked = GuardedWheel(options.Scenario, processId, handle, CenterX(wheelTarget), CenterY(wheelTarget), -360, holdShift: false);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryGetScrollBarValue(handle, "Vertical", out var verticalAfter) ||
+                verticalAfter <= verticalBefore)
+            {
+                return CaptureResult.Blocked(options.Scenario, "wheel-validation-failed", $"Expected vertical scrollbar to increase after wheel; before {verticalBefore:0.###}, after {verticalAfter:0.###}.", options.OutputRoot, "freex");
+            }
+
+            if (!TryGetScrollBarValue(handle, "Horizontal", out var horizontalBefore))
+            {
+                return CaptureResult.Blocked(options.Scenario, "scrollbar-validation-unavailable", "Could not read the horizontal worksheet scrollbar before Shift+wheel input.", options.OutputRoot, "freex", guard);
+            }
+
+            blocked = GuardedWheel(options.Scenario, processId, handle, CenterX(wheelTarget), CenterY(wheelTarget), -360, holdShift: true);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryGetScrollBarValue(handle, "Horizontal", out var horizontalAfter) ||
+                horizontalAfter <= horizontalBefore)
+            {
+                return CaptureResult.Blocked(options.Scenario, "shift-wheel-validation-failed", $"Expected horizontal scrollbar to increase after Shift+wheel; before {horizontalBefore:0.###}, after {horizontalAfter:0.###}.", options.OutputRoot, "freex");
+            }
+
+            _lastResultValidation = $"foreground wheel scroll; vertical scrollbar {verticalBefore:0.###}->{verticalAfter:0.###}; Shift+wheel horizontal scrollbar {horizontalBefore:0.###}->{horizontalAfter:0.###}";
+            return null;
+        };
+
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragRelative(double startX, double startY, double endX, double endY)
         => (handle, processId, window, _) => GuardedDrag(
             options.Scenario,
@@ -1259,6 +1368,43 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return null;
     }
 
+    private CaptureResult? GuardedWheel(string scenario, int processId, IntPtr handle, int x, int y, int wheelDelta, bool holdShift)
+    {
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(scenario, guard, "before-pointer-wheel");
+        }
+
+        NativeMethods.SetCursorPos(x, y);
+        Thread.Sleep(100);
+        if (holdShift)
+        {
+            NativeMethods.KeybdEvent(NativeMethods.VK_SHIFT, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(80);
+        }
+
+        try
+        {
+            guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, holdShift ? "before-shift-wheel" : "before-wheel");
+            }
+
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_WHEEL, 0, 0, wheelDelta, UIntPtr.Zero);
+            Thread.Sleep(options.AfterInputDelay);
+        }
+        finally
+        {
+            if (holdShift)
+            {
+                NativeMethods.KeybdEvent(NativeMethods.VK_SHIFT, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+            }
+        }
+
+        return null;
+    }
     private CaptureResult? GuardedDrag(string scenario, int processId, IntPtr handle, int startX, int startY, int endX, int endY)
     {
         var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
@@ -1363,6 +1509,51 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             ? 10 + sliderValue / 100 * 90
             : 100 + (sliderValue - 100) / 100 * 300;
     }
+
+    private static AutomationElement? FindElementByAutomationId(IntPtr handle, string automationId)
+    {
+        var root = AutomationElement.FromHandle(handle);
+        return root.FindFirst(
+            TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.AutomationIdProperty, automationId));
+    }
+
+    private static bool TryGetCellBounds(IntPtr handle, string cellId, out System.Windows.Rect bounds)
+    {
+        bounds = default;
+        var cell = FindElementByAutomationId(handle, cellId);
+        if (cell is null)
+        {
+            return false;
+        }
+
+        bounds = cell.Current.BoundingRectangle;
+        return !bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0;
+    }
+
+    private static bool TryGetScrollBarValue(IntPtr handle, string nameContains, out double value)
+    {
+        value = 0;
+        var root = AutomationElement.FromHandle(handle);
+        var scrollbars = root.FindAll(
+            TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ScrollBar));
+        foreach (AutomationElement scrollbar in scrollbars)
+        {
+            if (!scrollbar.Current.Name.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return TryGetRangeValue(scrollbar, out value);
+        }
+
+        return false;
+    }
+
+    private static int CenterX(System.Windows.Rect bounds) => (int)(bounds.Left + bounds.Width / 2.0);
+
+    private static int CenterY(System.Windows.Rect bounds) => (int)(bounds.Top + bounds.Height / 2.0);
 
     private CaptureResult CaptureWindow(string scenario, string subject, WindowInfo window, ForegroundGuardResult guard, string status, string? resultValidation = null)
     {
@@ -1723,6 +1914,8 @@ internal sealed record CaptureOptions(
           freex-status-ctrl-wheel-grid-zoom
           freex-sheet-tab-context-menu
           freex-grid-drag-select
+          freex-grid-row-column-resize
+          freex-grid-wheel-scroll
 
         Options:
           --output <path>       Default: tools/foreground-captures
@@ -2148,6 +2341,7 @@ internal static class NativeMethods
     public const int KEYEVENTF_KEYUP = 0x0002;
     public const byte VK_CONTROL = 0x11;
     public const byte VK_1 = 0x31;
+    public const byte VK_SHIFT = 0x10;
     public static readonly IntPtr HWND_TOPMOST = new(-1);
     public static readonly IntPtr HWND_NOTOPMOST = new(-2);
 
