@@ -30,6 +30,7 @@ public partial class MainWindow
     private const double ScreenshotTourCaptureHeight = 300;
     private const string ScreenshotTourTableName = "TourTable";
     private const string ScreenshotTourPivotTableName = "TourPivotTable";
+    private const string ScreenshotTourChartName = "TourChart";
     private const string RibbonScreenshotTourManifestFileName = "ribbon_screenshot_tour_manifest.json";
     private const string AutoFilterFlyoutTourManifestFileName = "autofilter_flyout_tour_manifest.json";
     private const string AutoFilterFlyoutTourCaptureFileName = "freex_table_autofilter_dropdown";
@@ -6096,6 +6097,9 @@ public partial class MainWindow
             case "pivot":
                 EnsurePivotTableScreenshotTourContext();
                 break;
+            case "chart":
+                EnsureChartScreenshotTourContext();
+                break;
             default:
                 throw new InvalidOperationException($"Unknown ribbon screenshot tour context '{context}'.");
         }
@@ -6217,6 +6221,56 @@ public partial class MainWindow
         }
     }
 
+    private void EnsureChartScreenshotTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet();
+        if (sheet is null)
+            return;
+
+        _currentSheetId = sheet.Id;
+        var headers = new[] { "Month", "North", "South" };
+        var rows = new[]
+        {
+            new object[] { "Jan", 1280d, 940d },
+            new object[] { "Feb", 1460d, 1020d },
+            new object[] { "Mar", 1325d, 1180d },
+            new object[] { "Apr", 1580d, 1210d }
+        };
+
+        for (var col = 0; col < headers.Length; col++)
+            sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)(col + 1)), new TextValue(headers[col]));
+
+        for (var row = 0; row < rows.Length; row++)
+        {
+            for (var col = 0; col < headers.Length; col++)
+            {
+                var address = new CellAddress(sheet.Id, (uint)(row + 2), (uint)(col + 1));
+                if (rows[row][col] is double number)
+                    sheet.SetCell(address, new NumberValue(number));
+                else
+                    sheet.SetCell(address, new TextValue(rows[row][col].ToString() ?? ""));
+            }
+        }
+
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 3));
+        var chart = FindScreenshotTourChart(sheet);
+        if (chart is null)
+        {
+            if (!TryExecuteCommand(
+                    new AddChartCommand(sheet.Id, sourceRange, ChartType.Column, ScreenshotTourChartName),
+                    "Insert Chart",
+                    out var outcome))
+            {
+                throw new InvalidOperationException(outcome.ErrorMessage ?? "Chart screenshot tour setup failed.");
+            }
+
+            chart = FindScreenshotTourChart(sheet);
+        }
+
+        if (chart is not null && SheetGrid is not null)
+            SheetGrid.SelectedRange = new GridRange(sourceRange.Start, sourceRange.Start);
+    }
+
     private Sheet? GetCurrentOrFirstScreenshotTourSheet()
     {
         var currentSheet = _workbook.GetSheet(_currentSheetId);
@@ -6246,6 +6300,17 @@ public partial class MainWindow
         {
             if (string.Equals(pivotTable.Name, ScreenshotTourPivotTableName, StringComparison.OrdinalIgnoreCase))
                 return pivotTable;
+        }
+
+        return null;
+    }
+
+    private static ChartModel? FindScreenshotTourChart(Sheet sheet)
+    {
+        foreach (var chart in sheet.Charts)
+        {
+            if (string.Equals(chart.Title, ScreenshotTourChartName, StringComparison.OrdinalIgnoreCase))
+                return chart;
         }
 
         return null;

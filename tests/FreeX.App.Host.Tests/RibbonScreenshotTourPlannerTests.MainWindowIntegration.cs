@@ -37,6 +37,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
         source.Should().Contain("EnsureTableDesignScreenshotTourContext");
         source.Should().Contain("EnsurePivotTableScreenshotTourContext");
+        source.Should().Contain("EnsureChartScreenshotTourContext");
+        source.Should().Contain("new AddChartCommand(sheet.Id, sourceRange, ChartType.Column, ScreenshotTourChartName)");
+        source.Should().Contain("FindScreenshotTourChart");
         source.Should().Contain("CaptureAutoFilterFlyoutTourAsync");
         source.Should().Contain("CaptureHomeAlignmentNumberTourAsync");
         source.Should().Contain("CapturePrintPreviewTourAsync");

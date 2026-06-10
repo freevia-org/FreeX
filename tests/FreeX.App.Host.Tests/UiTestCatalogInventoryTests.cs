@@ -139,8 +139,8 @@ public sealed partial class UiTestCatalogInventoryTests
     public void ScreenshotHarnessCatalogRow_DocumentsInAppRibbonTourPath()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
-        var row = catalog
-            .Split(Environment.NewLine)
+        var row = Regex
+            .Split(catalog, "\\r?\\n")
             .Single(line => line.StartsWith("| UI-CMD-HARNESS-001 |", StringComparison.Ordinal));
         var plannedCaptureCount = RibbonScreenshotTourPlanner.DefaultTabs.Count *
                                   RibbonScreenshotTourPlanner.DefaultWidths.Count;
@@ -148,6 +148,10 @@ public sealed partial class UiTestCatalogInventoryTests
         row.Should().Contain("FREEX_SS_TOUR=1");
         row.Should().Contain("FREEX_SS_TOUR_BURST=1");
         row.Should().Contain("FREEX_SS_TOUR_CONTEXT=table");
+        row.Should().Contain("FREEX_SS_TOUR_CONTEXT=chart");
+        row.Should().Contain("contextual-chart-tour");
+        row.Should().Contain("900_Chart_Design.png");
+        row.Should().Contain("900_Chart_Format.png");
         row.Should().Contain("FREEX_SS_TOUR_OUTPUT_SUBDIR");
         row.Should().Contain("FREEX_SS_TOUR_TABS");
         row.Should().Contain("FREEX_SS_TOUR_WIDTHS");
@@ -171,6 +175,22 @@ public sealed partial class UiTestCatalogInventoryTests
         row.Should().Contain("PairKey");
         row.Should().Contain("ribbon:<WidthLabel>:<TabFileName>");
         row.Should().Contain("counterpart file names");
+    }
+
+    [Fact]
+    public void ContextualObjectCatalogRow_DocumentsChartScreenshotEvidenceAndObjectTabGap()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var row = Regex
+            .Split(catalog, "\\r?\\n")
+            .Single(line => line.StartsWith("| UI-CAT-CONTEXT-003 |", StringComparison.Ordinal));
+
+        row.Should().Contain("screenshots/contextual-table-tour/900_Table_Design.png");
+        row.Should().Contain("screenshots/contextual-chart-tour/900_Chart_Design.png");
+        row.Should().Contain("screenshots/contextual-chart-tour/900_Chart_Format.png");
+        row.Should().Contain("screenshots/contextual-chart-tour/ribbon_screenshot_tour_manifest.json");
+        row.Should().Contain("dedicated object contextual tabs");
+        row.Should().Contain("Draw/context menus");
     }
 
     [Fact]
