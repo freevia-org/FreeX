@@ -468,6 +468,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("freex_updates_guarded_message");
         source.Should().Contain("freex_about_dialog");
         source.Should().Contain("freex_legal_notices_dialog");
+        source.Should().Contain("freex_help_focus_return_status");
         source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"Help\"))");
         source.Should().Contain("HelpOnlineButton.Focus();");
         source.Should().Contain("CreateExternalLinkOpenFailedMessageForHelpTour");
@@ -478,6 +479,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("new LegalNoticesDialog");
         source.Should().Contain("CaptureOwnedNativeDialogWhenShownForHelpTourAsync");
         source.Should().Contain("PrintWindow-owned-native-dialog");
+        source.Should().Contain("help-about-legal:focus-return");
+        source.Should().Contain("Ready status bar");
         source.Should().Contain("ExternalBrowserLaunched: false");
         source.Should().Contain("no global mouse, keyboard, UIA input, or external browser launch is used");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.HelpAboutLegalTourManifest");
