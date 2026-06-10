@@ -118,6 +118,7 @@ public sealed class AddChartSheetCommand : IWorkbookCommand
             return ChartCommandGuards.ChartDataRangeRequiresDataPoint();
 
         var target = ctx.Workbook.AddSheet(GetUniqueChartSheetName(ctx.Workbook));
+        target.ResetViewStateToA1();
         target.Charts.Add(candidate);
         _createdSheetId = target.Id;
         return new CommandOutcome(true, AffectedCells: [_dataRange.Start]);

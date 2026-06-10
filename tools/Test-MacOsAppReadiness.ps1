@@ -2699,7 +2699,7 @@ function Test-SourceWiring {
                 "private int GetNextFindResultIndex(",
                 "private int CompareFindOrder(CellAddress left, CellAddress right, FindSearchOrder searchOrder)",
                 "private SheetId? ResolveSheetIdByName(string sheetName)",
-                "ApplySuccessfulWorkbookStructureResult(Workbook.Sheets[^1].Id)",
+                "ApplySuccessfulNewWorksheetResult(Workbook.Sheets[^1].Id)",
                 "ApplySuccessfulHistoryResult(result, sheetIdsBefore)",
                 "private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId)"
             )

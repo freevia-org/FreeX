@@ -45,9 +45,9 @@ public sealed class RibbonTabParityTests
             "Text",
             "Symbols");
 
-        CommandTitles(Group(insertTab, "Tables")).Should().Contain("Recommended PivotTables");
-        Command(Group(insertTab, "Tables"), "Recommended PivotTables").Should().NotBeNull(
-            "Excel exposes Recommended PivotTables as a first-class Tables command, not only as a nested PivotTable menu item");
+        CommandTitles(Group(insertTab, "Tables")).Should().ContainInOrder("PivotTable", "Table");
+        CommandTitles(Group(insertTab, "Tables")).Should().NotContain("Recommended PivotTables",
+            "FreeX does not generate recommended PivotTable layouts, so this excluded command must not appear actionable");
         CommandTitles(Group(insertTab, "Illustrations")).Should().Contain(["Pictures", "Shapes"]);
         CommandTitles(Group(insertTab, "Charts")).Should().Contain("Recommended Charts");
         CommandTitles(Group(insertTab, "Filters")).Should().Contain(["Insert Slicer", "Insert Timeline"]);
@@ -202,8 +202,7 @@ public sealed class RibbonTabParityTests
             "Accessibility",
             "Comments",
             "Notes",
-            "Protect",
-            "Changes");
+            "Protect");
 
         Command(proofingGroup, "Workbook Statistics").Content.Should().Be("Workbook Statistics");
         CommandTitles(proofingGroup).Should().NotContain("Workbook Stats");
@@ -214,7 +213,7 @@ public sealed class RibbonTabParityTests
             "Next Comment",
             "Show Comments"]);
         CommandTitles(Group(reviewTab, "Notes")).Should().Contain(["New Note", "Show Notes"]);
-        CommandTitles(Group(reviewTab, "Changes")).Should().Contain("Show Changes");
+        GroupNames(reviewTab).Should().NotContain("Changes");
     }
 
     [Fact]

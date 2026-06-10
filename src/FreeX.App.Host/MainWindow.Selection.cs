@@ -768,6 +768,24 @@ public partial class MainWindow
         UpdateCommentPreview(snapshot.Anchor);
     }
 
+    private void ActivateNewWorksheetAtA1(SheetId sheetId)
+    {
+        _currentSheetId = sheetId;
+        CaptureOutgoingSelection();
+
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
+        _sheetGroupAnchor = _currentSheetId;
+        _worksheetSelections.Remove(_currentSheetId);
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        sheet?.ResetViewStateToA1();
+
+        VerticalScroll.Value = 1;
+        HorizontalScroll.Value = 1;
+        SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
+    }
+
     private void SelectCurrentRegionOrAll()
     {
         var sheet = _workbook.GetSheet(_currentSheetId);

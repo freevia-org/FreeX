@@ -341,6 +341,7 @@ public sealed class ScenarioSummaryReportCommand : IWorkbookCommand
         var changingCells = ScenarioCommandHelpers.CollectOrderedChangingCells(ctx.Workbook.Scenarios, sheetOrder);
 
         var report = ctx.Workbook.AddSheet(GetUniqueReportSheetName(ctx.Workbook));
+        report.ResetViewStateToA1();
         _reportSheetId = report.Id;
         report.EnsureCellCapacity(EstimateReportCellCount(ctx.Workbook.Scenarios.Count, changingCells.Count, _resultCells.Count));
         report.SetCell(new CellAddress(report.Id, 1, 1), new TextValue("Scenario Summary"));

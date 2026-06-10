@@ -177,6 +177,7 @@ public sealed class AddPivotTableToNewWorksheetCommand : IWorkbookCommand
             return protectedOutcome;
 
         var sheet = ctx.Workbook.AddSheet(GetUniquePivotSheetName(ctx.Workbook));
+        sheet.ResetViewStateToA1();
         _createdSheetId = sheet.Id;
         var targetRange = CreateInitialTargetRange(sheet.Id, _sourceRange, _rowFieldIndexes.Count, _dataFieldIndexes.Count);
         _innerCommand = new AddPivotTableCommand(

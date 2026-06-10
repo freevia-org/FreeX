@@ -1215,8 +1215,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("UI-CMD-REVIEW-002");
         source.Should().Contain("UI-CMD-REVIEW-003");
         source.Should().Contain("UI-CMD-REVIEW-004");
-        source.Should().Contain("Thesaurus is not currently a supported FreeX Review command");
-        source.Should().Contain("Protect/unprotect confirmation, wrong-password, Permissions, Share, Show Changes, foreground focus trapping, and paired Microsoft Excel screenshots remain open.");
+        source.Should().Contain("Thesaurus and Show Changes are not currently supported FreeX Review commands");
+        source.Should().Contain("Protect/unprotect confirmation, wrong-password, Permissions, Share, foreground focus trapping, and paired Microsoft Excel screenshots remain open.");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.ReviewCommentsProtectionTourManifest");
 
         catalog.Should().Contain("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR=1");

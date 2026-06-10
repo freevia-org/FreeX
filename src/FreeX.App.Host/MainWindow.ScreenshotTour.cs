@@ -5572,7 +5572,7 @@ public partial class MainWindow
                 "review-tab-supported-surfaces",
                 "freex_review_comments_protection_review_tab",
                 "Review tab",
-                "Review tab shows supported FreeX proofing, accessibility, comments, notes, protection, sharing, and changes controls; no Thesaurus command is currently exposed."));
+                "Review tab shows supported FreeX proofing, accessibility, comments, notes, protection, and sharing controls; unsupported Thesaurus and change-history commands are not exposed."));
 
             openDialog = new SpellCheckDialog(context.SpellingWord, context.SpellingSuggestion) { Owner = this };
             await ShowDataToolsTourDialogAsync(openDialog);
@@ -6266,7 +6266,7 @@ public partial class MainWindow
                 "print-area-menu-opened",
                 "freex_page_layout_setup_print_area_menu_opened",
                 "Print Area",
-                "Print Area menu exposes Set, disabled Add to Print Area, and Clear choices against the selected range."));
+                "Print Area menu exposes Set and Clear choices against the selected range."));
 
             captures.Add(await CapturePageLayoutSetupMenuAsync(
                 outputDir,
@@ -8105,7 +8105,7 @@ public partial class MainWindow
                 "UI-CMD-DATA-007",
                 "group-dropdown-open",
                 "freex_data_sort_filter_outline_group_dropdown",
-                "Group dropdown shows Group and disabled Auto Outline menu entries.");
+                "Group dropdown shows the implemented Group menu entry.");
             await CaptureDataSortFilterOutlineRibbonMenuAsync(
                 outputDir,
                 captures,
@@ -8664,19 +8664,6 @@ public partial class MainWindow
                 "Table result",
                 "freex_insert_tables_charts_table_result_table_design",
                 "Created structured table result with Table Design contextual tab selected, visible table style, row striping, and active table selection."));
-
-            openDialog = new RecommendedPivotTablesDialog { Owner = this };
-            await ShowInsertTablesChartsTourDialogAsync(openDialog);
-            captures.Add(await CaptureInsertTablesChartsDialogAsync(
-                openDialog,
-                outputDir,
-                "UI-CAT-INSERT-001A",
-                "recommended-pivottables-dialog",
-                "Recommended PivotTables",
-                "freex_insert_tables_charts_recommended_pivottables_dialog",
-                "Recommended PivotTables dialog shows the deterministic no-recommendations state and Blank PivotTable default action."));
-            CloseInsertTablesChartsTourDialog(openDialog);
-            openDialog = null;
 
             EnsurePivotTableScreenshotTourContext();
             SelectRibbonTourTab(new RibbonScreenshotTourTab("PivotTable Analyze", "PivotTable_Analyze", "PivotTableAnalyzeTab"));
@@ -10911,7 +10898,7 @@ public partial class MainWindow
             Captures: captures,
             CoveredStates:
             [
-                "Review tab supported command groups and current Thesaurus gap",
+                "Review tab supported command groups and current Thesaurus/change-history gaps",
                 "Spelling dialog",
                 "Accessibility Checker issue-list dialog",
                 "New threaded comment dialog",
@@ -10924,8 +10911,8 @@ public partial class MainWindow
                 "This tour drives FreeX in process and captures WPF windows with RenderTargetBitmap; it is not foreground CopyFromScreen proof.",
                 "No global mouse, keytip, keyboard, native share UI, or range-picker input is synthesized.",
                 "The Spelling capture shows the production dialog with a deterministic word/suggestion pair; it does not run the full modal replacement loop.",
-                "Thesaurus is not currently a supported FreeX Review command, so the baseline Review tab capture documents the absence rather than a dialog.",
-                "Protect/unprotect confirmation, wrong-password, Permissions, Share, Show Changes, foreground focus trapping, and paired Microsoft Excel screenshots remain open."
+                "Thesaurus and Show Changes are not currently supported FreeX Review commands, so the baseline Review tab capture documents their absence rather than placeholder dialogs.",
+                "Protect/unprotect confirmation, wrong-password, Permissions, Share, foreground focus trapping, and paired Microsoft Excel screenshots remain open."
             ]);
 
         var path = Path.Combine(outputDir, ReviewCommentsProtectionTourManifestFileName);
@@ -11432,7 +11419,6 @@ public partial class MainWindow
                 "Insert tab Tables/Charts/Sparklines command surface",
                 "Create Table dialog",
                 "Created structured table with Table Design contextual tab",
-                "Recommended PivotTables dialog",
                 "Created PivotTable with PivotTable Analyze contextual tab and Field List",
                 "Insert Chart dialog on Recommended Charts",
                 "Created embedded column chart target",
@@ -11443,8 +11429,7 @@ public partial class MainWindow
             [
                 "This bounded tour opens production FreeX WPF dialog surfaces in process and captures them with RenderTargetBitmap.",
                 "The tour seeds table, pivot, chart, and sparkline workbook state deterministically; it does not synthesize physical mouse/keytip/range-picker/Enter/Escape input.",
-                "Picture, shape, hyperlink, text box, header/footer, symbol, object, comment, slicer, and timeline workflows are intentionally outside this slice.",
-                "Recommended PivotTables currently captures the production no-recommendations dialog plus Blank PivotTable action surface rather than an Excel-style generated recommendation gallery.",
+                "Picture, shape, hyperlink, text box, header/footer, symbol, object, comment, slicer, timeline, and recommended PivotTable workflows are intentionally outside this slice.",
                 "The chart-result capture uses FreeX's existing object-placeholder display mode for a visible created chart target; full embedded chart renderer proof remains with the broader chart visual/persistence lane.",
                 "No Microsoft Excel counterpart screenshots are produced by this tool."
             ]);

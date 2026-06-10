@@ -3760,7 +3760,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     var result = _cellEditService.ExecuteEditCommand(
                         Workbook,
                         new AddSheetCommand(WorkbookSheetNameGenerator.GenerateUniqueSheetName(Workbook)));
-                    ApplySuccessfulWorkbookStructureResult(Workbook.Sheets[^1].Id);
+                    ApplySuccessfulNewWorksheetResult(Workbook.Sheets[^1].Id);
                     return result;
                 }
 

@@ -6,7 +6,6 @@ public sealed class InsertCommandSourceTests
 {
     [Theory]
     [InlineData("PivotTable", "PivotTable", "PT", "PivotTableBtn_Click")]
-    [InlineData("Recommended PivotTables", "Recommended PivotTables", "RP", "RecommendedPivotTablesMenuItem_Click")]
     [InlineData("Table", "Table", "TB", "TableBtn_Click")]
     [InlineData("Pictures", "Pictures", "IP", "InsertPictureBtn_Click")]
     [InlineData("Shapes", "Shapes", "SH", "DrawRectBtn_Click")]
@@ -52,6 +51,13 @@ public sealed class InsertCommandSourceTests
     }
 
     [Theory]
+    [InlineData("Recommended PivotTables")]
+    [InlineData("Place in Cell")]
+    [InlineData("This Device Picture in Cell")]
+    [InlineData("Stock Images in Cell")]
+    [InlineData("Online Pictures in Cell")]
+    [InlineData("Stock Images over Cells")]
+    [InlineData("Online Pictures over Cells")]
     [InlineData("Get Add-ins")]
     [InlineData("My Add-ins")]
     [InlineData("3D Map")]
@@ -92,10 +98,8 @@ public sealed class InsertCommandSourceTests
         var pivotSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotCommands.cs");
 
         insertSource.Should().Contain("private void TableBtn_Click(object sender, RoutedEventArgs e) => ApplyTableFormat(0);");
-        insertSource.Should().Contain("private void RecommendedPivotTablesMenuItem_Click(object sender, RoutedEventArgs e)");
-        insertSource.Should().Contain("new RecommendedPivotTablesDialog { Owner = this }");
-        insertSource.Should().Contain("dialog.Result != RecommendedPivotTablesDialogResult.BlankPivotTable");
-        insertSource.Should().Contain("PivotTableBtn_Click(sender, e);");
+        insertSource.Should().NotContain("RecommendedPivotTablesMenuItem_Click");
+        insertSource.Should().NotContain("RecommendedPivotTablesDialog");
         homeFormattingSource.Should().Contain("CreateTableSourceRangePlanner.PlanSourceRange(sheet, range)");
         insertSource.Should().Contain("private void SparklineLineBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"line\");");
         insertSource.Should().Contain("private void SparklineColumnBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"column\");");
@@ -118,6 +122,7 @@ public sealed class InsertCommandSourceTests
         pivotSource.Should().Contain("new PivotTableDialog(");
         pivotSource.Should().Contain("new AddPivotTableCommand(");
         pivotSource.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
+        pivotSource.Should().Contain("ActivateNewWorksheetAtA1(createdSheetId)");
         pivotSource.Should().Contain("private void PivotInsertSlicerBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("new InsertSlicerDialog(headers, fieldName)");
         pivotSource.Should().Contain("new AddSlicerCommand(dialog.Result.SlicerName, pivotTable.Name, dialog.Result.FieldName)");
@@ -139,7 +144,6 @@ public sealed class InsertCommandSourceTests
 
         source.Should().Contain("FREEX_INSERT_TABLES_CHARTS_TOUR");
         tourSource.Should().Contain("CreateTableDialog");
-        tourSource.Should().Contain("RecommendedPivotTablesDialog");
         tourSource.Should().Contain("InsertChartDialog");
         tourSource.Should().Contain("SparklineDialog");
         tourSource.Should().Contain("CreateStyledStructuredTableCommand");
