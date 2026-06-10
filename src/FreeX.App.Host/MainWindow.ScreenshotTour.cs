@@ -60,6 +60,8 @@ public partial class MainWindow
     private const string StatusFooterTourOutputDirectoryName = "status-footer-tour";
     private const string DataToolsDialogsTourManifestFileName = "data_tools_dialogs_tour_manifest.json";
     private const string DataToolsDialogsTourOutputDirectoryName = "data-tools-dialogs-tour";
+    private const string InsertTablesChartsTourManifestFileName = "insert_tables_charts_tour_manifest.json";
+    private const string InsertTablesChartsTourOutputDirectoryName = "insert-tables-charts-tour";
     private const string ViewPanesZoomTourManifestFileName = "view_panes_zoom_tour_manifest.json";
     private const string ViewPanesZoomTourOutputDirectoryName = "view-panes-zoom-tour";
     private const string ViewPanesZoomTourCustomViewName = "View Panes Zoom Tour";
@@ -141,9 +143,10 @@ public partial class MainWindow
         var formulaBarNameBoxTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_BAR_NAME_BOX_TOUR") == "1";
         var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
         var dataToolsDialogsTour = Environment.GetEnvironmentVariable("FREEX_DATA_TOOLS_DIALOGS_TOUR") == "1";
+        var insertTablesChartsTour = Environment.GetEnvironmentVariable("FREEX_INSERT_TABLES_CHARTS_TOUR") == "1";
         var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !dataToolsDialogsTour && !viewPanesZoomTour && !formulaDiagnosticsTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !dataToolsDialogsTour && !insertTablesChartsTour && !viewPanesZoomTour && !formulaDiagnosticsTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -160,7 +163,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, dataToolsDialogsTour, viewPanesZoomTour, formulaDiagnosticsTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, dataToolsDialogsTour, insertTablesChartsTour, viewPanesZoomTour, formulaDiagnosticsTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -200,6 +203,7 @@ public partial class MainWindow
         bool statusFooterTour,
         bool formulaBarNameBoxTour,
         bool dataToolsDialogsTour,
+        bool insertTablesChartsTour,
         bool viewPanesZoomTour,
         bool formulaDiagnosticsTour)
     {
@@ -249,6 +253,8 @@ public partial class MainWindow
 
         if (dataToolsDialogsTour)
             await CaptureDataToolsDialogsTourAsync(Path.Combine(outputDir, DataToolsDialogsTourOutputDirectoryName));
+        if (insertTablesChartsTour)
+            await CaptureInsertTablesChartsTourAsync(Path.Combine(outputDir, InsertTablesChartsTourOutputDirectoryName));
         if (viewPanesZoomTour)
             await CaptureViewPanesZoomTourAsync(Path.Combine(outputDir, ViewPanesZoomTourOutputDirectoryName));
         if (formulaDiagnosticsTour)
@@ -4122,6 +4128,424 @@ public partial class MainWindow
         }
     }
 
+    private async Task CaptureInsertTablesChartsTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteInsertTablesChartsTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 768;
+        await Task.Delay(700);
+
+        var context = EnsureInsertTablesChartsTourContext();
+        var captures = new List<InsertTablesChartsTourManifestCapture>();
+        Window? openDialog = null;
+
+        try
+        {
+            SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Insert"));
+            UpdateViewport();
+            RefreshToolbar();
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(250);
+            captures.Add(await CaptureInsertTablesChartsWindowStateAsync(
+                outputDir,
+                "UI-CAT-INSERT-001,UI-CAT-INSERT-002",
+                "insert-tab-command-surface",
+                "Insert ribbon",
+                "freex_insert_tables_charts_insert_tab",
+                "Insert tab command surface with Tables, Charts, and Sparklines groups visible; object/link/text flows are intentionally only incidental if present in the ribbon."));
+
+            openDialog = new CreateTableDialog(
+                context.Sheet.Id,
+                context.SourceRange.ToString(),
+                context.TableStyleName)
+            {
+                Owner = this
+            };
+            await ShowInsertTablesChartsTourDialogAsync(openDialog);
+            captures.Add(await CaptureInsertTablesChartsDialogAsync(
+                openDialog,
+                outputDir,
+                "UI-CAT-INSERT-001D",
+                "create-table-dialog",
+                "Create Table",
+                "freex_insert_tables_charts_create_table_dialog",
+                "Create Table dialog shows the seeded source range, headers checkbox, range picker affordance, and OK/Cancel command row."));
+            CloseInsertTablesChartsTourDialog(openDialog);
+            openDialog = null;
+
+            CreateTourStructuredTable(context);
+            SetSelectionRange(new GridRange(new CellAddress(context.Sheet.Id, 2, 2), new CellAddress(context.Sheet.Id, 2, 2)), new CellAddress(context.Sheet.Id, 2, 2));
+            SelectRibbonTourTab(new RibbonScreenshotTourTab("Table Design", "Table_Design", "TableDesignTab"));
+            UpdateViewport();
+            RefreshToolbar();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(250);
+            captures.Add(await CaptureInsertTablesChartsWindowStateAsync(
+                outputDir,
+                "UI-CAT-INSERT-001D",
+                "table-result-table-design",
+                "Table result",
+                "freex_insert_tables_charts_table_result_table_design",
+                "Created structured table result with Table Design contextual tab selected, visible table style, row striping, and active table selection."));
+
+            openDialog = new RecommendedPivotTablesDialog { Owner = this };
+            await ShowInsertTablesChartsTourDialogAsync(openDialog);
+            captures.Add(await CaptureInsertTablesChartsDialogAsync(
+                openDialog,
+                outputDir,
+                "UI-CAT-INSERT-001A",
+                "recommended-pivottables-dialog",
+                "Recommended PivotTables",
+                "freex_insert_tables_charts_recommended_pivottables_dialog",
+                "Recommended PivotTables dialog shows the deterministic no-recommendations state and Blank PivotTable default action."));
+            CloseInsertTablesChartsTourDialog(openDialog);
+            openDialog = null;
+
+            EnsurePivotTableScreenshotTourContext();
+            SelectRibbonTourTab(new RibbonScreenshotTourTab("PivotTable Analyze", "PivotTable_Analyze", "PivotTableAnalyzeTab"));
+            UpdateViewport();
+            RefreshToolbar();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(250);
+            captures.Add(await CaptureInsertTablesChartsWindowStateAsync(
+                outputDir,
+                "UI-CAT-INSERT-001A",
+                "pivot-result-analyze",
+                "PivotTable result",
+                "freex_insert_tables_charts_pivot_result_analyze",
+                "Created PivotTable result with PivotTable Analyze contextual tab and Field List surface visible for the active pivot target."));
+
+            SeedInsertTablesChartsTourSourceData(context.Sheet);
+            SetSelectionRange(context.SourceRange, context.SourceRange.Start);
+            openDialog = new InsertChartDialog { Owner = this };
+            await ShowInsertTablesChartsTourDialogAsync(openDialog);
+            captures.Add(await CaptureInsertTablesChartsDialogAsync(
+                openDialog,
+                outputDir,
+                "UI-CAT-INSERT-002A",
+                "recommended-charts-dialog",
+                "Insert Chart",
+                "freex_insert_tables_charts_recommended_charts_dialog",
+                "Insert Chart dialog opens to Recommended Charts with a seeded gallery choice and recommended layout checkbox."));
+            CloseInsertTablesChartsTourDialog(openDialog);
+            openDialog = null;
+
+            CreateTourChart(context);
+            _options.ObjectsDisplay = FreeXObjectDisplay.Placeholders;
+            SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Insert"));
+            UpdateViewport();
+            RefreshToolbar();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(250);
+            captures.Add(await CaptureInsertTablesChartsWindowStateAsync(
+                outputDir,
+                "UI-CAT-INSERT-002A",
+                "chart-result",
+                "Chart result",
+                "freex_insert_tables_charts_chart_result",
+                "Created embedded column chart target from the selected source range, shown through the existing chart placeholder display mode for deterministic visual evidence."));
+
+            openDialog = new SparklineDialog(
+                "B2:C2",
+                context.SparklineLocation.ToA1(),
+                SparklineKindChoice.Line,
+                sheetId: context.Sheet.Id)
+            {
+                Owner = this
+            };
+            await ShowInsertTablesChartsTourDialogAsync(openDialog);
+            captures.Add(await CaptureInsertTablesChartsDialogAsync(
+                openDialog,
+                outputDir,
+                "UI-CAT-INSERT-002",
+                "sparkline-dialog",
+                "Insert Sparkline",
+                "freex_insert_tables_charts_sparkline_dialog",
+                "Insert Sparkline dialog shows data range, location range, line/column/win-loss type selector, and both range picker buttons."));
+            CloseInsertTablesChartsTourDialog(openDialog);
+            openDialog = null;
+
+            CreateTourSparklines(context);
+            SetSelectionRange(new GridRange(context.SparklineLocation, context.SparklineLocation), context.SparklineLocation);
+            UpdateViewport();
+            RefreshToolbar();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(250);
+            captures.Add(await CaptureInsertTablesChartsWindowStateAsync(
+                outputDir,
+                "UI-CAT-INSERT-002",
+                "sparkline-result",
+                "Sparkline result",
+                "freex_insert_tables_charts_sparkline_result",
+                "Produced line, column, and win/loss sparkline cells next to the seeded source rows, with the first sparkline cell selected."));
+
+            ValidateInsertTablesChartsTourEvidence(outputDir, captures);
+            await WriteInsertTablesChartsTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteInsertTablesChartsTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (openDialog is { IsVisible: true })
+                CloseInsertTablesChartsTourDialog(openDialog);
+        }
+    }
+
+    private InsertTablesChartsTourContext EnsureInsertTablesChartsTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Insert tables/charts tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        sheet.StructuredTables.RemoveAll(table => string.Equals(table.Name, ScreenshotTourTableName, StringComparison.OrdinalIgnoreCase));
+        sheet.PivotTables.RemoveAll(pivot => string.Equals(pivot.Name, ScreenshotTourPivotTableName, StringComparison.OrdinalIgnoreCase));
+        sheet.Charts.Clear();
+        sheet.Sparklines.Clear();
+
+        for (uint row = 1; row <= 12; row++)
+        {
+            for (uint col = 1; col <= 10; col++)
+                sheet.ClearCell(new CellAddress(sheet.Id, row, col));
+        }
+
+        SeedInsertTablesChartsTourSourceData(sheet);
+
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 3));
+        SetSelectionRange(sourceRange, sourceRange.Start);
+        EnsureCellVisible(sourceRange.Start);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+
+        return new InsertTablesChartsTourContext(
+            sheet,
+            sourceRange,
+            new GridRange(new CellAddress(sheet.Id, 2, 5), new CellAddress(sheet.Id, 8, 8)),
+            new CellAddress(sheet.Id, 2, 4),
+            "TableStyleMedium2");
+    }
+
+    private static void SeedInsertTablesChartsTourSourceData(Sheet sheet)
+    {
+        var cells = new (uint Row, uint Col, ScalarValue Value)[]
+        {
+            (1, 1, new TextValue("Region")),
+            (1, 2, new TextValue("Q1")),
+            (1, 3, new TextValue("Q2")),
+            (1, 4, new TextValue("Trend")),
+            (2, 1, new TextValue("North")),
+            (2, 2, new NumberValue(1280)),
+            (2, 3, new NumberValue(1510)),
+            (3, 1, new TextValue("South")),
+            (3, 2, new NumberValue(960)),
+            (3, 3, new NumberValue(1120)),
+            (4, 1, new TextValue("West")),
+            (4, 2, new NumberValue(1140)),
+            (4, 3, new NumberValue(1030)),
+            (5, 1, new TextValue("East")),
+            (5, 2, new NumberValue(1410)),
+            (5, 3, new NumberValue(1680))
+        };
+
+        foreach (var (row, col, value) in cells)
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), value);
+    }
+
+    private void CreateTourStructuredTable(InsertTablesChartsTourContext context)
+    {
+        if (FindScreenshotTourTable(context.Sheet) is not null)
+            return;
+
+        if (!TableStyleGalleryPlanner.TryGetOption(context.TableStyleName, _workbook.Theme, out var option))
+            option = TableStyleGalleryPlanner.GetOption(0, _workbook.Theme);
+
+        if (!TryExecuteCommand(
+                new CreateStyledStructuredTableCommand(
+                    context.Sheet.Id,
+                    context.SourceRange,
+                    context.TableStyleName,
+                    firstRowHasHeaders: true,
+                    option.Banding),
+                "Create Table",
+                out var outcome))
+        {
+            throw new InvalidOperationException(outcome.ErrorMessage ?? "Insert tables/charts tour could not create the structured table.");
+        }
+
+        if (!context.Sheet.StructuredTables.Any(table => table.Range.Equals(context.SourceRange)))
+            throw new InvalidOperationException("Insert tables/charts tour created no structured table on the planned source range.");
+    }
+
+    private void CreateTourChart(InsertTablesChartsTourContext context)
+    {
+        if (context.Sheet.Charts.Count > 0)
+            return;
+
+        if (!TryExecuteCommand(
+                new AddChartCommand(
+                    context.Sheet.Id,
+                    context.SourceRange,
+                    ChartType.Column,
+                    "Quarterly Sales",
+                    left: 430,
+                    top: 150,
+                    width: 440,
+                    height: 270),
+                "Insert Chart",
+                out var outcome))
+        {
+            throw new InvalidOperationException(outcome.ErrorMessage ?? "Insert tables/charts tour could not create the chart.");
+        }
+    }
+
+    private void CreateTourSparklines(InsertTablesChartsTourContext context)
+    {
+        if (context.Sheet.Sparklines.Count > 0)
+            return;
+
+        var sparklineSpecs = new[]
+        {
+            (Row: 2u, Kind: SparklineKind.Line),
+            (Row: 3u, Kind: SparklineKind.Column),
+            (Row: 4u, Kind: SparklineKind.WinLoss)
+        };
+
+        foreach (var (row, kind) in sparklineSpecs)
+        {
+            var dataRange = new GridRange(new CellAddress(context.Sheet.Id, row, 2), new CellAddress(context.Sheet.Id, row, 3));
+            var location = new CellAddress(context.Sheet.Id, row, 4);
+            if (!TryExecuteCommand(
+                    new AddSparklineCommand(context.Sheet.Id, dataRange, location, kind),
+                    "Insert Sparkline",
+                    out var outcome))
+            {
+                throw new InvalidOperationException(outcome.ErrorMessage ?? "Insert tables/charts tour could not create a sparkline.");
+            }
+        }
+    }
+
+    private static async Task ShowInsertTablesChartsTourDialogAsync(Window dialog)
+    {
+        dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        dialog.Show();
+        dialog.Activate();
+        dialog.UpdateLayout();
+        await Task.Delay(450);
+        await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+    }
+
+    private static void CloseInsertTablesChartsTourDialog(Window dialog)
+    {
+        if (dialog.IsVisible)
+            dialog.Close();
+    }
+
+    private async Task<InsertTablesChartsTourManifestCapture> CaptureInsertTablesChartsDialogAsync(
+        Window dialog,
+        string outputDir,
+        string catalogId,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        dialog.UpdateLayout();
+        await Task.Delay(250);
+        await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+        await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+        return CreateInsertTablesChartsCapture(
+            catalogId,
+            state,
+            surface,
+            fileName,
+            "RenderTargetBitmap-insert-dialog-window",
+            dialog.ActualWidth,
+            dialog.ActualHeight,
+            evidenceSummary);
+    }
+
+    private async Task<InsertTablesChartsTourManifestCapture> CaptureInsertTablesChartsWindowStateAsync(
+        string outputDir,
+        string catalogId,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateInsertTablesChartsCapture(
+            catalogId,
+            state,
+            surface,
+            fileName,
+            "RenderTargetBitmap-window",
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            evidenceSummary);
+    }
+
+    private InsertTablesChartsTourManifestCapture CreateInsertTablesChartsCapture(
+        string catalogId,
+        string state,
+        string surface,
+        string fileName,
+        string captureMethod,
+        double captureLogicalWidth,
+        double captureLogicalHeight,
+        string evidenceSummary)
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet();
+        return new InsertTablesChartsTourManifestCapture(
+            CaptureKey: $"insert-tables-charts:{state}",
+            PairKey: $"interactive:insert-tables-charts:{state}",
+            CatalogId: catalogId,
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: captureLogicalWidth,
+            CaptureLogicalHeight: captureLogicalHeight,
+            SelectedRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
+            StructuredTableCount: sheet?.StructuredTables.Count ?? 0,
+            PivotTableCount: sheet?.PivotTables.Count ?? 0,
+            ChartCount: sheet?.Charts.Count ?? 0,
+            SparklineCount: sheet?.Sparklines.Count ?? 0,
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private static void DeleteInsertTablesChartsTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_insert_tables_charts_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, InsertTablesChartsTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateInsertTablesChartsTourEvidence(
+        string outputDir,
+        IReadOnlyList<InsertTablesChartsTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Insert tables/charts tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
     private async Task CaptureKeyTipOverlayTourAsync(string outputDir)
     {
         Directory.CreateDirectory(outputDir);
@@ -5705,6 +6129,66 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.DataToolsDialogsTourManifest);
     }
 
+    private static async Task WriteInsertTablesChartsTourManifestAsync(
+        string outputDir,
+        InsertTablesChartsTourContext context,
+        IReadOnlyList<InsertTablesChartsTourManifestCapture> captures)
+    {
+        var manifest = new InsertTablesChartsTourManifest(
+            Tool: "FREEX_INSERT_TABLES_CHARTS_TOUR",
+            EvidenceFamily: "insert-tables-charts",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "insert-tables-charts:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_insert_tables_charts_<Surface>_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#UI-CAT-INSERT-001",
+            CatalogIds: ["UI-CAT-INSERT-001", "UI-CAT-INSERT-002", "UI-CAT-INSERT-001A", "UI-CAT-INSERT-001D", "UI-CAT-INSERT-002A"],
+            SheetName: context.Sheet.Name,
+            SourceRange: context.SourceRange.ToString(),
+            PivotTargetRange: context.PivotTargetRange.ToString(),
+            SparklineLocation: context.SparklineLocation.ToA1(),
+            TableName: context.Sheet.StructuredTables.FirstOrDefault(table => table.Range.Equals(context.SourceRange))?.Name
+                ?? ScreenshotTourTableName,
+            PivotTableName: ScreenshotTourPivotTableName,
+            TableStyleName: context.TableStyleName,
+            CaptureStatus: "complete",
+            CaptureMode: "RenderTargetBitmap-in-process",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, keytip, range-picker, or screen capture input is used."
+                    : "Window and dialog captures abort unless the expected FreeX WPF surface owns foreground focus immediately before render and file write."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Insert tab Tables/Charts/Sparklines command surface",
+                "Create Table dialog",
+                "Created structured table with Table Design contextual tab",
+                "Recommended PivotTables dialog",
+                "Created PivotTable with PivotTable Analyze contextual tab and Field List",
+                "Insert Chart dialog on Recommended Charts",
+                "Created embedded column chart target",
+                "Insert Sparkline dialog",
+                "Produced line, column, and win/loss sparklines"
+            ],
+            Limitations:
+            [
+                "This bounded tour opens production FreeX WPF dialog surfaces in process and captures them with RenderTargetBitmap.",
+                "The tour seeds table, pivot, chart, and sparkline workbook state deterministically; it does not synthesize physical mouse/keytip/range-picker/Enter/Escape input.",
+                "Picture, shape, hyperlink, text box, header/footer, symbol, object, comment, slicer, and timeline workflows are intentionally outside this slice.",
+                "Recommended PivotTables currently captures the production no-recommendations dialog plus Blank PivotTable action surface rather than an Excel-style generated recommendation gallery.",
+                "The chart-result capture uses FreeX's existing object-placeholder display mode for a visible created chart target; full embedded chart renderer proof remains with the broader chart visual/persistence lane.",
+                "No Microsoft Excel counterpart screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, InsertTablesChartsTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.InsertTablesChartsTourManifest);
+    }
+
     private static async Task WriteKeyTipOverlayTourManifestAsync(
         string outputDir,
         IReadOnlyList<KeyTipOverlayTourManifestCapture> captures)
@@ -6150,6 +6634,57 @@ public partial class MainWindow
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
 
+    private sealed record InsertTablesChartsTourContext(
+        Sheet Sheet,
+        GridRange SourceRange,
+        GridRange PivotTargetRange,
+        CellAddress SparklineLocation,
+        string TableStyleName);
+
+    private sealed record InsertTablesChartsTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string SheetName,
+        string SourceRange,
+        string PivotTargetRange,
+        string SparklineLocation,
+        string TableName,
+        string PivotTableName,
+        string TableStyleName,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<InsertTablesChartsTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record InsertTablesChartsTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string CatalogId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SelectedRange,
+        int StructuredTableCount,
+        int PivotTableCount,
+        int ChartCount,
+        int SparklineCount,
+        string EvidenceSummary);
+
     [StructLayout(LayoutKind.Sequential)]
     private readonly struct NativeRect
     {
@@ -6576,6 +7111,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(FormulaBarNameBoxTourManifest))]
     [JsonSerializable(typeof(StatusFooterTourManifest))]
     [JsonSerializable(typeof(DataToolsDialogsTourManifest))]
+    [JsonSerializable(typeof(InsertTablesChartsTourManifest))]
     [JsonSerializable(typeof(ViewPanesZoomTourManifest))]
     [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
