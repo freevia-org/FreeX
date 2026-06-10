@@ -463,6 +463,71 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
+    public void SheetTabPointerMechanics_WireRenameDragGroupingOverflowAndContextMenuRoutes()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+
+        var mouseDown = Slice(source, "private void SheetTab_MouseLeftButtonDown", "private void SheetTab_MouseMove");
+        var mouseMove = Slice(source, "private void SheetTab_MouseMove", "private void SheetTab_MouseLeftButtonUp");
+        var groupClick = Slice(source, "private void UpdateGroupedSheetsForClick", "private void SheetNavLeftBtn_Click");
+        var leftNav = Slice(source, "private void SheetNavLeftBtn_Click", "private void SheetNavRightBtn_Click");
+        var rightNav = Slice(source, "private void SheetNavRightBtn_Click", "private void SheetNavButton_MouseRightButtonDown");
+        var navRightClick = Slice(source, "private void SheetNavButton_MouseRightButtonDown", "    //");
+
+        xaml.Should().Contain("MouseLeftButtonDown=\"SheetTab_MouseLeftButtonDown\"");
+        xaml.Should().Contain("MouseMove=\"SheetTab_MouseMove\"");
+        xaml.Should().Contain("MouseLeftButtonUp=\"SheetTab_MouseLeftButtonUp\"");
+        xaml.Should().Contain("LostMouseCapture=\"SheetTab_LostMouseCapture\"");
+        xaml.Should().Contain("MouseRightButtonDown=\"SheetTab_MouseRightButtonDown\"");
+        xaml.Should().Contain("MouseDown=\"SheetTab_LabelMouseDown\"");
+        xaml.Should().Contain("Click=\"SheetNavLeftBtn_Click\"");
+        xaml.Should().Contain("Click=\"SheetNavRightBtn_Click\"");
+        xaml.Should().Contain("MouseRightButtonDown=\"SheetNavButton_MouseRightButtonDown\"");
+
+        mouseDown.Should().Contain("_dragSheetTabId = tab.Id;");
+        mouseDown.Should().Contain("_dragSheetTabStart = e.GetPosition(SheetTabsControl);");
+        mouseDown.Should().Contain("element.CaptureMouse();");
+        mouseDown.Should().Contain("UpdateGroupedSheetsForClick(tab.Id);");
+
+        mouseMove.Should().Contain("SystemParameters.MinimumHorizontalDragDistance");
+        mouseMove.Should().Contain("FindSheetTabViewModel(e.OriginalSource as System.Windows.DependencyObject)");
+        mouseMove.Should().Contain("new MoveSheetCommand(fromIndex, toIndex)");
+        mouseMove.Should().Contain("_currentSheetId = draggedId;");
+
+        groupClick.Should().Contain("var modifiers = Keyboard.Modifiers;");
+        groupClick.Should().Contain("(modifiers & ModifierKeys.Shift) != 0");
+        groupClick.Should().Contain("SheetGroupSelectionService.SelectRange");
+        groupClick.Should().Contain("(modifiers & ModifierKeys.Control) != 0");
+        groupClick.Should().Contain("SheetGroupSelectionService.Toggle");
+        groupClick.Should().Contain("SheetGroupSelectionService.SelectSingle");
+
+        leftNav.Should().Contain("SheetTabsScroller.ScrollToHorizontalOffset");
+        leftNav.Should().Contain("SheetTabsScroller.HorizontalOffset - SheetTabNavScrollAmount");
+        rightNav.Should().Contain("SheetTabsScroller.ScrollToHorizontalOffset");
+        rightNav.Should().Contain("SheetTabsScroller.HorizontalOffset + SheetTabNavScrollAmount");
+        navRightClick.Should().Contain("new ActivateSheetDialog(_workbook, _currentSheetId)");
+        navRightClick.Should().Contain("e.Handled = true;");
+
+        xaml.Should().Contain("<ContextMenu Opened=\"SheetTabContextMenu_XamlOpened\">");
+        xaml.Should().Contain("Click=\"SheetCtxRename_Click\"");
+        xaml.Should().Contain("Click=\"SheetCtxMoveOrCopy_Click\"");
+        xaml.Should().Contain("Click=\"SheetCtxHide_Click\"");
+        xaml.Should().Contain("Click=\"SheetCtxUnhide_Click\"");
+        xaml.Should().Contain("Click=\"SheetCtxSelectAllSheets_Click\"");
+        xaml.Should().Contain("Click=\"SheetCtxUngroupSheets_Click\"");
+
+        static string Slice(string text, string startMarker, string endMarker)
+        {
+            var start = text.IndexOf(startMarker, StringComparison.Ordinal);
+            var end = text.IndexOf(endMarker, start + startMarker.Length, StringComparison.Ordinal);
+            start.Should().BeGreaterThanOrEqualTo(0, $"expected to find {startMarker}");
+            end.Should().BeGreaterThan(start, $"expected to find {endMarker} after {startMarker}");
+            return text[start..end];
+        }
+    }
+
+    [Fact]
     public void SheetTabChrome_ReusesRenderedPathsAcrossRepeatedManyTabNavigationUpdates()
     {
         StaTestRunner.Run(() =>
