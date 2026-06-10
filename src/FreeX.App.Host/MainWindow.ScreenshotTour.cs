@@ -42,6 +42,8 @@ public partial class MainWindow
     private const string HomeBordersDropdownTourCaptureFileName = "freex_dropdown_home_borders_opened";
     private const string HomeFontColorsTourManifestFileName = "home_font_colors_tour_manifest.json";
     private const string HomeFontColorsTourOutputDirectoryName = "home-font-colors-tour";
+    private const string HomeClipboardCellsEditingTourManifestFileName = "home_clipboard_cells_editing_tour_manifest.json";
+    private const string HomeClipboardCellsEditingTourOutputDirectoryName = "home-clipboard-cells-editing-tour";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
     private const string KeyTipOverlayTourManifestFileName = "keytip_overlay_tour_manifest.json";
@@ -149,6 +151,7 @@ public partial class MainWindow
         var homeAlignmentNumberTour = Environment.GetEnvironmentVariable("FREEX_HOME_ALIGNMENT_NUMBER_TOUR") == "1";
         var homeBordersDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_BORDERS_DROPDOWN_TOUR") == "1";
         var homeFontColorsTour = Environment.GetEnvironmentVariable("FREEX_HOME_FONT_COLORS_TOUR") == "1";
+        var homeClipboardCellsEditingTour = Environment.GetEnvironmentVariable("FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR") == "1";
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
@@ -168,7 +171,7 @@ public partial class MainWindow
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
         var formulaAuthoringNamesTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_AUTHORING_NAMES_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeClipboardCellsEditingTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -185,7 +188,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeClipboardCellsEditingTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -216,6 +219,7 @@ public partial class MainWindow
         bool homeAlignmentNumberTour,
         bool homeBordersDropdownTour,
         bool homeFontColorsTour,
+        bool homeClipboardCellsEditingTour,
         bool worksheetContextMenuTour,
         bool keyTipOverlayTour,
         bool printPreviewTour,
@@ -256,6 +260,9 @@ public partial class MainWindow
 
         if (homeFontColorsTour)
             await CaptureHomeFontColorsTourAsync(Path.Combine(outputDir, HomeFontColorsTourOutputDirectoryName));
+
+        if (homeClipboardCellsEditingTour)
+            await CaptureHomeClipboardCellsEditingTourAsync(Path.Combine(outputDir, HomeClipboardCellsEditingTourOutputDirectoryName));
 
         if (worksheetContextMenuTour)
             await CaptureWorksheetContextMenuTourAsync(Path.Combine(outputDir, "worksheet-context-menu-tour"));
@@ -1274,6 +1281,446 @@ public partial class MainWindow
             if (!File.Exists(path))
                 throw new InvalidOperationException($"Home font/colors tour did not create {fileName}.");
         }
+    }
+
+    private async Task CaptureHomeClipboardCellsEditingTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteHomeClipboardCellsEditingTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1320;
+        Height = 820;
+        await Task.Delay(700);
+
+        var context = EnsureHomeClipboardCellsEditingTourContext();
+        var captures = new List<HomeClipboardCellsEditingTourManifestCapture>();
+
+        try
+        {
+            SelectHomeClipboardCellsEditingRibbonTab();
+            SetSelectionRange(context.PasteTargetRange, context.PasteTargetRange.Start);
+            UpdateViewport();
+            RefreshToolbar();
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(350);
+
+            await CaptureCurrentWindowAsync(outputDir, "freex_home_clipboard_cells_editing_clipboard_copied_state", 760);
+            captures.Add(CreateHomeClipboardCellsEditingCapture(
+                "UI-CMD-HOME-CLIP-001",
+                "clipboard-copied-state",
+                "Home Clipboard",
+                "freex_home_clipboard_cells_editing_clipboard_copied_state",
+                "RenderTargetBitmap-window-full",
+                ActualWidth,
+                Math.Min(ActualHeight, 760),
+                [],
+                "Home tab with a deterministic copied source range and paste target selection visible on the grid."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-CLIP-002",
+                "paste-menu-opened",
+                "Paste",
+                "freex_home_clipboard_cells_editing_paste_menu_opened",
+                "Paste split menu with Paste, Values, Formulas, Formatting, column widths, transpose, link, picture, linked picture, and Paste Special entries."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-CELLS-001",
+                "insert-menu-opened",
+                "Insert",
+                "freex_home_clipboard_cells_editing_insert_menu_opened",
+                "Cells Insert menu with Insert Cells, sheet rows, sheet columns, and sheet insertion commands."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-CELLS-002",
+                "delete-menu-opened",
+                "Delete",
+                "freex_home_clipboard_cells_editing_delete_menu_opened",
+                "Cells Delete menu with Delete Cells, sheet rows, sheet columns, and sheet deletion commands."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-CELLS-003",
+                "format-menu-opened",
+                "Format",
+                "freex_home_clipboard_cells_editing_format_menu_opened",
+                "Cells Format menu with row/column sizing, hide/unhide, sheet actions, protection, lock-cell, and Format Cells entries."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-EDIT-003",
+                "clear-menu-opened",
+                "Clear",
+                "freex_home_clipboard_cells_editing_clear_menu_opened",
+                "Editing Clear menu with Clear All, Formats, Contents, Comments and Notes, and Hyperlinks entries."));
+
+            SetSelectionRange(context.SortRange, context.SortRange.Start);
+            UpdateViewport();
+            RefreshToolbar();
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "sort-filter-menu-opened",
+                "Sort & Filter",
+                "freex_home_clipboard_cells_editing_sort_filter_menu_opened",
+                "Editing Sort & Filter menu with A-to-Z, Z-to-A, Custom Sort, Filter, Clear, and Reapply entries."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "find-select-menu-opened",
+                "Find & Select",
+                "freex_home_clipboard_cells_editing_find_select_menu_opened",
+                "Editing Find & Select menu with Find, Replace, Go To, Go To Special, formulas, notes, conditional formatting, constants, data validation, objects, and selection pane entries."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                new CellShiftDialog(CellShiftDialogMode.Insert) { Owner = this },
+                outputDir,
+                "UI-CMD-HOME-CELLS-001",
+                "insert-cells-dialog",
+                "Insert Cells dialog",
+                "freex_home_clipboard_cells_editing_insert_cells_dialog",
+                "Insert Cells shift-choice dialog opened in its default Shift cells right state."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                new CellShiftDialog(CellShiftDialogMode.Delete) { Owner = this },
+                outputDir,
+                "UI-CMD-HOME-CELLS-002",
+                "delete-cells-dialog",
+                "Delete Cells dialog",
+                "freex_home_clipboard_cells_editing_delete_cells_dialog",
+                "Delete Cells shift-choice dialog opened in its default Shift cells left state."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                CreateHomeClipboardCellsEditingSortDialog(context),
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "custom-sort-dialog",
+                "Custom Sort dialog",
+                "freex_home_clipboard_cells_editing_custom_sort_dialog",
+                "Custom Sort dialog for the seeded header range with sort levels, Sort On, Order, color column, options, and My data has headers controls."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                CreateHomeClipboardCellsEditingFindReplaceDialog(replaceMode: false),
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "find-dialog",
+                "Find dialog",
+                "freex_home_clipboard_cells_editing_find_dialog",
+                "Find dialog opened on the Find tab with search box, options, Find Next, Find All, and results grid surfaces."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                CreateHomeClipboardCellsEditingFindReplaceDialog(replaceMode: true),
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "replace-dialog",
+                "Replace dialog",
+                "freex_home_clipboard_cells_editing_replace_dialog",
+                "Find and Replace dialog opened on the Replace tab with find/replace fields, replace actions, format pickers, options, and results grid surfaces."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                new GoToDialog(_currentSheetId, context.GoToDefaultAddress, _workbook.NamedRanges, [context.CopySourceRange.Start.ToA1(), "HomeTourData"]) { Owner = this },
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "go-to-dialog",
+                "Go To dialog",
+                "freex_home_clipboard_cells_editing_go_to_dialog",
+                "Go To dialog with recent references, defined name, reference box default focus/select-all behavior, Special, OK, and Cancel controls."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                new GoToSpecialDialog { Owner = this },
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "go-to-special-dialog",
+                "Go To Special dialog",
+                "freex_home_clipboard_cells_editing_go_to_special_dialog",
+                "Go To Special dialog with blanks, constants, formulas, comments, current region, differences, last cell, conditional formats, objects, precedents, dependents, data validation, and visible-cells choices."));
+
+            ValidateHomeClipboardCellsEditingTourEvidence(outputDir, captures);
+            await WriteHomeClipboardCellsEditingTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteHomeClipboardCellsEditingTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            ClearClipboardVisualState();
+            _internalClipboard = null;
+        }
+    }
+
+    private HomeClipboardCellsEditingTourContext EnsureHomeClipboardCellsEditingTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Home Clipboard/Cells/Editing tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+
+        for (uint row = 1; row <= 14; row++)
+        {
+            for (uint col = 1; col <= 9; col++)
+                sheet.ClearCell(new CellAddress(sheet.Id, row, col));
+        }
+
+        var headers = new[] { "Region", "Rep", "Q1", "Q2", "Total", "Status" };
+        for (var index = 0; index < headers.Length; index++)
+            sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)(index + 1)), new TextValue(headers[index]));
+
+        var rows = new (string Region, string Rep, double Q1, double Q2, string Status)[]
+        {
+            ("East", "Ari", 1200, 1380, "Open"),
+            ("West", "Bo", 950, 1125, "Closed"),
+            ("North", "Cai", 1440, 1510, "Open"),
+            ("South", "Dee", 875, 990, "Review"),
+            ("East", "Eli", 1680, 1725, "Open"),
+            ("West", "Fox", 1010, 1088, "Closed")
+        };
+
+        for (var index = 0; index < rows.Length; index++)
+        {
+            var row = (uint)(index + 2);
+            var item = rows[index];
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue(item.Region));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(item.Rep));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(item.Q1));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 4), new NumberValue(item.Q2));
+            sheet.SetFormula(new CellAddress(sheet.Id, row, 5), $"C{row}+D{row}");
+            sheet.SetCell(new CellAddress(sheet.Id, row, 6), new TextValue(item.Status));
+        }
+
+        sheet.SetCell(new CellAddress(sheet.Id, 9, 1), new TextValue("Paste target"));
+        sheet.SetCell(new CellAddress(sheet.Id, 9, 2), new TextValue("Copied marquee is seeded without touching the OS clipboard."));
+        sheet.SetCell(new CellAddress(sheet.Id, 10, 1), new TextValue("Find token"));
+        sheet.SetCell(new CellAddress(sheet.Id, 10, 2), new TextValue("Ari"));
+        sheet.Comments[new CellAddress(sheet.Id, 4, 2)] = "Home tour note for Clear and Find Notes.";
+        sheet.Hyperlinks[new CellAddress(sheet.Id, 5, 2)] = "https://example.test/freex-home-tour";
+
+        var copySourceRange = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 4, 3));
+        var pasteTargetRange = new GridRange(new CellAddress(sheet.Id, 9, 4), new CellAddress(sheet.Id, 11, 6));
+        var sortRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 7, 6));
+        var usedRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 11, 6));
+
+        ApplyHomeClipboardCellsEditingTourStyle(
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 6)),
+            new StyleDiff(Bold: true, FillColor: new CellColor(217, 225, 242)));
+        ApplyHomeClipboardCellsEditingTourStyle(
+            copySourceRange,
+            new StyleDiff(FillColor: new CellColor(226, 239, 218)));
+        ApplyHomeClipboardCellsEditingTourStyle(
+            pasteTargetRange,
+            new StyleDiff(FillColor: new CellColor(255, 242, 204)));
+
+        _workbook.DefineNamedRange("HomeTourData", sortRange);
+        SeedHomeClipboardCellsEditingInternalClipboard(sheet, copySourceRange);
+        SetSelectionRange(pasteTargetRange, pasteTargetRange.Start);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+
+        return new HomeClipboardCellsEditingTourContext(
+            sheet,
+            copySourceRange,
+            pasteTargetRange,
+            sortRange,
+            usedRange,
+            pasteTargetRange.Start.ToA1());
+    }
+
+    private void ApplyHomeClipboardCellsEditingTourStyle(GridRange range, StyleDiff diff)
+    {
+        if (!TryExecuteApplyStyle(range, diff, "Apply Style"))
+            throw new InvalidOperationException($"Home Clipboard/Cells/Editing tour could not apply style to {range}.");
+    }
+
+    private void SeedHomeClipboardCellsEditingInternalClipboard(Sheet sheet, GridRange copySourceRange)
+    {
+        var cells = new List<(CellAddress Source, Cell Cell)>();
+        for (var row = copySourceRange.Start.Row; row <= copySourceRange.End.Row; row++)
+        {
+            for (var col = copySourceRange.Start.Col; col <= copySourceRange.End.Col; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                cells.Add((address, sheet.GetCell(row, col)?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
+            }
+        }
+
+        _internalClipboard = new InternalClipboard(
+            copySourceRange,
+            cells,
+            [],
+            "Region\tRep\tQ1\r\nEast\tAri\t1200\r\nWest\tBo\t950",
+            IsCut: false);
+        SheetGrid.ClipboardRange = copySourceRange;
+        SheetGrid.ClipboardIsCut = false;
+    }
+
+    private void SelectHomeClipboardCellsEditingRibbonTab()
+    {
+        var homeTab = RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home");
+        SelectRibbonTourTab(homeTab);
+    }
+
+    private async Task<HomeClipboardCellsEditingTourManifestCapture> CaptureHomeClipboardCellsEditingMenuAsync(
+        string outputDir,
+        string catalogCommandRow,
+        string state,
+        string commandName,
+        string fileName,
+        string evidenceSummary)
+    {
+        SelectHomeClipboardCellsEditingRibbonTab();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)
+            ?? throw new InvalidOperationException($"Home Clipboard/Cells/Editing tour could not find '{commandName}' ribbon button.");
+        var menu = button.ContextMenu
+            ?? throw new InvalidOperationException($"Home Clipboard/Cells/Editing tour could not find '{commandName}' context menu.");
+
+        OpenRibbonContextMenu(button, menu);
+        await Task.Delay(350);
+        menu.UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        await CaptureElementAsync(menu, outputDir, fileName);
+        var headers = new List<string>();
+        AddMenuHeaders(menu, headers);
+        var capture = CreateHomeClipboardCellsEditingCapture(
+            catalogCommandRow,
+            state,
+            commandName,
+            fileName,
+            "RenderTargetBitmap-home-context-menu",
+            menu.ActualWidth,
+            menu.ActualHeight,
+            headers,
+            evidenceSummary);
+        menu.IsOpen = false;
+        return capture;
+    }
+
+    private SortDialog CreateHomeClipboardCellsEditingSortDialog(HomeClipboardCellsEditingTourContext context)
+    {
+        var sheet = context.Sheet;
+        var dialog = new SortDialog(
+            columnChoices: SortDialog.BuildColumnChoices(sheet, context.SortRange, hasHeaders: true),
+            genericColumnChoices: SortDialog.BuildColumnChoices(sheet, context.SortRange, hasHeaders: false),
+            rowChoices: SortDialog.BuildRowChoices(context.SortRange),
+            colorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange),
+            cellColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange, SortOn.CellColor),
+            fontColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange, SortOn.FontColor))
+        {
+            Owner = this
+        };
+        return dialog;
+    }
+
+    private FindReplaceDialog CreateHomeClipboardCellsEditingFindReplaceDialog(bool replaceMode) =>
+        new(
+            () => _workbook,
+            _commandBus,
+            NavigateToCell,
+            replaceMode,
+            () => _currentSheetId,
+            () => SheetGrid.SelectedRange?.Start,
+            RefreshAfterFindReplaceEdit)
+        {
+            Owner = this
+        };
+
+    private async Task<HomeClipboardCellsEditingTourManifestCapture> CaptureHomeClipboardCellsEditingDialogAsync(
+        Window dialog,
+        string outputDir,
+        string catalogCommandRow,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        try
+        {
+            await ShowDataToolsTourDialogAsync(dialog);
+            await CaptureElementAsync(dialog, outputDir, fileName);
+            return CreateHomeClipboardCellsEditingCapture(
+                catalogCommandRow,
+                state,
+                surface,
+                fileName,
+                "RenderTargetBitmap-home-dialog-window",
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                [],
+                evidenceSummary);
+        }
+        finally
+        {
+            CloseDataToolsTourDialog(dialog);
+        }
+    }
+
+    private HomeClipboardCellsEditingTourManifestCapture CreateHomeClipboardCellsEditingCapture(
+        string catalogCommandRow,
+        string state,
+        string surface,
+        string fileName,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        IReadOnlyList<string> menuHeaders,
+        string evidenceSummary)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return new HomeClipboardCellsEditingTourManifestCapture(
+            CaptureKey: $"interactive:home-clipboard-cells-editing:{state}",
+            PairKey: $"interactive:home-clipboard-cells-editing:{state}",
+            CatalogCommandRow: catalogCommandRow,
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            SelectedRange: SheetGrid.SelectedRange?.ToString() ?? string.Empty,
+            ClipboardRange: SheetGrid.ClipboardRange?.ToString() ?? string.Empty,
+            ClipboardIsCut: SheetGrid.ClipboardIsCut,
+            NoteCount: sheet?.Comments.Count ?? 0,
+            HyperlinkCount: sheet?.Hyperlinks.Count ?? 0,
+            MenuHeaders: menuHeaders,
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private static void DeleteHomeClipboardCellsEditingTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_home_clipboard_cells_editing_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, HomeClipboardCellsEditingTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateHomeClipboardCellsEditingTourEvidence(
+        string outputDir,
+        IReadOnlyList<HomeClipboardCellsEditingTourManifestCapture> captures)
+    {
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Home Clipboard/Cells/Editing tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
     }
 
     private async Task CaptureWorksheetContextMenuTourAsync(string outputDir)
@@ -8161,6 +8608,70 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeFontColorsTourManifest);
     }
 
+    private static async Task WriteHomeClipboardCellsEditingTourManifestAsync(
+        string outputDir,
+        HomeClipboardCellsEditingTourContext context,
+        IReadOnlyList<HomeClipboardCellsEditingTourManifestCapture> captures)
+    {
+        var manifest = new HomeClipboardCellsEditingTourManifest(
+            Tool: "FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR",
+            EvidenceFamily: "home-clipboard-cells-editing",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "home-clipboard-cells-editing:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_home_clipboard_cells_editing_<Surface>_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#UI-CAT-HOME-001",
+            CatalogCommandRows:
+            [
+                "UI-CMD-HOME-CLIP-001",
+                "UI-CMD-HOME-CLIP-002",
+                "UI-CMD-HOME-CELLS-001",
+                "UI-CMD-HOME-CELLS-002",
+                "UI-CMD-HOME-CELLS-003",
+                "UI-CMD-HOME-CELLS-004",
+                "UI-CMD-HOME-EDIT-003",
+                "UI-CMD-HOME-EDIT-004"
+            ],
+            SheetName: context.Sheet.Name,
+            CopySourceRange: context.CopySourceRange.ToString(),
+            PasteTargetRange: context.PasteTargetRange.ToString(),
+            SortRange: context.SortRange.ToString(),
+            UsedRange: context.UsedRange.ToString(),
+            CaptureStatus: "complete",
+            CaptureMode: "RenderTargetBitmap-in-process",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, keytip, OS clipboard, or screen capture input is used."
+                    : "Window, menu, and dialog captures abort unless the expected FreeX WPF surface owns foreground focus immediately before render and file write."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Home Clipboard copied-source marquee and Paste menu",
+                "Home Cells Insert, Delete, and Format menus",
+                "Insert Cells and Delete Cells shift-choice dialogs",
+                "Home Editing Clear menu",
+                "Home Editing Sort & Filter menu and Custom Sort dialog",
+                "Home Editing Find & Select menu",
+                "Find, Replace, Go To, and Go To Special dialog surfaces"
+            ],
+            Limitations:
+            [
+                "This bounded tour opens production FreeX WPF menu and dialog surfaces in process and captures them with RenderTargetBitmap.",
+                "The copied-source state is seeded in the FreeX internal clipboard visual model without reading or writing the operating-system clipboard.",
+                "The tour does not synthesize physical mouse, keytip, Ctrl+V/Ctrl+F/Ctrl+H/F5, dialog access-key, Enter/Escape, or range-picker input.",
+                "The tour avoids submitting destructive insert/delete/clear/sort/replace actions; command mutation, undo/repeat, persistence, and Excel-paired evidence remain separate lanes.",
+                "Paste Special, Format Painter persistent/double-click mode, row/column hide/unhide results, filter dropdown criteria, and Selection Pane object workflows are not captured in this slice."
+            ]);
+
+        var path = Path.Combine(outputDir, HomeClipboardCellsEditingTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeClipboardCellsEditingTourManifest);
+    }
+
     private static async Task WriteQatUndoRedoTourManifestAsync(
         string outputDir,
         CellAddress address,
@@ -9543,6 +10054,57 @@ public partial class MainWindow
         string? ActiveCellFillColor,
         IReadOnlyList<string> MenuHeaders);
 
+    private sealed record HomeClipboardCellsEditingTourContext(
+        Sheet Sheet,
+        GridRange CopySourceRange,
+        GridRange PasteTargetRange,
+        GridRange SortRange,
+        GridRange UsedRange,
+        string GoToDefaultAddress);
+
+    private sealed record HomeClipboardCellsEditingTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogCommandRows,
+        string SheetName,
+        string CopySourceRange,
+        string PasteTargetRange,
+        string SortRange,
+        string UsedRange,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<HomeClipboardCellsEditingTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record HomeClipboardCellsEditingTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string CatalogCommandRow,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SelectedRange,
+        string ClipboardRange,
+        bool ClipboardIsCut,
+        int NoteCount,
+        int HyperlinkCount,
+        IReadOnlyList<string> MenuHeaders,
+        string EvidenceSummary);
+
     private sealed record WorksheetContextMenuTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -10525,6 +11087,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(HomeAlignmentNumberTourManifest))]
     [JsonSerializable(typeof(HomeBordersDropdownTourManifest))]
     [JsonSerializable(typeof(HomeFontColorsTourManifest))]
+    [JsonSerializable(typeof(HomeClipboardCellsEditingTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(OptionsAccountTourManifest))]

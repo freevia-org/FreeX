@@ -33,6 +33,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_PAGE_LAYOUT_SETUP_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_DRAW_OBJECT_FORMATTING_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_FONT_COLORS_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_AUTHORING_NAMES_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
@@ -58,6 +59,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CapturePageLayoutSetupTourAsync");
         source.Should().Contain("CaptureDrawObjectFormattingTourAsync");
         source.Should().Contain("CaptureHomeFontColorsTourAsync");
+        source.Should().Contain("CaptureHomeClipboardCellsEditingTourAsync");
         source.Should().Contain("CaptureFormulaAuthoringNamesTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
@@ -102,6 +104,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("page_layout_setup_tour_manifest.json");
         source.Should().Contain("draw_object_formatting_tour_manifest.json");
         source.Should().Contain("home_font_colors_tour_manifest.json");
+        source.Should().Contain("home_clipboard_cells_editing_tour_manifest.json");
         source.Should().Contain("formula_authoring_names_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
@@ -764,6 +767,60 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("No global mouse or keyboard input is synthesized");
         source.Should().Contain("The trace-arrow and show-formulas captures are FreeX-only visual states; no paired Microsoft Excel evidence is produced by this tool.");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.FormulaDiagnosticsTourManifest");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesHomeClipboardCellsEditingVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR");
+        source.Should().Contain("home-clipboard-cells-editing-tour");
+        source.Should().Contain("EnsureHomeClipboardCellsEditingTourContext");
+        source.Should().Contain("SeedHomeClipboardCellsEditingInternalClipboard");
+        source.Should().Contain("new InternalClipboard(");
+        source.Should().Contain("SheetGrid.ClipboardRange = copySourceRange;");
+        source.Should().Contain("CaptureHomeClipboardCellsEditingMenuAsync");
+        source.Should().Contain("FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)");
+        source.Should().Contain("new CellShiftDialog(CellShiftDialogMode.Insert)");
+        source.Should().Contain("new CellShiftDialog(CellShiftDialogMode.Delete)");
+        source.Should().Contain("CreateHomeClipboardCellsEditingSortDialog");
+        source.Should().Contain("new SortDialog(");
+        source.Should().Contain("CreateHomeClipboardCellsEditingFindReplaceDialog(replaceMode: false)");
+        source.Should().Contain("CreateHomeClipboardCellsEditingFindReplaceDialog(replaceMode: true)");
+        source.Should().Contain("new GoToDialog(_currentSheetId, context.GoToDefaultAddress");
+        source.Should().Contain("new GoToSpecialDialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_clipboard_copied_state");
+        source.Should().Contain("freex_home_clipboard_cells_editing_paste_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_insert_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_delete_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_format_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_clear_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_sort_filter_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_find_select_menu_opened");
+        source.Should().Contain("freex_home_clipboard_cells_editing_insert_cells_dialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_delete_cells_dialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_custom_sort_dialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_find_dialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_replace_dialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_go_to_dialog");
+        source.Should().Contain("freex_home_clipboard_cells_editing_go_to_special_dialog");
+        source.Should().Contain("UI-CMD-HOME-CLIP-001");
+        source.Should().Contain("UI-CMD-HOME-CLIP-002");
+        source.Should().Contain("UI-CMD-HOME-CELLS-001");
+        source.Should().Contain("UI-CMD-HOME-CELLS-002");
+        source.Should().Contain("UI-CMD-HOME-CELLS-003");
+        source.Should().Contain("UI-CMD-HOME-CELLS-004");
+        source.Should().Contain("UI-CMD-HOME-EDIT-003");
+        source.Should().Contain("UI-CMD-HOME-EDIT-004");
+        source.Should().Contain("no global mouse, keyboard, keytip, OS clipboard, or screen capture input is used");
+        source.Should().Contain("Paste Special, Format Painter persistent/double-click mode");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.HomeClipboardCellsEditingTourManifest");
+
+        catalog.Should().Contain("FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR=1");
+        catalog.Should().Contain("screenshots/home-clipboard-cells-editing-tour/");
+        catalog.Should().Contain("home_clipboard_cells_editing_tour_manifest.json");
     }
 
     [Fact]
