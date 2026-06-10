@@ -362,6 +362,30 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void InsertCatalogRows_DocumentPivotOptionsSlicerTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-INSERT-001B |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-INSERT-001C |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-INSERT-001E-H |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-INSERT-011 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-INSERT-013 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-INSERT-014 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(6);
+        rows.Should().OnlyContain(row => row.Contains("pivot-options-slicer-tour"));
+
+        catalog.Should().Contain("FREEX_PIVOT_OPTIONS_SLICER_TOUR=1");
+        catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
+        catalog.Should().Contain("pivot_options_slicer_tour_manifest.json");
+        catalog.Should().Contain("freex_pivotchart_field_button_menu_opened.png");
+    }
+
+    [Fact]
     public void InsertCatalogRows_DocumentChartDataLayoutTourEvidence()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
