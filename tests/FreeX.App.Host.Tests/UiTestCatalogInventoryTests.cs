@@ -526,10 +526,14 @@ public sealed partial class UiTestCatalogInventoryTests
         }
 
         catalog.Should().Contain("FREEX_DRAW_OBJECT_FORMATTING_TOUR=1");
+        catalog.Should().Contain("FREEX_DRAW_OBJECT_PERSISTENCE_TOUR=1");
         catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
         catalog.Should().Contain("draw_object_formatting_tour_manifest.json");
+        catalog.Should().Contain("draw_object_persistence_tour_manifest.json");
         catalog.Should().Contain("freex_draw_object_formatting_shape_effects_dialog.png");
         catalog.Should().Contain("freex_draw_object_formatting_selection_pane_rename_visibility.png");
+        catalog.Should().Contain("freex_draw_object_persistence_reopened_persisted_objects.png");
+        catalog.Should().Contain("freex_draw_object_persistence_saved.fxl");
     }
 
     [Fact]

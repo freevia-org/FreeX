@@ -38,7 +38,7 @@ public sealed class ConfigurePivotTableViewCommand : IWorkbookCommand
             return CommandGuards.RejectPivotTableNotFound();
 
         _snapshot = PivotViewSnapshot.Capture(pivotTable);
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
 
         PivotTableCommandCollections.Replace(pivotTable.LabelFilters, _labelFilters);
         PivotTableCommandCollections.Replace(pivotTable.ValueFilters, _valueFilters);
@@ -60,7 +60,10 @@ public sealed class ConfigurePivotTableViewCommand : IWorkbookCommand
     {
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
+        {
+            PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
             _snapshot.Restore(pivotTable);
+        }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
         _snapshot = null;
         _targetSnapshot = null;
@@ -69,19 +72,22 @@ public sealed class ConfigurePivotTableViewCommand : IWorkbookCommand
     private sealed record PivotViewSnapshot(
         IReadOnlyList<PivotLabelFilterModel> LabelFilters,
         IReadOnlyList<PivotValueFilterModel> ValueFilters,
-        IReadOnlyList<PivotSortModel> Sorts)
+        IReadOnlyList<PivotSortModel> Sorts,
+        GridRange? LastRenderedRange)
     {
         public static PivotViewSnapshot Capture(PivotTableModel pivotTable) =>
             new(
                 pivotTable.LabelFilters.ToList(),
                 pivotTable.ValueFilters.ToList(),
-                pivotTable.Sorts.ToList());
+                pivotTable.Sorts.ToList(),
+                pivotTable.LastRenderedRange);
 
         public void Restore(PivotTableModel pivotTable)
         {
             PivotTableCommandCollections.Replace(pivotTable.LabelFilters, LabelFilters);
             PivotTableCommandCollections.Replace(pivotTable.ValueFilters, ValueFilters);
             PivotTableCommandCollections.Replace(pivotTable.Sorts, Sorts);
+            pivotTable.LastRenderedRange = LastRenderedRange;
         }
     }
 }

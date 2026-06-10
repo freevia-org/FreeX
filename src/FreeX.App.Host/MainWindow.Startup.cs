@@ -43,6 +43,7 @@ public partial class MainWindow
         RegisterWithWindowRegistry();
         TryStartScreenshotTour();
         TryStartSheetTabVisualTour();
+        TryStartSheetTabWorkflowsTour();
         TryStartAccentBarVisualTour();
     }
 }

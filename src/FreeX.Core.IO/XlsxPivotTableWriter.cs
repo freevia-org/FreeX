@@ -302,7 +302,7 @@ internal static partial class XlsxPivotTableWriter
             PivotReportLayoutAttributes(pivot.ReportLayout),
             new XElement(
                 workbookNs + "location",
-                new XAttribute("ref", pivot.TargetRange.ToString()),
+                new XAttribute("ref", (pivot.LastRenderedRange ?? pivot.TargetRange).ToString()),
                 new XAttribute("firstDataCol", Math.Max(0, pivot.FirstDataColumn).ToString(CultureInfo.InvariantCulture)),
                 new XAttribute("firstDataRow", Math.Max(0, pivot.FirstDataRow).ToString(CultureInfo.InvariantCulture)),
                 new XAttribute("firstHeaderRow", Math.Max(0, pivot.FirstHeaderRow).ToString(CultureInfo.InvariantCulture))),
