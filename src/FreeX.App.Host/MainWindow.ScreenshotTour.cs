@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -17,6 +17,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using FreeX.Core.Calc;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -38,6 +39,8 @@ public partial class MainWindow
     private const string HomeAlignmentNumberTourOutputDirectoryName = "home-alignment-number-tour";
     private const string HomeBordersDropdownTourManifestFileName = "home_borders_dropdown_tour_manifest.json";
     private const string HomeBordersDropdownTourCaptureFileName = "freex_dropdown_home_borders_opened";
+    private const string HomeFontColorsTourManifestFileName = "home_font_colors_tour_manifest.json";
+    private const string HomeFontColorsTourOutputDirectoryName = "home-font-colors-tour";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
     private const string KeyTipOverlayTourManifestFileName = "keytip_overlay_tour_manifest.json";
@@ -57,6 +60,13 @@ public partial class MainWindow
     private const string FormulaBarNameBoxTourOutputDirectoryName = "formula-bar-name-box-tour";
     private const string StatusFooterTourManifestFileName = "status_footer_tour_manifest.json";
     private const string StatusFooterTourOutputDirectoryName = "status-footer-tour";
+    private const string InsertObjectsLinksTourManifestFileName = "insert_objects_links_tour_manifest.json";
+    private const string InsertObjectsLinksTourOutputDirectoryName = "insert-objects-links-tour";
+    private const string DataToolsDialogsTourManifestFileName = "data_tools_dialogs_tour_manifest.json";
+    private const string DataToolsDialogsTourOutputDirectoryName = "data-tools-dialogs-tour";
+    private const string ViewPanesZoomTourManifestFileName = "view_panes_zoom_tour_manifest.json";
+    private const string ViewPanesZoomTourOutputDirectoryName = "view-panes-zoom-tour";
+    private const string ViewPanesZoomTourCustomViewName = "View Panes Zoom Tour";
     private const string FormulaDiagnosticsTourManifestFileName = "formula_diagnostics_tour_manifest.json";
     private const string FormulaDiagnosticsTourOutputDirectoryName = "formula-diagnostics-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
@@ -125,6 +135,7 @@ public partial class MainWindow
         var homeNumberFormatDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR") == "1";
         var homeAlignmentNumberTour = Environment.GetEnvironmentVariable("FREEX_HOME_ALIGNMENT_NUMBER_TOUR") == "1";
         var homeBordersDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_BORDERS_DROPDOWN_TOUR") == "1";
+        var homeFontColorsTour = Environment.GetEnvironmentVariable("FREEX_HOME_FONT_COLORS_TOUR") == "1";
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
@@ -134,8 +145,11 @@ public partial class MainWindow
         var titlebarWindowChromeTour = Environment.GetEnvironmentVariable("FREEX_TITLEBAR_WINDOW_CHROME_TOUR") == "1";
         var formulaBarNameBoxTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_BAR_NAME_BOX_TOUR") == "1";
         var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
+        var insertObjectsLinksTour = Environment.GetEnvironmentVariable("FREEX_INSERT_OBJECTS_LINKS_TOUR") == "1";
+        var dataToolsDialogsTour = Environment.GetEnvironmentVariable("FREEX_DATA_TOOLS_DIALOGS_TOUR") == "1";
+        var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !formulaDiagnosticsTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !viewPanesZoomTour && !formulaDiagnosticsTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -152,7 +166,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, formulaDiagnosticsTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, viewPanesZoomTour, formulaDiagnosticsTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -182,6 +196,7 @@ public partial class MainWindow
         bool homeNumberFormatDropdownTour,
         bool homeAlignmentNumberTour,
         bool homeBordersDropdownTour,
+        bool homeFontColorsTour,
         bool worksheetContextMenuTour,
         bool keyTipOverlayTour,
         bool printPreviewTour,
@@ -191,6 +206,9 @@ public partial class MainWindow
         bool titlebarWindowChromeTour,
         bool statusFooterTour,
         bool formulaBarNameBoxTour,
+        bool insertObjectsLinksTour,
+        bool dataToolsDialogsTour,
+        bool viewPanesZoomTour,
         bool formulaDiagnosticsTour)
     {
         if (ribbonPlan is not null)
@@ -210,6 +228,9 @@ public partial class MainWindow
 
         if (homeBordersDropdownTour)
             await CaptureHomeBordersDropdownTourAsync(Path.Combine(outputDir, "home-borders-dropdown-tour"));
+
+        if (homeFontColorsTour)
+            await CaptureHomeFontColorsTourAsync(Path.Combine(outputDir, HomeFontColorsTourOutputDirectoryName));
 
         if (worksheetContextMenuTour)
             await CaptureWorksheetContextMenuTourAsync(Path.Combine(outputDir, "worksheet-context-menu-tour"));
@@ -237,6 +258,12 @@ public partial class MainWindow
         if (formulaBarNameBoxTour)
             await CaptureFormulaBarNameBoxTourAsync(Path.Combine(outputDir, FormulaBarNameBoxTourOutputDirectoryName));
 
+        if (insertObjectsLinksTour)
+            await CaptureInsertObjectsLinksTourAsync(Path.Combine(outputDir, InsertObjectsLinksTourOutputDirectoryName));
+        if (dataToolsDialogsTour)
+            await CaptureDataToolsDialogsTourAsync(Path.Combine(outputDir, DataToolsDialogsTourOutputDirectoryName));
+        if (viewPanesZoomTour)
+            await CaptureViewPanesZoomTourAsync(Path.Combine(outputDir, ViewPanesZoomTourOutputDirectoryName));
         if (formulaDiagnosticsTour)
             await CaptureFormulaDiagnosticsTourAsync(Path.Combine(outputDir, FormulaDiagnosticsTourOutputDirectoryName));
 
@@ -827,6 +854,387 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, $"{HomeBordersDropdownTourCaptureFileName}.png");
         if (!File.Exists(path))
             throw new InvalidOperationException("Home Borders dropdown tour did not create the planned FreeX dropdown capture.");
+    }
+
+    private async Task CaptureHomeFontColorsTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteHomeFontColorsTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 820;
+        await Task.Delay(700);
+
+        var sampleRange = EnsureHomeFontColorsTourContext();
+        var captures = new List<HomeFontColorsTourManifestCapture>();
+
+        try
+        {
+            var homeTab = RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home");
+            SelectRibbonTourTab(homeTab);
+            SetSelectionRange(sampleRange, sampleRange.Start);
+            UpdateViewport();
+            RefreshToolbar();
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(350);
+
+            await CaptureCurrentWindowAsync(outputDir, "freex_home_font_colors_grid_styled", 760);
+            captures.Add(CreateHomeFontColorsWindowCapture(
+                "styled-grid",
+                "freex_home_font_colors_grid_styled",
+                "Real grid render for font family/size, grow/shrink-sized rows, bold, italic, underline, double underline, strikethrough, font color, fill color, theme-backed colors, and representative borders."));
+
+            captures.Add(await CaptureHomeFontColorsComboPopupAsync(
+                outputDir,
+                FontNameBox,
+                "font-family-dropdown",
+                "freex_home_font_family_dropdown_opened",
+                "Font family dropdown opened from the production Home Font combo box."));
+
+            captures.Add(await CaptureHomeFontColorsComboPopupAsync(
+                outputDir,
+                FontSizeBox,
+                "font-size-dropdown",
+                "freex_home_font_size_dropdown_opened",
+                "Font size dropdown opened from the production Home Font Size combo box."));
+
+            captures.Add(await CaptureHomeFontColorsMenuAsync(
+                outputDir,
+                UnderlineButton,
+                "underline-menu",
+                "freex_home_underline_menu_opened",
+                "Underline split-menu with single and double underline choices."));
+
+            var borderMenuCapture = await CaptureHomeFontColorsMenuAsync(
+                outputDir,
+                BordersMenuButton,
+                "borders-menu",
+                "freex_home_borders_full_menu_opened",
+                "Full Home Borders menu with presets, draw/erase commands, line color, line style, and More Borders.");
+            captures.Add(borderMenuCapture);
+
+            captures.Add(await CaptureHomeFontColorsBorderLineColorSubmenuAsync(
+                outputDir,
+                "freex_home_borders_line_color_submenu_opened"));
+
+            ValidateHomeFontColorsTourEvidence(outputDir, captures);
+            await WriteHomeFontColorsTourManifestAsync(outputDir, sampleRange, captures);
+        }
+        catch
+        {
+            DeleteHomeFontColorsTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            FontNameBox.IsDropDownOpen = false;
+            FontSizeBox.IsDropDownOpen = false;
+            if (UnderlineButton.ContextMenu is { } underlineMenu)
+                underlineMenu.IsOpen = false;
+            if (BordersMenuButton.ContextMenu is { } bordersMenu)
+                bordersMenu.IsOpen = false;
+        }
+    }
+
+    private GridRange EnsureHomeFontColorsTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Home font/colors tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+
+        var labels = new[]
+        {
+            "Calibri 11",
+            "Aptos 14",
+            "Grow 18",
+            "Shrink 9",
+            "Bold",
+            "Italic",
+            "Underline",
+            "Double underline",
+            "Strikethrough",
+            "Font color",
+            "Fill color",
+            "Theme colors",
+            "All borders",
+            "Outside border",
+            "Bottom double"
+        };
+
+        for (uint row = 1; row <= 5; row++)
+        {
+            for (uint col = 1; col <= 5; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                sheet.ClearCell(address);
+                var index = (int)((row - 1) * 5 + (col - 1));
+                if (index < labels.Length)
+                    sheet.SetCell(address, new TextValue(labels[index]));
+            }
+        }
+
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 1), new StyleDiff(FontName: "Calibri", FontSize: 11));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 2), new StyleDiff(FontName: "Aptos", FontSize: 14));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 3), new StyleDiff(FontSize: FontSizePlanner.Increase(16)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 4), new StyleDiff(FontSize: FontSizePlanner.Decrease(10)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 5), new StyleDiff(Bold: true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 1), new StyleDiff(Italic: true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 2), CellStyleDiffPlanner.UnderlineDiff(true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 3), CellStyleDiffPlanner.DoubleUnderlineDiff(true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 4), CellStyleDiffPlanner.StrikethroughDiff(true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 5), new StyleDiff(FontColor: new CellColor(192, 0, 0)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 1), new StyleDiff(FillColor: new CellColor(255, 242, 204)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 2), new StyleDiff(
+            FontThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+            FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.6)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 3), BorderShortcutService.GetAllBorderDiff(BorderStyle.Thin, CellColor.Black));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 4), new StyleDiff(
+            BorderTop: new CellBorder(BorderStyle.Thick, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1)),
+            BorderRight: new CellBorder(BorderStyle.Thick, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1)),
+            BorderBottom: new CellBorder(BorderStyle.Thick, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1)),
+            BorderLeft: new CellBorder(BorderStyle.Thick, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1))));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 5), new StyleDiff(
+            BorderBottom: new CellBorder(BorderStyle.Double, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent2))));
+
+        var sampleRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 5));
+        SetActiveCell(sampleRange.Start);
+        SetSelectionRange(sampleRange, sampleRange.Start);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        return sampleRange;
+    }
+
+    private void ApplyHomeFontColorsTourStyle(CellAddress address, StyleDiff diff)
+    {
+        var range = new GridRange(address, address);
+        if (!TryExecuteApplyStyle(range, diff, "Apply Style"))
+            throw new InvalidOperationException($"Home font/colors tour could not apply style to {address}.");
+    }
+
+    private async Task<HomeFontColorsTourManifestCapture> CaptureHomeFontColorsComboPopupAsync(
+        string outputDir,
+        ComboBox comboBox,
+        string state,
+        string fileName,
+        string evidencePurpose)
+    {
+        comboBox.Focus();
+        comboBox.ApplyTemplate();
+        comboBox.IsDropDownOpen = true;
+        comboBox.UpdateLayout();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(350);
+
+        try
+        {
+            var popupChild = FindOpenPopupChild(comboBox)
+                ?? throw new InvalidOperationException($"Home font/colors tour could not locate the open {state} popup.");
+
+            await CaptureElementAsync(popupChild, outputDir, fileName);
+            return CreateHomeFontColorsElementCapture(state, fileName, evidencePurpose, popupChild.ActualWidth, popupChild.ActualHeight);
+        }
+        finally
+        {
+            comboBox.IsDropDownOpen = false;
+        }
+    }
+
+    private async Task<HomeFontColorsTourManifestCapture> CaptureHomeFontColorsMenuAsync(
+        string outputDir,
+        ButtonBase placementTarget,
+        string state,
+        string fileName,
+        string evidencePurpose)
+    {
+        var menu = placementTarget.ContextMenu
+            ?? throw new InvalidOperationException($"Home font/colors tour could not locate the {state} context menu.");
+
+        menu.PlacementTarget = placementTarget;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+        menu.UpdateLayout();
+        await Task.Delay(350);
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        await CaptureElementAsync(menu, outputDir, fileName);
+        var capture = CreateHomeFontColorsElementCapture(state, fileName, evidencePurpose, menu.ActualWidth, menu.ActualHeight);
+        menu.IsOpen = false;
+        return capture;
+    }
+
+    private async Task<HomeFontColorsTourManifestCapture> CaptureHomeFontColorsBorderLineColorSubmenuAsync(string outputDir, string fileName)
+    {
+        var menu = BordersMenuButton.ContextMenu
+            ?? throw new InvalidOperationException("Home font/colors tour could not locate the Borders context menu.");
+
+        menu.PlacementTarget = BordersMenuButton;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+        menu.UpdateLayout();
+        await Task.Delay(250);
+
+        var lineColorItem = FindMenuItemByHeader(menu.Items, UiText.Get("MainWindow_Header_LineColor"))
+            ?? throw new InvalidOperationException("Home font/colors tour could not locate the Borders Line Color submenu.");
+        lineColorItem.IsSubmenuOpen = true;
+        lineColorItem.UpdateLayout();
+        await Task.Delay(350);
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        try
+        {
+            var popupChild = FindOpenPopupChild(lineColorItem)
+                ?? throw new InvalidOperationException("Home font/colors tour could not locate the open Borders Line Color submenu popup.");
+            await CaptureElementAsync(popupChild, outputDir, fileName);
+            return CreateHomeFontColorsElementCapture(
+                "borders-line-color-submenu",
+                fileName,
+                "Borders Line Color submenu showing implemented black, gray, Accent 1, and Accent 2 theme color choices.",
+                popupChild.ActualWidth,
+                popupChild.ActualHeight);
+        }
+        finally
+        {
+            lineColorItem.IsSubmenuOpen = false;
+            menu.IsOpen = false;
+        }
+    }
+
+    private static MenuItem? FindMenuItemByHeader(ItemCollection items, string header)
+    {
+        foreach (var item in items)
+        {
+            if (item is not MenuItem menuItem)
+                continue;
+
+            if (string.Equals(menuItem.Header?.ToString(), header, StringComparison.Ordinal))
+                return menuItem;
+
+            var nested = FindMenuItemByHeader(menuItem.Items, header);
+            if (nested is not null)
+                return nested;
+        }
+
+        return null;
+    }
+
+    private HomeFontColorsTourManifestCapture CreateHomeFontColorsWindowCapture(string state, string fileName, string evidencePurpose)
+    {
+        var activeCell = SheetGrid.SelectedRange?.Start;
+        var style = activeCell is { } address
+            ? ResolveHomeFontColorsTourStyle(address)
+            : CellStyle.Default;
+        return new HomeFontColorsTourManifestCapture(
+            State: state,
+            FileName: $"{fileName}.png",
+            CaptureKey: $"interactive:home-font-colors:{state}",
+            EvidencePurpose: evidencePurpose,
+            CaptureMethod: IsScreenshotTourBackgroundRenderAllowed()
+                ? "RenderTargetBitmap-window-full"
+                : "CopyFromScreen-window-full",
+            LogicalWidth: ActualWidth,
+            LogicalHeight: Math.Min(ActualHeight, 760),
+            ActiveCell: activeCell?.ToString() ?? string.Empty,
+            ActiveCellFontName: style.FontName,
+            ActiveCellFontSize: style.FontSize,
+            ActiveCellBold: style.Bold,
+            ActiveCellItalic: style.Italic,
+            ActiveCellUnderline: style.Underline,
+            ActiveCellDoubleUnderline: style.DoubleUnderline,
+            ActiveCellStrikethrough: style.Strikethrough,
+            ActiveCellFontColor: FormatQatUndoRedoTourColor(style.ResolveFontColor(_workbook.Theme)),
+            ActiveCellFillColor: FormatQatUndoRedoTourColor(style.ResolveFillColor(_workbook.Theme)),
+            MenuHeaders: []);
+    }
+
+    private HomeFontColorsTourManifestCapture CreateHomeFontColorsElementCapture(
+        string state,
+        string fileName,
+        string evidencePurpose,
+        double width,
+        double height)
+    {
+        return new HomeFontColorsTourManifestCapture(
+            State: state,
+            FileName: $"{fileName}.png",
+            CaptureKey: $"interactive:home-font-colors:{state}",
+            EvidencePurpose: evidencePurpose,
+            CaptureMethod: "RenderTargetBitmap-wpf-element",
+            LogicalWidth: width,
+            LogicalHeight: height,
+            ActiveCell: SheetGrid.SelectedRange?.Start.ToString() ?? string.Empty,
+            ActiveCellFontName: string.Empty,
+            ActiveCellFontSize: 0,
+            ActiveCellBold: false,
+            ActiveCellItalic: false,
+            ActiveCellUnderline: false,
+            ActiveCellDoubleUnderline: false,
+            ActiveCellStrikethrough: false,
+            ActiveCellFontColor: null,
+            ActiveCellFillColor: null,
+            MenuHeaders: CaptureOpenMenuHeaders());
+    }
+
+    private IReadOnlyList<string> CaptureOpenMenuHeaders()
+    {
+        var headers = new List<string>();
+        AddMenuHeaders(UnderlineButton.ContextMenu, headers);
+        AddMenuHeaders(BordersMenuButton.ContextMenu, headers);
+        return headers;
+    }
+
+    private static void AddMenuHeaders(ContextMenu? menu, List<string> headers)
+    {
+        if (menu is not { IsOpen: true })
+            return;
+
+        foreach (var header in menu.Items.OfType<MenuItem>().Select(item => item.Header?.ToString()).Where(header => !string.IsNullOrWhiteSpace(header)))
+            headers.Add(header!);
+    }
+
+    private CellStyle ResolveHomeFontColorsTourStyle(CellAddress address)
+    {
+        var sheet = _workbook.GetSheet(address.Sheet)
+            ?? throw new InvalidOperationException("Home font/colors tour could not resolve the active worksheet.");
+        var cell = sheet.GetCell(address);
+        return _workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
+    }
+
+    private static void DeleteHomeFontColorsTourEvidence(string outputDir)
+    {
+        foreach (var fileName in HomeFontColorsTourExpectedFileNames().Append(HomeFontColorsTourManifestFileName))
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static IReadOnlyList<string> HomeFontColorsTourExpectedFileNames() =>
+    [
+        "freex_home_font_colors_grid_styled.png",
+        "freex_home_font_family_dropdown_opened.png",
+        "freex_home_font_size_dropdown_opened.png",
+        "freex_home_underline_menu_opened.png",
+        "freex_home_borders_full_menu_opened.png",
+        "freex_home_borders_line_color_submenu_opened.png"
+    ];
+
+    private static void ValidateHomeFontColorsTourEvidence(string outputDir, IReadOnlyList<HomeFontColorsTourManifestCapture> captures)
+    {
+        if (captures.Count != HomeFontColorsTourExpectedFileNames().Count)
+            throw new InvalidOperationException("Home font/colors tour did not create the planned capture count.");
+
+        foreach (var fileName in HomeFontColorsTourExpectedFileNames())
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Home font/colors tour did not create {fileName}.");
+        }
     }
 
     private async Task CaptureWorksheetContextMenuTourAsync(string outputDir)
@@ -1742,6 +2150,24 @@ public partial class MainWindow
         return null;
     }
 
+    private static T? FindDescendantByContent<T>(DependencyObject root, string content)
+        where T : ContentControl
+    {
+        if (root is T element && string.Equals(element.Content?.ToString(), content, StringComparison.Ordinal))
+            return element;
+
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            var match = FindDescendantByContent<T>(child, content);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
+    }
+
     private static Button? FindDescendantButtonByContent(DependencyObject root, string content)
     {
         if (root is Button button && string.Equals(button.Content?.ToString(), content, StringComparison.Ordinal))
@@ -1752,6 +2178,24 @@ public partial class MainWindow
         {
             var child = VisualTreeHelper.GetChild(root, index);
             var match = FindDescendantButtonByContent(child, content);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
+    }
+
+    private static T? FindDescendant<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        if (root is T element)
+            return element;
+
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            var match = FindDescendant<T>(child);
             if (match is not null)
                 return match;
         }
@@ -3145,6 +3589,378 @@ public partial class MainWindow
             File.Delete(manifestPath);
     }
 
+    private async Task CaptureViewPanesZoomTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteViewPanesZoomTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 760;
+        await Task.Delay(700);
+
+        var originalFormulaBarVisible = _options.ShowFormulaBar;
+        var sheet = EnsureViewPanesZoomTourContext();
+        var captures = new List<ViewPanesZoomTourManifestCapture>();
+
+        try
+        {
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "view-tab-normal-baseline",
+                "freex_view_panes_zoom_view_tab_normal",
+                "View tab with Normal workbook view selected, Show toggles on, 100% zoom, and baseline grid geometry."));
+
+            SetWorksheetViewMode(WorksheetViewMode.PageLayout);
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "page-layout-ruler-on",
+                "freex_view_panes_zoom_page_layout_ruler_on",
+                "Page Layout workbook view with ruler toggle enabled and on."));
+
+            SetWorksheetViewMode(WorksheetViewMode.PageBreakPreview);
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "page-break-preview",
+                "freex_view_panes_zoom_page_break_preview",
+                "Page Break Preview workbook view selected through the same workbook-view command path."));
+
+            SetWorksheetViewMode(WorksheetViewMode.PageLayout);
+            SetViewPanesZoomTourShowToggles(showGridlines: false, showHeadings: false, showRulers: false);
+            SetViewPanesZoomTourFormulaBarVisible(false);
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "show-toggles-hidden",
+                "freex_view_panes_zoom_show_toggles_hidden",
+                "Gridlines, headings, ruler, and formula bar hidden with ribbon checkbox state visible."));
+
+            SetViewPanesZoomTourShowToggles(showGridlines: true, showHeadings: true, showRulers: true);
+            SetViewPanesZoomTourFormulaBarVisible(true);
+            SetWorksheetViewMode(WorksheetViewMode.Normal);
+            SelectViewPanesZoomTourRange(sheet, new GridRange(new CellAddress(sheet.Id, 4, 3), new CellAddress(sheet.Id, 4, 3)));
+            FreezeAtSelectionMenuItem_Click(this, new RoutedEventArgs());
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "freeze-panes-c4",
+                "freex_view_panes_zoom_freeze_panes_c4",
+                "Freeze Panes at C4, showing frozen rows and columns in the grid model and visible pane geometry."));
+
+            SelectViewPanesZoomTourRange(sheet, new GridRange(new CellAddress(sheet.Id, 6, 5), new CellAddress(sheet.Id, 6, 5)));
+            SplitViewBtn_Click(SplitViewBtn, new RoutedEventArgs());
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "split-panes-e6",
+                "freex_view_panes_zoom_split_panes_e6",
+                "Split panes at E6 after the Split command clears the previous frozen-pane state."));
+
+            var zoomDialog = new ZoomDialog(125) { Owner = this };
+            try
+            {
+                zoomDialog.Show();
+                await Task.Delay(350);
+                zoomDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(zoomDialog, outputDir, "freex_view_panes_zoom_dialog_custom_125");
+                captures.Add(CreateViewPanesZoomTourCapture(
+                    "zoom-dialog-custom-125",
+                    "freex_view_panes_zoom_dialog_custom_125",
+                    "Zoom dialog opened with a custom 125% value selected in the production ZoomDialog surface.",
+                    "RenderTargetBitmap-zoom-dialog-window"));
+            }
+            finally
+            {
+                zoomDialog.Close();
+            }
+
+            await SetViewPanesZoomTourZoomAsync(175);
+            Zoom100Btn_Click(this, new RoutedEventArgs());
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "zoom-100-command",
+                "freex_view_panes_zoom_100_percent_command",
+                "View ribbon 100% command resets the worksheet zoom and status zoom text to 100%."));
+
+            SelectViewPanesZoomTourRange(sheet, new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 18, 8)));
+            ZoomSelectionBtn_Click(this, new RoutedEventArgs());
+            captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                outputDir,
+                "zoom-to-selection",
+                "freex_view_panes_zoom_to_selection",
+                "Zoom to Selection fits the selected A1:H18 range to the visible grid viewport."));
+
+            if (TryExecuteCommand(new SetWorkbookWindowArrangementCommand(WorkbookWindowArrangement.Horizontal), "Arrange Windows"))
+            {
+                captures.Add(await CaptureViewPanesZoomWindowStateAsync(
+                    outputDir,
+                    "arrange-horizontal-state",
+                    "freex_view_panes_zoom_arrange_horizontal_state",
+                    "Arrange All command state set to Horizontal and reflected in the workbook window arrangement model."));
+            }
+
+            var arrangeButton = FindDescendantByRibbonCommandName<Button>(RibbonTabs, "Arrange All");
+            if (arrangeButton?.ContextMenu is { } arrangeMenu)
+            {
+                OpenRibbonContextMenu(arrangeButton, arrangeMenu);
+                await Task.Delay(350);
+                arrangeMenu.UpdateLayout();
+                await CaptureElementAsync(arrangeMenu, outputDir, "freex_view_panes_zoom_arrange_all_menu_opened");
+                captures.Add(CreateViewPanesZoomTourCapture(
+                    "arrange-all-menu-opened",
+                    "freex_view_panes_zoom_arrange_all_menu_opened",
+                    "Arrange All menu opened with live checked layout state.",
+                    "RenderTargetBitmap-arrange-all-context-menu"));
+                arrangeMenu.IsOpen = false;
+            }
+
+            if (_workbook.CustomViews.All(view => !string.Equals(view.Name, ViewPanesZoomTourCustomViewName, StringComparison.OrdinalIgnoreCase)))
+                TryExecuteCommand(new SaveCustomViewCommand(ViewPanesZoomTourCustomViewName), "Save Custom View");
+
+            var customViewsDialog = new CustomViewsDialog(_workbook, _commandBus) { Owner = this };
+            try
+            {
+                customViewsDialog.Show();
+                await Task.Delay(350);
+                customViewsDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(customViewsDialog, outputDir, "freex_view_panes_zoom_custom_views_dialog");
+                captures.Add(CreateViewPanesZoomTourCapture(
+                    "custom-views-dialog-opened",
+                    "freex_view_panes_zoom_custom_views_dialog",
+                    "Custom Views dialog opened with a saved tour view in the production list surface.",
+                    "RenderTargetBitmap-custom-views-dialog-window"));
+            }
+            finally
+            {
+                customViewsDialog.Close();
+            }
+
+            ValidateViewPanesZoomTourEvidence(outputDir, captures);
+            await WriteViewPanesZoomTourManifestAsync(outputDir, captures);
+        }
+        catch
+        {
+            DeleteViewPanesZoomTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            SetViewPanesZoomTourFormulaBarVisible(originalFormulaBarVisible);
+        }
+    }
+
+    private Sheet EnsureViewPanesZoomTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("View panes/zoom tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        for (uint row = 1; row <= 24; row++)
+        {
+            for (uint col = 1; col <= 10; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                if (row == 1)
+                    sheet.SetCell(address, new TextValue($"Metric {col}"));
+                else if (col == 1)
+                    sheet.SetCell(address, new TextValue($"Region {row - 1}"));
+                else
+                    sheet.SetCell(address, new NumberValue((row - 1) * 100 + col));
+            }
+        }
+
+        _options.ShowFormulaBar = true;
+        _suppressAppViewOptionSync = true;
+        try
+        {
+            if (ViewFormulaBarChk is not null)
+                ViewFormulaBarChk.IsChecked = true;
+        }
+        finally
+        {
+            _suppressAppViewOptionSync = false;
+        }
+
+        FormulaBarBorder.Visibility = Visibility.Visible;
+        SelectViewPanesZoomTourRange(sheet, new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 5, 4)));
+        SetWorksheetViewMode(WorksheetViewMode.Normal);
+        SetViewPanesZoomTourShowToggles(showGridlines: true, showHeadings: true, showRulers: true);
+        SetFreezePanes(0, 0);
+        if (sheet.SplitRow is not null || sheet.SplitColumn is not null)
+            SplitViewBtn_Click(SplitViewBtn, new RoutedEventArgs());
+        SyncZoomFromSheet(100);
+        SelectViewRibbonTabForTour();
+        UpdateViewport();
+        return sheet;
+    }
+
+    private void SelectViewPanesZoomTourRange(Sheet sheet, GridRange range)
+    {
+        _currentSheetId = sheet.Id;
+        SetActiveCell(range.Start);
+        if (SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = range;
+            SheetGrid.SelectedRanges = null;
+            SheetGrid.Focus();
+        }
+
+        var cell = sheet.GetCell(range.Start);
+        SetFormulaBarSelectionText(FormatFormulaBarText(cell, range.Start));
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    private void SelectViewRibbonTabForTour()
+    {
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "View"));
+    }
+
+    private void SetViewPanesZoomTourShowToggles(bool showGridlines, bool showHeadings, bool showRulers)
+    {
+        if (!TryExecuteGroupedSheetCommand(
+                "View Show",
+                sheetId => new SetWorksheetViewOptionsCommand(sheetId, showGridlines, showHeadings, showRulers)))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void SetViewPanesZoomTourFormulaBarVisible(bool isVisible)
+    {
+        _options.ShowFormulaBar = isVisible;
+        _suppressAppViewOptionSync = true;
+        try
+        {
+            if (ViewFormulaBarChk is not null)
+                ViewFormulaBarChk.IsChecked = isVisible;
+        }
+        finally
+        {
+            _suppressAppViewOptionSync = false;
+        }
+
+        FormulaBarBorder.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async Task SetViewPanesZoomTourZoomAsync(int zoomPercent)
+    {
+        ZoomSlider.Value = FreeX.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+        RefreshStatusBar();
+        UpdateViewport();
+        await Task.Delay(250);
+    }
+
+    private async Task<ViewPanesZoomTourManifestCapture> CaptureViewPanesZoomWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string evidencePurpose)
+    {
+        SelectViewRibbonTabForTour();
+        SyncViewPanesZoomTourWorkbookViewButtons();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateViewPanesZoomTourCapture(state, fileName, evidencePurpose, "RenderTargetBitmap-window-full");
+    }
+
+    private void SyncViewPanesZoomTourWorkbookViewButtons()
+    {
+        var viewMode = _workbook.GetSheet(_currentSheetId)?.ViewMode ?? WorksheetViewMode.Normal;
+        ViewNormalButton.IsChecked = viewMode == WorksheetViewMode.Normal;
+        ViewPageLayoutButton.IsChecked = viewMode == WorksheetViewMode.PageLayout;
+        ViewPageBreakPreviewButton.IsChecked = viewMode == WorksheetViewMode.PageBreakPreview;
+    }
+
+    private ViewPanesZoomTourManifestCapture CreateViewPanesZoomTourCapture(
+        string state,
+        string fileName,
+        string evidencePurpose,
+        string captureMethod)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return new ViewPanesZoomTourManifestCapture(
+            CaptureKey: $"interactive:view-panes-zoom:{state}",
+            PairKey: $"interactive:view-panes-zoom:{state}",
+            ScenarioId: "view-panes-zoom:visual-evidence",
+            State: state,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            EvidencePurpose: evidencePurpose,
+            CaptureLogicalWidth: captureMethod.Contains("window-full", StringComparison.Ordinal) ? ActualWidth : 0,
+            CaptureLogicalHeight: captureMethod.Contains("window-full", StringComparison.Ordinal) ? Math.Min(ActualHeight, 760) : 0,
+            SheetName: sheet?.Name ?? string.Empty,
+            ActiveRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
+            ViewMode: (sheet?.ViewMode ?? WorksheetViewMode.Normal).ToString(),
+            ShowGridlines: sheet?.ShowGridlines ?? true,
+            ShowHeadings: sheet?.ShowHeadings ?? true,
+            ShowRulers: sheet?.ShowRulers ?? true,
+            FormulaBarVisible: FormulaBarBorder.Visibility == Visibility.Visible,
+            FrozenRows: sheet?.FrozenRows ?? 0,
+            FrozenCols: sheet?.FrozenCols ?? 0,
+            SplitRow: sheet?.SplitRow,
+            SplitColumn: sheet?.SplitColumn,
+            ZoomText: StatusZoomText.Text,
+            ZoomSliderValue: ZoomSlider.Value,
+            WindowArrangement: _workbook.WindowArrangement.ToString(),
+            CustomViewCount: _workbook.CustomViews.Count,
+            ViewNormalChecked: ViewNormalButton.IsChecked == true,
+            ViewPageLayoutChecked: ViewPageLayoutButton.IsChecked == true,
+            ViewPageBreakPreviewChecked: ViewPageBreakPreviewButton.IsChecked == true,
+            ViewGridlinesChecked: ViewGridlinesChk.IsChecked == true,
+            ViewHeadingsChecked: ViewHeadersChk.IsChecked == true,
+            ViewRulerChecked: ViewRulerChk.IsChecked == true,
+            ViewFormulaBarChecked: ViewFormulaBarChk.IsChecked == true,
+            SplitButtonChecked: SplitViewBtn.IsChecked == true);
+    }
+
+    private static void DeleteViewPanesZoomTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_view_panes_zoom_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, ViewPanesZoomTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateViewPanesZoomTourEvidence(string outputDir, IReadOnlyList<ViewPanesZoomTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"View panes/zoom tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
+    private static T? FindDescendantByRibbonCommandName<T>(DependencyObject root, string commandName)
+        where T : DependencyObject
+    {
+        if (root is T typed &&
+            RibbonMetadata.TryGetCommandName(typed, out var candidate) &&
+            string.Equals(candidate, commandName, StringComparison.Ordinal))
+            return typed;
+
+        var visualCount = root is Visual or System.Windows.Media.Media3D.Visual3D
+            ? VisualTreeHelper.GetChildrenCount(root)
+            : 0;
+        for (var index = 0; index < visualCount; index++)
+        {
+            var match = FindDescendantByRibbonCommandName<T>(VisualTreeHelper.GetChild(root, index), commandName);
+            if (match is not null)
+                return match;
+        }
+
+        foreach (var logicalChild in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            var match = FindDescendantByRibbonCommandName<T>(logicalChild, commandName);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
+    }
+
     private static void ValidateFormulaDiagnosticsTourEvidence(
         string outputDir,
         IReadOnlyList<FormulaDiagnosticsTourManifestCapture> captures)
@@ -3157,6 +3973,710 @@ public partial class MainWindow
         if (missing.Length > 0)
             throw new InvalidOperationException(
                 $"Formula diagnostics tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
+    }
+
+    private async Task CaptureDataToolsDialogsTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteDataToolsDialogsTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 768;
+        await Task.Delay(700);
+
+        var context = EnsureDataToolsDialogsTourContext();
+        var captures = new List<DataToolsDialogsTourManifestCapture>();
+        Window? openDialog = null;
+
+        try
+        {
+            openDialog = new AdvancedFilterDialog(
+                _currentSheetId,
+                context.RemoveDuplicatesRange.ToString(),
+                ResolveSheetIdByName,
+                _ => { })
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-003",
+                "advanced-filter-dialog",
+                "Advanced Filter",
+                "freex_data_tools_advanced_filter_dialog",
+                "Advanced Filter dialog shows action choices, list range, criteria range, copy-to range, unique records, and range picker buttons."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new TextToColumnsDialog(
+                TextToColumnsDialog.BuildPreviewRows(context.Sheet, context.TextToColumnsRange),
+                context.TextToColumnsRange.Start,
+                _ => { })
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-004",
+                "text-to-columns-step-1-original-data-type",
+                "Text to Columns",
+                "freex_data_tools_text_to_columns_step1_original_data_type",
+                "Text to Columns wizard step 1 shows delimited/fixed-width original data type choices and a seeded preview."));
+
+            ClickDataToolsDialogButton(openDialog, UiText.Get("TextToColumns_NextButton"));
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-004",
+                "text-to-columns-step-2-delimited",
+                "Text to Columns",
+                "freex_data_tools_text_to_columns_step2_delimited",
+                "Text to Columns wizard step 2 shows delimiter choices, text qualifier, consecutive delimiter option, and split preview."));
+
+            SetDataToolsDialogRadio(openDialog, UiText.Get("TextToColumns_FixedWidth"));
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-004",
+                "text-to-columns-step-2-fixed-width",
+                "Text to Columns",
+                "freex_data_tools_text_to_columns_step2_fixed_width",
+                "Text to Columns wizard step 2 fixed-width mode shows break-position entry, ruler surface, and preview."));
+
+            SetDataToolsDialogRadio(openDialog, UiText.Get("TextToColumns_Delimited"));
+            ClickDataToolsDialogButton(openDialog, UiText.Get("TextToColumns_NextButton"));
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-004",
+                "text-to-columns-step-3-column-format-destination",
+                "Text to Columns",
+                "freex_data_tools_text_to_columns_step3_column_format_destination",
+                "Text to Columns wizard step 3 shows column data format choices, destination editor, advanced separators, and final preview."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new RemoveDuplicatesDialog(
+                RemoveDuplicatesDialog.BuildColumnChoices(context.Sheet, context.RemoveDuplicatesRange),
+                RemoveDuplicatesDialog.BuildColumnChoices(context.Sheet, context.RemoveDuplicatesRange, hasHeaders: false),
+                hasHeaders: true)
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-005",
+                "remove-duplicates-header-column-list",
+                "Remove Duplicates",
+                "freex_data_tools_remove_duplicates_headers_columns",
+                "Remove Duplicates dialog shows My data has headers enabled plus header-derived column checkboxes and Select All/Unselect All controls."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = CreateDataValidationTourDialog();
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-005",
+                "data-validation-settings-tab",
+                "Data Validation",
+                "freex_data_tools_data_validation_settings_tab",
+                "Data Validation Settings tab shows list validation criteria, source editor, in-cell dropdown, ignore blank, and same-settings controls."));
+
+            SelectDataToolsTab(openDialog, 1);
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-005",
+                "data-validation-input-message-tab",
+                "Data Validation",
+                "freex_data_tools_data_validation_input_message_tab",
+                "Data Validation Input Message tab shows title and message editors with show-input-message enabled."));
+
+            SelectDataToolsTab(openDialog, 2);
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-005",
+                "data-validation-error-alert-tab",
+                "Data Validation",
+                "freex_data_tools_data_validation_error_alert_tab",
+                "Data Validation Error Alert tab shows alert style, title, and error message editors with show-error-alert enabled."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new GoalSeekDialog(context.Sheet.Id, context.GoalSeekSetCell, _ => { }) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            FindDescendantByAutomationId<TextBox>(openDialog, "GoalSeekToValueBox")!.Text = "5000";
+            FindDescendantByAutomationId<TextBox>(openDialog, "GoalSeekChangingCellBox")!.Text = context.GoalSeekChangingCell.ToA1();
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-006",
+                "goal-seek-dialog",
+                "Goal Seek",
+                "freex_data_tools_goal_seek_dialog",
+                "Goal Seek dialog shows Set cell, To value, By changing cell, range picker buttons, and OK/Cancel controls."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new GoalSeekStatusDialog(new GoalSeekResult(true, 125d, 5000d, 7), 5000d) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-006",
+                "goal-seek-status-dialog",
+                "Goal Seek Status",
+                "freex_data_tools_goal_seek_status_dialog",
+                "Goal Seek Status dialog shows a converged result message with Keep Result and Restore Original Values default actions."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new ScenarioManagerDialog(_workbook, context.Sheet.Id, ResolveSheetIdByName) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-006",
+                "scenario-manager-dialog",
+                "Scenario Manager",
+                "freex_data_tools_scenario_manager_dialog",
+                "Scenario Manager dialog shows existing scenario list, add/edit fields, changing/result cells, comment, hidden/locked options, and action buttons."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new DataTableDialog(context.Sheet.Id, context.DataTableRange, _ => { }) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            FindDescendantByAutomationId<TextBox>(openDialog, "DataTableRowInputCellBox")!.Text = "E2";
+            FindDescendantByAutomationId<TextBox>(openDialog, "DataTableColumnInputCellBox")!.Text = "F2";
+            await WaitForDataToolsDialogRenderAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-006",
+                "data-table-dialog",
+                "Data Table",
+                "freex_data_tools_data_table_dialog",
+                "Data Table dialog shows row and column input cell editors with range picker buttons for a seeded two-variable table range."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new ConsolidateDialog(context.Sheet.Id, context.ConsolidateSourceRange.ToString(), "H2", _ => { }) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-006",
+                "consolidate-dialog",
+                "Consolidate",
+                "freex_data_tools_consolidate_dialog",
+                "Consolidate dialog shows source reference, all references list, destination cell, function selector, label options, and create-links option."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            openDialog = new ForecastSheetDialog(6) { Owner = this };
+            await ShowDataToolsTourDialogAsync(openDialog);
+            captures.Add(await CaptureDataToolsDialogWindowAsync(
+                openDialog,
+                outputDir,
+                "UI-CMD-DATA-006",
+                "forecast-sheet-dialog",
+                "Forecast Sheet",
+                "freex_data_tools_forecast_sheet_dialog",
+                "Forecast Sheet dialog shows forecast periods input and Create/Cancel command row."));
+            CloseDataToolsTourDialog(openDialog);
+            openDialog = null;
+
+            ValidateDataToolsDialogsTourEvidence(outputDir, captures);
+            await WriteDataToolsDialogsTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteDataToolsDialogsTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (openDialog is { IsVisible: true })
+                CloseDataToolsTourDialog(openDialog);
+        }
+    }
+
+    private DataToolsDialogsTourContext EnsureDataToolsDialogsTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Data tools dialogs tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        var cells = new (uint Row, uint Col, ScalarValue Value)[]
+        {
+            (1, 1, new TextValue("Region")),
+            (1, 2, new TextValue("Sales Rep")),
+            (1, 3, new TextValue("Amount")),
+            (1, 4, new TextValue("Status")),
+            (2, 1, new TextValue("North")),
+            (2, 2, new TextValue("Ada")),
+            (2, 3, new NumberValue(4200)),
+            (2, 4, new TextValue("Open")),
+            (3, 1, new TextValue("South")),
+            (3, 2, new TextValue("Beth")),
+            (3, 3, new NumberValue(3150)),
+            (3, 4, new TextValue("Closed")),
+            (4, 1, new TextValue("North")),
+            (4, 2, new TextValue("Ada")),
+            (4, 3, new NumberValue(4200)),
+            (4, 4, new TextValue("Open")),
+            (6, 1, new TextValue("East,125,Open")),
+            (7, 1, new TextValue("West,98,Closed")),
+            (8, 1, new TextValue("North,143,Open")),
+            (10, 1, new TextValue("Year")),
+            (10, 2, new TextValue("Revenue")),
+            (11, 1, new NumberValue(2023)),
+            (11, 2, new NumberValue(1200)),
+            (12, 1, new NumberValue(2024)),
+            (12, 2, new NumberValue(1420)),
+            (13, 1, new NumberValue(2025)),
+            (13, 2, new NumberValue(1630)),
+            (2, 5, new NumberValue(125)),
+            (2, 6, new NumberValue(42))
+        };
+
+        foreach (var (row, col, value) in cells)
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), value);
+
+        if (!_workbook.Scenarios.Any(scenario => string.Equals(scenario.Name, "Tour Base Case", StringComparison.Ordinal)))
+        {
+            _workbook.Scenarios.Add(new WorkbookScenario(
+                "Tour Base Case",
+                [
+                    new ScenarioCellValue(new CellAddress(sheet.Id, 2, 3), new NumberValue(4200)),
+                    new ScenarioCellValue(new CellAddress(sheet.Id, 3, 3), new NumberValue(3150))
+                ],
+                "Seeded scenario for deterministic Data Tools dialog visual evidence.",
+                Hidden: false,
+                Locked: true));
+        }
+
+        var removeDuplicatesRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 4));
+        var textToColumnsRange = new GridRange(new CellAddress(sheet.Id, 6, 1), new CellAddress(sheet.Id, 8, 1));
+        var dataTableRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 4, 4));
+        var consolidateSourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3));
+        SetSelectionRange(removeDuplicatesRange, removeDuplicatesRange.Start);
+        EnsureCellVisible(removeDuplicatesRange.Start);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+
+        return new DataToolsDialogsTourContext(
+            sheet,
+            textToColumnsRange,
+            removeDuplicatesRange,
+            dataTableRange,
+            consolidateSourceRange,
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 2, 5));
+    }
+
+    private DataValidationDialog CreateDataValidationTourDialog()
+    {
+        var validation = new DataValidation
+        {
+            Type = DvType.List,
+            Formula1 = "\"North,South,West\"",
+            AllowBlank = true,
+            ShowDropdown = true,
+            ShowInputMessage = true,
+            PromptTitle = "Choose a region",
+            PromptMessage = "Pick a region from the approved sales territories.",
+            ShowErrorMessage = true,
+            AlertStyle = DvAlertStyle.Stop,
+            ErrorTitle = "Invalid region",
+            ErrorMessage = "Use one of the listed region names."
+        };
+
+        return new DataValidationDialog(validation, _ => { })
+        {
+            Owner = this,
+            SelectionSource = "$A$2:$A$4"
+        };
+    }
+
+    private static async Task ShowDataToolsTourDialogAsync(Window dialog)
+    {
+        dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        dialog.Show();
+        dialog.Activate();
+        dialog.UpdateLayout();
+        await Task.Delay(450);
+        await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+    }
+
+    private static void CloseDataToolsTourDialog(Window dialog)
+    {
+        if (dialog.IsVisible)
+            dialog.Close();
+    }
+
+    private static void ClickDataToolsDialogButton(Window dialog, string content)
+    {
+        var button = FindDescendantByContent<Button>(dialog, content)
+            ?? throw new InvalidOperationException($"Data tools dialogs tour could not find button '{content}'.");
+        button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+    }
+
+    private static void SetDataToolsDialogRadio(Window dialog, string content)
+    {
+        var radio = FindDescendantByContent<RadioButton>(dialog, content)
+            ?? throw new InvalidOperationException($"Data tools dialogs tour could not find radio button '{content}'.");
+        radio.IsChecked = true;
+    }
+
+    private static void SelectDataToolsTab(Window dialog, int index)
+    {
+        var tabs = FindDescendant<TabControl>(dialog)
+            ?? throw new InvalidOperationException("Data tools dialogs tour could not find a tab control.");
+        tabs.SelectedIndex = index;
+    }
+
+    private static async Task WaitForDataToolsDialogRenderAsync(Window dialog)
+    {
+        dialog.UpdateLayout();
+        await Task.Delay(250);
+        await dialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+    }
+
+    private async Task<DataToolsDialogsTourManifestCapture> CaptureDataToolsDialogWindowAsync(
+        Window dialog,
+        string outputDir,
+        string commandRow,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        await WaitForDataToolsDialogRenderAsync(dialog);
+        await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+        return new DataToolsDialogsTourManifestCapture(
+            CaptureKey: $"data-tools-dialogs:{state}",
+            PairKey: $"interactive:data-tools-dialogs:{state}",
+            CatalogCommandRow: commandRow,
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: "RenderTargetBitmap-data-tools-dialog-window",
+            EvidenceSummary: evidenceSummary,
+            CaptureLogicalWidth: dialog.ActualWidth,
+            CaptureLogicalHeight: dialog.ActualHeight);
+    }
+
+    private static void DeleteDataToolsDialogsTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_data_tools_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, DataToolsDialogsTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateDataToolsDialogsTourEvidence(string outputDir, IReadOnlyList<DataToolsDialogsTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Data tools dialogs tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
+    private async Task CaptureInsertObjectsLinksTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteInsertObjectsLinksTourEvidence(outputDir);
+
+        var captures = new List<InsertObjectsLinksTourManifestCapture>();
+
+        try
+        {
+            await ApplyScreenshotTourWidthAsync(new RibbonScreenshotTourWidth("1100", 1100));
+            EnsureInsertObjectsLinksTourContext();
+
+            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
+                outputDir,
+                new HyperlinkDialog("https://freex.example/insert-objects", "FreeX visual evidence") { Owner = this },
+                "freex_insert_hyperlink_dialog_address_focus",
+                "hyperlink-dialog-address-focus",
+                "Insert Hyperlink dialog opened with the address box as the initial focused/select-all target.",
+                "RenderTargetBitmap-hyperlink-dialog-window",
+                "UI-CMD-INSERT-009"));
+
+            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
+                outputDir,
+                new SymbolPickerDialog { Owner = this },
+                "freex_insert_symbol_picker_opened",
+                "symbol-picker-opened",
+                "Symbol picker opened on the production Symbols tab/grid with insert/cancel actions visible.",
+                "RenderTargetBitmap-symbol-picker-dialog-window",
+                "UI-CMD-INSERT-009"));
+
+            await ApplyInsertObjectsLinksTourModelEvidenceAsync();
+            captures.Add(await CaptureInsertObjectsLinksWindowStateAsync(
+                outputDir,
+                "freex_insert_objects_grid_visuals",
+                "inserted-objects-grid-visuals",
+                "Worksheet visual state after applying model-backed hyperlink, rectangle shape, text box, picture placeholder, threaded comment, and note evidence.",
+                "UI-CMD-INSERT-008"));
+
+            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
+                outputDir,
+                new ThreadedCommentDialog("D6", null) { Owner = this },
+                "freex_insert_new_comment_dialog",
+                "new-threaded-comment-dialog",
+                "New Comment dialog opened for D6 with the threaded-comment text box focused.",
+                "RenderTargetBitmap-threaded-comment-dialog-window",
+                "UI-CMD-INSERT-010"));
+
+            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
+                outputDir,
+                new TextEntryDialog(
+                    UiText.Get("MainWindowMessage_CommentTitle"),
+                    UiText.Format("MainWindowMessage_CommentForCellLabel", "E6"),
+                    "Note evidence") { Owner = this },
+                "freex_insert_new_note_dialog",
+                "new-note-dialog",
+                "New Note dialog opened for E6 with the note text box focused.",
+                "RenderTargetBitmap-note-dialog-window",
+                "UI-CMD-INSERT-010"));
+
+            ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());
+            if (_reviewCommentsWindow is null)
+                throw new InvalidOperationException("Insert objects/links/text tour could not open the threaded comments list surface.");
+
+            captures.Add(await CaptureInsertObjectsLinksOwnedWindowAsync(
+                outputDir,
+                _reviewCommentsWindow,
+                "freex_insert_comments_list_surface",
+                "comments-list-surface",
+                "Review/Insert comments list surface showing the seeded threaded comment.",
+                "RenderTargetBitmap-comment-list-window",
+                "UI-CMD-INSERT-010"));
+            _reviewCommentsWindow.Close();
+            _reviewCommentsWindow = null;
+
+            ReviewShowNotesBtn_Click(this, new RoutedEventArgs());
+            if (_reviewNotesWindow is null)
+                throw new InvalidOperationException("Insert objects/links/text tour could not open the notes list surface.");
+
+            captures.Add(await CaptureInsertObjectsLinksOwnedWindowAsync(
+                outputDir,
+                _reviewNotesWindow,
+                "freex_insert_notes_list_surface",
+                "notes-list-surface",
+                "Review/Insert notes list surface showing the seeded note.",
+                "RenderTargetBitmap-note-list-window",
+                "UI-CMD-INSERT-010"));
+            _reviewNotesWindow.Close();
+            _reviewNotesWindow = null;
+
+            ValidateInsertObjectsLinksTourEvidence(outputDir, captures);
+            await WriteInsertObjectsLinksTourManifestAsync(outputDir, captures);
+        }
+        catch
+        {
+            DeleteInsertObjectsLinksTourEvidence(outputDir);
+            throw;
+        }
+    }
+
+    private async Task<InsertObjectsLinksTourManifestCapture> CaptureInsertObjectsLinksDialogAsync(
+        string outputDir,
+        Window dialog,
+        string fileName,
+        string state,
+        string evidenceSummary,
+        string captureMethod,
+        string commandRow)
+    {
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            await Task.Delay(300);
+            dialog.UpdateLayout();
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+            return CreateInsertObjectsLinksTourCapture(
+                state,
+                fileName,
+                evidenceSummary,
+                captureMethod,
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                commandRow);
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private async Task<InsertObjectsLinksTourManifestCapture> CaptureInsertObjectsLinksOwnedWindowAsync(
+        string outputDir,
+        Window window,
+        string fileName,
+        string state,
+        string evidenceSummary,
+        string captureMethod,
+        string commandRow)
+    {
+        window.Activate();
+        await Task.Delay(250);
+        window.UpdateLayout();
+        await CaptureWindowElementForScreenshotTourAsync(window, outputDir, fileName);
+        return CreateInsertObjectsLinksTourCapture(
+            state,
+            fileName,
+            evidenceSummary,
+            captureMethod,
+            window.ActualWidth,
+            window.ActualHeight,
+            commandRow);
+    }
+
+    private async Task<InsertObjectsLinksTourManifestCapture> CaptureInsertObjectsLinksWindowStateAsync(
+        string outputDir,
+        string fileName,
+        string state,
+        string evidenceSummary,
+        string commandRow)
+    {
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateInsertObjectsLinksTourCapture(
+            state,
+            fileName,
+            evidenceSummary,
+            "RenderTargetBitmap-window-full",
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            commandRow);
+    }
+
+    private InsertObjectsLinksTourManifestCapture CreateInsertObjectsLinksTourCapture(
+        string state,
+        string fileName,
+        string evidenceSummary,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        string commandRow) =>
+        new(
+            CaptureKey: $"insert-objects-links:{state}",
+            PairKey: $"interactive:insert-objects-links:{state}",
+            ScenarioId: "insert:objects-links-text",
+            State: state,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CounterpartFileName: $"interactive_insert_objects_links_{state.Replace("-", "_", StringComparison.Ordinal)}.png",
+            EvidenceSummary: evidenceSummary,
+            CommandRow: commandRow,
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight);
+
+    private void EnsureInsertObjectsLinksTourContext()
+    {
+        SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshReviewCommentNoteCommandStates();
+    }
+
+    private async Task ApplyInsertObjectsLinksTourModelEvidenceAsync()
+    {
+        var sheetId = _currentSheetId;
+        ExecuteInsertObjectsLinksTourCommand(new SetHyperlinkCommand(
+            sheetId,
+            new CellAddress(sheetId, 2, 2),
+            "https://freex.example/insert-objects",
+            "FreeX hyperlink",
+            new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage, "FreeX visual evidence", "")), "Insert Hyperlink");
+        ExecuteInsertObjectsLinksTourCommand(
+            new AddDrawingShapeCommand(sheetId, new CellAddress(sheetId, 4, 2), DrawingShapeKind.Rectangle),
+            "Insert Shape");
+        ExecuteInsertObjectsLinksTourCommand(
+            new AddTextBoxCommand(sheetId, new CellAddress(sheetId, 4, 5), "Text Box evidence"),
+            "Insert Text Box");
+        ExecuteInsertObjectsLinksTourCommand(
+            InsertObjectPlacementPlanner.CreateInsertPictureCommand(
+                sheetId,
+                new CellAddress(sheetId, 8, 2),
+                [1, 2, 3, 4],
+                "image/png"),
+            "Insert Picture");
+        ExecuteInsertObjectsLinksTourCommand(
+            new SetThreadedCommentCommand(sheetId, new CellAddress(sheetId, 6, 4), "Threaded comment evidence"),
+            "Threaded Comment");
+        ExecuteInsertObjectsLinksTourCommand(
+            new SetCommentCommand(sheetId, new CellAddress(sheetId, 6, 5), "Note evidence"),
+            "Comment");
+
+        SetActiveCell(new CellAddress(sheetId, 4, 2));
+        EnsureCellVisible(new CellAddress(sheetId, 8, 2));
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshReviewCommentNoteCommandStates();
+        await Task.Delay(350);
+    }
+
+    private void ExecuteInsertObjectsLinksTourCommand(IWorkbookCommand command, string title)
+    {
+        if (!TryExecuteCommand(command, title, out var outcome))
+            throw new InvalidOperationException($"Insert objects/links/text tour failed to apply '{title}': {outcome.ErrorMessage}");
+    }
+
+    private static void DeleteInsertObjectsLinksTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, InsertObjectsLinksTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateInsertObjectsLinksTourEvidence(
+        string outputDir,
+        IReadOnlyList<InsertObjectsLinksTourManifestCapture> captures)
+    {
+        if (captures.Count != 7)
+            throw new InvalidOperationException($"Insert objects/links/text tour expected 7 captures but created {captures.Count}.");
+
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Insert objects/links/text tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
     }
 
     private async Task CaptureKeyTipOverlayTourAsync(string outputDir)
@@ -4093,6 +5613,71 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeBordersDropdownTourManifest);
     }
 
+    private static async Task WriteHomeFontColorsTourManifestAsync(
+        string outputDir,
+        GridRange sampleRange,
+        IReadOnlyList<HomeFontColorsTourManifestCapture> captures)
+    {
+        var manifest = new HomeFontColorsTourManifest(
+            Tool: "FREEX_HOME_FONT_COLORS_TOUR",
+            EvidenceFamily: "home-formatting",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "UI-CAT-HOME-002A-M",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_home_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            SampleRange: sampleRange.ToString(),
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "RenderTargetBitmap; no global mouse, keyboard, or screen capture input is used"
+                : "foreground CopyFromScreen",
+            CaptureLogicalHeight: 760,
+            PlannedCaptureCount: HomeFontColorsTourExpectedFileNames().Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new HomeFontColorsTourManifestPairing(
+                "interactive:home-font-colors:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1 permits deterministic in-process WPF rendering; foreground mouse/keytip/input ownership remains a separate gap."
+                    : "FreeX main window owns foreground focus for screen captures."),
+            CoveredFeatures:
+            [
+                "font family",
+                "font size",
+                "grow font",
+                "shrink font",
+                "bold",
+                "italic",
+                "underline",
+                "double underline",
+                "strikethrough",
+                "font color",
+                "fill color",
+                "theme-backed font/fill colors",
+                "border presets",
+                "full implemented Borders menu",
+                "implemented Borders Line Color theme choices"
+            ],
+            RemainingGaps:
+            [
+                "foreground mouse/keytip evidence for Home font/color/border commands",
+                "Excel-paired Home font/color/border screenshots",
+                "full LCID/theme matrix",
+                "font/fill color gallery parity beyond the current custom color picker and swatch buttons",
+                "persistence breadth across save/reload and native JSON state"
+            ],
+            Captures: captures);
+
+        var path = Path.Combine(outputDir, HomeFontColorsTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeFontColorsTourManifest);
+    }
+
     private static async Task WriteQatUndoRedoTourManifestAsync(
         string outputDir,
         CellAddress address,
@@ -4274,6 +5859,130 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, StatusFooterTourManifestFileName);
         await using var stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest);
+    }
+
+    private static async Task WriteInsertObjectsLinksTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<InsertObjectsLinksTourManifestCapture> captures)
+    {
+        var manifest = new InsertObjectsLinksTourManifest(
+            Tool: "FREEX_INSERT_OBJECTS_LINKS_TOUR",
+            EvidenceFamily: "insert-objects-links-text",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "insert:objects-links-text",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_insert_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds:
+            [
+                "UI-CAT-INSERT-003",
+                "UI-CMD-INSERT-008",
+                "UI-CMD-INSERT-009",
+                "UI-CMD-INSERT-010"
+            ],
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new InsertObjectsLinksTourManifestPairing(
+                "interactive:insert-objects-links:<State>",
+                "manual-or-excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, or screen capture input is used."
+                    : "FreeX WPF window/dialog must own foreground focus before RenderTargetBitmap capture."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Insert Hyperlink dialog with address box default focus/select-all behavior",
+                "Symbol picker dialog with Symbols tab/grid and Insert/Cancel controls",
+                "Model-backed worksheet visuals for hyperlink, rectangle shape, text box, picture placeholder, threaded comment, and note",
+                "New Comment threaded-comment dialog",
+                "New Note text-entry dialog",
+                "Threaded comments list surface",
+                "Notes list surface"
+            ],
+            Limitations:
+            [
+                "This tour renders FreeX WPF surfaces in process with RenderTargetBitmap; it is not foreground CopyFromScreen or physical mouse/keytip/UIA proof.",
+                "The picture evidence uses the production InsertPictureCommand sizing/fallback path with deterministic placeholder bytes rather than opening the native Windows file picker.",
+                "Dialog captures show production initial states and focus targets but do not submit hyperlink, symbol, comment, or note dialogs through keyboard/mouse input.",
+                "The inserted worksheet object evidence is applied through command model calls so save/reload persistence and selection-handle drag evidence remain separate.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, InsertObjectsLinksTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.InsertObjectsLinksTourManifest);
+    }
+
+    private static async Task WriteViewPanesZoomTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<ViewPanesZoomTourManifestCapture> captures)
+    {
+        var manifest = new ViewPanesZoomTourManifest(
+            Tool: "FREEX_VIEW_PANES_ZOOM_TOUR",
+            EvidenceFamily: "view-panes-zoom",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "view-panes-zoom:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_view_panes_zoom_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds:
+            [
+                "UI-CAT-VIEW-001",
+                "UI-CAT-VIEW-002",
+                "UI-CMD-VIEW-001",
+                "UI-CMD-VIEW-002",
+                "UI-CMD-VIEW-003",
+                "UI-CMD-VIEW-004"
+            ],
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new ViewPanesZoomTourManifestPairing(
+                "interactive:view-panes-zoom:<State>",
+                "manual-or-excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 was set; no global mouse, keyboard, or screen capture input is used."
+                    : "FreeX main window must own foreground focus before each RenderTargetBitmap window capture."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "View ribbon selected with Normal, Page Layout, and Page Break Preview workbook states.",
+                "Show toggles for gridlines, headings, ruler, and formula bar.",
+                "Freeze Panes and Split pane model/visual states.",
+                "Zoom dialog, View ribbon 100%, and Zoom to Selection states.",
+                "Arrange All model state plus menu capture when the View ribbon button is discoverable.",
+                "Custom Views dialog opened with a saved custom view when implemented."
+            ],
+            Limitations:
+            [
+                "RenderTargetBitmap evidence only; it is not foreground CopyFromScreen proof.",
+                "The tour drives production handlers in process rather than physical mouse/keytip/UIA invocation.",
+                "Split divider drag, pane scrollbar interaction, Ctrl+wheel zoom, status slider drag, and native UIA RangeValue remain open.",
+                "Arrange All evidence records the workbook arrangement state and menu check state; multi-window OS layout proof remains open.",
+                "Custom Views evidence opens the production dialog with a saved view, but add/show/delete keyboard and persistence round-trip proof remains open.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, ViewPanesZoomTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.ViewPanesZoomTourManifest);
     }
 
     private static async Task WriteFormulaDiagnosticsTourManifestAsync(
@@ -4598,6 +6307,69 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HelpAboutLegalTourManifest);
     }
 
+    private static async Task WriteDataToolsDialogsTourManifestAsync(
+        string outputDir,
+        DataToolsDialogsTourContext context,
+        IReadOnlyList<DataToolsDialogsTourManifestCapture> captures)
+    {
+        var manifest = new DataToolsDialogsTourManifest(
+            Tool: "FREEX_DATA_TOOLS_DIALOGS_TOUR",
+            EvidenceFamily: "data-tools-dialogs",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "data-tools-dialogs:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_data_tools_<Surface>_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#UI-CAT-DATA-002",
+            CatalogCategoryId: "UI-CAT-DATA-002",
+            CatalogCommandRows: ["UI-CMD-DATA-003", "UI-CMD-DATA-004", "UI-CMD-DATA-005", "UI-CMD-DATA-006"],
+            SheetName: context.Sheet.Name,
+            TextToColumnsRange: context.TextToColumnsRange.ToString(),
+            RemoveDuplicatesRange: context.RemoveDuplicatesRange.ToString(),
+            DataTableRange: context.DataTableRange.ToString(),
+            ConsolidateSourceRange: context.ConsolidateSourceRange.ToString(),
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-data-tools-dialog-window",
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, keytip, range-picker, or screen capture input is used."
+                    : "Dialog captures abort unless the expected FreeX WPF dialog owns foreground focus immediately before render and file write."),
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Captures: captures,
+            CoveredStates:
+            [
+                "Advanced Filter dialog",
+                "Text to Columns wizard step 1 original data type",
+                "Text to Columns wizard step 2 delimited choices",
+                "Text to Columns wizard step 2 fixed-width ruler choices",
+                "Text to Columns wizard step 3 column format/destination choices",
+                "Remove Duplicates header checkbox and column list",
+                "Data Validation Settings tab",
+                "Data Validation Input Message tab",
+                "Data Validation Error Alert tab",
+                "Goal Seek dialog",
+                "Goal Seek Status dialog",
+                "Scenario Manager dialog",
+                "Data Table dialog",
+                "Consolidate dialog",
+                "Forecast Sheet dialog"
+            ],
+            Limitations:
+            [
+                "This bounded first tour opens production FreeX WPF dialog surfaces in process and captures them with RenderTargetBitmap.",
+                "The tour does not synthesize physical mouse/keytip/range-picker/Enter/Escape input; those interaction paths remain separate UI evidence gaps.",
+                "The tour avoids native import/open/save dialogs and does not submit data-tool mutations to the workbook.",
+                "Goal Seek status is seeded with a deterministic converged result instead of running iterative recalculation during screenshot capture.",
+                "No Microsoft Excel counterpart screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, DataToolsDialogsTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.DataToolsDialogsTourManifest);
+    }
+
     private static async Task WriteKeyTipOverlayTourManifestAsync(
         string outputDir,
         IReadOnlyList<KeyTipOverlayTourManifestCapture> captures)
@@ -4841,6 +6613,53 @@ public partial class MainWindow
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
 
+    private sealed record HomeFontColorsTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string SampleRange,
+        string CaptureStatus,
+        string CaptureMode,
+        double CaptureLogicalHeight,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        HomeFontColorsTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<string> CoveredFeatures,
+        IReadOnlyList<string> RemainingGaps,
+        IReadOnlyList<HomeFontColorsTourManifestCapture> Captures);
+
+    private sealed record HomeFontColorsTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record HomeFontColorsTourManifestCapture(
+        string State,
+        string FileName,
+        string CaptureKey,
+        string EvidencePurpose,
+        string CaptureMethod,
+        double LogicalWidth,
+        double LogicalHeight,
+        string ActiveCell,
+        string ActiveCellFontName,
+        double ActiveCellFontSize,
+        bool ActiveCellBold,
+        bool ActiveCellItalic,
+        bool ActiveCellUnderline,
+        bool ActiveCellDoubleUnderline,
+        bool ActiveCellStrikethrough,
+        string? ActiveCellFontColor,
+        string? ActiveCellFillColor,
+        IReadOnlyList<string> MenuHeaders);
+
     private sealed record WorksheetContextMenuTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -4981,6 +6800,53 @@ public partial class MainWindow
         string EvidenceSummary,
         string? Url,
         string? FocusedElementAutomationId,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
+
+    private sealed record DataToolsDialogsTourContext(
+        Sheet Sheet,
+        GridRange TextToColumnsRange,
+        GridRange RemoveDuplicatesRange,
+        GridRange DataTableRange,
+        GridRange ConsolidateSourceRange,
+        CellAddress GoalSeekSetCell,
+        CellAddress GoalSeekChangingCell);
+
+    private sealed record DataToolsDialogsTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string CatalogCategoryId,
+        IReadOnlyList<string> CatalogCommandRows,
+        string SheetName,
+        string TextToColumnsRange,
+        string RemoveDuplicatesRange,
+        string DataTableRange,
+        string ConsolidateSourceRange,
+        string CaptureStatus,
+        string CaptureMethod,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        IReadOnlyList<DataToolsDialogsTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record DataToolsDialogsTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string CatalogCommandRow,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        string EvidenceSummary,
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
 
@@ -5283,6 +7149,107 @@ public partial class MainWindow
         bool ZoomInButtonEnabled,
         string FormulaBarText);
 
+    private sealed record InsertObjectsLinksTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        InsertObjectsLinksTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<InsertObjectsLinksTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record InsertObjectsLinksTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record InsertObjectsLinksTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string FileName,
+        string OutputFileName,
+        string CounterpartFileName,
+        string EvidenceSummary,
+        string CommandRow,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
+
+    private sealed record ViewPanesZoomTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        ViewPanesZoomTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<ViewPanesZoomTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record ViewPanesZoomTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record ViewPanesZoomTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        string EvidencePurpose,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SheetName,
+        string ActiveRange,
+        string ViewMode,
+        bool ShowGridlines,
+        bool ShowHeadings,
+        bool ShowRulers,
+        bool FormulaBarVisible,
+        uint FrozenRows,
+        uint FrozenCols,
+        uint? SplitRow,
+        uint? SplitColumn,
+        string ZoomText,
+        double ZoomSliderValue,
+        string WindowArrangement,
+        int CustomViewCount,
+        bool ViewNormalChecked,
+        bool ViewPageLayoutChecked,
+        bool ViewPageBreakPreviewChecked,
+        bool ViewGridlinesChecked,
+        bool ViewHeadingsChecked,
+        bool ViewRulerChecked,
+        bool ViewFormulaBarChecked,
+        bool SplitButtonChecked);
+
     private sealed record FormulaDiagnosticsTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -5338,6 +7305,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(HomeNumberFormatDropdownTourManifest))]
     [JsonSerializable(typeof(HomeAlignmentNumberTourManifest))]
     [JsonSerializable(typeof(HomeBordersDropdownTourManifest))]
+    [JsonSerializable(typeof(HomeFontColorsTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(OptionsAccountTourManifest))]
@@ -5348,6 +7316,9 @@ public partial class MainWindow
     [JsonSerializable(typeof(TitlebarWindowChromeTourManifest))]
     [JsonSerializable(typeof(FormulaBarNameBoxTourManifest))]
     [JsonSerializable(typeof(StatusFooterTourManifest))]
+    [JsonSerializable(typeof(InsertObjectsLinksTourManifest))]
+    [JsonSerializable(typeof(DataToolsDialogsTourManifest))]
+    [JsonSerializable(typeof(ViewPanesZoomTourManifest))]
     [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
