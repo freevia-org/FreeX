@@ -99,6 +99,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-status-zoom-slider-rangevalue-set" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-rangevalue-set", SetFirstSliderRangeValue("Zoom", 150)),
             "freex-status-ctrl-wheel-grid-zoom" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-wheel-grid-zoom", CtrlWheelRelativeExpectZoom(0.36, 0.56, 120, 110)),
             "freex-sheet-tab-context-menu" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-context-menu", RightClickNamedElement("Sheet1", ControlType.TabItem)),
+            "freex-sheet-tab-click-select" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-click-select", SheetTabClickSelect()),
+            "freex-sheet-tab-double-click-rename" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-double-click-rename", SheetTabDoubleClickRename()),
+            "freex-sheet-tab-ctrl-click-grouping" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-ctrl-click-grouping", SheetTabModifierGrouping(NativeMethods.VK_CONTROL, "Ctrl+click", "Sheet3")),
+            "freex-sheet-tab-shift-click-grouping" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-shift-click-grouping", SheetTabModifierGrouping(NativeMethods.VK_SHIFT, "Shift+click", "Sheet5")),
+            "freex-sheet-tab-drag-reorder" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-drag-reorder", SheetTabDragReorder()),
+            "freex-sheet-tab-overflow-nav-click" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-overflow-nav-click", SheetTabOverflowNavClick()),
+            "freex-sheet-tab-overflow-activate-dialog" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-overflow-activate-dialog", SheetTabOverflowActivateDialog()),
             "freex-grid-drag-select" => RunFreeXMainWindowPointerScenario("freex-grid-drag-select", DragRelative(0.14, 0.56, 0.37, 0.69)),
             "freex-grid-row-column-resize" => RunFreeXMainWindowPointerScenario("freex-grid-row-column-resize", DragColumnAndRowResizeHandles()),
             "freex-grid-wheel-scroll" => RunFreeXMainWindowPointerScenario("freex-grid-wheel-scroll", WheelVerticalThenShiftHorizontal()),
@@ -1333,6 +1340,225 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return null;
         };
 
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabClickSelect()
+        => (handle, processId, _, _) =>
+        {
+            var blocked = SeedSheetsWithAddButton(handle, processId, 3);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var tab = FindVisibleSheetTabElement(handle, "Sheet2");
+            if (tab is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find seeded sheet tab 'Sheet2'.", options.OutputRoot, "freex");
+            }
+
+            blocked = GuardedClickElement(options.Scenario, processId, handle, tab, MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            _lastResultValidation = "Created Sheet2 and Sheet3 through physical Insert Sheet button clicks, then physically left-clicked the Sheet2 tab. Screenshot should show Sheet2 selected in the tab strip.";
+            return null;
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabDoubleClickRename()
+        => (handle, processId, _, _) =>
+        {
+            var blocked = SeedSheetsWithAddButton(handle, processId, 2);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var tab = FindVisibleSheetTabElement(handle, "Sheet2");
+            if (tab is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find seeded sheet tab 'Sheet2'.", options.OutputRoot, "freex");
+            }
+
+            blocked = GuardedDoubleClickElement(options.Scenario, processId, handle, tab);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var dialog = WindowFinder.FindProcessWindow(
+                processId,
+                window => window.Title.Contains("Rename Sheet", StringComparison.OrdinalIgnoreCase),
+                options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "dialog-not-found", "Did not detect Rename Sheet dialog after the physical tab double-click.", options.OutputRoot, "freex");
+            }
+
+            var dialogHandle = new IntPtr(dialog.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(dialogHandle, processId, "Rename Sheet", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(options.Scenario, guard, "before-rename-dialog-capture");
+            }
+
+            return CaptureWindow(
+                options.Scenario,
+                "freex",
+                dialog,
+                guard,
+                "complete",
+                "Created Sheet2 through the physical Insert Sheet button, then physically double-clicked the Sheet2 tab and captured the foreground Rename Sheet dialog.");
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabModifierGrouping(byte modifierKey, string gestureName, string targetSheetName)
+        => (handle, processId, _, _) =>
+        {
+            var targetCount = targetSheetName == "Sheet5" ? 5 : 3;
+            var blocked = SeedSheetsWithAddButton(handle, processId, targetCount);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var anchor = FindVisibleSheetTabElement(handle, "Sheet1");
+            var target = FindVisibleSheetTabElement(handle, targetSheetName);
+            if (anchor is null || target is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find Sheet1 and {targetSheetName} for {gestureName} grouping.", options.OutputRoot, "freex");
+            }
+
+            blocked = GuardedClickElement(options.Scenario, processId, handle, anchor, MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            blocked = GuardedModifiedClickElement(options.Scenario, processId, handle, target, modifierKey);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            _lastResultValidation = $"Created sheets through physical Insert Sheet clicks, selected Sheet1 as the grouping anchor, then performed a physical {gestureName} on {targetSheetName}. Screenshot should show grouped sheet-tab styling from the live modifier-click path.";
+            return null;
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabDragReorder()
+        => (handle, processId, _, _) =>
+        {
+            var blocked = SeedSheetsWithAddButton(handle, processId, 4);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var source = FindVisibleSheetTabElement(handle, "Sheet4");
+            var target = FindVisibleSheetTabElement(handle, "Sheet2");
+            if (source is null || target is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find Sheet4 and Sheet2 for drag reorder.", options.OutputRoot, "freex");
+            }
+
+            var sourceBounds = source.Current.BoundingRectangle;
+            var targetBounds = target.Current.BoundingRectangle;
+            blocked = GuardedDrag(
+                options.Scenario,
+                processId,
+                handle,
+                (int)(sourceBounds.Left + sourceBounds.Width / 2.0),
+                (int)(sourceBounds.Top + sourceBounds.Height / 2.0),
+                (int)(targetBounds.Left + targetBounds.Width / 2.0),
+                (int)(targetBounds.Top + targetBounds.Height / 2.0));
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+            var tabOrder = GetVisibleSheetTabOrder(handle);
+            var sheet4Index = tabOrder.IndexOf("Sheet4");
+            var sheet2Index = tabOrder.IndexOf("Sheet2");
+            if (sheet4Index < 0 || sheet2Index < 0 || sheet4Index > sheet2Index)
+            {
+                return CaptureResult.Blocked(options.Scenario, "reorder-validation-failed", $"Expected Sheet4 to move before Sheet2 after drag; observed order: {string.Join(", ", tabOrder)}.", options.OutputRoot, "freex");
+            }
+
+            _lastResultValidation = $"Created Sheet2-Sheet4 through physical Insert Sheet clicks, physically dragged Sheet4 onto Sheet2, and validated visible tab order: {string.Join(", ", tabOrder)}.";
+            return null;
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabOverflowNavClick()
+        => (handle, processId, _, _) =>
+        {
+            var blocked = SeedSheetsWithAddButton(handle, processId, 8);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var rightNav = FindSheetNavButton(handle, right: true);
+            if (rightNav is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the visible sheet-tab Scroll Tabs Right button after seeding overflow sheets.", options.OutputRoot, "freex");
+            }
+
+            blocked = GuardedClickElement(options.Scenario, processId, handle, rightNav, MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            _lastResultValidation = "Created Sheet2-Sheet8 through physical Insert Sheet button clicks, then physically clicked the visible Scroll Tabs Right overflow navigation button.";
+            return null;
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabOverflowActivateDialog()
+        => (handle, processId, _, _) =>
+        {
+            var blocked = SeedSheetsWithAddButton(handle, processId, 8);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var rightNav = FindSheetNavButton(handle, right: true);
+            if (rightNav is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the visible sheet-tab Scroll Tabs Right button after seeding overflow sheets.", options.OutputRoot, "freex");
+            }
+
+            blocked = GuardedClickElement(options.Scenario, processId, handle, rightNav, MouseButtonKind.Right);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var dialog = WindowFinder.FindProcessWindow(
+                processId,
+                window => window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase),
+                options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "dialog-not-found", "Did not detect Activate Sheet dialog after right-clicking the sheet-tab overflow navigation button.", options.OutputRoot, "freex");
+            }
+
+            var dialogHandle = new IntPtr(dialog.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(dialogHandle, processId, "Activate", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(options.Scenario, guard, "before-activate-dialog-capture");
+            }
+
+            return CaptureWindow(
+                options.Scenario,
+                "freex",
+                dialog,
+                guard,
+                "complete",
+                "Created Sheet2-Sheet8 through physical Insert Sheet button clicks, then physically right-clicked the sheet-tab overflow navigation button and captured the foreground Activate Sheet dialog.");
+        };
+
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragRelative(double startX, double startY, double endX, double endY)
         => (handle, processId, window, _) => GuardedDrag(
             options.Scenario,
@@ -1405,6 +1631,58 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
         return null;
     }
+
+    private CaptureResult? GuardedDoubleClickElement(string scenario, int processId, IntPtr handle, AutomationElement element)
+    {
+        var bounds = element.Current.BoundingRectangle;
+        if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+        {
+            return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", $"Element bounds were not usable: {bounds}.", options.OutputRoot, "freex");
+        }
+
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(scenario, guard, "before-pointer-double-click");
+        }
+
+        var x = (int)(bounds.Left + bounds.Width / 2.0);
+        var y = (int)(bounds.Top + bounds.Height / 2.0);
+        NativeMethods.SetCursorPos(x, y);
+        Thread.Sleep(100);
+        for (var i = 0; i < 2; i++)
+        {
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(45);
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(90);
+        }
+
+        Thread.Sleep(options.AfterInputDelay);
+        return null;
+    }
+
+    private CaptureResult? GuardedModifiedClickElement(string scenario, int processId, IntPtr handle, AutomationElement element, byte modifierKey)
+    {
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(scenario, guard, "before-modifier-keydown");
+        }
+
+        NativeMethods.KeybdEvent(modifierKey, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(80);
+        try
+        {
+            return GuardedClickElement(scenario, processId, handle, element, MouseButtonKind.Left);
+        }
+        finally
+        {
+            NativeMethods.KeybdEvent(modifierKey, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+            Thread.Sleep(80);
+        }
+    }
+
     private CaptureResult? GuardedDrag(string scenario, int processId, IntPtr handle, int startX, int startY, int endX, int endY)
     {
         var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
@@ -1430,6 +1708,162 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
         Thread.Sleep(options.AfterInputDelay);
         return null;
+    }
+
+    private CaptureResult? SeedSheetsWithAddButton(IntPtr handle, int processId, int targetSheetCount)
+    {
+        for (var sheetNumber = 2; sheetNumber <= targetSheetCount; sheetNumber++)
+        {
+            var sheetName = $"Sheet{sheetNumber}";
+            if (FindVisibleSheetTabElement(handle, sheetName) is not null)
+            {
+                continue;
+            }
+
+            var addButton = FindSheetAddButton(handle);
+            if (addButton is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find the Insert Sheet button before creating {sheetName}.", options.OutputRoot, "freex");
+            }
+
+            var blocked = GuardedClickElement(options.Scenario, processId, handle, addButton, MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+            while (DateTime.UtcNow < deadline)
+            {
+                if (FindVisibleSheetTabElement(handle, sheetName) is not null)
+                {
+                    break;
+                }
+
+                Thread.Sleep(100);
+            }
+
+            if (FindVisibleSheetTabElement(handle, sheetName) is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "sheet-seed-validation-failed", $"Insert Sheet click did not expose expected tab {sheetName}.", options.OutputRoot, "freex");
+            }
+        }
+
+        return null;
+    }
+
+    private static AutomationElement? FindNamedVisibleElement(IntPtr handle, string name, ControlType? controlType = null)
+    {
+        var root = AutomationElement.FromHandle(handle);
+        Condition condition = new PropertyCondition(AutomationElement.NameProperty, name);
+        if (controlType is not null)
+        {
+            condition = new AndCondition(
+                condition,
+                new PropertyCondition(AutomationElement.ControlTypeProperty, controlType));
+        }
+
+        return root.FindAll(TreeScope.Descendants, condition)
+            .Cast<AutomationElement>()
+            .Where(IsVisibleElement)
+            .OrderBy(element => element.Current.BoundingRectangle.Top)
+            .ThenBy(element => element.Current.BoundingRectangle.Left)
+            .FirstOrDefault();
+    }
+
+    private static AutomationElement? FindSheetAddButton(IntPtr handle)
+        => AutomationElement.FromHandle(handle)
+            .FindAll(TreeScope.Descendants, new AndCondition(
+                new PropertyCondition(AutomationElement.NameProperty, "Insert Sheet"),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button)))
+            .Cast<AutomationElement>()
+            .Where(IsVisibleElement)
+            .OrderByDescending(element => element.Current.BoundingRectangle.Top)
+            .ThenByDescending(element => element.Current.BoundingRectangle.Left)
+            .FirstOrDefault();
+
+    private static AutomationElement? FindVisibleSheetTabElement(IntPtr handle, string name)
+        => GetVisibleSheetTabElements(handle)
+            .Where(element => element.Current.Name.Equals(name, StringComparison.Ordinal))
+            .OrderByDescending(element => element.Current.BoundingRectangle.Width * element.Current.BoundingRectangle.Height)
+            .ThenByDescending(element => element.Current.BoundingRectangle.Top)
+            .FirstOrDefault();
+
+    private static AutomationElement? FindSheetNavButton(IntPtr handle, bool right)
+    {
+        var tabBounds = GetVisibleSheetTabElements(handle)
+            .Select(element => element.Current.BoundingRectangle)
+            .Where(bounds => !bounds.IsEmpty)
+            .ToList();
+        if (tabBounds.Count == 0)
+        {
+            return null;
+        }
+
+        var tabCenterY = tabBounds.Average(bounds => bounds.Top + bounds.Height / 2.0);
+        var buttons = AutomationElement.FromHandle(handle)
+            .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button))
+            .Cast<AutomationElement>()
+            .Where(IsVisibleElement)
+            .Where(element =>
+            {
+                var bounds = element.Current.BoundingRectangle;
+                var name = element.Current.Name ?? string.Empty;
+                return !name.Equals("Insert Sheet", StringComparison.OrdinalIgnoreCase) &&
+                       bounds.Width is >= 20 and <= 50 &&
+                       bounds.Height is >= 20 and <= 35 &&
+                       Math.Abs(bounds.Top + bounds.Height / 2.0 - tabCenterY) <= 16;
+            })
+            .OrderBy(element => element.Current.BoundingRectangle.Left)
+            .ToList();
+
+        if (buttons.Count == 0)
+        {
+            return null;
+        }
+
+        return right ? buttons[^1] : buttons[0];
+    }
+
+    private static List<string> GetVisibleSheetTabOrder(IntPtr handle)
+    {
+        return GetVisibleSheetTabElements(handle)
+            .GroupBy(element => element.Current.Name)
+            .Select(group => group.OrderBy(element => element.Current.BoundingRectangle.Width * element.Current.BoundingRectangle.Height).Last())
+            .OrderBy(element => element.Current.BoundingRectangle.Left)
+            .Select(element => element.Current.Name)
+            .ToList();
+    }
+
+    private static List<AutomationElement> GetVisibleSheetTabElements(IntPtr handle)
+    {
+        var root = AutomationElement.FromHandle(handle);
+        return root.FindAll(TreeScope.Descendants, Condition.TrueCondition)
+            .Cast<AutomationElement>()
+            .Where(IsVisibleElement)
+            .Where(element => IsDefaultSheetName(element.Current.Name))
+            .ToList();
+    }
+
+    private static bool IsDefaultSheetName(string name)
+        => name.StartsWith("Sheet", StringComparison.Ordinal) &&
+           name.Length > "Sheet".Length &&
+           name["Sheet".Length..].All(char.IsDigit);
+
+    private static bool IsVisibleElement(AutomationElement element)
+    {
+        try
+        {
+            var bounds = element.Current.BoundingRectangle;
+            return !bounds.IsEmpty &&
+                   bounds.Width >= 1 &&
+                   bounds.Height >= 1 &&
+                   !element.Current.IsOffscreen;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
     }
 
     private CaptureResult? ValidateZoomSliderValue(IntPtr handle, double expectedSliderValue, string trigger)
@@ -1913,6 +2347,13 @@ internal sealed record CaptureOptions(
           freex-status-zoom-slider-rangevalue-set
           freex-status-ctrl-wheel-grid-zoom
           freex-sheet-tab-context-menu
+          freex-sheet-tab-click-select
+          freex-sheet-tab-double-click-rename
+          freex-sheet-tab-ctrl-click-grouping
+          freex-sheet-tab-shift-click-grouping
+          freex-sheet-tab-drag-reorder
+          freex-sheet-tab-overflow-nav-click
+          freex-sheet-tab-overflow-activate-dialog
           freex-grid-drag-select
           freex-grid-row-column-resize
           freex-grid-wheel-scroll
