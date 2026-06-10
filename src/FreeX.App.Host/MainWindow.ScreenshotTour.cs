@@ -67,6 +67,8 @@ public partial class MainWindow
     private const string InsertObjectsLinksTourOutputDirectoryName = "insert-objects-links-tour";
     private const string DataToolsDialogsTourManifestFileName = "data_tools_dialogs_tour_manifest.json";
     private const string DataToolsDialogsTourOutputDirectoryName = "data-tools-dialogs-tour";
+    private const string DataSortFilterOutlineTourManifestFileName = "data_sort_filter_outline_tour_manifest.json";
+    private const string DataSortFilterOutlineTourOutputDirectoryName = "data-sort-filter-outline-tour";
     private const string InsertTablesChartsTourManifestFileName = "insert_tables_charts_tour_manifest.json";
     private const string InsertTablesChartsTourOutputDirectoryName = "insert-tables-charts-tour";
     private const string ViewPanesZoomTourManifestFileName = "view_panes_zoom_tour_manifest.json";
@@ -159,13 +161,14 @@ public partial class MainWindow
         var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
         var insertObjectsLinksTour = Environment.GetEnvironmentVariable("FREEX_INSERT_OBJECTS_LINKS_TOUR") == "1";
         var dataToolsDialogsTour = Environment.GetEnvironmentVariable("FREEX_DATA_TOOLS_DIALOGS_TOUR") == "1";
+        var dataSortFilterOutlineTour = Environment.GetEnvironmentVariable("FREEX_DATA_SORT_FILTER_OUTLINE_TOUR") == "1";
         var insertTablesChartsTour = Environment.GetEnvironmentVariable("FREEX_INSERT_TABLES_CHARTS_TOUR") == "1";
         var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
         var pageLayoutSetupTour = Environment.GetEnvironmentVariable("FREEX_PAGE_LAYOUT_SETUP_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
         var formulaAuthoringNamesTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_AUTHORING_NAMES_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeClipboardCellsEditingTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeClipboardCellsEditingTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -182,7 +185,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeClipboardCellsEditingTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeClipboardCellsEditingTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -225,6 +228,7 @@ public partial class MainWindow
         bool formulaBarNameBoxTour,
         bool insertObjectsLinksTour,
         bool dataToolsDialogsTour,
+        bool dataSortFilterOutlineTour,
         bool insertTablesChartsTour,
         bool viewPanesZoomTour,
         bool pageLayoutSetupTour,
@@ -286,6 +290,8 @@ public partial class MainWindow
             await CaptureInsertObjectsLinksTourAsync(Path.Combine(outputDir, InsertObjectsLinksTourOutputDirectoryName));
         if (dataToolsDialogsTour)
             await CaptureDataToolsDialogsTourAsync(Path.Combine(outputDir, DataToolsDialogsTourOutputDirectoryName));
+        if (dataSortFilterOutlineTour)
+            await CaptureDataSortFilterOutlineTourAsync(Path.Combine(outputDir, DataSortFilterOutlineTourOutputDirectoryName));
         if (insertTablesChartsTour)
             await CaptureInsertTablesChartsTourAsync(Path.Combine(outputDir, InsertTablesChartsTourOutputDirectoryName));
         if (viewPanesZoomTour)
@@ -5991,6 +5997,382 @@ public partial class MainWindow
         }
     }
 
+    private async Task CaptureDataSortFilterOutlineTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteDataSortFilterOutlineTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 768;
+        await Task.Delay(700);
+
+        var context = EnsureDataSortFilterOutlineTourContext();
+        var captures = new List<DataSortFilterOutlineTourManifestCapture>();
+        Window? openWindow = null;
+
+        try
+        {
+            SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Data"));
+            await WaitForRibbonScreenshotRenderPassAsync();
+            captures.Add(await CaptureDataSortFilterOutlineWindowAsync(
+                outputDir,
+                "UI-CAT-DATA-001",
+                "data-tab-sort-filter-outline-surface",
+                "Data tab",
+                "freex_data_sort_filter_outline_data_tab_surface",
+                "Data tab shows Get Data, Refresh All, Sort & Filter, and Outline command groups against seeded tabular data."));
+
+            openWindow = new SortDialog(
+                levels:
+                [
+                    new SortDialogLevel(0, true),
+                    new SortDialogLevel(2, false)
+                ],
+                columnChoices: SortDialog.BuildColumnChoices(context.Sheet, context.TableRange, hasHeaders: true),
+                genericColumnChoices: SortDialog.BuildColumnChoices(context.Sheet, context.TableRange, hasHeaders: false),
+                rowChoices: SortDialog.BuildRowChoices(context.TableRange),
+                colorChoices: SortDialog.BuildColorChoices(_workbook, context.Sheet, context.TableRange),
+                cellColorChoices: SortDialog.BuildColorChoices(_workbook, context.Sheet, context.TableRange, SortOn.CellColor),
+                fontColorChoices: SortDialog.BuildColorChoices(_workbook, context.Sheet, context.TableRange, SortOn.FontColor))
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openWindow);
+            captures.Add(await CaptureDataSortFilterOutlineDialogAsync(
+                openWindow,
+                outputDir,
+                "UI-CMD-DATA-002",
+                "sort-dialog-multi-level",
+                "Sort dialog",
+                "freex_data_sort_filter_outline_sort_dialog",
+                "Sort dialog shows header-aware column choices, two sort levels, Sort On/Order columns, level commands, Options, OK, and Cancel."));
+            CloseDataToolsTourDialog(openWindow);
+            openWindow = null;
+
+            openWindow = new SortOptionsDialog(new SortDialogOptions(
+                CaseSensitive: true,
+                LeftToRight: true,
+                FirstKeySortOrder: "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec"))
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openWindow);
+            captures.Add(await CaptureDataSortFilterOutlineDialogAsync(
+                openWindow,
+                outputDir,
+                "UI-CMD-DATA-002",
+                "sort-options-left-to-right",
+                "Sort Options dialog",
+                "freex_data_sort_filter_outline_sort_options_dialog",
+                "Sort Options dialog shows Case sensitive, custom first-key sort order, and left-to-right orientation choices."));
+            CloseDataToolsTourDialog(openWindow);
+            openWindow = null;
+
+            if (CreateAutoFilterFlyoutDialog(context.Sheet, context.FilterHeaderCell, null, out var autoFilterPlan) is not { } filterDialog ||
+                autoFilterPlan is null)
+            {
+                throw new InvalidOperationException("Data sort/filter/outline tour could not create the AutoFilter flyout.");
+            }
+
+            openWindow = filterDialog;
+            filterDialog.Show();
+            filterDialog.Activate();
+            filterDialog.UpdateLayout();
+            await Task.Delay(350);
+            var searchBox = FindDescendantByAutomationName<TextBox>(filterDialog, UiText.Get("AutoFilter_Search3"))
+                ?? FindDescendant<TextBox>(filterDialog)
+                ?? throw new InvalidOperationException("Data sort/filter/outline tour could not find the AutoFilter search box.");
+            searchBox.Text = "Open";
+            await WaitForDataToolsDialogRenderAsync(filterDialog);
+            captures.Add(await CaptureDataSortFilterOutlineDialogAsync(
+                filterDialog,
+                outputDir,
+                "UI-CMD-DATA-008",
+                "autofilter-flyout-search-open",
+                "AutoFilter flyout",
+                "freex_data_sort_filter_outline_autofilter_search_open",
+                "AutoFilter flyout for the Status header shows sort commands, text filters, search text 'Open', and filtered checklist values."));
+            CloseDataToolsTourDialog(filterDialog);
+            openWindow = null;
+
+            openWindow = new SubtotalDialog(SubtotalDialog.BuildColumnChoices(context.Sheet, context.TableRange))
+            {
+                Owner = this
+            };
+            await ShowDataToolsTourDialogAsync(openWindow);
+            captures.Add(await CaptureDataSortFilterOutlineDialogAsync(
+                openWindow,
+                outputDir,
+                "UI-CMD-DATA-007",
+                "subtotal-dialog-defaults",
+                "Subtotal dialog",
+                "freex_data_sort_filter_outline_subtotal_dialog",
+                "Subtotal dialog shows At each change in, Use function, Add subtotal to, replace/page-break/summary options, Remove All, OK, and Cancel."));
+            CloseDataToolsTourDialog(openWindow);
+            openWindow = null;
+
+            SetSelectionRange(context.OutlineRange, context.OutlineRange.Start);
+            GroupRowsBtn_Click(this, new RoutedEventArgs());
+            await WaitForDataSortFilterOutlineWindowAsync(context.OutlineRange.Start);
+            captures.Add(await CaptureDataSortFilterOutlineWindowAsync(
+                outputDir,
+                "UI-CMD-DATA-007",
+                "outline-group-expanded",
+                "Worksheet grid",
+                "freex_data_sort_filter_outline_group_expanded",
+                "Worksheet grid shows seeded rows after the production Group command assigned row outline levels while detail remains expanded."));
+
+            CollapseGroupBtn_Click(this, new RoutedEventArgs());
+            await WaitForDataSortFilterOutlineWindowAsync(context.OutlineRange.Start);
+            captures.Add(await CaptureDataSortFilterOutlineWindowAsync(
+                outputDir,
+                "UI-CMD-DATA-007",
+                "outline-hide-detail-collapsed",
+                "Worksheet grid",
+                "freex_data_sort_filter_outline_hide_detail_collapsed",
+                "Worksheet grid shows the Hide Detail command collapsed the grouped rows through GroupHiddenRows."));
+
+            ExpandGroupBtn_Click(this, new RoutedEventArgs());
+            await WaitForDataSortFilterOutlineWindowAsync(context.OutlineRange.Start);
+            captures.Add(await CaptureDataSortFilterOutlineWindowAsync(
+                outputDir,
+                "UI-CMD-DATA-007",
+                "outline-show-detail-expanded",
+                "Worksheet grid",
+                "freex_data_sort_filter_outline_show_detail_expanded",
+                "Worksheet grid shows the Show Detail command restored the grouped rows while outline levels remain."));
+
+            await CaptureDataSortFilterOutlineRibbonMenuAsync(
+                outputDir,
+                captures,
+                "Group",
+                "UI-CMD-DATA-007",
+                "group-dropdown-open",
+                "freex_data_sort_filter_outline_group_dropdown",
+                "Group dropdown shows Group and disabled Auto Outline menu entries.");
+            await CaptureDataSortFilterOutlineRibbonMenuAsync(
+                outputDir,
+                captures,
+                "Ungroup",
+                "UI-CMD-DATA-007",
+                "ungroup-dropdown-open",
+                "freex_data_sort_filter_outline_ungroup_dropdown",
+                "Ungroup dropdown shows Ungroup and Clear Outline menu entries.");
+
+            ValidateDataSortFilterOutlineTourEvidence(outputDir, captures);
+            await WriteDataSortFilterOutlineTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteDataSortFilterOutlineTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            if (openWindow is { IsVisible: true })
+                CloseDataToolsTourDialog(openWindow);
+        }
+    }
+
+    private DataSortFilterOutlineTourContext EnsureDataSortFilterOutlineTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Data sort/filter/outline tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        var tableRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 9, 5));
+        foreach (var address in tableRange.AllCells())
+            sheet.ClearCell(address);
+
+        var rows = new (string Region, string Rep, double Amount, string Status, string Month)[]
+        {
+            ("North", "Ada", 4200, "Open", "Jan"),
+            ("South", "Beth", 3150, "Closed", "Feb"),
+            ("North", "Cora", 5100, "Open", "Mar"),
+            ("East", "Drew", 2800, "Pending", "Apr"),
+            ("West", "Eli", 6300, "Open", "May"),
+            ("East", "Fay", 2400, "Closed", "Jun"),
+            ("South", "Gus", 4700, "Open", "Jul"),
+            ("West", "Hana", 3900, "Pending", "Aug")
+        };
+
+        var headers = new[] { "Region", "Rep", "Amount", "Status", "Month" };
+        for (var index = 0; index < headers.Length; index++)
+            sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)(index + 1)), new TextValue(headers[index]));
+
+        for (var index = 0; index < rows.Length; index++)
+        {
+            var row = (uint)(index + 2);
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue(rows[index].Region));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(rows[index].Rep));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(rows[index].Amount));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 4), new TextValue(rows[index].Status));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 5), new TextValue(rows[index].Month));
+        }
+
+        sheet.AutoFilter = new WorksheetAutoFilterModel(tableRange.ToString(), null);
+        sheet.FilterHiddenRows.Clear();
+        sheet.HiddenRows.Clear();
+        sheet.GroupHiddenRows.Clear();
+        sheet.RowOutlineLevels.Clear();
+        sheet.ShowOutlineSymbols = true;
+        ClearRememberedAutoFilterCommand();
+
+        SetSelectionRange(tableRange, tableRange.Start);
+        EnsureCellVisible(tableRange.Start);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+
+        var outlineRange = new GridRange(new CellAddress(sheet.Id, 3, 1), new CellAddress(sheet.Id, 6, 5));
+        return new DataSortFilterOutlineTourContext(
+            sheet,
+            tableRange,
+            outlineRange,
+            new CellAddress(sheet.Id, 1, 4));
+    }
+
+    private async Task WaitForDataSortFilterOutlineWindowAsync(CellAddress visibleCell)
+    {
+        EnsureCellVisible(visibleCell);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+        await Task.Delay(300);
+        await WaitForRibbonScreenshotRenderPassAsync();
+    }
+
+    private async Task<DataSortFilterOutlineTourManifestCapture> CaptureDataSortFilterOutlineWindowAsync(
+        string outputDir,
+        string catalogRow,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return new DataSortFilterOutlineTourManifestCapture(
+            CaptureKey: $"data-sort-filter-outline:{state}",
+            PairKey: $"interactive:data-sort-filter-outline:{state}",
+            CatalogRow: catalogRow,
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: "RenderTargetBitmap-window-full",
+            EvidenceSummary: evidenceSummary,
+            CaptureLogicalWidth: ActualWidth,
+            CaptureLogicalHeight: Math.Min(ActualHeight, 760));
+    }
+
+    private async Task<DataSortFilterOutlineTourManifestCapture> CaptureDataSortFilterOutlineDialogAsync(
+        Window dialog,
+        string outputDir,
+        string catalogRow,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        await WaitForDataToolsDialogRenderAsync(dialog);
+        await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+        return new DataSortFilterOutlineTourManifestCapture(
+            CaptureKey: $"data-sort-filter-outline:{state}",
+            PairKey: $"interactive:data-sort-filter-outline:{state}",
+            CatalogRow: catalogRow,
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: "RenderTargetBitmap-wpf-window",
+            EvidenceSummary: evidenceSummary,
+            CaptureLogicalWidth: dialog.ActualWidth,
+            CaptureLogicalHeight: dialog.ActualHeight);
+    }
+
+    private async Task CaptureDataSortFilterOutlineRibbonMenuAsync(
+        string outputDir,
+        List<DataSortFilterOutlineTourManifestCapture> captures,
+        string commandName,
+        string catalogRow,
+        string state,
+        string fileName,
+        string evidenceSummary)
+    {
+        var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)
+            ?? throw new InvalidOperationException($"Data sort/filter/outline tour could not find the {commandName} ribbon button.");
+        var menu = button.ContextMenu
+            ?? throw new InvalidOperationException($"Data sort/filter/outline tour could not find the {commandName} ribbon menu.");
+
+        try
+        {
+            MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
+            menu.PlacementTarget = button;
+            menu.Placement = PlacementMode.Bottom;
+            menu.IsOpen = true;
+            await Task.Delay(350);
+            menu.UpdateLayout();
+            await CaptureElementAsync(menu, outputDir, fileName);
+            captures.Add(new DataSortFilterOutlineTourManifestCapture(
+                CaptureKey: $"data-sort-filter-outline:{state}",
+                PairKey: $"interactive:data-sort-filter-outline:{state}",
+                CatalogRow: catalogRow,
+                State: state,
+                Surface: $"{commandName} dropdown",
+                FileName: fileName,
+                OutputFileName: $"{fileName}.png",
+                CaptureMethod: "RenderTargetBitmap-ribbon-context-menu",
+                EvidenceSummary: evidenceSummary,
+                CaptureLogicalWidth: menu.ActualWidth,
+                CaptureLogicalHeight: menu.ActualHeight));
+        }
+        finally
+        {
+            menu.IsOpen = false;
+        }
+    }
+
+    private static T? FindDescendantByAutomationName<T>(DependencyObject root, string automationName)
+        where T : FrameworkElement
+    {
+        if (root is T element && string.Equals(AutomationProperties.GetName(element), automationName, StringComparison.Ordinal))
+            return element;
+
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            var match = FindDescendantByAutomationName<T>(child, automationName);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
+    }
+
+    private static void DeleteDataSortFilterOutlineTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_data_sort_filter_outline_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, DataSortFilterOutlineTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateDataSortFilterOutlineTourEvidence(string outputDir, IReadOnlyList<DataSortFilterOutlineTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Data sort/filter/outline tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
     private async Task CaptureInsertObjectsLinksTourAsync(string outputDir)
     {
         Directory.CreateDirectory(outputDir);
@@ -8705,6 +9087,68 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.DataToolsDialogsTourManifest);
     }
 
+    private static async Task WriteDataSortFilterOutlineTourManifestAsync(
+        string outputDir,
+        DataSortFilterOutlineTourContext context,
+        IReadOnlyList<DataSortFilterOutlineTourManifestCapture> captures)
+    {
+        var hiddenRows = context.Sheet.GroupHiddenRows.OrderBy(row => row).Select(row => row.ToString()).ToArray();
+        var outlinedRows = context.Sheet.RowOutlineLevels
+            .OrderBy(entry => entry.Key)
+            .Select(entry => $"{entry.Key}:{entry.Value}")
+            .ToArray();
+
+        var manifest = new DataSortFilterOutlineTourManifest(
+            Tool: "FREEX_DATA_SORT_FILTER_OUTLINE_TOUR",
+            EvidenceFamily: "data-sort-filter-outline",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "data-sort-filter-outline:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_data_sort_filter_outline_<Surface>_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#UI-CAT-DATA-001",
+            CatalogRows: ["UI-CAT-DATA-001", "UI-CAT-DATA-003", "UI-CMD-DATA-001", "UI-CMD-DATA-002", "UI-CMD-DATA-007", "UI-CMD-DATA-008"],
+            SheetName: context.Sheet.Name,
+            TableRange: context.TableRange.ToString(),
+            FilterHeaderCell: context.FilterHeaderCell.ToA1(),
+            OutlineRange: context.OutlineRange.ToString(),
+            RowOutlineLevels: outlinedRows,
+            GroupHiddenRowsAfterShowDetail: hiddenRows,
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-window-dialog-menu",
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, native file dialog, range-picker, or screen capture input is used."
+                    : "Window, dialog, and menu captures abort unless the expected FreeX WPF surface owns foreground focus immediately before render and file write."),
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Captures: captures,
+            CoveredStates:
+            [
+                "Data tab command surface for Get Data, Refresh All, Sort & Filter, and Outline",
+                "Sort dialog with multiple levels and header-aware columns",
+                "Sort Options dialog with case-sensitive, custom first-key order, and left-to-right orientation",
+                "AutoFilter flyout searched to a deterministic Status value",
+                "Subtotal dialog default command surface",
+                "Outline Group, Hide Detail, and Show Detail visual states",
+                "Group and Ungroup dropdown menu states"
+            ],
+            Limitations:
+            [
+                "This tour captures production FreeX WPF surfaces in process and does not synthesize physical mouse clicks, keytips, access keys, or UI Automation invoke.",
+                "Get Data is represented by the Data tab command surface only; the native OpenFileDialog import workflow is intentionally not opened in this deterministic tour.",
+                "Refresh All is represented by its Data tab command surface only; no external data source refresh or recalculation assertion is performed by this screenshot slice.",
+                "The AutoFilter flyout is opened through the existing in-app flyout factory rather than OS pointer input, then the search box is set directly for deterministic checklist filtering.",
+                "Subtotal is captured as the production dialog surface; this tour does not submit subtotal insertion or verify generated subtotal rows.",
+                "No Microsoft Excel counterpart screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, DataSortFilterOutlineTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.DataSortFilterOutlineTourManifest);
+    }
+
     private static async Task WriteInsertTablesChartsTourManifestAsync(
         string outputDir,
         InsertTablesChartsTourContext context,
@@ -9287,6 +9731,50 @@ public partial class MainWindow
         string CaptureKey,
         string PairKey,
         string CatalogCommandRow,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        string EvidenceSummary,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
+
+    private sealed record DataSortFilterOutlineTourContext(
+        Sheet Sheet,
+        GridRange TableRange,
+        GridRange OutlineRange,
+        CellAddress FilterHeaderCell);
+
+    private sealed record DataSortFilterOutlineTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogRows,
+        string SheetName,
+        string TableRange,
+        string FilterHeaderCell,
+        string OutlineRange,
+        IReadOnlyList<string> RowOutlineLevels,
+        IReadOnlyList<string> GroupHiddenRowsAfterShowDetail,
+        string CaptureStatus,
+        string CaptureMethod,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        IReadOnlyList<DataSortFilterOutlineTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record DataSortFilterOutlineTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string CatalogRow,
         string State,
         string Surface,
         string FileName,
@@ -10001,6 +10489,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(StatusFooterTourManifest))]
     [JsonSerializable(typeof(InsertObjectsLinksTourManifest))]
     [JsonSerializable(typeof(DataToolsDialogsTourManifest))]
+    [JsonSerializable(typeof(DataSortFilterOutlineTourManifest))]
     [JsonSerializable(typeof(InsertTablesChartsTourManifest))]
     [JsonSerializable(typeof(ViewPanesZoomTourManifest))]
     [JsonSerializable(typeof(PageLayoutSetupTourManifest))]
