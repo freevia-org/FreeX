@@ -12,6 +12,11 @@ public sealed record TextToColumnsRangeSelectionRequest(
 
 public sealed partial class TextToColumnsDialog : Window
 {
+    private const double DialogDefaultWidth = 560d;
+    private const double DialogDefaultHeight = 560d;
+    private const double DialogMinimumWidth = 520d;
+    private const double DialogMinimumHeight = 500d;
+
     private static readonly string[] DateColumnFormatLabels = ["MDY", "DMY", "YMD", "MYD", "DYM", "YDM"];
 
     private readonly RadioButton _delimitedButton = new() { Content = UiText.Get("TextToColumns_Delimited"), IsChecked = true };
@@ -42,6 +47,12 @@ public sealed partial class TextToColumnsDialog : Window
     private readonly TextBox _thousandsSeparatorBox = new() { Text = ",", Width = 42 };
     private readonly CheckBox _trailingMinusBox = new() { Content = UiText.Get("TextToColumns_TrailingMinusForNegativeNumbers") };
     private readonly ListView _previewGrid = new() { Height = 88 };
+    private readonly ScrollViewer _wizardBodyScrollViewer = new()
+    {
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        CanContentScroll = false
+    };
     private readonly IReadOnlyList<string> _previewRows;
     private readonly Dictionary<int, TextToColumnsColumnFormat> _columnFormats = [];
     private readonly CellAddress _defaultDestination;
@@ -77,9 +88,11 @@ public sealed partial class TextToColumnsDialog : Window
         _destinationBox.Text = _defaultDestination.ToA1();
 
         Title = UiText.Get("TextToColumns_TextToColumns");
-        Width = 500;
-        Height = 430;
-        ResizeMode = ResizeMode.NoResize;
+        Width = DialogDefaultWidth;
+        Height = DialogDefaultHeight;
+        MinWidth = DialogMinimumWidth;
+        MinHeight = DialogMinimumHeight;
+        ResizeMode = ResizeMode.CanResizeWithGrip;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
@@ -116,17 +129,25 @@ public sealed partial class TextToColumnsDialog : Window
         };
         _formatSkipButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.Skip);
 
-        var root = new DockPanel { Margin = new Thickness(12) };
+        var root = new Grid { Margin = new Thickness(12) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 330 });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var header = new StackPanel();
+        header.Children.Add(_wizardHeader);
+        header.Children.Add(_wizardInstruction);
+        Grid.SetRow(header, 0);
+        root.Children.Add(header);
+
         var buttons = CreateWizardButtonRow();
-        DockPanel.SetDock(buttons, Dock.Bottom);
+        Grid.SetRow(buttons, 2);
         root.Children.Add(buttons);
 
         var body = new StackPanel();
-        DockPanel.SetDock(body, Dock.Top);
-        root.Children.Add(body);
-
-        body.Children.Add(_wizardHeader);
-        body.Children.Add(_wizardInstruction);
+        _wizardBodyScrollViewer.Content = body;
+        Grid.SetRow(_wizardBodyScrollViewer, 1);
+        root.Children.Add(_wizardBodyScrollViewer);
         _originalDataTypePanel = CreateOriginalDataTypePanel();
         _delimiterPanel = CreateDelimiterPanel();
         _fixedWidthPanel = CreateFixedWidthPanel();
