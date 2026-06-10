@@ -43,7 +43,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (harness.CanUseRequestedRibbonWidth(1465))
             {
                 harness.TallLargeRibbonCommandLabels.Should().Contain(
-                    ["PivotTable", "Recommended PivotTables", "Table", "Pictures", "Shapes", "Link", "Comment", "Text Box", "Header & Footer", "Symbol"],
+                    ["PivotTable", "Table", "Pictures", "Shapes", "Link", "Comment", "Text Box", "Header & Footer", "Symbol"],
                     $"Insert should spend available width on tall icon-label commands before compacting lower-priority groups; {harness.DebugActiveRibbonChildren}");
                 harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                     0.5,
@@ -54,7 +54,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (harness.CanUseRequestedRibbonWidth(1100))
             {
                 harness.TallLargeRibbonCommandLabels.Should().Contain(
-                    ["PivotTable", "Recommended PivotTables", "Table", "Pictures", "Shapes"],
+                    ["PivotTable", "Table", "Pictures", "Shapes"],
                     $"Insert should keep primary command groups large at medium desktop widths until space truly requires compacting; {harness.DebugActiveRibbonChildren}");
                 harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                     0.5,
@@ -64,7 +64,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void InsertRibbon_CollapsesPrimaryCommandsWhenVeryNarrow()
+    public void InsertRibbon_KeepsImplementedTablesCommandsVisibleWhenNarrow()
     {
         StaTestRunner.Run(() =>
         {
@@ -72,10 +72,11 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
             harness.SelectRibbonTab("Insert", 700);
 
-            harness.CollapsedActiveRibbonGroupNames.Should().Contain("Tables", harness.DebugActiveRibbonChildren);
-            harness.CollapsedActiveMenuHeaders("Tables").Should().Contain(
-                ["PivotTable", "Recommended PivotTables", "Table"],
-                "very narrow Insert widths should compact primary commands into the collapsed group menu without losing access");
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Tables", harness.DebugActiveRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["PivotTable", "Table"],
+                "removing unsupported Recommended PivotTables should let implemented primary table commands remain visible at narrow widths");
+            harness.VisibleRibbonCommandLabels.Should().NotContain("Recommended PivotTables", harness.DebugActiveRibbonChildren);
         });
     }
 
