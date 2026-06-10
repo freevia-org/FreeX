@@ -3176,7 +3176,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem))
             .Cast<AutomationElement>()
             .Where(element => ElementMatchesProcessAndName(element, processId, nameContains))
-            .OrderByDescending(element =>
+            .OrderBy(element => IsOffscreen(element) ? 1 : 0)
+            .ThenByDescending(element =>
             {
                 var bounds = element.Current.BoundingRectangle;
                 return bounds.Width * bounds.Height;
@@ -3211,14 +3212,52 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     {
         try
         {
-            return element.Current.ProcessId == processId &&
-                   (element.Current.Name ?? string.Empty).Contains(nameContains, StringComparison.OrdinalIgnoreCase) &&
-                   !element.Current.IsOffscreen;
+            if (element.Current.ProcessId != processId)
+            {
+                return false;
+            }
+
+            var expected = NormalizeMenuSearchText(nameContains);
+            var name = NormalizeMenuSearchText(element.Current.Name);
+            var automationId = NormalizeMenuSearchText(element.Current.AutomationId);
+            return name.Contains(expected, StringComparison.OrdinalIgnoreCase) ||
+                   automationId.Contains(expected, StringComparison.OrdinalIgnoreCase);
         }
         catch (ElementNotAvailableException)
         {
             return false;
         }
+    }
+
+    private static bool IsOffscreen(AutomationElement element)
+    {
+        try
+        {
+            return element.Current.IsOffscreen;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return true;
+        }
+    }
+
+    private static string NormalizeMenuSearchText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(text.Length);
+        foreach (var character in text)
+        {
+            if (char.IsLetterOrDigit(character) || char.IsWhiteSpace(character))
+            {
+                builder.Append(character);
+            }
+        }
+
+        return builder.ToString();
     }
 
     private static void SendCtrl1()
