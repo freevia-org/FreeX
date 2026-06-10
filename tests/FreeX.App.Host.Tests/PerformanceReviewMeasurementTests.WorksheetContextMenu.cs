@@ -15,7 +15,8 @@ public sealed partial class PerformanceReviewMeasurementTests
             WorksheetContextMenuTargetKind.ColumnSelection,
             WorksheetContextMenuTargetKind.Picture,
             WorksheetContextMenuTargetKind.Shape,
-            WorksheetContextMenuTargetKind.TextBox
+            WorksheetContextMenuTargetKind.TextBox,
+            WorksheetContextMenuTargetKind.Chart
         };
         var states = new[]
         {
@@ -51,7 +52,7 @@ public sealed partial class PerformanceReviewMeasurementTests
             $"allocated_bytes={result.Measurement.AllocatedBytes:N0}");
 
         result.Measurement.StepCount.Should().Be(2_000);
-        result.CallCount.Should().Be(72_000);
+        result.CallCount.Should().Be(84_000);
         result.CommandItemCount.Should().BeGreaterThan(0);
         result.Measurement.TotalMilliseconds.Should().BeGreaterThan(0);
     }

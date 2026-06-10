@@ -31,7 +31,7 @@ public sealed class GridViewPointerCursorTests
         hoverCursorBlock.Should().Contain("var hoveringObjectBody = selectedObjectDragKind == ObjectDragKind.None");
         hoverCursorBlock.Should().Contain("var hitObject = HitTestDrawingObject(pos);");
         hoverCursorBlock.Should().Contain("hitObject.Id != Guid.Empty");
-        hoverCursorBlock.Should().Contain("hitObject.Kind != ObjectKind.Chart");
+        hoverCursorBlock.Should().NotContain("hitObject.Kind != ObjectKind.Chart");
         hoverCursorBlock.Should().Contain("if (hoveringObjectBody)");
         hoverCursorBlock.Should().Contain("Cursor = Cursors.SizeAll;");
         hoverCursorBlock.IndexOf("if (hoveringObjectBody)", StringComparison.Ordinal)
@@ -263,6 +263,24 @@ public sealed class GridViewPointerCursorTests
             .Should().BeLessThan(objectMouseUpBlock.IndexOf("_objectRotationPreviewDegrees = 0;", StringComparison.Ordinal));
         objectMouseUpBlock.IndexOf("ObjectRotated?.Invoke(id, kind, rotationDegrees);", StringComparison.Ordinal)
             .Should().BeLessThan(objectMouseUpBlock.IndexOf("InvalidateVisual();", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ChartObjectDragMouseUpCommitsBoundsInsteadOfDrawingAnchorEvents()
+    {
+        var inputSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
+        var eventsSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Events.cs");
+        var mouseUpStart = inputSource.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
+        var objectMouseUpBlock = inputSource[
+            inputSource.IndexOf("if (_objectDragKind != ObjectDragKind.None)", mouseUpStart, StringComparison.Ordinal)..
+            inputSource.IndexOf("if (_marginDragEdge.HasValue)", mouseUpStart, StringComparison.Ordinal)];
+
+        eventsSource.Should().Contain("ChartBoundsChanged");
+        objectMouseUpBlock.Should().Contain("if (kind == ObjectKind.Chart)");
+        objectMouseUpBlock.Should().Contain("CommitChartObjectBoundsChange(id, startRect, currentRect);");
+        objectMouseUpBlock.Should().Contain("ObjectMoved?.Invoke(id, kind, newAnchor.Value);");
+        objectMouseUpBlock.IndexOf("if (kind == ObjectKind.Chart)", StringComparison.Ordinal)
+            .Should().BeLessThan(objectMouseUpBlock.IndexOf("ObjectMoved?.Invoke(id, kind, newAnchor.Value);", StringComparison.Ordinal));
     }
 
     [Fact]

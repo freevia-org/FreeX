@@ -13,6 +13,9 @@ public static class WorksheetContextMenuPlanner
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> TextBoxCommands =
         BuildDrawingObjectCommands("Format Text Box...", includeReorder: false);
 
+    private static readonly IReadOnlyList<WorksheetContextMenuCommand> ChartCommands =
+        BuildChartCommands();
+
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> RowSelectionCommands =
         BuildRowSelectionCommands();
 
@@ -33,6 +36,7 @@ public static class WorksheetContextMenuPlanner
             WorksheetContextMenuTargetKind.Picture => PictureCommands,
             WorksheetContextMenuTargetKind.Shape => ShapeCommands,
             WorksheetContextMenuTargetKind.TextBox => TextBoxCommands,
+            WorksheetContextMenuTargetKind.Chart => ChartCommands,
             WorksheetContextMenuTargetKind.RowSelection => RowSelectionCommands,
             WorksheetContextMenuTargetKind.ColumnSelection => ColumnSelectionCommands,
             _ => WorksheetCommandCache[GetStateCacheIndex(state)]
@@ -172,6 +176,19 @@ public static class WorksheetContextMenuPlanner
         new("Reset Crop", WorksheetContextMenuAction.ResetPictureCrop, AccessHeader: "_Reset Crop"),
         WorksheetContextMenuCommand.Separator,
         new("Edit Alt Text...", WorksheetContextMenuAction.EditAltText, AccessHeader: "Edit _Alt Text..."),
+        new("Selection Pane...", WorksheetContextMenuAction.SelectionPane, AccessHeader: "_Selection Pane...")
+    ]);
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildChartCommands() =>
+        Freeze([
+        new("Format Chart Area...", WorksheetContextMenuAction.FormatChartArea, AccessHeader: "_Format Chart Area..."),
+        new("Select Data...", WorksheetContextMenuAction.SelectChartData, AccessHeader: "Select _Data..."),
+        new("Change Chart Type...", WorksheetContextMenuAction.ChangeChartType, AccessHeader: "_Change Chart Type..."),
+        new("Chart Styles...", WorksheetContextMenuAction.ChartStyles, AccessHeader: "Chart _Styles..."),
+        new("Chart Titles...", WorksheetContextMenuAction.ChartTitles, AccessHeader: "Chart _Titles..."),
+        new("Size and Properties...", WorksheetContextMenuAction.ChartSizeAndProperties, AccessHeader: "Si_ze and Properties..."),
+        new("Move Chart...", WorksheetContextMenuAction.MoveChart, AccessHeader: "_Move Chart..."),
+        WorksheetContextMenuCommand.Separator,
         new("Selection Pane...", WorksheetContextMenuAction.SelectionPane, AccessHeader: "_Selection Pane...")
     ]);
 
@@ -396,6 +413,13 @@ public enum WorksheetContextMenuAction
     RotateDrawingObject,
     ShapeFill,
     ShapeOutline,
+    FormatChartArea,
+    SelectChartData,
+    ChangeChartType,
+    ChartStyles,
+    ChartTitles,
+    ChartSizeAndProperties,
+    MoveChart,
     BringForward,
     SendBackward,
     EditAltText,
@@ -408,6 +432,7 @@ public enum WorksheetContextMenuTargetKind
     Picture,
     Shape,
     TextBox,
+    Chart,
     RowSelection,
     ColumnSelection
 }

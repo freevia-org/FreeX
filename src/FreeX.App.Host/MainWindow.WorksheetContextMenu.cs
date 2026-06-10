@@ -373,6 +373,27 @@ public partial class MainWindow
             case WorksheetContextMenuAction.ShapeOutline:
                 ObjectOutlineBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.FormatChartArea:
+                FormatChartAreaBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.SelectChartData:
+                SelectChartDataSourceBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ChangeChartType:
+                ChangeChartTypeBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ChartStyles:
+                ChartStylesBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ChartTitles:
+                ChartTitlesBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ChartSizeAndProperties:
+                ResizeSelectedChartObject();
+                break;
+            case WorksheetContextMenuAction.MoveChart:
+                MoveChartBtn_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.BringForward:
                 BringForwardBtn_Click(this, new RoutedEventArgs());
                 break;
@@ -458,10 +479,19 @@ public partial class MainWindow
     private WorksheetContextMenuTargetKind? GetSelectedWorksheetContextMenuTargetKind(Sheet? sheet, CellAddress address)
     {
         if (SheetGrid.SelectedObjectId == Guid.Empty ||
-            GetSelectedDrawingObjectTargetKind() is not { } selectedKind)
+            SheetGrid.SelectedObjectKind == FreeX.App.UI.ObjectKind.None)
         {
             return null;
         }
+
+        if (SheetGrid.SelectedObjectKind == FreeX.App.UI.ObjectKind.Chart)
+            return GetSelectedChartOnCurrentSheet() is { } selectedChart &&
+                IsChartContextualRibbonTarget(selectedChart)
+                ? WorksheetContextMenuTargetKind.Chart
+                : null;
+
+        if (GetSelectedDrawingObjectTargetKind() is not { } selectedKind)
+            return null;
 
         var target = DrawingTargetResolver.GetTargetDrawingObject(
             sheet,

@@ -140,6 +140,22 @@ public sealed class GridViewContextMenuTests
     }
 
     [Fact]
+    public void GridViewRightClick_ClearsSelectedObjectBeforeCellContextMenuFallback()
+    {
+        var inputSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
+        var rightClickBlock = inputSource[
+            inputSource.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)..
+            inputSource.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal)];
+
+        rightClickBlock.Should().Contain("if (SelectedObjectId != Guid.Empty)");
+        rightClickBlock.Should().Contain("SelectedObjectKind = ObjectKind.None;");
+        rightClickBlock.Should().Contain("_selectedObjectKind = ObjectKind.None;");
+        rightClickBlock.IndexOf("SelectedObjectKind = ObjectKind.None;", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(rightClickBlock.IndexOf("if (HitTestViewportCell(Viewport, default, pos) is { } contextCell)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void GridViewRightClick_IgnoresContextMenuWhileCapturedDragIsActive()
     {
         var inputSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
