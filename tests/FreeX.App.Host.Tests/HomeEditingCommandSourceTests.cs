@@ -91,8 +91,13 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("UiText.Get(\"FillSeriesStep_SelectNumericOrDateStartMessage\")");
         source.Should().Contain("UiText.Get(\"FillSeriesStep_Title\")");
         source.Should().Contain("private void FlashFillMenuItem_Click(object sender, RoutedEventArgs e) => TryFlashFill();");
-        source.Should().Contain("currentRange => CreateFlashFillCommand(sheet, currentRange)");
-        source.Should().Contain("FlashFillRangePlanner.Plan(sheet, range)");
+        source.Should().Contain("var command = CreateFlashFillCommand(range.Value, out var hasExamples, out var hasFillTargets);");
+        source.Should().Contain("No examples found. Type at least one value in the fill column.");
+        source.Should().Contain("Flash Fill found examples, but there are no blank adjacent cells to fill.");
+        source.Should().Contain("currentRange => CreateFlashFillCommand(currentRange, out _, out _) ?? new FailedWorkbookCommand(\"Flash Fill could not find blank adjacent cells to fill.\")");
+        source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId)");
+        source.Should().Contain("new CompositeWorkbookCommand(\"Flash Fill\", commands)");
+        source.Should().Contain("FlashFillRangePlanner.Plan(sheet, sheetRange)");
         source.Should().Contain("private void SortAZMenuItem_Click(object sender, RoutedEventArgs e)    => SortAscButton_Click(sender, e);");
         source.Should().Contain("private void SortZAMenuItem_Click(object sender, RoutedEventArgs e)    => SortDescButton_Click(sender, e);");
         source.Should().Contain("private void SortCustomMenuItem_Click(object sender, RoutedEventArgs e) => SortCustomButton_Click(sender, e);");

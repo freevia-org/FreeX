@@ -146,13 +146,29 @@ public partial class MainWindow
         var range = SheetGrid.SelectedRange;
         if (range is null) return;
 
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
+        var command = CreateFlashFillCommand(range.Value, out var hasExamples, out var hasFillTargets);
+        if (command is null)
+        {
+            if (!hasExamples)
+            {
+                _messageService.ShowWarning(
+                    "No examples found. Type at least one value in the fill column.",
+                    "Flash Fill");
+            }
+            else if (!hasFillTargets)
+            {
+                _messageService.ShowInfo(
+                    "Flash Fill found examples, but there are no blank adjacent cells to fill.",
+                    "Flash Fill");
+            }
+
+            return;
+        }
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Flash Fill",
                 range.Value,
-                currentRange => CreateFlashFillCommand(sheet, currentRange),
+                currentRange => CreateFlashFillCommand(currentRange, out _, out _) ?? new FailedWorkbookCommand("Flash Fill could not find blank adjacent cells to fill."),
                 out var outcome))
             return;
 
@@ -160,10 +176,37 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private FlashFillCommand CreateFlashFillCommand(Sheet sheet, GridRange range)
+    private IWorkbookCommand? CreateFlashFillCommand(
+        GridRange range,
+        out bool hasExamples,
+        out bool hasFillTargets)
     {
-        var plan = FlashFillRangePlanner.Plan(sheet, range);
-        return plan.CreateCommand(_currentSheetId);
+        hasExamples = false;
+        hasFillTargets = false;
+
+        var commands = new List<IWorkbookCommand>();
+        foreach (var sheetId in CurrentGroupedEditSheetIds())
+        {
+            var sheet = _workbook.GetSheet(sheetId);
+            if (sheet is null)
+                continue;
+
+            var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
+            var plan = FlashFillRangePlanner.Plan(sheet, sheetRange);
+            hasExamples |= FlashFillRangePlanner.HasExamples(sheet, plan);
+            if (!FlashFillRangePlanner.HasFillTargets(sheet, plan))
+                continue;
+
+            hasFillTargets = true;
+            commands.Add(plan.CreateCommand(sheetId));
+        }
+
+        return commands.Count switch
+        {
+            0 => null,
+            1 => commands[0],
+            _ => new CompositeWorkbookCommand("Flash Fill", commands)
+        };
     }
 
     private void SortFilterPickerBtn_Click(object sender, RoutedEventArgs e)
