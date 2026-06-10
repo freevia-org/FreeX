@@ -31,8 +31,7 @@ public sealed class PivotTableDataSourceDialog : Window
         _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(sourceRangeText);
         Title = UiText.Get("PivotTableDataSource_ChangePivotTableDataSource");
-        Width = 420;
-        Height = 160;
+        DialogSizing.ApplyContentHeight(this, width: 420, minHeight: 160);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;

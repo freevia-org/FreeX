@@ -96,8 +96,7 @@ public sealed partial class PivotTableOptionsDialog : Window
     {
         Result = FromPivotTable(pivotTable, cache);
         Title = UiText.Get("PivotTableOptions_PivotTableOptions");
-        Width = 520;
-        Height = 500;
+        DialogSizing.ApplyContentHeight(this, width: 520, minHeight: 500);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;

@@ -61,8 +61,7 @@ public sealed class PivotTableDialog : Window
             openFieldList: true);
 
         Title = UiText.Get("PivotTable_CreatePivotTable");
-        Width = 500;
-        Height = 320;
+        DialogSizing.ApplyContentHeight(this, width: 500, minHeight: 320);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
