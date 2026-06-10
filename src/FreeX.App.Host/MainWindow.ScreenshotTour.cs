@@ -17,6 +17,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -35,6 +36,8 @@ public partial class MainWindow
     private const string HomeNumberFormatDropdownTourCaptureFileName = "freex_dropdown_home_number_format_opened";
     private const string HomeBordersDropdownTourManifestFileName = "home_borders_dropdown_tour_manifest.json";
     private const string HomeBordersDropdownTourCaptureFileName = "freex_dropdown_home_borders_opened";
+    private const string HomeFontColorsTourManifestFileName = "home_font_colors_tour_manifest.json";
+    private const string HomeFontColorsTourOutputDirectoryName = "home-font-colors-tour";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
     private const string KeyTipOverlayTourManifestFileName = "keytip_overlay_tour_manifest.json";
@@ -117,6 +120,7 @@ public partial class MainWindow
         var autoFilterFlyoutTour = Environment.GetEnvironmentVariable("FREEX_AUTOFILTER_FLYOUT_TOUR") == "1";
         var homeNumberFormatDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR") == "1";
         var homeBordersDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_BORDERS_DROPDOWN_TOUR") == "1";
+        var homeFontColorsTour = Environment.GetEnvironmentVariable("FREEX_HOME_FONT_COLORS_TOUR") == "1";
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
@@ -125,7 +129,7 @@ public partial class MainWindow
         var titlebarWindowChromeTour = Environment.GetEnvironmentVariable("FREEX_TITLEBAR_WINDOW_CHROME_TOUR") == "1";
         var formulaBarNameBoxTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_BAR_NAME_BOX_TOUR") == "1";
         var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -142,7 +146,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -171,6 +175,7 @@ public partial class MainWindow
         bool autoFilterFlyoutTour,
         bool homeNumberFormatDropdownTour,
         bool homeBordersDropdownTour,
+        bool homeFontColorsTour,
         bool worksheetContextMenuTour,
         bool keyTipOverlayTour,
         bool printPreviewTour,
@@ -194,6 +199,9 @@ public partial class MainWindow
 
         if (homeBordersDropdownTour)
             await CaptureHomeBordersDropdownTourAsync(Path.Combine(outputDir, "home-borders-dropdown-tour"));
+
+        if (homeFontColorsTour)
+            await CaptureHomeFontColorsTourAsync(Path.Combine(outputDir, HomeFontColorsTourOutputDirectoryName));
 
         if (worksheetContextMenuTour)
             await CaptureWorksheetContextMenuTourAsync(Path.Combine(outputDir, "worksheet-context-menu-tour"));
@@ -520,6 +528,387 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, $"{HomeBordersDropdownTourCaptureFileName}.png");
         if (!File.Exists(path))
             throw new InvalidOperationException("Home Borders dropdown tour did not create the planned FreeX dropdown capture.");
+    }
+
+    private async Task CaptureHomeFontColorsTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteHomeFontColorsTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 820;
+        await Task.Delay(700);
+
+        var sampleRange = EnsureHomeFontColorsTourContext();
+        var captures = new List<HomeFontColorsTourManifestCapture>();
+
+        try
+        {
+            var homeTab = RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home");
+            SelectRibbonTourTab(homeTab);
+            SetSelectionRange(sampleRange, sampleRange.Start);
+            UpdateViewport();
+            RefreshToolbar();
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(350);
+
+            await CaptureCurrentWindowAsync(outputDir, "freex_home_font_colors_grid_styled", 760);
+            captures.Add(CreateHomeFontColorsWindowCapture(
+                "styled-grid",
+                "freex_home_font_colors_grid_styled",
+                "Real grid render for font family/size, grow/shrink-sized rows, bold, italic, underline, double underline, strikethrough, font color, fill color, theme-backed colors, and representative borders."));
+
+            captures.Add(await CaptureHomeFontColorsComboPopupAsync(
+                outputDir,
+                FontNameBox,
+                "font-family-dropdown",
+                "freex_home_font_family_dropdown_opened",
+                "Font family dropdown opened from the production Home Font combo box."));
+
+            captures.Add(await CaptureHomeFontColorsComboPopupAsync(
+                outputDir,
+                FontSizeBox,
+                "font-size-dropdown",
+                "freex_home_font_size_dropdown_opened",
+                "Font size dropdown opened from the production Home Font Size combo box."));
+
+            captures.Add(await CaptureHomeFontColorsMenuAsync(
+                outputDir,
+                UnderlineButton,
+                "underline-menu",
+                "freex_home_underline_menu_opened",
+                "Underline split-menu with single and double underline choices."));
+
+            var borderMenuCapture = await CaptureHomeFontColorsMenuAsync(
+                outputDir,
+                BordersMenuButton,
+                "borders-menu",
+                "freex_home_borders_full_menu_opened",
+                "Full Home Borders menu with presets, draw/erase commands, line color, line style, and More Borders.");
+            captures.Add(borderMenuCapture);
+
+            captures.Add(await CaptureHomeFontColorsBorderLineColorSubmenuAsync(
+                outputDir,
+                "freex_home_borders_line_color_submenu_opened"));
+
+            ValidateHomeFontColorsTourEvidence(outputDir, captures);
+            await WriteHomeFontColorsTourManifestAsync(outputDir, sampleRange, captures);
+        }
+        catch
+        {
+            DeleteHomeFontColorsTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            FontNameBox.IsDropDownOpen = false;
+            FontSizeBox.IsDropDownOpen = false;
+            if (UnderlineButton.ContextMenu is { } underlineMenu)
+                underlineMenu.IsOpen = false;
+            if (BordersMenuButton.ContextMenu is { } bordersMenu)
+                bordersMenu.IsOpen = false;
+        }
+    }
+
+    private GridRange EnsureHomeFontColorsTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Home font/colors tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+
+        var labels = new[]
+        {
+            "Calibri 11",
+            "Aptos 14",
+            "Grow 18",
+            "Shrink 9",
+            "Bold",
+            "Italic",
+            "Underline",
+            "Double underline",
+            "Strikethrough",
+            "Font color",
+            "Fill color",
+            "Theme colors",
+            "All borders",
+            "Outside border",
+            "Bottom double"
+        };
+
+        for (uint row = 1; row <= 5; row++)
+        {
+            for (uint col = 1; col <= 5; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                sheet.ClearCell(address);
+                var index = (int)((row - 1) * 5 + (col - 1));
+                if (index < labels.Length)
+                    sheet.SetCell(address, new TextValue(labels[index]));
+            }
+        }
+
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 1), new StyleDiff(FontName: "Calibri", FontSize: 11));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 2), new StyleDiff(FontName: "Aptos", FontSize: 14));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 3), new StyleDiff(FontSize: FontSizePlanner.Increase(16)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 4), new StyleDiff(FontSize: FontSizePlanner.Decrease(10)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 1, 5), new StyleDiff(Bold: true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 1), new StyleDiff(Italic: true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 2), CellStyleDiffPlanner.UnderlineDiff(true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 3), CellStyleDiffPlanner.DoubleUnderlineDiff(true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 4), CellStyleDiffPlanner.StrikethroughDiff(true));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 2, 5), new StyleDiff(FontColor: new CellColor(192, 0, 0)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 1), new StyleDiff(FillColor: new CellColor(255, 242, 204)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 2), new StyleDiff(
+            FontThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+            FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.6)));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 3), BorderShortcutService.GetAllBorderDiff(BorderStyle.Thin, CellColor.Black));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 4), new StyleDiff(
+            BorderTop: new CellBorder(BorderStyle.Thick, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1)),
+            BorderRight: new CellBorder(BorderStyle.Thick, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1)),
+            BorderBottom: new CellBorder(BorderStyle.Thick, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1)),
+            BorderLeft: new CellBorder(BorderStyle.Thick, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1))));
+        ApplyHomeFontColorsTourStyle(new CellAddress(sheet.Id, 3, 5), new StyleDiff(
+            BorderBottom: new CellBorder(BorderStyle.Double, _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent2))));
+
+        var sampleRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 5));
+        SetActiveCell(sampleRange.Start);
+        SetSelectionRange(sampleRange, sampleRange.Start);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        return sampleRange;
+    }
+
+    private void ApplyHomeFontColorsTourStyle(CellAddress address, StyleDiff diff)
+    {
+        var range = new GridRange(address, address);
+        if (!TryExecuteApplyStyle(range, diff, "Apply Style"))
+            throw new InvalidOperationException($"Home font/colors tour could not apply style to {address}.");
+    }
+
+    private async Task<HomeFontColorsTourManifestCapture> CaptureHomeFontColorsComboPopupAsync(
+        string outputDir,
+        ComboBox comboBox,
+        string state,
+        string fileName,
+        string evidencePurpose)
+    {
+        comboBox.Focus();
+        comboBox.ApplyTemplate();
+        comboBox.IsDropDownOpen = true;
+        comboBox.UpdateLayout();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(350);
+
+        try
+        {
+            var popupChild = FindOpenPopupChild(comboBox)
+                ?? throw new InvalidOperationException($"Home font/colors tour could not locate the open {state} popup.");
+
+            await CaptureElementAsync(popupChild, outputDir, fileName);
+            return CreateHomeFontColorsElementCapture(state, fileName, evidencePurpose, popupChild.ActualWidth, popupChild.ActualHeight);
+        }
+        finally
+        {
+            comboBox.IsDropDownOpen = false;
+        }
+    }
+
+    private async Task<HomeFontColorsTourManifestCapture> CaptureHomeFontColorsMenuAsync(
+        string outputDir,
+        ButtonBase placementTarget,
+        string state,
+        string fileName,
+        string evidencePurpose)
+    {
+        var menu = placementTarget.ContextMenu
+            ?? throw new InvalidOperationException($"Home font/colors tour could not locate the {state} context menu.");
+
+        menu.PlacementTarget = placementTarget;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+        menu.UpdateLayout();
+        await Task.Delay(350);
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        await CaptureElementAsync(menu, outputDir, fileName);
+        var capture = CreateHomeFontColorsElementCapture(state, fileName, evidencePurpose, menu.ActualWidth, menu.ActualHeight);
+        menu.IsOpen = false;
+        return capture;
+    }
+
+    private async Task<HomeFontColorsTourManifestCapture> CaptureHomeFontColorsBorderLineColorSubmenuAsync(string outputDir, string fileName)
+    {
+        var menu = BordersMenuButton.ContextMenu
+            ?? throw new InvalidOperationException("Home font/colors tour could not locate the Borders context menu.");
+
+        menu.PlacementTarget = BordersMenuButton;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+        menu.UpdateLayout();
+        await Task.Delay(250);
+
+        var lineColorItem = FindMenuItemByHeader(menu.Items, UiText.Get("MainWindow_Header_LineColor"))
+            ?? throw new InvalidOperationException("Home font/colors tour could not locate the Borders Line Color submenu.");
+        lineColorItem.IsSubmenuOpen = true;
+        lineColorItem.UpdateLayout();
+        await Task.Delay(350);
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        try
+        {
+            var popupChild = FindOpenPopupChild(lineColorItem)
+                ?? throw new InvalidOperationException("Home font/colors tour could not locate the open Borders Line Color submenu popup.");
+            await CaptureElementAsync(popupChild, outputDir, fileName);
+            return CreateHomeFontColorsElementCapture(
+                "borders-line-color-submenu",
+                fileName,
+                "Borders Line Color submenu showing implemented black, gray, Accent 1, and Accent 2 theme color choices.",
+                popupChild.ActualWidth,
+                popupChild.ActualHeight);
+        }
+        finally
+        {
+            lineColorItem.IsSubmenuOpen = false;
+            menu.IsOpen = false;
+        }
+    }
+
+    private static MenuItem? FindMenuItemByHeader(ItemCollection items, string header)
+    {
+        foreach (var item in items)
+        {
+            if (item is not MenuItem menuItem)
+                continue;
+
+            if (string.Equals(menuItem.Header?.ToString(), header, StringComparison.Ordinal))
+                return menuItem;
+
+            var nested = FindMenuItemByHeader(menuItem.Items, header);
+            if (nested is not null)
+                return nested;
+        }
+
+        return null;
+    }
+
+    private HomeFontColorsTourManifestCapture CreateHomeFontColorsWindowCapture(string state, string fileName, string evidencePurpose)
+    {
+        var activeCell = SheetGrid.SelectedRange?.Start;
+        var style = activeCell is { } address
+            ? ResolveHomeFontColorsTourStyle(address)
+            : CellStyle.Default;
+        return new HomeFontColorsTourManifestCapture(
+            State: state,
+            FileName: $"{fileName}.png",
+            CaptureKey: $"interactive:home-font-colors:{state}",
+            EvidencePurpose: evidencePurpose,
+            CaptureMethod: IsScreenshotTourBackgroundRenderAllowed()
+                ? "RenderTargetBitmap-window-full"
+                : "CopyFromScreen-window-full",
+            LogicalWidth: ActualWidth,
+            LogicalHeight: Math.Min(ActualHeight, 760),
+            ActiveCell: activeCell?.ToString() ?? string.Empty,
+            ActiveCellFontName: style.FontName,
+            ActiveCellFontSize: style.FontSize,
+            ActiveCellBold: style.Bold,
+            ActiveCellItalic: style.Italic,
+            ActiveCellUnderline: style.Underline,
+            ActiveCellDoubleUnderline: style.DoubleUnderline,
+            ActiveCellStrikethrough: style.Strikethrough,
+            ActiveCellFontColor: FormatQatUndoRedoTourColor(style.ResolveFontColor(_workbook.Theme)),
+            ActiveCellFillColor: FormatQatUndoRedoTourColor(style.ResolveFillColor(_workbook.Theme)),
+            MenuHeaders: []);
+    }
+
+    private HomeFontColorsTourManifestCapture CreateHomeFontColorsElementCapture(
+        string state,
+        string fileName,
+        string evidencePurpose,
+        double width,
+        double height)
+    {
+        return new HomeFontColorsTourManifestCapture(
+            State: state,
+            FileName: $"{fileName}.png",
+            CaptureKey: $"interactive:home-font-colors:{state}",
+            EvidencePurpose: evidencePurpose,
+            CaptureMethod: "RenderTargetBitmap-wpf-element",
+            LogicalWidth: width,
+            LogicalHeight: height,
+            ActiveCell: SheetGrid.SelectedRange?.Start.ToString() ?? string.Empty,
+            ActiveCellFontName: string.Empty,
+            ActiveCellFontSize: 0,
+            ActiveCellBold: false,
+            ActiveCellItalic: false,
+            ActiveCellUnderline: false,
+            ActiveCellDoubleUnderline: false,
+            ActiveCellStrikethrough: false,
+            ActiveCellFontColor: null,
+            ActiveCellFillColor: null,
+            MenuHeaders: CaptureOpenMenuHeaders());
+    }
+
+    private IReadOnlyList<string> CaptureOpenMenuHeaders()
+    {
+        var headers = new List<string>();
+        AddMenuHeaders(UnderlineButton.ContextMenu, headers);
+        AddMenuHeaders(BordersMenuButton.ContextMenu, headers);
+        return headers;
+    }
+
+    private static void AddMenuHeaders(ContextMenu? menu, List<string> headers)
+    {
+        if (menu is not { IsOpen: true })
+            return;
+
+        foreach (var header in menu.Items.OfType<MenuItem>().Select(item => item.Header?.ToString()).Where(header => !string.IsNullOrWhiteSpace(header)))
+            headers.Add(header!);
+    }
+
+    private CellStyle ResolveHomeFontColorsTourStyle(CellAddress address)
+    {
+        var sheet = _workbook.GetSheet(address.Sheet)
+            ?? throw new InvalidOperationException("Home font/colors tour could not resolve the active worksheet.");
+        var cell = sheet.GetCell(address);
+        return _workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
+    }
+
+    private static void DeleteHomeFontColorsTourEvidence(string outputDir)
+    {
+        foreach (var fileName in HomeFontColorsTourExpectedFileNames().Append(HomeFontColorsTourManifestFileName))
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static IReadOnlyList<string> HomeFontColorsTourExpectedFileNames() =>
+    [
+        "freex_home_font_colors_grid_styled.png",
+        "freex_home_font_family_dropdown_opened.png",
+        "freex_home_font_size_dropdown_opened.png",
+        "freex_home_underline_menu_opened.png",
+        "freex_home_borders_full_menu_opened.png",
+        "freex_home_borders_line_color_submenu_opened.png"
+    ];
+
+    private static void ValidateHomeFontColorsTourEvidence(string outputDir, IReadOnlyList<HomeFontColorsTourManifestCapture> captures)
+    {
+        if (captures.Count != HomeFontColorsTourExpectedFileNames().Count)
+            throw new InvalidOperationException("Home font/colors tour did not create the planned capture count.");
+
+        foreach (var fileName in HomeFontColorsTourExpectedFileNames())
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Home font/colors tour did not create {fileName}.");
+        }
     }
 
     private async Task CaptureWorksheetContextMenuTourAsync(string outputDir)
@@ -3079,6 +3468,71 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeBordersDropdownTourManifest);
     }
 
+    private static async Task WriteHomeFontColorsTourManifestAsync(
+        string outputDir,
+        GridRange sampleRange,
+        IReadOnlyList<HomeFontColorsTourManifestCapture> captures)
+    {
+        var manifest = new HomeFontColorsTourManifest(
+            Tool: "FREEX_HOME_FONT_COLORS_TOUR",
+            EvidenceFamily: "home-formatting",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "UI-CAT-HOME-002A-M",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_home_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            SampleRange: sampleRange.ToString(),
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "RenderTargetBitmap; no global mouse, keyboard, or screen capture input is used"
+                : "foreground CopyFromScreen",
+            CaptureLogicalHeight: 760,
+            PlannedCaptureCount: HomeFontColorsTourExpectedFileNames().Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new HomeFontColorsTourManifestPairing(
+                "interactive:home-font-colors:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1 permits deterministic in-process WPF rendering; foreground mouse/keytip/input ownership remains a separate gap."
+                    : "FreeX main window owns foreground focus for screen captures."),
+            CoveredFeatures:
+            [
+                "font family",
+                "font size",
+                "grow font",
+                "shrink font",
+                "bold",
+                "italic",
+                "underline",
+                "double underline",
+                "strikethrough",
+                "font color",
+                "fill color",
+                "theme-backed font/fill colors",
+                "border presets",
+                "full implemented Borders menu",
+                "implemented Borders Line Color theme choices"
+            ],
+            RemainingGaps:
+            [
+                "foreground mouse/keytip evidence for Home font/color/border commands",
+                "Excel-paired Home font/color/border screenshots",
+                "full LCID/theme matrix",
+                "font/fill color gallery parity beyond the current custom color picker and swatch buttons",
+                "persistence breadth across save/reload and native JSON state"
+            ],
+            Captures: captures);
+
+        var path = Path.Combine(outputDir, HomeFontColorsTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeFontColorsTourManifest);
+    }
+
     private static async Task WriteQatUndoRedoTourManifestAsync(
         string outputDir,
         CellAddress address,
@@ -3672,6 +4126,53 @@ public partial class MainWindow
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
 
+    private sealed record HomeFontColorsTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string SampleRange,
+        string CaptureStatus,
+        string CaptureMode,
+        double CaptureLogicalHeight,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        HomeFontColorsTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<string> CoveredFeatures,
+        IReadOnlyList<string> RemainingGaps,
+        IReadOnlyList<HomeFontColorsTourManifestCapture> Captures);
+
+    private sealed record HomeFontColorsTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record HomeFontColorsTourManifestCapture(
+        string State,
+        string FileName,
+        string CaptureKey,
+        string EvidencePurpose,
+        string CaptureMethod,
+        double LogicalWidth,
+        double LogicalHeight,
+        string ActiveCell,
+        string ActiveCellFontName,
+        double ActiveCellFontSize,
+        bool ActiveCellBold,
+        bool ActiveCellItalic,
+        bool ActiveCellUnderline,
+        bool ActiveCellDoubleUnderline,
+        bool ActiveCellStrikethrough,
+        string? ActiveCellFontColor,
+        string? ActiveCellFillColor,
+        IReadOnlyList<string> MenuHeaders);
+
     private sealed record WorksheetContextMenuTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -4075,6 +4576,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
     [JsonSerializable(typeof(HomeNumberFormatDropdownTourManifest))]
     [JsonSerializable(typeof(HomeBordersDropdownTourManifest))]
+    [JsonSerializable(typeof(HomeFontColorsTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(OptionsAccountTourManifest))]
