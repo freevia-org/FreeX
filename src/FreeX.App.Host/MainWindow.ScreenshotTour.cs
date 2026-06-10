@@ -95,6 +95,9 @@ public partial class MainWindow
     private const string FileIoImportSmokeTourOutputDirectoryName = "file-io-import-smoke-tour";
     private const string InsertTablesChartsTourManifestFileName = "insert_tables_charts_tour_manifest.json";
     private const string InsertTablesChartsTourOutputDirectoryName = "insert-tables-charts-tour";
+    private const string TableWorkflowsTourManifestFileName = "table_workflows_tour_manifest.json";
+    private const string TableWorkflowsTourOutputDirectoryName = "table-workflows-tour";
+    private const string TableWorkflowsTourSavedWorkbookFileName = "freex_table_workflows_saved.xlsx";
     private const string ChartDataLayoutTourManifestFileName = "chart_data_layout_tour_manifest.json";
     private const string ChartDataLayoutTourOutputDirectoryName = "chart-data-layout-tour";
     private const string ChartPersistenceRenderTourManifestFileName = "chart_persistence_render_tour_manifest.json";
@@ -124,6 +127,9 @@ public partial class MainWindow
     private const string FormulaDiagnosticsTourOutputDirectoryName = "formula-diagnostics-tour";
     private const string FormulaAuthoringNamesTourManifestFileName = "formula_authoring_names_tour_manifest.json";
     private const string FormulaAuthoringNamesTourOutputDirectoryName = "formula-authoring-names-tour";
+    private const string FormulaSubmittedPersistenceTourManifestFileName = "formula_submitted_persistence_tour_manifest.json";
+    private const string FormulaSubmittedPersistenceTourOutputDirectoryName = "formula-submitted-persistence-tour";
+    private const string FormulaSubmittedPersistenceTourSavedWorkbookFileName = "freex_formula_submitted_persistence_saved.fxl";
     private const string ReviewCommentsProtectionTourManifestFileName = "review_comments_protection_tour_manifest.json";
     private const string ReviewCommentsProtectionTourOutputDirectoryName = "review-comments-protection-tour";
     private const string ReviewProtectionMatrixTourManifestFileName = "review_protection_matrix_tour_manifest.json";
@@ -220,6 +226,7 @@ public partial class MainWindow
         var dataSubmittedWorkflowsTour = Environment.GetEnvironmentVariable("FREEX_DATA_SUBMITTED_WORKFLOWS_TOUR") == "1";
         var fileIoImportSmokeTour = Environment.GetEnvironmentVariable("FREEX_FILE_IO_IMPORT_SMOKE_TOUR") == "1";
         var insertTablesChartsTour = Environment.GetEnvironmentVariable("FREEX_INSERT_TABLES_CHARTS_TOUR") == "1";
+        var tableWorkflowsTour = Environment.GetEnvironmentVariable("FREEX_TABLE_WORKFLOWS_TOUR") == "1";
         var chartDataLayoutTour = Environment.GetEnvironmentVariable("FREEX_CHART_DATA_LAYOUT_TOUR") == "1";
         var chartPersistenceRenderTour = Environment.GetEnvironmentVariable("FREEX_CHART_PERSISTENCE_RENDER_TOUR") == "1";
         var pivotFieldListContextTour = Environment.GetEnvironmentVariable("FREEX_PIVOT_FIELD_LIST_CONTEXT_TOUR") == "1";
@@ -232,10 +239,11 @@ public partial class MainWindow
         var drawObjectPersistenceTour = Environment.GetEnvironmentVariable("FREEX_DRAW_OBJECT_PERSISTENCE_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
         var formulaAuthoringNamesTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_AUTHORING_NAMES_TOUR") == "1";
+        var formulaSubmittedPersistenceTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_SUBMITTED_PERSISTENCE_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
         var reviewProtectionMatrixTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_PROTECTION_MATRIX_TOUR") == "1";
         var reviewStatsShareTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_STATS_SHARE_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeStylesConditionalFormattingTour && !homeClipboardCellsEditingTour && !homeSubmittedWorkflowsTour && !ribbonOverflowKeytipTour && !worksheetContextMenuTour && !worksheetContextTargetsTour && !keyTipOverlayTour && !printPreviewTour && !backstageRecentExportShareTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !statusFooterInteractionsTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !insertObjectPersistenceTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !dataSubmittedWorkflowsTour && !fileIoImportSmokeTour && !insertTablesChartsTour && !chartDataLayoutTour && !chartPersistenceRenderTour && !pivotFieldListContextTour && !pivotOptionsSlicerTour && !viewPanesZoomTour && !viewWorkflowsTour && !pageLayoutSetupTour && !pageLayoutOutputTour && !drawObjectFormattingTour && !drawObjectPersistenceTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour && !reviewProtectionMatrixTour && !reviewStatsShareTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeStylesConditionalFormattingTour && !homeClipboardCellsEditingTour && !homeSubmittedWorkflowsTour && !ribbonOverflowKeytipTour && !worksheetContextMenuTour && !worksheetContextTargetsTour && !keyTipOverlayTour && !printPreviewTour && !backstageRecentExportShareTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !statusFooterInteractionsTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !insertObjectPersistenceTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !dataSubmittedWorkflowsTour && !fileIoImportSmokeTour && !insertTablesChartsTour && !tableWorkflowsTour && !chartDataLayoutTour && !chartPersistenceRenderTour && !pivotFieldListContextTour && !pivotOptionsSlicerTour && !viewPanesZoomTour && !viewWorkflowsTour && !pageLayoutSetupTour && !pageLayoutOutputTour && !drawObjectFormattingTour && !drawObjectPersistenceTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !formulaSubmittedPersistenceTour && !reviewCommentsProtectionTour && !reviewProtectionMatrixTour && !reviewStatsShareTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -252,7 +260,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeStylesConditionalFormattingTour, homeClipboardCellsEditingTour, homeSubmittedWorkflowsTour, ribbonOverflowKeytipTour, worksheetContextMenuTour, worksheetContextTargetsTour, keyTipOverlayTour, printPreviewTour, backstageRecentExportShareTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, statusFooterInteractionsTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, insertObjectPersistenceTour, dataToolsDialogsTour, dataSortFilterOutlineTour, dataSubmittedWorkflowsTour, fileIoImportSmokeTour, insertTablesChartsTour, chartDataLayoutTour, chartPersistenceRenderTour, pivotFieldListContextTour, pivotOptionsSlicerTour, viewPanesZoomTour, viewWorkflowsTour, pageLayoutSetupTour, pageLayoutOutputTour, drawObjectFormattingTour, drawObjectPersistenceTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour, reviewProtectionMatrixTour, reviewStatsShareTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeStylesConditionalFormattingTour, homeClipboardCellsEditingTour, homeSubmittedWorkflowsTour, ribbonOverflowKeytipTour, worksheetContextMenuTour, worksheetContextTargetsTour, keyTipOverlayTour, printPreviewTour, backstageRecentExportShareTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, statusFooterInteractionsTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, insertObjectPersistenceTour, dataToolsDialogsTour, dataSortFilterOutlineTour, dataSubmittedWorkflowsTour, fileIoImportSmokeTour, insertTablesChartsTour, tableWorkflowsTour, chartDataLayoutTour, chartPersistenceRenderTour, pivotFieldListContextTour, pivotOptionsSlicerTour, viewPanesZoomTour, viewWorkflowsTour, pageLayoutSetupTour, pageLayoutOutputTour, drawObjectFormattingTour, drawObjectPersistenceTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, formulaSubmittedPersistenceTour, reviewCommentsProtectionTour, reviewProtectionMatrixTour, reviewStatsShareTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -307,6 +315,7 @@ public partial class MainWindow
         bool dataSubmittedWorkflowsTour,
         bool fileIoImportSmokeTour,
         bool insertTablesChartsTour,
+        bool tableWorkflowsTour,
         bool chartDataLayoutTour,
         bool chartPersistenceRenderTour,
         bool pivotFieldListContextTour,
@@ -319,6 +328,7 @@ public partial class MainWindow
         bool drawObjectPersistenceTour,
         bool formulaDiagnosticsTour,
         bool formulaAuthoringNamesTour,
+        bool formulaSubmittedPersistenceTour,
         bool reviewCommentsProtectionTour,
         bool reviewProtectionMatrixTour,
         bool reviewStatsShareTour)
@@ -407,6 +417,8 @@ public partial class MainWindow
             await CaptureFileIoImportSmokeTourAsync(Path.Combine(outputDir, FileIoImportSmokeTourOutputDirectoryName));
         if (insertTablesChartsTour)
             await CaptureInsertTablesChartsTourAsync(Path.Combine(outputDir, InsertTablesChartsTourOutputDirectoryName));
+        if (tableWorkflowsTour)
+            await CaptureTableWorkflowsTourAsync(Path.Combine(outputDir, TableWorkflowsTourOutputDirectoryName));
         if (chartDataLayoutTour)
             await CaptureChartDataLayoutTourAsync(Path.Combine(outputDir, ChartDataLayoutTourOutputDirectoryName));
         if (chartPersistenceRenderTour)
@@ -432,6 +444,9 @@ public partial class MainWindow
 
         if (formulaAuthoringNamesTour)
             await CaptureFormulaAuthoringNamesTourAsync(Path.Combine(outputDir, FormulaAuthoringNamesTourOutputDirectoryName));
+
+        if (formulaSubmittedPersistenceTour)
+            await CaptureFormulaSubmittedPersistenceTourAsync(Path.Combine(outputDir, FormulaSubmittedPersistenceTourOutputDirectoryName));
 
         if (reviewCommentsProtectionTour)
             await CaptureReviewCommentsProtectionTourAsync(Path.Combine(outputDir, ReviewCommentsProtectionTourOutputDirectoryName));
@@ -3470,9 +3485,38 @@ public partial class MainWindow
 
         captures.Add(await CaptureAboutDialogForTourAsync(outputDir));
         captures.Add(await CaptureLegalNoticesDialogForTourAsync(outputDir));
+        captures.Add(await CaptureHelpAboutLegalFocusReturnForTourAsync(outputDir));
 
         ValidateHelpAboutLegalTourEvidence(outputDir);
         await WriteHelpAboutLegalTourManifestAsync(outputDir, captures);
+    }
+
+    private async Task<HelpAboutLegalTourManifestCapture> CaptureHelpAboutLegalFocusReturnForTourAsync(string outputDir)
+    {
+        Activate();
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Help"));
+        HelpOnlineButton.Focus();
+        Keyboard.Focus(HelpOnlineButton);
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(250);
+        await CaptureCurrentWindowAsync(outputDir, "freex_help_focus_return_status", ActualHeight);
+
+        return new HelpAboutLegalTourManifestCapture(
+            CaptureKey: "help:focus-return-status",
+            PairKey: "interactive:help:focus-return-status",
+            ScenarioId: "help-about-legal:focus-return",
+            State: "focus-return-status",
+            Surface: "Help tab focus return and status bar",
+            FileName: "freex_help_focus_return_status",
+            OutputFileName: "freex_help_focus_return_status.png",
+            CaptureMethod: "RenderTargetBitmap-main-window-full",
+            EntryPath: "Help tab after owned dialog close",
+            EvidenceSummary: "Focus returns to the FreeX Help ribbon context after owned About/Legal dialogs close, with the Ready status bar still visible.",
+            Url: null,
+            FocusedElementAutomationId: AutomationProperties.GetAutomationId(HelpOnlineButton),
+            CaptureLogicalWidth: ActualWidth,
+            CaptureLogicalHeight: ActualHeight);
     }
 
     private async Task<HelpAboutLegalTourManifestCapture> CaptureGuardedExternalHelpMessageForTourAsync(
@@ -3675,7 +3719,8 @@ public partial class MainWindow
         "freex_feedback_guarded_message.png",
         "freex_updates_guarded_message.png",
         "freex_about_dialog.png",
-        "freex_legal_notices_dialog.png"
+        "freex_legal_notices_dialog.png",
+        "freex_help_focus_return_status.png"
     ];
 
     private static T? FindDescendantByAutomationId<T>(DependencyObject root, string automationId)
@@ -11155,7 +11200,8 @@ public partial class MainWindow
                 "Help > Feedback",
                 "Help > Check for Updates",
                 "Help > About FreeX",
-                "Help > Legal Notices"
+                "Help > Legal Notices",
+                "Help tab focus return / Ready status"
             ],
             CaptureStatus: "complete",
             CaptureMethod: "RenderTargetBitmap-WPF-windows-and-PrintWindow-owned-native-dialogs",
@@ -11174,6 +11220,7 @@ public partial class MainWindow
                 "The Help Online, Feedback, and Check for Updates captures intentionally render FreeX-owned guarded failure messages instead of launching a browser or external process.",
                 "The tour does not synthesize foreground mouse clicks, keytips, or UI Automation invoke; those interaction paths remain separate from this visual evidence.",
                 "The About and Legal Notices dialogs are shown as owned WPF windows for deterministic capture, then closed directly by the tour.",
+                "The final full-window capture records FreeX focus returned to the Help ribbon context and the Ready status bar after owned dialogs close.",
                 "No Microsoft Excel counterpart capture is produced by this tool."
             ]);
 
@@ -12908,6 +12955,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(DataSubmittedWorkflowsTourManifest))]
     [JsonSerializable(typeof(FileIoImportSmokeTourManifest))]
     [JsonSerializable(typeof(InsertTablesChartsTourManifest))]
+    [JsonSerializable(typeof(TableWorkflowsTourManifest))]
     [JsonSerializable(typeof(ChartDataLayoutTourManifest))]
     [JsonSerializable(typeof(ChartPersistenceRenderTourManifest))]
     [JsonSerializable(typeof(PivotFieldListContextTourManifest))]
@@ -12920,6 +12968,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(DrawObjectPersistenceTourManifest))]
     [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
     [JsonSerializable(typeof(FormulaAuthoringNamesTourManifest))]
+    [JsonSerializable(typeof(FormulaSubmittedPersistenceTourManifest))]
     [JsonSerializable(typeof(ReviewCommentsProtectionTourManifest))]
     [JsonSerializable(typeof(ReviewProtectionMatrixTourManifest))]
     [JsonSerializable(typeof(ReviewStatsShareTourManifest))]

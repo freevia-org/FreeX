@@ -239,6 +239,35 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void FormulaCatalogRows_DocumentSubmittedPersistenceEvidenceArtifacts()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var evidencePaths = new[]
+        {
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_seeded_before_submit.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_formula_results.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_use_in_formula_inserted_reference.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_use_in_formula_menu.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_name_manager_submitted.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_saved_native_workbook.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_reopened_grid.png",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_name_manager_reopened.png",
+            "screenshots/formula-submitted-persistence-tour/formula_submitted_persistence_tour_manifest.json",
+            "screenshots/formula-submitted-persistence-tour/freex_formula_submitted_persistence_saved.fxl",
+        };
+
+        foreach (var evidencePath in evidencePaths)
+        {
+            catalog.Should().Contain(evidencePath);
+            File.Exists(WorkspaceFileLocator.Find(evidencePath.Split('/'))).Should().BeTrue(evidencePath);
+        }
+
+        WorkspaceFileLocator
+            .ReadAllText("screenshots", "formula-submitted-persistence-tour", "formula_submitted_persistence_tour_manifest.json")
+            .Should().Contain("interactive:formula-submitted-persistence:reopened-persisted-formulas-names");
+    }
+
+    [Fact]
     public void ContextualObjectCatalogRow_DocumentsChartScreenshotEvidenceAndObjectTabGap()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
@@ -405,6 +434,32 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().Contain("freex_insert_tables_charts_create_table_dialog.png");
         catalog.Should().Contain("freex_insert_tables_charts_recommended_charts_dialog.png");
         catalog.Should().Contain("freex_insert_tables_charts_sparkline_result.png");
+    }
+
+    [Fact]
+    public void TableCatalogRows_DocumentTableWorkflowsTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var lines = Regex.Split(catalog, "\\r?\\n");
+        var rows = new[]
+        {
+            lines.Single(line => line.StartsWith("| UI-CAT-HOME-003 |", StringComparison.Ordinal)),
+            lines.Single(line => line.StartsWith("| UI-CAT-INSERT-001 |", StringComparison.Ordinal)),
+            lines.Single(line => line.StartsWith("| UI-CAT-INSERT-001D |", StringComparison.Ordinal)),
+            lines.Single(line => line.StartsWith("| UI-CMD-HOME-STYLE-002 |", StringComparison.Ordinal)),
+            lines.Single(line => line.StartsWith("| UI-CMD-INSERT-004 |", StringComparison.Ordinal))
+        };
+
+        foreach (var row in rows)
+            row.Should().Contain("table-workflows-tour");
+
+        catalog.Should().Contain("FREEX_TABLE_WORKFLOWS_TOUR=1");
+        catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
+        catalog.Should().Contain("table_workflows_tour_manifest.json");
+        catalog.Should().Contain("freex_table_workflows_create_table_submitted_result.png");
+        catalog.Should().Contain("freex_table_workflows_filter_totals_style_result.png");
+        catalog.Should().Contain("freex_table_workflows_reopened_persisted_table.png");
+        catalog.Should().Contain("freex_table_workflows_saved.xlsx");
     }
 
     [Fact]
