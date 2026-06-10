@@ -15,7 +15,6 @@ public sealed class PageLayoutCommandSourceTests
     [InlineData("Paper Size", "Size", "SZ", "PageSizeBtn_Click")]
     [InlineData("Print Area", "Print Area", "PA", "PrintAreaBtn_Click")]
     [InlineData("Breaks", "Breaks", "BK", "PageBreaksBtn_Click")]
-    [InlineData("Scale to Fit", "...", "SF", "ScaleToFitBtn_Click")]
     [InlineData("Print Titles", "Print Titles", "PT", "PrintTitlesBtn_Click")]
     public void PageLayoutButtons_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
@@ -30,6 +29,20 @@ public sealed class PageLayoutCommandSourceTests
         button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
+    }
+
+    [Fact]
+    public void ScaleToFitLauncher_UsesDialogLauncherGlyphInsteadOfEllipsisButton()
+    {
+        var button = ReadMainWindowXaml()
+            .ExtractButtonElementByInvariantCommandName("Scale to Fit", "Click=\"ScaleToFitBtn_Click\"");
+
+        button.Should().NotContain("Content=\"...\"");
+        button.Should().Contain("<Path");
+        button.Should().Contain("Data=\"M 2 8 L 8 2 M 4 2 H 8 V 6\"");
+        button.Should().Contain("HorizontalAlignment=\"Right\"");
+        button.Should().Contain("VerticalAlignment=\"Bottom\"");
+        button.Should().Contain("local:RibbonTooltip.KeyTip=\"SF\"");
     }
 
     [Theory]
@@ -102,7 +115,10 @@ public sealed class PageLayoutCommandSourceTests
     [Fact]
     public void PageLayoutHandlers_RouteThroughExpectedThemePageSetupAndPrintCommands()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "MainWindow.PageLayout.cs",
+            "MainWindow.Startup.cs",
+            "MainWindow.Viewport.cs");
 
         source.Should().Contain("WorkbookThemeWorkflow.CreateColorfulTheme()");
         source.Should().Contain("WorkbookThemeWorkflow.CreateGrayscaleTheme()");
@@ -120,10 +136,15 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))");
         source.Should().Contain("new ClearPrintAreaCommand(sheetId)");
         source.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit)");
+        source.Should().Contain("InitializePageLayoutScaleToFitControls()");
+        source.Should().Contain("PageLayoutInputParser.ScalePageCountOptions");
+        source.Should().Contain("SyncPageLayoutScaleToFitControls(sheet)");
+        source.Should().Contain("CreateScaleToFitFromPageDimensions(current, wide, current.FitToPagesTall)");
         source.Should().Contain("PageBreakSelectionPlanner.Insert(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks)");
         source.Should().Contain("PageBreakSelectionPlanner.Remove(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks)");
         source.Should().Contain("new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks)");
         source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
+        source.Should().Contain("NativePrintDialogService.ShowPrinterOptionsDialog()");
         source.Should().Contain("new SetPrintOptionsCommand(_currentSheetId, isChecked, sheet?.PrintHeadings ?? false)");
         source.Should().Contain("new SetPrintOptionsCommand(_currentSheetId, sheet?.PrintGridlines ?? false, isChecked)");
     }

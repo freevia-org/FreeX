@@ -2149,7 +2149,7 @@
                         <!-- ▌Scale to Fit ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PageLayoutScaleToFitGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,1,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,1,22,0">
                                 <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
                                     <TextBlock Text="{local:Loc Key=MainWindow_Text_Width}" FontSize="11" Margin="2,0,2,0" Foreground="#444"/>
                                     <ComboBox x:Name="PageLayoutScaleWidthBox" Width="82" Height="22" Margin="1,0" Background="White" FontSize="12"
@@ -2186,13 +2186,19 @@
                                               local:RibbonTooltip.KeyTip="SC"
                                               local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale Percent"/>
                                 </StackPanel>
-                                <Button x:Name="PageLayoutScaleToFitDialogButton" Content="..." Width="24" Height="22" Margin="1,14,1,0" Style="{StaticResource RibbonBtn}" Click="ScaleToFitBtn_Click"
-                                        AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ScaleToFit}"
-                                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ScaleToFit}"
-                                        local:RibbonTooltip.KeyTip="SF"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale to Fit"/>
                             </StackPanel>
+                            <Button x:Name="PageLayoutScaleToFitDialogButton" Grid.Row="0" Width="18" Height="18" Margin="0,0,1,1"
+                                    HorizontalAlignment="Right" VerticalAlignment="Bottom" Style="{StaticResource RibbonBtn}" Click="ScaleToFitBtn_Click"
+                                    AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ScaleToFit}"
+                                    AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}"
+                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ScaleToFit}"
+                                    local:RibbonTooltip.KeyTip="SF"
+                                    local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale to Fit">
+                                <Viewbox Width="10" Height="10">
+                                    <Path Stroke="#444" StrokeThickness="1.4" StrokeStartLineCap="Square" StrokeEndLineCap="Square"
+                                          Data="M 2 8 L 8 2 M 4 2 H 8 V 6"/>
+                                </Viewbox>
+                            </Button>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_ScaleToFit}" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
@@ -5615,7 +5621,7 @@
 
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
                             <Button x:Name="SsPrintPreviewButton"
-                                    Content="{local:Loc Key=PrintPreview_PrintButton}"
+                                    Content="{local:Loc Key=PageSetup_PrintPreviewAutomationName}"
                                     Width="220" Height="34"
                                     HorizontalAlignment="Left"
                                     Margin="0,0,0,10"

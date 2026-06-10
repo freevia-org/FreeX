@@ -279,6 +279,30 @@ public partial class MainWindow
         ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit);
     }
 
+    private void InitializePageLayoutScaleToFitControls()
+    {
+        PageLayoutScaleWidthBox.ItemsSource = PageLayoutInputParser.ScalePageCountOptions;
+        PageLayoutScaleHeightBox.ItemsSource = PageLayoutInputParser.ScalePageCountOptions;
+        PageLayoutScalePercentBox.ItemsSource = PageLayoutInputParser.ScalePercentOptions;
+        SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId));
+    }
+
+    private void SyncPageLayoutScaleToFitControls(Sheet? sheet)
+    {
+        var scaleToFit = sheet?.ScaleToFit ?? WorksheetScaleToFit.Default;
+        _suppressToolbarSync = true;
+        try
+        {
+            SetComboBoxTextIfChanged(PageLayoutScaleWidthBox, PageLayoutInputParser.FormatScalePages(scaleToFit.FitToPagesWide));
+            SetComboBoxTextIfChanged(PageLayoutScaleHeightBox, PageLayoutInputParser.FormatScalePages(scaleToFit.FitToPagesTall));
+            SetComboBoxTextIfChanged(PageLayoutScalePercentBox, PageLayoutInputParser.FormatScalePercent(scaleToFit.ScalePercent));
+        }
+        finally
+        {
+            _suppressToolbarSync = false;
+        }
+    }
+
     private void PageLayoutScaleWidthBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressToolbarSync || PageLayoutScaleWidthBox.SelectedItem is null) return;
@@ -340,28 +364,38 @@ public partial class MainWindow
     {
         var current = _workbook.GetSheet(_currentSheetId)?.ScaleToFit ?? WorksheetScaleToFit.Default;
         var text = GetComboBoxText(PageLayoutScaleWidthBox);
-        var wide = TryParseScalePages(text, out var pages) ? pages : (int?)null;
-        ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(null, wide, current.FitToPagesTall));
+        if (!PageLayoutInputParser.TryParseScalePages(text, out var wide))
+        {
+            SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId));
+            return;
+        }
+
+        ApplyPageLayoutScaleToFit(CreateScaleToFitFromPageDimensions(current, wide, current.FitToPagesTall));
     }
 
     private void CommitPageLayoutScaleHeightBoxText()
     {
         var current = _workbook.GetSheet(_currentSheetId)?.ScaleToFit ?? WorksheetScaleToFit.Default;
         var text = GetComboBoxText(PageLayoutScaleHeightBox);
-        var tall = TryParseScalePages(text, out var pages) ? pages : (int?)null;
-        ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(null, current.FitToPagesWide, tall));
+        if (!PageLayoutInputParser.TryParseScalePages(text, out var tall))
+        {
+            SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId));
+            return;
+        }
+
+        ApplyPageLayoutScaleToFit(CreateScaleToFitFromPageDimensions(current, current.FitToPagesWide, tall));
     }
 
     private void CommitPageLayoutScalePercentBoxText()
     {
         var text = GetComboBoxText(PageLayoutScalePercentBox);
-        if (!PageLayoutInputParser.TryParseScaleToFit(text, out var scaleToFit) ||
-            scaleToFit.ScalePercent is null)
+        if (!PageLayoutInputParser.TryParseScalePercent(text, out var percent))
         {
+            SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId));
             return;
         }
 
-        ApplyPageLayoutScaleToFit(scaleToFit);
+        ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(percent ?? 100, null, null));
     }
 
     private void ApplyPageLayoutScaleToFit(WorksheetScaleToFit scaleToFit)
@@ -376,16 +410,31 @@ public partial class MainWindow
     private static string GetComboBoxText(ComboBox comboBox) =>
         comboBox.SelectedItem?.ToString() ?? comboBox.Text ?? "";
 
-    private static bool TryParseScalePages(string text, out int pages)
+    private static WorksheetScaleToFit CreateScaleToFitFromPageDimensions(
+        WorksheetScaleToFit current,
+        int? pagesWide,
+        int? pagesTall)
     {
-        var trimmed = text.Trim();
-        if (trimmed.EndsWith("page", StringComparison.OrdinalIgnoreCase))
-            trimmed = trimmed[..^4].TrimEnd();
-        else if (trimmed.EndsWith("pages", StringComparison.OrdinalIgnoreCase))
-            trimmed = trimmed[..^5].TrimEnd();
+        if (pagesWide is not null || pagesTall is not null)
+            return new WorksheetScaleToFit(null, pagesWide, pagesTall);
 
-        return int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out pages) &&
-               pages > 0;
+        return new WorksheetScaleToFit(current.ScalePercent ?? 100, null, null);
+    }
+
+    private static void SetComboBoxTextIfChanged(ComboBox comboBox, string text)
+    {
+        if (comboBox.Items.Contains(text))
+        {
+            if (!Equals(comboBox.SelectedItem, text))
+                comboBox.SelectedItem = text;
+            return;
+        }
+
+        if (string.Equals(comboBox.Text, text, StringComparison.Ordinal))
+            return;
+
+        comboBox.SelectedItem = null;
+        comboBox.Text = text;
     }
 
     private void PageBreaksBtn_Click(object sender, RoutedEventArgs e)
@@ -543,8 +592,7 @@ public partial class MainWindow
 
     private void ShowPageSetupPrinterOptions()
     {
-        var dialog = new System.Windows.Controls.PrintDialog();
-        dialog.ShowDialog();
+        NativePrintDialogService.ShowPrinterOptionsDialog();
     }
 
     private void PrintGridlinesChk_Click(object sender, RoutedEventArgs e)

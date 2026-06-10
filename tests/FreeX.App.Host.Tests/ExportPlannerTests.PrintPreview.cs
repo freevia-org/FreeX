@@ -21,6 +21,8 @@ public partial class ExportPlannerTests
 
         source.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");
         source.Should().Contain("ShowNativePrintDialog");
+        source.Should().Contain("NativePrintDialogService.ShowPrintDialogAndPrint");
+        source.Should().Contain("Forms.PrintDialog");
         source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange)");
         source.Should().Contain("PrintDocument(paginator");
     }
@@ -316,9 +318,9 @@ public partial class ExportPlannerTests
         source.Should().Contain("statusText");
         source.Should().Contain("TryParseCopyCount(copiesBox.Text, out var copies)");
         source.Should().Contain("ShowInvalidCopiesWarning(copiesBox)");
-        source.Should().Contain("dialog.PrintTicket.CopyCount = copies");
-        source.Should().Contain("dialog.PrintTicket.Collation = collated ? Collation.Collated : Collation.Uncollated");
-        source.Should().Contain("dialog.PrintTicket.Duplexing = ResolvePrintTicketDuplexing(sidesMode)");
+        source.Should().Contain("documentPrinter.PrintTicket.CopyCount = Math.Clamp((int)dialog.PrinterSettings.Copies, 1, 999)");
+        source.Should().Contain("documentPrinter.PrintTicket.Collation = dialog.PrinterSettings.Collate");
+        source.Should().Contain("documentPrinter.PrintTicket.Duplexing = ResolveDuplexing(dialog.PrinterSettings.Duplex, sidesMode)");
         source.Should().Contain("ResolveSelectedSidesMode(sidesBox)");
         source.Should().Contain("collatedBox.IsChecked == true");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"PrintPreview_InvalidCopiesMessage\"), Title);");
@@ -375,6 +377,7 @@ public partial class ExportPlannerTests
             "PrintPreviewDialog.cs",
             "PrintPreviewDialog.Layout.cs",
             "PrintPreviewDialog.Helpers.cs",
+            "NativePrintDialogService.cs",
             "PrintPreviewSettingsPanelFactory.cs",
             "PrintPreviewToolbarPlanner.cs");
 

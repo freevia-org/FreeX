@@ -99,22 +99,8 @@ public sealed partial class PrintPreviewDialog
         PrintQueue? printQueue,
         int copies,
         bool collated,
-        PrintPreviewSidesMode sidesMode)
-    {
-        var dialog = new PrintDialog();
-        if (printQueue is not null)
-            dialog.PrintQueue = printQueue;
-
-        if (dialog.PrintTicket is not null)
-        {
-            dialog.PrintTicket.CopyCount = copies;
-            dialog.PrintTicket.Collation = collated ? Collation.Collated : Collation.Uncollated;
-            dialog.PrintTicket.Duplexing = ResolvePrintTicketDuplexing(sidesMode);
-        }
-
-        if (dialog.ShowDialog() == true)
-            dialog.PrintDocument(paginator, "FreeX worksheet");
-    }
+        PrintPreviewSidesMode sidesMode) =>
+        NativePrintDialogService.ShowPrintDialogAndPrint(paginator, printQueue, copies, collated, sidesMode);
 
     private static void PopulatePrinterBox(ComboBox printerBox)
     {
