@@ -83,6 +83,9 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("new ChangeChartSourceCommand(");
         source.Should().Contain("private void MoveChartBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new MoveChartDialog(currentSheet.Name)");
+        source.Should().Contain("private void ResizeSelectedChartObject()");
+        source.Should().Contain("new ObjectSizeDialog(chart.Width, chart.Height, UiText.Get(\"MainWindowMessage_ObjectSizeTitle\"))");
+        source.Should().Contain("new SetChartBoundsCommand(");
     }
 
     [Fact]
@@ -94,6 +97,19 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("command = new AddChartCommand(");
         source.Should().Contain("SelectInsertedChart(command.ChartId)");
         source.Should().Contain("SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.Chart");
+    }
+
+    [Fact]
+    public void ChartCommands_PreferSelectedChartForCommandTargets()
+    {
+        var chartSource = ReadHostSourceFile("MainWindow.ChartCommands.cs");
+        var commandExecutionSource = ReadHostSourceFile("MainWindow.CommandExecution.cs");
+
+        chartSource.Should().Contain("GetSelectedChartOnCurrentSheet() is { } selectedChart");
+        chartSource.Should().Contain("IsChartContextualRibbonTarget(selectedChart)");
+        commandExecutionSource.Should().Contain("private ChartModel? GetSelectedChartOnCurrentSheet()");
+        commandExecutionSource.Should().Contain("SheetGrid.SelectedObjectKind != FreeX.App.UI.ObjectKind.Chart");
+        commandExecutionSource.Should().Contain("chart.Id == SheetGrid.SelectedObjectId");
     }
 
     [Fact]

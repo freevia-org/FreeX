@@ -227,7 +227,8 @@ public sealed partial class WorksheetContextMenuPlannerTests
             HasNote: true,
             HasHyperlink: true,
             HasAutoFilterHeaderTarget: true,
-            HasDropdownTarget: true);
+            HasDropdownTarget: true,
+            HasPivotTableTarget: true);
 
         WorksheetContextMenuPlanner.BuildCommands(state: state)
             .Should()

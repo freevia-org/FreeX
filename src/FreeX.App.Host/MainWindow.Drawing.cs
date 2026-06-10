@@ -586,6 +586,16 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void OnChartBoundsChanged(Guid id, double left, double top, double width, double height)
+    {
+        if (!TryExecuteCommand(new SetChartBoundsCommand(_currentSheetId, id, left, top, width, height), "Chart Bounds"))
+            return;
+
+        SheetGrid.SelectedObjectId = id;
+        SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.Chart;
+        UpdateViewport();
+    }
+
     private void OnObjectResized(Guid id, FreeX.App.UI.ObjectKind kind, double width, double height)
     {
         IWorkbookCommand cmd = kind switch

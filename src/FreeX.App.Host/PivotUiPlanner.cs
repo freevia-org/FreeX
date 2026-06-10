@@ -71,6 +71,9 @@ public static class PivotUiPlanner
         return FindPivotTableIntersectingSelection(sheet, range);
     }
 
+    public static PivotTableModel? FindPivotTableContainingCell(Sheet sheet, CellAddress cell) =>
+        FindFirstPivotTable(sheet, pivotTable => PivotTableContainsCell(pivotTable, cell));
+
     public static GridRange VisiblePivotRange(PivotTableModel pivotTable) =>
         pivotTable.LastRenderedRange is { } renderedRange &&
         renderedRange.Start.Sheet == pivotTable.TargetRange.Start.Sheet
@@ -442,9 +445,6 @@ public static class PivotUiPlanner
 
     private static PivotTableModel? FindPivotTableIntersectingSelection(Sheet sheet, GridRange range) =>
         FindFirstPivotTable(sheet, pivotTable => PivotTableIntersectsSelection(pivotTable, range));
-
-    private static PivotTableModel? FindPivotTableContainingCell(Sheet sheet, CellAddress cell) =>
-        FindFirstPivotTable(sheet, pivotTable => PivotTableContainsCell(pivotTable, cell));
 
     private static bool PivotTableIntersectsSelection(PivotTableModel pivotTable, GridRange range) =>
         PivotTableContainsCell(pivotTable, range.Start) || VisiblePivotRange(pivotTable).Overlaps(range);

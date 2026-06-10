@@ -51,4 +51,28 @@ public sealed partial class WorksheetContextMenuPlannerTests
         commands.Single(command => command.Header == formatHeader)
             .AccessHeader.Should().Be($"_Format {formatHeader["Format ".Length..]}");
     }
+
+    [Fact]
+    public void BuildCommands_ForChartTargetIncludesChartCommandsAndPaneAccess()
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.Chart);
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            "Format Chart Area...",
+            "Select Data...",
+            "Change Chart Type...",
+            "Chart Styles...",
+            "Chart Titles...",
+            "Size and Properties...",
+            "Move Chart...",
+            "Selection Pane...");
+        commands.Single(command => command.Header == "Format Chart Area...")
+            .Action.Should().Be(WorksheetContextMenuAction.FormatChartArea);
+        commands.Single(command => command.Header == "Select Data...")
+            .Action.Should().Be(WorksheetContextMenuAction.SelectChartData);
+        commands.Single(command => command.Header == "Size and Properties...")
+            .Action.Should().Be(WorksheetContextMenuAction.ChartSizeAndProperties);
+        commands.Single(command => command.Header == "Selection Pane...")
+            .Action.Should().Be(WorksheetContextMenuAction.SelectionPane);
+    }
 }

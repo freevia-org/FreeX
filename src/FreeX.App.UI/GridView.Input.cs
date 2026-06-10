@@ -211,8 +211,7 @@ public partial class GridView
         {
             var selectedObjectDragKind = ObjectDragKind.None;
             if (SelectedObjectId != Guid.Empty &&
-                SelectedObjectKind != ObjectKind.None &&
-                SelectedObjectKind != ObjectKind.Chart)
+                SelectedObjectKind != ObjectKind.None)
             {
                 var selectedObjectRect = GetSelectedObjectRect();
                 selectedObjectDragKind = HitTestObjectHandle(pos, selectedObjectRect);
@@ -225,8 +224,7 @@ public partial class GridView
 
             var hitObject = HitTestDrawingObject(pos);
             var hoveringObjectBody = selectedObjectDragKind == ObjectDragKind.None &&
-                hitObject.Id != Guid.Empty &&
-                hitObject.Kind != ObjectKind.Chart;
+                hitObject.Id != Guid.Empty;
             if (hoveringObjectBody)
             {
                 Cursor = Cursors.SizeAll;
@@ -424,8 +422,7 @@ public partial class GridView
 
         // Check if clicking on an already-selected object's handles
         if (SelectedObjectId != Guid.Empty &&
-            SelectedObjectKind != ObjectKind.None &&
-            SelectedObjectKind != ObjectKind.Chart)
+            SelectedObjectKind != ObjectKind.None)
         {
             var selRect = GetSelectedObjectRect();
             var dragKind = HitTestObjectHandle(pos, selRect);
@@ -455,17 +452,6 @@ public partial class GridView
             SelectedObjectKind = hit.Kind;
             _selectedObjectId = hit.Id;
             _selectedObjectKind = hit.Kind;
-            if (hit.Kind == ObjectKind.Chart)
-            {
-                _objectDragKind = ObjectDragKind.None;
-                _objectDragStartRect = Rect.Empty;
-                _objectDragCurrentRect = Rect.Empty;
-                Cursor = null;
-                InvalidateVisual();
-                e.Handled = true;
-                return;
-            }
-
             _objectDragKind = ObjectDragKind.Move;
             _objectDragStartPos = pos;
             _objectDragStartRect = hit.Rect;
@@ -649,6 +635,15 @@ public partial class GridView
             return;
         }
 
+        if (SelectedObjectId != Guid.Empty)
+        {
+            SelectedObjectId = Guid.Empty;
+            SelectedObjectKind = ObjectKind.None;
+            _selectedObjectId = Guid.Empty;
+            _selectedObjectKind = ObjectKind.None;
+            InvalidateVisual();
+        }
+
         if (GridHeaderContextMenuHitPlanner.HitTest(Viewport, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight) is { } headerHit)
         {
             HeaderContextMenuRequested?.Invoke(headerHit.Target, headerHit.Index, pos);
@@ -699,7 +694,11 @@ public partial class GridView
             Cursor = null;
             ReleaseMouseCapture();
 
-            if (dragKind == ObjectDragKind.Rotate)
+            if (kind == ObjectKind.Chart)
+            {
+                CommitChartObjectBoundsChange(id, startRect, currentRect);
+            }
+            else if (dragKind == ObjectDragKind.Rotate)
             {
                 ObjectRotated?.Invoke(id, kind, rotationDegrees);
             }
@@ -869,6 +868,25 @@ public partial class GridView
         {
             base.OnMouseLeftButtonUp(e);
         }
+    }
+
+    private void CommitChartObjectBoundsChange(Guid id, Rect startRect, Rect currentRect)
+    {
+        var moved =
+            Math.Abs(currentRect.Left - startRect.Left) > 1 ||
+            Math.Abs(currentRect.Top - startRect.Top) > 1;
+        var resized =
+            Math.Abs(currentRect.Width - startRect.Width) > 1 ||
+            Math.Abs(currentRect.Height - startRect.Height) > 1;
+        if (!moved && !resized)
+            return;
+
+        ChartBoundsChanged?.Invoke(
+            id,
+            Math.Max(0, currentRect.Left - ActualRowHeaderWidth),
+            Math.Max(0, currentRect.Top - EffectiveColHeaderHeight),
+            Math.Max(MinimumChartObjectWidth, currentRect.Width),
+            Math.Max(MinimumChartObjectHeight, currentRect.Height));
     }
 
     protected override void OnMouseLeave(MouseEventArgs e)
