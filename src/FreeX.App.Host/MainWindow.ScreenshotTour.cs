@@ -66,6 +66,9 @@ public partial class MainWindow
     private const string QatUndoRedoTourOutputDirectoryName = "qat-undo-redo-tour";
     private const string SheetTabTourManifestFileName = "sheet_tabs_tour_manifest.json";
     private const string SheetTabTourOutputDirectoryName = "sheet-tabs-tour";
+    private const string SheetTabWorkflowsTourManifestFileName = "sheet_tab_workflows_tour_manifest.json";
+    private const string SheetTabWorkflowsTourOutputDirectoryName = "sheet-tab-workflows-tour";
+    private const string SheetTabWorkflowsTourSavedWorkbookFileName = "freex_sheet_tab_workflows_persisted.xlsx";
     private const string TitlebarWindowChromeTourManifestFileName = "titlebar_window_chrome_tour_manifest.json";
     private const string TitlebarWindowChromeTourOutputDirectoryName = "titlebar-window-chrome-tour";
     private const string TitlebarWindowChromeTourSavedWorkbookFileName = "freex_titlebar_renamed_workbook.xlsx";
@@ -79,6 +82,9 @@ public partial class MainWindow
     private const string StatusFooterInteractionsTourOutputDirectoryName = "status-footer-interactions-tour";
     private const string InsertObjectsLinksTourManifestFileName = "insert_objects_links_tour_manifest.json";
     private const string InsertObjectsLinksTourOutputDirectoryName = "insert-objects-links-tour";
+    private const string InsertObjectPersistenceTourManifestFileName = "insert_object_persistence_tour_manifest.json";
+    private const string InsertObjectPersistenceTourOutputDirectoryName = "insert-object-persistence-tour";
+    private const string InsertObjectPersistenceTourSavedWorkbookFileName = "freex_insert_object_persistence_saved.fxl";
     private const string DataToolsDialogsTourManifestFileName = "data_tools_dialogs_tour_manifest.json";
     private const string DataToolsDialogsTourOutputDirectoryName = "data-tools-dialogs-tour";
     private const string DataSortFilterOutlineTourManifestFileName = "data_sort_filter_outline_tour_manifest.json";
@@ -107,12 +113,17 @@ public partial class MainWindow
     private const string PageLayoutOutputTourOutputDirectoryName = "page-layout-output-tour";
     private const string DrawObjectFormattingTourManifestFileName = "draw_object_formatting_tour_manifest.json";
     private const string DrawObjectFormattingTourOutputDirectoryName = "draw-object-formatting-tour";
+    private const string DrawObjectPersistenceTourManifestFileName = "draw_object_persistence_tour_manifest.json";
+    private const string DrawObjectPersistenceTourOutputDirectoryName = "draw-object-persistence-tour";
+    private const string DrawObjectPersistenceTourSavedWorkbookFileName = "freex_draw_object_persistence_saved.fxl";
     private const string FormulaDiagnosticsTourManifestFileName = "formula_diagnostics_tour_manifest.json";
     private const string FormulaDiagnosticsTourOutputDirectoryName = "formula-diagnostics-tour";
     private const string FormulaAuthoringNamesTourManifestFileName = "formula_authoring_names_tour_manifest.json";
     private const string FormulaAuthoringNamesTourOutputDirectoryName = "formula-authoring-names-tour";
     private const string ReviewCommentsProtectionTourManifestFileName = "review_comments_protection_tour_manifest.json";
     private const string ReviewCommentsProtectionTourOutputDirectoryName = "review-comments-protection-tour";
+    private const string ReviewProtectionMatrixTourManifestFileName = "review_protection_matrix_tour_manifest.json";
+    private const string ReviewProtectionMatrixTourOutputDirectoryName = "review-protection-matrix-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -199,6 +210,7 @@ public partial class MainWindow
         var statusFooterInteractionsTour = statusFooterTour ||
             Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_INTERACTIONS_TOUR") == "1";
         var insertObjectsLinksTour = Environment.GetEnvironmentVariable("FREEX_INSERT_OBJECTS_LINKS_TOUR") == "1";
+        var insertObjectPersistenceTour = Environment.GetEnvironmentVariable("FREEX_INSERT_OBJECT_PERSISTENCE_TOUR") == "1";
         var dataToolsDialogsTour = Environment.GetEnvironmentVariable("FREEX_DATA_TOOLS_DIALOGS_TOUR") == "1";
         var dataSortFilterOutlineTour = Environment.GetEnvironmentVariable("FREEX_DATA_SORT_FILTER_OUTLINE_TOUR") == "1";
         var dataSubmittedWorkflowsTour = Environment.GetEnvironmentVariable("FREEX_DATA_SUBMITTED_WORKFLOWS_TOUR") == "1";
@@ -212,11 +224,13 @@ public partial class MainWindow
         var pageLayoutSetupTour = Environment.GetEnvironmentVariable("FREEX_PAGE_LAYOUT_SETUP_TOUR") == "1";
         var pageLayoutOutputTour = Environment.GetEnvironmentVariable("FREEX_PAGE_LAYOUT_OUTPUT_TOUR") == "1";
         var drawObjectFormattingTour = Environment.GetEnvironmentVariable("FREEX_DRAW_OBJECT_FORMATTING_TOUR") == "1";
+        var drawObjectPersistenceTour = Environment.GetEnvironmentVariable("FREEX_DRAW_OBJECT_PERSISTENCE_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
         var formulaAuthoringNamesTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_AUTHORING_NAMES_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
+        var reviewProtectionMatrixTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_PROTECTION_MATRIX_TOUR") == "1";
         var reviewStatsShareTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_STATS_SHARE_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeStylesConditionalFormattingTour && !homeClipboardCellsEditingTour && !homeSubmittedWorkflowsTour && !ribbonOverflowKeytipTour && !worksheetContextMenuTour && !worksheetContextTargetsTour && !keyTipOverlayTour && !printPreviewTour && !backstageRecentExportShareTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !statusFooterInteractionsTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !dataSubmittedWorkflowsTour && !fileIoImportSmokeTour && !insertTablesChartsTour && !chartDataLayoutTour && !chartPersistenceRenderTour && !pivotFieldListContextTour && !pivotOptionsSlicerTour && !viewPanesZoomTour && !pageLayoutSetupTour && !pageLayoutOutputTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour && !reviewStatsShareTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeStylesConditionalFormattingTour && !homeClipboardCellsEditingTour && !homeSubmittedWorkflowsTour && !ribbonOverflowKeytipTour && !worksheetContextMenuTour && !worksheetContextTargetsTour && !keyTipOverlayTour && !printPreviewTour && !backstageRecentExportShareTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !statusFooterInteractionsTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !insertObjectPersistenceTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !dataSubmittedWorkflowsTour && !fileIoImportSmokeTour && !insertTablesChartsTour && !chartDataLayoutTour && !chartPersistenceRenderTour && !pivotFieldListContextTour && !pivotOptionsSlicerTour && !viewPanesZoomTour && !pageLayoutSetupTour && !pageLayoutOutputTour && !drawObjectFormattingTour && !drawObjectPersistenceTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour && !reviewProtectionMatrixTour && !reviewStatsShareTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -233,7 +247,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeStylesConditionalFormattingTour, homeClipboardCellsEditingTour, homeSubmittedWorkflowsTour, ribbonOverflowKeytipTour, worksheetContextMenuTour, worksheetContextTargetsTour, keyTipOverlayTour, printPreviewTour, backstageRecentExportShareTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, statusFooterInteractionsTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, dataSubmittedWorkflowsTour, fileIoImportSmokeTour, insertTablesChartsTour, chartDataLayoutTour, chartPersistenceRenderTour, pivotFieldListContextTour, pivotOptionsSlicerTour, viewPanesZoomTour, pageLayoutSetupTour, pageLayoutOutputTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour, reviewStatsShareTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeStylesConditionalFormattingTour, homeClipboardCellsEditingTour, homeSubmittedWorkflowsTour, ribbonOverflowKeytipTour, worksheetContextMenuTour, worksheetContextTargetsTour, keyTipOverlayTour, printPreviewTour, backstageRecentExportShareTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, statusFooterInteractionsTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, insertObjectPersistenceTour, dataToolsDialogsTour, dataSortFilterOutlineTour, dataSubmittedWorkflowsTour, fileIoImportSmokeTour, insertTablesChartsTour, chartDataLayoutTour, chartPersistenceRenderTour, pivotFieldListContextTour, pivotOptionsSlicerTour, viewPanesZoomTour, pageLayoutSetupTour, pageLayoutOutputTour, drawObjectFormattingTour, drawObjectPersistenceTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour, reviewProtectionMatrixTour, reviewStatsShareTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -282,6 +296,7 @@ public partial class MainWindow
         bool formulaBarNameBoxTour,
         bool gridSelectionEditingTour,
         bool insertObjectsLinksTour,
+        bool insertObjectPersistenceTour,
         bool dataToolsDialogsTour,
         bool dataSortFilterOutlineTour,
         bool dataSubmittedWorkflowsTour,
@@ -295,9 +310,11 @@ public partial class MainWindow
         bool pageLayoutSetupTour,
         bool pageLayoutOutputTour,
         bool drawObjectFormattingTour,
+        bool drawObjectPersistenceTour,
         bool formulaDiagnosticsTour,
         bool formulaAuthoringNamesTour,
         bool reviewCommentsProtectionTour,
+        bool reviewProtectionMatrixTour,
         bool reviewStatsShareTour)
     {
         if (ribbonPlan is not null)
@@ -372,6 +389,8 @@ public partial class MainWindow
 
         if (insertObjectsLinksTour)
             await CaptureInsertObjectsLinksTourAsync(Path.Combine(outputDir, InsertObjectsLinksTourOutputDirectoryName));
+        if (insertObjectPersistenceTour)
+            await CaptureInsertObjectPersistenceTourAsync(Path.Combine(outputDir, InsertObjectPersistenceTourOutputDirectoryName));
         if (dataToolsDialogsTour)
             await CaptureDataToolsDialogsTourAsync(Path.Combine(outputDir, DataToolsDialogsTourOutputDirectoryName));
         if (dataSortFilterOutlineTour)
@@ -398,6 +417,8 @@ public partial class MainWindow
             await CapturePageLayoutOutputTourAsync(Path.Combine(outputDir, PageLayoutOutputTourOutputDirectoryName));
         if (drawObjectFormattingTour)
             await CaptureDrawObjectFormattingTourAsync(Path.Combine(outputDir, DrawObjectFormattingTourOutputDirectoryName));
+        if (drawObjectPersistenceTour)
+            await CaptureDrawObjectPersistenceTourAsync(Path.Combine(outputDir, DrawObjectPersistenceTourOutputDirectoryName));
         if (formulaDiagnosticsTour)
             await CaptureFormulaDiagnosticsTourAsync(Path.Combine(outputDir, FormulaDiagnosticsTourOutputDirectoryName));
 
@@ -406,6 +427,9 @@ public partial class MainWindow
 
         if (reviewCommentsProtectionTour)
             await CaptureReviewCommentsProtectionTourAsync(Path.Combine(outputDir, ReviewCommentsProtectionTourOutputDirectoryName));
+
+        if (reviewProtectionMatrixTour)
+            await CaptureReviewProtectionMatrixTourAsync(Path.Combine(outputDir, ReviewProtectionMatrixTourOutputDirectoryName));
 
         if (reviewStatsShareTour)
             await CaptureReviewStatsShareTourAsync(Path.Combine(outputDir, ReviewStatsShareTourOutputDirectoryName));
@@ -12863,12 +12887,14 @@ public partial class MainWindow
     [JsonSerializable(typeof(KeyTipOverlayTourManifest))]
     [JsonSerializable(typeof(QatUndoRedoTourManifest))]
     [JsonSerializable(typeof(SheetTabTourManifest))]
+    [JsonSerializable(typeof(SheetTabWorkflowsTourManifest))]
     [JsonSerializable(typeof(TitlebarWindowChromeTourManifest))]
     [JsonSerializable(typeof(FormulaBarNameBoxTourManifest))]
     [JsonSerializable(typeof(GridSelectionEditingTourManifest))]
     [JsonSerializable(typeof(StatusFooterTourManifest))]
     [JsonSerializable(typeof(StatusFooterInteractionsTourManifest))]
     [JsonSerializable(typeof(InsertObjectsLinksTourManifest))]
+    [JsonSerializable(typeof(InsertObjectPersistenceTourManifest))]
     [JsonSerializable(typeof(DataToolsDialogsTourManifest))]
     [JsonSerializable(typeof(DataSortFilterOutlineTourManifest))]
     [JsonSerializable(typeof(DataSubmittedWorkflowsTourManifest))]
@@ -12882,9 +12908,11 @@ public partial class MainWindow
     [JsonSerializable(typeof(PageLayoutSetupTourManifest))]
     [JsonSerializable(typeof(PageLayoutOutputTourManifest))]
     [JsonSerializable(typeof(DrawObjectFormattingTourManifest))]
+    [JsonSerializable(typeof(DrawObjectPersistenceTourManifest))]
     [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
     [JsonSerializable(typeof(FormulaAuthoringNamesTourManifest))]
     [JsonSerializable(typeof(ReviewCommentsProtectionTourManifest))]
+    [JsonSerializable(typeof(ReviewProtectionMatrixTourManifest))]
     [JsonSerializable(typeof(ReviewStatsShareTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 

@@ -360,6 +360,24 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void ReviewCatalogRows_DocumentProtectionMatrixTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var row = Regex
+            .Split(catalog, "\\r?\\n")
+            .Single(line => line.StartsWith("| UI-CMD-REVIEW-006 |", StringComparison.Ordinal));
+
+        row.Should().Contain("FREEX_REVIEW_PROTECTION_MATRIX_TOUR=1");
+        row.Should().Contain("screenshots/review-protection-matrix-tour/");
+        row.Should().Contain("review_protection_matrix_tour_manifest.json");
+        catalog.Should().Contain("freex_review_protection_matrix_protected_disabled_state.png");
+        catalog.Should().Contain("freex_review_protection_matrix_locked_cell_blocked.png");
+        catalog.Should().Contain("freex_review_protection_matrix_unlocked_cell_allowed.png");
+        catalog.Should().Contain("freex_review_protection_matrix_allow_range_allowed.png");
+        catalog.Should().Contain("freex_review_protection_matrix_reopened_persistence.png");
+    }
+
+    [Fact]
     public void InsertCatalogRows_DocumentTablesChartsTourEvidence()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
@@ -508,10 +526,14 @@ public sealed partial class UiTestCatalogInventoryTests
         }
 
         catalog.Should().Contain("FREEX_DRAW_OBJECT_FORMATTING_TOUR=1");
+        catalog.Should().Contain("FREEX_DRAW_OBJECT_PERSISTENCE_TOUR=1");
         catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
         catalog.Should().Contain("draw_object_formatting_tour_manifest.json");
+        catalog.Should().Contain("draw_object_persistence_tour_manifest.json");
         catalog.Should().Contain("freex_draw_object_formatting_shape_effects_dialog.png");
         catalog.Should().Contain("freex_draw_object_formatting_selection_pane_rename_visibility.png");
+        catalog.Should().Contain("freex_draw_object_persistence_reopened_persisted_objects.png");
+        catalog.Should().Contain("freex_draw_object_persistence_saved.fxl");
     }
 
     [Fact]
