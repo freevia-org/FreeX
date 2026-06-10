@@ -85,6 +85,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "excel-save-as-dialog" => RunExcelSaveAsDialogScenario(),
             "freex-open-dialog" => RunFreeXDialogScenario("freex-open-dialog", "^{F12}", "#32770", "Open"),
             "freex-save-as-dialog" => RunFreeXDialogScenario("freex-save-as-dialog", "{F12}", "#32770", "Save As"),
+            "freex-status-zoom-in-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-in-click", ClickAutomationId("StatusZoomInButton")),
+            "freex-status-zoom-slider-drag" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-drag", DragFirstSlider("Zoom")),
+            "freex-sheet-tab-context-menu" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-context-menu", RightClickNamedElement("Sheet1", ControlType.TabItem)),
+            "freex-grid-drag-select" => RunFreeXMainWindowPointerScenario("freex-grid-drag-select", DragRelative(0.14, 0.56, 0.37, 0.69)),
             _ => CaptureResult.Blocked(options.Scenario, "unsupported-scenario", $"Unsupported scenario '{options.Scenario}'.", options.OutputRoot, options.Subject)
         };
     }
@@ -439,6 +443,185 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
+    private CaptureResult RunFreeXMainWindowPointerScenario(
+        string scenario,
+        Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> action)
+    {
+        Process? process = null;
+
+        try
+        {
+            var exePath = ResolveFreeXExePath();
+            process = Process.Start(new ProcessStartInfo(exePath)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory
+            });
+
+            if (process is null)
+            {
+                return CaptureResult.Blocked(scenario, "launch-failed", $"Failed to launch '{exePath}'.", options.OutputRoot, "freex");
+            }
+
+            var window = WindowFinder.WaitForMainWindow(process.Id, options.LaunchTimeout);
+            if (window is null)
+            {
+                return CaptureResult.Blocked(scenario, "window-not-found", $"FreeX process {process.Id} did not expose a visible main window.", options.OutputRoot, "freex");
+            }
+
+            var handle = new IntPtr(window.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(handle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-pointer-input");
+            }
+
+            var blocked = action(handle, process.Id, window, guard);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            var refreshedWindow = WindowFinder.GetWindowInfo(handle) ?? window;
+            return CaptureWindow(scenario, "freex", refreshedWindow, guard, "complete");
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> ClickAutomationId(string automationId)
+        => (handle, processId, _, guard) =>
+        {
+            var root = AutomationElement.FromHandle(handle);
+            var element = root.FindFirst(
+                TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.AutomationIdProperty, automationId));
+            if (element is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find AutomationId '{automationId}'.", options.OutputRoot, "freex", guard);
+            }
+
+            return GuardedClickElement(options.Scenario, processId, handle, element, MouseButtonKind.Left);
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragFirstSlider(string nameContains)
+        => (handle, processId, _, guard) =>
+        {
+            var root = AutomationElement.FromHandle(handle);
+            var sliders = root.FindAll(
+                TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Slider));
+            var slider = sliders
+                .Cast<AutomationElement>()
+                .FirstOrDefault(candidate => candidate.Current.Name.Contains(nameContains, StringComparison.OrdinalIgnoreCase));
+            if (slider is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find a slider named like '{nameContains}'.", options.OutputRoot, "freex", guard);
+            }
+
+            var bounds = slider.Current.BoundingRectangle;
+            if (bounds.IsEmpty || bounds.Width < 20 || bounds.Height < 8)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-bounds-invalid", $"Slider bounds were not usable: {bounds}.", options.OutputRoot, "freex", guard);
+            }
+
+            return GuardedDrag(
+                options.Scenario,
+                processId,
+                handle,
+                (int)(bounds.Left + bounds.Width * 0.35),
+                (int)(bounds.Top + bounds.Height / 2.0),
+                (int)(bounds.Left + bounds.Width * 0.82),
+                (int)(bounds.Top + bounds.Height / 2.0));
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> RightClickNamedElement(string name, ControlType controlType)
+        => (handle, processId, _, guard) =>
+        {
+            var root = AutomationElement.FromHandle(handle);
+            var condition = new AndCondition(
+                new PropertyCondition(AutomationElement.NameProperty, name),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, controlType));
+            var element = root.FindFirst(TreeScope.Descendants, condition)
+                ?? root.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.NameProperty, name))
+                    .Cast<AutomationElement>()
+                    .FirstOrDefault(candidate => !candidate.Current.BoundingRectangle.IsEmpty);
+            if (element is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find element named '{name}'.", options.OutputRoot, "freex", guard);
+            }
+
+            return GuardedClickElement(options.Scenario, processId, handle, element, MouseButtonKind.Right);
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragRelative(double startX, double startY, double endX, double endY)
+        => (handle, processId, window, _) => GuardedDrag(
+            options.Scenario,
+            processId,
+            handle,
+            window.Bounds.Left + (int)(window.Bounds.Width * startX),
+            window.Bounds.Top + (int)(window.Bounds.Height * startY),
+            window.Bounds.Left + (int)(window.Bounds.Width * endX),
+            window.Bounds.Top + (int)(window.Bounds.Height * endY));
+
+    private CaptureResult? GuardedClickElement(string scenario, int processId, IntPtr handle, AutomationElement element, MouseButtonKind button)
+    {
+        var bounds = element.Current.BoundingRectangle;
+        if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+        {
+            return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", $"Element bounds were not usable: {bounds}.", options.OutputRoot, "freex");
+        }
+
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(scenario, guard, "before-pointer-click");
+        }
+
+        var x = (int)(bounds.Left + bounds.Width / 2.0);
+        var y = (int)(bounds.Top + bounds.Height / 2.0);
+        NativeMethods.SetCursorPos(x, y);
+        Thread.Sleep(100);
+        NativeMethods.MouseEvent(button == MouseButtonKind.Left ? NativeMethods.MOUSEEVENTF_LEFTDOWN : NativeMethods.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.MouseEvent(button == MouseButtonKind.Left ? NativeMethods.MOUSEEVENTF_LEFTUP : NativeMethods.MOUSEEVENTF_RIGHTUP, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(options.AfterInputDelay);
+        return null;
+    }
+
+    private CaptureResult? GuardedDrag(string scenario, int processId, IntPtr handle, int startX, int startY, int endX, int endY)
+    {
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(scenario, guard, "before-pointer-drag");
+        }
+
+        NativeMethods.SetCursorPos(startX, startY);
+        Thread.Sleep(120);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        const int steps = 12;
+        for (var i = 1; i <= steps; i++)
+        {
+            var x = startX + (endX - startX) * i / steps;
+            var y = startY + (endY - startY) * i / steps;
+            NativeMethods.SetCursorPos(x, y);
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_MOVE, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(35);
+        }
+
+        Thread.Sleep(80);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(options.AfterInputDelay);
+        return null;
+    }
+
     private CaptureResult CaptureWindow(string scenario, string subject, WindowInfo window, ForegroundGuardResult guard, string status)
     {
         var scenarioDir = Path.Combine(options.OutputRoot, scenario);
@@ -738,6 +921,10 @@ internal sealed record CaptureOptions(
           excel-save-as-dialog
           freex-open-dialog
           freex-save-as-dialog
+          freex-status-zoom-in-click
+          freex-status-zoom-slider-drag
+          freex-sheet-tab-context-menu
+          freex-grid-drag-select
 
         Options:
           --output <path>       Default: tools/foreground-captures
@@ -1140,12 +1327,19 @@ internal sealed record WindowInfo(
     string ClassName,
     Rectangle Bounds);
 
+internal enum MouseButtonKind
+{
+    Left,
+    Right
+}
+
 internal static class NativeMethods
 {
     public const int SW_RESTORE = 9;
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_SHOWWINDOW = 0x0040;
+    public const int MOUSEEVENTF_MOVE = 0x0001;
     public const int MOUSEEVENTF_LEFTDOWN = 0x0002;
     public const int MOUSEEVENTF_LEFTUP = 0x0004;
     public const int MOUSEEVENTF_RIGHTDOWN = 0x0008;
