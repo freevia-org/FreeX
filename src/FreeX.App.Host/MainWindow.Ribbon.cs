@@ -145,7 +145,7 @@ public partial class MainWindow
         string commandName,
         RibbonCommandLayoutKind plannedLayout)
     {
-        if (plannedLayout != RibbonCommandLayoutKind.Large ||
+        if (plannedLayout is not (RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium) ||
             !TryGetRibbonButtonGroupCatalogId(button, out var groupCatalogId))
         {
             return false;
@@ -154,6 +154,32 @@ public partial class MainWindow
         var normalizedCommandName = NormalizeRibbonCommandName(commandName);
         return groupCatalogId switch
         {
+            "InsertTablesGroup" =>
+                normalizedCommandName is "pivottable" or
+                    "recommended pivottables" or
+                    "table",
+            "InsertIllustrationsGroup" =>
+                normalizedCommandName is "pictures" or
+                    "shapes",
+            "InsertChartsGroup" =>
+                normalizedCommandName is "recommended charts" or
+                    "recommended chart",
+            "InsertSparklinesGroup" =>
+                normalizedCommandName is "line sparkline" or
+                    "column sparkline" or
+                    "win/loss sparkline",
+            "InsertFiltersGroup" =>
+                normalizedCommandName is "insert slicer" or
+                    "insert timeline",
+            "InsertLinksGroup" =>
+                normalizedCommandName is "insert link",
+            "InsertCommentsGroup" =>
+                normalizedCommandName is "comment",
+            "InsertTextGroup" =>
+                normalizedCommandName is "text box" or
+                    "header & footer",
+            "InsertSymbolsGroup" =>
+                normalizedCommandName is "symbol",
             "ReviewProofingGroup" =>
                 normalizedCommandName is "spelling" or "workbook statistics",
             "ReviewAccessibilityGroup" =>
