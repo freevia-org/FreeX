@@ -19,10 +19,12 @@ public static partial class PivotTableRefreshService
         {
             var (rowOffset, colPairOffset) = GetPageFieldOffset(index, pageFields.Count, wrap, pivotTable.PageOverThenDown);
             var field = pageFields[index];
-            sheet.SetCell(
+            SetPivotCell(
+                sheet,
                 new CellAddress(sheet.Id, start.Row + rowOffset, start.Col + colPairOffset),
                 new TextValue(headers[field.SourceFieldIndex]));
-            sheet.SetCell(
+            SetPivotCell(
+                sheet,
                 new CellAddress(sheet.Id, start.Row + rowOffset, start.Col + colPairOffset + 1),
                 new TextValue(GetPageFieldSelectionText(field)));
         }

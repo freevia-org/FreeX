@@ -71,7 +71,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
 
         _snapshot = SlicerSelectionSnapshot.Capture(slicer, pivotTable);
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
 
         slicer.SelectedItems.Clear();
         slicer.SelectedItems.AddRange(_selectedItems.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.CurrentCultureIgnoreCase));
@@ -89,6 +89,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         var target = slicer?.SourcePivotTableName is null ? null : PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, slicer.SourcePivotTableName);
         if (slicer is not null && target is { } connected && _snapshot is not null)
         {
+            PivotTableRefreshService.ClearRenderedRange(connected.Sheet, connected.PivotTable.LastRenderedRange);
             _snapshot.Restore(slicer, connected.PivotTable);
             AddPivotTableCommand.Restore(connected.Sheet, _targetSnapshot);
         }
@@ -101,14 +102,16 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         IReadOnlyList<string> SelectedItems,
         IReadOnlyList<PivotFieldModel> RowFields,
         IReadOnlyList<PivotFieldModel> ColumnFields,
-        IReadOnlyList<PivotFieldModel> PageFields)
+        IReadOnlyList<PivotFieldModel> PageFields,
+        GridRange? LastRenderedRange)
     {
         public static SlicerSelectionSnapshot Capture(SlicerModel slicer, PivotTableModel pivotTable) =>
             new(
                 slicer.SelectedItems.ToList(),
                 pivotTable.RowFields.ToList(),
                 pivotTable.ColumnFields.ToList(),
-                pivotTable.PageFields.ToList());
+                pivotTable.PageFields.ToList(),
+                pivotTable.LastRenderedRange);
 
         public void Restore(SlicerModel slicer, PivotTableModel pivotTable)
         {
@@ -117,6 +120,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
             PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
             PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
+            pivotTable.LastRenderedRange = LastRenderedRange;
         }
     }
 }

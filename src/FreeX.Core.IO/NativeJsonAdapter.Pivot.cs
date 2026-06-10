@@ -119,8 +119,12 @@ public sealed partial class NativeJsonAdapter
         {
             var sourceRange = GridRange.Parse(sourceReference, sourceSheet.Id);
             var targetRange = GridRange.Parse(dto.TargetRange, targetSheet.Id);
+            var lastRenderedRange = string.IsNullOrWhiteSpace(dto.LastRenderedRange)
+                ? targetRange
+                : GridRange.Parse(dto.LastRenderedRange, targetSheet.Id);
             if (!IsValidRangeOnSheet(sourceRange, sourceSheet.Id) ||
-                !IsValidRangeOnSheet(targetRange, targetSheet.Id))
+                !IsValidRangeOnSheet(targetRange, targetSheet.Id) ||
+                !IsValidRangeOnSheet(lastRenderedRange, targetSheet.Id))
             {
                 return null;
             }
@@ -131,6 +135,7 @@ public sealed partial class NativeJsonAdapter
                 CacheId = dto.CacheId,
                 SourceRange = sourceRange,
                 TargetRange = targetRange,
+                LastRenderedRange = lastRenderedRange,
                 PackagePart = dto.PackagePart ?? "",
                 CreatedVersion = dto.CreatedVersion,
                 UpdatedVersion = dto.UpdatedVersion,
@@ -354,6 +359,7 @@ public sealed partial class NativeJsonAdapter
             SourceSheetName = sourceSheet.Name,
             SourceRange = pivot.SourceRange.ToString(),
             TargetRange = pivot.TargetRange.ToString(),
+            LastRenderedRange = pivot.LastRenderedRange?.ToString(),
             PackagePart = pivot.PackagePart,
             CreatedVersion = pivot.CreatedVersion,
             UpdatedVersion = pivot.UpdatedVersion,

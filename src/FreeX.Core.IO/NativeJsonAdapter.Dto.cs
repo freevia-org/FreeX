@@ -932,6 +932,7 @@ public sealed partial class NativeJsonAdapter
         public string? SourceSheetName { get; set; }
         public string? SourceRange { get; set; }
         public string? TargetRange { get; set; }
+        public string? LastRenderedRange { get; set; }
         public string PackagePart { get; set; } = "";
         public int? CreatedVersion { get; set; }
         public int? UpdatedVersion { get; set; }

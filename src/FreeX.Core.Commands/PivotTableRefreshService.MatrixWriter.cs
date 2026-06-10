@@ -31,11 +31,11 @@ public static partial class PivotTableRefreshService
         var singleDataField = pivotTable.DataFields.Count == 1;
 
         if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
-            sheet.SetCell(new CellAddress(sheet.Id, start.Row, start.Col), new TextValue("Row Labels"));
+            SetPivotCell(sheet, new CellAddress(sheet.Id, start.Row, start.Col), new TextValue("Row Labels"));
         else
         {
             for (var index = 0; index < rowFields.Count; index++)
-                sheet.SetCell(new CellAddress(sheet.Id, start.Row, start.Col + (uint)index), new TextValue(headers[rowFields[index].SourceFieldIndex]));
+                SetPivotCell(sheet, new CellAddress(sheet.Id, start.Row, start.Col + (uint)index), new TextValue(headers[rowFields[index].SourceFieldIndex]));
         }
 
         var valueStartCol = start.Col + (uint)rowFieldOutputColumns;
@@ -52,7 +52,8 @@ public static partial class PivotTableRefreshService
         {
             foreach (var dataField in pivotTable.DataFields)
             {
-                sheet.SetCell(
+                SetPivotCell(
+                    sheet,
                     new CellAddress(sheet.Id, start.Row, outputColumn),
                     new TextValue(GrandTotalCaption(pivotTable, dataField, singleDataField)));
                 outputColumn++;
@@ -135,7 +136,7 @@ public static partial class PivotTableRefreshService
 
             if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
             {
-                sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(string.Join(" ", rowGroup.Key.Values)));
+                SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(string.Join(" ", rowGroup.Key.Values)));
             }
             else
             {
@@ -143,7 +144,7 @@ public static partial class PivotTableRefreshService
                 {
                     var suppressRepeat = ShouldSuppressRepeatedRowLabel(pivotTable, rowGroup.Key, previousRowKey, index);
                     if (!suppressRepeat)
-                        sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col + (uint)index), new TextValue(rowGroup.Key.Values[index]));
+                        SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col + (uint)index), new TextValue(rowGroup.Key.Values[index]));
                 }
             }
 
@@ -218,7 +219,7 @@ public static partial class PivotTableRefreshService
 
         if (pivotTable.ShowColumnGrandTotals)
         {
-            sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(GrandTotalCaption(pivotTable)));
+            SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(GrandTotalCaption(pivotTable)));
             outputColumn = valueStartCol;
             foreach (var columnKey in columnKeys)
             {
@@ -272,7 +273,7 @@ public static partial class PivotTableRefreshService
         var captionItem = subtotalKey.Values.Count == 0
             ? ""
             : subtotalKey.Values[^1];
-        sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue($"{captionItem} Total"));
+        SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue($"{captionItem} Total"));
 
         var subtotalRowsByColumnKey = BuildColumnRowsByKey(subtotalRows, columnFields);
         var visibleSubtotalRows = RowsForColumnKeys(subtotalRowsByColumnKey, columnKeys, subtotalRows);

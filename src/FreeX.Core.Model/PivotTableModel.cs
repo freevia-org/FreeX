@@ -64,6 +64,7 @@ public sealed class PivotTableModel
     public int CacheId { get; init; }
     public GridRange SourceRange { get; set; }
     public GridRange TargetRange { get; set; }
+    public GridRange? LastRenderedRange { get; set; }
     public string PackagePart { get; init; } = "";
     public int? CreatedVersion { get; set; }
     public int? UpdatedVersion { get; set; }
