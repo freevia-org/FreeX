@@ -82,7 +82,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "excel-borders" => RunExcelPopupScenario("excel-borders", PrepareExcelBlankWorkbook, "%hb", "Net UI Tool Window"),
             "excel-context-menu" => RunExcelContextMenuScenario(),
             "excel-open-dialog" => RunExcelDialogScenario("excel-open-dialog", PrepareExcelBlankWorkbook, "^{F12}", "#32770", "Open"),
-            "excel-save-as-dialog" => RunExcelDialogScenario("excel-save-as-dialog", PrepareExcelBlankWorkbook, "{F12}", "#32770", "Save As"),
+            "excel-save-as-dialog" => RunExcelSaveAsDialogScenario(),
             "freex-open-dialog" => RunFreeXDialogScenario("freex-open-dialog", "^{F12}", "#32770", "Open"),
             "freex-save-as-dialog" => RunFreeXDialogScenario("freex-save-as-dialog", "{F12}", "#32770", "Save As"),
             _ => CaptureResult.Blocked(options.Scenario, "unsupported-scenario", $"Unsupported scenario '{options.Scenario}'.", options.OutputRoot, options.Subject)
@@ -108,10 +108,54 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard("excel-autofilter", guard, "before-input");
             }
 
-            ClickExcelAutoFilterHeaderDropdown(excel, worksheet);
-            Thread.Sleep(options.AfterInputDelay);
+            WindowInfo? popup = null;
+            if (TryOpenExcelAutoFilterWithUia(hwnd))
+            {
+                Thread.Sleep(options.AfterInputDelay);
+                popup = WindowFinder.FindProcessPopup(pid.Value, hwnd.ToInt64(), TimeSpan.FromMilliseconds(1200), 120, 80);
+            }
 
-            var popup = WindowFinder.FindProcessPopup(pid.Value, hwnd.ToInt64(), options.PopupTimeout, 120, 80);
+            if (popup is null)
+            {
+                guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+                if (!guard.Success)
+                {
+                    return BlockedWithGuard("excel-autofilter", guard, "before-com-sendkeys");
+                }
+
+                worksheet.Range["A1"].Activate();
+                excel.SendKeys("%{DOWN}");
+                Thread.Sleep(options.AfterInputDelay);
+                popup = WindowFinder.FindForegroundProcessPopup(pid.Value, hwnd.ToInt64(), TimeSpan.FromMilliseconds(1200), 120, 80);
+            }
+
+            if (popup is null)
+            {
+                guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+                if (!guard.Success)
+                {
+                    return BlockedWithGuard("excel-autofilter", guard, "before-winforms-sendkeys");
+                }
+
+                worksheet.Range["A1"].Activate();
+                SendKeys.SendWait("%{DOWN}");
+                Thread.Sleep(options.AfterInputDelay);
+                popup = WindowFinder.FindForegroundProcessPopup(pid.Value, hwnd.ToInt64(), TimeSpan.FromMilliseconds(1200), 120, 80);
+            }
+
+            if (popup is null)
+            {
+                guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+                if (!guard.Success)
+                {
+                    return BlockedWithGuard("excel-autofilter", guard, "before-coordinate-click");
+                }
+
+                ClickExcelAutoFilterHeaderDropdown(excel, worksheet);
+                Thread.Sleep(options.AfterInputDelay);
+                popup = WindowFinder.FindForegroundProcessPopup(pid.Value, hwnd.ToInt64(), options.PopupTimeout, 120, 80);
+            }
+
             if (popup is null)
             {
                 return CaptureResult.Blocked("excel-autofilter", "popup-not-found", "Did not detect foreground Excel AutoFilter popup after the guarded header-arrow click.", options.OutputRoot, "excel", guard);
@@ -289,6 +333,57 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
+    private CaptureResult RunExcelSaveAsDialogScenario()
+    {
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelBlankWorkbook(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("excel-save-as-dialog", guard, "before-input");
+            }
+
+            SendKeys.SendWait("{F12}");
+            Thread.Sleep(options.AfterInputDelay);
+
+            var dialog = WindowFinder.FindProcessWindow(
+                pid.Value,
+                window => window.Handle != hwnd.ToInt64() &&
+                    (window.ClassName.Equals("NUIDialog", StringComparison.OrdinalIgnoreCase) ||
+                    (window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                     window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase))) &&
+                    window.Bounds.Width > 400 &&
+                    window.Bounds.Height > 250,
+                options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked("excel-save-as-dialog", "dialog-not-found", "Did not detect Excel Save As NUIDialog or '#32770' dialog after F12.", options.OutputRoot, "excel", guard);
+            }
+
+            if (dialog.ClassName.Equals("NUIDialog", StringComparison.OrdinalIgnoreCase))
+            {
+                return CaptureResult.Blocked("excel-save-as-dialog", "nuidialog-not-capturable", "Detected an Office NUIDialog after F12, but it is not a capturable native Save As file dialog in this Office state.", options.OutputRoot, "excel", guard);
+            }
+
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            return CaptureWindow("excel-save-as-dialog", "excel", dialog, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
     private CaptureResult RunFreeXDialogScenario(
         string scenario,
         string keys,
@@ -457,6 +552,47 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
         Thread.Sleep(60);
         NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+    }
+
+    private static bool TryOpenExcelAutoFilterWithUia(IntPtr excelWindowHandle)
+    {
+        var root = AutomationElement.FromHandle(excelWindowHandle);
+        var buttons = root.FindAll(
+            TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button));
+
+        foreach (AutomationElement button in buttons)
+        {
+            var name = button.Current.Name ?? string.Empty;
+            var automationId = button.Current.AutomationId ?? string.Empty;
+            var candidateText = $"{name} {automationId}";
+            if (!candidateText.Contains("score", StringComparison.OrdinalIgnoreCase) ||
+                !(candidateText.Contains("filter", StringComparison.OrdinalIgnoreCase) ||
+                  candidateText.Contains("drop", StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            if (button.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePattern) &&
+                invokePattern is InvokePattern invoke)
+            {
+                invoke.Invoke();
+                return true;
+            }
+
+            var bounds = button.Current.BoundingRectangle;
+            if (!bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0)
+            {
+                NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
+                Thread.Sleep(100);
+                NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                Thread.Sleep(60);
+                NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void RightClickExcelRangeCenter(dynamic excel, dynamic worksheet, string address)
@@ -873,6 +1009,28 @@ internal static class WindowFinder
         return null;
     }
 
+    public static WindowInfo? FindProcessWindow(int processId, Func<WindowInfo, bool> predicate, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var window = EnumerateVisibleWindows()
+                .Where(candidate => candidate.ProcessId == processId)
+                .Where(predicate)
+                .OrderByDescending(candidate => candidate.Bounds.Width * candidate.Bounds.Height)
+                .FirstOrDefault();
+
+            if (window is not null)
+            {
+                return window;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return null;
+    }
+
     public static WindowInfo? FindProcessPopup(int processId, long ownerHandle, TimeSpan timeout, int minimumWidth, int minimumHeight)
     {
         var deadline = DateTime.UtcNow + timeout;
@@ -900,6 +1058,28 @@ internal static class WindowFinder
             if (popup is not null)
             {
                 return popup;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return null;
+    }
+
+    public static WindowInfo? FindForegroundProcessPopup(int processId, long ownerHandle, TimeSpan timeout, int minimumWidth, int minimumHeight)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var foreground = GetWindowInfo(NativeMethods.GetForegroundWindow());
+            if (foreground is not null &&
+                foreground.ProcessId == processId &&
+                foreground.Handle != ownerHandle &&
+                !foreground.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase) &&
+                foreground.Bounds.Width >= minimumWidth &&
+                foreground.Bounds.Height >= minimumHeight)
+            {
+                return foreground;
             }
 
             Thread.Sleep(150);
