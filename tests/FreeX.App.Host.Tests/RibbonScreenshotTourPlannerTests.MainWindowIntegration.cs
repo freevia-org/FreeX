@@ -8,7 +8,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     [Fact]
     public void MainWindowScreenshotTour_UsesPlannerForEnvironmentFilters()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "MainWindow.ScreenshotTour.cs",
+            "MainWindow.ScreenshotTour.RibbonOverflowKeytip.cs");
 
         source.Should().Contain("RibbonScreenshotTourPlanner.CreatePlan");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_BURST\")");
@@ -36,6 +38,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_FONT_COLORS_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_STYLES_CF_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_RIBBON_OVERFLOW_KEYTIP_TOUR\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_FORMULA_AUTHORING_NAMES_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
@@ -64,6 +67,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureHomeFontColorsTourAsync");
         source.Should().Contain("CaptureHomeStylesConditionalFormattingTourAsync");
         source.Should().Contain("CaptureHomeClipboardCellsEditingTourAsync");
+        source.Should().Contain("CaptureRibbonOverflowKeytipTourAsync");
         source.Should().Contain("CaptureFormulaAuthoringNamesTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
@@ -112,6 +116,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("home_font_colors_tour_manifest.json");
         source.Should().Contain("home_styles_conditional_formatting_tour_manifest.json");
         source.Should().Contain("home_clipboard_cells_editing_tour_manifest.json");
+        source.Should().Contain("ribbon_overflow_keytip_tour_manifest.json");
         source.Should().Contain("formula_authoring_names_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
@@ -119,6 +124,26 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("GetForegroundWindow");
         source.Should().Contain("_suppressClosePrompt = true;");
         source.Should().Contain("throw new InvalidOperationException");
+    }
+
+    [Fact]
+    public void RibbonOverflowKeytipTour_CapturesCollapsedMenusAndEscapeCancellation()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "MainWindow.ScreenshotTour.cs",
+            "MainWindow.ScreenshotTour.RibbonOverflowKeytip.cs");
+
+        source.Should().Contain("RibbonOverflowKeytipTourOutputDirectoryName = \"ribbon-overflow-keytip-tour\"");
+        source.Should().Contain("HomeEditingGroup");
+        source.Should().Contain("InsertChartsGroup");
+        source.Should().Contain("ViewWindowGroup");
+        source.Should().Contain("OpenRibbonContextMenu(collapsedButton, menu)");
+        source.Should().Contain("HandleActiveRibbonKeyTip(Key.Escape)");
+        source.Should().Contain("freex_keytip_escape_after_cancel");
+        source.Should().Contain("IsNonBlankPng");
+        source.Should().Contain("UI-CAT-RIBBON-002A");
+        source.Should().Contain("UI-CAT-RIBBON-002B");
+        source.Should().Contain("UI-CMD-KEYTIP-001");
     }
 
     [Fact]
