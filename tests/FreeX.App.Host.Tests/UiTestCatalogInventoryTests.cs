@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -200,6 +200,32 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static string FindCatalogRow(IEnumerable<string> lines, string rowId) =>
         lines.Single(line => line.TrimStart().StartsWith($"| {rowId} |", StringComparison.Ordinal));
+
+    [Fact]
+    public void ViewCatalogRows_DocumentViewPanesZoomTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-VIEW-001 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CAT-VIEW-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-VIEW-001 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-VIEW-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-VIEW-003 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-VIEW-004 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(6);
+        foreach (var row in rows)
+        {
+            row.Should().Contain("view-panes-zoom-tour");
+        }
+
+        catalog.Should().Contain("FREEX_VIEW_PANES_ZOOM_TOUR=1");
+        catalog.Should().Contain("view_panes_zoom_tour_manifest.json");
+        catalog.Should().Contain("freex_view_panes_zoom_custom_views_dialog.png");
+    }
 
     [Theory]
     [InlineData("screenshot_excel.ps1")]
