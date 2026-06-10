@@ -111,6 +111,8 @@ public partial class MainWindow
     private const string FormulaAuthoringNamesTourOutputDirectoryName = "formula-authoring-names-tour";
     private const string ReviewCommentsProtectionTourManifestFileName = "review_comments_protection_tour_manifest.json";
     private const string ReviewCommentsProtectionTourOutputDirectoryName = "review-comments-protection-tour";
+    private const string ReviewProtectionMatrixTourManifestFileName = "review_protection_matrix_tour_manifest.json";
+    private const string ReviewProtectionMatrixTourOutputDirectoryName = "review-protection-matrix-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -211,8 +213,9 @@ public partial class MainWindow
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
         var formulaAuthoringNamesTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_AUTHORING_NAMES_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
+        var reviewProtectionMatrixTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_PROTECTION_MATRIX_TOUR") == "1";
         var reviewStatsShareTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_STATS_SHARE_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeStylesConditionalFormattingTour && !homeClipboardCellsEditingTour && !homeSubmittedWorkflowsTour && !ribbonOverflowKeytipTour && !worksheetContextMenuTour && !worksheetContextTargetsTour && !keyTipOverlayTour && !printPreviewTour && !backstageRecentExportShareTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !dataSubmittedWorkflowsTour && !fileIoImportSmokeTour && !insertTablesChartsTour && !chartDataLayoutTour && !chartPersistenceRenderTour && !pivotFieldListContextTour && !pivotOptionsSlicerTour && !viewPanesZoomTour && !pageLayoutSetupTour && !pageLayoutOutputTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour && !reviewStatsShareTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeStylesConditionalFormattingTour && !homeClipboardCellsEditingTour && !homeSubmittedWorkflowsTour && !ribbonOverflowKeytipTour && !worksheetContextMenuTour && !worksheetContextTargetsTour && !keyTipOverlayTour && !printPreviewTour && !backstageRecentExportShareTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !dataSubmittedWorkflowsTour && !fileIoImportSmokeTour && !insertTablesChartsTour && !chartDataLayoutTour && !chartPersistenceRenderTour && !pivotFieldListContextTour && !pivotOptionsSlicerTour && !viewPanesZoomTour && !pageLayoutSetupTour && !pageLayoutOutputTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour && !reviewProtectionMatrixTour && !reviewStatsShareTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -229,7 +232,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeStylesConditionalFormattingTour, homeClipboardCellsEditingTour, homeSubmittedWorkflowsTour, ribbonOverflowKeytipTour, worksheetContextMenuTour, worksheetContextTargetsTour, keyTipOverlayTour, printPreviewTour, backstageRecentExportShareTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, dataSubmittedWorkflowsTour, fileIoImportSmokeTour, insertTablesChartsTour, chartDataLayoutTour, chartPersistenceRenderTour, pivotFieldListContextTour, pivotOptionsSlicerTour, viewPanesZoomTour, pageLayoutSetupTour, pageLayoutOutputTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour, reviewStatsShareTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeStylesConditionalFormattingTour, homeClipboardCellsEditingTour, homeSubmittedWorkflowsTour, ribbonOverflowKeytipTour, worksheetContextMenuTour, worksheetContextTargetsTour, keyTipOverlayTour, printPreviewTour, backstageRecentExportShareTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, dataSubmittedWorkflowsTour, fileIoImportSmokeTour, insertTablesChartsTour, chartDataLayoutTour, chartPersistenceRenderTour, pivotFieldListContextTour, pivotOptionsSlicerTour, viewPanesZoomTour, pageLayoutSetupTour, pageLayoutOutputTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour, reviewProtectionMatrixTour, reviewStatsShareTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -293,6 +296,7 @@ public partial class MainWindow
         bool formulaDiagnosticsTour,
         bool formulaAuthoringNamesTour,
         bool reviewCommentsProtectionTour,
+        bool reviewProtectionMatrixTour,
         bool reviewStatsShareTour)
     {
         if (ribbonPlan is not null)
@@ -398,6 +402,9 @@ public partial class MainWindow
 
         if (reviewCommentsProtectionTour)
             await CaptureReviewCommentsProtectionTourAsync(Path.Combine(outputDir, ReviewCommentsProtectionTourOutputDirectoryName));
+
+        if (reviewProtectionMatrixTour)
+            await CaptureReviewProtectionMatrixTourAsync(Path.Combine(outputDir, ReviewProtectionMatrixTourOutputDirectoryName));
 
         if (reviewStatsShareTour)
             await CaptureReviewStatsShareTourAsync(Path.Combine(outputDir, ReviewStatsShareTourOutputDirectoryName));
@@ -12876,6 +12883,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
     [JsonSerializable(typeof(FormulaAuthoringNamesTourManifest))]
     [JsonSerializable(typeof(ReviewCommentsProtectionTourManifest))]
+    [JsonSerializable(typeof(ReviewProtectionMatrixTourManifest))]
     [JsonSerializable(typeof(ReviewStatsShareTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
