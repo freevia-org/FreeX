@@ -95,6 +95,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             // S3 native-dialog continuation scenarios.
             "freex-save-as-dialog-cancel" => RunFreeXDialogCancelScenario("freex-save-as-dialog-cancel", "{F12}", "#32770", "Save As"),
             "freex-save-as-overwrite-prompt" => RunFreeXSaveAsOverwritePromptScenario(),
+            "freex-export-pdf-save-dialog-cancel" => RunFreeXExportSaveDialogCancelScenario(),
             "freex-background-picker-cancel" => RunFreeXBackgroundPickerCancelScenario(),
             "freex-background-picker-select" => RunFreeXBackgroundPickerSelectScenario(),
             "freex-status-zoom-in-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-in-click", ClickAutomationIdExpectZoom("StatusZoomInButton", 105)),
@@ -914,6 +915,53 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
+    private CaptureResult RunFreeXExportSaveDialogCancelScenario()
+    {
+        Process? process = null;
+
+        try
+        {
+            var launch = LaunchFreeX("freex-export-pdf-save-dialog-cancel");
+            if (launch.Result is not null)
+            {
+                return launch.Result;
+            }
+
+            process = launch.Process!;
+            var mainHandle = new IntPtr(launch.Window!.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(mainHandle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-export-pdf-save-dialog-cancel", guard, "before-export-open");
+            }
+
+            var blocked = OpenFreeXExportSaveDialog("freex-export-pdf-save-dialog-cancel", process.Id, mainHandle, guard, out var dialog);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            var result = CaptureWindow("freex-export-pdf-save-dialog-cancel", "freex", dialog!, guard, "complete");
+            SendKeys.SendWait("{ESC}");
+            Thread.Sleep(options.AfterInputDelay);
+            return AttachContinuationCapture(
+                result,
+                "freex-export-pdf-save-dialog-cancel",
+                process.Id,
+                mainHandle,
+                "FreeX",
+                "Escape canceled the PDF/XPS native SaveFileDialog and returned foreground focus to FreeX.");
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
     private CaptureResult RunFreeXBackgroundPickerCancelScenario()
     {
         return RunFreeXNativeDialogOpenedByAction(
@@ -1065,6 +1113,56 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return InvokeOrClickElement(options.Scenario, process.Id, mainHandle, backgroundButton, "freex");
     }
 
+    private CaptureResult? OpenFreeXExportSaveDialog(
+        string scenario,
+        int processId,
+        IntPtr mainHandle,
+        ForegroundGuardResult guard,
+        out WindowInfo? dialog)
+    {
+        dialog = null;
+        var blocked = InvokeFreeXBackstageButton(scenario, processId, mainHandle, "BackstageExportButton", guard);
+        if (blocked is not null)
+        {
+            return blocked;
+        }
+
+        dialog = WindowFinder.FindProcessWindow(processId, "#32770", "Export as PDF / XPS", options.PopupTimeout);
+        if (dialog is null)
+        {
+            return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect FreeX PDF/XPS native SaveFileDialog after invoking Backstage Export.", options.OutputRoot, "freex", guard);
+        }
+
+        return null;
+    }
+
+    private CaptureResult? InvokeFreeXBackstageButton(
+        string scenario,
+        int processId,
+        IntPtr mainHandle,
+        string automationId,
+        ForegroundGuardResult guard)
+    {
+        var fileTab = FindDescendantByNameAndType(mainHandle, "File", ControlType.TabItem);
+        if (fileTab is not null)
+        {
+            TrySelectOrInvoke(fileTab);
+        }
+        else
+        {
+            SendKeys.SendWait("%f");
+        }
+
+        Thread.Sleep(options.AfterInputDelay);
+        var button = FindVisibleElementByAutomationId(mainHandle, automationId);
+        if (button is null)
+        {
+            return CaptureResult.Blocked(scenario, "uia-target-not-found", $"Could not find visible Backstage button AutomationId '{automationId}'.", options.OutputRoot, "freex", guard);
+        }
+
+        return InvokeOrClickElement(scenario, processId, mainHandle, button, "freex");
+    }
+
     private CaptureResult AttachContinuationCapture(
         CaptureResult result,
         string scenario,
@@ -1195,6 +1293,19 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 new PropertyCondition(AutomationElement.ControlTypeProperty, controlType))
             .Cast<AutomationElement>()
             .FirstOrDefault(candidate => (candidate.Current.Name ?? string.Empty).Contains(nameContains, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static AutomationElement? FindVisibleElementByAutomationId(IntPtr handle, string automationId)
+    {
+        var root = AutomationElement.FromHandle(handle);
+        return root.FindAll(
+                TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.AutomationIdProperty, automationId))
+            .Cast<AutomationElement>()
+            .Where(IsVisibleElement)
+            .OrderBy(element => element.Current.BoundingRectangle.Top)
+            .ThenBy(element => element.Current.BoundingRectangle.Left)
+            .FirstOrDefault();
     }
 
     private static void TrySelectOrInvoke(AutomationElement element)
@@ -3035,6 +3146,7 @@ internal sealed record CaptureOptions(
           freex-format-cells-context-dialog
           freex-save-as-dialog-cancel
           freex-save-as-overwrite-prompt
+          freex-export-pdf-save-dialog-cancel
           freex-background-picker-cancel
           freex-background-picker-select
           freex-status-zoom-in-click
