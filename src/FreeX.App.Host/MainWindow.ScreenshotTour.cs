@@ -42,6 +42,8 @@ public partial class MainWindow
     private const string HomeBordersDropdownTourCaptureFileName = "freex_dropdown_home_borders_opened";
     private const string HomeFontColorsTourManifestFileName = "home_font_colors_tour_manifest.json";
     private const string HomeFontColorsTourOutputDirectoryName = "home-font-colors-tour";
+    private const string HomeClipboardCellsEditingTourManifestFileName = "home_clipboard_cells_editing_tour_manifest.json";
+    private const string HomeClipboardCellsEditingTourOutputDirectoryName = "home-clipboard-cells-editing-tour";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
     private const string KeyTipOverlayTourManifestFileName = "keytip_overlay_tour_manifest.json";
@@ -76,6 +78,8 @@ public partial class MainWindow
     private const string ViewPanesZoomTourCustomViewName = "View Panes Zoom Tour";
     private const string PageLayoutSetupTourManifestFileName = "page_layout_setup_tour_manifest.json";
     private const string PageLayoutSetupTourOutputDirectoryName = "page-layout-setup-tour";
+    private const string DrawObjectFormattingTourManifestFileName = "draw_object_formatting_tour_manifest.json";
+    private const string DrawObjectFormattingTourOutputDirectoryName = "draw-object-formatting-tour";
     private const string FormulaDiagnosticsTourManifestFileName = "formula_diagnostics_tour_manifest.json";
     private const string FormulaDiagnosticsTourOutputDirectoryName = "formula-diagnostics-tour";
     private const string FormulaAuthoringNamesTourManifestFileName = "formula_authoring_names_tour_manifest.json";
@@ -149,6 +153,7 @@ public partial class MainWindow
         var homeAlignmentNumberTour = Environment.GetEnvironmentVariable("FREEX_HOME_ALIGNMENT_NUMBER_TOUR") == "1";
         var homeBordersDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_BORDERS_DROPDOWN_TOUR") == "1";
         var homeFontColorsTour = Environment.GetEnvironmentVariable("FREEX_HOME_FONT_COLORS_TOUR") == "1";
+        var homeClipboardCellsEditingTour = Environment.GetEnvironmentVariable("FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR") == "1";
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
@@ -165,10 +170,11 @@ public partial class MainWindow
         var insertTablesChartsTour = Environment.GetEnvironmentVariable("FREEX_INSERT_TABLES_CHARTS_TOUR") == "1";
         var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
         var pageLayoutSetupTour = Environment.GetEnvironmentVariable("FREEX_PAGE_LAYOUT_SETUP_TOUR") == "1";
+        var drawObjectFormattingTour = Environment.GetEnvironmentVariable("FREEX_DRAW_OBJECT_FORMATTING_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
         var formulaAuthoringNamesTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_AUTHORING_NAMES_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeClipboardCellsEditingTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -185,7 +191,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeClipboardCellsEditingTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -216,6 +222,7 @@ public partial class MainWindow
         bool homeAlignmentNumberTour,
         bool homeBordersDropdownTour,
         bool homeFontColorsTour,
+        bool homeClipboardCellsEditingTour,
         bool worksheetContextMenuTour,
         bool keyTipOverlayTour,
         bool printPreviewTour,
@@ -232,6 +239,7 @@ public partial class MainWindow
         bool insertTablesChartsTour,
         bool viewPanesZoomTour,
         bool pageLayoutSetupTour,
+        bool drawObjectFormattingTour,
         bool formulaDiagnosticsTour,
         bool formulaAuthoringNamesTour,
         bool reviewCommentsProtectionTour)
@@ -256,6 +264,9 @@ public partial class MainWindow
 
         if (homeFontColorsTour)
             await CaptureHomeFontColorsTourAsync(Path.Combine(outputDir, HomeFontColorsTourOutputDirectoryName));
+
+        if (homeClipboardCellsEditingTour)
+            await CaptureHomeClipboardCellsEditingTourAsync(Path.Combine(outputDir, HomeClipboardCellsEditingTourOutputDirectoryName));
 
         if (worksheetContextMenuTour)
             await CaptureWorksheetContextMenuTourAsync(Path.Combine(outputDir, "worksheet-context-menu-tour"));
@@ -298,6 +309,8 @@ public partial class MainWindow
             await CaptureViewPanesZoomTourAsync(Path.Combine(outputDir, ViewPanesZoomTourOutputDirectoryName));
         if (pageLayoutSetupTour)
             await CapturePageLayoutSetupTourAsync(Path.Combine(outputDir, PageLayoutSetupTourOutputDirectoryName));
+        if (drawObjectFormattingTour)
+            await CaptureDrawObjectFormattingTourAsync(Path.Combine(outputDir, DrawObjectFormattingTourOutputDirectoryName));
         if (formulaDiagnosticsTour)
             await CaptureFormulaDiagnosticsTourAsync(Path.Combine(outputDir, FormulaDiagnosticsTourOutputDirectoryName));
 
@@ -1275,6 +1288,446 @@ public partial class MainWindow
             if (!File.Exists(path))
                 throw new InvalidOperationException($"Home font/colors tour did not create {fileName}.");
         }
+    }
+
+    private async Task CaptureHomeClipboardCellsEditingTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteHomeClipboardCellsEditingTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1320;
+        Height = 820;
+        await Task.Delay(700);
+
+        var context = EnsureHomeClipboardCellsEditingTourContext();
+        var captures = new List<HomeClipboardCellsEditingTourManifestCapture>();
+
+        try
+        {
+            SelectHomeClipboardCellsEditingRibbonTab();
+            SetSelectionRange(context.PasteTargetRange, context.PasteTargetRange.Start);
+            UpdateViewport();
+            RefreshToolbar();
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await Task.Delay(350);
+
+            await CaptureCurrentWindowAsync(outputDir, "freex_home_clipboard_cells_editing_clipboard_copied_state", 760);
+            captures.Add(CreateHomeClipboardCellsEditingCapture(
+                "UI-CMD-HOME-CLIP-001",
+                "clipboard-copied-state",
+                "Home Clipboard",
+                "freex_home_clipboard_cells_editing_clipboard_copied_state",
+                "RenderTargetBitmap-window-full",
+                ActualWidth,
+                Math.Min(ActualHeight, 760),
+                [],
+                "Home tab with a deterministic copied source range and paste target selection visible on the grid."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-CLIP-002",
+                "paste-menu-opened",
+                "Paste",
+                "freex_home_clipboard_cells_editing_paste_menu_opened",
+                "Paste split menu with Paste, Values, Formulas, Formatting, column widths, transpose, link, picture, linked picture, and Paste Special entries."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-CELLS-001",
+                "insert-menu-opened",
+                "Insert",
+                "freex_home_clipboard_cells_editing_insert_menu_opened",
+                "Cells Insert menu with Insert Cells, sheet rows, sheet columns, and sheet insertion commands."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-CELLS-002",
+                "delete-menu-opened",
+                "Delete",
+                "freex_home_clipboard_cells_editing_delete_menu_opened",
+                "Cells Delete menu with Delete Cells, sheet rows, sheet columns, and sheet deletion commands."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-CELLS-003",
+                "format-menu-opened",
+                "Format",
+                "freex_home_clipboard_cells_editing_format_menu_opened",
+                "Cells Format menu with row/column sizing, hide/unhide, sheet actions, protection, lock-cell, and Format Cells entries."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-EDIT-003",
+                "clear-menu-opened",
+                "Clear",
+                "freex_home_clipboard_cells_editing_clear_menu_opened",
+                "Editing Clear menu with Clear All, Formats, Contents, Comments and Notes, and Hyperlinks entries."));
+
+            SetSelectionRange(context.SortRange, context.SortRange.Start);
+            UpdateViewport();
+            RefreshToolbar();
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "sort-filter-menu-opened",
+                "Sort & Filter",
+                "freex_home_clipboard_cells_editing_sort_filter_menu_opened",
+                "Editing Sort & Filter menu with A-to-Z, Z-to-A, Custom Sort, Filter, Clear, and Reapply entries."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingMenuAsync(
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "find-select-menu-opened",
+                "Find & Select",
+                "freex_home_clipboard_cells_editing_find_select_menu_opened",
+                "Editing Find & Select menu with Find, Replace, Go To, Go To Special, formulas, notes, conditional formatting, constants, data validation, objects, and selection pane entries."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                new CellShiftDialog(CellShiftDialogMode.Insert) { Owner = this },
+                outputDir,
+                "UI-CMD-HOME-CELLS-001",
+                "insert-cells-dialog",
+                "Insert Cells dialog",
+                "freex_home_clipboard_cells_editing_insert_cells_dialog",
+                "Insert Cells shift-choice dialog opened in its default Shift cells right state."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                new CellShiftDialog(CellShiftDialogMode.Delete) { Owner = this },
+                outputDir,
+                "UI-CMD-HOME-CELLS-002",
+                "delete-cells-dialog",
+                "Delete Cells dialog",
+                "freex_home_clipboard_cells_editing_delete_cells_dialog",
+                "Delete Cells shift-choice dialog opened in its default Shift cells left state."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                CreateHomeClipboardCellsEditingSortDialog(context),
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "custom-sort-dialog",
+                "Custom Sort dialog",
+                "freex_home_clipboard_cells_editing_custom_sort_dialog",
+                "Custom Sort dialog for the seeded header range with sort levels, Sort On, Order, color column, options, and My data has headers controls."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                CreateHomeClipboardCellsEditingFindReplaceDialog(replaceMode: false),
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "find-dialog",
+                "Find dialog",
+                "freex_home_clipboard_cells_editing_find_dialog",
+                "Find dialog opened on the Find tab with search box, options, Find Next, Find All, and results grid surfaces."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                CreateHomeClipboardCellsEditingFindReplaceDialog(replaceMode: true),
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "replace-dialog",
+                "Replace dialog",
+                "freex_home_clipboard_cells_editing_replace_dialog",
+                "Find and Replace dialog opened on the Replace tab with find/replace fields, replace actions, format pickers, options, and results grid surfaces."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                new GoToDialog(_currentSheetId, context.GoToDefaultAddress, _workbook.NamedRanges, [context.CopySourceRange.Start.ToA1(), "HomeTourData"]) { Owner = this },
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "go-to-dialog",
+                "Go To dialog",
+                "freex_home_clipboard_cells_editing_go_to_dialog",
+                "Go To dialog with recent references, defined name, reference box default focus/select-all behavior, Special, OK, and Cancel controls."));
+
+            captures.Add(await CaptureHomeClipboardCellsEditingDialogAsync(
+                new GoToSpecialDialog { Owner = this },
+                outputDir,
+                "UI-CMD-HOME-EDIT-004",
+                "go-to-special-dialog",
+                "Go To Special dialog",
+                "freex_home_clipboard_cells_editing_go_to_special_dialog",
+                "Go To Special dialog with blanks, constants, formulas, comments, current region, differences, last cell, conditional formats, objects, precedents, dependents, data validation, and visible-cells choices."));
+
+            ValidateHomeClipboardCellsEditingTourEvidence(outputDir, captures);
+            await WriteHomeClipboardCellsEditingTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteHomeClipboardCellsEditingTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            ClearClipboardVisualState();
+            _internalClipboard = null;
+        }
+    }
+
+    private HomeClipboardCellsEditingTourContext EnsureHomeClipboardCellsEditingTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Home Clipboard/Cells/Editing tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+
+        for (uint row = 1; row <= 14; row++)
+        {
+            for (uint col = 1; col <= 9; col++)
+                sheet.ClearCell(new CellAddress(sheet.Id, row, col));
+        }
+
+        var headers = new[] { "Region", "Rep", "Q1", "Q2", "Total", "Status" };
+        for (var index = 0; index < headers.Length; index++)
+            sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)(index + 1)), new TextValue(headers[index]));
+
+        var rows = new (string Region, string Rep, double Q1, double Q2, string Status)[]
+        {
+            ("East", "Ari", 1200, 1380, "Open"),
+            ("West", "Bo", 950, 1125, "Closed"),
+            ("North", "Cai", 1440, 1510, "Open"),
+            ("South", "Dee", 875, 990, "Review"),
+            ("East", "Eli", 1680, 1725, "Open"),
+            ("West", "Fox", 1010, 1088, "Closed")
+        };
+
+        for (var index = 0; index < rows.Length; index++)
+        {
+            var row = (uint)(index + 2);
+            var item = rows[index];
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue(item.Region));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(item.Rep));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(item.Q1));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 4), new NumberValue(item.Q2));
+            sheet.SetFormula(new CellAddress(sheet.Id, row, 5), $"C{row}+D{row}");
+            sheet.SetCell(new CellAddress(sheet.Id, row, 6), new TextValue(item.Status));
+        }
+
+        sheet.SetCell(new CellAddress(sheet.Id, 9, 1), new TextValue("Paste target"));
+        sheet.SetCell(new CellAddress(sheet.Id, 9, 2), new TextValue("Copied marquee is seeded without touching the OS clipboard."));
+        sheet.SetCell(new CellAddress(sheet.Id, 10, 1), new TextValue("Find token"));
+        sheet.SetCell(new CellAddress(sheet.Id, 10, 2), new TextValue("Ari"));
+        sheet.Comments[new CellAddress(sheet.Id, 4, 2)] = "Home tour note for Clear and Find Notes.";
+        sheet.Hyperlinks[new CellAddress(sheet.Id, 5, 2)] = "https://example.test/freex-home-tour";
+
+        var copySourceRange = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 4, 3));
+        var pasteTargetRange = new GridRange(new CellAddress(sheet.Id, 9, 4), new CellAddress(sheet.Id, 11, 6));
+        var sortRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 7, 6));
+        var usedRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 11, 6));
+
+        ApplyHomeClipboardCellsEditingTourStyle(
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 6)),
+            new StyleDiff(Bold: true, FillColor: new CellColor(217, 225, 242)));
+        ApplyHomeClipboardCellsEditingTourStyle(
+            copySourceRange,
+            new StyleDiff(FillColor: new CellColor(226, 239, 218)));
+        ApplyHomeClipboardCellsEditingTourStyle(
+            pasteTargetRange,
+            new StyleDiff(FillColor: new CellColor(255, 242, 204)));
+
+        _workbook.DefineNamedRange("HomeTourData", sortRange);
+        SeedHomeClipboardCellsEditingInternalClipboard(sheet, copySourceRange);
+        SetSelectionRange(pasteTargetRange, pasteTargetRange.Start);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+
+        return new HomeClipboardCellsEditingTourContext(
+            sheet,
+            copySourceRange,
+            pasteTargetRange,
+            sortRange,
+            usedRange,
+            pasteTargetRange.Start.ToA1());
+    }
+
+    private void ApplyHomeClipboardCellsEditingTourStyle(GridRange range, StyleDiff diff)
+    {
+        if (!TryExecuteApplyStyle(range, diff, "Apply Style"))
+            throw new InvalidOperationException($"Home Clipboard/Cells/Editing tour could not apply style to {range}.");
+    }
+
+    private void SeedHomeClipboardCellsEditingInternalClipboard(Sheet sheet, GridRange copySourceRange)
+    {
+        var cells = new List<(CellAddress Source, Cell Cell)>();
+        for (var row = copySourceRange.Start.Row; row <= copySourceRange.End.Row; row++)
+        {
+            for (var col = copySourceRange.Start.Col; col <= copySourceRange.End.Col; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                cells.Add((address, sheet.GetCell(row, col)?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
+            }
+        }
+
+        _internalClipboard = new InternalClipboard(
+            copySourceRange,
+            cells,
+            [],
+            "Region\tRep\tQ1\r\nEast\tAri\t1200\r\nWest\tBo\t950",
+            IsCut: false);
+        SheetGrid.ClipboardRange = copySourceRange;
+        SheetGrid.ClipboardIsCut = false;
+    }
+
+    private void SelectHomeClipboardCellsEditingRibbonTab()
+    {
+        var homeTab = RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home");
+        SelectRibbonTourTab(homeTab);
+    }
+
+    private async Task<HomeClipboardCellsEditingTourManifestCapture> CaptureHomeClipboardCellsEditingMenuAsync(
+        string outputDir,
+        string catalogCommandRow,
+        string state,
+        string commandName,
+        string fileName,
+        string evidenceSummary)
+    {
+        SelectHomeClipboardCellsEditingRibbonTab();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)
+            ?? throw new InvalidOperationException($"Home Clipboard/Cells/Editing tour could not find '{commandName}' ribbon button.");
+        var menu = button.ContextMenu
+            ?? throw new InvalidOperationException($"Home Clipboard/Cells/Editing tour could not find '{commandName}' context menu.");
+
+        OpenRibbonContextMenu(button, menu);
+        await Task.Delay(350);
+        menu.UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+
+        await CaptureElementAsync(menu, outputDir, fileName);
+        var headers = new List<string>();
+        AddMenuHeaders(menu, headers);
+        var capture = CreateHomeClipboardCellsEditingCapture(
+            catalogCommandRow,
+            state,
+            commandName,
+            fileName,
+            "RenderTargetBitmap-home-context-menu",
+            menu.ActualWidth,
+            menu.ActualHeight,
+            headers,
+            evidenceSummary);
+        menu.IsOpen = false;
+        return capture;
+    }
+
+    private SortDialog CreateHomeClipboardCellsEditingSortDialog(HomeClipboardCellsEditingTourContext context)
+    {
+        var sheet = context.Sheet;
+        var dialog = new SortDialog(
+            columnChoices: SortDialog.BuildColumnChoices(sheet, context.SortRange, hasHeaders: true),
+            genericColumnChoices: SortDialog.BuildColumnChoices(sheet, context.SortRange, hasHeaders: false),
+            rowChoices: SortDialog.BuildRowChoices(context.SortRange),
+            colorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange),
+            cellColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange, SortOn.CellColor),
+            fontColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange, SortOn.FontColor))
+        {
+            Owner = this
+        };
+        return dialog;
+    }
+
+    private FindReplaceDialog CreateHomeClipboardCellsEditingFindReplaceDialog(bool replaceMode) =>
+        new(
+            () => _workbook,
+            _commandBus,
+            NavigateToCell,
+            replaceMode,
+            () => _currentSheetId,
+            () => SheetGrid.SelectedRange?.Start,
+            RefreshAfterFindReplaceEdit)
+        {
+            Owner = this
+        };
+
+    private async Task<HomeClipboardCellsEditingTourManifestCapture> CaptureHomeClipboardCellsEditingDialogAsync(
+        Window dialog,
+        string outputDir,
+        string catalogCommandRow,
+        string state,
+        string surface,
+        string fileName,
+        string evidenceSummary)
+    {
+        try
+        {
+            await ShowDataToolsTourDialogAsync(dialog);
+            await CaptureElementAsync(dialog, outputDir, fileName);
+            return CreateHomeClipboardCellsEditingCapture(
+                catalogCommandRow,
+                state,
+                surface,
+                fileName,
+                "RenderTargetBitmap-home-dialog-window",
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                [],
+                evidenceSummary);
+        }
+        finally
+        {
+            CloseDataToolsTourDialog(dialog);
+        }
+    }
+
+    private HomeClipboardCellsEditingTourManifestCapture CreateHomeClipboardCellsEditingCapture(
+        string catalogCommandRow,
+        string state,
+        string surface,
+        string fileName,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        IReadOnlyList<string> menuHeaders,
+        string evidenceSummary)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return new HomeClipboardCellsEditingTourManifestCapture(
+            CaptureKey: $"interactive:home-clipboard-cells-editing:{state}",
+            PairKey: $"interactive:home-clipboard-cells-editing:{state}",
+            CatalogCommandRow: catalogCommandRow,
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            SelectedRange: SheetGrid.SelectedRange?.ToString() ?? string.Empty,
+            ClipboardRange: SheetGrid.ClipboardRange?.ToString() ?? string.Empty,
+            ClipboardIsCut: SheetGrid.ClipboardIsCut,
+            NoteCount: sheet?.Comments.Count ?? 0,
+            HyperlinkCount: sheet?.Hyperlinks.Count ?? 0,
+            MenuHeaders: menuHeaders,
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private static void DeleteHomeClipboardCellsEditingTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_home_clipboard_cells_editing_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, HomeClipboardCellsEditingTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateHomeClipboardCellsEditingTourEvidence(
+        string outputDir,
+        IReadOnlyList<HomeClipboardCellsEditingTourManifestCapture> captures)
+    {
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Home Clipboard/Cells/Editing tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
     }
 
     private async Task CaptureWorksheetContextMenuTourAsync(string outputDir)
@@ -4980,6 +5433,481 @@ public partial class MainWindow
                 $"Page Layout/Page Setup tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
     }
 
+    private async Task CaptureDrawObjectFormattingTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteDrawObjectFormattingTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1220;
+        Height = 768;
+        await Task.Delay(700);
+
+        var context = EnsureDrawObjectFormattingTourContext();
+        var captures = new List<DrawObjectFormattingTourManifestCapture>();
+
+        try
+        {
+            captures.Add(await CaptureDrawObjectFormattingWindowStateAsync(
+                outputDir,
+                "draw-tab-baseline-seeded-objects",
+                "freex_draw_object_formatting_draw_tab_baseline",
+                "Draw tab baseline shows Arrange and Format command groups with seeded shape, picture, and text-box objects visible on the worksheet.",
+                ["UI-CAT-DRAW-001", "UI-CMD-DRAW-001", "UI-CMD-DRAW-002", "UI-CMD-DRAW-003"]));
+
+            captures.Add(await CaptureDrawObjectFormattingDialogAsync(
+                outputDir,
+                new ColorPickerDialog(context.Shape.FillColor, allowNoColor: false)
+                {
+                    Owner = this,
+                    Title = UiText.Get("MainWindowMessage_ObjectFillTitle")
+                },
+                "shape-fill-color-picker",
+                "freex_draw_object_formatting_shape_fill_color_picker",
+                "Shape Fill color picker opens on the standard/theme/custom palette surface using the selected shape fill color.",
+                "Shape Fill",
+                "RenderTargetBitmap-color-picker-dialog-window",
+                ["UI-CMD-DRAW-003"]));
+
+            captures.Add(await CaptureDrawObjectFormattingDialogAsync(
+                outputDir,
+                new ColorPickerDialog(context.Shape.OutlineColor, allowNoColor: false)
+                {
+                    Owner = this,
+                    Title = UiText.Get("MainWindowMessage_ObjectOutlineTitle")
+                },
+                "object-outline-color-picker",
+                "freex_draw_object_formatting_object_outline_color_picker",
+                "Object Outline color picker opens against the selected drawing object's current outline color.",
+                "Object Outline",
+                "RenderTargetBitmap-color-picker-dialog-window",
+                ["UI-CMD-DRAW-003"]));
+
+            captures.Add(await CaptureDrawObjectFormattingDialogAsync(
+                outputDir,
+                new ShapeGradientDialog(context.Shape.GetEffectiveGradientFillDirection()) { Owner = this },
+                "shape-gradient-dialog",
+                "freex_draw_object_formatting_shape_gradient_dialog",
+                "Shape Gradient dialog shows start/end RGB stop inputs, color buttons, direction choices, and OK/Cancel.",
+                "Shape Gradient",
+                "RenderTargetBitmap-shape-gradient-dialog-window",
+                ["UI-CMD-DRAW-004"]));
+
+            captures.Add(await CaptureDrawObjectFormattingDialogAsync(
+                outputDir,
+                new ShapeEffectsDialog(context.Shape.GetEffectiveEffectPreset()) { Owner = this },
+                "shape-effects-dialog",
+                "freex_draw_object_formatting_shape_effects_dialog",
+                "Shape Effects dialog shows the current effect preset selector and description text.",
+                "Shape Effects",
+                "RenderTargetBitmap-shape-effects-dialog-window",
+                ["UI-CMD-DRAW-004"]));
+
+            SelectDrawObjectFormattingPicture(context);
+            captures.Add(await CaptureDrawObjectFormattingCropMenuAsync(outputDir));
+
+            SelectDrawObjectFormattingShape(context);
+            captures.Add(await CaptureDrawObjectFormattingDialogAsync(
+                outputDir,
+                new ObjectSizeDialog(context.Shape.Width, context.Shape.Height, UiText.Get("MainWindowMessage_ObjectSizeTitle")) { Owner = this },
+                "object-size-dialog",
+                "freex_draw_object_formatting_object_size_dialog",
+                "Object Size dialog opens with the height box focused/select-all and lock-aspect-ratio visible for the selected shape.",
+                "Object Size",
+                "RenderTargetBitmap-object-size-dialog-window",
+                ["UI-CMD-DRAW-003"]));
+
+            foreach (var capture in await CaptureDrawObjectFormattingFormatPictureDialogAsync(outputDir, context.Picture))
+                captures.Add(capture);
+
+            captures.Add(await CaptureDrawObjectFormattingSelectionPaneAsync(outputDir, context));
+
+            ValidateDrawObjectFormattingTourEvidence(outputDir, captures);
+            await WriteDrawObjectFormattingTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteDrawObjectFormattingTourEvidence(outputDir);
+            throw;
+        }
+    }
+
+    private DrawObjectFormattingTourContext EnsureDrawObjectFormattingTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Draw/object formatting tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        for (uint row = 1; row <= 16; row++)
+        {
+            for (uint col = 1; col <= 8; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                if (row == 1)
+                    sheet.SetCell(address, new TextValue($"Draw Field {col}"));
+                else if (col == 1)
+                    sheet.SetCell(address, new TextValue($"Object Row {row - 1}"));
+                else
+                    sheet.SetCell(address, new NumberValue(row * 100 + col));
+            }
+        }
+
+        sheet.DrawingShapes.Clear();
+        sheet.Pictures.Clear();
+        sheet.TextBoxes.Clear();
+        sheet.DrawingObjectZOrder.Clear();
+
+        var shape = new DrawingShapeModel
+        {
+            Id = Guid.Parse("aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"),
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            Kind = DrawingShapeKind.Rectangle,
+            Width = 168,
+            Height = 88,
+            Name = "Tour Process Shape",
+            Title = "Draw tour process shape",
+            AltText = "Rounded process shape for Draw object formatting evidence.",
+            FillColor = new CellColor(47, 117, 181),
+            OutlineColor = new CellColor(31, 78, 121),
+            GradientFillEndColor = new CellColor(189, 215, 238),
+            GradientFillDirection = DrawingShapeGradientDirection.Horizontal,
+            EffectPreset = DrawingShapeEffectPreset.Shadow,
+            RotationDegrees = 4
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var picture = new PictureModel
+        {
+            Id = Guid.Parse("bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"),
+            Anchor = new CellAddress(sheet.Id, 5, 5),
+            Kind = PictureKind.Image,
+            ImageBytes = [1, 2, 3, 4],
+            ContentType = "image/png",
+            Name = "Tour Picture Logo",
+            AltText = "Picture placeholder used for Draw formatting and alt text evidence.",
+            Width = 176,
+            Height = 96,
+            RotationDegrees = 8,
+            CropLeft = 0.04,
+            CropTop = 0.02,
+            CropRight = 0.08,
+            CropBottom = 0.03
+        };
+        sheet.Pictures.Add(picture);
+
+        var textBox = new FreeX.Core.Model.TextBoxModel
+        {
+            Id = Guid.Parse("cccccccc-3333-4333-8333-cccccccccccc"),
+            Anchor = new CellAddress(sheet.Id, 8, 3),
+            Text = "Text box evidence",
+            Width = 210,
+            Height = 76,
+            Name = "Tour Text Box",
+            AltText = "Text box object for Draw formatting evidence.",
+            FillColor = new CellColor(255, 242, 204),
+            OutlineColor = new CellColor(191, 143, 0),
+            RotationDegrees = 0
+        };
+        sheet.TextBoxes.Add(textBox);
+
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id));
+
+        SelectDrawObjectFormattingShape(new DrawObjectFormattingTourContext(sheet, shape, picture, textBox));
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Draw"));
+        UpdateViewport();
+        RefreshToolbar();
+        return new DrawObjectFormattingTourContext(sheet, shape, picture, textBox);
+    }
+
+    private void SelectDrawObjectFormattingShape(DrawObjectFormattingTourContext context) =>
+        SelectDrawObjectFormattingObject(context.Shape.Anchor, context.Shape.Id, FreeX.App.UI.ObjectKind.Shape);
+
+    private void SelectDrawObjectFormattingPicture(DrawObjectFormattingTourContext context) =>
+        SelectDrawObjectFormattingObject(context.Picture.Anchor, context.Picture.Id, FreeX.App.UI.ObjectKind.Picture);
+
+    private void SelectDrawObjectFormattingObject(CellAddress anchor, Guid objectId, FreeX.App.UI.ObjectKind kind)
+    {
+        SetActiveCell(anchor);
+        EnsureCellVisible(anchor);
+        if (SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = new GridRange(anchor, anchor);
+            SheetGrid.SelectedRanges = null;
+            SheetGrid.SelectedObjectId = objectId;
+            SheetGrid.SelectedObjectKind = kind;
+        }
+    }
+
+    private async Task<DrawObjectFormattingTourManifestCapture> CaptureDrawObjectFormattingWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string evidencePurpose,
+        IReadOnlyList<string> commandRows)
+    {
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Draw"));
+        UpdateViewport();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateDrawObjectFormattingCapture(
+            state,
+            fileName,
+            evidencePurpose,
+            "Draw ribbon",
+            "RenderTargetBitmap-window-full",
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            commandRows,
+            []);
+    }
+
+    private async Task<DrawObjectFormattingTourManifestCapture> CaptureDrawObjectFormattingDialogAsync(
+        string outputDir,
+        Window dialog,
+        string state,
+        string fileName,
+        string evidencePurpose,
+        string surface,
+        string captureMethod,
+        IReadOnlyList<string> commandRows,
+        Action<Window>? configureAfterShow = null)
+    {
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            await Task.Delay(300);
+            configureAfterShow?.Invoke(dialog);
+            dialog.UpdateLayout();
+            await Task.Delay(150);
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+            return CreateDrawObjectFormattingCapture(
+                state,
+                fileName,
+                evidencePurpose,
+                surface,
+                captureMethod,
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                commandRows,
+                []);
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private async Task<DrawObjectFormattingTourManifestCapture> CaptureDrawObjectFormattingCropMenuAsync(string outputDir)
+    {
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Draw"));
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, "Crop Picture")
+            ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Crop Picture ribbon button.");
+        var menu = button.ContextMenu
+            ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Crop Picture context menu.");
+
+        OpenRibbonContextMenu(button, menu);
+        await Task.Delay(350);
+        menu.UpdateLayout();
+        await CaptureElementAsync(menu, outputDir, "freex_draw_object_formatting_crop_menu_opened");
+        var headers = new List<string>();
+        AddMenuHeaders(menu, headers);
+        menu.IsOpen = false;
+        return CreateDrawObjectFormattingCapture(
+            "crop-reset-crop-menu-opened",
+            "freex_draw_object_formatting_crop_menu_opened",
+            "Crop Picture split menu exposes Crop and Reset Crop commands for the selected picture object.",
+            "Crop Picture menu",
+            "RenderTargetBitmap-draw-crop-context-menu",
+            0,
+            0,
+            ["UI-CMD-DRAW-004"],
+            headers);
+    }
+
+    private async Task<IReadOnlyList<DrawObjectFormattingTourManifestCapture>> CaptureDrawObjectFormattingFormatPictureDialogAsync(
+        string outputDir,
+        PictureModel picture)
+    {
+        var dialog = new FormatPictureDialog(picture) { Owner = this };
+        var captures = new List<DrawObjectFormattingTourManifestCapture>();
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            await Task.Delay(300);
+            dialog.UpdateLayout();
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_draw_object_formatting_picture_size_tab");
+            captures.Add(CreateDrawObjectFormattingCapture(
+                "format-picture-size-tab",
+                "freex_draw_object_formatting_picture_size_tab",
+                "Format Picture dialog Size tab shows width, height, rotation, lock aspect ratio, tabs, and OK/Cancel for the selected picture.",
+                "Format Picture",
+                "RenderTargetBitmap-format-picture-dialog-window",
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                ["UI-CMD-DRAW-003", "UI-CMD-DRAW-004"],
+                []));
+
+            var tabs = FindDescendant<TabControl>(dialog)
+                ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Format Picture tab control.");
+            foreach (var item in tabs.Items.OfType<TabItem>())
+            {
+                if (string.Equals(item.Header?.ToString(), UiText.Get("FormatPicture_AltTextTab"), StringComparison.Ordinal))
+                {
+                    tabs.SelectedItem = item;
+                    break;
+                }
+            }
+
+            await Task.Delay(250);
+            dialog.UpdateLayout();
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_draw_object_formatting_picture_alt_text_tab");
+            captures.Add(CreateDrawObjectFormattingCapture(
+                "format-picture-alt-text-tab",
+                "freex_draw_object_formatting_picture_alt_text_tab",
+                "Format Picture dialog Alt Text tab shows the seeded picture description field and dialog action buttons.",
+                "Format Picture",
+                "RenderTargetBitmap-format-picture-dialog-window",
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                ["UI-CMD-DRAW-003"],
+                []));
+        }
+        finally
+        {
+            dialog.Close();
+        }
+
+        return captures;
+    }
+
+    private async Task<DrawObjectFormattingTourManifestCapture> CaptureDrawObjectFormattingSelectionPaneAsync(
+        string outputDir,
+        DrawObjectFormattingTourContext context)
+    {
+        var dialog = new SelectionPaneDialog(SelectionPanePlanner.BuildItems(context.Sheet)) { Owner = this };
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            await Task.Delay(300);
+            var searchBox = FindDescendantByAutomationId<TextBox>(dialog, "SelectionPaneSearchBox")
+                ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Selection Pane search box.");
+            var renameBox = FindDescendantByAutomationId<TextBox>(dialog, "SelectionPaneRenameBox")
+                ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Selection Pane rename box.");
+            var renameButton = FindDescendantByAutomationId<Button>(dialog, "SelectionPaneRenameButton")
+                ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Selection Pane rename button.");
+            var toggleButton = FindDescendantByAutomationId<Button>(dialog, "SelectionPaneToggleVisibilityButton")
+                ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Selection Pane visibility button.");
+
+            searchBox.Text = "Tour";
+            renameBox.Text = "Tour Shape Renamed";
+            renameButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            toggleButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            dialog.UpdateLayout();
+            await Task.Delay(250);
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_draw_object_formatting_selection_pane_rename_visibility");
+            return CreateDrawObjectFormattingCapture(
+                "selection-pane-rename-visibility",
+                "freex_draw_object_formatting_selection_pane_rename_visibility",
+                "Selection Pane dialog shows search/list state, a renamed object preview, visibility toggle state, show/hide all, bring/send, OK, and Cancel.",
+                "Selection Pane",
+                "RenderTargetBitmap-selection-pane-dialog-window",
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                ["UI-CMD-DRAW-002", "UI-CMD-DRAW-005"],
+                []);
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private DrawObjectFormattingTourManifestCapture CreateDrawObjectFormattingCapture(
+        string state,
+        string fileName,
+        string evidencePurpose,
+        string surface,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        IReadOnlyList<string> commandRows,
+        IReadOnlyList<string> menuHeaders)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return new DrawObjectFormattingTourManifestCapture(
+            CaptureKey: $"interactive:draw-object-formatting:{state}",
+            PairKey: $"interactive:draw-object-formatting:{state}",
+            ScenarioId: "draw-object-formatting:visual-evidence",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            SheetName: sheet?.Name ?? string.Empty,
+            ActiveRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
+            SelectedObjectKind: SheetGrid?.SelectedObjectKind.ToString() ?? string.Empty,
+            SelectedObjectName: GetDrawObjectFormattingSelectedObjectName(sheet),
+            ShapeCount: sheet?.DrawingShapes.Count ?? 0,
+            PictureCount: sheet?.Pictures.Count ?? 0,
+            TextBoxCount: sheet?.TextBoxes.Count ?? 0,
+            DrawingZOrder: sheet?.DrawingObjectZOrder.Select(entry => $"{entry.Kind}:{entry.Id:N}").ToArray() ?? [],
+            CommandRows: commandRows,
+            MenuHeaders: menuHeaders,
+            EvidencePurpose: evidencePurpose);
+    }
+
+    private string GetDrawObjectFormattingSelectedObjectName(Sheet? sheet)
+    {
+        if (sheet is null || SheetGrid is null || SheetGrid.SelectedObjectId == Guid.Empty)
+            return string.Empty;
+
+        var id = SheetGrid.SelectedObjectId;
+        return SheetGrid.SelectedObjectKind switch
+        {
+            FreeX.App.UI.ObjectKind.Picture => sheet.Pictures.FirstOrDefault(picture => picture.Id == id)?.Name ?? string.Empty,
+            FreeX.App.UI.ObjectKind.Shape => sheet.DrawingShapes.FirstOrDefault(shape => shape.Id == id)?.Name ?? string.Empty,
+            FreeX.App.UI.ObjectKind.TextBox => sheet.TextBoxes.FirstOrDefault(textBox => textBox.Id == id)?.Name ?? string.Empty,
+            _ => string.Empty
+        };
+    }
+
+    private static void DeleteDrawObjectFormattingTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_draw_object_formatting_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, DrawObjectFormattingTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateDrawObjectFormattingTourEvidence(
+        string outputDir,
+        IReadOnlyList<DrawObjectFormattingTourManifestCapture> captures)
+    {
+        if (captures.Count != 10)
+            throw new InvalidOperationException($"Draw/object formatting tour expected 10 captures but created {captures.Count}.");
+
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Draw/object formatting tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
+    }
+
     private static T? FindDescendantByRibbonCommandName<T>(DependencyObject root, string commandName)
         where T : DependencyObject
     {
@@ -8016,6 +8944,70 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeFontColorsTourManifest);
     }
 
+    private static async Task WriteHomeClipboardCellsEditingTourManifestAsync(
+        string outputDir,
+        HomeClipboardCellsEditingTourContext context,
+        IReadOnlyList<HomeClipboardCellsEditingTourManifestCapture> captures)
+    {
+        var manifest = new HomeClipboardCellsEditingTourManifest(
+            Tool: "FREEX_HOME_CLIPBOARD_CELLS_EDITING_TOUR",
+            EvidenceFamily: "home-clipboard-cells-editing",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "home-clipboard-cells-editing:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_home_clipboard_cells_editing_<Surface>_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#UI-CAT-HOME-001",
+            CatalogCommandRows:
+            [
+                "UI-CMD-HOME-CLIP-001",
+                "UI-CMD-HOME-CLIP-002",
+                "UI-CMD-HOME-CELLS-001",
+                "UI-CMD-HOME-CELLS-002",
+                "UI-CMD-HOME-CELLS-003",
+                "UI-CMD-HOME-CELLS-004",
+                "UI-CMD-HOME-EDIT-003",
+                "UI-CMD-HOME-EDIT-004"
+            ],
+            SheetName: context.Sheet.Name,
+            CopySourceRange: context.CopySourceRange.ToString(),
+            PasteTargetRange: context.PasteTargetRange.ToString(),
+            SortRange: context.SortRange.ToString(),
+            UsedRange: context.UsedRange.ToString(),
+            CaptureStatus: "complete",
+            CaptureMode: "RenderTargetBitmap-in-process",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, keytip, OS clipboard, or screen capture input is used."
+                    : "Window, menu, and dialog captures abort unless the expected FreeX WPF surface owns foreground focus immediately before render and file write."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Home Clipboard copied-source marquee and Paste menu",
+                "Home Cells Insert, Delete, and Format menus",
+                "Insert Cells and Delete Cells shift-choice dialogs",
+                "Home Editing Clear menu",
+                "Home Editing Sort & Filter menu and Custom Sort dialog",
+                "Home Editing Find & Select menu",
+                "Find, Replace, Go To, and Go To Special dialog surfaces"
+            ],
+            Limitations:
+            [
+                "This bounded tour opens production FreeX WPF menu and dialog surfaces in process and captures them with RenderTargetBitmap.",
+                "The copied-source state is seeded in the FreeX internal clipboard visual model without reading or writing the operating-system clipboard.",
+                "The tour does not synthesize physical mouse, keytip, Ctrl+V/Ctrl+F/Ctrl+H/F5, dialog access-key, Enter/Escape, or range-picker input.",
+                "The tour avoids submitting destructive insert/delete/clear/sort/replace actions; command mutation, undo/repeat, persistence, and Excel-paired evidence remain separate lanes.",
+                "Paste Special, Format Painter persistent/double-click mode, row/column hide/unhide results, filter dropdown criteria, and Selection Pane object workflows are not captured in this slice."
+            ]);
+
+        var path = Path.Combine(outputDir, HomeClipboardCellsEditingTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeClipboardCellsEditingTourManifest);
+    }
+
     private static async Task WriteQatUndoRedoTourManifestAsync(
         string outputDir,
         CellAddress address,
@@ -8457,6 +9449,80 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, PageLayoutSetupTourManifestFileName);
         await using var stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.PageLayoutSetupTourManifest);
+    }
+
+    private static async Task WriteDrawObjectFormattingTourManifestAsync(
+        string outputDir,
+        DrawObjectFormattingTourContext context,
+        IReadOnlyList<DrawObjectFormattingTourManifestCapture> captures)
+    {
+        var manifest = new DrawObjectFormattingTourManifest(
+            Tool: "FREEX_DRAW_OBJECT_FORMATTING_TOUR",
+            EvidenceFamily: "draw-object-formatting",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "draw-object-formatting:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_draw_object_formatting_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds:
+            [
+                "UI-CAT-DRAW-001",
+                "UI-CAT-DRAW-001A",
+                "UI-CAT-DRAW-001B",
+                "UI-CAT-DRAW-001C",
+                "UI-CMD-DRAW-001",
+                "UI-CMD-DRAW-002",
+                "UI-CMD-DRAW-003",
+                "UI-CMD-DRAW-004",
+                "UI-CMD-DRAW-005"
+            ],
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new DrawObjectFormattingTourManifestPairing(
+                "interactive:draw-object-formatting:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no foreground mouse, keyboard, native file dialog, or screen capture input was used."
+                    : "Abort before file write unless the expected FreeX window/dialog owns foreground focus for each capture."),
+            SeededObjects:
+            [
+                $"shape:{context.Shape.Name}:{context.Shape.Anchor.ToA1()}",
+                $"picture:{context.Picture.Name}:{context.Picture.Anchor.ToA1()}",
+                $"text-box:{context.TextBox.Name}:{context.TextBox.Anchor.ToA1()}"
+            ],
+            Captures: captures,
+            CoveredStates:
+            [
+                "Draw tab baseline with Arrange and Format groups plus seeded visible shape, picture, and text-box objects.",
+                "Shape Fill and Object Outline color picker surfaces.",
+                "Shape Gradient and Shape Effects dialogs.",
+                "Crop/Reset Crop split-menu surface for a selected picture.",
+                "Object Size dialog default numeric-input focus/select-all surface.",
+                "Format Picture Size and Alt Text tabs for object size/rotation/crop/alt-text evidence.",
+                "Selection Pane list/search/rename/visibility/reorder controls with seeded drawing objects."
+            ],
+            Limitations:
+            [
+                "RenderTargetBitmap evidence only; it is not foreground CopyFromScreen proof.",
+                "The tour drives FreeX in process and captures WPF windows/menus without physical mouse, keyboard, keytip, drag-handle, or UIA invocation.",
+                "Color picker and dialog captures are visual states only; OK/Cancel/Escape, invalid input recovery, and command mutation from those dialogs remain open.",
+                "Picture insertion uses deterministic in-process placeholder bytes rather than opening the native Windows file picker.",
+                "Selection Pane rename and visibility states are previewed in the dialog before OK/apply; grouped-sheet propagation and persistence breadth remain covered by planner/command tests.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, DrawObjectFormattingTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.DrawObjectFormattingTourManifest);
     }
 
     private static async Task WriteFormulaDiagnosticsTourManifestAsync(
@@ -9394,6 +10460,57 @@ public partial class MainWindow
         string? ActiveCellFillColor,
         IReadOnlyList<string> MenuHeaders);
 
+    private sealed record HomeClipboardCellsEditingTourContext(
+        Sheet Sheet,
+        GridRange CopySourceRange,
+        GridRange PasteTargetRange,
+        GridRange SortRange,
+        GridRange UsedRange,
+        string GoToDefaultAddress);
+
+    private sealed record HomeClipboardCellsEditingTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogCommandRows,
+        string SheetName,
+        string CopySourceRange,
+        string PasteTargetRange,
+        string SortRange,
+        string UsedRange,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<HomeClipboardCellsEditingTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record HomeClipboardCellsEditingTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string CatalogCommandRow,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SelectedRange,
+        string ClipboardRange,
+        bool ClipboardIsCut,
+        int NoteCount,
+        int HyperlinkCount,
+        IReadOnlyList<string> MenuHeaders,
+        string EvidenceSummary);
+
     private sealed record WorksheetContextMenuTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -9908,6 +11025,12 @@ public partial class MainWindow
         CellAddress NewThreadedCommentCell,
         GridRange AllowEditRange);
 
+    private sealed record DrawObjectFormattingTourContext(
+        Sheet Sheet,
+        DrawingShapeModel Shape,
+        PictureModel Picture,
+        FreeX.Core.Model.TextBoxModel TextBox);
+
     private sealed record FormulaBarNameBoxTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -10234,6 +11357,56 @@ public partial class MainWindow
         IReadOnlyList<string> MenuHeaders,
         string EvidencePurpose);
 
+    private sealed record DrawObjectFormattingTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        DrawObjectFormattingTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<string> SeededObjects,
+        IReadOnlyList<DrawObjectFormattingTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record DrawObjectFormattingTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record DrawObjectFormattingTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SheetName,
+        string ActiveRange,
+        string SelectedObjectKind,
+        string SelectedObjectName,
+        int ShapeCount,
+        int PictureCount,
+        int TextBoxCount,
+        IReadOnlyList<string> DrawingZOrder,
+        IReadOnlyList<string> CommandRows,
+        IReadOnlyList<string> MenuHeaders,
+        string EvidencePurpose);
+
     private sealed record FormulaDiagnosticsTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -10396,6 +11569,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(HomeAlignmentNumberTourManifest))]
     [JsonSerializable(typeof(HomeBordersDropdownTourManifest))]
     [JsonSerializable(typeof(HomeFontColorsTourManifest))]
+    [JsonSerializable(typeof(HomeClipboardCellsEditingTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(OptionsAccountTourManifest))]
@@ -10413,6 +11587,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(InsertTablesChartsTourManifest))]
     [JsonSerializable(typeof(ViewPanesZoomTourManifest))]
     [JsonSerializable(typeof(PageLayoutSetupTourManifest))]
+    [JsonSerializable(typeof(DrawObjectFormattingTourManifest))]
     [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
     [JsonSerializable(typeof(FormulaAuthoringNamesTourManifest))]
     [JsonSerializable(typeof(ReviewCommentsProtectionTourManifest))]
