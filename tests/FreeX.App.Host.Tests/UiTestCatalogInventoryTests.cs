@@ -284,6 +284,50 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     [Fact]
+    public void WorksheetContextCatalogRows_DocumentSubmittedCommandEvidenceArtifacts()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var lines = catalog.Split('\n');
+        var categoryRow = FindCatalogRow(lines, "UI-CAT-CONTEXT-001");
+        var commandRow = FindCatalogRow(lines, "UI-CAT-CONTEXT-001C");
+        var evidencePaths = new[]
+        {
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_note_menu_available.png",
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_delete_note_result.png",
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_resolve_comment_result.png",
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_hyperlink_menu_available.png",
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_remove_hyperlink_result.png",
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_clear_contents_result.png",
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_insert_row_above_result.png",
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_delete_column_result.png",
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_protected_clear_blocked.png",
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_undo_restored_delete_column.png",
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_redo_reapplied_delete_column.png",
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_reopened_persistence_result.png",
+            "screenshots/worksheet-context-submitted-tour/worksheet_context_submitted_tour_manifest.json",
+            "screenshots/worksheet-context-submitted-tour/freex_worksheet_context_submitted_saved.fxl",
+        };
+
+        categoryRow.Should().Contain("FREEX_WORKSHEET_CONTEXT_SUBMITTED_TOUR=1");
+        categoryRow.Should().Contain("worksheet-context-submitted-tour");
+        categoryRow.Should().Contain("protected locked-cell rejection");
+        commandRow.Should().Contain("FREEX_WORKSHEET_CONTEXT_SUBMITTED_TOUR=1");
+        commandRow.Should().Contain("freex_worksheet_context_submitted_clear_contents_result.png");
+        commandRow.Should().Contain("freex_worksheet_context_submitted_saved.fxl");
+        commandRow.Should().Contain("protected disabled menu-state modeling");
+
+        foreach (var evidencePath in evidencePaths)
+        {
+            catalog.Should().Contain(evidencePath);
+            File.Exists(WorkspaceFileLocator.Find(evidencePath.Split('/'))).Should().BeTrue(evidencePath);
+        }
+
+        WorkspaceFileLocator
+            .ReadAllText("screenshots", "worksheet-context-submitted-tour", "worksheet_context_submitted_tour_manifest.json")
+            .Should().Contain("context-menu:worksheet-submitted-mutation-evidence");
+    }
+
+    [Fact]
     public void InsertObjectsLinksCatalogRows_DocumentFreeXVisualEvidenceTour()
     {
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
