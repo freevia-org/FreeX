@@ -13,17 +13,7 @@ public sealed class RibbonDisabledCommandGuardrailTests
     [Fact]
     public void VisibleRibbonCommands_DoNotShipAsStaticDisabledOrDeferredPlaceholdersWithoutReason()
     {
-        var path = DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml");
-        var document = XDocument.Load(path, LoadOptions.SetLineInfo);
-        var ribbonTabs = document
-            .Descendants(Presentation + "TabControl")
-            .Single(element => AttributeValue(element, Xaml + "Name") == "RibbonTabs");
-
-        var violations = ribbonTabs
-            .Descendants()
-            .Where(IsRibbonCommandElement)
-            .Where(command => !IsHiddenOutsideContextualTab(command))
-            .Select(ReadCommand)
+        var violations = ReadVisibleRibbonCommands()
             .Where(command => command.IsStaticDisabled || command.HasDeferredOrExcludedTooltip)
             .Where(command => !AllowedRibbonCommandReasons.ContainsKey(command.Key))
             .Select(command => command.FormatViolation())
@@ -31,6 +21,19 @@ public sealed class RibbonDisabledCommandGuardrailTests
 
         violations.Should().BeEmpty(
             "visible ribbon commands should not remain as disabled/deferred/excluded placeholders unless this guardrail documents an explicit allowed runtime-state or temporary integration reason; violations: {0}",
+            string.Join("; ", violations));
+    }
+
+    [Fact]
+    public void NotImplementedOrExcludedRibbonCommands_AreNotSurfacedAsActionableCommands()
+    {
+        var violations = ReadVisibleRibbonCommands()
+            .Where(command => HiddenRibbonCommandPaths.Contains(command.Key.Path))
+            .Select(command => command.FormatViolation())
+            .ToArray();
+
+        violations.Should().BeEmpty(
+            "ribbon commands without implemented behavior must remain hidden until they have a real command path; violations: {0}",
             string.Join("; ", violations));
     }
 
@@ -48,6 +51,22 @@ public sealed class RibbonDisabledCommandGuardrailTests
             return false;
 
         return AttributeValue(element, Local + "RibbonMetadata.CommandName") is not null;
+    }
+
+    private static IEnumerable<GuardedRibbonCommand> ReadVisibleRibbonCommands()
+    {
+        var path = DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml");
+        var document = XDocument.Load(path, LoadOptions.SetLineInfo);
+        var ribbonTabs = document
+            .Descendants(Presentation + "TabControl")
+            .Single(element => AttributeValue(element, Xaml + "Name") == "RibbonTabs");
+
+        return ribbonTabs
+            .Descendants()
+            .Where(IsRibbonCommandElement)
+            .Where(command => !IsHiddenOutsideContextualTab(command))
+            .Select(ReadCommand)
+            .ToArray();
     }
 
     private static bool IsHiddenOutsideContextualTab(XElement element) =>
@@ -132,22 +151,22 @@ public sealed class RibbonDisabledCommandGuardrailTests
             [new("Data", "Get & Transform Data", "Get Data")] =
                 "Allowed partial-scope copy: the command imports local CSV data; its tooltip only calls out excluded connector families.",
             [new("Data", "Queries & Connections", "Refresh All")] =
-                "Allowed partial-scope copy: the command recalculates and refreshes FreeX-managed workbook data; its tooltip only calls out excluded external query families.",
-            [new("Insert", "Illustrations", "Pictures > Place in Cell > This Device Picture in Cell")] =
-                "Temporary Excel-parity placeholder: in-cell picture anchoring needs model/rendering support before local file insertion can be enabled.",
-            [new("Insert", "Illustrations", "Pictures > Place in Cell > Stock Images in Cell")] =
-                "Temporary Excel-parity placeholder: stock image service integration is intentionally unavailable until connector policy and licensing are defined.",
-            [new("Insert", "Illustrations", "Pictures > Place in Cell > Online Pictures in Cell")] =
-                "Temporary Excel-parity placeholder: online image search/source connectors are intentionally unavailable until connector policy is defined.",
-            [new("Insert", "Illustrations", "Pictures > Place over Cells > Stock Images over Cells")] =
-                "Temporary Excel-parity placeholder: stock image service integration is intentionally unavailable until connector policy and licensing are defined.",
-            [new("Insert", "Illustrations", "Pictures > Place over Cells > Online Pictures over Cells")] =
-                "Temporary Excel-parity placeholder: online image search/source connectors are intentionally unavailable until connector policy is defined.",
-            [new("Page Layout", "Page Setup", "Print Area > Add to Print Area")] =
-                "Temporary Excel-parity placeholder: additive print areas need multi-range print-area model and persistence support before enabling.",
-            [new("Data", "Outline", "Group > Auto Outline")] =
-                "Temporary Excel-parity placeholder: automatic outline inference is not implemented; manual group/ungroup remains the supported path."
+                "Allowed partial-scope copy: the command recalculates and refreshes FreeX-managed workbook data; its tooltip only calls out excluded external query families."
         };
+
+    private static readonly HashSet<string> HiddenRibbonCommandPaths = new(StringComparer.Ordinal)
+    {
+        "Recommended PivotTables",
+        "Pictures > Place in Cell",
+        "Pictures > Place in Cell > This Device Picture in Cell",
+        "Pictures > Place in Cell > Stock Images in Cell",
+        "Pictures > Place in Cell > Online Pictures in Cell",
+        "Pictures > Place over Cells > Stock Images over Cells",
+        "Pictures > Place over Cells > Online Pictures over Cells",
+        "Print Area > Add to Print Area",
+        "Group > Auto Outline",
+        "Show Changes"
+    };
 
     private sealed record GuardedRibbonCommand(
         RibbonCommandGuardKey Key,
