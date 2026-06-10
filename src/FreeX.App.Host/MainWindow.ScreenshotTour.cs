@@ -74,6 +74,8 @@ public partial class MainWindow
     private const string ViewPanesZoomTourCustomViewName = "View Panes Zoom Tour";
     private const string PageLayoutSetupTourManifestFileName = "page_layout_setup_tour_manifest.json";
     private const string PageLayoutSetupTourOutputDirectoryName = "page-layout-setup-tour";
+    private const string DrawObjectFormattingTourManifestFileName = "draw_object_formatting_tour_manifest.json";
+    private const string DrawObjectFormattingTourOutputDirectoryName = "draw-object-formatting-tour";
     private const string FormulaDiagnosticsTourManifestFileName = "formula_diagnostics_tour_manifest.json";
     private const string FormulaDiagnosticsTourOutputDirectoryName = "formula-diagnostics-tour";
     private const string FormulaAuthoringNamesTourManifestFileName = "formula_authoring_names_tour_manifest.json";
@@ -162,10 +164,11 @@ public partial class MainWindow
         var insertTablesChartsTour = Environment.GetEnvironmentVariable("FREEX_INSERT_TABLES_CHARTS_TOUR") == "1";
         var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
         var pageLayoutSetupTour = Environment.GetEnvironmentVariable("FREEX_PAGE_LAYOUT_SETUP_TOUR") == "1";
+        var drawObjectFormattingTour = Environment.GetEnvironmentVariable("FREEX_DRAW_OBJECT_FORMATTING_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
         var formulaAuthoringNamesTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_AUTHORING_NAMES_TOUR") == "1";
         var reviewCommentsProtectionTour = Environment.GetEnvironmentVariable("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !insertTablesChartsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !drawObjectFormattingTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !reviewCommentsProtectionTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -182,7 +185,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, dataSortFilterOutlineTour, insertTablesChartsTour, viewPanesZoomTour, pageLayoutSetupTour, drawObjectFormattingTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, reviewCommentsProtectionTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -228,6 +231,7 @@ public partial class MainWindow
         bool insertTablesChartsTour,
         bool viewPanesZoomTour,
         bool pageLayoutSetupTour,
+        bool drawObjectFormattingTour,
         bool formulaDiagnosticsTour,
         bool formulaAuthoringNamesTour,
         bool reviewCommentsProtectionTour)
@@ -291,6 +295,8 @@ public partial class MainWindow
             await CaptureViewPanesZoomTourAsync(Path.Combine(outputDir, ViewPanesZoomTourOutputDirectoryName));
         if (pageLayoutSetupTour)
             await CapturePageLayoutSetupTourAsync(Path.Combine(outputDir, PageLayoutSetupTourOutputDirectoryName));
+        if (drawObjectFormattingTour)
+            await CaptureDrawObjectFormattingTourAsync(Path.Combine(outputDir, DrawObjectFormattingTourOutputDirectoryName));
         if (formulaDiagnosticsTour)
             await CaptureFormulaDiagnosticsTourAsync(Path.Combine(outputDir, FormulaDiagnosticsTourOutputDirectoryName));
 
@@ -4644,6 +4650,481 @@ public partial class MainWindow
                 $"Page Layout/Page Setup tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
     }
 
+    private async Task CaptureDrawObjectFormattingTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteDrawObjectFormattingTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1220;
+        Height = 768;
+        await Task.Delay(700);
+
+        var context = EnsureDrawObjectFormattingTourContext();
+        var captures = new List<DrawObjectFormattingTourManifestCapture>();
+
+        try
+        {
+            captures.Add(await CaptureDrawObjectFormattingWindowStateAsync(
+                outputDir,
+                "draw-tab-baseline-seeded-objects",
+                "freex_draw_object_formatting_draw_tab_baseline",
+                "Draw tab baseline shows Arrange and Format command groups with seeded shape, picture, and text-box objects visible on the worksheet.",
+                ["UI-CAT-DRAW-001", "UI-CMD-DRAW-001", "UI-CMD-DRAW-002", "UI-CMD-DRAW-003"]));
+
+            captures.Add(await CaptureDrawObjectFormattingDialogAsync(
+                outputDir,
+                new ColorPickerDialog(context.Shape.FillColor, allowNoColor: false)
+                {
+                    Owner = this,
+                    Title = UiText.Get("MainWindowMessage_ObjectFillTitle")
+                },
+                "shape-fill-color-picker",
+                "freex_draw_object_formatting_shape_fill_color_picker",
+                "Shape Fill color picker opens on the standard/theme/custom palette surface using the selected shape fill color.",
+                "Shape Fill",
+                "RenderTargetBitmap-color-picker-dialog-window",
+                ["UI-CMD-DRAW-003"]));
+
+            captures.Add(await CaptureDrawObjectFormattingDialogAsync(
+                outputDir,
+                new ColorPickerDialog(context.Shape.OutlineColor, allowNoColor: false)
+                {
+                    Owner = this,
+                    Title = UiText.Get("MainWindowMessage_ObjectOutlineTitle")
+                },
+                "object-outline-color-picker",
+                "freex_draw_object_formatting_object_outline_color_picker",
+                "Object Outline color picker opens against the selected drawing object's current outline color.",
+                "Object Outline",
+                "RenderTargetBitmap-color-picker-dialog-window",
+                ["UI-CMD-DRAW-003"]));
+
+            captures.Add(await CaptureDrawObjectFormattingDialogAsync(
+                outputDir,
+                new ShapeGradientDialog(context.Shape.GetEffectiveGradientFillDirection()) { Owner = this },
+                "shape-gradient-dialog",
+                "freex_draw_object_formatting_shape_gradient_dialog",
+                "Shape Gradient dialog shows start/end RGB stop inputs, color buttons, direction choices, and OK/Cancel.",
+                "Shape Gradient",
+                "RenderTargetBitmap-shape-gradient-dialog-window",
+                ["UI-CMD-DRAW-004"]));
+
+            captures.Add(await CaptureDrawObjectFormattingDialogAsync(
+                outputDir,
+                new ShapeEffectsDialog(context.Shape.GetEffectiveEffectPreset()) { Owner = this },
+                "shape-effects-dialog",
+                "freex_draw_object_formatting_shape_effects_dialog",
+                "Shape Effects dialog shows the current effect preset selector and description text.",
+                "Shape Effects",
+                "RenderTargetBitmap-shape-effects-dialog-window",
+                ["UI-CMD-DRAW-004"]));
+
+            SelectDrawObjectFormattingPicture(context);
+            captures.Add(await CaptureDrawObjectFormattingCropMenuAsync(outputDir));
+
+            SelectDrawObjectFormattingShape(context);
+            captures.Add(await CaptureDrawObjectFormattingDialogAsync(
+                outputDir,
+                new ObjectSizeDialog(context.Shape.Width, context.Shape.Height, UiText.Get("MainWindowMessage_ObjectSizeTitle")) { Owner = this },
+                "object-size-dialog",
+                "freex_draw_object_formatting_object_size_dialog",
+                "Object Size dialog opens with the height box focused/select-all and lock-aspect-ratio visible for the selected shape.",
+                "Object Size",
+                "RenderTargetBitmap-object-size-dialog-window",
+                ["UI-CMD-DRAW-003"]));
+
+            foreach (var capture in await CaptureDrawObjectFormattingFormatPictureDialogAsync(outputDir, context.Picture))
+                captures.Add(capture);
+
+            captures.Add(await CaptureDrawObjectFormattingSelectionPaneAsync(outputDir, context));
+
+            ValidateDrawObjectFormattingTourEvidence(outputDir, captures);
+            await WriteDrawObjectFormattingTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteDrawObjectFormattingTourEvidence(outputDir);
+            throw;
+        }
+    }
+
+    private DrawObjectFormattingTourContext EnsureDrawObjectFormattingTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Draw/object formatting tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        for (uint row = 1; row <= 16; row++)
+        {
+            for (uint col = 1; col <= 8; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                if (row == 1)
+                    sheet.SetCell(address, new TextValue($"Draw Field {col}"));
+                else if (col == 1)
+                    sheet.SetCell(address, new TextValue($"Object Row {row - 1}"));
+                else
+                    sheet.SetCell(address, new NumberValue(row * 100 + col));
+            }
+        }
+
+        sheet.DrawingShapes.Clear();
+        sheet.Pictures.Clear();
+        sheet.TextBoxes.Clear();
+        sheet.DrawingObjectZOrder.Clear();
+
+        var shape = new DrawingShapeModel
+        {
+            Id = Guid.Parse("aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"),
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            Kind = DrawingShapeKind.Rectangle,
+            Width = 168,
+            Height = 88,
+            Name = "Tour Process Shape",
+            Title = "Draw tour process shape",
+            AltText = "Rounded process shape for Draw object formatting evidence.",
+            FillColor = new CellColor(47, 117, 181),
+            OutlineColor = new CellColor(31, 78, 121),
+            GradientFillEndColor = new CellColor(189, 215, 238),
+            GradientFillDirection = DrawingShapeGradientDirection.Horizontal,
+            EffectPreset = DrawingShapeEffectPreset.Shadow,
+            RotationDegrees = 4
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var picture = new PictureModel
+        {
+            Id = Guid.Parse("bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"),
+            Anchor = new CellAddress(sheet.Id, 5, 5),
+            Kind = PictureKind.Image,
+            ImageBytes = [1, 2, 3, 4],
+            ContentType = "image/png",
+            Name = "Tour Picture Logo",
+            AltText = "Picture placeholder used for Draw formatting and alt text evidence.",
+            Width = 176,
+            Height = 96,
+            RotationDegrees = 8,
+            CropLeft = 0.04,
+            CropTop = 0.02,
+            CropRight = 0.08,
+            CropBottom = 0.03
+        };
+        sheet.Pictures.Add(picture);
+
+        var textBox = new FreeX.Core.Model.TextBoxModel
+        {
+            Id = Guid.Parse("cccccccc-3333-4333-8333-cccccccccccc"),
+            Anchor = new CellAddress(sheet.Id, 8, 3),
+            Text = "Text box evidence",
+            Width = 210,
+            Height = 76,
+            Name = "Tour Text Box",
+            AltText = "Text box object for Draw formatting evidence.",
+            FillColor = new CellColor(255, 242, 204),
+            OutlineColor = new CellColor(191, 143, 0),
+            RotationDegrees = 0
+        };
+        sheet.TextBoxes.Add(textBox);
+
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id));
+
+        SelectDrawObjectFormattingShape(new DrawObjectFormattingTourContext(sheet, shape, picture, textBox));
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Draw"));
+        UpdateViewport();
+        RefreshToolbar();
+        return new DrawObjectFormattingTourContext(sheet, shape, picture, textBox);
+    }
+
+    private void SelectDrawObjectFormattingShape(DrawObjectFormattingTourContext context) =>
+        SelectDrawObjectFormattingObject(context.Shape.Anchor, context.Shape.Id, FreeX.App.UI.ObjectKind.Shape);
+
+    private void SelectDrawObjectFormattingPicture(DrawObjectFormattingTourContext context) =>
+        SelectDrawObjectFormattingObject(context.Picture.Anchor, context.Picture.Id, FreeX.App.UI.ObjectKind.Picture);
+
+    private void SelectDrawObjectFormattingObject(CellAddress anchor, Guid objectId, FreeX.App.UI.ObjectKind kind)
+    {
+        SetActiveCell(anchor);
+        EnsureCellVisible(anchor);
+        if (SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = new GridRange(anchor, anchor);
+            SheetGrid.SelectedRanges = null;
+            SheetGrid.SelectedObjectId = objectId;
+            SheetGrid.SelectedObjectKind = kind;
+        }
+    }
+
+    private async Task<DrawObjectFormattingTourManifestCapture> CaptureDrawObjectFormattingWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string evidencePurpose,
+        IReadOnlyList<string> commandRows)
+    {
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Draw"));
+        UpdateViewport();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateDrawObjectFormattingCapture(
+            state,
+            fileName,
+            evidencePurpose,
+            "Draw ribbon",
+            "RenderTargetBitmap-window-full",
+            ActualWidth,
+            Math.Min(ActualHeight, 760),
+            commandRows,
+            []);
+    }
+
+    private async Task<DrawObjectFormattingTourManifestCapture> CaptureDrawObjectFormattingDialogAsync(
+        string outputDir,
+        Window dialog,
+        string state,
+        string fileName,
+        string evidencePurpose,
+        string surface,
+        string captureMethod,
+        IReadOnlyList<string> commandRows,
+        Action<Window>? configureAfterShow = null)
+    {
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            await Task.Delay(300);
+            configureAfterShow?.Invoke(dialog);
+            dialog.UpdateLayout();
+            await Task.Delay(150);
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, fileName);
+            return CreateDrawObjectFormattingCapture(
+                state,
+                fileName,
+                evidencePurpose,
+                surface,
+                captureMethod,
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                commandRows,
+                []);
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private async Task<DrawObjectFormattingTourManifestCapture> CaptureDrawObjectFormattingCropMenuAsync(string outputDir)
+    {
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Draw"));
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, "Crop Picture")
+            ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Crop Picture ribbon button.");
+        var menu = button.ContextMenu
+            ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Crop Picture context menu.");
+
+        OpenRibbonContextMenu(button, menu);
+        await Task.Delay(350);
+        menu.UpdateLayout();
+        await CaptureElementAsync(menu, outputDir, "freex_draw_object_formatting_crop_menu_opened");
+        var headers = new List<string>();
+        AddMenuHeaders(menu, headers);
+        menu.IsOpen = false;
+        return CreateDrawObjectFormattingCapture(
+            "crop-reset-crop-menu-opened",
+            "freex_draw_object_formatting_crop_menu_opened",
+            "Crop Picture split menu exposes Crop and Reset Crop commands for the selected picture object.",
+            "Crop Picture menu",
+            "RenderTargetBitmap-draw-crop-context-menu",
+            0,
+            0,
+            ["UI-CMD-DRAW-004"],
+            headers);
+    }
+
+    private async Task<IReadOnlyList<DrawObjectFormattingTourManifestCapture>> CaptureDrawObjectFormattingFormatPictureDialogAsync(
+        string outputDir,
+        PictureModel picture)
+    {
+        var dialog = new FormatPictureDialog(picture) { Owner = this };
+        var captures = new List<DrawObjectFormattingTourManifestCapture>();
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            await Task.Delay(300);
+            dialog.UpdateLayout();
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_draw_object_formatting_picture_size_tab");
+            captures.Add(CreateDrawObjectFormattingCapture(
+                "format-picture-size-tab",
+                "freex_draw_object_formatting_picture_size_tab",
+                "Format Picture dialog Size tab shows width, height, rotation, lock aspect ratio, tabs, and OK/Cancel for the selected picture.",
+                "Format Picture",
+                "RenderTargetBitmap-format-picture-dialog-window",
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                ["UI-CMD-DRAW-003", "UI-CMD-DRAW-004"],
+                []));
+
+            var tabs = FindDescendant<TabControl>(dialog)
+                ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Format Picture tab control.");
+            foreach (var item in tabs.Items.OfType<TabItem>())
+            {
+                if (string.Equals(item.Header?.ToString(), UiText.Get("FormatPicture_AltTextTab"), StringComparison.Ordinal))
+                {
+                    tabs.SelectedItem = item;
+                    break;
+                }
+            }
+
+            await Task.Delay(250);
+            dialog.UpdateLayout();
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_draw_object_formatting_picture_alt_text_tab");
+            captures.Add(CreateDrawObjectFormattingCapture(
+                "format-picture-alt-text-tab",
+                "freex_draw_object_formatting_picture_alt_text_tab",
+                "Format Picture dialog Alt Text tab shows the seeded picture description field and dialog action buttons.",
+                "Format Picture",
+                "RenderTargetBitmap-format-picture-dialog-window",
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                ["UI-CMD-DRAW-003"],
+                []));
+        }
+        finally
+        {
+            dialog.Close();
+        }
+
+        return captures;
+    }
+
+    private async Task<DrawObjectFormattingTourManifestCapture> CaptureDrawObjectFormattingSelectionPaneAsync(
+        string outputDir,
+        DrawObjectFormattingTourContext context)
+    {
+        var dialog = new SelectionPaneDialog(SelectionPanePlanner.BuildItems(context.Sheet)) { Owner = this };
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            await Task.Delay(300);
+            var searchBox = FindDescendantByAutomationId<TextBox>(dialog, "SelectionPaneSearchBox")
+                ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Selection Pane search box.");
+            var renameBox = FindDescendantByAutomationId<TextBox>(dialog, "SelectionPaneRenameBox")
+                ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Selection Pane rename box.");
+            var renameButton = FindDescendantByAutomationId<Button>(dialog, "SelectionPaneRenameButton")
+                ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Selection Pane rename button.");
+            var toggleButton = FindDescendantByAutomationId<Button>(dialog, "SelectionPaneToggleVisibilityButton")
+                ?? throw new InvalidOperationException("Draw/object formatting tour could not find the Selection Pane visibility button.");
+
+            searchBox.Text = "Tour";
+            renameBox.Text = "Tour Shape Renamed";
+            renameButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            toggleButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            dialog.UpdateLayout();
+            await Task.Delay(250);
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_draw_object_formatting_selection_pane_rename_visibility");
+            return CreateDrawObjectFormattingCapture(
+                "selection-pane-rename-visibility",
+                "freex_draw_object_formatting_selection_pane_rename_visibility",
+                "Selection Pane dialog shows search/list state, a renamed object preview, visibility toggle state, show/hide all, bring/send, OK, and Cancel.",
+                "Selection Pane",
+                "RenderTargetBitmap-selection-pane-dialog-window",
+                dialog.ActualWidth,
+                dialog.ActualHeight,
+                ["UI-CMD-DRAW-002", "UI-CMD-DRAW-005"],
+                []);
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private DrawObjectFormattingTourManifestCapture CreateDrawObjectFormattingCapture(
+        string state,
+        string fileName,
+        string evidencePurpose,
+        string surface,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        IReadOnlyList<string> commandRows,
+        IReadOnlyList<string> menuHeaders)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return new DrawObjectFormattingTourManifestCapture(
+            CaptureKey: $"interactive:draw-object-formatting:{state}",
+            PairKey: $"interactive:draw-object-formatting:{state}",
+            ScenarioId: "draw-object-formatting:visual-evidence",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            SheetName: sheet?.Name ?? string.Empty,
+            ActiveRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
+            SelectedObjectKind: SheetGrid?.SelectedObjectKind.ToString() ?? string.Empty,
+            SelectedObjectName: GetDrawObjectFormattingSelectedObjectName(sheet),
+            ShapeCount: sheet?.DrawingShapes.Count ?? 0,
+            PictureCount: sheet?.Pictures.Count ?? 0,
+            TextBoxCount: sheet?.TextBoxes.Count ?? 0,
+            DrawingZOrder: sheet?.DrawingObjectZOrder.Select(entry => $"{entry.Kind}:{entry.Id:N}").ToArray() ?? [],
+            CommandRows: commandRows,
+            MenuHeaders: menuHeaders,
+            EvidencePurpose: evidencePurpose);
+    }
+
+    private string GetDrawObjectFormattingSelectedObjectName(Sheet? sheet)
+    {
+        if (sheet is null || SheetGrid is null || SheetGrid.SelectedObjectId == Guid.Empty)
+            return string.Empty;
+
+        var id = SheetGrid.SelectedObjectId;
+        return SheetGrid.SelectedObjectKind switch
+        {
+            FreeX.App.UI.ObjectKind.Picture => sheet.Pictures.FirstOrDefault(picture => picture.Id == id)?.Name ?? string.Empty,
+            FreeX.App.UI.ObjectKind.Shape => sheet.DrawingShapes.FirstOrDefault(shape => shape.Id == id)?.Name ?? string.Empty,
+            FreeX.App.UI.ObjectKind.TextBox => sheet.TextBoxes.FirstOrDefault(textBox => textBox.Id == id)?.Name ?? string.Empty,
+            _ => string.Empty
+        };
+    }
+
+    private static void DeleteDrawObjectFormattingTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_draw_object_formatting_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, DrawObjectFormattingTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateDrawObjectFormattingTourEvidence(
+        string outputDir,
+        IReadOnlyList<DrawObjectFormattingTourManifestCapture> captures)
+    {
+        if (captures.Count != 10)
+            throw new InvalidOperationException($"Draw/object formatting tour expected 10 captures but created {captures.Count}.");
+
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Draw/object formatting tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
+    }
+
     private static T? FindDescendantByRibbonCommandName<T>(DependencyObject root, string commandName)
         where T : DependencyObject
     {
@@ -8053,6 +8534,80 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.PageLayoutSetupTourManifest);
     }
 
+    private static async Task WriteDrawObjectFormattingTourManifestAsync(
+        string outputDir,
+        DrawObjectFormattingTourContext context,
+        IReadOnlyList<DrawObjectFormattingTourManifestCapture> captures)
+    {
+        var manifest = new DrawObjectFormattingTourManifest(
+            Tool: "FREEX_DRAW_OBJECT_FORMATTING_TOUR",
+            EvidenceFamily: "draw-object-formatting",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "draw-object-formatting:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_draw_object_formatting_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds:
+            [
+                "UI-CAT-DRAW-001",
+                "UI-CAT-DRAW-001A",
+                "UI-CAT-DRAW-001B",
+                "UI-CAT-DRAW-001C",
+                "UI-CMD-DRAW-001",
+                "UI-CMD-DRAW-002",
+                "UI-CMD-DRAW-003",
+                "UI-CMD-DRAW-004",
+                "UI-CMD-DRAW-005"
+            ],
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new DrawObjectFormattingTourManifestPairing(
+                "interactive:draw-object-formatting:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no foreground mouse, keyboard, native file dialog, or screen capture input was used."
+                    : "Abort before file write unless the expected FreeX window/dialog owns foreground focus for each capture."),
+            SeededObjects:
+            [
+                $"shape:{context.Shape.Name}:{context.Shape.Anchor.ToA1()}",
+                $"picture:{context.Picture.Name}:{context.Picture.Anchor.ToA1()}",
+                $"text-box:{context.TextBox.Name}:{context.TextBox.Anchor.ToA1()}"
+            ],
+            Captures: captures,
+            CoveredStates:
+            [
+                "Draw tab baseline with Arrange and Format groups plus seeded visible shape, picture, and text-box objects.",
+                "Shape Fill and Object Outline color picker surfaces.",
+                "Shape Gradient and Shape Effects dialogs.",
+                "Crop/Reset Crop split-menu surface for a selected picture.",
+                "Object Size dialog default numeric-input focus/select-all surface.",
+                "Format Picture Size and Alt Text tabs for object size/rotation/crop/alt-text evidence.",
+                "Selection Pane list/search/rename/visibility/reorder controls with seeded drawing objects."
+            ],
+            Limitations:
+            [
+                "RenderTargetBitmap evidence only; it is not foreground CopyFromScreen proof.",
+                "The tour drives FreeX in process and captures WPF windows/menus without physical mouse, keyboard, keytip, drag-handle, or UIA invocation.",
+                "Color picker and dialog captures are visual states only; OK/Cancel/Escape, invalid input recovery, and command mutation from those dialogs remain open.",
+                "Picture insertion uses deterministic in-process placeholder bytes rather than opening the native Windows file picker.",
+                "Selection Pane rename and visibility states are previewed in the dialog before OK/apply; grouped-sheet propagation and persistence breadth remain covered by planner/command tests.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, DrawObjectFormattingTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.DrawObjectFormattingTourManifest);
+    }
+
     private static async Task WriteFormulaDiagnosticsTourManifestAsync(
         string outputDir,
         FormulaDiagnosticsTourContext context,
@@ -9489,6 +10044,12 @@ public partial class MainWindow
         CellAddress NewThreadedCommentCell,
         GridRange AllowEditRange);
 
+    private sealed record DrawObjectFormattingTourContext(
+        Sheet Sheet,
+        DrawingShapeModel Shape,
+        PictureModel Picture,
+        FreeX.Core.Model.TextBoxModel TextBox);
+
     private sealed record FormulaBarNameBoxTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -9752,6 +10313,56 @@ public partial class MainWindow
         IReadOnlyList<string> MenuHeaders,
         string EvidencePurpose);
 
+    private sealed record DrawObjectFormattingTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        DrawObjectFormattingTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<string> SeededObjects,
+        IReadOnlyList<DrawObjectFormattingTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record DrawObjectFormattingTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record DrawObjectFormattingTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SheetName,
+        string ActiveRange,
+        string SelectedObjectKind,
+        string SelectedObjectName,
+        int ShapeCount,
+        int PictureCount,
+        int TextBoxCount,
+        IReadOnlyList<string> DrawingZOrder,
+        IReadOnlyList<string> CommandRows,
+        IReadOnlyList<string> MenuHeaders,
+        string EvidencePurpose);
+
     private sealed record FormulaDiagnosticsTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -9930,6 +10541,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(InsertTablesChartsTourManifest))]
     [JsonSerializable(typeof(ViewPanesZoomTourManifest))]
     [JsonSerializable(typeof(PageLayoutSetupTourManifest))]
+    [JsonSerializable(typeof(DrawObjectFormattingTourManifest))]
     [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
     [JsonSerializable(typeof(FormulaAuthoringNamesTourManifest))]
     [JsonSerializable(typeof(ReviewCommentsProtectionTourManifest))]
