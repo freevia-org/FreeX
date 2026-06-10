@@ -67,6 +67,8 @@ public partial class MainWindow
     private const string ViewPanesZoomTourManifestFileName = "view_panes_zoom_tour_manifest.json";
     private const string ViewPanesZoomTourOutputDirectoryName = "view-panes-zoom-tour";
     private const string ViewPanesZoomTourCustomViewName = "View Panes Zoom Tour";
+    private const string PageLayoutSetupTourManifestFileName = "page_layout_setup_tour_manifest.json";
+    private const string PageLayoutSetupTourOutputDirectoryName = "page-layout-setup-tour";
     private const string FormulaDiagnosticsTourManifestFileName = "formula_diagnostics_tour_manifest.json";
     private const string FormulaDiagnosticsTourOutputDirectoryName = "formula-diagnostics-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
@@ -148,8 +150,9 @@ public partial class MainWindow
         var insertObjectsLinksTour = Environment.GetEnvironmentVariable("FREEX_INSERT_OBJECTS_LINKS_TOUR") == "1";
         var dataToolsDialogsTour = Environment.GetEnvironmentVariable("FREEX_DATA_TOOLS_DIALOGS_TOUR") == "1";
         var viewPanesZoomTour = Environment.GetEnvironmentVariable("FREEX_VIEW_PANES_ZOOM_TOUR") == "1";
+        var pageLayoutSetupTour = Environment.GetEnvironmentVariable("FREEX_PAGE_LAYOUT_SETUP_TOUR") == "1";
         var formulaDiagnosticsTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_DIAGNOSTICS_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !viewPanesZoomTour && !formulaDiagnosticsTour)
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !formulaBarNameBoxTour && !insertObjectsLinksTour && !dataToolsDialogsTour && !viewPanesZoomTour && !pageLayoutSetupTour && !formulaDiagnosticsTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -166,7 +169,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, viewPanesZoomTour, formulaDiagnosticsTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, formulaBarNameBoxTour, insertObjectsLinksTour, dataToolsDialogsTour, viewPanesZoomTour, pageLayoutSetupTour, formulaDiagnosticsTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -209,6 +212,7 @@ public partial class MainWindow
         bool insertObjectsLinksTour,
         bool dataToolsDialogsTour,
         bool viewPanesZoomTour,
+        bool pageLayoutSetupTour,
         bool formulaDiagnosticsTour)
     {
         if (ribbonPlan is not null)
@@ -264,6 +268,8 @@ public partial class MainWindow
             await CaptureDataToolsDialogsTourAsync(Path.Combine(outputDir, DataToolsDialogsTourOutputDirectoryName));
         if (viewPanesZoomTour)
             await CaptureViewPanesZoomTourAsync(Path.Combine(outputDir, ViewPanesZoomTourOutputDirectoryName));
+        if (pageLayoutSetupTour)
+            await CapturePageLayoutSetupTourAsync(Path.Combine(outputDir, PageLayoutSetupTourOutputDirectoryName));
         if (formulaDiagnosticsTour)
             await CaptureFormulaDiagnosticsTourAsync(Path.Combine(outputDir, FormulaDiagnosticsTourOutputDirectoryName));
 
@@ -3933,6 +3939,358 @@ public partial class MainWindow
         }
     }
 
+    private async Task CapturePageLayoutSetupTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeletePageLayoutSetupTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1240;
+        Height = 768;
+        await Task.Delay(700);
+
+        var sheet = EnsurePageLayoutSetupTourContext();
+        var captures = new List<PageLayoutSetupTourManifestCapture>();
+
+        try
+        {
+            captures.Add(await CapturePageLayoutSetupWindowStateAsync(
+                outputDir,
+                "ribbon-baseline",
+                "freex_page_layout_setup_ribbon_baseline",
+                "Page Layout tab shows Themes, Page Setup, Scale to Fit, Sheet Options, and Arrange groups with a seeded print area and print-title state."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "margins-menu-opened",
+                "freex_page_layout_setup_margins_menu_opened",
+                "Margins",
+                "Margins menu exposes Normal, Wide, Narrow, and Custom Margins choices."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "orientation-menu-opened",
+                "freex_page_layout_setup_orientation_menu_opened",
+                "Page Orientation",
+                "Orientation menu exposes Portrait and Landscape choices."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "size-menu-opened",
+                "freex_page_layout_setup_size_menu_opened",
+                "Paper Size",
+                "Size menu exposes implemented paper-size choices plus dialog-backed larger paper entries."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "print-area-menu-opened",
+                "freex_page_layout_setup_print_area_menu_opened",
+                "Print Area",
+                "Print Area menu exposes Set, disabled Add to Print Area, and Clear choices against the selected range."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "breaks-menu-opened",
+                "freex_page_layout_setup_breaks_menu_opened",
+                "Breaks",
+                "Breaks menu exposes Insert Page Break, Remove Page Break, and Reset All Page Breaks."));
+
+            captures.Add(await CapturePageLayoutSetupMenuAsync(
+                outputDir,
+                "background-menu-opened",
+                "freex_page_layout_setup_background_menu_opened",
+                "Background",
+                "Background menu exposes Choose Background and Delete Background without opening the native file picker."));
+
+            var pageSetupDialog = new PageSetupDialog(sheet, SheetGrid.SelectedRange, null, PageSetupInitialFocusTarget.PageOrientation)
+            {
+                Owner = this
+            };
+            try
+            {
+                pageSetupDialog.Show();
+                await Task.Delay(350);
+                pageSetupDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(pageSetupDialog, outputDir, "freex_page_layout_setup_dialog_page_tab");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "page-setup-dialog-page-tab",
+                    "freex_page_layout_setup_dialog_page_tab",
+                    "Page Setup dialog Page tab shows orientation, paper size, scaling, first-page number, print quality, and Print/Preview/Options/OK/Cancel buttons.",
+                    "Page Setup",
+                    "RenderTargetBitmap-page-setup-dialog-window",
+                    []));
+
+                pageSetupDialog.PageSetupTabs.SelectedItem = pageSetupDialog.MarginsTab;
+                await Task.Delay(250);
+                pageSetupDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(pageSetupDialog, outputDir, "freex_page_layout_setup_dialog_margins_tab");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "page-setup-dialog-margins-tab",
+                    "freex_page_layout_setup_dialog_margins_tab",
+                    "Page Setup dialog Margins tab shows left/right/top/bottom, header/footer margins, and center-on-page options.",
+                    "Page Setup",
+                    "RenderTargetBitmap-page-setup-dialog-window",
+                    []));
+
+                pageSetupDialog.PageSetupTabs.SelectedItem = pageSetupDialog.SheetTab;
+                await Task.Delay(250);
+                pageSetupDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(pageSetupDialog, outputDir, "freex_page_layout_setup_dialog_sheet_tab_print_titles");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "page-setup-dialog-sheet-tab-print-titles",
+                    "freex_page_layout_setup_dialog_sheet_tab_print_titles",
+                    "Page Setup dialog Sheet tab captures Print Titles fields, print area, print gridlines/headings, page order, comments, and error display options.",
+                    "Page Setup",
+                    "RenderTargetBitmap-page-setup-dialog-window",
+                    []));
+            }
+            finally
+            {
+                pageSetupDialog.Close();
+            }
+
+            ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(null, 1, 2));
+            PageLayoutScaleWidthBox.Text = "1 page";
+            PageLayoutScaleHeightBox.Text = "2 pages";
+            PageLayoutScalePercentBox.Text = "85%";
+            captures.Add(await CapturePageLayoutSetupWindowStateAsync(
+                outputDir,
+                "scale-to-fit-state",
+                "freex_page_layout_setup_scale_to_fit_state",
+                "Scale to Fit ribbon fields show fit-to-pages width/height and percent controls after applying the production scale command."));
+
+            PageLayoutViewGridlinesChk.IsChecked = false;
+            PageLayoutViewHeadingsChk.IsChecked = false;
+            PageLayoutPrintGridlinesChk.IsChecked = true;
+            PageLayoutPrintHeadingsChk.IsChecked = true;
+            sheet.ShowGridlines = false;
+            sheet.ShowHeadings = false;
+            sheet.PrintGridlines = true;
+            sheet.PrintHeadings = true;
+            UpdateViewport();
+            captures.Add(await CapturePageLayoutSetupWindowStateAsync(
+                outputDir,
+                "sheet-options-toggled",
+                "freex_page_layout_setup_sheet_options_toggled",
+                "Sheet Options shows display gridlines/headings off and print gridlines/headings on for the active sheet."));
+
+            var selectionPaneDialog = new SelectionPaneDialog(CreatePageLayoutSetupSelectionPaneItems())
+            {
+                Owner = this
+            };
+            try
+            {
+                selectionPaneDialog.Show();
+                await Task.Delay(350);
+                selectionPaneDialog.UpdateLayout();
+                await CaptureWindowElementForScreenshotTourAsync(selectionPaneDialog, outputDir, "freex_page_layout_setup_arrange_selection_pane_dialog");
+                captures.Add(CreatePageLayoutSetupCapture(
+                    "arrange-selection-pane-dialog",
+                    "freex_page_layout_setup_arrange_selection_pane_dialog",
+                    "Arrange group representative Selection Pane dialog shows object list, search/filter, visibility, rename, and move controls.",
+                    "Selection Pane",
+                    "RenderTargetBitmap-selection-pane-dialog-window",
+                    []));
+            }
+            finally
+            {
+                selectionPaneDialog.Close();
+            }
+
+            ValidatePageLayoutSetupTourEvidence(outputDir, captures);
+            await WritePageLayoutSetupTourManifestAsync(outputDir, captures);
+        }
+        catch
+        {
+            DeletePageLayoutSetupTourEvidence(outputDir);
+            throw;
+        }
+    }
+
+    private Sheet EnsurePageLayoutSetupTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Page Layout/Page Setup tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        for (uint row = 1; row <= 28; row++)
+        {
+            for (uint col = 1; col <= 8; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                if (row == 1)
+                    sheet.SetCell(address, new TextValue($"Print Field {col}"));
+                else if (col == 1)
+                    sheet.SetCell(address, new TextValue($"Page Row {row - 1}"));
+                else
+                    sheet.SetCell(address, new NumberValue(row * 10 + col));
+            }
+        }
+
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PaperSize = WorksheetPaperSize.Letter;
+        sheet.PageMargins = WorksheetPageMargins.Narrow;
+        sheet.PrintArea = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 18, 6));
+        sheet.PrintTitleRows = new WorksheetRepeatRange(1, 1);
+        sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
+        sheet.RowPageBreaks.Clear();
+        sheet.RowPageBreaks.Add(12);
+        sheet.ColumnPageBreaks.Clear();
+        sheet.ColumnPageBreaks.Add(5);
+        sheet.ScaleToFit = new WorksheetScaleToFit(90, null, null);
+        sheet.PrintGridlines = false;
+        sheet.PrintHeadings = false;
+        sheet.ShowGridlines = true;
+        sheet.ShowHeadings = true;
+        sheet.CenterHorizontallyOnPage = true;
+        sheet.PageOrder = WorksheetPageOrder.OverThenDown;
+        sheet.PageHeader = new WorksheetHeaderFooter("", "Page Layout Tour", "");
+        sheet.PageFooter = new WorksheetHeaderFooter("", "Page &[Page] of &[Pages]", "");
+
+        SelectViewPanesZoomTourRange(sheet, sheet.PrintArea.Value);
+        SetWorksheetViewMode(WorksheetViewMode.PageLayout);
+        SelectPageLayoutRibbonTabForTour();
+        SyncPageLayoutSetupTourControls(sheet);
+        UpdateViewport();
+        RefreshStatusBar();
+        return sheet;
+    }
+
+    private void SelectPageLayoutRibbonTabForTour()
+    {
+        SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Page Layout"));
+    }
+
+    private void SyncPageLayoutSetupTourControls(Sheet sheet)
+    {
+        _suppressToolbarSync = true;
+        try
+        {
+            PageLayoutScaleWidthBox.Text = sheet.ScaleToFit.FitToPagesWide is { } wide ? $"{wide} page" : "Automatic";
+            PageLayoutScaleHeightBox.Text = sheet.ScaleToFit.FitToPagesTall is { } tall ? $"{tall} page" : "Automatic";
+            PageLayoutScalePercentBox.Text = $"{sheet.ScaleToFit.ScalePercent ?? 100}%";
+            PageLayoutViewGridlinesChk.IsChecked = sheet.ShowGridlines;
+            PageLayoutViewHeadingsChk.IsChecked = sheet.ShowHeadings;
+            PageLayoutPrintGridlinesChk.IsChecked = sheet.PrintGridlines;
+            PageLayoutPrintHeadingsChk.IsChecked = sheet.PrintHeadings;
+        }
+        finally
+        {
+            _suppressToolbarSync = false;
+        }
+    }
+
+    private async Task<PageLayoutSetupTourManifestCapture> CapturePageLayoutSetupWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string evidencePurpose)
+    {
+        SelectPageLayoutRibbonTabForTour();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 768);
+        return CreatePageLayoutSetupCapture(state, fileName, evidencePurpose, "Page Layout ribbon", "RenderTargetBitmap-window-full", []);
+    }
+
+    private async Task<PageLayoutSetupTourManifestCapture> CapturePageLayoutSetupMenuAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string commandName,
+        string evidencePurpose)
+    {
+        SelectPageLayoutRibbonTabForTour();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)
+            ?? throw new InvalidOperationException($"Page Layout/Page Setup tour could not find '{commandName}' ribbon button.");
+        var menu = button.ContextMenu
+            ?? throw new InvalidOperationException($"Page Layout/Page Setup tour could not find '{commandName}' context menu.");
+
+        OpenRibbonContextMenu(button, menu);
+        await Task.Delay(350);
+        menu.UpdateLayout();
+        await CaptureElementAsync(menu, outputDir, fileName);
+        var headers = new List<string>();
+        AddMenuHeaders(menu, headers);
+        menu.IsOpen = false;
+        return CreatePageLayoutSetupCapture(state, fileName, evidencePurpose, commandName, "RenderTargetBitmap-page-layout-context-menu", headers);
+    }
+
+    private PageLayoutSetupTourManifestCapture CreatePageLayoutSetupCapture(
+        string state,
+        string fileName,
+        string evidencePurpose,
+        string surface,
+        string captureMethod,
+        IReadOnlyList<string> menuHeaders)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return new PageLayoutSetupTourManifestCapture(
+            CaptureKey: $"interactive:page-layout-setup:{state}",
+            PairKey: $"interactive:page-layout-setup:{state}",
+            ScenarioId: "page-layout-setup:visual-evidence",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: captureMethod.Contains("window-full", StringComparison.Ordinal) ? ActualWidth : 0,
+            CaptureLogicalHeight: captureMethod.Contains("window-full", StringComparison.Ordinal) ? Math.Min(ActualHeight, 768) : 0,
+            SheetName: sheet?.Name ?? string.Empty,
+            ActiveRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
+            ViewMode: (sheet?.ViewMode ?? WorksheetViewMode.Normal).ToString(),
+            PageOrientation: (sheet?.PageOrientation ?? WorksheetPageOrientation.Portrait).ToString(),
+            PaperSize: (sheet?.PaperSize ?? WorksheetPaperSize.A4).ToString(),
+            PrintArea: sheet?.PrintArea?.ToString() ?? string.Empty,
+            PrintTitleRows: sheet?.PrintTitleRows?.ToString() ?? string.Empty,
+            PrintTitleColumns: sheet?.PrintTitleColumns?.ToString() ?? string.Empty,
+            RowPageBreaks: sheet?.RowPageBreaks.ToArray() ?? [],
+            ColumnPageBreaks: sheet?.ColumnPageBreaks.ToArray() ?? [],
+            ScaleToFit: sheet?.ScaleToFit.ToString() ?? WorksheetScaleToFit.Default.ToString(),
+            ShowGridlines: sheet?.ShowGridlines ?? true,
+            ShowHeadings: sheet?.ShowHeadings ?? true,
+            PrintGridlines: sheet?.PrintGridlines ?? false,
+            PrintHeadings: sheet?.PrintHeadings ?? false,
+            ScaleWidthText: PageLayoutScaleWidthBox.Text,
+            ScaleHeightText: PageLayoutScaleHeightBox.Text,
+            ScalePercentText: PageLayoutScalePercentBox.Text,
+            MenuHeaders: menuHeaders,
+            EvidencePurpose: evidencePurpose);
+    }
+
+    private static IReadOnlyList<SelectionPaneItem> CreatePageLayoutSetupSelectionPaneItems() =>
+    [
+        new(SelectionPaneObjectKind.Shape, Guid.Parse("11111111-1111-1111-1111-111111111111"), "Rectangle 1", true, false, true),
+        new(SelectionPaneObjectKind.TextBox, Guid.Parse("22222222-2222-2222-2222-222222222222"), "Text Box 1", true, true, true),
+        new(SelectionPaneObjectKind.Picture, Guid.Parse("33333333-3333-3333-3333-333333333333"), "Picture 1", false, true, false)
+    ];
+
+    private static void DeletePageLayoutSetupTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_page_layout_setup_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, PageLayoutSetupTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidatePageLayoutSetupTourEvidence(
+        string outputDir,
+        IReadOnlyList<PageLayoutSetupTourManifestCapture> captures)
+    {
+        var missing = captures
+            .Select(capture => capture.OutputFileName)
+            .Where(fileName => !File.Exists(Path.Combine(outputDir, fileName)))
+            .ToArray();
+
+        if (missing.Length > 0)
+            throw new InvalidOperationException(
+                $"Page Layout/Page Setup tour did not create {missing.Length} planned capture(s): {string.Join(", ", missing)}.");
+    }
+
     private static T? FindDescendantByRibbonCommandName<T>(DependencyObject root, string commandName)
         where T : DependencyObject
     {
@@ -5985,6 +6343,72 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.ViewPanesZoomTourManifest);
     }
 
+    private static async Task WritePageLayoutSetupTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<PageLayoutSetupTourManifestCapture> captures)
+    {
+        var manifest = new PageLayoutSetupTourManifest(
+            Tool: "FREEX_PAGE_LAYOUT_SETUP_TOUR",
+            EvidenceFamily: "page-layout-setup",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "page-layout-setup:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_page_layout_setup_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CatalogIds:
+            [
+                "UI-CAT-PAGE-001",
+                "UI-CAT-PAGE-001A",
+                "UI-CAT-DIALOG-001B",
+                "UI-CMD-PAGE-001",
+                "UI-CMD-PAGE-002",
+                "UI-CMD-PAGE-003",
+                "UI-CMD-PAGE-004",
+                "UI-CMD-PAGE-005",
+                "UI-CMD-PAGE-006",
+                "UI-CMD-DRAW-002"
+            ],
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new PageLayoutSetupTourManifestPairing(
+                "interactive:page-layout-setup:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no foreground mouse, keyboard, native file dialog, or screen capture input was used."
+                    : "Abort before file write unless the expected FreeX window/dialog owns foreground focus for each capture."),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Page Layout ribbon baseline with Page Setup, Scale to Fit, Sheet Options, and Arrange groups visible.",
+                "Margins, Orientation, Size, Print Area, Breaks, and Background menu surfaces.",
+                "Page Setup dialog Page, Margins, and Sheet tabs, including Print Titles fields.",
+                "Scale to Fit field state and Sheet Options print/display checkbox state.",
+                "Arrange representative Selection Pane dialog surface."
+            ],
+            Limitations:
+            [
+                "RenderTargetBitmap evidence only; it is not foreground CopyFromScreen proof.",
+                "The tour drives FreeX in process and captures WPF windows/menus without physical mouse, keyboard, keytip, or UIA invocation.",
+                "Background captures the supported menu surface only; the native image picker, image tiling display, replacement, clear foreground proof, and persistence remain open.",
+                "Page Setup dialog captures are visual states only; OK/Cancel/Escape/default-button execution, range-picker collapse/restore, Print/Preview/Options actions, and printer options are not executed.",
+                "Arrange evidence uses a deterministic representative Selection Pane dialog item list rather than live overlapping drawing objects on the sheet.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, PageLayoutSetupTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.PageLayoutSetupTourManifest);
+    }
+
     private static async Task WriteFormulaDiagnosticsTourManifestAsync(
         string outputDir,
         FormulaDiagnosticsTourContext context,
@@ -7250,6 +7674,64 @@ public partial class MainWindow
         bool ViewFormulaBarChecked,
         bool SplitButtonChecked);
 
+    private sealed record PageLayoutSetupTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        IReadOnlyList<string> CatalogIds,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        PageLayoutSetupTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<PageLayoutSetupTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record PageLayoutSetupTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record PageLayoutSetupTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string SheetName,
+        string ActiveRange,
+        string ViewMode,
+        string PageOrientation,
+        string PaperSize,
+        string PrintArea,
+        string PrintTitleRows,
+        string PrintTitleColumns,
+        IReadOnlyList<uint> RowPageBreaks,
+        IReadOnlyList<uint> ColumnPageBreaks,
+        string ScaleToFit,
+        bool ShowGridlines,
+        bool ShowHeadings,
+        bool PrintGridlines,
+        bool PrintHeadings,
+        string ScaleWidthText,
+        string ScaleHeightText,
+        string ScalePercentText,
+        IReadOnlyList<string> MenuHeaders,
+        string EvidencePurpose);
+
     private sealed record FormulaDiagnosticsTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -7319,6 +7801,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(InsertObjectsLinksTourManifest))]
     [JsonSerializable(typeof(DataToolsDialogsTourManifest))]
     [JsonSerializable(typeof(ViewPanesZoomTourManifest))]
+    [JsonSerializable(typeof(PageLayoutSetupTourManifest))]
     [JsonSerializable(typeof(FormulaDiagnosticsTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
