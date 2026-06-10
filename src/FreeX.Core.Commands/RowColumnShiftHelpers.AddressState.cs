@@ -115,7 +115,7 @@ internal static partial class RowColumnShiftHelpers
 
         var snapshots = new List<PivotTableAddressSnapshot>(sheet.PivotTables.Count);
         foreach (var pivotTable in sheet.PivotTables)
-            snapshots.Add(new PivotTableAddressSnapshot(pivotTable, pivotTable.SourceRange, pivotTable.TargetRange));
+            snapshots.Add(new PivotTableAddressSnapshot(pivotTable, pivotTable.SourceRange, pivotTable.TargetRange, pivotTable.LastRenderedRange));
 
         return snapshots;
     }
@@ -202,6 +202,7 @@ internal static partial class RowColumnShiftHelpers
         {
             entry.PivotTable.SourceRange = entry.SourceRange;
             entry.PivotTable.TargetRange = entry.TargetRange;
+            entry.PivotTable.LastRenderedRange = entry.LastRenderedRange;
             sheet.PivotTables.Add(entry.PivotTable);
         }
 
@@ -702,6 +703,9 @@ internal static partial class RowColumnShiftHelpers
 
             entry.PivotTable.SourceRange = sourceRange;
             entry.PivotTable.TargetRange = targetRange;
+            entry.PivotTable.LastRenderedRange = entry.LastRenderedRange is { } lastRenderedRange
+                ? shift.ShiftRange(lastRenderedRange)
+                : null;
             sheet.PivotTables.Add(entry.PivotTable);
         }
     }
@@ -1326,7 +1330,8 @@ internal readonly record struct SparklineAddressSnapshot(
 internal readonly record struct PivotTableAddressSnapshot(
     PivotTableModel PivotTable,
     GridRange SourceRange,
-    GridRange TargetRange);
+    GridRange TargetRange,
+    GridRange? LastRenderedRange);
 
 internal readonly record struct PivotCacheSourceSnapshot(
     PivotCacheModel Cache,

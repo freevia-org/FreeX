@@ -58,7 +58,7 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
         }
 
         _snapshot = PivotCalculatedItemsSnapshot.Capture(pivotTable);
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
 
         PivotTableCommandCollections.Replace(pivotTable.RowFields, _rowFields);
         PivotTableCommandCollections.Replace(pivotTable.ColumnFields, _columnFields);
@@ -83,7 +83,10 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
     {
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
+        {
+            PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
             _snapshot.Restore(pivotTable);
+        }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
         _snapshot = null;
         _targetSnapshot = null;
@@ -94,7 +97,8 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
         IReadOnlyList<PivotFieldModel> ColumnFields,
         IReadOnlyList<PivotFieldModel> PageFields,
         IReadOnlyList<PivotCalculatedFieldModel> CalculatedFields,
-        IReadOnlyList<PivotCalculatedItemModel> CalculatedItems)
+        IReadOnlyList<PivotCalculatedItemModel> CalculatedItems,
+        GridRange? LastRenderedRange)
     {
         public static PivotCalculatedItemsSnapshot Capture(PivotTableModel pivotTable) =>
             new(
@@ -102,7 +106,8 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
                 pivotTable.ColumnFields.ToList(),
                 pivotTable.PageFields.ToList(),
                 pivotTable.CalculatedFields.ToList(),
-                pivotTable.CalculatedItems.ToList());
+                pivotTable.CalculatedItems.ToList(),
+                pivotTable.LastRenderedRange);
 
         public void Restore(PivotTableModel pivotTable)
         {
@@ -111,6 +116,7 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
             PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
             PivotTableCommandCollections.Replace(pivotTable.CalculatedFields, CalculatedFields);
             PivotTableCommandCollections.Replace(pivotTable.CalculatedItems, CalculatedItems);
+            pivotTable.LastRenderedRange = LastRenderedRange;
         }
     }
 }
@@ -155,7 +161,7 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
 
         var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
         _snapshot = PivotSourceSnapshot.Capture(pivotTable, cache);
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
 
         pivotTable.SourceRange = _sourceRange;
         if (cache is not null)
@@ -174,11 +180,11 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
+        if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
         {
             var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
-            if (_snapshot is not null)
-                _snapshot.Restore(pivotTable, cache);
+            PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
+            _snapshot.Restore(pivotTable, cache);
         }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
         _snapshot = null;
@@ -204,7 +210,8 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
         string? CacheSourceSheetName,
         string? CacheSourceReference,
         string? CacheSourceTableName,
-        IReadOnlyList<PivotCacheFieldModel> CacheFields)
+        IReadOnlyList<PivotCacheFieldModel> CacheFields,
+        GridRange? LastRenderedRange)
     {
         public static PivotSourceSnapshot Capture(PivotTableModel pivotTable, PivotCacheModel? cache) =>
             new(
@@ -212,11 +219,13 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
                 cache?.SourceSheetName,
                 cache?.SourceReference,
                 cache?.SourceTableName,
-                cache?.Fields.ToList() ?? []);
+                cache?.Fields.ToList() ?? [],
+                pivotTable.LastRenderedRange);
 
         public void Restore(PivotTableModel pivotTable, PivotCacheModel? cache)
         {
             pivotTable.SourceRange = SourceRange;
+            pivotTable.LastRenderedRange = LastRenderedRange;
             if (cache is null)
                 return;
 

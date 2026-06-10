@@ -6,12 +6,14 @@ internal static partial class XlsxPivotTableReader
 {
     private static PivotTableModel ToPivotTableModel(PendingPivotTableModel pending, SheetId sheetId)
     {
+        var targetRange = GridRange.Parse(pending.TargetReference, sheetId);
         var pivotTable = new PivotTableModel
         {
             Name = pending.Name,
             CacheId = pending.CacheId,
             SourceRange = ParseOptionalRange(pending.SourceReference, sheetId),
-            TargetRange = GridRange.Parse(pending.TargetReference, sheetId),
+            TargetRange = targetRange,
+            LastRenderedRange = targetRange,
             PackagePart = pending.PackagePart,
             CreatedVersion = pending.CreatedVersion,
             UpdatedVersion = pending.UpdatedVersion,
