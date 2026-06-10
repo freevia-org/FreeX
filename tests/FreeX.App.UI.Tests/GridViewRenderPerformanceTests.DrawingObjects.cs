@@ -223,9 +223,8 @@ public sealed partial class GridViewRenderPerformanceTests
         cache.Should().Contain("RenderDrawingObjectLayers(groupContext);");
         cache.Should().Contain("group.Freeze();");
         cache.Should().Contain("_hasLastDrawingObjectLayerRenderKey && _lastDrawingObjectLayerRenderKey == key");
-        cache.Should().Contain("CellAddress? PictureSelectionAnchor");
-        cache.Should().Contain("GetPictureSelectionAnchorForLayerCache()");
-        cache.Should().Contain("picture.IsVisible && picture.Anchor == anchor");
+        cache.Should().NotContain("CellAddress? PictureSelectionAnchor");
+        cache.Should().NotContain("GetPictureSelectionAnchorForLayerCache()");
         cache.Should().NotContain("GridRange? SelectedRange");
         cache.Should().Contain("IReadOnlyList<DrawingShapeModel>? DrawingShapes");
         cache.Should().Contain("IReadOnlyList<TextBoxModel>? TextBoxes");

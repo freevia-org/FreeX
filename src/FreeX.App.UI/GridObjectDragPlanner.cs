@@ -122,11 +122,52 @@ public static class GridObjectDragPlanner
         Point position,
         Rect objectRect,
         double handleSize = 8,
-        double handleHitPadding = 4)
+        double handleHitPadding = 4,
+        double rotationDegrees = 0)
     {
         if (objectRect.IsEmpty)
             return ObjectDragKind.None;
 
+        if (Math.Abs(rotationDegrees) > 0.0001)
+            position = RotatePointAroundCenter(position, objectRect, -rotationDegrees);
+
+        return HitTestUnrotatedHandle(position, objectRect, handleSize, handleHitPadding);
+    }
+
+    public static Point RotateHandleCenter(
+        ObjectDragKind handle,
+        Rect objectRect,
+        double rotationDegrees)
+    {
+        var center = GetUnrotatedHandleCenter(handle, objectRect);
+        return Math.Abs(rotationDegrees) <= 0.0001
+            ? center
+            : RotatePointAroundCenter(center, objectRect, rotationDegrees);
+    }
+
+    public static Point RotatePointAroundCenter(Point point, Rect objectRect, double rotationDegrees)
+    {
+        if (objectRect.IsEmpty || Math.Abs(rotationDegrees) <= 0.0001)
+            return point;
+
+        var radians = rotationDegrees * Math.PI / 180.0;
+        var centerX = objectRect.Left + objectRect.Width / 2.0;
+        var centerY = objectRect.Top + objectRect.Height / 2.0;
+        var dx = point.X - centerX;
+        var dy = point.Y - centerY;
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        return new Point(
+            centerX + dx * cos - dy * sin,
+            centerY + dx * sin + dy * cos);
+    }
+
+    private static ObjectDragKind HitTestUnrotatedHandle(
+        Point position,
+        Rect objectRect,
+        double handleSize,
+        double handleHitPadding)
+    {
         var pad = handleHitPadding + handleSize / 2;
 
         // Rotation grip sits above the top-center handle with a connector line.
@@ -156,6 +197,25 @@ public static class GridObjectDragPlanner
         if (nearLeft && inVertical) return ObjectDragKind.ResizeW;
         if (objectRect.Contains(position)) return ObjectDragKind.Move;
         return ObjectDragKind.None;
+    }
+
+    private static Point GetUnrotatedHandleCenter(ObjectDragKind handle, Rect objectRect)
+    {
+        var centerX = objectRect.Left + objectRect.Width / 2.0;
+        var centerY = objectRect.Top + objectRect.Height / 2.0;
+        return handle switch
+        {
+            ObjectDragKind.ResizeNW => new Point(objectRect.Left, objectRect.Top),
+            ObjectDragKind.ResizeN => new Point(centerX, objectRect.Top),
+            ObjectDragKind.ResizeNE => new Point(objectRect.Right, objectRect.Top),
+            ObjectDragKind.ResizeE => new Point(objectRect.Right, centerY),
+            ObjectDragKind.ResizeSE => new Point(objectRect.Right, objectRect.Bottom),
+            ObjectDragKind.ResizeS => new Point(centerX, objectRect.Bottom),
+            ObjectDragKind.ResizeSW => new Point(objectRect.Left, objectRect.Bottom),
+            ObjectDragKind.ResizeW => new Point(objectRect.Left, centerY),
+            ObjectDragKind.Rotate => new Point(centerX, objectRect.Top - RotationGripOffset),
+            _ => new Point(centerX, centerY)
+        };
     }
 
     public static CellAddress? HitTestAnchorCell(

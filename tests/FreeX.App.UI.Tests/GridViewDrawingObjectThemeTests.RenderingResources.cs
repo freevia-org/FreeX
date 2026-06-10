@@ -10,23 +10,15 @@ namespace FreeX.App.UI.Tests;
 public sealed partial class GridViewDrawingObjectThemeTests
 {
     [Fact]
-    public void PictureRenderer_DrawsSelectionAdornerForPictureAtActiveCell()
+    public void PictureRenderer_LeavesSelectionHandlesToObjectOverlay()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
-        var adorner = source[
-            source.IndexOf("private void DrawPictureSelectionAdorner", StringComparison.Ordinal)..
-            source.IndexOf("private static bool HasPictureCrop", StringComparison.Ordinal)];
 
-        source.Should().Contain("DrawPictureSelectionAdorner");
-        source.Should().Contain("SelectedRange?.Start != picture.Anchor");
-        adorner.Should().Contain("dc.DrawRectangle(null, PictureSelectionPen, rect);");
-        adorner.Should().Contain("DrawPictureSelectionHandle(dc, rect.TopLeft, handle);");
-        adorner.Should().Contain("DrawPictureSelectionHandle(dc, rect.TopRight, handle);");
-        adorner.Should().Contain("DrawPictureSelectionHandle(dc, rect.BottomLeft, handle);");
-        adorner.Should().Contain("DrawPictureSelectionHandle(dc, rect.BottomRight, handle);");
-        adorner.Should().Contain("private static void DrawPictureSelectionHandle");
-        adorner.Should().NotContain("new[]");
-        adorner.Should().NotContain("foreach (var point");
+        source.Should().NotContain("DrawPictureSelectionAdorner");
+        source.Should().NotContain("PictureSelectionBrush");
+        source.Should().NotContain("PictureSelectionPen");
+        source.Should().NotContain("DrawPictureSelectionHandle");
+        source.Should().NotContain("SelectedRange?.Start != picture.Anchor");
     }
 
     [Fact]
@@ -34,7 +26,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
         var renderStart = source.IndexOf("private void RenderPictures", StringComparison.Ordinal);
-        var renderEnd = source.IndexOf("private static bool HasPictureCrop", StringComparison.Ordinal);
+        var renderEnd = source.IndexOf("private void DrawPictureCellStyle", StringComparison.Ordinal);
         renderStart.Should().BeGreaterThanOrEqualTo(0);
         renderEnd.Should().BeGreaterThan(renderStart);
         var renderPictures = source[
@@ -46,24 +38,16 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
         GetStaticResource<Pen>("PictureBorderPen").IsFrozen.Should().BeTrue();
         GetStaticResource<Pen>("PictureGridPen").IsFrozen.Should().BeTrue();
-        GetStaticResource<Brush>("PictureSelectionBrush").IsFrozen.Should().BeTrue();
-        GetStaticResource<Pen>("PictureSelectionPen").IsFrozen.Should().BeTrue();
         source.Should().Contain("private const int CroppedPictureBrushCacheLimit = 256;");
         source.Should().Contain("private readonly Dictionary<CroppedPictureBrushCacheKey, ImageBrush> _croppedPictureBrushCache = new();");
         source.Should().Contain("private readonly record struct CroppedPictureBrushCacheKey(");
         source.Should().Contain("private static readonly Pen PictureBorderPen = CreateFrozenPen");
         source.Should().Contain("private static readonly Pen PictureGridPen = CreateFrozenPen");
-        source.Should().Contain("private static readonly Brush PictureSelectionBrush = MakeBrush");
-        source.Should().Contain("private static readonly Pen PictureSelectionPen = CreateFrozenPen");
         renderPictures.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
         renderPictures.Should().Contain("var brush = GetCroppedPictureBrush(picture, image);");
-        renderPictures.Should().Contain("GetDrawingObjectText(");
         renderPictures.Should().Contain("pixelsPerDip,");
-        renderPictures.Should().Contain("TextTrimming.CharacterEllipsis");
-        renderPictures.Should().Contain("dc.PushClip(GetDrawingObjectClipGeometry(textRect));");
         renderPictures.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip)");
         renderPictures.Should().NotContain("new ImageBrush");
-        renderPictures.Should().NotContain("new FormattedText(");
         renderPictures.Should().NotContain("new RectangleGeometry(textRect)");
         renderPictures.Should().NotContain("new Pen(new SolidColorBrush");
         renderPictures.Should().NotContain("new SolidColorBrush");

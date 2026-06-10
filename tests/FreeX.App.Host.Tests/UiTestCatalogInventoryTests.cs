@@ -452,8 +452,11 @@ public sealed partial class UiTestCatalogInventoryTests
         }
 
         catalog.Should().Contain("FREEX_PAGE_LAYOUT_SETUP_TOUR=1");
+        catalog.Should().Contain("FREEX_PAGE_LAYOUT_OUTPUT_TOUR=1");
         catalog.Should().Contain("page_layout_setup_tour_manifest.json");
+        catalog.Should().Contain("page_layout_output_tour_manifest.json");
         catalog.Should().Contain("freex_page_layout_setup_dialog_sheet_tab_print_titles.png");
+        catalog.Should().Contain("freex_page_layout_output_print_preview_summary.png");
     }
 
     [Fact]

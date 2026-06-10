@@ -140,7 +140,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
             drawingObjects.IndexOf("public static string CreateObjectPlaceholderLabel", StringComparison.Ordinal)];
         var renderPictures = pictures[
             pictures.IndexOf("private void RenderPictures", StringComparison.Ordinal)..
-            pictures.IndexOf("private void DrawPictureSelectionAdorner", StringComparison.Ordinal)];
+            pictures.IndexOf("private void DrawPictureCellStyle", StringComparison.Ordinal)];
 
         plannerMethod.Should().Contain("TryFindAnchorRow(viewport.RowMetrics, anchor.Row");
         plannerMethod.Should().Contain("TryFindAnchorColumn(viewport.ColMetrics, anchor.Col");

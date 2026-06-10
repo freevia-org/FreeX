@@ -128,14 +128,15 @@ public sealed class DrawCommandSourceTests
     }
 
     [Fact]
-    public void InteractivePictureCropEvent_RoutesThroughUndoableCropCommand()
+    public void PictureCropDialog_RoutesThroughUndoableCropCommandWithoutGridCropHandles()
     {
         var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
-        windowSource.Should().Contain("SheetGrid.PictureCropped += OnPictureCropped;");
-        drawingSource.Should().Contain("private void OnPictureCropped(Guid id, double left, double top, double right, double bottom)");
-        drawingSource.Should().Contain("new SetPictureCropCommand(_currentSheetId, id, left, top, right, bottom)");
+        windowSource.Should().NotContain("SheetGrid.PictureCropped += OnPictureCropped;");
+        drawingSource.Should().NotContain("private void OnPictureCropped");
+        drawingSource.Should().Contain("new PictureCropDialog(picture)");
+        drawingSource.Should().Contain("new SetPictureCropCommand(");
         drawingSource.Should().Contain("TryExecuteCommand(");
     }
 
