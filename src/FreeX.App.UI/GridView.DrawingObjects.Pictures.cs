@@ -11,8 +11,6 @@ public partial class GridView
 {
     private static readonly Pen PictureBorderPen = CreateFrozenPen(MakeBrush(120, 120, 120), 1);
     private static readonly Pen PictureGridPen = CreateFrozenPen(MakeBrush(210, 210, 210), 0.75);
-    private static readonly Brush PictureSelectionBrush = MakeBrush(33, 115, 70);
-    private static readonly Pen PictureSelectionPen = CreateFrozenPen(PictureSelectionBrush, 2);
     private const int CroppedPictureBrushCacheLimit = 256;
     private readonly Dictionary<CroppedPictureBrushCacheKey, ImageBrush> _croppedPictureBrushCache = new();
     private ImageBrush? _worksheetBackgroundBrushCache;
@@ -79,7 +77,6 @@ public partial class GridView
                 dc.DrawImage(image, rect);
             }
             dc.DrawRectangle(null, PictureBorderPen, rect);
-            DrawPictureSelectionAdorner(dc, picture, rect);
             if (Math.Abs(picture.RotationDegrees) > 0.0001)
                 dc.Pop();
             return;
@@ -135,31 +132,8 @@ public partial class GridView
                 DrawPictureCellBorders(dc, cellRect, style);
         }
 
-        DrawPictureSelectionAdorner(dc, picture, rect);
-
         if (Math.Abs(picture.RotationDegrees) > 0.0001)
             dc.Pop();
-    }
-
-    private void DrawPictureSelectionAdorner(DrawingContext dc, PictureModel picture, Rect rect)
-    {
-        if (SelectedRange?.Start != picture.Anchor)
-            return;
-
-        dc.DrawRectangle(null, PictureSelectionPen, rect);
-        const double handle = 6;
-        DrawPictureSelectionHandle(dc, rect.TopLeft, handle);
-        DrawPictureSelectionHandle(dc, rect.TopRight, handle);
-        DrawPictureSelectionHandle(dc, rect.BottomLeft, handle);
-        DrawPictureSelectionHandle(dc, rect.BottomRight, handle);
-    }
-
-    private static void DrawPictureSelectionHandle(DrawingContext dc, Point point, double handle)
-    {
-        dc.DrawRectangle(
-            PictureSelectionBrush,
-            null,
-            new Rect(point.X - handle / 2, point.Y - handle / 2, handle, handle));
     }
 
     private void DrawPictureCellStyle(DrawingContext dc, Rect rect, CellStyle style)

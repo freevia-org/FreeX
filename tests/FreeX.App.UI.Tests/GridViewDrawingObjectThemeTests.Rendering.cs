@@ -60,7 +60,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
             drawingObjects.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)];
         var renderPictures = pictures[
             pictures.IndexOf("private void RenderPictures", StringComparison.Ordinal)..
-            pictures.IndexOf("private void DrawPictureSelectionAdorner", StringComparison.Ordinal)];
+            pictures.IndexOf("private void DrawPictureCellStyle", StringComparison.Ordinal)];
         var renderPlaceholders = drawingObjects[
             drawingObjects.IndexOf("private void RenderObjectPlaceholders", StringComparison.Ordinal)..
             drawingObjects.IndexOf("public static string CreateObjectPlaceholderLabel", StringComparison.Ordinal)];

@@ -16,6 +16,10 @@ public sealed partial class GridViewDrawingObjectThemeTests
             source.IndexOf("internal void DrawObjectSelectionHandles", StringComparison.Ordinal)..
             source.IndexOf("private ObjectDragKind HitTestObjectHandle", StringComparison.Ordinal)];
 
+        drawHandles.Should().Contain("dc.PushTransform(new RotateTransform(");
+        drawHandles.Should().Contain("DrawRotationGrip(dc, gripCenter);");
+        drawHandles.Should().Contain("context.ArcTo(");
+        drawHandles.Should().Contain("RotationGlyphPen");
         drawHandles.Should().Contain("DrawObjectSelectionHandle(dc,");
         drawHandles.Should().Contain("private static void DrawObjectSelectionHandle");
         drawHandles.Should().NotContain("GetHandleRects");
@@ -126,6 +130,35 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
         GridObjectDragPlanner.HitTestHandle(new Point(start.Left + 16, start.Top + 16), start)
             .Should().Be(ObjectDragKind.Move);
+    }
+
+    [Fact]
+    public void GridObjectDragPlanner_HitTestsRotatedHandleCentersInObjectSpace()
+    {
+        var start = new Rect(10, 20, 80, 40);
+        const double rotationDegrees = 45;
+
+        var rotatedSouthEast = GridObjectDragPlanner.RotateHandleCenter(
+            ObjectDragKind.ResizeSE,
+            start,
+            rotationDegrees);
+        var rotatedNorth = GridObjectDragPlanner.RotateHandleCenter(
+            ObjectDragKind.ResizeN,
+            start,
+            rotationDegrees);
+        var rotatedGrip = GridObjectDragPlanner.RotateHandleCenter(
+            ObjectDragKind.Rotate,
+            start,
+            rotationDegrees);
+
+        GridObjectDragPlanner.HitTestHandle(rotatedSouthEast, start, rotationDegrees: rotationDegrees)
+            .Should().Be(ObjectDragKind.ResizeSE);
+        GridObjectDragPlanner.HitTestHandle(rotatedNorth, start, rotationDegrees: rotationDegrees)
+            .Should().Be(ObjectDragKind.ResizeN);
+        GridObjectDragPlanner.HitTestHandle(rotatedGrip, start, rotationDegrees: rotationDegrees)
+            .Should().Be(ObjectDragKind.Rotate);
+        GridObjectDragPlanner.HitTestHandle(rotatedSouthEast, start)
+            .Should().NotBe(ObjectDragKind.ResizeSE);
     }
 
     [Fact]
@@ -248,7 +281,9 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
         inputSource.Should().Contain("GridObjectDragPlanner.CalculateDragRect(");
         inputSource.Should().Contain("_objectDragStartAnchor = GetSelectedObjectAnchor() ?? HitTestAnchorCell(pos) ?? default;");
-        dragSource.Should().Contain("GridObjectDragPlanner.HitTestHandle(pos, objRect, HandleSize, HandleHitPad)");
+        dragSource.Should().Contain("GetSelectedObjectRotationDegrees()");
+        dragSource.Should().Contain("GridObjectDragPlanner.HitTestHandle(");
+        dragSource.Should().Contain("HandleHitPad,");
         dragSource.Should().Contain("GridObjectDragPlanner.HitTestAnchorCell(");
     }
 }
