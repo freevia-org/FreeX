@@ -640,7 +640,7 @@
                                         </Grid>
                                     </ToggleButton>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
-                                    <Button Width="40" Height="22" Style="{StaticResource RibbonBtn}"
+                                    <Button x:Name="OrientationPickerButton" Width="40" Height="22" Style="{StaticResource RibbonBtn}"
                                             Click="OrientationPickerBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Orientation}"
                                             local:RibbonTooltip.KeyTip="RO"
