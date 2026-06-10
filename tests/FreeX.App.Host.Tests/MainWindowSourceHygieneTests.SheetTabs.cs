@@ -674,7 +674,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("case WorksheetContextMenuAction.ShowNotes:");
         source.Should().Contain("ReviewShowNotesBtn_Click(this, new RoutedEventArgs());");
         source.Should().NotContain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());");
-        plannerSource.Should().Contain("new(\"Show Notes\", WorksheetContextMenuAction.ShowNotes, AccessHeader: \"_Show Notes\", IsEnabled: state.HasNote)");
+        plannerSource.Should().Contain("\"Show Notes\", WorksheetContextMenuAction.ShowNotes, AccessHeader: \"_Show Notes\", IsEnabled: state.HasNote");
         plannerSource.Should().NotContain("IsEnabled: state.HasNote || state.HasThreadedComment");
     }
 

@@ -12,7 +12,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
             HasNote: false,
             HasHyperlink: false);
 
-        var commands = WorksheetContextMenuPlanner.BuildCommands(state: state);
+        var commands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(state: state));
 
         commands.Single(command => command.Action == WorksheetContextMenuAction.EditComment).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ResolveComment).IsEnabled.Should().BeFalse();
@@ -35,7 +35,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
             HasNote: true,
             HasHyperlink: true);
 
-        var commands = WorksheetContextMenuPlanner.BuildCommands(state: state);
+        var commands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(state: state));
 
         commands.Single(command => command.Action == WorksheetContextMenuAction.EditComment).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ResolveComment).IsEnabled.Should().BeTrue();
@@ -49,8 +49,8 @@ public sealed partial class WorksheetContextMenuPlannerTests
     [Fact]
     public void BuildCommands_KeepsThreadedCommentAndNoteStateIndependent()
     {
-        var threadedOnlyCommands = WorksheetContextMenuPlanner.BuildCommands(
-            state: new WorksheetContextMenuState(HasThreadedComment: true));
+        var threadedOnlyCommands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasThreadedComment: true)));
 
         threadedOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.EditComment).IsEnabled.Should().BeTrue();
         threadedOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.ResolveComment).IsEnabled.Should().BeTrue();
@@ -59,8 +59,8 @@ public sealed partial class WorksheetContextMenuPlannerTests
         threadedOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeFalse();
         threadedOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeFalse();
 
-        var noteOnlyCommands = WorksheetContextMenuPlanner.BuildCommands(
-            state: new WorksheetContextMenuState(HasNote: true));
+        var noteOnlyCommands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasNote: true)));
 
         noteOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.EditComment).IsEnabled.Should().BeFalse();
         noteOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.ResolveComment).IsEnabled.Should().BeFalse();
@@ -73,17 +73,17 @@ public sealed partial class WorksheetContextMenuPlannerTests
     [Fact]
     public void BuildCommands_EnablesFilterContextEntriesOnlyForFilterOrDropdownTargets()
     {
-        var filterHeaderCommands = WorksheetContextMenuPlanner.BuildCommands(
+        var filterHeaderCommands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(
             state: new WorksheetContextMenuState(
                 HasAutoFilterHeaderTarget: true,
-                HasDropdownTarget: true));
+                HasDropdownTarget: true)));
 
         filterHeaderCommands.Single(command => command.Action == WorksheetContextMenuAction.ClearFilter).IsEnabled.Should().BeTrue();
         filterHeaderCommands.Single(command => command.Action == WorksheetContextMenuAction.ReapplyFilter).IsEnabled.Should().BeTrue();
         filterHeaderCommands.Single(command => command.Action == WorksheetContextMenuAction.PickFromDropDown).IsEnabled.Should().BeTrue();
 
-        var validationDropdownCommands = WorksheetContextMenuPlanner.BuildCommands(
-            state: new WorksheetContextMenuState(HasDropdownTarget: true));
+        var validationDropdownCommands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasDropdownTarget: true)));
 
         validationDropdownCommands.Single(command => command.Action == WorksheetContextMenuAction.ClearFilter).IsEnabled.Should().BeFalse();
         validationDropdownCommands.Single(command => command.Action == WorksheetContextMenuAction.ReapplyFilter).IsEnabled.Should().BeFalse();
@@ -97,7 +97,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
             HasThreadedComment: true,
             IsThreadedCommentResolved: true);
 
-        var commands = WorksheetContextMenuPlanner.BuildCommands(state: state);
+        var commands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(state: state));
 
         commands.Select(command => command.Header).Should().ContainInOrder(
             "Edit Comment...",
@@ -114,13 +114,13 @@ public sealed partial class WorksheetContextMenuPlannerTests
     [Fact]
     public void BuildCommands_UsesExcelLikeHyperlinkStateCommands()
     {
-        var withoutLink = WorksheetContextMenuPlanner.BuildCommands(
-            state: new WorksheetContextMenuState(HasHyperlink: false));
+        var withoutLink = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasHyperlink: false)));
         withoutLink.Select(command => command.Header).Should().Contain("Hyperlink...");
         withoutLink.Select(command => command.Header).Should().NotContain(["Open Hyperlink", "Edit Hyperlink...", "Remove Hyperlink"]);
 
-        var withLink = WorksheetContextMenuPlanner.BuildCommands(
-            state: new WorksheetContextMenuState(HasHyperlink: true));
+        var withLink = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasHyperlink: true)));
 
         withLink.Select(command => command.Header).Should().ContainInOrder(
             "Open Hyperlink",
@@ -139,15 +139,15 @@ public sealed partial class WorksheetContextMenuPlannerTests
     [Fact]
     public void BuildCommands_ShowsPivotTableOptionsOnlyForPivotTableCells()
     {
-        var normalCellCommands = WorksheetContextMenuPlanner.BuildCommands(
-            state: new WorksheetContextMenuState(HasPivotTableTarget: false));
+        var normalCellCommands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasPivotTableTarget: false)));
 
         normalCellCommands.Select(command => command.Header)
             .Should()
             .NotContain("PivotTable Options...");
 
-        var pivotCellCommands = WorksheetContextMenuPlanner.BuildCommands(
-            state: new WorksheetContextMenuState(HasPivotTableTarget: true));
+        var pivotCellCommands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasPivotTableTarget: true)));
 
         pivotCellCommands.Select(command => command.Header).Should().ContainInOrder(
             "Hyperlink...",

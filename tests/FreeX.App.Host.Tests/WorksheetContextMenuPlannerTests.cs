@@ -161,4 +161,41 @@ public sealed partial class WorksheetContextMenuPlannerTests
             ]
         }
     };
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> FlattenActionCommands(
+        IEnumerable<WorksheetContextMenuCommand> commands) =>
+        FlattenCommands(commands)
+            .Where(command => !command.IsSeparator && command.Action != WorksheetContextMenuAction.None)
+            .ToList();
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> FlattenCommands(
+        IEnumerable<WorksheetContextMenuCommand> commands)
+    {
+        var flattened = new List<WorksheetContextMenuCommand>();
+        foreach (var command in commands)
+            AddFlattenedCommand(command, flattened);
+
+        return flattened;
+    }
+
+    private static void AddFlattenedCommand(
+        WorksheetContextMenuCommand command,
+        List<WorksheetContextMenuCommand> flattened)
+    {
+        flattened.Add(command);
+        foreach (var child in command.Children)
+            AddFlattenedCommand(child, flattened);
+    }
+
+    private static WorksheetContextMenuCommand SingleActionCommand(
+        IEnumerable<WorksheetContextMenuCommand> commands,
+        string header) =>
+        FlattenActionCommands(commands)
+            .Single(command => command.Header == header);
+
+    private static WorksheetContextMenuCommand SingleSubmenu(
+        IEnumerable<WorksheetContextMenuCommand> commands,
+        string header) =>
+        FlattenCommands(commands)
+            .Single(command => command.Header == header && command.HasChildren);
 }

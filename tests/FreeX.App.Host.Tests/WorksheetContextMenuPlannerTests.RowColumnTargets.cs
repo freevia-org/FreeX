@@ -98,9 +98,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
         WorksheetContextMenuTargetKind targetKind,
         WorksheetContextMenuCommand[] expectedCommands)
     {
-        var commands = WorksheetContextMenuPlanner.BuildCommands(targetKind)
-            .Where(command => !command.IsSeparator)
-            .ToList();
+        var commands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(targetKind));
 
         commands.Select(command => command.Header).Should().ContainInOrder(
             expectedCommands.Select(command => command.Header));
@@ -119,7 +117,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
         string[] expectedHeaders,
         string[] absentHeaders)
     {
-        var commands = WorksheetContextMenuPlanner.BuildCommands(targetKind);
+        var commands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(targetKind));
 
         commands.Select(command => command.Header)
             .Where(header => header.Length > 0)
