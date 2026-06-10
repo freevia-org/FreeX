@@ -327,7 +327,7 @@ public sealed partial class UiTestCatalogInventoryTests
             .ToArray();
 
         rows.Should().HaveCount(6);
-        rows.Should().OnlyContain(row => row.Contains("review-comments-protection-tour"));
+        rows.Should().OnlyContain(row => row.Contains("review-comments-protection-tour") || row.Contains("review-stats-share-tour"));
 
         catalog.Should().Contain("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR=1");
         catalog.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1");
@@ -335,6 +335,28 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().Contain("review_comments_protection_tour_manifest.json");
         catalog.Should().Contain("freex_review_allow_edit_ranges_dialog.png");
         catalog.Should().Contain("Thesaurus is documented as not currently surfaced");
+    }
+
+    [Fact]
+    public void ReviewCatalogRows_DocumentStatsShareTourEvidence()
+    {
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
+        var rows = Regex
+            .Split(catalog, "\\r?\\n")
+            .Where(line =>
+                line.StartsWith("| UI-CAT-REVIEW-001 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-REVIEW-002 |", StringComparison.Ordinal) ||
+                line.StartsWith("| UI-CMD-REVIEW-005 |", StringComparison.Ordinal))
+            .ToArray();
+
+        rows.Should().HaveCount(3);
+        rows.Should().OnlyContain(row => row.Contains("review-stats-share-tour"));
+
+        catalog.Should().Contain("FREEX_REVIEW_STATS_SHARE_TOUR=1");
+        catalog.Should().Contain("review_stats_share_tour_manifest.json");
+        catalog.Should().Contain("freex_review_workbook_statistics_dialog.png");
+        catalog.Should().Contain("freex_review_share_unsaved_guard_status.png");
+        catalog.Should().Contain("freex_review_share_saved_ready_status.png");
     }
 
     [Fact]

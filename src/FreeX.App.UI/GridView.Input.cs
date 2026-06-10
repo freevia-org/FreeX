@@ -153,12 +153,12 @@ public partial class GridView
             var col = FindColMetric(Viewport.ColMetrics, _resizeIndex);
             if (col is null)
             {
-                var collapsedDelta = pos.X - _resizeDragStart;
-                if (_resizeCollapsedBoundary && collapsedDelta > 0)
+                var delta = pos.X - _resizeDragStart;
+                double previewWidth = GridResizeSizePlanner.ClampColumnSize(_resizeSizeStart + delta);
+                if ((_resizeCollapsedBoundary && delta > 0) || (!_resizeCollapsedBoundary && previewWidth > 0))
                 {
-                    double collapsedWidth = GridResizeSizePlanner.ClampColumnSize(_resizeSizeStart + collapsedDelta);
-                    _resizeLinePos = _resizeDragStart + collapsedWidth;
-                    ColumnResizing?.Invoke(_resizeIndex, collapsedWidth);
+                    _resizeLinePos = _resizeDragStart - _resizeSizeStart + previewWidth;
+                    ColumnResizing?.Invoke(_resizeIndex, previewWidth);
                     InvalidateVisual();
                 }
 
@@ -186,12 +186,12 @@ public partial class GridView
             var row = FindRowMetric(Viewport.RowMetrics, _resizeIndex);
             if (row is null)
             {
-                var collapsedDelta = pos.Y - _resizeDragStart;
-                if (_resizeCollapsedBoundary && collapsedDelta > 0)
+                var delta = pos.Y - _resizeDragStart;
+                double previewHeight = GridResizeSizePlanner.ClampRowSize(_resizeSizeStart + delta);
+                if ((_resizeCollapsedBoundary && delta > 0) || (!_resizeCollapsedBoundary && previewHeight > 0))
                 {
-                    double collapsedHeight = GridResizeSizePlanner.ClampRowSize(_resizeSizeStart + collapsedDelta);
-                    _resizeLinePos = _resizeDragStart + collapsedHeight;
-                    RowResizing?.Invoke(_resizeIndex, collapsedHeight);
+                    _resizeLinePos = _resizeDragStart - _resizeSizeStart + previewHeight;
+                    RowResizing?.Invoke(_resizeIndex, previewHeight);
                     InvalidateVisual();
                 }
 
