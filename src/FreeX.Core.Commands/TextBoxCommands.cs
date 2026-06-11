@@ -61,18 +61,30 @@ public sealed class ResizeTextBoxCommand : IWorkbookCommand
     private readonly Guid _textBoxId;
     private readonly double _width;
     private readonly double _height;
+    private readonly bool? _flipHorizontal;
+    private readonly bool? _flipVertical;
     private double _previousWidth;
     private double _previousHeight;
+    private bool _previousFlipHorizontal;
+    private bool _previousFlipVertical;
     private bool _applied;
 
     public string Label => "Resize Text Box";
 
-    public ResizeTextBoxCommand(SheetId sheetId, Guid textBoxId, double width, double height)
+    public ResizeTextBoxCommand(
+        SheetId sheetId,
+        Guid textBoxId,
+        double width,
+        double height,
+        bool? flipHorizontal = null,
+        bool? flipVertical = null)
     {
         _sheetId = sheetId;
         _textBoxId = textBoxId;
         _width = width;
         _height = height;
+        _flipHorizontal = flipHorizontal;
+        _flipVertical = flipVertical;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -89,8 +101,14 @@ public sealed class ResizeTextBoxCommand : IWorkbookCommand
 
         _previousWidth = textBox.Width;
         _previousHeight = textBox.Height;
+        _previousFlipHorizontal = textBox.FlipHorizontal;
+        _previousFlipVertical = textBox.FlipVertical;
         textBox.Width = _width;
         textBox.Height = _height;
+        if (_flipHorizontal.HasValue)
+            textBox.FlipHorizontal = _flipHorizontal.Value;
+        if (_flipVertical.HasValue)
+            textBox.FlipVertical = _flipVertical.Value;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [textBox.Anchor]);
     }
@@ -102,6 +120,8 @@ public sealed class ResizeTextBoxCommand : IWorkbookCommand
         if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox)) return;
         textBox.Width = _previousWidth;
         textBox.Height = _previousHeight;
+        textBox.FlipHorizontal = _previousFlipHorizontal;
+        textBox.FlipVertical = _previousFlipVertical;
         _applied = false;
     }
 }

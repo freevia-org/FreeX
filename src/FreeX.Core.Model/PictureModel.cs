@@ -26,6 +26,8 @@ public sealed class PictureModel
     public double Height { get; set; } = 140;
     public bool LockAspectRatio { get; set; } = true;
     public double RotationDegrees { get; set; }
+    public bool FlipHorizontal { get; set; }
+    public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
     public double CropLeft { get; set; }
     public double CropTop { get; set; }

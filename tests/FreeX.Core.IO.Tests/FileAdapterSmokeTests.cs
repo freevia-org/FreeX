@@ -1600,6 +1600,8 @@ public partial class FileAdapterSmokeTests
             Height = 60,
             LockAspectRatio = false,
             RotationDegrees = 30,
+            FlipHorizontal = true,
+            FlipVertical = true,
             CropLeft = 0.1,
             CropTop = 0.2,
             CropRight = 0.15,
@@ -1623,6 +1625,8 @@ public partial class FileAdapterSmokeTests
         picture.Height.Should().Be(60);
         picture.LockAspectRatio.Should().BeFalse();
         picture.RotationDegrees.Should().Be(30);
+        picture.FlipHorizontal.Should().BeTrue();
+        picture.FlipVertical.Should().BeTrue();
         picture.CropLeft.Should().Be(0.1);
         picture.CropTop.Should().Be(0.2);
         picture.CropRight.Should().Be(0.15);
@@ -1740,6 +1744,8 @@ public partial class FileAdapterSmokeTests
             Width = 120,
             Height = 80,
             RotationDegrees = 33,
+            FlipHorizontal = true,
+            FlipVertical = true,
             AltText = "Authored picture"
         });
 
@@ -1755,13 +1761,13 @@ public partial class FileAdapterSmokeTests
             archive.GetEntry("xl/media/freexPicture1.png").Should().NotBeNull();
             var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
             XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-            drawingXml.Descendants(drawingNs + "xfrm")
+            var transform = drawingXml.Descendants(drawingNs + "xfrm")
                 .Should()
                 .ContainSingle()
-                .Which
-                .Attribute("rot")?.Value
-                .Should()
-                .Be("1980000");
+                .Which;
+            transform.Attribute("rot")?.Value.Should().Be("1980000");
+            transform.Attribute("flipH")?.Value.Should().Be("1");
+            transform.Attribute("flipV")?.Value.Should().Be("1");
         }
 
         ms.Position = 0;
@@ -1775,6 +1781,8 @@ public partial class FileAdapterSmokeTests
         picture.Width.Should().Be(120);
         picture.Height.Should().Be(80);
         picture.RotationDegrees.Should().Be(33);
+        picture.FlipHorizontal.Should().BeTrue();
+        picture.FlipVertical.Should().BeTrue();
         picture.AltText.Should().Be("Authored picture");
     }
 
@@ -1880,6 +1888,7 @@ public partial class FileAdapterSmokeTests
             Width = 220,
             Height = 120,
             RotationDegrees = 20,
+            FlipHorizontal = true,
             FillColor = new CellColor(240, 250, 255),
             OutlineColor = new CellColor(70, 80, 90),
             FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
@@ -1895,6 +1904,7 @@ public partial class FileAdapterSmokeTests
             Width = 140,
             Height = 90,
             RotationDegrees = 45,
+            FlipVertical = true,
             FillColor = new CellColor(200, 210, 220),
             OutlineColor = new CellColor(30, 40, 50),
             GradientFillEndColor = new CellColor(240, 245, 250),
@@ -1920,6 +1930,8 @@ public partial class FileAdapterSmokeTests
         textBox.Width.Should().Be(220);
         textBox.Height.Should().Be(120);
         textBox.RotationDegrees.Should().Be(20);
+        textBox.FlipHorizontal.Should().BeTrue();
+        textBox.FlipVertical.Should().BeFalse();
         textBox.FillColor.Should().Be(new CellColor(240, 250, 255));
         textBox.OutlineColor.Should().Be(new CellColor(70, 80, 90));
         textBox.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
@@ -1933,6 +1945,8 @@ public partial class FileAdapterSmokeTests
         shape.Width.Should().Be(140);
         shape.Height.Should().Be(90);
         shape.RotationDegrees.Should().Be(45);
+        shape.FlipHorizontal.Should().BeFalse();
+        shape.FlipVertical.Should().BeTrue();
         shape.FillColor.Should().Be(new CellColor(200, 210, 220));
         shape.OutlineColor.Should().Be(new CellColor(30, 40, 50));
         shape.GradientFillEndColor.Should().Be(new CellColor(240, 245, 250));
@@ -2047,6 +2061,7 @@ public partial class FileAdapterSmokeTests
             Text = "Review note",
             Width = 220,
             Height = 120,
+            FlipVertical = true,
             FillColor = new CellColor(240, 250, 255),
             OutlineColor = new CellColor(70, 80, 90),
             Title = "Review note title",
@@ -2059,6 +2074,7 @@ public partial class FileAdapterSmokeTests
             Kind = DrawingShapeKind.Ellipse,
             Width = 140,
             Height = 90,
+            FlipHorizontal = true,
             FillColor = new CellColor(200, 210, 220),
             OutlineColor = new CellColor(30, 40, 50),
             GradientFillEndColor = new CellColor(240, 245, 250),
@@ -2090,6 +2106,8 @@ public partial class FileAdapterSmokeTests
                 .Contain(["Review note title", "Approval marker title"]);
             drawingXml.Descendants(a + "t").Select(e => e.Value).Should().Contain("Review note");
             drawingXml.Descendants(a + "prstGeom").Select(e => e.Attribute("prst")?.Value).Should().Contain("ellipse");
+            drawingXml.Descendants(a + "xfrm").Select(e => e.Attribute("flipH")?.Value).Should().Contain("1");
+            drawingXml.Descendants(a + "xfrm").Select(e => e.Attribute("flipV")?.Value).Should().Contain("1");
             drawingXml.Descendants(a + "gradFill").Should().ContainSingle();
             drawingXml.Descendants(a + "outerShdw").Should().ContainSingle();
         }
@@ -2101,10 +2119,14 @@ public partial class FileAdapterSmokeTests
         loadedTextBox.Name.Should().Be("Review Callout");
         loadedTextBox.Text.Should().Be("Review note");
         loadedTextBox.Title.Should().Be("Review note title");
+        loadedTextBox.FlipHorizontal.Should().BeFalse();
+        loadedTextBox.FlipVertical.Should().BeTrue();
         var loadedShape = loadedSheet.DrawingShapes.Should().ContainSingle().Subject;
         loadedShape.Name.Should().Be("Approval Shape");
         loadedShape.Kind.Should().Be(DrawingShapeKind.Ellipse);
         loadedShape.Title.Should().Be("Approval marker title");
+        loadedShape.FlipHorizontal.Should().BeTrue();
+        loadedShape.FlipVertical.Should().BeFalse();
         loadedShape.GradientFillEndColor.Should().Be(new CellColor(240, 245, 250));
         loadedShape.HasShadowEffect.Should().BeTrue();
         loadedShape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Shadow);

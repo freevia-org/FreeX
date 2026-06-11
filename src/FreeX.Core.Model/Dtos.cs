@@ -121,6 +121,8 @@ public sealed record DrawingObjectBounds(
     double Width,
     double Height,
     double RotationDegrees = 0,
+    bool FlipHorizontal = false,
+    bool FlipVertical = false,
     DrawingShapeKind? ShapeKind = null,
     PictureKind? PictureKind = null,
     string? Text = null,

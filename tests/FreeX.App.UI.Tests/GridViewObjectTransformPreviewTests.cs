@@ -70,6 +70,37 @@ public sealed class GridViewObjectTransformPreviewTests
     }
 
     [Fact]
+    public void ActivePictureFlipPreview_DrawsMirroredContentWithoutMutatingModel()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var anchor = new CellAddress(sheetId, 1, 1);
+            var picture = CreateTwoColorSnapshotPicture(anchor, width: 64, height: 20);
+            var grid = CreateGrid(picture, width: 100, height: 50);
+            var rect = new Rect(0, 0, 64, 20);
+
+            GridViewTestHelpers.SetObjectTransformPreview(
+                grid,
+                picture.Id,
+                ObjectKind.Picture,
+                ObjectDragKind.ResizeE,
+                rect,
+                rect,
+                currentFlipHorizontal: true);
+
+            var bitmap = RenderGrid(grid, 100, 50);
+
+            CountRedPixels(bitmap, new Int32Rect(42, 6, 14, 8))
+                .Should().BeGreaterThan(70, "a horizontal flip should mirror the left snapshot cell into the right half");
+            CountRedPixels(bitmap, new Int32Rect(8, 6, 14, 8))
+                .Should().Be(0, "the left half should no longer contain the red snapshot cell while the preview is flipped");
+            picture.FlipHorizontal.Should().BeFalse();
+            picture.FlipVertical.Should().BeFalse();
+        });
+    }
+
+    [Fact]
     public void ActivePictureRotatePreview_DrawsPictureAtLiveRotationWithoutMutatingModel()
     {
         WpfTestThread.Run(() =>
@@ -127,6 +158,29 @@ public sealed class GridViewObjectTransformPreviewTests
                     0,
                     "",
                     new CellStyle { FillColor = new CellColor(220, 40, 40) })
+            }
+        };
+
+    private static PictureModel CreateTwoColorSnapshotPicture(CellAddress anchor, double width, double height) =>
+        new()
+        {
+            Anchor = anchor,
+            SourceRowCount = 1,
+            SourceColumnCount = 2,
+            Width = width,
+            Height = height,
+            Cells =
+            {
+                new PictureCellSnapshot(
+                    0,
+                    0,
+                    "",
+                    new CellStyle { FillColor = new CellColor(220, 40, 40) }),
+                new PictureCellSnapshot(
+                    0,
+                    1,
+                    "",
+                    new CellStyle { FillColor = new CellColor(40, 80, 220) })
             }
         };
 

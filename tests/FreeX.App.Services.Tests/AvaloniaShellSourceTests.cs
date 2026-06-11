@@ -1254,8 +1254,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("Canvas.SetTop(visual, top);");
         source.Should().Contain("GetDisplayedColumnWidth(metric, zoomFactor)");
         source.Should().Contain("GetDisplayedRowHeight(metric, zoomFactor)");
-        source.Should().Contain("ApplyDrawingObjectRotation(visual, drawingObject.RotationDegrees);");
+        source.Should().Contain("ApplyDrawingObjectTransform(");
+        source.Should().Contain("drawingObject.FlipHorizontal");
+        source.Should().Contain("drawingObject.FlipVertical");
         source.Should().Contain("new RotateTransform(rotationDegrees)");
+        source.Should().Contain("new ScaleTransform(flipHorizontal ? -1 : 1, flipVertical ? -1 : 1)");
     }
 
     [Fact]

@@ -2469,7 +2469,11 @@ public sealed class MainWindow : Window
             DrawingObjectRenderPrimitiveKind.TextBox => CreateDrawingTextBoxVisual(drawingObject, width, height),
             _ => CreateDrawingObjectBoundsMarker(drawingObject, width, height)
         };
-        ApplyDrawingObjectRotation(visual, drawingObject.RotationDegrees);
+        ApplyDrawingObjectTransform(
+            visual,
+            drawingObject.RotationDegrees,
+            drawingObject.FlipHorizontal,
+            drawingObject.FlipVertical);
         return visual;
     }
 
@@ -2740,13 +2744,28 @@ public sealed class MainWindow : Window
         }
     }
 
-    private static void ApplyDrawingObjectRotation(Control visual, double rotationDegrees)
+    private static void ApplyDrawingObjectTransform(
+        Control visual,
+        double rotationDegrees,
+        bool flipHorizontal,
+        bool flipVertical)
     {
-        if (Math.Abs(rotationDegrees % 360) <= 0.0001)
+        var hasRotation = Math.Abs(rotationDegrees % 360) > 0.0001;
+        if (!hasRotation && !flipHorizontal && !flipVertical)
             return;
 
         visual.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-        visual.RenderTransform = new RotateTransform(rotationDegrees);
+        if (!flipHorizontal && !flipVertical)
+        {
+            visual.RenderTransform = new RotateTransform(rotationDegrees);
+            return;
+        }
+
+        var transform = new TransformGroup();
+        transform.Children.Add(new ScaleTransform(flipHorizontal ? -1 : 1, flipVertical ? -1 : 1));
+        if (hasRotation)
+            transform.Children.Add(new RotateTransform(rotationDegrees));
+        visual.RenderTransform = transform;
     }
 
     private static bool TryGetDisplayedDrawingObjectBounds(

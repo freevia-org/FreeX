@@ -8,18 +8,30 @@ public sealed class ResizePictureCommand : IWorkbookCommand
     private readonly Guid _pictureId;
     private readonly double _width;
     private readonly double _height;
+    private readonly bool? _flipHorizontal;
+    private readonly bool? _flipVertical;
     private double _previousWidth;
     private double _previousHeight;
+    private bool _previousFlipHorizontal;
+    private bool _previousFlipVertical;
     private bool _applied;
 
     public string Label => "Resize Picture";
 
-    public ResizePictureCommand(SheetId sheetId, Guid pictureId, double width, double height)
+    public ResizePictureCommand(
+        SheetId sheetId,
+        Guid pictureId,
+        double width,
+        double height,
+        bool? flipHorizontal = null,
+        bool? flipVertical = null)
     {
         _sheetId = sheetId;
         _pictureId = pictureId;
         _width = width;
         _height = height;
+        _flipHorizontal = flipHorizontal;
+        _flipVertical = flipVertical;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -36,8 +48,14 @@ public sealed class ResizePictureCommand : IWorkbookCommand
 
         _previousWidth = picture.Width;
         _previousHeight = picture.Height;
+        _previousFlipHorizontal = picture.FlipHorizontal;
+        _previousFlipVertical = picture.FlipVertical;
         picture.Width = _width;
         picture.Height = _height;
+        if (_flipHorizontal.HasValue)
+            picture.FlipHorizontal = _flipHorizontal.Value;
+        if (_flipVertical.HasValue)
+            picture.FlipVertical = _flipVertical.Value;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [picture.Anchor]);
     }
@@ -49,6 +67,8 @@ public sealed class ResizePictureCommand : IWorkbookCommand
         if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture)) return;
         picture.Width = _previousWidth;
         picture.Height = _previousHeight;
+        picture.FlipHorizontal = _previousFlipHorizontal;
+        picture.FlipVertical = _previousFlipVertical;
         _applied = false;
     }
 }

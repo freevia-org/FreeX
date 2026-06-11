@@ -232,6 +232,43 @@ public sealed class ShapeCommandTests
     }
 
     [Fact]
+    public void ResizeDrawingShapeCommand_SetsFlipStateAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Width = 120,
+            Height = 70,
+            FlipVertical = true
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var command = new ResizeDrawingShapeCommand(
+            sheet.Id,
+            shape.Id,
+            160,
+            90,
+            flipHorizontal: true,
+            flipVertical: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        shape.Width.Should().Be(160);
+        shape.Height.Should().Be(90);
+        shape.FlipHorizontal.Should().BeTrue();
+        shape.FlipVertical.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        shape.Width.Should().Be(120);
+        shape.Height.Should().Be(70);
+        shape.FlipHorizontal.Should().BeFalse();
+        shape.FlipVertical.Should().BeTrue();
+    }
+
+    [Fact]
     public void RotateDrawingShapeCommand_SetsRotationAndUndoRestores()
     {
         var wb = new Workbook("test");

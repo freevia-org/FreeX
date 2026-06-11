@@ -15,6 +15,8 @@ internal sealed record XlsxPicturePackagePart(
     string? AltText,
     XlsxDrawingAnchor? Anchor,
     double RotationDegrees,
+    bool FlipHorizontal,
+    bool FlipVertical,
     double CropLeft,
     double CropTop,
     double CropRight,
@@ -28,6 +30,8 @@ internal sealed record XlsxTextBoxPackagePart(
     string? AltText,
     XlsxDrawingAnchor? Anchor,
     double RotationDegrees,
+    bool FlipHorizontal,
+    bool FlipVertical,
     CellColor? FillColor,
     CellColor? OutlineColor,
     WorkbookThemeColorReference? FillThemeColor,
@@ -41,6 +45,8 @@ internal sealed record XlsxShapePackagePart(
     string? AltText,
     XlsxDrawingAnchor? Anchor,
     double RotationDegrees,
+    bool FlipHorizontal,
+    bool FlipVertical,
     CellColor? FillColor,
     CellColor? OutlineColor,
     CellColor? GradientFillEndColor,
@@ -184,6 +190,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 altText,
                 anchorElement is null ? null : TryReadAnchor(anchorElement, spreadsheetDrawingNs),
                 ReadDrawingRotation(pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm")),
+                ReadDrawingFlipHorizontal(pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm")),
+                ReadDrawingFlipVertical(pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm")),
                 ReadSourceRectangleRatio(sourceRectangle, "l"),
                 ReadSourceRectangleRatio(sourceRectangle, "t"),
                 ReadSourceRectangleRatio(sourceRectangle, "r"),
@@ -254,7 +262,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
             var title = ReadNonVisualTitle(shapeElement);
             var altText = ReadNonVisualDescription(shapeElement);
             var spPr = shapeElement.Element(spreadsheetDrawingNs + "spPr");
-            var rotation = ReadDrawingRotation(spPr?.Element(drawingNs + "xfrm"));
+            var transform = spPr?.Element(drawingNs + "xfrm");
+            var rotation = ReadDrawingRotation(transform);
+            var flipHorizontal = ReadDrawingFlipHorizontal(transform);
+            var flipVertical = ReadDrawingFlipVertical(transform);
             var gradientFill = ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
             var solidFill = spPr?.Element(drawingNs + "solidFill");
             var outlineFill = spPr?.Element(drawingNs + "ln")?.Element(drawingNs + "solidFill");
@@ -284,6 +295,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                     altText,
                     ReadNearestAnchor(shapeElement),
                     rotation,
+                    flipHorizontal,
+                    flipVertical,
                     fillThemeColor is null ? fillColor : null,
                     outlineThemeColor is null ? outlineColor : null,
                     fillThemeColor,
@@ -304,6 +317,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                     altText,
                     ReadNearestAnchor(shapeElement),
                     rotation,
+                    flipHorizontal,
+                    flipVertical,
                     fillThemeColor is null ? fillColor : null,
                     outlineThemeColor is null ? outlineColor : null,
                     gradientFill.EndColor,
@@ -408,6 +423,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
         degrees %= 360;
         return degrees < 0 ? degrees + 360 : degrees;
     }
+
+    private static bool ReadDrawingFlipHorizontal(XElement? transform) =>
+        XlsxWorksheetXmlValueParser.IsTruthy(transform?.Attribute("flipH")?.Value);
+
+    private static bool ReadDrawingFlipVertical(XElement? transform) =>
+        XlsxWorksheetXmlValueParser.IsTruthy(transform?.Attribute("flipV")?.Value);
 
     private static CellColor? ReadDrawingSolidFillColor(XElement? solidFill, XNamespace drawingNs)
     {

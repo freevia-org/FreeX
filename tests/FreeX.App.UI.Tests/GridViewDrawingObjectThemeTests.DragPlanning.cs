@@ -47,18 +47,20 @@ public sealed partial class GridViewDrawingObjectThemeTests
                 new Point(100, 75))
             .Should()
             .Be(new Rect(10, 20, 90, 55));
-        GridObjectDragPlanner.CalculateDragRect(
+        GridObjectDragPlanner.CalculateDragTransform(
                 ObjectDragKind.ResizeE,
                 start,
                 new Point(90, 60),
                 new Point(0, 60))
-            .Width.Should().Be(8);
-        GridObjectDragPlanner.CalculateDragRect(
+            .Should()
+            .Be(new ObjectDragTransform(new Rect(0, 20, 10, 40), CrossedHorizontally: true, CrossedVertically: false));
+        GridObjectDragPlanner.CalculateDragTransform(
                 ObjectDragKind.ResizeS,
                 start,
                 new Point(90, 60),
                 new Point(90, 10))
-            .Height.Should().Be(8);
+            .Should()
+            .Be(new ObjectDragTransform(new Rect(10, 10, 80, 10), CrossedHorizontally: false, CrossedVertically: true));
 
         GridObjectDragPlanner.HitTestHandle(new Point(start.Right, start.Bottom), start)
             .Should().Be(ObjectDragKind.ResizeSE);
@@ -78,17 +80,20 @@ public sealed partial class GridViewDrawingObjectThemeTests
         var start = new Rect(10, 20, 80, 40);
 
         GridObjectDragPlanner.MinimumObjectSize.Should().Be(8);
-        GridObjectDragPlanner.CalculateDragRect(
+        GridObjectDragPlanner.CalculateDragTransform(
                 ObjectDragKind.ResizeSE,
                 start,
                 new Point(start.Right, start.Bottom),
                 new Point(start.Left - 100, start.Top - 100))
             .Should()
-            .Be(new Rect(
-                start.Left,
-                start.Top,
-                GridObjectDragPlanner.MinimumObjectSize,
-                GridObjectDragPlanner.MinimumObjectSize));
+            .Be(new ObjectDragTransform(
+                new Rect(
+                    start.Left - 100,
+                    start.Top - 100,
+                    100,
+                    100),
+                CrossedHorizontally: true,
+                CrossedVertically: true));
 
         var inputSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
         var mouseUpStart = inputSource.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
@@ -279,7 +284,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
         var inputSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
         var dragSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.ObjectDrag.cs");
 
-        inputSource.Should().Contain("GridObjectDragPlanner.CalculateDragRect(");
+        inputSource.Should().Contain("GridObjectDragPlanner.CalculateDragTransform(");
         inputSource.Should().Contain("_objectDragStartAnchor = GetSelectedObjectAnchor() ?? HitTestAnchorCell(pos) ?? default;");
         dragSource.Should().Contain("GetSelectedObjectRotationDegrees()");
         dragSource.Should().Contain("GridObjectDragPlanner.HitTestHandle(");

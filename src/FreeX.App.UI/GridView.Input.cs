@@ -49,11 +49,14 @@ public partial class GridView
 
         if (_objectDragKind != ObjectDragKind.None)
         {
-            _objectDragCurrentRect = GridObjectDragPlanner.CalculateDragRect(
+            var dragTransform = GridObjectDragPlanner.CalculateDragTransform(
                 _objectDragKind,
                 _objectDragStartRect,
                 _objectDragStartPos,
                 pos);
+            _objectDragCurrentRect = dragTransform.Rect;
+            _objectDragCurrentFlipHorizontal = _objectDragStartFlipHorizontal ^ dragTransform.CrossedHorizontally;
+            _objectDragCurrentFlipVertical = _objectDragStartFlipVertical ^ dragTransform.CrossedVertically;
             Cursor = ObjectDragCursor(_objectDragKind);
             InvalidateVisual();
             e.Handled = true;
@@ -306,13 +309,6 @@ public partial class GridView
             columnHeaderHeight,
             edgeThreshold);
 
-    private static bool MovesObjectTopLeft(ObjectDragKind kind) =>
-        kind is ObjectDragKind.ResizeNW
-            or ObjectDragKind.ResizeN
-            or ObjectDragKind.ResizeNE
-            or ObjectDragKind.ResizeW
-            or ObjectDragKind.ResizeSW;
-
     private bool HasActiveCapturedGridDrag() =>
         _objectDragKind != ObjectDragKind.None ||
         _marginDragEdge.HasValue ||
@@ -331,6 +327,10 @@ public partial class GridView
             _objectDragKind = ObjectDragKind.None;
             _objectDragCurrentRect = Rect.Empty;
             _objectRotationPreviewDegrees = 0;
+            _objectDragStartFlipHorizontal = false;
+            _objectDragStartFlipVertical = false;
+            _objectDragCurrentFlipHorizontal = false;
+            _objectDragCurrentFlipVertical = false;
             Cursor = null;
             InvalidateVisual();
         }
@@ -453,6 +453,11 @@ public partial class GridView
                 _objectDragStartRect = selRect;
                 _objectDragCurrentRect = selRect;
                 _objectRotationPreviewDegrees = GetSelectedObjectRotationDegrees();
+                var flipState = GetSelectedObjectFlipState();
+                _objectDragStartFlipHorizontal = flipState.Horizontal;
+                _objectDragStartFlipVertical = flipState.Vertical;
+                _objectDragCurrentFlipHorizontal = flipState.Horizontal;
+                _objectDragCurrentFlipVertical = flipState.Vertical;
                 _objectDragStartAnchor = GetSelectedObjectAnchor() ?? HitTestAnchorCell(pos) ?? default;
                 Cursor = ObjectDragCursor(dragKind);
                 InvalidateVisual();
@@ -475,6 +480,11 @@ public partial class GridView
             _objectDragStartRect = hit.Rect;
             _objectDragCurrentRect = hit.Rect;
             _objectRotationPreviewDegrees = GetSelectedObjectRotationDegrees();
+            var flipState = GetSelectedObjectFlipState();
+            _objectDragStartFlipHorizontal = flipState.Horizontal;
+            _objectDragStartFlipVertical = flipState.Vertical;
+            _objectDragCurrentFlipHorizontal = flipState.Horizontal;
+            _objectDragCurrentFlipVertical = flipState.Vertical;
             _objectDragStartAnchor = hit.Anchor;
             Cursor = Cursors.SizeAll;
             InvalidateVisual();
@@ -705,10 +715,19 @@ public partial class GridView
             var currentRect = _objectDragCurrentRect;
 
             var rotationDegrees = _objectRotationPreviewDegrees;
+            var currentFlipHorizontal = _objectDragCurrentFlipHorizontal;
+            var currentFlipVertical = _objectDragCurrentFlipVertical;
+            var flipChanged =
+                currentFlipHorizontal != _objectDragStartFlipHorizontal ||
+                currentFlipVertical != _objectDragStartFlipVertical;
 
             _objectDragKind = ObjectDragKind.None;
             _objectDragCurrentRect = Rect.Empty;
             _objectRotationPreviewDegrees = 0;
+            _objectDragStartFlipHorizontal = false;
+            _objectDragStartFlipVertical = false;
+            _objectDragCurrentFlipHorizontal = false;
+            _objectDragCurrentFlipVertical = false;
             Cursor = null;
             ReleaseMouseCapture();
 
@@ -730,20 +749,24 @@ public partial class GridView
             {
                 var newWidth  = Math.Max(GridObjectDragPlanner.MinimumObjectSize, currentRect.Width);
                 var newHeight = Math.Max(GridObjectDragPlanner.MinimumObjectSize, currentRect.Height);
-                var resized = Math.Abs(newWidth - startRect.Width) > 1 || Math.Abs(newHeight - startRect.Height) > 1;
+                var resized =
+                    Math.Abs(newWidth - startRect.Width) > 1 ||
+                    Math.Abs(newHeight - startRect.Height) > 1;
+                var boundsMoved =
+                    Math.Abs(currentRect.Left - startRect.Left) > 1 ||
+                    Math.Abs(currentRect.Top - startRect.Top) > 1;
 
-                // Directions that move the top-left edge change the anchor cell as well as the size.
-                if (resized && MovesObjectTopLeft(dragKind))
+                if ((resized || boundsMoved || flipChanged) && boundsMoved)
                 {
                     var newAnchor = HitTestAnchorCell(new Point(currentRect.Left, currentRect.Top));
                     if (newAnchor.HasValue)
-                        ObjectResizedWithAnchor?.Invoke(id, kind, newAnchor.Value, newWidth, newHeight);
+                        ObjectResizedWithAnchor?.Invoke(id, kind, newAnchor.Value, newWidth, newHeight, currentFlipHorizontal, currentFlipVertical);
                     else
-                        ObjectResized?.Invoke(id, kind, newWidth, newHeight);
+                        ObjectResized?.Invoke(id, kind, newWidth, newHeight, currentFlipHorizontal, currentFlipVertical);
                 }
-                else if (resized)
+                else if (resized || flipChanged)
                 {
-                    ObjectResized?.Invoke(id, kind, newWidth, newHeight);
+                    ObjectResized?.Invoke(id, kind, newWidth, newHeight, currentFlipHorizontal, currentFlipVertical);
                 }
             }
 

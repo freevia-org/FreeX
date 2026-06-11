@@ -115,6 +115,44 @@ public sealed class TextBoxCommandTests
     }
 
     [Fact]
+    public void ResizeTextBoxCommand_SetsFlipStateAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Text = "Note",
+            Width = 180,
+            Height = 80,
+            FlipVertical = true
+        };
+        sheet.TextBoxes.Add(textBox);
+
+        var command = new ResizeTextBoxCommand(
+            sheet.Id,
+            textBox.Id,
+            220,
+            120,
+            flipHorizontal: true,
+            flipVertical: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        textBox.Width.Should().Be(220);
+        textBox.Height.Should().Be(120);
+        textBox.FlipHorizontal.Should().BeTrue();
+        textBox.FlipVertical.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        textBox.Width.Should().Be(180);
+        textBox.Height.Should().Be(80);
+        textBox.FlipHorizontal.Should().BeFalse();
+        textBox.FlipVertical.Should().BeTrue();
+    }
+
+    [Fact]
     public void RotateTextBoxCommand_SetsRotationAndUndoRestores()
     {
         var wb = new Workbook("test");

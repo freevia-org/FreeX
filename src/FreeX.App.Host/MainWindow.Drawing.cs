@@ -694,13 +694,19 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void OnObjectResized(Guid id, FreeX.App.UI.ObjectKind kind, double width, double height)
+    private void OnObjectResized(
+        Guid id,
+        FreeX.App.UI.ObjectKind kind,
+        double width,
+        double height,
+        bool flipHorizontal,
+        bool flipVertical)
     {
         IWorkbookCommand cmd = kind switch
         {
-            FreeX.App.UI.ObjectKind.Picture  => new ResizePictureCommand(_currentSheetId, id, width, height),
-            FreeX.App.UI.ObjectKind.Shape    => new ResizeDrawingShapeCommand(_currentSheetId, id, width, height),
-            FreeX.App.UI.ObjectKind.TextBox  => new ResizeTextBoxCommand(_currentSheetId, id, width, height),
+            FreeX.App.UI.ObjectKind.Picture  => new ResizePictureCommand(_currentSheetId, id, width, height, flipHorizontal, flipVertical),
+            FreeX.App.UI.ObjectKind.Shape    => new ResizeDrawingShapeCommand(_currentSheetId, id, width, height, flipHorizontal, flipVertical),
+            FreeX.App.UI.ObjectKind.TextBox  => new ResizeTextBoxCommand(_currentSheetId, id, width, height, flipHorizontal, flipVertical),
             _ => null!
         };
         if (cmd is null) return;
@@ -715,7 +721,9 @@ public partial class MainWindow
         FreeX.App.UI.ObjectKind kind,
         Core.Model.CellAddress newAnchor,
         double width,
-        double height)
+        double height,
+        bool flipHorizontal,
+        bool flipVertical)
     {
         var anchor = new Core.Model.CellAddress(_currentSheetId, newAnchor.Row, newAnchor.Col);
         IReadOnlyList<IWorkbookCommand>? commands = kind switch
@@ -723,17 +731,17 @@ public partial class MainWindow
             FreeX.App.UI.ObjectKind.Picture =>
             [
                 new RepositionPictureCommand(_currentSheetId, id, anchor),
-                new ResizePictureCommand(_currentSheetId, id, width, height)
+                new ResizePictureCommand(_currentSheetId, id, width, height, flipHorizontal, flipVertical)
             ],
             FreeX.App.UI.ObjectKind.Shape =>
             [
                 new RepositionShapeCommand(_currentSheetId, id, anchor),
-                new ResizeDrawingShapeCommand(_currentSheetId, id, width, height)
+                new ResizeDrawingShapeCommand(_currentSheetId, id, width, height, flipHorizontal, flipVertical)
             ],
             FreeX.App.UI.ObjectKind.TextBox =>
             [
                 new RepositionTextBoxCommand(_currentSheetId, id, anchor),
-                new ResizeTextBoxCommand(_currentSheetId, id, width, height)
+                new ResizeTextBoxCommand(_currentSheetId, id, width, height, flipHorizontal, flipVertical)
             ],
             _ => null
         };

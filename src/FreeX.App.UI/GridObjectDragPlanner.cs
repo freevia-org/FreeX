@@ -18,6 +18,11 @@ public enum ObjectDragKind
     Rotate
 }
 
+public readonly record struct ObjectDragTransform(
+    Rect Rect,
+    bool CrossedHorizontally,
+    bool CrossedVertically);
+
 public static class GridObjectDragPlanner
 {
     public const double MinimumObjectSize = 8;
@@ -32,74 +37,122 @@ public static class GridObjectDragPlanner
         Rect startRect,
         Point startPosition,
         Point currentPosition,
+        double minimumSize = MinimumObjectSize) =>
+        CalculateDragTransform(dragKind, startRect, startPosition, currentPosition, minimumSize).Rect;
+
+    public static ObjectDragTransform CalculateDragTransform(
+        ObjectDragKind dragKind,
+        Rect startRect,
+        Point startPosition,
+        Point currentPosition,
         double minimumSize = MinimumObjectSize)
     {
         var dx = currentPosition.X - startPosition.X;
         var dy = currentPosition.Y - startPosition.Y;
 
-        // Track each edge independently so opposite edges stay fixed and the rect
-        // never inverts when an edge is dragged past its anchor.
         var left = startRect.Left;
         var top = startRect.Top;
         var right = startRect.Right;
         var bottom = startRect.Bottom;
+        var movesLeft = false;
+        var movesRight = false;
+        var movesTop = false;
+        var movesBottom = false;
 
         switch (dragKind)
         {
             case ObjectDragKind.Move:
-                return new Rect(startRect.X + dx, startRect.Y + dy, startRect.Width, startRect.Height);
+                return new ObjectDragTransform(
+                    new Rect(startRect.X + dx, startRect.Y + dy, startRect.Width, startRect.Height),
+                    CrossedHorizontally: false,
+                    CrossedVertically: false);
             case ObjectDragKind.ResizeNW:
                 left += dx;
                 top += dy;
+                movesLeft = true;
+                movesTop = true;
                 break;
             case ObjectDragKind.ResizeN:
                 top += dy;
+                movesTop = true;
                 break;
             case ObjectDragKind.ResizeNE:
                 right += dx;
                 top += dy;
+                movesRight = true;
+                movesTop = true;
                 break;
             case ObjectDragKind.ResizeE:
                 right += dx;
+                movesRight = true;
                 break;
             case ObjectDragKind.ResizeSE:
                 right += dx;
                 bottom += dy;
+                movesRight = true;
+                movesBottom = true;
                 break;
             case ObjectDragKind.ResizeS:
                 bottom += dy;
+                movesBottom = true;
                 break;
             case ObjectDragKind.ResizeSW:
                 left += dx;
                 bottom += dy;
+                movesLeft = true;
+                movesBottom = true;
                 break;
             case ObjectDragKind.ResizeW:
                 left += dx;
+                movesLeft = true;
                 break;
             default:
-                return startRect;
+                return new ObjectDragTransform(startRect, CrossedHorizontally: false, CrossedVertically: false);
         }
 
-        // Clamp each axis to the minimum size while keeping the un-dragged edge fixed.
-        var movesLeft = dragKind is ObjectDragKind.ResizeNW or ObjectDragKind.ResizeW or ObjectDragKind.ResizeSW;
-        if (right - left < minimumSize)
+        var horizontal = NormalizeAxis(left, right, movesLeft, movesRight, minimumSize);
+        var vertical = NormalizeAxis(top, bottom, movesTop, movesBottom, minimumSize);
+        return new ObjectDragTransform(
+            new Rect(
+                horizontal.Start,
+                vertical.Start,
+                horizontal.End - horizontal.Start,
+                vertical.End - vertical.Start),
+            horizontal.Crossed,
+            vertical.Crossed);
+    }
+
+    private static AxisDragTransform NormalizeAxis(
+        double lower,
+        double upper,
+        bool movesLower,
+        bool movesUpper,
+        double minimumSize)
+    {
+        var minSize = double.IsFinite(minimumSize) && minimumSize > 0 ? minimumSize : MinimumObjectSize;
+        if (movesLower == movesUpper)
+            return new AxisDragTransform(lower, upper, Crossed: false);
+
+        if (movesLower)
         {
-            if (movesLeft)
-                left = right - minimumSize;
-            else
-                right = left + minimumSize;
+            var signedExtent = upper - lower;
+            if (signedExtent >= 0)
+            {
+                var extent = Math.Max(signedExtent, minSize);
+                return new AxisDragTransform(upper - extent, upper, Crossed: false);
+            }
+
+            return new AxisDragTransform(upper, upper + Math.Max(-signedExtent, minSize), Crossed: true);
         }
 
-        var movesTop = dragKind is ObjectDragKind.ResizeNW or ObjectDragKind.ResizeN or ObjectDragKind.ResizeNE;
-        if (bottom - top < minimumSize)
+        var upperSignedExtent = upper - lower;
+        if (upperSignedExtent >= 0)
         {
-            if (movesTop)
-                top = bottom - minimumSize;
-            else
-                bottom = top + minimumSize;
+            var extent = Math.Max(upperSignedExtent, minSize);
+            return new AxisDragTransform(lower, lower + extent, Crossed: false);
         }
 
-        return new Rect(left, top, right - left, bottom - top);
+        return new AxisDragTransform(lower - Math.Max(-upperSignedExtent, minSize), lower, Crossed: true);
     }
 
     /// <summary>
@@ -369,4 +422,6 @@ public static class GridObjectDragPlanner
 
         return null;
     }
+
+    private readonly record struct AxisDragTransform(double Start, double End, bool Crossed);
 }

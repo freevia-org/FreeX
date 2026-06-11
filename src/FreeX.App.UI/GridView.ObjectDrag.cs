@@ -136,6 +136,27 @@ public partial class GridView
         };
     }
 
+    private DrawingObjectFlipState GetSelectedObjectFlipState()
+    {
+        if (ObjectDisplayMode == GridObjectDisplayMode.Nothing ||
+            SelectedObjectId == Guid.Empty ||
+            SelectedObjectKind == ObjectKind.None)
+        {
+            return default;
+        }
+
+        return SelectedObjectKind switch
+        {
+            ObjectKind.Picture when Pictures is not null =>
+                TryGetObjectFlip(Pictures, p => p.Id == SelectedObjectId && p.IsVisible, p => (p.FlipHorizontal, p.FlipVertical)),
+            ObjectKind.Shape when DrawingShapes is not null =>
+                TryGetObjectFlip(DrawingShapes, s => s.Id == SelectedObjectId && s.IsVisible, s => (s.FlipHorizontal, s.FlipVertical)),
+            ObjectKind.TextBox when TextBoxes is not null =>
+                TryGetObjectFlip(TextBoxes, t => t.Id == SelectedObjectId && t.IsVisible, t => (t.FlipHorizontal, t.FlipVertical)),
+            _ => default
+        };
+    }
+
     private Rect TryGetObjectRect<T>(
         IEnumerable<T> items,
         Func<T, bool> match,
@@ -214,6 +235,23 @@ public partial class GridView
         }
 
         return 0;
+    }
+
+    private static DrawingObjectFlipState TryGetObjectFlip<T>(
+        IEnumerable<T> items,
+        Func<T, bool> match,
+        Func<T, (bool Horizontal, bool Vertical)> flip)
+    {
+        foreach (var item in items)
+        {
+            if (!match(item))
+                continue;
+
+            var state = flip(item);
+            return new DrawingObjectFlipState(state.Horizontal, state.Vertical);
+        }
+
+        return default;
     }
 
     internal void DrawObjectSelectionHandles(DrawingContext dc, Rect r, double rotationDegrees)
@@ -349,16 +387,27 @@ public partial class GridView
             ? _objectRotationPreviewDegrees
             : committedRotationDegrees;
 
+    private DrawingObjectFlipState GetSelectedObjectLiveFlipState(bool committedFlipHorizontal, bool committedFlipVertical) =>
+        HasLiveObjectTransformPreview()
+            ? new DrawingObjectFlipState(_objectDragCurrentFlipHorizontal, _objectDragCurrentFlipVertical)
+            : new DrawingObjectFlipState(committedFlipHorizontal, committedFlipVertical);
+
     private bool TryResolveLiveObjectTransform(
         Guid id,
         ObjectKind kind,
         Rect committedRect,
         double committedRotationDegrees,
+        bool committedFlipHorizontal,
+        bool committedFlipVertical,
         out Rect renderRect,
-        out double renderRotationDegrees)
+        out double renderRotationDegrees,
+        out bool renderFlipHorizontal,
+        out bool renderFlipVertical)
     {
         renderRect = committedRect;
         renderRotationDegrees = committedRotationDegrees;
+        renderFlipHorizontal = committedFlipHorizontal;
+        renderFlipVertical = committedFlipVertical;
 
         if (!HasLiveObjectTransformPreview() ||
             id != _selectedObjectId ||
@@ -369,11 +418,18 @@ public partial class GridView
 
         renderRect = GetSelectedObjectLiveRect(committedRect);
         renderRotationDegrees = GetSelectedObjectLiveRotationDegrees(committedRotationDegrees);
+        var flipState = GetSelectedObjectLiveFlipState(committedFlipHorizontal, committedFlipVertical);
+        renderFlipHorizontal = flipState.Horizontal;
+        renderFlipVertical = flipState.Vertical;
         return true;
     }
 
     private Rect _objectDragCurrentRect;
     private double _objectRotationPreviewDegrees;
+    private bool _objectDragStartFlipHorizontal;
+    private bool _objectDragStartFlipVertical;
+    private bool _objectDragCurrentFlipHorizontal;
+    private bool _objectDragCurrentFlipVertical;
 
     private static Cursor ObjectDragCursor(ObjectDragKind kind) => kind switch
     {
@@ -591,4 +647,6 @@ public partial class GridView
         pos.X <= rect.Right &&
         pos.Y >= rect.Top &&
         pos.Y <= rect.Bottom;
+
+    private readonly record struct DrawingObjectFlipState(bool Horizontal, bool Vertical);
 }

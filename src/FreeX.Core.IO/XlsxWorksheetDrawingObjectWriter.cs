@@ -264,7 +264,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         : null,
                     new XElement(drawingNs + "stretch", new XElement(drawingNs + "fillRect"))),
                 new XElement(spreadsheetDrawingNs + "spPr",
-                    ToDrawingTransform(picture.RotationDegrees, drawingNs),
+                    ToDrawingTransform(picture.RotationDegrees, picture.FlipHorizontal, picture.FlipVertical, drawingNs),
                     new XElement(drawingNs + "prstGeom",
                         new XAttribute("prst", "rect"),
                         new XElement(drawingNs + "avLst")))),
@@ -311,6 +311,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 ToShapePropertiesForDrawingObject(
                     "rect",
                     textBox.RotationDegrees,
+                    textBox.FlipHorizontal,
+                    textBox.FlipVertical,
                     textBox.FillThemeColor,
                     textBox.FillColor,
                     textBox.OutlineThemeColor,
@@ -346,6 +348,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 ToShapePropertiesForDrawingObject(
                     ToDrawingPreset(shape.Kind),
                     shape.RotationDegrees,
+                    shape.FlipHorizontal,
+                    shape.FlipVertical,
                     shape.FillThemeColor,
                     shape.FillColor,
                     shape.OutlineThemeColor,
@@ -367,6 +371,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
     private static XElement ToShapePropertiesForDrawingObject(
         string preset,
         double rotationDegrees,
+        bool flipHorizontal,
+        bool flipVertical,
         WorkbookThemeColorReference? fillThemeColor,
         CellColor? fillColor,
         WorkbookThemeColorReference? outlineThemeColor,
@@ -378,7 +384,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
         DrawingShapeEffectPreset effectPreset = DrawingShapeEffectPreset.None)
     {
         return new XElement(spreadsheetDrawingNs + "spPr",
-            ToDrawingTransform(rotationDegrees, drawingNs),
+            ToDrawingTransform(rotationDegrees, flipHorizontal, flipVertical, drawingNs),
             new XElement(drawingNs + "prstGeom",
                 new XAttribute("prst", preset),
                 new XElement(drawingNs + "avLst")),
@@ -391,11 +397,17 @@ internal static class XlsxWorksheetDrawingObjectWriter
             ToShape3dProperties(effectPreset, drawingNs));
     }
 
-    private static XElement ToDrawingTransform(double rotationDegrees, XNamespace drawingNs)
+    private static XElement ToDrawingTransform(
+        double rotationDegrees,
+        bool flipHorizontal,
+        bool flipVertical,
+        XNamespace drawingNs)
     {
         var rotation = NormalizeRotation(rotationDegrees);
         return new XElement(drawingNs + "xfrm",
-            rotation == 0 ? null : new XAttribute("rot", (long)Math.Round(rotation * 60000)));
+            rotation == 0 ? null : new XAttribute("rot", (long)Math.Round(rotation * 60000)),
+            flipHorizontal ? new XAttribute("flipH", "1") : null,
+            flipVertical ? new XAttribute("flipV", "1") : null);
     }
 
     private static XElement ToGradientFill(

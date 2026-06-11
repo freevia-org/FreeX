@@ -73,6 +73,8 @@ public sealed partial class ViewportService
             width,
             height,
             shape.RotationDegrees,
+            shape.FlipHorizontal,
+            shape.FlipVertical,
             ShapeKind: shape.Kind,
             FillColor: ResolveShapeFillColor(shape, theme),
             OutlineColor: ResolveShapeOutlineColor(shape, theme)));
@@ -112,6 +114,8 @@ public sealed partial class ViewportService
             width,
             height,
             picture.RotationDegrees,
+            picture.FlipHorizontal,
+            picture.FlipVertical,
             PictureKind: picture.Kind,
             ImageBytes: picture.Kind == PictureKind.Image && picture.ImageBytes is { Length: > 0 } imageBytes
                 ? imageBytes.ToArray()
@@ -163,6 +167,8 @@ public sealed partial class ViewportService
             width,
             height,
             textBox.RotationDegrees,
+            textBox.FlipHorizontal,
+            textBox.FlipVertical,
             Text: textBox.Text,
             FillColor: ResolveTextBoxFillColor(textBox, theme),
             OutlineColor: ResolveTextBoxOutlineColor(textBox, theme)));

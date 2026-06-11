@@ -70,7 +70,11 @@ internal static class GridViewTestHelpers
         ObjectDragKind dragKind,
         Rect startRect,
         Rect currentRect,
-        double rotationDegrees = 0)
+        double rotationDegrees = 0,
+        bool currentFlipHorizontal = false,
+        bool currentFlipVertical = false,
+        bool startFlipHorizontal = false,
+        bool startFlipVertical = false)
     {
         grid.SelectedObjectId = id;
         grid.SelectedObjectKind = kind;
@@ -80,6 +84,10 @@ internal static class GridViewTestHelpers
         SetPrivateField(grid, "_objectDragStartRect", startRect);
         SetPrivateField(grid, "_objectDragCurrentRect", currentRect);
         SetPrivateField(grid, "_objectRotationPreviewDegrees", rotationDegrees);
+        SetPrivateField(grid, "_objectDragStartFlipHorizontal", startFlipHorizontal);
+        SetPrivateField(grid, "_objectDragStartFlipVertical", startFlipVertical);
+        SetPrivateField(grid, "_objectDragCurrentFlipHorizontal", currentFlipHorizontal);
+        SetPrivateField(grid, "_objectDragCurrentFlipVertical", currentFlipVertical);
     }
 
     private static object InvokePrivate(GridView grid, string methodName, params object[] arguments)

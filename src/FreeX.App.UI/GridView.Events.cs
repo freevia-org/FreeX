@@ -85,13 +85,13 @@ public partial class GridView
     public event Action<Guid, double, double, double, double>? ChartBoundsChanged;
 
     /// <summary>Fired when the user finishes drag-resizing a drawing object.</summary>
-    public event Action<Guid, ObjectKind, double, double>? ObjectResized;
+    public event Action<Guid, ObjectKind, double, double, bool, bool>? ObjectResized;
 
     /// <summary>
     /// Fired when the user finishes drag-resizing a drawing object from a handle that also
-    /// moves the top-left corner (N/W/NW/NE/SW), so both the new anchor cell and size are committed together.
+    /// moves the normalized top-left corner, so the new anchor cell, size, and flip state are committed together.
     /// </summary>
-    public event Action<Guid, ObjectKind, CellAddress, double, double>? ObjectResizedWithAnchor;
+    public event Action<Guid, ObjectKind, CellAddress, double, double, bool, bool>? ObjectResizedWithAnchor;
 
     /// <summary>Fired when the user finishes rotating a drawing object via the rotation grip.</summary>
     public event Action<Guid, ObjectKind, double>? ObjectRotated;

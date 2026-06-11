@@ -8,18 +8,30 @@ public sealed class ResizeDrawingShapeCommand : IWorkbookCommand
     private readonly Guid _shapeId;
     private readonly double _width;
     private readonly double _height;
+    private readonly bool? _flipHorizontal;
+    private readonly bool? _flipVertical;
     private double _previousWidth;
     private double _previousHeight;
+    private bool _previousFlipHorizontal;
+    private bool _previousFlipVertical;
     private bool _applied;
 
     public string Label => "Resize Shape";
 
-    public ResizeDrawingShapeCommand(SheetId sheetId, Guid shapeId, double width, double height)
+    public ResizeDrawingShapeCommand(
+        SheetId sheetId,
+        Guid shapeId,
+        double width,
+        double height,
+        bool? flipHorizontal = null,
+        bool? flipVertical = null)
     {
         _sheetId = sheetId;
         _shapeId = shapeId;
         _width = width;
         _height = height;
+        _flipHorizontal = flipHorizontal;
+        _flipVertical = flipVertical;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -36,8 +48,14 @@ public sealed class ResizeDrawingShapeCommand : IWorkbookCommand
 
         _previousWidth = shape.Width;
         _previousHeight = shape.Height;
+        _previousFlipHorizontal = shape.FlipHorizontal;
+        _previousFlipVertical = shape.FlipVertical;
         shape.Width = _width;
         shape.Height = _height;
+        if (_flipHorizontal.HasValue)
+            shape.FlipHorizontal = _flipHorizontal.Value;
+        if (_flipVertical.HasValue)
+            shape.FlipVertical = _flipVertical.Value;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
     }
@@ -48,6 +66,8 @@ public sealed class ResizeDrawingShapeCommand : IWorkbookCommand
         if (!DrawingShapeCommandGuards.TryFindShape(ctx.GetSheet(_sheetId), _shapeId, out var shape)) return;
         shape.Width = _previousWidth;
         shape.Height = _previousHeight;
+        shape.FlipHorizontal = _previousFlipHorizontal;
+        shape.FlipVertical = _previousFlipVertical;
         _applied = false;
     }
 }

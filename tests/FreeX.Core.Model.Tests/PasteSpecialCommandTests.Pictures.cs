@@ -218,6 +218,46 @@ public sealed partial class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void ResizePictureCommand_SetsFlipStateAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var picture = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = PictureKind.Image,
+            ImageBytes = [1],
+            ContentType = "image/png",
+            Width = 100,
+            Height = 80,
+            FlipHorizontal = true
+        };
+        sheet.Pictures.Add(picture);
+
+        var command = new ResizePictureCommand(
+            sheet.Id,
+            picture.Id,
+            width: 160,
+            height: 90,
+            flipHorizontal: false,
+            flipVertical: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        picture.Width.Should().Be(160);
+        picture.Height.Should().Be(90);
+        picture.FlipHorizontal.Should().BeFalse();
+        picture.FlipVertical.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        picture.Width.Should().Be(100);
+        picture.Height.Should().Be(80);
+        picture.FlipHorizontal.Should().BeTrue();
+        picture.FlipVertical.Should().BeFalse();
+    }
+
+    [Fact]
     public void ResizePictureCommand_RejectsInvalidSize()
     {
         var wb = new Workbook("test");

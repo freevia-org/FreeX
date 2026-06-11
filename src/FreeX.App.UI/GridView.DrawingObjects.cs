@@ -265,17 +265,31 @@ public partial class GridView
             return;
 
         var rotationDegrees = textBox.RotationDegrees;
-        if (TryResolveLiveObjectTransform(textBox.Id, ObjectKind.TextBox, rect, rotationDegrees, out var previewRect, out var previewRotationDegrees))
+        var flipHorizontal = textBox.FlipHorizontal;
+        var flipVertical = textBox.FlipVertical;
+        if (TryResolveLiveObjectTransform(
+                textBox.Id,
+                ObjectKind.TextBox,
+                rect,
+                rotationDegrees,
+                flipHorizontal,
+                flipVertical,
+                out var previewRect,
+                out var previewRotationDegrees,
+                out var previewFlipHorizontal,
+                out var previewFlipVertical))
         {
             rect = previewRect;
             rotationDegrees = previewRotationDegrees;
+            flipHorizontal = previewFlipHorizontal;
+            flipVertical = previewFlipVertical;
         }
 
         if (NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom) &&
             !IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom))
             return;
 
-        var rotationPushed = PushRotation(dc, rotationDegrees, rect);
+        var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
         var colors = ResolveTextBoxColors(textBox, WorkbookTheme);
         DrawTextBoxThemeEffect(dc, rect, themeEffect);
         var fillBrush = GetDrawingObjectBrush(242, colors.Fill);
@@ -291,7 +305,7 @@ public partial class GridView
         dc.PushClip(GetDrawingObjectClipGeometry(textClipRect));
         dc.DrawText(text, new Point(rect.Left + 4, rect.Top + 4));
         dc.Pop();
-        if (rotationPushed) dc.Pop();
+        PopDrawingObjectTransform(dc, transformDepth);
     }
 
     private void RenderDrawingShapes(DrawingContext dc)
@@ -331,17 +345,31 @@ public partial class GridView
             return;
 
         var rotationDegrees = shape.RotationDegrees;
-        if (TryResolveLiveObjectTransform(shape.Id, ObjectKind.Shape, rect, rotationDegrees, out var previewRect, out var previewRotationDegrees))
+        var flipHorizontal = shape.FlipHorizontal;
+        var flipVertical = shape.FlipVertical;
+        if (TryResolveLiveObjectTransform(
+                shape.Id,
+                ObjectKind.Shape,
+                rect,
+                rotationDegrees,
+                flipHorizontal,
+                flipVertical,
+                out var previewRect,
+                out var previewRotationDegrees,
+                out var previewFlipHorizontal,
+                out var previewFlipVertical))
         {
             rect = previewRect;
             rotationDegrees = previewRotationDegrees;
+            flipHorizontal = previewFlipHorizontal;
+            flipVertical = previewFlipVertical;
         }
 
         if (NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom) &&
             !IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom))
             return;
 
-        var rotationPushed = PushRotation(dc, rotationDegrees, rect);
+        var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
         var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
         var pen = GetDrawingObjectPen(255, colors.Outline, 1.5);
         var fill = CreateDrawingShapeFill(shape, colors.Fill);
@@ -352,7 +380,7 @@ public partial class GridView
         DrawShapeThemeBevelEffect(dc, shape.Kind, rect, themeEffect);
         DrawShapeAuthoredInnerShadow(dc, shape.Kind, rect, shape);
         DrawShapeThemeInnerShadow(dc, shape.Kind, rect, themeEffect);
-        if (rotationPushed) dc.Pop();
+        PopDrawingObjectTransform(dc, transformDepth);
     }
 
     private bool HasExplicitDrawingObjectZOrder() =>
@@ -965,16 +993,40 @@ public partial class GridView
     public static DrawingObjectColors ResolveTextBoxColors(TextBoxModel textBox, WorkbookTheme theme) =>
         GridDrawingObjectPlanner.ResolveTextBoxColors(textBox, theme);
 
-    private static bool PushRotation(DrawingContext dc, double rotationDegrees, Rect rect)
+    private static int PushDrawingObjectTransform(
+        DrawingContext dc,
+        double rotationDegrees,
+        bool flipHorizontal,
+        bool flipVertical,
+        Rect rect)
     {
-        if (Math.Abs(rotationDegrees % 360) <= 0.0001)
-            return false;
+        var depth = 0;
+        if (Math.Abs(rotationDegrees % 360) > 0.0001)
+        {
+            dc.PushTransform(new RotateTransform(
+                rotationDegrees,
+                rect.Left + rect.Width / 2,
+                rect.Top + rect.Height / 2));
+            depth++;
+        }
 
-        dc.PushTransform(new RotateTransform(
-            rotationDegrees,
-            rect.Left + rect.Width / 2,
-            rect.Top + rect.Height / 2));
-        return true;
+        if (flipHorizontal || flipVertical)
+        {
+            dc.PushTransform(new ScaleTransform(
+                flipHorizontal ? -1 : 1,
+                flipVertical ? -1 : 1,
+                rect.Left + rect.Width / 2,
+                rect.Top + rect.Height / 2));
+            depth++;
+        }
+
+        return depth;
+    }
+
+    private static void PopDrawingObjectTransform(DrawingContext dc, int depth)
+    {
+        for (var i = 0; i < depth; i++)
+            dc.Pop();
     }
 
     private void RenderObjectPlaceholders(DrawingContext dc)

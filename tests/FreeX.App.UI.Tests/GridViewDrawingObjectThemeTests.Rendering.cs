@@ -75,7 +75,10 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
         renderTextBoxes.Should().Contain("GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom)");
         renderTextBoxes.Should().Contain("CanAnchoredObjectReachDrawingViewport(textBox.Anchor");
-        renderTextBoxes.Should().Contain("TryResolveLiveObjectTransform(textBox.Id, ObjectKind.TextBox, rect, rotationDegrees");
+        renderTextBoxes.Should().Contain("var flipHorizontal = textBox.FlipHorizontal;");
+        renderTextBoxes.Should().Contain("var flipVertical = textBox.FlipVertical;");
+        renderTextBoxes.Should().Contain("TryResolveLiveObjectTransform(");
+        renderTextBoxes.Should().Contain("PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect)");
         renderTextBoxes.Should().Contain("NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom)");
         renderTextBoxes.Should().Contain("IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom)");
         renderTextBoxes.IndexOf("NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)
@@ -83,7 +86,10 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
         renderDrawingShapes.Should().Contain("GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom)");
         renderDrawingShapes.Should().Contain("CanAnchoredObjectReachDrawingViewport(shape.Anchor");
-        renderDrawingShapes.Should().Contain("TryResolveLiveObjectTransform(shape.Id, ObjectKind.Shape, rect, rotationDegrees");
+        renderDrawingShapes.Should().Contain("var flipHorizontal = shape.FlipHorizontal;");
+        renderDrawingShapes.Should().Contain("var flipVertical = shape.FlipVertical;");
+        renderDrawingShapes.Should().Contain("TryResolveLiveObjectTransform(");
+        renderDrawingShapes.Should().Contain("PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect)");
         renderDrawingShapes.Should().Contain("NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom)");
         renderDrawingShapes.Should().Contain("IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom)");
         renderDrawingShapes.IndexOf("NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)
@@ -96,7 +102,10 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
         renderPictures.Should().Contain("GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom)");
         renderPictures.Should().Contain("CanAnchoredObjectReachDrawingViewport(picture.Anchor");
-        renderPictures.Should().Contain("TryResolveLiveObjectTransform(picture.Id, ObjectKind.Picture, rect, rotationDegrees");
+        renderPictures.Should().Contain("var flipHorizontal = picture.FlipHorizontal;");
+        renderPictures.Should().Contain("var flipVertical = picture.FlipVertical;");
+        renderPictures.Should().Contain("TryResolveLiveObjectTransform(");
+        renderPictures.Should().Contain("PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect)");
         renderPictures.Should().Contain("NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom)");
         renderPictures.Should().Contain("IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom)");
         renderPictures.IndexOf("NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)

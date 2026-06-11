@@ -185,6 +185,44 @@ public sealed class DrawingObjectRenderPlannerTests
         snapshotBounds.PictureCells.Should().NotBeSameAs(snapshot.Cells);
     }
 
+    [Fact]
+    public void GetViewport_DrawingObjectBoundsExposeFlipState()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            FlipHorizontal = true
+        };
+        var picture = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            FlipVertical = true
+        };
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            FlipHorizontal = true,
+            FlipVertical = true
+        };
+        sheet.DrawingShapes.Add(shape);
+        sheet.Pictures.Add(picture);
+        sheet.TextBoxes.Add(textBox);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 120, 120));
+
+        viewport.DrawingObjects.Single(bounds => bounds.Id == shape.Id).Should().Match<DrawingObjectBounds>(
+            bounds => bounds.FlipHorizontal && !bounds.FlipVertical);
+        viewport.DrawingObjects.Single(bounds => bounds.Id == picture.Id).Should().Match<DrawingObjectBounds>(
+            bounds => !bounds.FlipHorizontal && bounds.FlipVertical);
+        viewport.DrawingObjects.Single(bounds => bounds.Id == textBox.Id).Should().Match<DrawingObjectBounds>(
+            bounds => bounds.FlipHorizontal && bounds.FlipVertical);
+    }
+
     private static DrawingObjectBounds PictureBounds(
         PictureKind pictureKind = PictureKind.Image,
         byte[]? imageBytes = null,

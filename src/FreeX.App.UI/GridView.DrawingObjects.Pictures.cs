@@ -55,21 +55,31 @@ public partial class GridView
             return;
 
         var rotationDegrees = picture.RotationDegrees;
-        if (TryResolveLiveObjectTransform(picture.Id, ObjectKind.Picture, rect, rotationDegrees, out var previewRect, out var previewRotationDegrees))
+        var flipHorizontal = picture.FlipHorizontal;
+        var flipVertical = picture.FlipVertical;
+        if (TryResolveLiveObjectTransform(
+                picture.Id,
+                ObjectKind.Picture,
+                rect,
+                rotationDegrees,
+                flipHorizontal,
+                flipVertical,
+                out var previewRect,
+                out var previewRotationDegrees,
+                out var previewFlipHorizontal,
+                out var previewFlipVertical))
         {
             rect = previewRect;
             rotationDegrees = previewRotationDegrees;
+            flipHorizontal = previewFlipHorizontal;
+            flipVertical = previewFlipVertical;
         }
 
         if (NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom) &&
             !IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom))
             return;
 
-        if (Math.Abs(rotationDegrees) > 0.0001)
-            dc.PushTransform(new RotateTransform(
-                rotationDegrees,
-                rect.Left + rect.Width / 2,
-                rect.Top + rect.Height / 2));
+        var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
 
         if (picture.Kind == PictureKind.Image &&
             TryLoadPictureImage(picture, out var image) &&
@@ -85,8 +95,7 @@ public partial class GridView
                 dc.DrawImage(image, rect);
             }
             dc.DrawRectangle(null, PictureBorderPen, rect);
-            if (Math.Abs(rotationDegrees) > 0.0001)
-                dc.Pop();
+            PopDrawingObjectTransform(dc, transformDepth);
             return;
         }
 
@@ -140,8 +149,7 @@ public partial class GridView
                 DrawPictureCellBorders(dc, cellRect, style);
         }
 
-        if (Math.Abs(rotationDegrees) > 0.0001)
-            dc.Pop();
+        PopDrawingObjectTransform(dc, transformDepth);
     }
 
     private void DrawPictureCellStyle(DrawingContext dc, Rect rect, CellStyle style)

@@ -113,61 +113,68 @@ public sealed class GridObjectDragPlannerTests
     }
 
     [Fact]
-    public void CalculateDragRect_ResizeE_ClampsToMinimumWidth()
+    public void CalculateDragTransform_ResizeE_CrossesFixedLeftEdgeAndReportsHorizontalFlip()
     {
-        var result = GridObjectDragPlanner.CalculateDragRect(
+        var result = GridObjectDragPlanner.CalculateDragTransform(
             ObjectDragKind.ResizeE, Start, new Point(300, 150), new Point(0, 150), minimumSize: 8);
 
-        result.Width.Should().Be(8);
-        result.Left.Should().Be(100);
+        result.Rect.Should().Be(new Rect(0, 100, 100, 100));
+        result.CrossedHorizontally.Should().BeTrue();
+        result.CrossedVertically.Should().BeFalse();
     }
 
     [Fact]
-    public void CalculateDragRect_ResizeW_ClampsWithoutInvertingPastRightEdge()
+    public void CalculateDragTransform_ResizeW_CrossesFixedRightEdgeAndReportsHorizontalFlip()
     {
-        // Drag the left edge far past the right edge; it must clamp at minimum size
-        // and never produce a negative width nor cross the fixed right edge.
-        var result = GridObjectDragPlanner.CalculateDragRect(
+        var result = GridObjectDragPlanner.CalculateDragTransform(
             ObjectDragKind.ResizeW, Start, new Point(100, 150), new Point(500, 150), minimumSize: 8);
 
-        result.Width.Should().Be(8);
-        result.Right.Should().Be(Start.Right);
-        result.Left.Should().Be(Start.Right - 8);
+        result.Rect.Should().Be(new Rect(300, 100, 200, 100));
+        result.CrossedHorizontally.Should().BeTrue();
+        result.CrossedVertically.Should().BeFalse();
     }
 
     [Fact]
-    public void CalculateDragRect_ResizeN_ClampsWithoutInvertingPastBottomEdge()
+    public void CalculateDragTransform_ResizeN_CrossesFixedBottomEdgeAndReportsVerticalFlip()
     {
-        var result = GridObjectDragPlanner.CalculateDragRect(
+        var result = GridObjectDragPlanner.CalculateDragTransform(
             ObjectDragKind.ResizeN, Start, new Point(200, 100), new Point(200, 400), minimumSize: 8);
 
-        result.Height.Should().Be(8);
-        result.Bottom.Should().Be(Start.Bottom);
-        result.Top.Should().Be(Start.Bottom - 8);
+        result.Rect.Should().Be(new Rect(100, 200, 200, 200));
+        result.CrossedHorizontally.Should().BeFalse();
+        result.CrossedVertically.Should().BeTrue();
     }
 
     [Fact]
-    public void CalculateDragRect_ResizeNW_ClampsBothAxesWithoutInverting()
+    public void CalculateDragTransform_ResizeNW_CrossesBothAxesAndReportsBothFlips()
     {
-        var result = GridObjectDragPlanner.CalculateDragRect(
+        var result = GridObjectDragPlanner.CalculateDragTransform(
             ObjectDragKind.ResizeNW, Start, new Point(100, 100), new Point(900, 900), minimumSize: 8);
 
-        result.Width.Should().Be(8);
-        result.Height.Should().Be(8);
-        result.Right.Should().Be(Start.Right);
-        result.Bottom.Should().Be(Start.Bottom);
+        result.Rect.Should().Be(new Rect(300, 200, 600, 700));
+        result.CrossedHorizontally.Should().BeTrue();
+        result.CrossedVertically.Should().BeTrue();
     }
 
     [Fact]
-    public void CalculateDragRect_ResizeSE_ClampsBothAxesWithoutInverting()
+    public void CalculateDragTransform_ResizeSE_CrossesBothAxesForFreeLineEndpointMovement()
     {
-        var result = GridObjectDragPlanner.CalculateDragRect(
+        var result = GridObjectDragPlanner.CalculateDragTransform(
             ObjectDragKind.ResizeSE, Start, new Point(300, 200), new Point(0, 0), minimumSize: 8);
 
-        result.Width.Should().Be(8);
-        result.Height.Should().Be(8);
-        result.Left.Should().Be(Start.Left);
-        result.Top.Should().Be(Start.Top);
+        result.Rect.Should().Be(new Rect(0, 0, 100, 100));
+        result.CrossedHorizontally.Should().BeTrue();
+        result.CrossedVertically.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CalculateDragTransform_CrossedHandleMaintainsMinimumSizeAroundFixedEdge()
+    {
+        var result = GridObjectDragPlanner.CalculateDragTransform(
+            ObjectDragKind.ResizeE, Start, new Point(300, 150), new Point(95, 150), minimumSize: 8);
+
+        result.Rect.Should().Be(new Rect(92, 100, 8, 100));
+        result.CrossedHorizontally.Should().BeTrue();
     }
 
     [Fact]
