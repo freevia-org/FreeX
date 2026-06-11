@@ -14,6 +14,32 @@ public sealed record PageBreakInput(PageBreakInputKind Kind, uint? Row = null, u
 
 public static class PageLayoutInputParser
 {
+    public static IReadOnlyList<string> ScalePageCountOptions { get; } =
+    [
+        "Automatic",
+        "1 page",
+        "2 pages",
+        "3 pages",
+        "4 pages",
+        "5 pages",
+        "10 pages"
+    ];
+
+    public static IReadOnlyList<string> ScalePercentOptions { get; } =
+    [
+        "Automatic",
+        "10%",
+        "25%",
+        "50%",
+        "75%",
+        "90%",
+        "100%",
+        "125%",
+        "150%",
+        "200%",
+        "400%"
+    ];
+
     public static bool TryParseBreakInput(string input, string keyword, out uint value)
     {
         value = 0;
@@ -147,6 +173,58 @@ public static class PageLayoutInputParser
             ? scaleToFit.ScalePercent.Value.ToString(CultureInfo.InvariantCulture)
             : $"{scaleToFit.FitToPagesWide ?? 1}x{scaleToFit.FitToPagesTall ?? 1}";
 
+    public static string FormatScalePages(int? pages) =>
+        pages switch
+        {
+            null => "Automatic",
+            1 => "1 page",
+            _ => $"{pages.Value.ToString(CultureInfo.InvariantCulture)} pages"
+        };
+
+    public static string FormatScalePercent(int? percent) =>
+        percent is { } value
+            ? $"{value.ToString(CultureInfo.InvariantCulture)}%"
+            : "Automatic";
+
+    public static bool TryParseScalePages(string input, out int? pages)
+    {
+        pages = null;
+        var trimmed = input.Trim();
+        if (IsAutomaticInput(trimmed))
+            return true;
+
+        if (trimmed.EndsWith("pages", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[..^5].TrimEnd();
+        else if (trimmed.EndsWith("page", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[..^4].TrimEnd();
+
+        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) &&
+            parsed > 0)
+        {
+            pages = parsed;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool TryParseScalePercent(string input, out int? percent)
+    {
+        percent = null;
+        var trimmed = input.Trim();
+        if (IsAutomaticInput(trimmed))
+            return true;
+
+        if (int.TryParse(TrimPercentSuffix(trimmed), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) &&
+            parsed is >= 10 and <= 400)
+        {
+            percent = parsed;
+            return true;
+        }
+
+        return false;
+    }
+
     public static bool TryParseScaleToFit(string input, out WorksheetScaleToFit scaleToFit)
     {
         var trimmed = input.Trim();
@@ -233,6 +311,10 @@ public static class PageLayoutInputParser
     private static bool IsAutoInput(string normalized) =>
         normalized.Length == 0 ||
         normalized.Equals("auto", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAutomaticInput(string normalized) =>
+        IsAutoInput(normalized) ||
+        normalized.Equals("automatic", StringComparison.OrdinalIgnoreCase);
 
     public static bool IsValidRowBreak(uint row) =>
         row is > 1 and <= CellAddress.MaxRow;

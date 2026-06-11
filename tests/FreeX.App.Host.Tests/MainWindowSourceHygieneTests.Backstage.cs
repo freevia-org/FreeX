@@ -469,6 +469,8 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.Should().Contain("x:Name=\"SsPrintNavBtn\"");
         xaml.Should().Contain("Click=\"SsPrintNavBtn_Click\"");
         xaml.Should().Contain("x:Name=\"SsPrintPreviewButton\"");
+        xaml.ShouldContainLocalizedAttribute("Content", "Print Preview");
+        xaml.ShouldContainLocalizedAttribute("AutomationProperties.Name", "Print Preview");
         xaml.Should().Contain("Click=\"PrintButton_Click\"");
         xaml.ShouldContainLocalizedAttribute("local:RibbonTooltip.Description", "Open the print preview and native print dialog for the rendered worksheet.");
     }
@@ -481,7 +483,8 @@ public sealed partial class MainWindowSourceHygieneTests
             string.Empty,
             "PrintPreviewDialog.cs",
             "PrintPreviewDialog.Helpers.cs",
-            "PrintPreviewDialog.Layout.cs");
+            "PrintPreviewDialog.Layout.cs",
+            "NativePrintDialogService.cs");
 
         printSource.Should().Contain("var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);");
         printSource.Should().Contain("PrintSettingsPlanner.Build(sheet)");
@@ -489,6 +492,7 @@ public sealed partial class MainWindowSourceHygieneTests
         printSource.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
         previewSource.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");
         previewSource.Should().Contain("ShowNativePrintDialog");
+        previewSource.Should().Contain("Forms.PrintDialog");
         previewSource.Should().Contain("PrintDocument(paginator");
     }
 }
