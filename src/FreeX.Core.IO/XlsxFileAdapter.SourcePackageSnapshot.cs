@@ -849,6 +849,35 @@ public sealed partial class XlsxFileAdapter
                 currentPatchValidationModelFingerprint ?? CreatePatchValidationModelFingerprint(workbook);
             var invalidatesCalcChain = ChangesInvalidateCalcChain(changes);
 
+            // Pre-flight: reject any worksheet that contains r-less <row> elements.  Streaming
+            // writers may omit the r attribute on rows (position implied by document order).
+            // Patch-save cannot reliably match or insert into such rows, and would produce a
+            // duplicate-row document if it tried.  Check the ORIGINAL source bytes here, before
+            // any normalizer has had a chance to modify the in-memory copy, so the guard runs on
+            // exactly the bytes that were stored when the workbook was loaded.
+            var worksheetPathsWithChanges = changes
+                .Select(c => c.WorksheetPath)
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+            using (var sourceReadPackage = new MemoryStream(Buffer, Offset, Count, writable: false))
+            using (var sourceReadArchive = new ZipArchive(sourceReadPackage, ZipArchiveMode.Read))
+            {
+                foreach (var wPath in worksheetPathsWithChanges)
+                {
+                    var wEntry = sourceReadArchive.GetEntry(wPath);
+                    if (wEntry is null)
+                        continue;
+                    var wXml = XlsxPackageXmlEditor.LoadXml(wEntry);
+                    var wRoot = wXml.Root;
+                    if (wRoot is null)
+                        continue;
+                    var wNs = wRoot.Name.Namespace;
+                    var wSheetData = wRoot.Element(wNs + "sheetData");
+                    if (wSheetData is not null &&
+                        wSheetData.Elements(wNs + "row").Any(row => row.Attribute("r") is null))
+                        return Fail("patch_rless_rows", out diagnostics, invalidatesCalcChain);
+                }
+            }
+
             using var patchedPackage = new MemoryStream(Count + 4096);
             patchedPackage.Write(Buffer, Offset, Count);
             using (var archive = new ZipArchive(patchedPackage, ZipArchiveMode.Update, leaveOpen: true))
@@ -5437,6 +5466,13 @@ public sealed partial class XlsxFileAdapter
             if (sheetData is null)
                 return false;
 
+            // Streaming writers may omit the optional r attribute on <row> elements (position is
+            // implied by document order).  Patch-save cannot reliably identify such rows by number,
+            // and inserting a <row r="N"> alongside an r-less row would create two logical rows for
+            // the same position.  Bail out to the full-save fallback for this sheet.
+            if (SheetDataHasRLessRows(sheetData, worksheetNs))
+                return false;
+
             foreach (var change in changes)
             {
                 var cell = FindCell(sheetData, worksheetNs, change.Row, change.Col);
@@ -6918,6 +6954,24 @@ public sealed partial class XlsxFileAdapter
 
             sourceStyleIndex = parsed.ToString(CultureInfo.InvariantCulture);
             return true;
+        }
+
+        /// <summary>
+        /// Returns true when any <c>&lt;row&gt;</c> element in <paramref name="sheetData"/> omits the
+        /// optional <c>r</c> attribute.  Such r-less rows are schema-valid; their position is implied by
+        /// document order.  Patch-save cannot reliably match or insert into them, so callers should fall
+        /// back to a full ClosedXML save when this returns true.
+        /// </summary>
+        private static bool SheetDataHasRLessRows(XElement sheetData, XNamespace worksheetNs)
+        {
+            var rowName = worksheetNs + "row";
+            foreach (var rowElement in sheetData.Elements(rowName))
+            {
+                if (rowElement.Attribute("r") is null)
+                    return true;
+            }
+
+            return false;
         }
 
         private static XElement? FindCell(XElement sheetData, XNamespace worksheetNs, uint row, uint col)

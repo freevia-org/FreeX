@@ -8,7 +8,13 @@ internal static class XlsxPackageXmlEditor
 {
     public static void ReplaceXml(ZipArchive archive, string entryName, XDocument document)
     {
-        archive.GetEntry(entryName)?.Delete();
+        // Defense in depth: a crafted package may contain multiple entries with the same name
+        // (ZipArchive tolerates duplicates; GetEntry returns only the first).  Delete all of them
+        // before creating the authoritative replacement so no stale duplicate can be read back.
+        ZipArchiveEntry? existing;
+        while ((existing = archive.GetEntry(entryName)) is not null)
+            existing.Delete();
+
         var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
         using var stream = entry.Open();
         document.Save(stream, SaveOptions.DisableFormatting);

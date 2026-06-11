@@ -15,6 +15,18 @@ public sealed class WorkbookTooLargeException : Exception
 }
 
 /// <summary>
+/// Raised when a workbook is rejected before loading because the package is structurally
+/// invalid in a way that indicates a malformed or malicious file (e.g. duplicate zip entries
+/// that could be used to defeat sanitizers).
+/// </summary>
+public sealed class WorkbookInvalidException : Exception
+{
+    public WorkbookInvalidException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
 /// Pre-open safety limits that protect against accidental or malicious oversized
 /// workbooks (large files and "zip bomb" packages that declare an enormous
 /// decompressed size from a tiny archive). The checks inspect declared sizes only
@@ -82,9 +94,20 @@ public static class WorkbookOpenSizeGuard
     {
         long totalUncompressed = 0;
         long totalCompressed = 0;
+        HashSet<string>? seenNames = null;
 
         foreach (var entry in archive.Entries)
         {
+            // OPC part names are case-insensitive; a crafted package with duplicate entry names
+            // can keep a stale copy that survives GetEntry(name)?.Delete() (which only removes
+            // the first match), silently defeating every sanitizer that follows.  Reject early.
+            seenNames ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!seenNames.Add(entry.FullName))
+            {
+                throw new WorkbookInvalidException(
+                    $"The package contains duplicate zip entry names ('{entry.FullName}'), which is characteristic of a malformed or malicious package.");
+            }
+
             totalUncompressed += entry.Length;
             totalCompressed += entry.CompressedLength;
 

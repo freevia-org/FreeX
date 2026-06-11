@@ -10,7 +10,7 @@ internal static class XlsxWorksheetXmlValueParser
         if (string.IsNullOrWhiteSpace(value))
             return null;
 
-        if (uint.TryParse(value, out var integer))
+        if (uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer))
             return integer;
 
         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var floating) &&
