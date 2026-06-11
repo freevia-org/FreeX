@@ -1,17 +1,20 @@
 using System.Drawing.Printing;
 using System.Printing;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Interop;
 using Forms = System.Windows.Forms;
 
 namespace FreeX.App.Host;
 
 internal static class NativePrintDialogService
 {
-    public static void ShowPrinterOptionsDialog()
+    public static void ShowPrinterOptionsDialog(Window? owner = null)
     {
-        using var dialog = CreatePrinterSelectionDialog(null, copies: 1, collated: true, PrintPreviewSidesMode.OneSided);
-        dialog.ShowDialog();
+        using var document = CreatePrinterSelectionDocument(null, copies: 1, collated: true, PrintPreviewSidesMode.OneSided);
+        using var dialog = CreatePrinterSelectionDialog(document);
+        ShowDialog(dialog, owner);
     }
 
     public static void ShowPrintDialogAndPrint(
@@ -19,10 +22,12 @@ internal static class NativePrintDialogService
         PrintQueue? printQueue,
         int copies,
         bool collated,
-        PrintPreviewSidesMode sidesMode)
+        PrintPreviewSidesMode sidesMode,
+        Window? owner = null)
     {
-        using var dialog = CreatePrinterSelectionDialog(printQueue, copies, collated, sidesMode);
-        if (dialog.ShowDialog() != Forms.DialogResult.OK)
+        using var document = CreatePrinterSelectionDocument(printQueue, copies, collated, sidesMode);
+        using var dialog = CreatePrinterSelectionDialog(document);
+        if (ShowDialog(dialog, owner) != Forms.DialogResult.OK)
             return;
 
         var selectedQueue = ResolvePrintQueue(dialog.PrinterSettings.PrinterName) ?? printQueue;
@@ -42,7 +47,7 @@ internal static class NativePrintDialogService
         documentPrinter.PrintDocument(paginator, "FreeX worksheet");
     }
 
-    private static Forms.PrintDialog CreatePrinterSelectionDialog(
+    private static PrintDocument CreatePrinterSelectionDocument(
         PrintQueue? printQueue,
         int copies,
         bool collated,
@@ -57,15 +62,25 @@ internal static class NativePrintDialogService
         if (printQueue is not null)
             settings.PrinterName = printQueue.FullName;
 
+        return new PrintDocument
+        {
+            DocumentName = "FreeX worksheet",
+            PrinterSettings = settings
+        };
+    }
+
+    private static Forms.PrintDialog CreatePrinterSelectionDialog(PrintDocument document)
+    {
         return new Forms.PrintDialog
         {
             AllowCurrentPage = false,
             AllowPrintToFile = true,
             AllowSelection = false,
             AllowSomePages = false,
-            PrinterSettings = settings,
+            Document = document,
+            PrinterSettings = document.PrinterSettings,
             ShowNetwork = true,
-            UseEXDialog = true
+            UseEXDialog = false
         };
     }
 
@@ -108,4 +123,17 @@ internal static class NativePrintDialogService
             Duplex.Simplex => Duplexing.OneSided,
             _ => PrintPreviewDialog.ResolvePrintTicketDuplexing(fallbackMode)
         };
+
+    private static Forms.DialogResult ShowDialog(Forms.PrintDialog dialog, Window? owner)
+    {
+        var handle = owner is null ? IntPtr.Zero : new WindowInteropHelper(owner).Handle;
+        return handle == IntPtr.Zero
+            ? dialog.ShowDialog()
+            : dialog.ShowDialog(new WindowHandleOwner(handle));
+    }
+
+    private sealed class WindowHandleOwner(IntPtr handle) : Forms.IWin32Window
+    {
+        public IntPtr Handle { get; } = handle;
+    }
 }

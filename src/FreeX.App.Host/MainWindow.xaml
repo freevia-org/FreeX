@@ -5627,7 +5627,7 @@
                                     Margin="0,0,0,10"
                                     Click="PrintButton_Click"
                                     AutomationProperties.AutomationId="BackstagePrintPreviewButton"
-                                    AutomationProperties.Name="{local:Loc Key=PrintPreview_PrintAutomationName}"
+                                    AutomationProperties.Name="{local:Loc Key=PageSetup_PrintPreviewAutomationName}"
                                     AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenPrintPreviewWithWorksheetSettingsAndNativePrintAccess}"
                                     local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Print}"
                                     local:RibbonTooltip.KeyTip="V"

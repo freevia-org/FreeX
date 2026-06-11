@@ -592,7 +592,7 @@ public partial class MainWindow
 
     private void ShowPageSetupPrinterOptions()
     {
-        NativePrintDialogService.ShowPrinterOptionsDialog();
+        NativePrintDialogService.ShowPrinterOptionsDialog(this);
     }
 
     private void PrintGridlinesChk_Click(object sender, RoutedEventArgs e)

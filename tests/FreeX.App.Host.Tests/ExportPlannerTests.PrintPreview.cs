@@ -321,6 +321,9 @@ public partial class ExportPlannerTests
         source.Should().Contain("documentPrinter.PrintTicket.CopyCount = Math.Clamp((int)dialog.PrinterSettings.Copies, 1, 999)");
         source.Should().Contain("documentPrinter.PrintTicket.Collation = dialog.PrinterSettings.Collate");
         source.Should().Contain("documentPrinter.PrintTicket.Duplexing = ResolveDuplexing(dialog.PrinterSettings.Duplex, sidesMode)");
+        source.Should().Contain("using var document = CreatePrinterSelectionDocument(printQueue, copies, collated, sidesMode)");
+        source.Should().Contain("Document = document");
+        source.Should().Contain("UseEXDialog = false");
         source.Should().Contain("ResolveSelectedSidesMode(sidesBox)");
         source.Should().Contain("collatedBox.IsChecked == true");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"PrintPreview_InvalidCopiesMessage\"), Title);");

@@ -470,6 +470,7 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.Should().Contain("Click=\"SsPrintNavBtn_Click\"");
         xaml.Should().Contain("x:Name=\"SsPrintPreviewButton\"");
         xaml.ShouldContainLocalizedAttribute("Content", "Print Preview");
+        xaml.ShouldContainLocalizedAttribute("AutomationProperties.Name", "Print Preview");
         xaml.Should().Contain("Click=\"PrintButton_Click\"");
         xaml.ShouldContainLocalizedAttribute("local:RibbonTooltip.Description", "Open the print preview and native print dialog for the rendered worksheet.");
     }

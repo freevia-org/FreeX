@@ -94,13 +94,13 @@ public sealed partial class PrintPreviewDialog
         Keyboard.Focus(target);
     }
 
-    private static void ShowNativePrintDialog(
+    private void ShowNativePrintDialog(
         DocumentPaginator paginator,
         PrintQueue? printQueue,
         int copies,
         bool collated,
         PrintPreviewSidesMode sidesMode) =>
-        NativePrintDialogService.ShowPrintDialogAndPrint(paginator, printQueue, copies, collated, sidesMode);
+        NativePrintDialogService.ShowPrintDialogAndPrint(paginator, printQueue, copies, collated, sidesMode, this);
 
     private static void PopulatePrinterBox(ComboBox printerBox)
     {
