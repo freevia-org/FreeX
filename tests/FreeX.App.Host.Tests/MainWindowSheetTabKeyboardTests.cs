@@ -644,7 +644,7 @@ public sealed class MainWindowSheetTabKeyboardTests
             addSheet.IsKeyboardFocusWithin;
 
         public string? SheetTabAutomationName(string name) =>
-            AutomationProperties.GetName(SheetTabTarget(name));
+            AutomationProperties.GetName(SheetTabNameText(name) ?? SheetTabTarget(name));
 
         public bool SheetTabLockIsVisible(string name) =>
             SheetTabLockIcon(name)?.Visibility == Visibility.Visible;
@@ -857,6 +857,11 @@ public sealed class MainWindowSheetTabKeyboardTests
             WpfTestTree.FindVisualDescendants<FrameworkElement>(SheetTabTarget(name))
                 .Concat(WpfTestTree.FindLogicalDescendants<FrameworkElement>(SheetTabTarget(name)))
                 .FirstOrDefault(element => string.Equals(element.Name, "ProtectedSheetLockIcon", StringComparison.Ordinal));
+
+        private FrameworkElement? SheetTabNameText(string name) =>
+            WpfTestTree.FindVisualDescendants<FrameworkElement>(SheetTabTarget(name))
+                .Concat(WpfTestTree.FindLogicalDescendants<FrameworkElement>(SheetTabTarget(name)))
+                .FirstOrDefault(element => string.Equals(element.Name, "SheetTabNameText", StringComparison.Ordinal));
 
         private Workbook CurrentWorkbook =>
             (Workbook)(_workbookField.GetValue(_window)

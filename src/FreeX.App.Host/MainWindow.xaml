@@ -4644,7 +4644,11 @@
                                                                       Fill="{StaticResource FreeXAccentDarkBrush}"/>
                                                             </Grid>
                                                         </Viewbox>
-                                                        <TextBlock Text="{Binding Name}" FontSize="13" FontFamily="Segoe UI">
+                                                        <TextBlock x:Name="SheetTabNameText"
+                                                                   Text="{Binding Name}"
+                                                                   FontSize="13"
+                                                                   FontFamily="Segoe UI"
+                                                                   AutomationProperties.Name="{Binding AutomationName}">
                                                             <TextBlock.Style>
                                                                 <Style TargetType="TextBlock">
                                                                     <Setter Property="FontWeight" Value="SemiBold"/>
