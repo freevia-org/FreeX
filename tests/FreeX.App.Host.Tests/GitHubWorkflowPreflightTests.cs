@@ -26,8 +26,11 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("actions/setup-dotnet@v5");
         workflow.Should().Contain("dotnet-version: 10.0.x");
         workflow.Should().Contain("powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1");
+        workflow.Should().Contain("concurrency:");
+        workflow.Should().Contain("group: ci-${{ github.ref }}");
+        workflow.Should().Contain("cancel-in-progress: true");
         workflow.Should().Contain("name: Default test lane");
-        workflow.Should().Contain("dotnet build FreeX.DefaultTests.slnx --configuration Release");
+        workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release");
         workflow.Should().Contain("dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build");
         workflow.Should().Contain("name: UI test lane");
         workflow.Should().Contain("dotnet build FreeX.UiTests.slnx --configuration Release");
