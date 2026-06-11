@@ -59,4 +59,25 @@ public partial class InsertDeleteColumnsTests
         result.Success.Should().BeFalse();
         result.ErrorMessage.Should().Contain("pushed past the last column");
     }
+
+    [Fact]
+    public void DeleteColumn_ShrinksMergeToSingleCell_DropsIt()
+    {
+        // E1:F1 (2-column single-row merge) minus column F → would become E1:E1 — must be dropped.
+        var (_, sheet, ctx) = Setup();
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 1, 5),
+            new CellAddress(sheet.Id, 1, 6)));
+
+        var cmd = new DeleteColumnsCommand(sheet.Id, startCol: 6, count: 1);
+        cmd.Apply(ctx);
+
+        sheet.MergedRegions.Should().BeEmpty("a 1×1 merge is invalid and must be dropped");
+
+        cmd.Revert(ctx);
+
+        sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(
+            new GridRange(new CellAddress(sheet.Id, 1, 5), new CellAddress(sheet.Id, 1, 6)),
+            "undo should restore the original 2-column merge");
+    }
 }

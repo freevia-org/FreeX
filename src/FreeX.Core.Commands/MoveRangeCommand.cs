@@ -16,6 +16,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
+    private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
+    private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
 
     public string Label => "Move Cells";
 
@@ -90,6 +92,9 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         _hyperlinkMetadataSnapshot = CaptureDictionary(sheet.HyperlinkMetadata, affected);
         _payloadAffectedCells = affected;
 
+        (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
+        TranslateFullyContainedRules(sheet, _sourceRange, _destination);
+
         _formulaSnapshot = [];
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook,
@@ -124,6 +129,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot, _payloadAffectedCells);
         RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot, _payloadAffectedCells);
         RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot, _payloadAffectedCells);
+        // Restore DV/CF rule ranges that were translated during the move.
+        RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
     }
 
     private static IReadOnlyList<CellAddress> CreateAffectedCellList(GridRange sourceRange, GridRange targetRange)
@@ -320,6 +327,66 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
 
     private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
         comment with { Replies = comment.Replies.Select(reply => reply with { }).ToList() };
+
+    /// <summary>
+    /// Translates DV and CF rule ranges that are fully contained within <paramref name="sourceRange"/>
+    /// by the move offset.  Rules that only partially overlap are left unchanged (documented limitation:
+    /// full split would match Excel behaviour but is deferred; see tests).
+    /// </summary>
+    private static void TranslateFullyContainedRules(Sheet sheet, GridRange sourceRange, CellAddress destination)
+    {
+        var rowDelta = (long)destination.Row - sourceRange.Start.Row;
+        var colDelta = (long)destination.Col - sourceRange.Start.Col;
+
+        if (rowDelta == 0 && colDelta == 0)
+            return;
+
+        bool dvChanged = false;
+        foreach (var rule in sheet.DataValidations)
+        {
+            if (IsFullyContained(rule.AppliesTo, sourceRange))
+            {
+                rule.AppliesTo = TranslateRange(rule.AppliesTo, rowDelta, colDelta);
+                dvChanged = true;
+            }
+
+            for (var i = 0; i < rule.AdditionalRanges.Count; i++)
+            {
+                if (IsFullyContained(rule.AdditionalRanges[i], sourceRange))
+                {
+                    rule.AdditionalRanges[i] = TranslateRange(rule.AdditionalRanges[i], rowDelta, colDelta);
+                    dvChanged = true;
+                }
+            }
+        }
+
+        if (dvChanged)
+            sheet.DataValidations.NotifyRulesChanged();
+
+        bool cfChanged = false;
+        foreach (var rule in sheet.ConditionalFormats)
+        {
+            if (IsFullyContained(rule.AppliesTo, sourceRange))
+            {
+                rule.AppliesTo = TranslateRange(rule.AppliesTo, rowDelta, colDelta);
+                cfChanged = true;
+            }
+        }
+
+        if (cfChanged)
+            sheet.ConditionalFormats.NotifyRulesChanged();
+    }
+
+    private static bool IsFullyContained(GridRange candidate, GridRange container) =>
+        candidate.Start.Row >= container.Start.Row &&
+        candidate.Start.Col >= container.Start.Col &&
+        candidate.End.Row   <= container.End.Row   &&
+        candidate.End.Col   <= container.End.Col;
+
+    private static GridRange TranslateRange(GridRange range, long rowDelta, long colDelta) =>
+        new GridRange(
+            new CellAddress(range.Start.Sheet, (uint)(range.Start.Row + rowDelta), (uint)(range.Start.Col + colDelta)),
+            new CellAddress(range.End.Sheet,   (uint)(range.End.Row   + rowDelta), (uint)(range.End.Col   + colDelta)));
 
     private static int GetSafeListCapacity(long cellCount) =>
         cellCount is > 0 and <= 1_000_000 ? (int)cellCount : 0;

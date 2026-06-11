@@ -101,4 +101,25 @@ public partial class InsertDeleteRowsTests
         sheet.MergedRegions.Should().BeEmpty();
     }
 
+    [Fact]
+    public void DeleteRow_ShrinksMergeToSingleCell_DropsIt()
+    {
+        // A5:A6 (2-row single-column merge) minus row 6 → would become A5:A5 — must be dropped.
+        var (_, sheet, ctx) = Setup();
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 5, 1),
+            new CellAddress(sheet.Id, 6, 1)));
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 6, count: 1);
+        cmd.Apply(ctx);
+
+        sheet.MergedRegions.Should().BeEmpty("a 1×1 merge is invalid and must be dropped");
+
+        cmd.Revert(ctx);
+
+        sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(
+            new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 6, 1)),
+            "undo should restore the original 2-row merge");
+    }
+
 }

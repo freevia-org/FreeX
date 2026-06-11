@@ -73,7 +73,8 @@ internal static partial class RowColumnShiftHelpers
             ? region.End.Col - count
             : startCol > 1 ? startCol - 1 : 0;
 
-        if (newEnd > 0 && newEnd >= newStart)
+        // Keep only if it still spans ≥2 columns (width > 1); a 1×1 merge is invalid per Excel.
+        if (newEnd > 0 && newEnd > newStart)
         {
             adjusted = new GridRange(
                 new CellAddress(region.Start.Sheet, region.Start.Row, newStart),

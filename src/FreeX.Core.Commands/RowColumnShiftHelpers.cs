@@ -10,7 +10,8 @@ internal static partial class RowColumnShiftHelpers
             return range;
 
         var newStartRow = range.Start.Row >= start ? range.Start.Row + count : range.Start.Row;
-        var newEndRow = range.End.Row + count;
+        // Clamp to MaxRow so that full-column ranges (End.Row == MaxRow) remain valid after insert.
+        var newEndRow = Math.Min(range.End.Row + count, CellAddress.MaxRow);
         return new GridRange(
             new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
             new CellAddress(range.End.Sheet, newEndRow, range.End.Col));
@@ -46,7 +47,8 @@ internal static partial class RowColumnShiftHelpers
             return range;
 
         var newStartCol = range.Start.Col >= start ? range.Start.Col + count : range.Start.Col;
-        var newEndCol = range.End.Col + count;
+        // Clamp to MaxCol so that full-row ranges (End.Col == MaxCol) remain valid after insert.
+        var newEndCol = Math.Min(range.End.Col + count, CellAddress.MaxCol);
         return new GridRange(
             new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
             new CellAddress(range.End.Sheet, range.End.Row, newEndCol));
