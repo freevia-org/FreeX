@@ -659,7 +659,14 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             if (dialog.ClassName.Equals("NUIDialog", StringComparison.OrdinalIgnoreCase))
             {
-                return CaptureResult.Blocked("excel-save-as-dialog", "nuidialog-not-capturable", "Detected an Office NUIDialog after F12, but it is not a capturable native Save As file dialog in this Office state.", options.OutputRoot, "excel", guard);
+                var commonDialog = TryContinueExcelNuiSaveAsToCommonDialog(hwnd, pid.Value, dialog);
+                if (commonDialog is null)
+                {
+                    return CaptureResult.Blocked("excel-save-as-dialog", "nuidialog-common-save-as-continuation-not-found", "Detected an Office NUIDialog after F12, but could not continue it to a capturable native '#32770' Save As file dialog in this Office state.", options.OutputRoot, "excel", guard);
+                }
+
+                Thread.Sleep(options.AfterDialogDetectedDelay);
+                return CaptureWindow("excel-save-as-dialog", "excel", commonDialog, guard, "complete", "Continued the Office NUIDialog Save As surface to the native common '#32770' Save As dialog.");
             }
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
@@ -669,6 +676,118 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         {
             CloseExcel(excel, workbook);
             KillProcess(pid);
+        }
+    }
+
+    private WindowInfo? TryContinueExcelNuiSaveAsToCommonDialog(IntPtr excelHwnd, int processId, WindowInfo nuiDialog)
+    {
+        var nuiHandle = new IntPtr(nuiDialog.Handle);
+        var guard = ForegroundGuard.FocusAndVerify(nuiHandle, processId, "Save", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return null;
+        }
+
+        foreach (var action in FindExcelNuiSaveAsContinuationElements(nuiHandle))
+        {
+            if (!TryInvokeOrClickAutomationElement(action))
+            {
+                continue;
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+            var commonDialog = WindowFinder.FindProcessWindow(
+                processId,
+                candidate => candidate.Handle != excelHwnd.ToInt64() &&
+                    candidate.Handle != nuiDialog.Handle &&
+                    candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Bounds.Width > 400 &&
+                    candidate.Bounds.Height > 250,
+                TimeSpan.FromMilliseconds(Math.Max(1200, options.PopupTimeout.TotalMilliseconds / 2.0)));
+            commonDialog ??= WindowFinder.FindForegroundWindow(
+                candidate => candidate.ProcessId == processId &&
+                    candidate.Handle != excelHwnd.ToInt64() &&
+                    candidate.Handle != nuiDialog.Handle &&
+                    candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Bounds.Width > 400 &&
+                    candidate.Bounds.Height > 250,
+                TimeSpan.FromMilliseconds(1200));
+            if (commonDialog is not null)
+            {
+                return commonDialog;
+            }
+
+            guard = ForegroundGuard.FocusAndVerify(nuiHandle, processId, "Save", TimeSpan.FromMilliseconds(1200));
+            if (!guard.Success)
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<AutomationElement> FindExcelNuiSaveAsContinuationElements(IntPtr nuiHandle)
+    {
+        static int Rank(string name)
+        {
+            if (name.Equals("Browse", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("Browse...", StringComparison.OrdinalIgnoreCase))
+            {
+                return 0;
+            }
+
+            if (name.Contains("Browse", StringComparison.OrdinalIgnoreCase))
+            {
+                return 1;
+            }
+
+            if (name.Contains("More options", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("More Options", StringComparison.OrdinalIgnoreCase))
+            {
+                return 2;
+            }
+
+            if (name.Contains("Save As", StringComparison.OrdinalIgnoreCase))
+            {
+                return 3;
+            }
+
+            if (name.Contains("This PC", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Computer", StringComparison.OrdinalIgnoreCase))
+            {
+                return 4;
+            }
+
+            return 100;
+        }
+
+        try
+        {
+            var root = AutomationElement.FromHandle(nuiHandle);
+            var controlTypes = new[] { ControlType.Button, ControlType.Hyperlink, ControlType.MenuItem, ControlType.ListItem };
+            return controlTypes
+                .SelectMany(controlType => root.FindAll(
+                        TreeScope.Descendants,
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, controlType))
+                    .Cast<AutomationElement>())
+                .Where(IsVisibleElement)
+                .Select(element => new { Element = element, Name = GetElementName(element) })
+                .Where(candidate => Rank(candidate.Name) < 100)
+                .OrderBy(candidate => Rank(candidate.Name))
+                .ThenByDescending(candidate => GetElementArea(candidate.Element))
+                .Select(candidate => candidate.Element)
+                .ToArray();
+        }
+        catch (COMException)
+        {
+            return [];
+        }
+        catch (ElementNotAvailableException)
+        {
+            return [];
         }
     }
 
@@ -1330,16 +1449,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             TypeDialogPath(dialog.Handle, xpsPath);
 
-            var optionsDialog = WindowFinder.FindProcessWindow(
-                process.Id,
-                candidate => candidate.Handle != dialog.Handle &&
-                    candidate.Title.Contains("PDF/XPS options", StringComparison.OrdinalIgnoreCase),
-                options.PopupTimeout);
-            optionsDialog ??= WindowFinder.FindForegroundWindow(
-                candidate => candidate.ProcessId == process.Id &&
-                    candidate.Handle != dialog.Handle &&
-                    candidate.Title.Contains("PDF/XPS options", StringComparison.OrdinalIgnoreCase),
-                TimeSpan.FromMilliseconds(1500));
+            var optionsDialog = FindFreeXExportOptionsDialog(process.Id, dialog.Handle, options.PopupTimeout);
             if (optionsDialog is null)
             {
                 return CaptureResult.Blocked("freex-export-xps-accept", "options-dialog-not-found", "Accepted an explicit .xps path but did not detect the PDF/XPS options dialog.", options.OutputRoot, "freex", guard);
@@ -1457,26 +1567,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked("freex-native-print-dialog", "print-button-not-found", "Print Preview opened, but the Print button automation target was not visible.", options.OutputRoot, "freex", guard);
             }
 
-            blocked = InvokeOrClickElement("freex-native-print-dialog", process.Id, new IntPtr(preview.Handle), printButton, "freex");
+            blocked = ClickPrintPreviewPrintButton("freex-native-print-dialog", process.Id, preview, printButton);
             if (blocked is not null)
             {
                 return blocked;
             }
 
-            var printDialog = WindowFinder.FindProcessWindow(
-                process.Id,
-                candidate => candidate.Handle != preview.Handle &&
-                    candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
-                    candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase),
-                options.PopupTimeout);
-            printDialog ??= WindowFinder.FindForegroundWindow(
-                candidate => candidate.Handle != preview.Handle &&
-                    candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
-                    (candidate.ProcessId == process.Id ||
-                     candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase)) &&
-                    candidate.Bounds.Width >= 300 &&
-                    candidate.Bounds.Height >= 200,
-                TimeSpan.FromMilliseconds(1200));
+            var printDialog = FindNativePrintDialog(process.Id, preview.Handle, options.PopupTimeout);
             if (printDialog is null)
             {
                 return CaptureResult.Blocked("freex-native-print-dialog", "native-print-dialog-not-found", "Clicked Print Preview's Print button but did not detect a native Windows Print dialog.", options.OutputRoot, "freex", guard);
@@ -1867,6 +1964,81 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         return null;
+    }
+
+    private static WindowInfo? FindFreeXExportOptionsDialog(int processId, long saveDialogHandle, TimeSpan timeout)
+    {
+        return WindowFinder.FindProcessWindow(
+            processId,
+            candidate => candidate.Handle != saveDialogHandle &&
+                candidate.Bounds.Width >= 300 &&
+                candidate.Bounds.Height >= 250 &&
+                (candidate.Title.Contains("Export Options", StringComparison.OrdinalIgnoreCase) ||
+                 candidate.Title.Contains("PDF/XPS options", StringComparison.OrdinalIgnoreCase) ||
+                 candidate.Title.Contains("PDF/XPS", StringComparison.OrdinalIgnoreCase) ||
+                 candidate.Title.Contains("Publish", StringComparison.OrdinalIgnoreCase)),
+            timeout);
+    }
+
+    private CaptureResult? ClickPrintPreviewPrintButton(string scenario, int processId, WindowInfo preview, AutomationElement printButton)
+    {
+        var bounds = printButton.Current.BoundingRectangle;
+        if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+        {
+            return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", $"Print Preview Print button bounds were not usable: {bounds}.", options.OutputRoot, "freex");
+        }
+
+        var previewHandle = new IntPtr(preview.Handle);
+        var guard = ForegroundGuard.FocusAndVerify(previewHandle, processId, "Print Preview", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return CaptureResult.Blocked(scenario, "foreground-guard-failed", "Foreground guard failed before clicking Print Preview's Print button.", options.OutputRoot, "freex", guard);
+        }
+
+        NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
+        Thread.Sleep(100);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(options.AfterInputDelay);
+        return null;
+    }
+
+    private static WindowInfo? FindNativePrintDialog(int processId, long previewHandle, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var foreground = WindowFinder.GetWindowInfo(NativeMethods.GetForegroundWindow());
+            if (IsNativePrintDialog(foreground, previewHandle, allowAnyProcess: true))
+            {
+                return foreground;
+            }
+
+            var processDialog = WindowFinder.FindProcessWindow(
+                processId,
+                candidate => IsNativePrintDialog(candidate, previewHandle, allowAnyProcess: false),
+                TimeSpan.FromMilliseconds(150));
+            if (processDialog is not null)
+            {
+                return processDialog;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return null;
+    }
+
+    private static bool IsNativePrintDialog(WindowInfo? candidate, long previewHandle, bool allowAnyProcess)
+    {
+        return candidate is not null &&
+            candidate.Handle != previewHandle &&
+            candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+            candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase) &&
+            candidate.Bounds.Width >= 300 &&
+            candidate.Bounds.Height >= 200 &&
+            (allowAnyProcess || candidate.ProcessId != 0);
     }
 
     private CaptureResult? InvokeFreeXBackstageButton(
@@ -2267,6 +2439,51 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             invokePatternObject is InvokePattern invoke)
         {
             invoke.Invoke();
+        }
+    }
+
+    private static bool TryInvokeOrClickAutomationElement(AutomationElement element)
+    {
+        try
+        {
+            if (element.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
+                invokePatternObject is InvokePattern invoke)
+            {
+                invoke.Invoke();
+                return true;
+            }
+
+            if (element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out var selectionPatternObject) &&
+                selectionPatternObject is SelectionItemPattern selection)
+            {
+                selection.Select();
+                return true;
+            }
+
+            var bounds = element.Current.BoundingRectangle;
+            if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+            {
+                return false;
+            }
+
+            NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
+            Thread.Sleep(100);
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(60);
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            return true;
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
         }
     }
 
@@ -4127,6 +4344,22 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             yield return textPattern.DocumentRange.GetText(256).TrimEnd('\r', '\n');
         }
 
+    }
+
+    private static string GetElementName(AutomationElement element)
+    {
+        try
+        {
+            return element.Current.Name ?? string.Empty;
+        }
+        catch (COMException)
+        {
+            return string.Empty;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return string.Empty;
+        }
     }
 
     private static int CenterX(System.Windows.Rect bounds) => (int)(bounds.Left + bounds.Width / 2.0);
