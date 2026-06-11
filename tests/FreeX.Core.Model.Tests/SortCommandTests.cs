@@ -415,6 +415,88 @@ public sealed class SortCommandTests
         sheet.GetValue(3, 1).Should().Be(new TextValue("Zebra"));
     }
 
+    [Fact]
+    public void SortCommand_HyperlinkRidesItsRow_AndUndoRestoresOriginalPosition()
+    {
+        // A hyperlink attached to row 2 col 1 must move to row 1 col 1 after sort asc,
+        // and return to row 2 col 1 after undo.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+
+        var r1c1 = new CellAddress(sheet.Id, 1, 1);
+        var r2c1 = new CellAddress(sheet.Id, 2, 1);
+
+        sheet.SetCell(r1c1, new NumberValue(2));
+        sheet.SetCell(r2c1, new NumberValue(1));
+
+        // Attach hyperlink to row 2 (value=1, will sort to row 1)
+        var meta = new HyperlinkMetadata(ScreenTip: "Go to example");
+        sheet.Hyperlinks[r2c1] = "https://example.com";
+        sheet.HyperlinkMetadata[r2c1] = meta;
+
+        var range = new GridRange(r1c1, r2c1);
+        var command = new SortCommand(sheet.Id, range, [new SortKey(0, true)]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        // After sort: value 1 (originally row 2) is now at row 1
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1));
+        // Hyperlink must have followed its cell to row 1
+        sheet.Hyperlinks.Should().ContainKey(r1c1).WhoseValue.Should().Be("https://example.com");
+        sheet.HyperlinkMetadata.Should().ContainKey(r1c1).WhoseValue.Should().Be(meta);
+        // Row 2 now holds value 2 with no hyperlink
+        sheet.Hyperlinks.Should().NotContainKey(r2c1);
+
+        command.Revert(ctx);
+
+        // After undo: hyperlink is back at its original row 2
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(1));
+        sheet.Hyperlinks.Should().ContainKey(r2c1).WhoseValue.Should().Be("https://example.com");
+        sheet.HyperlinkMetadata.Should().ContainKey(r2c1).WhoseValue.Should().Be(meta);
+        sheet.Hyperlinks.Should().NotContainKey(r1c1);
+    }
+
+    [Fact]
+    public void SortCommand_StyleOnlyRidesItsRow_AndUndoRestoresOriginalEntries()
+    {
+        // A blank cell with a style-only fill at row 2 must move with its row after sort,
+        // and the style-only entry must be restored at the original address after undo.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+
+        var r1c1 = new CellAddress(sheet.Id, 1, 1);
+        var r2c1 = new CellAddress(sheet.Id, 2, 1);
+        var r1c2 = new CellAddress(sheet.Id, 1, 2);
+        var r2c2 = new CellAddress(sheet.Id, 2, 2);
+
+        var yellowStyle = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 255, 0) });
+
+        // Row 1: value 2 in col 1, blank-but-styled in col 2
+        sheet.SetCell(r1c1, new NumberValue(2));
+        // Row 2: value 1 in col 1, blank-but-styled in col 2 (will sort before row 1)
+        sheet.SetCell(r2c1, new NumberValue(1));
+        sheet.SetStyleOnly(r2c2.Row, r2c2.Col, yellowStyle);
+
+        var range = new GridRange(r1c1, r2c2);
+        var command = new SortCommand(sheet.Id, range, [new SortKey(0, true)]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        // Row 2 (value=1) sorted to row 1 -- style-only must follow
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1));
+        sheet.GetCell(1, 2).Should().BeNull();                       // still blank
+        sheet.GetStyleOnly(1, 2).Should().Be(yellowStyle);           // style rode the row
+        sheet.GetStyleOnly(2, 2).Should().BeNull();                   // row 2 is now plain
+
+        command.Revert(ctx);
+
+        // Style-only must be back at its original address (row 2 col 2)
+        sheet.GetStyleOnly(2, 2).Should().Be(yellowStyle);
+        sheet.GetStyleOnly(1, 2).Should().BeNull();
+    }
+
     private static void SetStyledRow(Sheet sheet, uint row, string label, StyleId styleId)
     {
         var keyCell = Cell.FromValue(new TextValue(label));

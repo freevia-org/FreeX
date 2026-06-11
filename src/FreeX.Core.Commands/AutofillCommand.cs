@@ -12,7 +12,7 @@ public sealed class AutofillCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly GridRange _sourceRange;
     private readonly GridRange _fillRange;
-    private List<(CellAddress Addr, Cell? OldCell)>? _snapshot;
+    private List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
     public string Label => "Autofill";
 
@@ -42,14 +42,16 @@ public sealed class AutofillCommand : IWorkbookCommand
         var sourceCell = sheet.GetCell(sourceAddr);
         var scalarSeries = TryCreateScalarSeries(sheet, plan);
 
-        _snapshot = new List<(CellAddress Addr, Cell? OldCell)>(GetFillCellCapacity());
+        _snapshot = new List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>(GetFillCellCapacity());
 
         for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)
         {
             for (var col = _fillRange.Start.Col; col <= _fillRange.End.Col; col++)
             {
                 var addr = new CellAddress(_sheetId, row, col);
-                _snapshot.Add((addr, sheet.GetCell(addr)?.Clone()));
+                var oldCell = sheet.GetCell(addr);
+                var oldStyleOnly = oldCell is null ? sheet.GetStyleOnly(row, col) : null;
+                _snapshot.Add((addr, oldCell?.Clone(), oldStyleOnly));
 
                 if (sourceCell is null)
                 {
@@ -92,10 +94,20 @@ public sealed class AutofillCommand : IWorkbookCommand
     {
         if (_snapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (addr, oldCell) in _snapshot)
+        foreach (var (addr, oldCell, oldStyleOnly) in _snapshot)
         {
-            if (oldCell is null) sheet.ClearCell(addr);
-            else sheet.SetCell(addr, oldCell.Clone());
+            if (oldCell is null)
+            {
+                sheet.ClearCell(addr);
+                if (oldStyleOnly.HasValue)
+                    sheet.SetStyleOnly(addr.Row, addr.Col, oldStyleOnly.Value);
+                else
+                    sheet.ClearStyleOnly(addr.Row, addr.Col);
+            }
+            else
+            {
+                sheet.SetCell(addr, oldCell.Clone());
+            }
         }
     }
 

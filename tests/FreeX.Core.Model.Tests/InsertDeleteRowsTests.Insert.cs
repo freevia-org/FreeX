@@ -254,4 +254,36 @@ public partial class InsertDeleteRowsTests
         result.ErrorMessage.Should().Contain("pushed past the last row");
     }
 
+    [Fact]
+    public void InsertRowRevert_DataValidationLookupCacheIsRefreshedSoValidationAppliesToOriginalAddress()
+    {
+        // Regression: RestoreRuleRanges mutated rule.AppliesTo in-place without bumping
+        // DataValidationCollection.Version, so DataValidationLookupCache.RefreshIfNeeded kept
+        // the pre-undo index and GetApplicable returned nothing at the restored address.
+        var (_, sheet, ctx) = Setup();
+
+        var validatedAddr = new CellAddress(sheet.Id, 5, 1);
+        var rule = new DataValidation
+        {
+            AppliesTo = new GridRange(validatedAddr, validatedAddr),
+            Type = DvType.List,
+            Formula1 = "Yes,No"
+        };
+        sheet.DataValidations.Add(rule);
+
+        // Warm the lookup cache so a stale snapshot is definitely stored.
+        DataValidationService.GetApplicable(sheet, validatedAddr).Should().ContainSingle();
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        // After insert the rule applies to row 7, not row 5.
+        DataValidationService.GetApplicable(sheet, validatedAddr).Should().BeEmpty();
+
+        cmd.Revert(ctx);
+
+        // After undo, the lookup cache must see the restored range and return the rule.
+        DataValidationService.GetApplicable(sheet, validatedAddr).Should().ContainSingle();
+    }
+
 }

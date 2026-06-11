@@ -24,8 +24,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     private readonly IReadOnlyList<SortKey> _sortKeys;
     private readonly SortOptions _options;
 
-    // Snapshot for undo: list of rows, each row is a list of (address, cell?) pairs
-    private List<List<(CellAddress Address, Cell? Cell)>>? _snapshot;
+    // Snapshot for undo: list of rows, each row is a list of cell+style+hyperlink tuples
+    private List<List<(CellAddress Address, Cell? Cell, StyleId? StyleOnly, string? Hyperlink, HyperlinkMetadata? HyperlinkMetadata)>>? _snapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<uint, double>? _rowHeightSnapshot;
@@ -34,22 +34,28 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
     private sealed record SortPayloadCapture(
         SortCellPayload[][] Rows,
-        List<List<(CellAddress Address, Cell? Cell)>> CellSnapshot,
+        List<List<(CellAddress Address, Cell? Cell, StyleId? StyleOnly, string? Hyperlink, HyperlinkMetadata? HyperlinkMetadata)>> CellSnapshot,
         Dictionary<CellAddress, string> CommentSnapshot,
         Dictionary<CellAddress, ThreadedComment> ThreadedCommentSnapshot);
 
     private readonly struct SortCellPayload
     {
-        public SortCellPayload(Cell? cell, string? comment, ThreadedComment? threadedComment)
+        public SortCellPayload(Cell? cell, StyleId? styleOnly, string? comment, ThreadedComment? threadedComment, string? hyperlink, HyperlinkMetadata? hyperlinkMetadata)
         {
             Cell = cell;
+            StyleOnly = styleOnly;
             Comment = comment;
             ThreadedComment = threadedComment;
+            Hyperlink = hyperlink;
+            HyperlinkMetadata = hyperlinkMetadata;
         }
 
         public Cell? Cell { get; }
+        public StyleId? StyleOnly { get; }
         public string? Comment { get; }
         public ThreadedComment? ThreadedComment { get; }
+        public string? Hyperlink { get; }
+        public HyperlinkMetadata? HyperlinkMetadata { get; }
     }
 
     public string Label => _sortKeys.Count == 1
@@ -236,7 +242,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         int colCount)
     {
         var rows = new SortCellPayload[rowCount][];
-        var cellSnapshot = new List<List<(CellAddress, Cell?)>>(rowCount);
+        var cellSnapshot = new List<List<(CellAddress, Cell?, StyleId?, string?, HyperlinkMetadata?)>>(rowCount);
         var commentSnapshot = new Dictionary<CellAddress, string>();
         var threadedCommentSnapshot = new Dictionary<CellAddress, ThreadedComment>();
 
@@ -244,15 +250,15 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         {
             uint row = startRow + (uint)ri;
             var payloadRow = new SortCellPayload[colCount];
-            var snapRow = new List<(CellAddress, Cell?)>(colCount);
+            var snapRow = new List<(CellAddress, Cell?, StyleId?, string?, HyperlinkMetadata?)>(colCount);
 
             for (int ci = 0; ci < colCount; ci++)
             {
                 uint col = startCol + (uint)ci;
                 var addr = new CellAddress(sheetId, row, col);
-                var payload = CaptureCellPayload(sheet, addr, out var snapshotCell);
+                var payload = CaptureCellPayload(sheet, addr, out var snapshotCell, out var snapshotStyleOnly, out var snapshotHyperlink, out var snapshotHyperlinkMetadata);
                 payloadRow[ci] = payload;
-                snapRow.Add((addr, snapshotCell));
+                snapRow.Add((addr, snapshotCell, snapshotStyleOnly, snapshotHyperlink, snapshotHyperlinkMetadata));
                 if (payload.Comment is not null)
                     commentSnapshot[addr] = payload.Comment;
                 if (payload.ThreadedComment is not null)
@@ -292,15 +298,27 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         return snapshot;
     }
 
-    private static SortCellPayload CaptureCellPayload(Sheet sheet, CellAddress address, out Cell? snapshotCell)
+    private static SortCellPayload CaptureCellPayload(
+        Sheet sheet,
+        CellAddress address,
+        out Cell? snapshotCell,
+        out StyleId? snapshotStyleOnly,
+        out string? snapshotHyperlink,
+        out HyperlinkMetadata? snapshotHyperlinkMetadata)
     {
         var cell = sheet.GetCell(address);
         sheet.Comments.TryGetValue(address, out var comment);
         sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
+        sheet.Hyperlinks.TryGetValue(address, out var hyperlink);
+        sheet.HyperlinkMetadata.TryGetValue(address, out var hyperlinkMetadata);
+        var styleOnly = cell is null ? sheet.GetStyleOnly(address.Row, address.Col) : null;
 
         // The sortable payload and undo snapshot must not share mutable cell instances.
         snapshotCell = cell?.Clone();
-        return new SortCellPayload(cell?.Clone(), comment, threadedComment);
+        snapshotStyleOnly = styleOnly;
+        snapshotHyperlink = hyperlink;
+        snapshotHyperlinkMetadata = hyperlinkMetadata;
+        return new SortCellPayload(cell?.Clone(), styleOnly, comment, threadedComment, hyperlink, hyperlinkMetadata);
     }
 
     private static SortCellPayload[] CopyColumnPayloads(SortCellPayload[][] rows, int columnIndex, int rowCount)
@@ -314,7 +332,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
     private static void WriteCellPayload(Sheet sheet, CellAddress address, SortCellPayload payload)
     {
-        WriteCellClone(sheet, address, payload.Cell);
+        WriteCellClone(sheet, address, payload.Cell, payload.StyleOnly);
 
         sheet.Comments.Remove(address);
         if (payload.Comment is not null)
@@ -323,22 +341,48 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         sheet.ThreadedComments.Remove(address);
         if (payload.ThreadedComment is not null)
             sheet.ThreadedComments[address] = payload.ThreadedComment;
+
+        sheet.Hyperlinks.Remove(address);
+        if (payload.Hyperlink is not null)
+            sheet.Hyperlinks[address] = payload.Hyperlink;
+
+        sheet.HyperlinkMetadata.Remove(address);
+        if (payload.HyperlinkMetadata is not null)
+            sheet.HyperlinkMetadata[address] = payload.HyperlinkMetadata;
     }
 
-    private static void WriteCellClone(Sheet sheet, CellAddress address, Cell? cell)
+    private static void WriteCellClone(Sheet sheet, CellAddress address, Cell? cell, StyleId? styleOnly = null)
     {
         if (cell is null)
+        {
             sheet.ClearCell(address);
+            if (styleOnly.HasValue)
+                sheet.SetStyleOnly(address.Row, address.Col, styleOnly.Value);
+            else
+                sheet.ClearStyleOnly(address.Row, address.Col);
+        }
         else
+        {
             sheet.SetCell(address, cell.Clone());
+        }
     }
 
-    private static void RestoreCellSnapshot(Sheet sheet, List<List<(CellAddress Address, Cell? Cell)>> snapshot)
+    private static void RestoreCellSnapshot(Sheet sheet, List<List<(CellAddress Address, Cell? Cell, StyleId? StyleOnly, string? Hyperlink, HyperlinkMetadata? HyperlinkMetadata)>> snapshot)
     {
         foreach (var snapRow in snapshot)
         {
-            foreach (var (addr, cell) in snapRow)
-                WriteCellClone(sheet, addr, cell);
+            foreach (var (addr, cell, styleOnly, hyperlink, hyperlinkMetadata) in snapRow)
+            {
+                WriteCellClone(sheet, addr, cell, styleOnly);
+
+                sheet.Hyperlinks.Remove(addr);
+                if (hyperlink is not null)
+                    sheet.Hyperlinks[addr] = hyperlink;
+
+                sheet.HyperlinkMetadata.Remove(addr);
+                if (hyperlinkMetadata is not null)
+                    sheet.HyperlinkMetadata[addr] = hyperlinkMetadata;
+            }
         }
     }
 
