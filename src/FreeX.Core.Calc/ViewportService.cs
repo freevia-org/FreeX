@@ -140,6 +140,12 @@ public sealed partial class ViewportService : IViewportService
         var drawingObjects = request.IncludeObjects
             ? BuildDrawingObjectBounds(sheet, workbook.Theme, rowMetrics, colMetrics)
             : [];
+        var rowOutlineGroups = sheet.ShowOutlineSymbols == false
+            ? []
+            : BuildRowOutlineGroups(sheet);
+        var columnOutlineGroups = sheet.ShowOutlineSymbols == false
+            ? []
+            : BuildColumnOutlineGroups(sheet);
 
         return new ViewportModel(
             cells,
@@ -149,7 +155,9 @@ public sealed partial class ViewportService : IViewportService
             [],
             splitPanes,
             chartDataCells,
-            drawingObjects);
+            drawingObjects,
+            rowOutlineGroups,
+            columnOutlineGroups);
     }
 
     private static IReadOnlyList<RowMetric> MaterializeRowMetrics(IReadOnlyList<RowMetric> metrics)

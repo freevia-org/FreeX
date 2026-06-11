@@ -146,3 +146,64 @@ public sealed class ExpandColGroupCommand : IWorkbookCommand
             sheet.GroupHiddenCols.Add(col);
     }
 }
+
+public sealed class SetColumnOutlineGroupCollapsedCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly uint _startCol;
+    private readonly uint _endCol;
+    private readonly int _level;
+    private readonly bool _collapsed;
+    private Dictionary<uint, bool>? _previousHiddenStates;
+
+    public string Label => _collapsed ? "Collapse Column Group" : "Expand Column Group";
+
+    public SetColumnOutlineGroupCollapsedCommand(SheetId sheetId, uint startCol, uint endCol, int level, bool collapsed)
+    {
+        OutlineGroupingService.ValidateOutlineLevel(level);
+        if (level == 0)
+            throw new ArgumentOutOfRangeException(nameof(level), "Outline level must be 1-8.");
+
+        _sheetId = sheetId;
+        _startCol = startCol;
+        _endCol = endCol;
+        _level = level;
+        _collapsed = collapsed;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatColumns) is { } protectedOutcome)
+            return protectedOutcome;
+
+        _previousHiddenStates = [];
+        foreach (var (col, level) in sheet.ColOutlineLevels)
+        {
+            if (col < _startCol || col > _endCol || level < _level)
+                continue;
+
+            _previousHiddenStates[col] = sheet.GroupHiddenCols.Contains(col);
+            if (_collapsed)
+                sheet.GroupHiddenCols.Add(col);
+            else
+                sheet.GroupHiddenCols.Remove(col);
+        }
+
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previousHiddenStates is null) return;
+
+        var sheet = ctx.GetSheet(_sheetId);
+        foreach (var (col, wasHidden) in _previousHiddenStates)
+        {
+            if (wasHidden)
+                sheet.GroupHiddenCols.Add(col);
+            else
+                sheet.GroupHiddenCols.Remove(col);
+        }
+    }
+}
