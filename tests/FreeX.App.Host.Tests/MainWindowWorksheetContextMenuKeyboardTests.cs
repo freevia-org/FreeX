@@ -347,9 +347,93 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         });
     }
 
+    [Fact]
+    public void AutoFilterDialogResult_AppliesPlannedRangeWhenHeaderCellIsSelected()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SeedRegionFilterData();
+            var filterRange = harness.SelectRegionFilterRange();
+            harness.SetAutoFilterRange(filterRange);
+            harness.SelectCell(1, 1);
+
+            harness.ApplyAllowedValuesFilter(filterRange, "West");
+
+            harness.FilterHiddenRows.Should().Contain(3);
+            harness.SelectedRange.Should().Be(filterRange);
+        });
+    }
+
+    [Fact]
+    public void ReapplyAutoFilter_UsesRememberedRangeWhenHeaderCellIsSelected()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SeedRegionFilterData();
+            var filterRange = harness.SelectRegionFilterRange();
+            harness.SetAutoFilterRange(filterRange);
+            harness.ApplyAllowedValuesFilter(filterRange, "West");
+            harness.FilterHiddenRows.Should().Contain(3);
+
+            harness.SetRegionValue(3, "West");
+            harness.SelectCell(1, 1);
+            harness.ReapplyAutoFilter();
+
+            harness.FilterHiddenRows.Should().BeEmpty();
+            harness.SelectedRange.Should().Be(filterRange);
+        });
+    }
+
+    [Fact]
+    public void ClearAutoFilter_ClearsPlannedRangeWhenHeaderCellIsSelected()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SeedRegionFilterData();
+            var filterRange = harness.SelectRegionFilterRange();
+            harness.SetAutoFilterRange(filterRange);
+            harness.ApplyAllowedValuesFilter(filterRange, "West");
+            harness.FilterHiddenRows.Should().Contain(3);
+            harness.SelectCell(1, 1);
+
+            harness.ClearAutoFilter();
+
+            harness.FilterHiddenRows.Should().BeEmpty();
+            harness.SelectedRange.Should().Be(filterRange);
+            harness.LastInfo.Should().BeNull();
+        });
+    }
+
+    [Fact]
+    public void ClearAutoFilter_ReportsWhenCurrentRangeHasNoActiveFilter()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SeedRegionFilterData();
+            harness.SelectRegionFilterRange();
+            harness.ClearMessages();
+
+            harness.ClearAutoFilter();
+
+            harness.FilterHiddenRows.Should().BeEmpty();
+            harness.LastInfo.Should().Be((
+                UiText.Get("MainWindowMessage_ClearFilterTitle"),
+                UiText.Get("MainWindowMessage_ClearFilterNoFilter")));
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
+        private readonly RecordingUserMessageService _messageService;
         private readonly MethodInfo _openKeyboardContextMenu;
         private readonly MethodInfo _onGridContextMenuRequested;
         private readonly MethodInfo _onGridHeaderContextMenuRequested;
@@ -360,9 +444,10 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
 
-        private MainWindowHarness(MainWindow window)
+        private MainWindowHarness(MainWindow window, RecordingUserMessageService messageService)
         {
             _window = window;
+            _messageService = messageService;
             _openKeyboardContextMenu = typeof(MainWindow)
                 .GetMethod("OpenKeyboardContextMenu", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "OpenKeyboardContextMenu");
@@ -420,6 +505,8 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 .ToList() ?? [];
 
         public IReadOnlyCollection<uint> FilterHiddenRows => CurrentSheet.FilterHiddenRows;
+
+        public (string Title, string Message)? LastInfo => _messageService.LastInfo;
 
         public SheetId CurrentSheetId => CurrentSheet.Id;
 
@@ -512,18 +599,33 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             PumpDispatcher();
         }
 
-        public void SelectRegionFilterRange()
+        public GridRange SelectRegionFilterRange()
         {
             var sheet = CurrentSheet;
-            SheetGrid.SelectedRange = new GridRange(
+            var range = new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 3, 1));
+            SheetGrid.SelectedRange = range;
+            PumpDispatcher();
+            return range;
+        }
+
+        public void SetAutoFilterRange(GridRange range)
+        {
+            CurrentSheet.AutoFilter = new WorksheetAutoFilterModel(range.ToString(), null);
             PumpDispatcher();
         }
+
+        public void ClearMessages() => _messageService.Clear();
 
         public void ApplyAllowedValuesFilter(params string[] allowedValues)
         {
             var range = SheetGrid.SelectedRange ?? throw new InvalidOperationException("Select a filter range first.");
+            ApplyAllowedValuesFilter(range, allowedValues);
+        }
+
+        public void ApplyAllowedValuesFilter(GridRange range, params string[] allowedValues)
+        {
             var result = AutoFilterDialog.BuildResult(
                 AutoFilterSortDirection.None,
                 allowedValues.Select(value => new AutoFilterDialogItem(value, value, true)),
@@ -590,6 +692,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();
+            var messageService = new RecordingUserMessageService();
             var window = new MainWindow(
                 NullLogger<MainWindow>.Instance,
                 new ViewportService(),
@@ -598,7 +701,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 [],
                 workbookRef,
                 workbook,
-                NullUserMessageService.Instance)
+                messageService)
             {
                 WindowState = WindowState.Normal,
                 Width = 1280,
@@ -608,7 +711,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             window.Show();
             window.UpdateLayout();
             PumpDispatcher();
-            return new MainWindowHarness(window);
+            return new MainWindowHarness(window, messageService);
         }
 
         private FreeX.App.UI.GridView SheetGrid =>
@@ -652,8 +755,47 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
 
         public void Dispose()
         {
+            foreach (Window ownedWindow in _window.OwnedWindows.Cast<Window>().ToList())
+                ownedWindow.Close();
             MainWindowTestCleanup.CloseWithoutSavePrompt(_window);
             PumpDispatcher();
+        }
+    }
+
+    private sealed class RecordingUserMessageService : FreeX.App.UI.IUserMessageService
+    {
+        private readonly List<(string Kind, string Title, string Message)> _messages = [];
+
+        public (string Title, string Message)? LastInfo
+        {
+            get
+            {
+                for (var index = _messages.Count - 1; index >= 0; index--)
+                {
+                    var message = _messages[index];
+                    if (message.Kind == "Info")
+                        return (message.Title, message.Message);
+                }
+
+                return null;
+            }
+        }
+
+        public void Clear() => _messages.Clear();
+
+        public void ShowError(string message, string title = "Error") =>
+            _messages.Add(("Error", title, message));
+
+        public void ShowWarning(string message, string title = "Warning") =>
+            _messages.Add(("Warning", title, message));
+
+        public void ShowInfo(string message, string title = "Information") =>
+            _messages.Add(("Info", title, message));
+
+        public bool AskYesNo(string message, string title = "Confirm")
+        {
+            _messages.Add(("Question", title, message));
+            return false;
         }
     }
 

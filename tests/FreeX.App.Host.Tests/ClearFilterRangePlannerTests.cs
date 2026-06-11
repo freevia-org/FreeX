@@ -38,6 +38,28 @@ public sealed class ClearFilterRangePlannerTests
         ClearFilterRangePlanner.Create(sheet, selectedRange).Should().Be(selectedRange);
     }
 
+    [Fact]
+    public void HasActiveFilter_DetectsFilteredDataRowsInsideRange()
+    {
+        var sheet = CreateSheetWithList();
+        var range = new GridRange(Address(sheet, 1, 1), Address(sheet, 4, 2));
+
+        sheet.FilterHiddenRows.Add(3);
+
+        ClearFilterRangePlanner.HasActiveFilter(sheet, range).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasActiveFilter_IgnoresHeaderAndRowsOutsideRange()
+    {
+        var sheet = CreateSheetWithList();
+        var range = new GridRange(Address(sheet, 1, 1), Address(sheet, 4, 2));
+
+        sheet.FilterHiddenRows.UnionWith([1u, 8u]);
+
+        ClearFilterRangePlanner.HasActiveFilter(sheet, range).Should().BeFalse();
+    }
+
     private static Sheet CreateSheetWithList()
     {
         var workbook = new Workbook("Book1");

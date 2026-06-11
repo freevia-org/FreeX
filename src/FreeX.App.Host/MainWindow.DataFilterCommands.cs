@@ -81,14 +81,7 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Filter",
                 range,
-                currentRange =>
-                {
-                    var currentSheet = _workbook.GetSheet(_currentSheetId);
-                    var plannedRange = currentSheet is null
-                        ? currentRange
-                        : AutoFilterToggleRangePlanner.Create(currentSheet, currentRange);
-                    return new ToggleWorksheetAutoFilterCommand(_currentSheetId, plannedRange);
-                }))
+                _ => new ToggleWorksheetAutoFilterCommand(_currentSheetId, range)))
         {
             return;
         }
@@ -102,7 +95,7 @@ public partial class MainWindow
         GridRange range,
         Func<GridRange, IWorkbookCommand> createCommand)
     {
-        if (!TryExecuteRepeatableCurrentRangeCommand(title, range, createCommand))
+        if (!TryExecuteRepeatableCurrentRangeCommand(title, range, _ => createCommand(range)))
             return false;
 
         _lastAutoFilterRange = range;
@@ -124,9 +117,10 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 _lastAutoFilterCommandTitle,
                 range,
-                _lastAutoFilterCommandFactory))
+                _ => _lastAutoFilterCommandFactory(range)))
             return;
 
+        RestoreAutoFilterRangeSelection(range);
         UpdateViewport();
     }
 
@@ -144,9 +138,10 @@ public partial class MainWindow
             if (!TryExecuteRepeatableCurrentRangeCommand(
                     "Clear Filter",
                     range,
-                    currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: [])))
+                    _ => new FilterCommand(_currentSheetId, range, filterColOffset, allowedValues: [])))
                 return false;
             ClearRememberedAutoFilterCommand();
+            RestoreAutoFilterRangeSelection(range);
             return true;
         }
 
@@ -157,6 +152,7 @@ public partial class MainWindow
                     range,
                     currentRange => new SortCommand(_currentSheetId, currentRange, filterColOffset, result.SortDirection == AutoFilterSortDirection.Ascending)))
                 return false;
+            RestoreAutoFilterRangeSelection(range);
             return true;
         }
 
@@ -184,6 +180,7 @@ public partial class MainWindow
                         _ => new FilterCommand(_currentSheetId, currentRange, filterColOffset, [])
                     }))
                 return false;
+            RestoreAutoFilterRangeSelection(range);
             return true;
         }
 
@@ -202,6 +199,7 @@ public partial class MainWindow
                     range,
                     currentRange => promptPlan.CreateCommand(_currentSheetId, currentRange, filterColOffset)))
                 return false;
+            RestoreAutoFilterRangeSelection(range);
             return true;
         }
 
@@ -223,6 +221,7 @@ public partial class MainWindow
                 currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: allowedValues)))
             return false;
 
+        RestoreAutoFilterRangeSelection(range);
         return true;
     }
 
@@ -430,20 +429,39 @@ public partial class MainWindow
         }
 
         var range = ClearFilterRangePlanner.Create(sheet, selectedRange);
+        if (!ClearFilterRangePlanner.HasActiveFilter(sheet, range))
+        {
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_ClearFilterNoFilter"),
+                UiText.Get("MainWindowMessage_ClearFilterTitle"));
+            return;
+        }
+
         if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Filter",
+                "Clear Filter",
                 range,
-                currentRange =>
-                {
-                    var currentSheet = _workbook.GetSheet(_currentSheetId);
-                    var plannedRange = currentSheet is null
-                        ? currentRange
-                        : ClearFilterRangePlanner.Create(currentSheet, currentRange);
-                    return new FilterCommand(_currentSheetId, plannedRange, filterColOffset: 0, allowedValues: []);
-                }))
+                _ => new FilterCommand(_currentSheetId, range, filterColOffset: 0, allowedValues: [])))
             return;
         ClearRememberedAutoFilterCommand();
+        RestoreAutoFilterRangeSelection(range);
         UpdateViewport();
+    }
+
+    private void RestoreAutoFilterRangeSelection(GridRange range)
+    {
+        if (SheetGrid.SelectedRange == range)
+            return;
+
+        if (SheetGrid.SelectedRange is not { } selectedRange ||
+            selectedRange.RowCount != 1 ||
+            selectedRange.ColCount != 1 ||
+            selectedRange.Start.Row != range.Start.Row ||
+            !range.Contains(selectedRange.Start))
+        {
+            return;
+        }
+
+        SetSelectionRange(range, selectedRange.Start);
     }
 
     private void NamedRangesButton_Click(object sender, RoutedEventArgs e)

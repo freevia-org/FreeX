@@ -118,12 +118,31 @@ public partial class MainWindow
         if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
             return;
 
-        SheetGrid.SelectedRange = new GridRange(headerCell, headerCell);
-        SheetGrid.SelectedRanges = null;
-        _selectionAnchor = headerCell;
-        _selectionCursor = headerCell;
-        CellAddressBox.Text = headerCell.ToA1();
+        if (!ShouldPreserveAutoFilterSelection(sheet, headerCell, SheetGrid.SelectedRange))
+        {
+            SheetGrid.SelectedRange = new GridRange(headerCell, headerCell);
+            SheetGrid.SelectedRanges = null;
+            _selectionAnchor = headerCell;
+            _selectionCursor = headerCell;
+            CellAddressBox.Text = headerCell.ToA1();
+        }
+
         ShowAutoFilterDropdownForHeaderCell(sheet, headerCell, position);
+    }
+
+    private static bool ShouldPreserveAutoFilterSelection(Sheet sheet, CellAddress headerCell, GridRange? selectedRange)
+    {
+        if (selectedRange is not { } range ||
+            !range.Contains(headerCell))
+        {
+            return false;
+        }
+
+        if (AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange))
+            return range == autoFilterRange;
+
+        return SelectionRangeService.GetCurrentRegion(sheet, headerCell) is { } currentRegion &&
+               range == currentRegion;
     }
 
     private void ShowAutoFilterDropdownForHeaderCell(

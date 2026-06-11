@@ -20,4 +20,31 @@ internal static class ClearFilterRangePlanner
 
         return selectedRange;
     }
+
+    public static bool HasActiveFilter(Sheet sheet, GridRange range)
+    {
+        var firstDataRow = range.Start.Row + 1;
+        var lastDataRow = range.End.Row;
+        if (sheet.FilterHiddenRows.Count == 0 || firstDataRow > lastDataRow)
+            return false;
+
+        if ((uint)sheet.FilterHiddenRows.Count < range.RowCount)
+        {
+            foreach (var row in sheet.FilterHiddenRows)
+            {
+                if (row >= firstDataRow && row <= lastDataRow)
+                    return true;
+            }
+
+            return false;
+        }
+
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+        {
+            if (sheet.FilterHiddenRows.Contains(row))
+                return true;
+        }
+
+        return false;
+    }
 }
