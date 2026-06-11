@@ -24,17 +24,7 @@ public partial class MainWindow
         var state = GetWorksheetContextMenuState(actualAddr);
         var menu = new ContextMenu();
         foreach (var command in WorksheetContextMenuPlanner.BuildCommands(targetKind, state))
-        {
-            if (command.IsSeparator)
-            {
-                menu.Items.Add(new Separator());
-                continue;
-            }
-
-            var item = new MenuItem { Header = command.AccessHeader, IsEnabled = command.IsEnabled };
-            item.Click += (_, _) => ExecuteWorksheetContextMenuAction(command.Action, actualAddr);
-            menu.Items.Add(item);
-        }
+            AddWorksheetContextMenuItem(menu.Items, command, actualAddr);
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = SheetGrid;
@@ -47,6 +37,46 @@ public partial class MainWindow
         SheetGrid.ContextMenu = menu;
         PositionWorksheetContextMenu(menu, gridPos);
         menu.IsOpen = true;
+    }
+
+    private void AddWorksheetContextMenuItem(ItemCollection items, WorksheetContextMenuCommand command, CellAddress address)
+    {
+        if (command.IsSeparator)
+        {
+            items.Add(new Separator());
+            return;
+        }
+
+        var item = new MenuItem { Header = command.AccessHeader, IsEnabled = command.IsEnabled };
+        System.Windows.Automation.AutomationProperties.SetName(item, command.Header);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(
+            item,
+            command.Action == WorksheetContextMenuAction.None
+                ? $"WorksheetContextMenu_{NormalizeWorksheetContextMenuAutomationId(command.Header)}"
+                : $"WorksheetContextMenu_{command.Action}");
+        if (command.HasChildren)
+        {
+            foreach (var child in command.Children)
+                AddWorksheetContextMenuItem(item.Items, child, address);
+        }
+        else
+        {
+            item.Click += (_, _) => ExecuteWorksheetContextMenuAction(command.Action, address);
+        }
+
+        items.Add(item);
+    }
+
+    private static string NormalizeWorksheetContextMenuAutomationId(string header)
+    {
+        var builder = new System.Text.StringBuilder(header.Length);
+        foreach (var character in header)
+        {
+            if (char.IsLetterOrDigit(character))
+                builder.Append(character);
+        }
+
+        return builder.Length == 0 ? "Item" : builder.ToString();
     }
 
     private void OnWaterfallChartPointContextMenuRequested(ChartModel chart, int pointIndex, System.Windows.Point gridPos)
@@ -315,6 +345,9 @@ public partial class MainWindow
             case WorksheetContextMenuAction.Hyperlink:
                 InsertLinkBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.PivotTableOptions:
+                ShowPivotTableOptionsDialog(address);
+                break;
             case WorksheetContextMenuAction.FormatCells:
                 OpenFormatCellsDialog();
                 break;
@@ -357,6 +390,27 @@ public partial class MainWindow
                 break;
             case WorksheetContextMenuAction.ShapeOutline:
                 ObjectOutlineBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.FormatChartArea:
+                FormatChartAreaBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.SelectChartData:
+                SelectChartDataSourceBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ChangeChartType:
+                ChangeChartTypeBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ChartStyles:
+                ChartStylesBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ChartTitles:
+                ChartTitlesBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ChartSizeAndProperties:
+                ResizeSelectedChartObject();
+                break;
+            case WorksheetContextMenuAction.MoveChart:
+                MoveChartBtn_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.BringForward:
                 BringForwardBtn_Click(this, new RoutedEventArgs());
@@ -443,10 +497,19 @@ public partial class MainWindow
     private WorksheetContextMenuTargetKind? GetSelectedWorksheetContextMenuTargetKind(Sheet? sheet, CellAddress address)
     {
         if (SheetGrid.SelectedObjectId == Guid.Empty ||
-            GetSelectedDrawingObjectTargetKind() is not { } selectedKind)
+            SheetGrid.SelectedObjectKind == FreeX.App.UI.ObjectKind.None)
         {
             return null;
         }
+
+        if (SheetGrid.SelectedObjectKind == FreeX.App.UI.ObjectKind.Chart)
+            return GetSelectedChartOnCurrentSheet() is { } selectedChart &&
+                IsChartContextualRibbonTarget(selectedChart)
+                ? WorksheetContextMenuTargetKind.Chart
+                : null;
+
+        if (GetSelectedDrawingObjectTargetKind() is not { } selectedKind)
+            return null;
 
         var target = DrawingTargetResolver.GetTargetDrawingObject(
             sheet,
@@ -485,12 +548,14 @@ public partial class MainWindow
             sheet.DataValidations.Count > 0 &&
             DataValidationService.GetApplicable(sheet, address)
                 .Any(rule => rule.Type == DvType.List && rule.ShowDropdown);
+        var hasPivotTableTarget = PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null;
         return new WorksheetContextMenuState(
             HasThreadedComment: threadedComment is not null,
             IsThreadedCommentResolved: threadedComment?.IsResolved == true,
             HasNote: sheet.Comments.ContainsKey(address),
             HasHyperlink: sheet.Hyperlinks.ContainsKey(address),
             HasAutoFilterHeaderTarget: hasAutoFilterHeaderTarget,
-            HasDropdownTarget: hasAutoFilterHeaderTarget || hasValidationDropdown);
+            HasDropdownTarget: hasAutoFilterHeaderTarget || hasValidationDropdown,
+            HasPivotTableTarget: hasPivotTableTarget);
     }
 }

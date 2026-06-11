@@ -70,6 +70,7 @@ public sealed class TableDesignCommandSourceTests
         source.Should().Contain("new RenameStructuredTableCommand(_currentSheetId, table.Id, dialog.Result.Text)");
         source.Should().Contain("new ResizeStructuredTableCommand(_currentSheetId, table.Id, newRange)");
         source.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
+        source.Should().Contain("ActivateNewWorksheetAtA1(createdSheetId)");
         source.Should().Contain("new AddPivotTableCommand(");
         source.Should().Contain("new ConvertStructuredTableToRangeCommand(_currentSheetId, table.Id)");
         source.Should().Contain("_messageService.AskYesNo(");

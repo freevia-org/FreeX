@@ -17,6 +17,25 @@ public sealed partial class WorkbookThemeDialogXamlTests
     }
 
     [Fact]
+    public void Dialog_UsesCompactNoScrollbarThemeLayout()
+    {
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("WorkbookThemeDialog.xaml");
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("WorkbookThemeDialog.xaml");
+        XNamespace xamlNs = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        xaml.Should().Contain("Width=\"760\"");
+        xaml.Should().Contain("Height=\"600\"");
+        xaml.Should().NotContain("<ScrollViewer");
+
+        var colorsPanel = document
+            .Descendants(presentation + "UniformGrid")
+            .Single(element => element.Attribute(xamlNs + "Name")?.Value == "ThemeColorsPanel");
+
+        colorsPanel.Attribute("Columns")?.Value.Should().Be("3");
+    }
+
+    [Fact]
     public void Dialog_ExposesAllThemeColorSlots()
     {
         var document = XamlLocalizationTestHelper.LoadLocalizedXaml("WorkbookThemeDialog.xaml");

@@ -37,6 +37,12 @@ public partial class GridView
 
     private void RenderDrawingObjectLayersWithCache(DrawingContext dc)
     {
+        if (HasLiveObjectTransformPreview())
+        {
+            RenderDrawingObjectLayers(dc);
+            return;
+        }
+
         var key = CreateDrawingObjectLayerCacheKey();
         if (_drawingObjectLayerCache is { } cached && _drawingObjectLayerCacheKey == key)
         {

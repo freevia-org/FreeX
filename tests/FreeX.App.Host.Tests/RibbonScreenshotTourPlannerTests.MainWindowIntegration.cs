@@ -49,9 +49,17 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
+        source.Should().Contain("case \"drawing\":");
+        source.Should().Contain("EnsureDrawObjectFormattingTourContext");
+        source.Should().Contain("PrepareRibbonScreenshotTourTabContext(capture)");
+        source.Should().Contain("case \"ShapeFormatTab\":");
+        source.Should().Contain("case \"PictureFormatTab\":");
+        source.Should().Contain("SelectDrawObjectFormattingPicture(context)");
         source.Should().Contain("EnsureTableDesignScreenshotTourContext");
         source.Should().Contain("EnsurePivotTableScreenshotTourContext");
         source.Should().Contain("EnsureChartScreenshotTourContext");
+        source.Should().Contain("SheetGrid.SelectedObjectId = chart.Id");
+        source.Should().Contain("SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.Chart");
         source.Should().Contain("new AddChartCommand(sheet.Id, sourceRange, ChartType.Column, ScreenshotTourChartName)");
         source.Should().Contain("FindScreenshotTourChart");
         source.Should().Contain("CaptureAutoFilterFlyoutTourAsync");
@@ -549,6 +557,31 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("PageBreakPreviewChecked");
         source.Should().Contain("FormulaBarText");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesAccentBarVisualEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs", "MainWindow.Startup.cs");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
+
+        source.Should().Contain("FREEX_ACCENT_BAR_TOUR");
+        source.Should().Contain("TryStartAccentBarVisualTour();");
+        source.Should().Contain("screenshots\", \"accent-bars-tour");
+        source.Should().Contain("RunAccentBarVisualTourAsync");
+        source.Should().Contain("CaptureElementAsync(TitleBarRoot, outputDir, \"title-normal\")");
+        source.Should().Contain("CaptureElementAsync(StatusBarRoot, outputDir, \"status-normal\")");
+        source.Should().Contain("HoverAndCaptureElementAsync(saveQatButton, TitleBarRoot, outputDir, \"title-save-hover\")");
+        source.Should().Contain("HoverAndCaptureElementAsync(MaxRestoreBtn, TitleBarRoot, outputDir, \"title-system-hover\")");
+        source.Should().Contain("HoverAndCaptureElementAsync(CloseSysBtn, TitleBarRoot, outputDir, \"title-close-hover\")");
+        source.Should().Contain("HoverAndCaptureElementAsync(StatusZoomOutButton, StatusBarRoot, outputDir, \"status-minus-hover\")");
+        source.Should().Contain("HoverAndCaptureElementAsync(StatusZoomInButton, StatusBarRoot, outputDir, \"status-plus-hover\")");
+
+        catalog.Should().Contain("FREEX_ACCENT_BAR_TOUR=1");
+        catalog.Should().Contain("screenshots/accent-bars-tour/");
+        catalog.Should().Contain("title-save-hover.png");
+        catalog.Should().Contain("status-plus-hover.png");
+        catalog.Should().Contain("PNG-only legacy evidence");
     }
 
     [Fact]
@@ -1190,8 +1223,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("UI-CMD-REVIEW-002");
         source.Should().Contain("UI-CMD-REVIEW-003");
         source.Should().Contain("UI-CMD-REVIEW-004");
-        source.Should().Contain("Thesaurus is not currently a supported FreeX Review command");
-        source.Should().Contain("Protect/unprotect confirmation, wrong-password, Permissions, Share, Show Changes, foreground focus trapping, and paired Microsoft Excel screenshots remain open.");
+        source.Should().Contain("Thesaurus and Show Changes are not currently supported FreeX Review commands");
+        source.Should().Contain("Protect/unprotect confirmation, wrong-password, Permissions, Share, foreground focus trapping, and paired Microsoft Excel screenshots remain open.");
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.ReviewCommentsProtectionTourManifest");
 
         catalog.Should().Contain("FREEX_REVIEW_COMMENTS_PROTECTION_TOUR=1");

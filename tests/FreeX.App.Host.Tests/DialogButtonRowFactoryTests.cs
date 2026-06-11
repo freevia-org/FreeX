@@ -26,7 +26,8 @@ public sealed class DialogButtonRowFactoryTests
 
             var ok = row.Children[0].Should().BeOfType<Button>().Subject;
             ok.Content.Should().Be(UiText.Ok);
-            ok.Width.Should().Be(72);
+            double.IsNaN(ok.Width).Should().BeTrue();
+            ok.MinWidth.Should().Be(72);
             ok.Margin.Should().Be(new Thickness(0, 0, 8, 0));
             ok.IsDefault.Should().BeTrue();
             AutomationProperties.GetName(ok).Should().Be(UiText.CreateAutomationName(UiText.Ok));
@@ -34,7 +35,8 @@ public sealed class DialogButtonRowFactoryTests
 
             var cancel = row.Children[1].Should().BeOfType<Button>().Subject;
             cancel.Content.Should().Be(UiText.Cancel);
-            cancel.Width.Should().Be(72);
+            double.IsNaN(cancel.Width).Should().BeTrue();
+            cancel.MinWidth.Should().Be(72);
             cancel.IsCancel.Should().BeTrue();
             AutomationProperties.GetName(cancel).Should().Be(UiText.CreateAutomationName(UiText.Cancel));
             AutomationProperties.GetAcceleratorKey(cancel).Should().Be("Alt+C");
@@ -63,7 +65,8 @@ public sealed class DialogButtonRowFactoryTests
 
             var ok = row.Children[0].Should().BeOfType<Button>().Subject;
             ok.Content.Should().Be(UiText.Ok);
-            ok.Width.Should().Be(76);
+            double.IsNaN(ok.Width).Should().BeTrue();
+            ok.MinWidth.Should().Be(76);
             ok.IsDefault.Should().BeTrue();
             ok.IsCancel.Should().BeTrue();
             AutomationProperties.GetName(ok).Should().Be(UiText.CreateAutomationName(UiText.Ok));
@@ -88,6 +91,25 @@ public sealed class DialogButtonRowFactoryTests
             ok.Content.Should().Be("_Create");
             AutomationProperties.GetName(ok).Should().Be("Create");
             AutomationProperties.GetAcceleratorKey(ok).Should().Be("Alt+C");
+        });
+    }
+
+    [Fact]
+    public void Create_AllowsActionButtonsToGrowBeyondMinimumWidth()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var row = DialogButtonRowFactory.Create(
+                () => { },
+                buttonWidth: 72,
+                acceptContent: "_Apply All Selected Changes");
+
+            row.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+            var ok = row.Children[0].Should().BeOfType<Button>().Subject;
+            ok.MinWidth.Should().Be(72);
+            ok.DesiredSize.Width.Should().BeGreaterThan(72);
+            double.IsNaN(ok.Width).Should().BeTrue();
         });
     }
 }

@@ -259,6 +259,31 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void ResizeSelectedChartObject()
+    {
+        if (!TryGetActiveNormalChart("Chart Size", out var chart))
+            return;
+
+        var dialog = new ObjectSizeDialog(chart.Width, chart.Height, UiText.Get("MainWindowMessage_ObjectSizeTitle")) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!TryExecuteCommand(
+                new SetChartBoundsCommand(
+                    _currentSheetId,
+                    chart.Id,
+                    chart.Left,
+                    chart.Top,
+                    dialog.Result.Width,
+                    dialog.Result.Height),
+                "Chart Size"))
+            return;
+
+        SheetGrid.SelectedObjectId = chart.Id;
+        SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.Chart;
+        UpdateViewport();
+    }
+
     private void FormatChartAreaBtn_Click(object sender, RoutedEventArgs e)
     {
         if (!TryGetFirstChartForDialog("Format Chart Area", "Insert or select a chart before formatting the chart area.", out var chart))
@@ -278,6 +303,13 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         chart = null!;
+        if (GetSelectedChartOnCurrentSheet() is { } selectedChart &&
+            IsChartContextualRibbonTarget(selectedChart))
+        {
+            chart = selectedChart;
+            return true;
+        }
+
         if (sheet is not null)
         {
             foreach (var candidate in sheet.Charts)
@@ -303,8 +335,21 @@ public partial class MainWindow
         SetChartContextualTabsVisible(HasChartContextualRibbonTarget(sheet));
     }
 
-    private static bool HasChartContextualRibbonTarget(Sheet? sheet) =>
-        sheet?.Charts.Any(IsChartContextualRibbonTarget) == true;
+    private bool HasChartContextualRibbonTarget(Sheet? sheet)
+    {
+        if (sheet is null ||
+            SheetGrid.SelectedObjectKind != FreeX.App.UI.ObjectKind.Chart ||
+            SheetGrid.SelectedObjectId == Guid.Empty)
+            return false;
+
+        foreach (var chart in sheet.Charts)
+        {
+            if (chart.Id == SheetGrid.SelectedObjectId && IsChartContextualRibbonTarget(chart))
+                return true;
+        }
+
+        return false;
+    }
 
     private static bool IsChartContextualRibbonTarget(ChartModel chart) =>
         chart.IsVisible && !chart.IsPivotChart;

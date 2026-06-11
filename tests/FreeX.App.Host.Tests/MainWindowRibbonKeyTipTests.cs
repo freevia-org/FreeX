@@ -39,6 +39,10 @@ public sealed partial class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _hideStartScreen;
         private readonly MethodInfo _rebuildQuickAccessToolbar;
         private readonly MethodInfo _zoomCustomMenuItemClick;
+        private readonly MethodInfo _setActiveCell;
+        private readonly MethodInfo _applyPivotFieldListLayout;
+        private readonly MethodInfo _movePivotFieldToZone;
+        private readonly Type _pivotFieldDropZoneType;
         private readonly Type _scopeType;
         private readonly FieldInfo _scopeField;
         private readonly FieldInfo _activeMenuField;
@@ -80,6 +84,14 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "RebuildQuickAccessToolbar");
             _zoomCustomMenuItemClick = typeof(MainWindow).GetMethod("ZoomCustomMenuItem_Click", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ZoomCustomMenuItem_Click");
+            _setActiveCell = typeof(MainWindow).GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
+            _applyPivotFieldListLayout = typeof(MainWindow).GetMethod("ApplyPivotFieldListLayout", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ApplyPivotFieldListLayout");
+            _movePivotFieldToZone = typeof(MainWindow).GetMethod("MovePivotFieldToZone", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "MovePivotFieldToZone");
+            _pivotFieldDropZoneType = typeof(MainWindow).GetNestedType("PivotFieldDropZone", BindingFlags.NonPublic)
+                ?? throw new MissingMemberException(nameof(MainWindow), "PivotFieldDropZone");
             _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
                 ?? throw new MissingMemberException(nameof(MainWindow), "RibbonKeyTipScope");
             _scopeField = typeof(MainWindow).GetField("_ribbonKeyTipScope", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -316,8 +328,47 @@ public sealed partial class MainWindowRibbonKeyTipTests
             var sheet = _workbook.Sheets[0];
             var address = new CellAddress(sheet.Id, 1, 1);
             if (_window.FindName("SheetGrid") is SheetGridView sheetGrid)
+            {
+                sheetGrid.SelectedObjectId = Guid.Empty;
+                sheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.None;
                 sheetGrid.SelectedRange = new GridRange(address, address);
+            }
             PumpDispatcher();
+        }
+
+        public void SelectFirstChartObject()
+        {
+            var chart = _workbook.Sheets[0].Charts[0];
+            SelectDrawingObject(chart.Id, FreeX.App.UI.ObjectKind.Chart);
+        }
+
+        public void SelectFirstShapeObject()
+        {
+            var shape = _workbook.Sheets[0].DrawingShapes[0];
+            SelectDrawingObject(shape.Id, FreeX.App.UI.ObjectKind.Shape);
+        }
+
+        public void SelectFirstPictureObject()
+        {
+            var picture = _workbook.Sheets[0].Pictures[0];
+            SelectDrawingObject(picture.Id, FreeX.App.UI.ObjectKind.Picture);
+        }
+
+        public void SelectFirstTextBoxObject()
+        {
+            var textBox = _workbook.Sheets[0].TextBoxes[0];
+            SelectDrawingObject(textBox.Id, FreeX.App.UI.ObjectKind.TextBox);
+        }
+
+        private void SelectDrawingObject(Guid objectId, FreeX.App.UI.ObjectKind kind)
+        {
+            if (_window.FindName("SheetGrid") is SheetGridView sheetGrid)
+            {
+                sheetGrid.SelectedObjectId = objectId;
+                sheetGrid.SelectedObjectKind = kind;
+            }
+
+            RefreshViewport();
         }
 
         public void SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
@@ -331,6 +382,52 @@ public sealed partial class MainWindowRibbonKeyTipTests
                     new CellAddress(sheet.Id, endRow, endCol));
             }
 
+            PumpDispatcher();
+        }
+
+        public void SetActiveCell(uint row, uint col)
+        {
+            var sheet = _workbook.Sheets[0];
+            _setActiveCell.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
+        public GridRange? SelectedRange =>
+            (_window.FindName("SheetGrid") as SheetGridView)?.SelectedRange;
+
+        public GridRange ActivePivotVisibleRange =>
+            PivotUiPlanner.VisiblePivotRange(_workbook.Sheets[0].PivotTables[0]);
+
+        public IReadOnlyList<string> PivotListItems(string listName) =>
+            (_window.FindName(listName) as ListBox)?.Items
+                .Cast<object>()
+                .Select(item => PivotUiPlanner.GetFieldListCaption(item) ?? item.ToString() ?? string.Empty)
+                .Where(item => item.Length > 0)
+                .ToList() ?? [];
+
+        public void ApplyPivotLayoutWithoutRowFields()
+        {
+            var pivot = _workbook.Sheets[0].PivotTables[0];
+            _applyPivotFieldListLayout.Invoke(
+                _window,
+                [
+                    pivot,
+                    Array.Empty<PivotFieldModel>(),
+                    Array.Empty<PivotFieldModel>(),
+                    Array.Empty<PivotFieldModel>(),
+                    pivot.DataFields.ToList(),
+                    true
+                ]);
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
+        public void MoveAvailablePivotFieldTo(string caption, string zoneName)
+        {
+            var zone = Enum.Parse(_pivotFieldDropZoneType, zoneName);
+            _movePivotFieldToZone.Invoke(_window, [caption, zone, -1, null]);
+            _window.UpdateLayout();
             PumpDispatcher();
         }
 
@@ -754,6 +851,10 @@ public sealed partial class MainWindowRibbonKeyTipTests
             }
             if (_window.FindName("NumberFormatBox") is ComboBox numberFormatBox)
                 numberFormatBox.IsDropDownOpen = false;
+            if (_window.FindName("ShapeFormatTab") is TabItem shapeFormatTab)
+                shapeFormatTab.Visibility = Visibility.Collapsed;
+            if (_window.FindName("PictureFormatTab") is TabItem pictureFormatTab)
+                pictureFormatTab.Visibility = Visibility.Collapsed;
             SelectActiveCell();
             _window.UpdateLayout();
             _updateRibbonCompactMode.Invoke(_window, [true]);
@@ -884,6 +985,58 @@ public sealed partial class MainWindowRibbonKeyTipTests
         sheet.PivotTables.Add(pivot);
     }
 
+    private static void ConfigureWorkbookWithExpandablePivotTable(Workbook workbook)
+    {
+        var sheet = workbook.Sheets[0];
+        var sheetId = sheet.Id;
+        sheet.SetCell(new CellAddress(sheetId, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheetId, 1, 2), new TextValue("Quarter"));
+        sheet.SetCell(new CellAddress(sheetId, 1, 3), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheetId, 1, 4), new TextValue("Units"));
+        sheet.SetCell(new CellAddress(sheetId, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheetId, 2, 2), new TextValue("Q1"));
+        sheet.SetCell(new CellAddress(sheetId, 2, 3), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheetId, 2, 4), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheetId, 3, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheetId, 3, 2), new TextValue("Q2"));
+        sheet.SetCell(new CellAddress(sheetId, 3, 3), new NumberValue(15));
+        sheet.SetCell(new CellAddress(sheetId, 3, 4), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheetId, 4, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheetId, 4, 2), new TextValue("Q1"));
+        sheet.SetCell(new CellAddress(sheetId, 4, 3), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheetId, 4, 4), new NumberValue(4));
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 4));
+        var targetRange = new GridRange(
+            new CellAddress(sheetId, 6, 5),
+            new CellAddress(sheetId, 12, 8));
+
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = sourceRange.ToString()
+        });
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Region"));
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Quarter"));
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Amount", ContainsNumber: true));
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Units", ContainsNumber: true));
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = sourceRange,
+            TargetRange = targetRange
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+    }
+
     private static void ConfigureWorkbookWithChart(Workbook workbook)
     {
         var sheet = workbook.Sheets[0];
@@ -903,6 +1056,36 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 new CellAddress(sheetId, 1, 1),
                 new CellAddress(sheetId, 3, 2)),
             Title = "Sales"
+        });
+    }
+
+    private static void ConfigureWorkbookWithDrawingObjects(Workbook workbook)
+    {
+        var sheet = workbook.Sheets[0];
+        var sheetId = sheet.Id;
+
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Name = "Rectangle 1",
+            Kind = DrawingShapeKind.Rectangle,
+            Anchor = new CellAddress(sheetId, 2, 2),
+            IsVisible = true
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Name = "Picture 1",
+            Kind = PictureKind.Image,
+            Anchor = new CellAddress(sheetId, 4, 2),
+            ImageBytes = [1, 2, 3],
+            ContentType = "image/png",
+            IsVisible = true
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Name = "Text Box 1",
+            Anchor = new CellAddress(sheetId, 6, 2),
+            Text = "Notes",
+            IsVisible = true
         });
     }
 

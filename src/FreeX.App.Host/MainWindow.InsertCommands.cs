@@ -29,18 +29,6 @@ public partial class MainWindow
 
     private void TableBtn_Click(object sender, RoutedEventArgs e) => ApplyTableFormat(0);
 
-    private void RecommendedPivotTablesMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new RecommendedPivotTablesDialog { Owner = this };
-        if (dialog.ShowDialog() != true ||
-            dialog.Result != RecommendedPivotTablesDialogResult.BlankPivotTable)
-        {
-            return;
-        }
-
-        PivotTableBtn_Click(sender, e);
-    }
-
     private void PicturesBtn_Click(object sender, RoutedEventArgs e) => InsertPictureBtn_Click(sender, e);
 
     private void ShapesBtn_Click(object sender, RoutedEventArgs e) => DrawRectBtn_Click(sender, e);

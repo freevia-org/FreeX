@@ -58,6 +58,16 @@ public static partial class PivotTableRefreshService
                 subtotalRows.Add(row);
         }
 
+        MaterializePivotTotalStyleFootprintCells(
+            sheet,
+            pivotTable,
+            materialized,
+            bodyStart,
+            headerEndRow,
+            subtotalRows,
+            grandTotalRows,
+            grandTotalColumns);
+
         for (var row = materialized.Start.Row; row <= materialized.End.Row; row++)
         for (var col = materialized.Start.Col; col <= materialized.End.Col; col++)
         {
@@ -100,6 +110,57 @@ public static partial class PivotTableRefreshService
         }
 
         ApplyCompactRowLabelIndent(workbook, sheet, pivotTable, materialized, headerEndRow, subtotalRows, grandTotalRows);
+    }
+
+    private static void MaterializePivotTotalStyleFootprintCells(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        GridRange materialized,
+        CellAddress bodyStart,
+        uint headerEndRow,
+        IReadOnlySet<uint> subtotalRows,
+        IReadOnlySet<uint> grandTotalRows,
+        IReadOnlySet<uint> grandTotalColumns)
+    {
+        foreach (var row in subtotalRows.Concat(grandTotalRows))
+            MaterializePivotBlankRowCells(sheet, pivotTable, row, materialized.Start.Col, materialized.End.Col);
+
+        foreach (var col in grandTotalColumns)
+            MaterializePivotBlankColumnCells(sheet, pivotTable, bodyStart.Row, headerEndRow, col);
+    }
+
+    private static void MaterializePivotBlankRowCells(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        uint row,
+        uint startCol,
+        uint endCol)
+    {
+        for (var col = startCol; col <= endCol; col++)
+            MaterializePivotBlankCell(sheet, pivotTable, row, col);
+    }
+
+    private static void MaterializePivotBlankColumnCells(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        uint startRow,
+        uint endRow,
+        uint col)
+    {
+        for (var row = startRow; row <= endRow; row++)
+            MaterializePivotBlankCell(sheet, pivotTable, row, col);
+    }
+
+    private static void MaterializePivotBlankCell(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        uint row,
+        uint col)
+    {
+        if (sheet.GetCell(row, col) is not null)
+            return;
+
+        SetPivotCell(sheet, new CellAddress(sheet.Id, row, col), BlankValue.Instance);
     }
 
     private static void ApplyPivotVisualStyle(Workbook workbook, Cell cell, StyleId visualStyleId, PivotTableModel pivotTable)

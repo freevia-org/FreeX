@@ -12,6 +12,11 @@ namespace FreeX.App.Host;
 
 public sealed partial class SortDialog : Window
 {
+    private const double DialogDefaultWidth = 760d;
+    private const double DialogDefaultHeight = 500d;
+    private const double DialogMinimumWidth = 680d;
+    private const double DialogMinimumHeight = 420d;
+
     private readonly ObservableCollection<SortDialogLevel> _levels;
     private readonly IReadOnlyList<SortColumnChoice> _columnChoices;
     private readonly IReadOnlyList<SortColumnChoice> _genericColumnChoices;
@@ -21,10 +26,12 @@ public sealed partial class SortDialog : Window
     private readonly CheckBox _headerCheck;
     private readonly DataGridComboBoxColumn _sortByColumn;
     private readonly DataGrid _levelsGrid;
+    private readonly Button _addLevelButton;
     private readonly Button _deleteLevelButton;
     private readonly Button _copyLevelButton;
     private readonly Button _moveUpButton;
     private readonly Button _moveDownButton;
+    private readonly Button _optionsButton;
     private SortDialogOptions _options;
 
     public IReadOnlyList<SortDialogLevel> Levels => _levels.ToList();
@@ -57,12 +64,18 @@ public sealed partial class SortDialog : Window
         ResultOptions = _options;
 
         Title = UiText.Get("Sort_CustomSort");
-        Width = 640;
-        Height = 420;
+        Width = DialogDefaultWidth;
+        Height = DialogDefaultHeight;
+        MinWidth = DialogMinimumWidth;
+        MinHeight = DialogMinimumHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ResizeMode = ResizeMode.NoResize;
+        ResizeMode = ResizeMode.CanResizeWithGrip;
 
-        var root = new DockPanel { Margin = new Thickness(16), LastChildFill = false };
+        var root = new Grid { Margin = new Thickness(16) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 220 });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var headerRow = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
         _headerCheck = new CheckBox
         {
@@ -78,7 +91,7 @@ public sealed partial class SortDialog : Window
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = System.Windows.VerticalAlignment.Center
         });
-        DockPanel.SetDock(headerRow, Dock.Top);
+        Grid.SetRow(headerRow, 0);
         root.Children.Add(headerRow);
         _headerCheck.Checked += (_, _) => UpdateColumnChoices();
         _headerCheck.Unchecked += (_, _) => UpdateColumnChoices();
@@ -100,7 +113,7 @@ public sealed partial class SortDialog : Window
             CanUserDeleteRows = false,
             HeadersVisibility = DataGridHeadersVisibility.Column,
             SelectionMode = DataGridSelectionMode.Single,
-            Height = 220,
+            MinHeight = 220,
             Margin = new Thickness(0, 0, 0, 12)
         };
         _levelsGrid.SelectionChanged += (_, _) => UpdateToolbarButtonStates();
@@ -134,23 +147,25 @@ public sealed partial class SortDialog : Window
         });
         _levelsGrid.Columns.Add(CreateOrderColumn());
         _levelsGrid.Columns.Add(CreateColorColumn());
-        DockPanel.SetDock(_levelsGrid, Dock.Top);
+        Grid.SetRow(_levelsGrid, 1);
         root.Children.Add(_levelsGrid);
 
-        var commandDock = new DockPanel { Margin = new Thickness(0, 0, 0, 16) };
-        var helperRow = new StackPanel
+        var commandRow = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        commandRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        commandRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var helperRow = new WrapPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
         };
-        var add = new Button { Content = UiText.Get("Sort_AddLevel"), Width = 98, Margin = new Thickness(0, 0, 8, 0) };
-        add.Click += (_, _) =>
+        _addLevelButton = new Button { Content = UiText.Get("Sort_AddLevel"), MinWidth = 98, Margin = new Thickness(0, 0, 8, 6) };
+        _addLevelButton.Click += (_, _) =>
         {
             ReplaceLevels(AddLevel(_levels));
             _levelsGrid.SelectedIndex = _levels.Count - 1;
             UpdateToolbarButtonStates();
         };
-        _deleteLevelButton = new Button { Content = UiText.Get("Sort_DeleteLevel"), Width = 104, Margin = new Thickness(0, 0, 8, 0) };
+        _deleteLevelButton = new Button { Content = UiText.Get("Sort_DeleteLevel"), MinWidth = 104, Margin = new Thickness(0, 0, 8, 6) };
         _deleteLevelButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
@@ -158,7 +173,7 @@ public sealed partial class SortDialog : Window
             _levelsGrid.SelectedIndex = Math.Min(selectedIndex, _levels.Count - 1);
             UpdateToolbarButtonStates();
         };
-        _copyLevelButton = new Button { Content = UiText.Get("Sort_CopyLevel"), Width = 98 };
+        _copyLevelButton = new Button { Content = UiText.Get("Sort_CopyLevel"), MinWidth = 98, Margin = new Thickness(0, 0, 8, 6) };
         _copyLevelButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
@@ -166,7 +181,7 @@ public sealed partial class SortDialog : Window
             _levelsGrid.SelectedIndex = Math.Min(selectedIndex + 1, _levels.Count - 1);
             UpdateToolbarButtonStates();
         };
-        _moveUpButton = new Button { Content = UiText.Get("Sort_MoveUp"), Width = 86, Margin = new Thickness(8, 0, 8, 0) };
+        _moveUpButton = new Button { Content = UiText.Get("Sort_MoveUp"), MinWidth = 86, Margin = new Thickness(0, 0, 8, 6) };
         _moveUpButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? 0 : _levelsGrid.SelectedIndex;
@@ -174,7 +189,7 @@ public sealed partial class SortDialog : Window
             _levelsGrid.SelectedIndex = Math.Max(0, selectedIndex - 1);
             UpdateToolbarButtonStates();
         };
-        _moveDownButton = new Button { Content = UiText.Get("Sort_MoveDown"), Width = 92 };
+        _moveDownButton = new Button { Content = UiText.Get("Sort_MoveDown"), MinWidth = 92, Margin = new Thickness(0, 0, 8, 6) };
         _moveDownButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
@@ -182,19 +197,20 @@ public sealed partial class SortDialog : Window
             _levelsGrid.SelectedIndex = Math.Min(_levels.Count - 1, selectedIndex + 1);
             UpdateToolbarButtonStates();
         };
-        helperRow.Children.Add(add);
+        helperRow.Children.Add(_addLevelButton);
         helperRow.Children.Add(_deleteLevelButton);
         helperRow.Children.Add(_copyLevelButton);
         helperRow.Children.Add(_moveUpButton);
         helperRow.Children.Add(_moveDownButton);
-        commandDock.Children.Add(helperRow);
-        var options = new Button
+        Grid.SetColumn(helperRow, 0);
+        commandRow.Children.Add(helperRow);
+        _optionsButton = new Button
         {
             Content = UiText.Get("Sort_Options"),
-            Width = 92,
+            MinWidth = 92,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right
         };
-        options.Click += (_, _) =>
+        _optionsButton.Click += (_, _) =>
         {
             var dialog = new SortOptionsDialog(_options) { Owner = this };
             if (dialog.ShowDialog() == true)
@@ -203,17 +219,18 @@ public sealed partial class SortDialog : Window
                 UpdateColumnChoices();
             }
         };
-        DockPanel.SetDock(options, Dock.Right);
-        commandDock.Children.Add(options);
-        DockPanel.SetDock(commandDock, Dock.Bottom);
-        root.Children.Add(commandDock);
+        Grid.SetColumn(_optionsButton, 1);
+        commandRow.Children.Add(_optionsButton);
+        Grid.SetRow(commandRow, 2);
+        root.Children.Add(commandRow);
 
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 4, 0, 0)
         };
-        var ok = new Button { Content = UiText.Ok, IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = UiText.Ok, IsDefault = true, MinWidth = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
         {
             ResultSortKeys = BuildSortKeys(_levels);
@@ -221,10 +238,10 @@ public sealed partial class SortDialog : Window
             ResultOptions = _options;
             DialogResult = true;
         };
-        var cancel = new Button { Content = UiText.Cancel, IsCancel = true, Width = 76 };
+        var cancel = new Button { Content = UiText.Cancel, IsCancel = true, MinWidth = 76 };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
-        DockPanel.SetDock(buttons, Dock.Bottom);
+        Grid.SetRow(buttons, 3);
         root.Children.Add(buttons);
 
         Content = root;

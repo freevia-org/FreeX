@@ -43,7 +43,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (harness.CanUseRequestedRibbonWidth(1465))
             {
                 harness.TallLargeRibbonCommandLabels.Should().Contain(
-                    ["PivotTable", "Recommended PivotTables", "Table", "Pictures", "Shapes", "Link", "Comment", "Text Box", "Header & Footer", "Symbol"],
+                    ["PivotTable", "Table", "Link", "Comment", "Text Box", "Header & Footer", "Symbol"],
                     $"Insert should spend available width on tall icon-label commands before compacting lower-priority groups; {harness.DebugActiveRibbonChildren}");
                 harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                     0.5,
@@ -54,7 +54,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (harness.CanUseRequestedRibbonWidth(1100))
             {
                 harness.TallLargeRibbonCommandLabels.Should().Contain(
-                    ["PivotTable", "Recommended PivotTables", "Table", "Pictures", "Shapes"],
+                    ["PivotTable", "Table"],
                     $"Insert should keep primary command groups large at medium desktop widths until space truly requires compacting; {harness.DebugActiveRibbonChildren}");
                 harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                     0.5,
@@ -64,7 +64,27 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void InsertRibbon_CollapsesPrimaryCommandsWhenVeryNarrow()
+    public void DrawRibbon_PromotesIllustrationCommandsWhenSpaceAllows()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.CreateIsolated();
+
+            harness.SelectRibbonTab("Draw", 1100);
+            if (harness.CanUseRequestedRibbonWidth(1100))
+            {
+                harness.VisibleRibbonCommandLabels.Should().Contain(
+                    ["Pictures", "Shapes"],
+                    $"Draw owns object creation commands, so Pictures and Shapes should remain visible at normal desktop widths; {harness.DebugActiveRibbonChildren}");
+                harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                    0.5,
+                    $"Draw should fit illustration commands without hidden overflow; {harness.DebugActiveRibbonChildren}");
+            }
+        });
+    }
+
+    [Fact]
+    public void InsertRibbon_KeepsImplementedTablesCommandsVisibleWhenNarrow()
     {
         StaTestRunner.Run(() =>
         {
@@ -72,10 +92,11 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
             harness.SelectRibbonTab("Insert", 700);
 
-            harness.CollapsedActiveRibbonGroupNames.Should().Contain("Tables", harness.DebugActiveRibbonChildren);
-            harness.CollapsedActiveMenuHeaders("Tables").Should().Contain(
-                ["PivotTable", "Recommended PivotTables", "Table"],
-                "very narrow Insert widths should compact primary commands into the collapsed group menu without losing access");
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Tables", harness.DebugActiveRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["PivotTable", "Table"],
+                "removing unsupported Recommended PivotTables should let implemented primary table commands remain visible at narrow widths");
+            harness.VisibleRibbonCommandLabels.Should().NotContain("Recommended PivotTables", harness.DebugActiveRibbonChildren);
         });
     }
 
@@ -283,8 +304,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (harness.CanUseRequestedRibbonWidth(1465))
             {
                 harness.TallLargeRibbonCommandLabels.Should().Contain(
-                    ["Themes", "Colors", "Fonts", "Effects", "Bring Forward", "Send Backward", "Selection Pane", "Rotate", "Size"],
-                    $"Page Layout should spend wide ribbon space on standalone large commands while keeping stacked Page Setup compact; {harness.DebugActiveRibbonChildren}");
+                    ["Themes", "Colors", "Fonts", "Effects"],
+                    $"Page Layout should spend wide ribbon space on standalone theme commands while keeping stacked Page Setup compact; {harness.DebugActiveRibbonChildren}");
                 harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                     0.5,
                     $"Page Layout should promote standalone commands without hidden overflow; {harness.DebugActiveRibbonChildren}");

@@ -2,7 +2,7 @@ namespace FreeX.App.Host;
 
 public static class WorksheetContextMenuPlanner
 {
-    private const int WorksheetStateCacheSize = 1 << 6;
+    private const int WorksheetStateCacheSize = 1 << 7;
 
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> PictureCommands =
         BuildPictureCommands();
@@ -12,6 +12,9 @@ public static class WorksheetContextMenuPlanner
 
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> TextBoxCommands =
         BuildDrawingObjectCommands("Format Text Box...", includeReorder: false);
+
+    private static readonly IReadOnlyList<WorksheetContextMenuCommand> ChartCommands =
+        BuildChartCommands();
 
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> RowSelectionCommands =
         BuildRowSelectionCommands();
@@ -33,6 +36,7 @@ public static class WorksheetContextMenuPlanner
             WorksheetContextMenuTargetKind.Picture => PictureCommands,
             WorksheetContextMenuTargetKind.Shape => ShapeCommands,
             WorksheetContextMenuTargetKind.TextBox => TextBoxCommands,
+            WorksheetContextMenuTargetKind.Chart => ChartCommands,
             WorksheetContextMenuTargetKind.RowSelection => RowSelectionCommands,
             WorksheetContextMenuTargetKind.ColumnSelection => ColumnSelectionCommands,
             _ => WorksheetCommandCache[GetStateCacheIndex(state)]
@@ -55,7 +59,8 @@ public static class WorksheetContextMenuPlanner
             HasNote: (index & (1 << 2)) != 0,
             HasHyperlink: (index & (1 << 3)) != 0,
             HasAutoFilterHeaderTarget: (index & (1 << 4)) != 0,
-            HasDropdownTarget: (index & (1 << 5)) != 0);
+            HasDropdownTarget: (index & (1 << 5)) != 0,
+            HasPivotTableTarget: (index & (1 << 6)) != 0);
 
     private static int GetStateCacheIndex(WorksheetContextMenuState state)
     {
@@ -72,6 +77,8 @@ public static class WorksheetContextMenuPlanner
             index |= 1 << 4;
         if (state.HasDropdownTarget)
             index |= 1 << 5;
+        if (state.HasPivotTableTarget)
+            index |= 1 << 6;
 
         return index;
     }
@@ -79,59 +86,87 @@ public static class WorksheetContextMenuPlanner
     private static IReadOnlyList<WorksheetContextMenuCommand> Freeze(WorksheetContextMenuCommand[] commands) =>
         Array.AsReadOnly(commands);
 
+    private static WorksheetContextMenuCommand Submenu(
+        string header,
+        string accessHeader,
+        params WorksheetContextMenuCommand[] children) =>
+        new(header, WorksheetContextMenuAction.None, AccessHeader: accessHeader, Children: Freeze(children));
+
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildWorksheetCommands(WorksheetContextMenuState state) =>
         Freeze([
         new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
         new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
         new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
-        new("Paste Special...", WorksheetContextMenuAction.PasteSpecial, AccessHeader: "Paste _Special..."),
-        new("Insert Copied Cells...", WorksheetContextMenuAction.InsertCopiedCells, AccessHeader: "Insert Copied _Cells..."),
         WorksheetContextMenuCommand.Separator,
-        new("Insert...", WorksheetContextMenuAction.InsertCells, AccessHeader: "_Insert..."),
-        new("Insert Row Above", WorksheetContextMenuAction.InsertRowAbove, AccessHeader: "Insert Row _Above"),
-        new("Insert Row Below", WorksheetContextMenuAction.InsertRowBelow, AccessHeader: "Insert Row _Below"),
-        new("Insert Column Left", WorksheetContextMenuAction.InsertColumnLeft, AccessHeader: "Insert Column _Left"),
-        new("Insert Column Right", WorksheetContextMenuAction.InsertColumnRight, AccessHeader: "Insert Column _Right"),
+        Submenu(
+            "Paste Options",
+            "_Paste Options",
+            new WorksheetContextMenuCommand("Paste Special...", WorksheetContextMenuAction.PasteSpecial, AccessHeader: "Paste _Special..."),
+            new WorksheetContextMenuCommand("Insert Copied Cells...", WorksheetContextMenuAction.InsertCopiedCells, AccessHeader: "Insert Copied _Cells...")),
+        Submenu(
+            "Insert and Delete",
+            "_Insert and Delete",
+            new WorksheetContextMenuCommand("Insert...", WorksheetContextMenuAction.InsertCells, AccessHeader: "_Insert..."),
+            new WorksheetContextMenuCommand("Insert Row Above", WorksheetContextMenuAction.InsertRowAbove, AccessHeader: "Insert Row _Above"),
+            new WorksheetContextMenuCommand("Insert Row Below", WorksheetContextMenuAction.InsertRowBelow, AccessHeader: "Insert Row _Below"),
+            new WorksheetContextMenuCommand("Insert Column Left", WorksheetContextMenuAction.InsertColumnLeft, AccessHeader: "Insert Column _Left"),
+            new WorksheetContextMenuCommand("Insert Column Right", WorksheetContextMenuAction.InsertColumnRight, AccessHeader: "Insert Column _Right"),
+            WorksheetContextMenuCommand.Separator,
+            new WorksheetContextMenuCommand("Delete...", WorksheetContextMenuAction.DeleteCells, AccessHeader: "_Delete..."),
+            new WorksheetContextMenuCommand("Delete Row(s)", WorksheetContextMenuAction.DeleteRows, AccessHeader: "Delete _Row(s)"),
+            new WorksheetContextMenuCommand("Delete Column(s)", WorksheetContextMenuAction.DeleteColumns, AccessHeader: "Delete _Column(s)")),
         WorksheetContextMenuCommand.Separator,
-        new("Delete...", WorksheetContextMenuAction.DeleteCells, AccessHeader: "_Delete..."),
-        new("Delete Row(s)", WorksheetContextMenuAction.DeleteRows, AccessHeader: "Delete _Row(s)"),
-        new("Delete Column(s)", WorksheetContextMenuAction.DeleteColumns, AccessHeader: "Delete _Column(s)"),
-        WorksheetContextMenuCommand.Separator,
-        new("Sort A to Z", WorksheetContextMenuAction.SortAscending, AccessHeader: "Sort _A to Z"),
-        new("Sort Z to A", WorksheetContextMenuAction.SortDescending, AccessHeader: "Sort _Z to A"),
-        new("Custom Sort...", WorksheetContextMenuAction.CustomSort, AccessHeader: "C_ustom Sort..."),
-        new("Filter...", WorksheetContextMenuAction.Filter, AccessHeader: "_Filter..."),
-        new("Clear Filter", WorksheetContextMenuAction.ClearFilter, AccessHeader: "C_lear Filter", IsEnabled: state.HasAutoFilterHeaderTarget),
-        new("Reapply Filter", WorksheetContextMenuAction.ReapplyFilter, AccessHeader: "_Reapply Filter", IsEnabled: state.HasAutoFilterHeaderTarget),
-        new("Pick From Drop-down List...", WorksheetContextMenuAction.PickFromDropDown, AccessHeader: "Pick From _Drop-down List...", IsEnabled: state.HasDropdownTarget),
+        Submenu(
+            "Sort and Filter",
+            "Sort and _Filter",
+            new WorksheetContextMenuCommand("Sort A to Z", WorksheetContextMenuAction.SortAscending, AccessHeader: "Sort _A to Z"),
+            new WorksheetContextMenuCommand("Sort Z to A", WorksheetContextMenuAction.SortDescending, AccessHeader: "Sort _Z to A"),
+            new WorksheetContextMenuCommand("Custom Sort...", WorksheetContextMenuAction.CustomSort, AccessHeader: "C_ustom Sort..."),
+            WorksheetContextMenuCommand.Separator,
+            new WorksheetContextMenuCommand("Filter...", WorksheetContextMenuAction.Filter, AccessHeader: "_Filter..."),
+            new WorksheetContextMenuCommand("Clear Filter", WorksheetContextMenuAction.ClearFilter, AccessHeader: "C_lear Filter", IsEnabled: state.HasAutoFilterHeaderTarget),
+            new WorksheetContextMenuCommand("Reapply Filter", WorksheetContextMenuAction.ReapplyFilter, AccessHeader: "_Reapply Filter", IsEnabled: state.HasAutoFilterHeaderTarget),
+            new WorksheetContextMenuCommand("Pick From Drop-down List...", WorksheetContextMenuAction.PickFromDropDown, AccessHeader: "Pick From _Drop-down List...", IsEnabled: state.HasDropdownTarget)),
         new("Quick Analysis", WorksheetContextMenuAction.QuickAnalysis, AccessHeader: "_Quick Analysis"),
-        new("Define Name...", WorksheetContextMenuAction.DefineName, AccessHeader: "Define _Name..."),
-        new("Create Table...", WorksheetContextMenuAction.CreateTable, AccessHeader: "Create Ta_ble..."),
-        new("Format as Table...", WorksheetContextMenuAction.FormatAsTable, AccessHeader: "Format as _Table..."),
-        new("Text to Columns...", WorksheetContextMenuAction.TextToColumns, AccessHeader: "Te_xt to Columns..."),
-        new("Remove Duplicates...", WorksheetContextMenuAction.RemoveDuplicates, AccessHeader: "Remove D_uplicates..."),
-        new("Data Validation...", WorksheetContextMenuAction.DataValidation, AccessHeader: "Data _Validation..."),
+        Submenu(
+            "Data Tools",
+            "Data _Tools",
+            new WorksheetContextMenuCommand("Define Name...", WorksheetContextMenuAction.DefineName, AccessHeader: "Define _Name..."),
+            new WorksheetContextMenuCommand("Create Table...", WorksheetContextMenuAction.CreateTable, AccessHeader: "Create Ta_ble..."),
+            new WorksheetContextMenuCommand("Format as Table...", WorksheetContextMenuAction.FormatAsTable, AccessHeader: "Format as _Table..."),
+            WorksheetContextMenuCommand.Separator,
+            new WorksheetContextMenuCommand("Text to Columns...", WorksheetContextMenuAction.TextToColumns, AccessHeader: "Te_xt to Columns..."),
+            new WorksheetContextMenuCommand("Remove Duplicates...", WorksheetContextMenuAction.RemoveDuplicates, AccessHeader: "Remove D_uplicates..."),
+            new WorksheetContextMenuCommand("Data Validation...", WorksheetContextMenuAction.DataValidation, AccessHeader: "Data _Validation...")),
+        Submenu(
+            "Rows and Columns",
+            "_Rows and Columns",
+            [.. BuildRowSizingVisibilityCommands(), WorksheetContextMenuCommand.Separator, .. BuildColumnSizingVisibilityCommands()]),
         WorksheetContextMenuCommand.Separator,
-        .. BuildRowSizingVisibilityCommands(),
-        .. BuildColumnSizingVisibilityCommands(),
-        WorksheetContextMenuCommand.Separator,
-        new("New Comment", WorksheetContextMenuAction.NewComment, AccessHeader: "New Co_mment"),
-        new("Edit Comment...", WorksheetContextMenuAction.EditComment, AccessHeader: "_Edit Comment...", IsEnabled: state.HasThreadedComment),
-        BuildThreadedCommentResolveCommand(state),
-        new("Delete Comment", WorksheetContextMenuAction.DeleteComment, AccessHeader: "Delete _Comment", IsEnabled: state.HasThreadedComment),
-        new("New Note", WorksheetContextMenuAction.NewNote, AccessHeader: "New No_te"),
-        new("Edit Note...", WorksheetContextMenuAction.EditNote, AccessHeader: "_Edit Note...", IsEnabled: state.HasNote),
-        new("Delete Note", WorksheetContextMenuAction.DeleteNote, AccessHeader: "De_lete Note", IsEnabled: state.HasNote),
-        new("Show Notes", WorksheetContextMenuAction.ShowNotes, AccessHeader: "_Show Notes", IsEnabled: state.HasNote),
+        Submenu(
+            "Comments and Notes",
+            "Co_mments and Notes",
+            new WorksheetContextMenuCommand("New Comment", WorksheetContextMenuAction.NewComment, AccessHeader: "New Co_mment"),
+            new WorksheetContextMenuCommand("Edit Comment...", WorksheetContextMenuAction.EditComment, AccessHeader: "_Edit Comment...", IsEnabled: state.HasThreadedComment),
+            BuildThreadedCommentResolveCommand(state),
+            new WorksheetContextMenuCommand("Delete Comment", WorksheetContextMenuAction.DeleteComment, AccessHeader: "Delete _Comment", IsEnabled: state.HasThreadedComment),
+            WorksheetContextMenuCommand.Separator,
+            new WorksheetContextMenuCommand("New Note", WorksheetContextMenuAction.NewNote, AccessHeader: "New No_te"),
+            new WorksheetContextMenuCommand("Edit Note...", WorksheetContextMenuAction.EditNote, AccessHeader: "_Edit Note...", IsEnabled: state.HasNote),
+            new WorksheetContextMenuCommand("Delete Note", WorksheetContextMenuAction.DeleteNote, AccessHeader: "De_lete Note", IsEnabled: state.HasNote),
+            new WorksheetContextMenuCommand("Show Notes", WorksheetContextMenuAction.ShowNotes, AccessHeader: "_Show Notes", IsEnabled: state.HasNote)),
         .. BuildHyperlinkCommands(state),
+        .. BuildPivotTableCommands(state),
         WorksheetContextMenuCommand.Separator,
         new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
-        WorksheetContextMenuCommand.Separator,
-        new("Clear All", WorksheetContextMenuAction.ClearAll, AccessHeader: "Clear _All"),
-        new("Clear Formats", WorksheetContextMenuAction.ClearFormats, AccessHeader: "Clear _Formats"),
-        new("Clear Comments and Notes", WorksheetContextMenuAction.ClearComments, AccessHeader: "Clear Co_mments and Notes"),
-        new("Clear Hyperlinks", WorksheetContextMenuAction.ClearHyperlinks, AccessHeader: "Clear _Hyperlinks", IsEnabled: state.HasHyperlink),
-        new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
+        Submenu(
+            "Clear",
+            "C_lear",
+            new WorksheetContextMenuCommand("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents"),
+            new WorksheetContextMenuCommand("Clear All", WorksheetContextMenuAction.ClearAll, AccessHeader: "Clear _All"),
+            new WorksheetContextMenuCommand("Clear Formats", WorksheetContextMenuAction.ClearFormats, AccessHeader: "Clear _Formats"),
+            new WorksheetContextMenuCommand("Clear Comments and Notes", WorksheetContextMenuAction.ClearComments, AccessHeader: "Clear Co_mments and Notes"),
+            new WorksheetContextMenuCommand("Clear Hyperlinks", WorksheetContextMenuAction.ClearHyperlinks, AccessHeader: "Clear _Hyperlinks", IsEnabled: state.HasHyperlink))
     ]);
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildPictureCommands() =>
@@ -141,6 +176,19 @@ public static class WorksheetContextMenuPlanner
         new("Reset Crop", WorksheetContextMenuAction.ResetPictureCrop, AccessHeader: "_Reset Crop"),
         WorksheetContextMenuCommand.Separator,
         new("Edit Alt Text...", WorksheetContextMenuAction.EditAltText, AccessHeader: "Edit _Alt Text..."),
+        new("Selection Pane...", WorksheetContextMenuAction.SelectionPane, AccessHeader: "_Selection Pane...")
+    ]);
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildChartCommands() =>
+        Freeze([
+        new("Format Chart Area...", WorksheetContextMenuAction.FormatChartArea, AccessHeader: "_Format Chart Area..."),
+        new("Select Data...", WorksheetContextMenuAction.SelectChartData, AccessHeader: "Select _Data..."),
+        new("Change Chart Type...", WorksheetContextMenuAction.ChangeChartType, AccessHeader: "_Change Chart Type..."),
+        new("Chart Styles...", WorksheetContextMenuAction.ChartStyles, AccessHeader: "Chart _Styles..."),
+        new("Chart Titles...", WorksheetContextMenuAction.ChartTitles, AccessHeader: "Chart _Titles..."),
+        new("Size and Properties...", WorksheetContextMenuAction.ChartSizeAndProperties, AccessHeader: "Si_ze and Properties..."),
+        new("Move Chart...", WorksheetContextMenuAction.MoveChart, AccessHeader: "_Move Chart..."),
+        WorksheetContextMenuCommand.Separator,
         new("Selection Pane...", WorksheetContextMenuAction.SelectionPane, AccessHeader: "_Selection Pane...")
     ]);
 
@@ -246,13 +294,26 @@ public static class WorksheetContextMenuPlanner
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildHyperlinkCommands(WorksheetContextMenuState state) =>
         state.HasHyperlink
             ? Freeze([
-                new("Open Hyperlink", WorksheetContextMenuAction.OpenHyperlink, AccessHeader: "_Open Hyperlink"),
-                new("Edit Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Edit Hyperlink..."),
-                new("Remove Hyperlink", WorksheetContextMenuAction.RemoveHyperlinks, AccessHeader: "_Remove Hyperlink")
+                Submenu(
+                    "Hyperlink",
+                    "_Hyperlink",
+                    new WorksheetContextMenuCommand("Open Hyperlink", WorksheetContextMenuAction.OpenHyperlink, AccessHeader: "_Open Hyperlink"),
+                    new WorksheetContextMenuCommand("Edit Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Edit Hyperlink..."),
+                    new WorksheetContextMenuCommand("Remove Hyperlink", WorksheetContextMenuAction.RemoveHyperlinks, AccessHeader: "_Remove Hyperlink"))
             ])
             : Freeze([
                 new("Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Hyperlink...")
             ]);
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildPivotTableCommands(WorksheetContextMenuState state) =>
+        state.HasPivotTableTarget
+            ? Freeze([
+                Submenu(
+                    "PivotTable",
+                    "_PivotTable",
+                    new WorksheetContextMenuCommand("PivotTable Options...", WorksheetContextMenuAction.PivotTableOptions, AccessHeader: "PivotTable _Options..."))
+            ])
+            : [];
 }
 
 public sealed record WorksheetContextMenuCommand(
@@ -260,12 +321,17 @@ public sealed record WorksheetContextMenuCommand(
     WorksheetContextMenuAction Action,
     bool IsSeparator = false,
     string? AccessHeader = null,
-    bool IsEnabled = true)
+    bool IsEnabled = true,
+    IReadOnlyList<WorksheetContextMenuCommand>? Children = null)
 {
     public static WorksheetContextMenuCommand Separator { get; } =
         new("", WorksheetContextMenuAction.None, IsSeparator: true, IsEnabled: false);
 
     public string AccessHeader { get; init; } = AccessHeader ?? Header;
+
+    public IReadOnlyList<WorksheetContextMenuCommand> Children { get; init; } = Children ?? [];
+
+    public bool HasChildren => Children.Count > 0;
 }
 
 public sealed record WorksheetContextMenuState(
@@ -274,7 +340,8 @@ public sealed record WorksheetContextMenuState(
     bool HasNote = false,
     bool HasHyperlink = false,
     bool HasAutoFilterHeaderTarget = false,
-    bool HasDropdownTarget = false)
+    bool HasDropdownTarget = false,
+    bool HasPivotTableTarget = false)
 {
     public static WorksheetContextMenuState Default { get; } = new();
 }
@@ -330,6 +397,7 @@ public enum WorksheetContextMenuAction
     ShowNotes,
     OpenHyperlink,
     Hyperlink,
+    PivotTableOptions,
     FormatCells,
     ClearAll,
     ClearFormats,
@@ -345,6 +413,13 @@ public enum WorksheetContextMenuAction
     RotateDrawingObject,
     ShapeFill,
     ShapeOutline,
+    FormatChartArea,
+    SelectChartData,
+    ChangeChartType,
+    ChartStyles,
+    ChartTitles,
+    ChartSizeAndProperties,
+    MoveChart,
     BringForward,
     SendBackward,
     EditAltText,
@@ -357,6 +432,7 @@ public enum WorksheetContextMenuTargetKind
     Picture,
     Shape,
     TextBox,
+    Chart,
     RowSelection,
     ColumnSelection
 }

@@ -95,10 +95,10 @@ public partial class GridView
             if (!selectedRect.IsEmpty)
             {
                 var rotationDegrees = GetSelectedObjectRotationDegrees();
-                if (_objectDragKind != ObjectDragKind.None)
-                    RenderObjectDragPreview(dc, selectedRect);
-                else
-                    DrawObjectSelectionHandles(dc, selectedRect, rotationDegrees);
+                DrawObjectSelectionHandles(
+                    dc,
+                    GetSelectedObjectLiveRect(selectedRect),
+                    GetSelectedObjectLiveRotationDegrees(rotationDegrees));
             }
         }
 

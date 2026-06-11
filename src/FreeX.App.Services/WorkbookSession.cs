@@ -135,6 +135,7 @@ public sealed class WorkbookSession
     private readonly IViewportService _viewportService;
     private readonly bool _includeObjects;
     private readonly WorkbookSelectionStatsCache _selectionStatsCache = new();
+    private readonly WorksheetSelectionStore _worksheetSelections = new();
     private readonly HashSet<SheetId> _groupedSheetIds = [];
     private SheetId? _sheetGroupAnchor;
     private InternalClipboard? _internalClipboard;
@@ -382,6 +383,57 @@ public sealed class WorkbookSession
         SelectedRanges = ranges.ToArray();
     }
 
+    private void RememberActiveWorksheetSelection()
+    {
+        if (Workbook.GetSheet(ActiveSheet.Id) is null)
+            return;
+
+        IReadOnlyList<GridRange> ranges = SelectedRanges.Count == 0
+            ? new[] { SelectedRange }
+            : SelectedRanges.ToArray();
+        _worksheetSelections.Save(
+            ActiveSheet.Id,
+            new WorksheetSelectionSnapshot(
+                ActiveCell,
+                SelectedRange.End,
+                SelectedRange,
+                ranges));
+    }
+
+    private bool TryRestoreActiveWorksheetSelection()
+    {
+        if (!_worksheetSelections.TryGet(ActiveSheet.Id, out var snapshot) ||
+            !IsSnapshotForSheet(snapshot, ActiveSheet.Id))
+        {
+            return false;
+        }
+
+        IReadOnlyList<GridRange> ranges = snapshot.AdditionalRanges is { Count: > 0 }
+            ? snapshot.AdditionalRanges
+            : new[] { snapshot.PrimaryRange };
+        ActiveCell = snapshot.Anchor;
+        ActiveSheet.ActiveRow = ActiveCell.Row;
+        ActiveSheet.ActiveCol = ActiveCell.Col;
+        SetSelectedRanges(snapshot.PrimaryRange, ranges);
+        return true;
+    }
+
+    private static bool IsSnapshotForSheet(WorksheetSelectionSnapshot snapshot, SheetId sheetId)
+    {
+        if (!snapshot.Anchor.Sheet.Equals(sheetId) ||
+            !snapshot.Cursor.Sheet.Equals(sheetId) ||
+            !snapshot.PrimaryRange.Start.Sheet.Equals(sheetId) ||
+            !snapshot.PrimaryRange.End.Sheet.Equals(sheetId))
+        {
+            return false;
+        }
+
+        return snapshot.AdditionalRanges is null ||
+            snapshot.AdditionalRanges.All(range =>
+                range.Start.Sheet.Equals(sheetId) &&
+                range.End.Sheet.Equals(sheetId));
+    }
+
     public GridRange SelectCurrentRegionOrAll()
     {
         if (SelectionRangeService.GetCurrentRegion(ActiveSheet, ActiveCell) is { } currentRegion &&
@@ -570,7 +622,9 @@ public sealed class WorkbookSession
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var range = SelectedRange;
+        if (!SubtotalPlanner.TryCreateSourceRange(ActiveSheet, SelectedRange, out var range, out var sourceRangeError))
+            return new WorkbookCellEditResult(false, sourceRangeError, [], RecalcReport: null);
+
         var command = CreateGroupedSheetCommand(
             options.ReplaceExisting ? "Replace Subtotals" : "Subtotal",
             sheetId =>
@@ -606,7 +660,7 @@ public sealed class WorkbookSession
 
     public WorkbookCellEditResult RemoveSelectedRangeSubtotals()
     {
-        var range = SelectedRange;
+        var range = SubtotalPlanner.NormalizeSourceRange(ActiveSheet, SelectedRange);
         var command = CreateGroupedSheetCommand(
             "Remove Subtotals",
             sheetId =>
@@ -1056,6 +1110,9 @@ public sealed class WorkbookSession
     {
         var previousSheetId = ActiveSheet.Id;
         var previousGroupedSheetIds = _groupedSheetIds.ToHashSet();
+        if (!previousSheetId.Equals(sheetId))
+            RememberActiveWorksheetSelection();
+
         var selection = _sheetSelectionService.SelectSheet(Workbook, sheetId);
         var sheetChanged = previousSheetId != selection.Sheet.Id;
 
@@ -1066,8 +1123,12 @@ public sealed class WorkbookSession
 
         if (sheetChanged)
         {
-            ActiveCell = GetInitialActiveCell(ActiveSheet);
-            SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+            if (!TryRestoreActiveWorksheetSelection())
+            {
+                ActiveCell = GetInitialActiveCell(ActiveSheet);
+                SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+            }
+
             RefreshViewport();
         }
 
@@ -1100,7 +1161,7 @@ public sealed class WorkbookSession
         if (!result.Success)
             return result;
 
-        ApplySuccessfulWorkbookStructureResult(Workbook.Sheets[^1].Id);
+        ApplySuccessfulNewWorksheetResult(Workbook.Sheets[^1].Id);
         return result;
     }
 
@@ -1124,7 +1185,7 @@ public sealed class WorkbookSession
             return result;
 
         var copyIndex = Math.Min(sourceIndex + 1, Workbook.Sheets.Count - 1);
-        ApplySuccessfulWorkbookStructureResult(Workbook.Sheets[copyIndex].Id);
+        ApplySuccessfulNewWorksheetResult(Workbook.Sheets[copyIndex].Id);
         return result;
     }
 
@@ -2401,15 +2462,15 @@ public sealed class WorkbookSession
         WorkbookCellEditResult result,
         IReadOnlySet<SheetId> sheetIdsBefore)
     {
-        if (result.AffectedCells.Count > 0)
+        if (FindNewSheetId(sheetIdsBefore) is { } newSheetId)
         {
-            ApplySuccessfulEditResult(result, ActiveCell);
+            ApplySuccessfulNewWorksheetResult(newSheetId);
             return;
         }
 
-        if (FindNewSheetId(sheetIdsBefore) is { } newSheetId)
+        if (result.AffectedCells.Count > 0)
         {
-            ApplySuccessfulWorkbookStructureResult(newSheetId);
+            ApplySuccessfulEditResult(result, ActiveCell);
             return;
         }
 
@@ -3165,16 +3226,42 @@ public sealed class WorkbookSession
             GetForecastSheetSelectedRange(forecastSheetId, plan));
     }
 
-    private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId)
+    private void ApplySuccessfulNewWorksheetResult(SheetId preferredSheetId)
     {
+        if (Workbook.GetSheet(preferredSheetId) is { } sheet)
+        {
+            sheet.ResetViewStateToA1();
+            _worksheetSelections.Remove(preferredSheetId);
+        }
+
+        ApplySuccessfulWorkbookStructureResult(preferredSheetId, resetSelectionToA1: true);
+    }
+
+    private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId) =>
+        ApplySuccessfulWorkbookStructureResult(preferredSheetId, resetSelectionToA1: false);
+
+    private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId, bool resetSelectionToA1)
+    {
+        RememberActiveWorksheetSelection();
         var selection = _sheetSelectionService.SelectSheet(Workbook, preferredSheetId);
         ActiveSheet = selection.Sheet;
         SelectSingleSheetGroup(ActiveSheet.Id);
         RefreshSheetTabsForActiveSheet();
-        ActiveCell = GetInitialActiveCell(ActiveSheet);
-        ActiveSheet.ActiveRow = ActiveCell.Row;
-        ActiveSheet.ActiveCol = ActiveCell.Col;
-        SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+        if (resetSelectionToA1)
+        {
+            ActiveSheet.ResetViewStateToA1();
+            _worksheetSelections.Remove(ActiveSheet.Id);
+            ActiveCell = new CellAddress(ActiveSheet.Id, 1, 1);
+            SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+        }
+        else if (!TryRestoreActiveWorksheetSelection())
+        {
+            ActiveCell = GetInitialActiveCell(ActiveSheet);
+            ActiveSheet.ActiveRow = ActiveCell.Row;
+            ActiveSheet.ActiveCol = ActiveCell.Col;
+            SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+        }
+
         FormulaEditAddress = null;
         IsDirty = true;
         _selectionStatsRevision++;
@@ -3184,6 +3271,7 @@ public sealed class WorkbookSession
 
     private void ApplySuccessfulWorkbookStructureRangeResult(SheetId preferredSheetId, GridRange selectedRange)
     {
+        RememberActiveWorksheetSelection();
         var selection = _sheetSelectionService.SelectSheet(Workbook, preferredSheetId);
         ActiveSheet = selection.Sheet;
         SelectSingleSheetGroup(ActiveSheet.Id);
@@ -3223,6 +3311,7 @@ public sealed class WorkbookSession
         var address = FirstAffectedCellOrDefault(result.AffectedCells, fallbackAddress);
         if (!ActiveSheet.Id.Equals(address.Sheet))
         {
+            RememberActiveWorksheetSelection();
             var selection = _sheetSelectionService.SelectSheet(Workbook, address.Sheet, _groupedSheetIds);
             ActiveSheet = selection.Sheet;
             RefreshSheetTabsForActiveSheet();

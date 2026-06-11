@@ -75,16 +75,18 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
         renderTextBoxes.Should().Contain("GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom)");
         renderTextBoxes.Should().Contain("CanAnchoredObjectReachDrawingViewport(textBox.Anchor");
-        renderTextBoxes.Should().Contain("NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom)");
-        renderTextBoxes.Should().Contain("IntersectsDrawingViewport(rect, textBox.RotationDegrees, visibleRight, visibleBottom)");
-        renderTextBoxes.IndexOf("NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)
+        renderTextBoxes.Should().Contain("TryResolveLiveObjectTransform(textBox.Id, ObjectKind.TextBox, rect, rotationDegrees");
+        renderTextBoxes.Should().Contain("NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom)");
+        renderTextBoxes.Should().Contain("IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom)");
+        renderTextBoxes.IndexOf("NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)
             .Should().BeLessThan(renderTextBoxes.IndexOf("ResolveTextBoxColors(textBox, WorkbookTheme)", StringComparison.Ordinal));
 
         renderDrawingShapes.Should().Contain("GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom)");
         renderDrawingShapes.Should().Contain("CanAnchoredObjectReachDrawingViewport(shape.Anchor");
-        renderDrawingShapes.Should().Contain("NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom)");
-        renderDrawingShapes.Should().Contain("IntersectsDrawingViewport(rect, shape.RotationDegrees, visibleRight, visibleBottom)");
-        renderDrawingShapes.IndexOf("NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)
+        renderDrawingShapes.Should().Contain("TryResolveLiveObjectTransform(shape.Id, ObjectKind.Shape, rect, rotationDegrees");
+        renderDrawingShapes.Should().Contain("NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom)");
+        renderDrawingShapes.Should().Contain("IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom)");
+        renderDrawingShapes.IndexOf("NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)
             .Should().BeLessThan(renderDrawingShapes.IndexOf("ResolveDrawingShapeColors(shape, WorkbookTheme)", StringComparison.Ordinal));
 
         renderNativeControls.Should().Contain("GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom)");
@@ -94,9 +96,10 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
         renderPictures.Should().Contain("GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom)");
         renderPictures.Should().Contain("CanAnchoredObjectReachDrawingViewport(picture.Anchor");
-        renderPictures.Should().Contain("NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom)");
-        renderPictures.Should().Contain("IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom)");
-        renderPictures.IndexOf("NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)
+        renderPictures.Should().Contain("TryResolveLiveObjectTransform(picture.Id, ObjectKind.Picture, rect, rotationDegrees");
+        renderPictures.Should().Contain("NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom)");
+        renderPictures.Should().Contain("IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom)");
+        renderPictures.IndexOf("NeedsDrawingViewportCull(rect, rotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)
             .Should().BeLessThan(renderPictures.IndexOf("TryLoadPictureImage(picture, out var image)", StringComparison.Ordinal));
 
         renderPlaceholders.Should().Contain("CanAnchoredObjectReachDrawingViewport(shape.Anchor");
@@ -492,8 +495,8 @@ public sealed partial class GridViewDrawingObjectThemeTests
         renderDrawingShape.Should().Contain("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);");
         renderDrawingShape.Should().Contain("DrawShapeThemeBevelEffect(dc, shape.Kind, rect, themeEffect);");
         renderDrawingShape.IndexOf("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);", StringComparison.Ordinal)
-            .Should().BeLessThan(renderDrawingShape.IndexOf("switch (shape.Kind)", StringComparison.Ordinal));
-        renderDrawingShape.IndexOf("switch (shape.Kind)", StringComparison.Ordinal)
+            .Should().BeLessThan(renderDrawingShape.IndexOf("DrawShapeGeometry(dc, shape.Kind, rect", StringComparison.Ordinal));
+        renderDrawingShape.IndexOf("DrawShapeGeometry(dc, shape.Kind, rect", StringComparison.Ordinal)
             .Should().BeLessThan(renderDrawingShape.IndexOf("DrawShapeThemeBevelEffect(dc, shape.Kind, rect, themeEffect);", StringComparison.Ordinal));
         shapeThemeEffect.Should().Contain("effect.HasThreeDRotation");
         shapeThemeEffect.Should().Contain("DrawShapeThreeDRotationEffect(dc, kind, rect, colors);");
@@ -531,8 +534,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
         textBoxThemeInnerShadow.Should().Contain("GetInnerShadowThickness(effect.InnerShadowBlurRadius)");
         textBoxThemeInnerShadow.Should().Contain("GetInnerShadowRect(rect, thickness, effect.InnerShadowOffsetX, effect.InnerShadowOffsetY)");
         shapeThemeInnerShadow.Should().Contain("effect.HasInnerShadow");
-        shapeThemeInnerShadow.Should().Contain("dc.DrawRectangle(null, pen, shadowRect);");
-        shapeThemeInnerShadow.Should().Contain("dc.DrawEllipse(null, pen");
+        shapeThemeInnerShadow.Should().Contain("DrawShapeGeometry(dc, kind, shadowRect, null, pen);");
         pictures.Should().NotContain("WorkbookThemeEffectStyle");
         pictures.Should().NotContain("HasInnerShadow");
         pictures.Should().NotContain("InnerShadow");

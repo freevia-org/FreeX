@@ -20,6 +20,7 @@ public sealed class DataSubmittedWorkflowsScreenshotTourTests
         tourSource.Should().Contain("new SortCommand(");
         tourSource.Should().Contain("new FilterCommand(context.Sheet.Id, currentRange, filterColOffset: 3, allowedValues: [\"Open\"])");
         tourSource.Should().Contain("ReapplyAutoFilter()");
+        tourSource.Should().Contain("new AdvancedFilterCommand(");
         tourSource.Should().Contain("TextToColumnsDialog.CreateResult(");
         tourSource.Should().Contain("CreateTextToColumnsCommand(");
         tourSource.Should().Contain("new SetDataValidationCommand(");
@@ -32,6 +33,7 @@ public sealed class DataSubmittedWorkflowsScreenshotTourTests
         tourSource.Should().Contain("freex_data_submitted_workflows_autofilter_applied_open");
         tourSource.Should().Contain("freex_data_submitted_workflows_autofilter_cleared");
         tourSource.Should().Contain("freex_data_submitted_workflows_autofilter_reapplied_open");
+        tourSource.Should().Contain("freex_data_submitted_workflows_advanced_filter_copy_to_result");
         tourSource.Should().Contain("freex_data_submitted_workflows_text_to_columns_result");
         tourSource.Should().Contain("freex_data_submitted_workflows_data_validation_invalid_selected");
         tourSource.Should().Contain("freex_data_submitted_workflows_subtotal_result");
@@ -41,6 +43,7 @@ public sealed class DataSubmittedWorkflowsScreenshotTourTests
         tourSource.Should().Contain("RenderTargetBitmap-window-full-with-real-workbook-commands");
         tourSource.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.DataSubmittedWorkflowsTourManifest");
         tourSource.Should().Contain("UI-CMD-DATA-002");
+        tourSource.Should().Contain("UI-CMD-DATA-003");
         tourSource.Should().Contain("UI-CMD-DATA-004");
         tourSource.Should().Contain("UI-CMD-DATA-005");
         tourSource.Should().Contain("UI-CMD-DATA-007");

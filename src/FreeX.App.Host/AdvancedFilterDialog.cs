@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -231,7 +232,17 @@ public sealed partial class AdvancedFilterDialog : Window
         {
             target = _criteriaRangeBox;
         }
+        else if (string.Equals(error, AdvancedFilterCommand.CriteriaRangeTooLargeMessage, StringComparison.Ordinal))
+        {
+            target = _criteriaRangeBox;
+        }
         else if (string.Equals(error, UiText.Get("AdvancedFilter_EnterValidCopyToRange"), StringComparison.Ordinal))
+        {
+            _copyToAnotherLocationButton.IsChecked = true;
+            UpdateCopyToState();
+            target = _copyToBox;
+        }
+        else if (string.Equals(error, AdvancedFilterCommand.CopyOutputTooLargeMessage, StringComparison.Ordinal))
         {
             _copyToAnotherLocationButton.IsChecked = true;
             UpdateCopyToState();

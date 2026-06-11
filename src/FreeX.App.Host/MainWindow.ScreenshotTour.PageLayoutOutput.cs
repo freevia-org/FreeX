@@ -84,7 +84,7 @@ public partial class MainWindow
                 "print-area-menu-status",
                 "freex_page_layout_output_print_area_menu_status",
                 "Print Area",
-                "Print Area menu status is captured against the selected persisted print-area range, including Set, disabled Add to Print Area, and Clear.",
+                "Print Area menu status is captured against the selected persisted print-area range, including Set and Clear.",
                 ["UI-CAT-PAGE-001", "UI-CMD-PAGE-001"]));
 
             SelectViewPanesZoomTourRange(sheet, Range(sheet.Id, 12, 5, 12, 5));

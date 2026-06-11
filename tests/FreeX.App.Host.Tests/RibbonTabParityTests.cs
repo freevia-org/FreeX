@@ -36,7 +36,6 @@ public sealed class RibbonTabParityTests
 
         GroupNames(insertTab).Should().Equal(
             "Tables",
-            "Illustrations",
             "Charts",
             "Sparklines",
             "Filters",
@@ -45,10 +44,9 @@ public sealed class RibbonTabParityTests
             "Text",
             "Symbols");
 
-        CommandTitles(Group(insertTab, "Tables")).Should().Contain("Recommended PivotTables");
-        Command(Group(insertTab, "Tables"), "Recommended PivotTables").Should().NotBeNull(
-            "Excel exposes Recommended PivotTables as a first-class Tables command, not only as a nested PivotTable menu item");
-        CommandTitles(Group(insertTab, "Illustrations")).Should().Contain(["Pictures", "Shapes"]);
+        CommandTitles(Group(insertTab, "Tables")).Should().ContainInOrder("PivotTable", "Table");
+        CommandTitles(Group(insertTab, "Tables")).Should().NotContain("Recommended PivotTables",
+            "FreeX does not generate recommended PivotTable layouts, so this excluded command must not appear actionable");
         CommandTitles(Group(insertTab, "Charts")).Should().Contain("Recommended Charts");
         CommandTitles(Group(insertTab, "Filters")).Should().Contain(["Insert Slicer", "Insert Timeline"]);
         CommandTitles(Group(insertTab, "Links")).Should().Contain("Insert Link");
@@ -64,18 +62,20 @@ public sealed class RibbonTabParityTests
         var drawTab = Tab(catalog, "Draw");
 
         GroupNames(drawTab).Should().Equal(
+            "Illustrations",
             "Arrange",
             "Format");
 
         drawTab.Groups.SelectMany(group => group.Commands).Select(command => command.Title)
             .Should()
             .NotContain(["Rectangle", "Ellipse", "Line", "Draw with Touch", "Eraser", "Lasso Select", "Pen", "Pencil", "Highlighter", "Add Pen", "Ink to Shape", "Ink to Math"]);
+        CommandTitles(Group(drawTab, "Illustrations")).Should().Contain(["Pictures", "Shapes"]);
         CommandTitles(Group(drawTab, "Arrange")).Should().Contain(["Bring Forward", "Send Backward", "Selection Pane"]);
         CommandTitles(Group(drawTab, "Format")).Should().Contain("Shape Fill");
     }
 
     [Fact]
-    public void PageLayoutTab_UsesExcelLikeGroupOrderAndArrangeCommands()
+    public void PageLayoutTab_UsesExcelLikeGroupOrderWithoutDuplicateArrangeCommands()
     {
         var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
         var pageLayoutTab = Tab(catalog, "Page Layout");
@@ -85,8 +85,7 @@ public sealed class RibbonTabParityTests
             "Themes",
             "Page Setup",
             "Scale to Fit",
-            "Sheet Options",
-            "Arrange");
+            "Sheet Options");
 
         CommandTitles(pageSetupGroup).Should().ContainInOrder(
             "Margins",
@@ -97,7 +96,8 @@ public sealed class RibbonTabParityTests
             "Background",
             "Print Titles");
         CommandTitles(pageSetupGroup).Should().NotContain("Header & Footer");
-        CommandTitles(Group(pageLayoutTab, "Arrange")).Should().Contain(["Bring Forward", "Send Backward", "Selection Pane", "Rotate Object"]);
+        GroupNames(pageLayoutTab).Should().NotContain("Arrange",
+            "object arrangement remains in Draw and the object-specific contextual format tabs");
     }
 
     [Fact]
@@ -108,7 +108,8 @@ public sealed class RibbonTabParityTests
         foreach (var arrangeGroup in new[]
         {
             Group(Tab(catalog, "Draw"), "Arrange"),
-            Group(Tab(catalog, "Page Layout"), "Arrange")
+            Group(Tab(catalog, "Shape Format"), "Arrange"),
+            Group(Tab(catalog, "Picture Format"), "Arrange")
         })
         {
             CommandTitles(arrangeGroup).Should().ContainInOrder("Bring Forward", "Send Backward");
@@ -122,6 +123,54 @@ public sealed class RibbonTabParityTests
         WorkspaceFileLocator.ReadAllText("docs", "parity/command-surface.md")
             .Should()
             .Contain("| Bring Forward/Send Backward | Implemented |");
+    }
+
+    [Fact]
+    public void ShapeFormatTab_UsesObjectContextualGroupOrder()
+    {
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var shapeFormatTab = Tab(catalog, "Shape Format");
+
+        GroupNames(shapeFormatTab).Should().Equal(
+            "Shape Styles",
+            "Arrange",
+            "Accessibility");
+
+        CommandTitles(Group(shapeFormatTab, "Shape Styles")).Should().Contain([
+            "Shape Fill",
+            "Object Outline",
+            "Shape Gradient",
+            "Shape Effects"]);
+        CommandTitles(Group(shapeFormatTab, "Arrange")).Should().Contain([
+            "Bring Forward",
+            "Send Backward",
+            "Selection Pane",
+            "Rotate Object",
+            "Object Size"]);
+        CommandTitles(Group(shapeFormatTab, "Accessibility")).Should().Contain("Alt Text");
+    }
+
+    [Fact]
+    public void PictureFormatTab_UsesObjectContextualGroupOrder()
+    {
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var pictureFormatTab = Tab(catalog, "Picture Format");
+
+        GroupNames(pictureFormatTab).Should().Equal(
+            "Format",
+            "Arrange",
+            "Accessibility");
+
+        CommandTitles(Group(pictureFormatTab, "Format")).Should().Contain([
+            "Format Picture",
+            "Crop Picture"]);
+        CommandTitles(Group(pictureFormatTab, "Arrange")).Should().Contain([
+            "Bring Forward",
+            "Send Backward",
+            "Selection Pane",
+            "Rotate Object",
+            "Object Size"]);
+        CommandTitles(Group(pictureFormatTab, "Accessibility")).Should().Contain("Alt Text");
     }
 
     [Fact]
@@ -202,8 +251,7 @@ public sealed class RibbonTabParityTests
             "Accessibility",
             "Comments",
             "Notes",
-            "Protect",
-            "Changes");
+            "Protect");
 
         Command(proofingGroup, "Workbook Statistics").Content.Should().Be("Workbook Statistics");
         CommandTitles(proofingGroup).Should().NotContain("Workbook Stats");
@@ -214,7 +262,9 @@ public sealed class RibbonTabParityTests
             "Next Comment",
             "Show Comments"]);
         CommandTitles(Group(reviewTab, "Notes")).Should().Contain(["New Note", "Show Notes"]);
-        CommandTitles(Group(reviewTab, "Changes")).Should().Contain("Show Changes");
+        GroupNames(reviewTab).Should().NotContain("Changes");
+        reviewTab.Groups.SelectMany(group => group.Commands).Select(command => command.Title)
+            .Should().NotContain(["Show Changes", "Track Changes"]);
     }
 
     [Fact]

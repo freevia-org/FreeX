@@ -4318,7 +4318,7 @@
     <value>Clear Contents</value>
   </data>
   <data name="MainWindow_Header_ClearFilter" xml:space="preserve">
-    <value>Clear Filter</value>
+    <value>Clear Filters from This Field</value>
   </data>
   <data name="MainWindow_Header_ClearFormats" xml:space="preserve">
     <value>Clear Formats</value>
@@ -14855,6 +14855,12 @@ and {0} more.</value>
   </data>
   <data name="Progress_SavingWorkbook" xml:space="preserve">
     <value>Saving workbook</value>
+  </data>
+  <data name="MainWindow_Header_ShapeFormat" xml:space="preserve">
+    <value>Shape Format</value>
+  </data>
+  <data name="MainWindow_Header_PictureFormat" xml:space="preserve">
+    <value>Picture Format</value>
   </data>
   <data name="MainWindow_Header_TableDesign" xml:space="preserve">
     <value>Table Design</value>

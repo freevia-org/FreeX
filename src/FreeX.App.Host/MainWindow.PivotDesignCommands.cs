@@ -307,6 +307,24 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out _, out var pivotTable))
             return;
 
+        ShowPivotTableOptionsDialog(pivotTable);
+    }
+
+    private void ShowPivotTableOptionsDialog(CellAddress address)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var pivotTable = PivotUiPlanner.FindPivotTableContainingCell(sheet, address);
+        if (pivotTable is null)
+            return;
+
+        ShowPivotTableOptionsDialog(pivotTable);
+    }
+
+    private void ShowPivotTableOptionsDialog(PivotTableModel pivotTable)
+    {
         PivotCacheModel? cache = null;
         foreach (var item in _workbook.PivotCaches)
         {

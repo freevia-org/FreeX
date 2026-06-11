@@ -212,5 +212,7 @@ public sealed partial class RemainingDialogTests
             .Should().Be(SparklineDialogValidationResult.InvalidLocation);
         SparklineDialogPlanner.ValidateInputs("A1", "F1", sheetId)
             .Should().Be(SparklineDialogValidationResult.InvalidDataRange);
+        SparklineDialogPlanner.ValidateInputs("A1:A4097", "F1", sheetId)
+            .Should().Be(SparklineDialogValidationResult.InvalidDataRange);
     }
 }

@@ -24,7 +24,34 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
 
             harness.FocusedMenuHeader.Should().Be("Cu_t");
             harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
-            harness.OpenMenuHeaders.Should().StartWith(["Cu_t", "_Copy", "_Paste", "Paste _Special..."]);
+            harness.OpenMenuHeaders.Should().StartWith(["Cu_t", "_Copy", "_Paste"]);
+            harness.OpenMenuHeaders.Where(header => header.Length > 0).Should().HaveCount(13);
+            harness.OpenMenuHeaders.Should().ContainInOrder([
+                "_Paste Options",
+                "_Insert and Delete",
+                "Sort and _Filter",
+                "Data _Tools",
+                "_Rows and Columns",
+                "Co_mments and Notes",
+                "_Hyperlink...",
+                "_Format Cells...",
+                "C_lear"
+            ]);
+            harness.OpenMenuHeaders.Should().NotContain([
+                "Paste _Special...",
+                "Insert Row _Above",
+                "Data _Validation...",
+                "Clear C_ontents"
+            ]);
+            harness.OpenMenuHeadersRecursive.Should().Contain([
+                "Paste _Special...",
+                "Insert Row _Above",
+                "Delete _Column(s)",
+                "Data _Validation...",
+                "Row _Height...",
+                "New Co_mment",
+                "Clear C_ontents"
+            ]);
         });
     }
 
@@ -387,6 +414,11 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 .Select(item => item.Header?.ToString() ?? "")
                 .ToList() ?? [];
 
+        public IReadOnlyList<string> OpenMenuHeadersRecursive =>
+            ActiveContextMenu?.Items.OfType<MenuItem>()
+                .SelectMany(ReadMenuItemHeaders)
+                .ToList() ?? [];
+
         public IReadOnlyCollection<uint> FilterHiddenRows => CurrentSheet.FilterHiddenRows;
 
         public SheetId CurrentSheetId => CurrentSheet.Id;
@@ -604,6 +636,17 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 return SheetGrid.ContextMenu?.IsOpen == true
                     ? SheetGrid.ContextMenu
                     : null;
+            }
+        }
+
+        private static IEnumerable<string> ReadMenuItemHeaders(MenuItem item)
+        {
+            yield return item.Header?.ToString() ?? "";
+
+            foreach (var child in item.Items.OfType<MenuItem>())
+            {
+                foreach (var header in ReadMenuItemHeaders(child))
+                    yield return header;
             }
         }
 

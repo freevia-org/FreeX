@@ -33,15 +33,21 @@ public class Win32e {
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern IntPtr SetActiveWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, ref RECT lpRect);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
     [DllImport("user32.dll")] public static extern void mouse_event(int dwFlags, int dx, int dy, int dwData, int dwExtraInfo);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
     [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
     [DllImport("gdi32.dll")]  public static extern int GetDeviceCaps(IntPtr hDC, int nIndex);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT { public int Left, Top, Right, Bottom; }
     public static IntPtr FindWindowByClass(string className) {
@@ -120,6 +126,7 @@ function Clear-ScreenshotEvidenceArtifacts {
     Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath (Join-Path $outDir "screenshot_manifest.json") -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $outDir "screenshot_blocker_manifest.json") -Force -ErrorAction SilentlyContinue
 }
 
 function Clear-AutoFilterFlyoutEvidenceArtifacts {
@@ -171,6 +178,9 @@ function Clear-SaveAsWorkbookDialogEvidenceArtifacts {
 }
 
 $tabNames = @("Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help")
+$script:requestedTabNames = $tabNames
+$script:availableTabNames = @()
+$script:skippedTabNames = @()
 $script:capturedFiles = @()
 $captureLimitations = @(
     "Ribbon tab captures cover the top window band only.",
@@ -357,10 +367,59 @@ function Get-WindowTitle($windowHandle) {
     return $title.ToString()
 }
 
+function Get-ForegroundWindowInfo {
+    $foreground = [Win32e]::GetForegroundWindow()
+    if ($foreground -eq [IntPtr]::Zero) {
+        return [pscustomobject]@{
+            Handle = "0"
+            ProcessId = $null
+            Title = ""
+        }
+    }
+
+    $actualPid = 0
+    [Win32e]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    $title = New-Object System.Text.StringBuilder 512
+    [Win32e]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+    return [pscustomobject]@{
+        Handle = $foreground.ToString()
+        ProcessId = $actualPid
+        Title = $title.ToString()
+    }
+}
+
+function Write-RootCaptureBlockerManifest($operation, $expectedPid, $expectedTitle, $reason) {
+    $manifestPath = Join-Path $outDir "screenshot_blocker_manifest.json"
+    [pscustomobject]@{
+        Tool = "screenshot_excel.ps1"
+        EvidenceFamily = "ribbon"
+        EvidenceSubject = "excel"
+        EvidenceApp = "Microsoft Excel"
+        CaptureStatus = "blocked"
+        BlockedAt = (Get-Date).ToString("o")
+        Operation = $operation
+        Reason = $reason
+        OutputDirectory = $outDir
+        ValidEvidenceManifest = "screenshot_manifest.json"
+        ExpectedForeground = [pscustomobject]@{
+            ProcessId = $expectedPid
+            WindowTitle = $expectedTitle
+        }
+        ActualForeground = Get-ForegroundWindowInfo
+        RequestedWidths = @($captureWidths | ForEach-Object { $_.Label })
+        RequestedTabs = $script:requestedTabNames
+        AvailableTabs = $script:availableTabNames
+        SkippedTabs = $script:skippedTabNames
+        Policy = "Root ribbon screenshots and screenshot_manifest.json are discarded unless the expected Excel process and window title own foreground immediately before global input and screen capture."
+    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+    Write-Warning "Saved blocker manifest $manifestPath"
+}
+
 function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operation = "capture") {
     $foreground = [Win32e]::GetForegroundWindow()
     if ($foreground -eq [IntPtr]::Zero) {
         Clear-ScreenshotEvidenceArtifacts
+        Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle "No foreground window was available."
         throw "Blocked: no foreground window before $operation."
     }
 
@@ -371,6 +430,7 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operati
     $actualTitle = $title.ToString()
     if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
         Clear-ScreenshotEvidenceArtifacts
+        Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle "Foreground window '$actualTitle' (PID $actualPid) did not match expected '$expectedTitle' (PID $expectedPid)."
         throw "Blocked: foreground window '$actualTitle' (PID $actualPid) does not match expected '$expectedTitle' (PID $expectedPid) before $operation."
     }
 }
@@ -399,15 +459,53 @@ function Set-ExcelForegroundWindow($excelHwnd, $excelPid, $expectedTitle, $opera
         $shell = $null
     }
 
-    for ($attempt = 0; $attempt -lt 10; $attempt++) {
-        [Win32e]::ShowWindow($excelHwnd, 1) | Out-Null
+    for ($attempt = 0; $attempt -lt 16; $attempt++) {
+        [Win32e]::ShowWindow($excelHwnd, 9) | Out-Null
         [Win32e]::SetWindowPos($excelHwnd, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null
-        [Win32e]::SetForegroundWindow($excelHwnd) | Out-Null
+        Start-Sleep -Milliseconds 40
+        [Win32e]::SetWindowPos($excelHwnd, [IntPtr](-2), 0, 0, 0, 0, 0x0043) | Out-Null
+
+        $foreground = [Win32e]::GetForegroundWindow()
+        $foregroundPid = 0
+        $targetPid = 0
+        $foregroundThread = if ($foreground -ne [IntPtr]::Zero) { [Win32e]::GetWindowThreadProcessId($foreground, [ref]$foregroundPid) } else { 0 }
+        $targetThread = [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$targetPid)
+        $currentThread = [Win32e]::GetCurrentThreadId()
+        $attachedTarget = $false
+        $attachedForeground = $false
+        try {
+            if ($targetThread -ne 0 -and $targetThread -ne $currentThread) {
+                $attachedTarget = [Win32e]::AttachThreadInput($currentThread, $targetThread, $true)
+            }
+            if ($foregroundThread -ne 0 -and $foregroundThread -ne $currentThread -and $foregroundThread -ne $targetThread) {
+                $attachedForeground = [Win32e]::AttachThreadInput($currentThread, $foregroundThread, $true)
+            }
+
+            [Win32e]::BringWindowToTop($excelHwnd) | Out-Null
+            [Win32e]::SetActiveWindow($excelHwnd) | Out-Null
+            [Win32e]::SetFocus($excelHwnd) | Out-Null
+            [Win32e]::SetForegroundWindow($excelHwnd) | Out-Null
+        }
+        finally {
+            if ($attachedForeground) {
+                [Win32e]::AttachThreadInput($currentThread, $foregroundThread, $false) | Out-Null
+            }
+            if ($attachedTarget) {
+                [Win32e]::AttachThreadInput($currentThread, $targetThread, $false) | Out-Null
+            }
+        }
+
+        if (($attempt % 4) -eq 3) {
+            [Win32e]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
+            [Win32e]::SetForegroundWindow($excelHwnd) | Out-Null
+            [Win32e]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+        }
+
         if ($null -ne $shell) {
             $shell.AppActivate([int]$excelPid) | Out-Null
         }
 
-        Start-Sleep -Milliseconds 250
+        Start-Sleep -Milliseconds 300
 
         $foreground = [Win32e]::GetForegroundWindow()
         if ($foreground -eq [IntPtr]::Zero) {
@@ -1456,23 +1554,53 @@ if (-not (Test-Path -LiteralPath $exe)) {
     throw "Excel executable was not found at $exe. Install Microsoft Excel or update tools\screenshot_excel.ps1 before running this capture."
 }
 
-Start-Process -FilePath $exe -ArgumentList "/e"
-Write-Host "Launched Excel (searching by class XLMAIN)"
+$excelLaunchStarted = Get-Date
+$excelProcess = Start-Process -FilePath $exe -ArgumentList @("/x", "/e") -PassThru
+Write-Host "Launched Excel PID $($excelProcess.Id) (searching for matching class XLMAIN)"
 
-Start-Sleep -Seconds 8
+function Resolve-LaunchedExcelMainWindow($preferredProcessId, $launchStarted) {
+    $launchThreshold = $launchStarted.AddSeconds(-2)
+    $candidateProcesses = Get-Process EXCEL -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Id -eq $preferredProcessId -or
+            ($null -ne $_.StartTime -and $_.StartTime -ge $launchThreshold)
+        } |
+        Sort-Object @{ Expression = { if ($_.Id -eq $preferredProcessId) { 0 } else { 1 } } }, StartTime -Descending
+
+    foreach ($candidateProcess in $candidateProcesses) {
+        $windows = [Win32e]::GetVisibleWindowsByProcess($candidateProcess.Id) |
+            Where-Object { $_.ClassName -eq "XLMAIN" } |
+            Sort-Object @{ Expression = { if ([string]::IsNullOrWhiteSpace($_.Title)) { 1 } else { 0 } } }
+        foreach ($window in $windows) {
+            return [pscustomobject]@{
+                Handle = $window.Handle
+                ProcessId = $candidateProcess.Id
+            }
+        }
+    }
+
+    return $null
+}
 
 $hwnd = [IntPtr]::Zero
+$launchedExcelWindow = $null
 for ($i = 0; $i -lt 30; $i++) {
-    $hwnd = [Win32e]::FindWindowByClass("XLMAIN")
-    if ($hwnd -ne [IntPtr]::Zero) { break }
+    $launchedExcelWindow = Resolve-LaunchedExcelMainWindow $excelProcess.Id $excelLaunchStarted
+    if ($null -ne $launchedExcelWindow) {
+        $hwnd = [IntPtr]$launchedExcelWindow.Handle
+        break
+    }
     Start-Sleep -Milliseconds 500
 }
-if ($hwnd -eq [IntPtr]::Zero) { Write-Error "No Excel window found"; exit 1 }
+if ($hwnd -eq [IntPtr]::Zero) {
+    Clear-ScreenshotEvidenceArtifacts
+    Get-Process -Id $excelProcess.Id -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    throw "No launched Excel window found; refusing to bind to an existing Excel workbook window."
+}
 
 Write-Host "HWND: $hwnd"
 # Get PID and expected title from the launched window before foreground activation.
-$wpid = 0
-[Win32e]::GetWindowThreadProcessId($hwnd, [ref]$wpid) | Out-Null
+$wpid = [int]$launchedExcelWindow.ProcessId
 Write-Host "Excel PID: $wpid"
 $expectedTitle = Get-WindowTitle $hwnd
 
@@ -1494,6 +1622,39 @@ if ($appEl -eq $null) { Write-Error "UIA element not found"; exit 1 }
 $captureH = [int]([Math]::Ceiling(300 * $scale))
 Write-Host "Capture height: $captureH physical px (300 logical)"
 
+function Find-ExcelRibbonTab($tabName) {
+    $tabCond = New-Object System.Windows.Automation.PropertyCondition(
+                   [System.Windows.Automation.AutomationElement]::NameProperty, $tabName)
+    return $appEl.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $tabCond)
+}
+
+function Resolve-ExcelAvailableRibbonTabs {
+    $available = @()
+    $skipped = @()
+
+    foreach ($tabName in $script:requestedTabNames) {
+        if ($null -ne (Find-ExcelRibbonTab $tabName)) {
+            $available += $tabName
+        }
+        else {
+            $skipped += $tabName
+        }
+    }
+
+    if ($available.Count -eq 0) {
+        Clear-ScreenshotEvidenceArtifacts
+        throw "Blocked: none of the requested Excel ribbon tabs were found. Requested tabs: $($script:requestedTabNames -join ', ')."
+    }
+
+    $script:availableTabNames = $available
+    $script:skippedTabNames = $skipped
+    if ($skipped.Count -gt 0) {
+        Write-Warning "Skipping unavailable Excel ribbon tab(s): $($skipped -join ', ')"
+    }
+}
+
+Resolve-ExcelAvailableRibbonTabs
+
 function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
     if ($null -eq $widthSpec.WindowLogicalWidth) {
         [Win32e]::ShowWindow($windowHandle, 3) | Out-Null
@@ -1511,10 +1672,31 @@ function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
 
 function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect, $captureLogicalHeight, $capturePhysicalHeight, $widths, $files, $expectedPid, $expectedTitle) {
     $manifestPath = Join-Path $scriptOutDir "screenshot_manifest.json"
-    $plannedCaptureCount = $tabNames.Count * $widths.Count
+    $plannedCaptureCount = $script:availableTabNames.Count * $widths.Count
     if ($files.Count -ne $plannedCaptureCount) {
         Clear-ScreenshotEvidenceArtifacts
         throw "Blocked: captured $($files.Count) screenshot(s), expected $plannedCaptureCount. Discarded incomplete evidence matrix."
+    }
+
+    $skippedCaptures = @()
+    foreach ($widthSpec in $widths) {
+        foreach ($tabName in $script:skippedTabNames) {
+            $safe = $tabName -replace '[^a-zA-Z0-9_]','_'
+            $skippedCaptures += [pscustomobject]@{
+                CaptureKey = "ribbon:$($widthSpec.Label):$safe"
+                PairKey = "ribbon:$($widthSpec.Label):$safe"
+                EvidenceSubject = "excel"
+                CounterpartSubject = "freex"
+                CounterpartFileName = "ribbon_$($widthSpec.Label)_$safe.png"
+                Tab = $tabName
+                TabFileName = $safe
+                WidthLabel = $widthSpec.Label
+                WindowLogicalWidth = $widthSpec.WindowLogicalWidth
+                EvidencePurpose = $widthSpec.EvidencePurpose
+                CaptureStatus = "skipped-unavailable-excel-tab"
+                SkipReason = "The requested Excel ribbon tab was not exposed by this installed Excel UI/profile during preflight tab discovery."
+            }
+        }
     }
 
     [pscustomobject]@{
@@ -1528,7 +1710,7 @@ function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect,
         WidthSource = "RibbonScreenshotTourPlanner.DefaultWidths"
         PlannedCaptureCount = $plannedCaptureCount
         ActualCaptureCount = $files.Count
-        CaptureStatus = "complete"
+        CaptureStatus = $(if ($script:skippedTabNames.Count -gt 0) { "complete-with-skipped-unavailable-tabs" } else { "complete" })
         CaptureMethod = "CopyFromScreen-window-rectangle-top-band"
         ForegroundGuard = [pscustomobject]@{
             Required = $true
@@ -1553,7 +1735,10 @@ function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect,
         CaptureLogicalHeight = $captureLogicalHeight
         CapturePhysicalHeight = $capturePhysicalHeight
         Widths = $widths
-        Tabs = $tabNames
+        RequestedTabs = $script:requestedTabNames
+        Tabs = $script:availableTabNames
+        SkippedTabs = $script:skippedTabNames
+        SkippedCaptures = $skippedCaptures
         Limitations = $captureLimitations
         InteractiveCapturePlan = $interactiveCapturePlan
         Captures = $files
@@ -1562,12 +1747,10 @@ function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect,
 }
 
 function Screenshot-Tab($tabName, $widthSpec) {
-    $tabCond = New-Object System.Windows.Automation.PropertyCondition(
-                   [System.Windows.Automation.AutomationElement]::NameProperty, $tabName)
-    $tabEl   = $appEl.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $tabCond)
+    $tabEl = Find-ExcelRibbonTab $tabName
     if ($tabEl -eq $null) {
         Clear-ScreenshotEvidenceArtifacts
-        throw "Ribbon screenshot tab '$tabName' was not found; aborting instead of writing an incomplete evidence matrix."
+        throw "Ribbon screenshot tab '$tabName' was discovered during preflight but was not found during capture; aborting instead of writing an incomplete evidence matrix."
     }
 
     # Click the tab via its bounding rectangle center (UIA patterns unsupported in Excel ribbon)
@@ -1636,7 +1819,7 @@ foreach ($widthSpec in $captureWidths) {
     Write-Host "Capturing Excel ribbon width '$($widthSpec.Label)' ($($widthSpec.EvidencePurpose))"
     Set-CaptureWindowWidth $hwnd $widthSpec
 
-    foreach ($tabName in $tabNames) {
+    foreach ($tabName in $script:availableTabNames) {
         Screenshot-Tab $tabName $widthSpec
     }
 }

@@ -19,6 +19,9 @@ public enum ConsolidateFunction
 
 public sealed class ConsolidateCommand : IWorkbookCommand
 {
+    private const string SourceBoundsMessage = "Consolidate source ranges must stay inside the worksheet bounds.";
+    private const string DestinationBoundsMessage = "Consolidate destination range is outside the worksheet bounds.";
+
     private readonly IReadOnlyList<GridRange> _sourceRanges;
     private readonly CellAddress _destination;
     private readonly ConsolidateFunction _function;
@@ -53,11 +56,17 @@ public sealed class ConsolidateCommand : IWorkbookCommand
             return new CommandOutcome(false, "Consolidate destination must belong to this workbook.");
         if (_sourceRanges.Any(range => ctx.Workbook.GetSheet(range.Start.Sheet) is null))
             return new CommandOutcome(false, "Consolidate source ranges must belong to this workbook.");
+        if (_sourceRanges.Any(range => !WorksheetBounds.IsValidAddress(range.Start) || !WorksheetBounds.IsValidAddress(range.End)))
+            return new CommandOutcome(false, SourceBoundsMessage);
+        if (!WorksheetBounds.IsValidAddress(_destination))
+            return new CommandOutcome(false, DestinationBoundsMessage);
 
         var rowCount = _sourceRanges[0].RowCount;
         var colCount = _sourceRanges[0].ColCount;
         if (_sourceRanges.Any(r => r.RowCount != rowCount || r.ColCount != colCount))
             return new CommandOutcome(false, "Consolidate source ranges must be the same size.");
+        if (!WorksheetBounds.TryGetRectangleEnd(_destination, rowCount, colCount, out _))
+            return new CommandOutcome(false, DestinationBoundsMessage);
 
         if (_useTopRowLabels || _useLeftColumnLabels)
             return ApplyByLabels(ctx, rowCount, colCount);
@@ -148,6 +157,9 @@ public sealed class ConsolidateCommand : IWorkbookCommand
 
     private CommandOutcome WriteCells(ICommandContext ctx, IReadOnlyList<(CellAddress Address, ScalarValue Value, string? FormulaText)> writes)
     {
+        if (writes.Any(write => !WorksheetBounds.IsValidAddress(write.Address)))
+            return new CommandOutcome(false, DestinationBoundsMessage);
+
         var destinationSheet = ctx.GetSheet(_destination.Sheet);
         if (destinationSheet.IsProtected)
         {

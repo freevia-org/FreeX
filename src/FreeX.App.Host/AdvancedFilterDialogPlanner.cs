@@ -1,3 +1,4 @@
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -28,6 +29,11 @@ internal static class AdvancedFilterDialogPlanner
             error = UiText.Get("AdvancedFilter_ListRangeMustIncludeHeaders");
             return false;
         }
+        if (!AdvancedFilterCommand.IsListRangeWithinSupportedBounds(listRange))
+        {
+            error = AdvancedFilterCommand.ListRangeTooLargeMessage;
+            return false;
+        }
 
         if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, criteriaRangeText, resolveSheetId, out var criteriaRange))
         {
@@ -39,10 +45,21 @@ internal static class AdvancedFilterDialogPlanner
             error = UiText.Get("AdvancedFilter_CriteriaRangeMustIncludeHeaders");
             return false;
         }
+        if (!AdvancedFilterCommand.IsCriteriaRangeWithinSupportedBounds(criteriaRange))
+        {
+            error = AdvancedFilterCommand.CriteriaRangeTooLargeMessage;
+            return false;
+        }
 
         if (!AdvancedFilterInputParser.TryParseCopyDestinationRange(copyToCellText ?? "", currentSheetId, out var copyToRange))
         {
             error = UiText.Get("AdvancedFilter_EnterValidCopyToRange");
+            return false;
+        }
+        if (copyToRange is { } destinationRange &&
+            destinationRange.ColCount > AdvancedFilterCommand.MaxListColumns)
+        {
+            error = AdvancedFilterCommand.CopyOutputTooLargeMessage;
             return false;
         }
 

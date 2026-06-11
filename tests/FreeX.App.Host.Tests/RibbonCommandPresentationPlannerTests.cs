@@ -130,7 +130,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Home", "Insert", RibbonCommandIconKind.Insert)]
     [InlineData("Home", "Sort & Filter", RibbonCommandIconKind.Sort)]
     [InlineData("Insert", "Get Add-ins", RibbonCommandIconKind.Insert)]
-    [InlineData("Insert", "Shapes", RibbonCommandIconKind.Rectangle)]
+    [InlineData("Draw", "Shapes", RibbonCommandIconKind.Rectangle)]
     [InlineData("Data", "Queries & Connections", RibbonCommandIconKind.GetData)]
     [InlineData("Data", "Advanced Filter", RibbonCommandIconKind.Filter)]
     [InlineData("View", "Normal", RibbonCommandIconKind.Grid)]

@@ -23,6 +23,7 @@ public partial class MainWindow
 
         NumberFormatBox.ItemsSource = HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label).ToArray();
         NumberFormatBox.SelectedIndex = HomeNumberFormatDropdownPlanner.DefaultSelectionIndex;
+        InitializePageLayoutScaleToFitControls();
 
         PopulateFormatTableGalleryMenu();
         ApplyOptionsToView();

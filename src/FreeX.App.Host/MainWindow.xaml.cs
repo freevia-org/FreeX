@@ -191,6 +191,9 @@ public partial class MainWindow : Window, IWorkbookWindow
     private RowResizeSnapshot? _rowResizeSnapshot;
     private Action<CommandOutcome>? _repeatPostAction;
     private string? _pivotFieldMenuContextCaption;
+    private PivotFieldDropZone? _pivotFieldMenuContextZone;
+    private PivotFieldDropZone? _pivotFieldDragSourceZone;
+    private bool _pivotFieldDragRemoveCueActive;
     private IReadOnlyDictionary<(uint Row, uint Col), PivotHeaderDropdownTarget> _pivotHeaderDropdownTargets =
         new Dictionary<(uint Row, uint Col), PivotHeaderDropdownTarget>();
     private bool _slicerTimelinePaneDismissed;
@@ -234,6 +237,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         _recentFiles = RecentFilesStore.Load();
 
         InitializeComponent();
+        InitializeInsertShapeGalleryContextMenu();
         if (_commandStackChangeNotifier is not null)
             _commandStackChangeNotifier.StackChanged += CommandStackChangeNotifier_StackChanged;
 
@@ -276,9 +280,16 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.SplitDividerMoved += OnSplitDividerMoved;
         SheetGrid.SplitPaneScrollbarScrolled += OnSplitPaneScrollbarScrolled;
         SheetGrid.ObjectMoved   += OnObjectMoved;
+        SheetGrid.ChartBoundsChanged += OnChartBoundsChanged;
         SheetGrid.ObjectResized += OnObjectResized;
         SheetGrid.ObjectResizedWithAnchor += OnObjectResizedWithAnchor;
         SheetGrid.ObjectRotated += OnObjectRotated;
+        DependencyPropertyDescriptor.FromProperty(
+            FreeX.App.UI.GridView.SelectedObjectIdProperty,
+            typeof(FreeX.App.UI.GridView))?.AddValueChanged(SheetGrid, OnSelectedObjectContextChanged);
+        DependencyPropertyDescriptor.FromProperty(
+            FreeX.App.UI.GridView.SelectedObjectKindProperty,
+            typeof(FreeX.App.UI.GridView))?.AddValueChanged(SheetGrid, OnSelectedObjectContextChanged);
         SheetGrid.MouseMove  += SheetGrid_MouseMove;
         SheetGrid.MouseUp    += SheetGrid_MouseUp;
         SheetGrid.LostMouseCapture += SheetGrid_LostMouseCapture;

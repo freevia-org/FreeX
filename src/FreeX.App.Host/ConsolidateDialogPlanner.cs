@@ -33,6 +33,21 @@ internal static class ConsolidateDialogPlanner
         IEnumerable<string> existingReferences,
         string referenceText,
         out IReadOnlyList<string> updatedReferences,
+        out string? error) =>
+        TryAddReference(
+            sheetId,
+            _ => null,
+            existingReferences,
+            referenceText,
+            out updatedReferences,
+            out error);
+
+    public static bool TryAddReference(
+        SheetId sheetId,
+        Func<string, SheetId?> resolveSheetId,
+        IEnumerable<string> existingReferences,
+        string referenceText,
+        out IReadOnlyList<string> updatedReferences,
         out string? error)
     {
         var references = existingReferences.Select(item => item.Trim()).Where(item => item.Length > 0).ToList();
@@ -40,7 +55,7 @@ internal static class ConsolidateDialogPlanner
         error = null;
 
         var reference = referenceText.Trim();
-        if (!ConsolidateInputParser.TryParseSourceRanges(reference, sheetId, out var ranges, out var invalidPart) ||
+        if (!ConsolidateInputParser.TryParseSourceRanges(reference, sheetId, resolveSheetId, out var ranges, out var invalidPart) ||
             ranges.Count != 1)
         {
             error = string.IsNullOrWhiteSpace(invalidPart)
@@ -94,6 +109,26 @@ internal static class ConsolidateDialogPlanner
         out string? error) =>
         TryParse(
             sheetId,
+            _ => null,
+            sourceRangesText,
+            destinationCellText,
+            ConsolidateFunction.Sum,
+            useTopRowLabels: false,
+            useLeftColumnLabels: false,
+            createLinksToSourceData: false,
+            out result,
+            out error);
+
+    public static bool TryParse(
+        SheetId sheetId,
+        Func<string, SheetId?> resolveSheetId,
+        string sourceRangesText,
+        string destinationCellText,
+        out ConsolidateDialogResult result,
+        out string? error) =>
+        TryParse(
+            sheetId,
+            resolveSheetId,
             sourceRangesText,
             destinationCellText,
             ConsolidateFunction.Sum,
@@ -112,12 +147,35 @@ internal static class ConsolidateDialogPlanner
         bool useLeftColumnLabels,
         bool createLinksToSourceData,
         out ConsolidateDialogResult result,
+        out string? error) =>
+        TryParse(
+            sheetId,
+            _ => null,
+            sourceRangesText,
+            destinationCellText,
+            function,
+            useTopRowLabels,
+            useLeftColumnLabels,
+            createLinksToSourceData,
+            out result,
+            out error);
+
+    public static bool TryParse(
+        SheetId sheetId,
+        Func<string, SheetId?> resolveSheetId,
+        string sourceRangesText,
+        string destinationCellText,
+        ConsolidateFunction function,
+        bool useTopRowLabels,
+        bool useLeftColumnLabels,
+        bool createLinksToSourceData,
+        out ConsolidateDialogResult result,
         out string? error)
     {
         result = default!;
         error = null;
 
-        if (!ConsolidateInputParser.TryParseSourceRanges(sourceRangesText, sheetId, out var ranges, out var invalidPart))
+        if (!ConsolidateInputParser.TryParseSourceRanges(sourceRangesText, sheetId, resolveSheetId, out var ranges, out var invalidPart))
         {
             error = string.IsNullOrWhiteSpace(invalidPart)
                 ? UiText.Get("Consolidate_EnterAtLeastOneValidSourceRange")
@@ -131,7 +189,7 @@ internal static class ConsolidateDialogPlanner
             return false;
         }
 
-        if (!ConsolidateInputParser.TryParseDestination(destinationCellText, sheetId, out var destination))
+        if (!ConsolidateInputParser.TryParseDestination(destinationCellText, sheetId, resolveSheetId, out var destination))
         {
             error = UiText.Get("Consolidate_EnterValidDestinationCell");
             return false;

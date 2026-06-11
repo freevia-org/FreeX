@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
@@ -6,16 +7,13 @@ public sealed class InsertCommandSourceTests
 {
     [Theory]
     [InlineData("PivotTable", "PivotTable", "PT", "PivotTableBtn_Click")]
-    [InlineData("Recommended PivotTables", "Recommended PivotTables", "RP", "RecommendedPivotTablesMenuItem_Click")]
     [InlineData("Table", "Table", "TB", "TableBtn_Click")]
-    [InlineData("Pictures", "Pictures", "IP", "InsertPictureBtn_Click")]
-    [InlineData("Shapes", "Shapes", "SH", "DrawRectBtn_Click")]
     [InlineData("Line Sparkline", "Line", "SL", "SparklineLineBtn_Click")]
     [InlineData("Column Sparkline", "Column", "SK", "SparklineColumnBtn_Click")]
     [InlineData("Win/Loss Sparkline", "Win/Loss", "SW", "SparklineWinLossBtn_Click")]
     [InlineData("Insert Slicer", "Slicer", "SF", "PivotInsertSlicerBtn_Click")]
     [InlineData("Insert Timeline", "Timeline", "IT", "PivotInsertTimelineBtn_Click")]
-    public void InsertTablesIllustrationsSparklineAndFilterCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
+    public void InsertTablesSparklineAndFilterCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string content,
         string keyTip,
@@ -52,6 +50,13 @@ public sealed class InsertCommandSourceTests
     }
 
     [Theory]
+    [InlineData("Recommended PivotTables")]
+    [InlineData("Place in Cell")]
+    [InlineData("This Device Picture in Cell")]
+    [InlineData("Stock Images in Cell")]
+    [InlineData("Online Pictures in Cell")]
+    [InlineData("Stock Images over Cells")]
+    [InlineData("Online Pictures over Cells")]
     [InlineData("Get Add-ins")]
     [InlineData("My Add-ins")]
     [InlineData("3D Map")]
@@ -65,37 +70,50 @@ public sealed class InsertCommandSourceTests
     }
 
     [Fact]
-    public void InsertShapesButton_ExposesExpectedShapeMenuRoutes()
+    public void DrawShapesCatalog_ExposesExcelLikeGroupedRenderableShapeGallery()
     {
         var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
             .ExtractButtonElementByInvariantCommandName("Shapes");
 
-        var rectangle = button.ExtractMenuItemElementByClickHandler("DrawRectBtn_Click");
-        rectangle.ShouldContainLocalizedAttribute("Header", "Rectangle");
-        rectangle.Should().Contain("local:RibbonTooltip.KeyTip=\"R\"");
+        button.Should().Contain("x:Name=\"ShapesBtn\"");
+        button.Should().NotContain("<Button.ContextMenu>");
 
-        var ellipse = button.ExtractMenuItemElementByClickHandler("DrawEllipseBtn_Click");
-        ellipse.ShouldContainLocalizedAttribute("Header", "Ellipse");
-        ellipse.Should().Contain("local:RibbonTooltip.KeyTip=\"E\"");
+        InsertShapeGalleryCatalog.Groups.Select(group => group.Label).Should().Equal(
+            "Lines",
+            "Rectangles",
+            "Basic Shapes",
+            "Block Arrows",
+            "Equation Shapes",
+            "Flowchart",
+            "Stars and Banners",
+            "Callouts");
 
-        var line = button.ExtractMenuItemElementByClickHandler("DrawLineBtn_Click");
-        line.ShouldContainLocalizedAttribute("Header", "Line");
-        line.Should().Contain("local:RibbonTooltip.KeyTip=\"L\"");
+        var items = InsertShapeGalleryCatalog.Items.ToArray();
+        items.Should().HaveCountGreaterThan(35);
+        items.Select(item => item.Kind).Should().OnlyHaveUniqueItems();
+        items.Select(item => item.Kind).Should().Contain([
+            DrawingShapeKind.RoundedRectangle,
+            DrawingShapeKind.RightArrow,
+            DrawingShapeKind.NotEqualSign,
+            DrawingShapeKind.FlowchartDecision,
+            DrawingShapeKind.Star5,
+            DrawingShapeKind.OvalCallout
+        ]);
+        items.Select(item => item.Kind)
+            .Should()
+            .OnlyContain(kind => DrawingShapeKindSupport.IsRenderable(kind));
     }
 
     [Fact]
-    public void InsertTablesIllustrationsSparklineAndFilterHandlers_RouteThroughExpectedCommandsAndDialogs()
+    public void InsertTablesSparklineAndFilterHandlers_RouteThroughExpectedCommandsAndDialogs()
     {
         var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
-        var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
         var homeFormattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         var pivotSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotCommands.cs");
 
         insertSource.Should().Contain("private void TableBtn_Click(object sender, RoutedEventArgs e) => ApplyTableFormat(0);");
-        insertSource.Should().Contain("private void RecommendedPivotTablesMenuItem_Click(object sender, RoutedEventArgs e)");
-        insertSource.Should().Contain("new RecommendedPivotTablesDialog { Owner = this }");
-        insertSource.Should().Contain("dialog.Result != RecommendedPivotTablesDialogResult.BlankPivotTable");
-        insertSource.Should().Contain("PivotTableBtn_Click(sender, e);");
+        insertSource.Should().NotContain("RecommendedPivotTablesMenuItem_Click");
+        insertSource.Should().NotContain("RecommendedPivotTablesDialog");
         homeFormattingSource.Should().Contain("CreateTableSourceRangePlanner.PlanSourceRange(sheet, range)");
         insertSource.Should().Contain("private void SparklineLineBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"line\");");
         insertSource.Should().Contain("private void SparklineColumnBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"column\");");
@@ -103,21 +121,13 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("new SparklineDialog(");
         insertSource.Should().Contain("new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind)");
 
-        drawingSource.Should().Contain("private void InsertPictureBtn_Click(object sender, RoutedEventArgs e)");
-        drawingSource.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
-        drawingSource.Should().Contain("DrawRectBtn_Click(object sender, RoutedEventArgs e)");
-        drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Rectangle)");
-        drawingSource.Should().Contain("DrawEllipseBtn_Click(object sender, RoutedEventArgs e)");
-        drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Ellipse)");
-        drawingSource.Should().Contain("DrawLineBtn_Click(object sender, RoutedEventArgs e)");
-        drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Line)");
-
         pivotSource.Should().Contain("private void PivotTableBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("PivotTableSourceRangePlanner.CreatePlan(sheet, SheetGrid.SelectedRange)");
         pivotSource.Should().Contain("ShowPivotTableSourceRangeError(sourcePlan.Error)");
         pivotSource.Should().Contain("new PivotTableDialog(");
         pivotSource.Should().Contain("new AddPivotTableCommand(");
         pivotSource.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
+        pivotSource.Should().Contain("ActivateNewWorksheetAtA1(createdSheetId)");
         pivotSource.Should().Contain("private void PivotInsertSlicerBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("new InsertSlicerDialog(headers, fieldName)");
         pivotSource.Should().Contain("new AddSlicerCommand(dialog.Result.SlicerName, pivotTable.Name, dialog.Result.FieldName)");
@@ -139,7 +149,6 @@ public sealed class InsertCommandSourceTests
 
         source.Should().Contain("FREEX_INSERT_TABLES_CHARTS_TOUR");
         tourSource.Should().Contain("CreateTableDialog");
-        tourSource.Should().Contain("RecommendedPivotTablesDialog");
         tourSource.Should().Contain("InsertChartDialog");
         tourSource.Should().Contain("SparklineDialog");
         tourSource.Should().Contain("CreateStyledStructuredTableCommand");

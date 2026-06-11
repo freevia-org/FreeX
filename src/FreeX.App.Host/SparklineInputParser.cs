@@ -8,7 +8,14 @@ public static class SparklineInputParser
     {
         try
         {
-            range = GridRange.Parse(input, sheetId);
+            var parsedRange = GridRange.Parse(input, sheetId);
+            if (!SparklineRangeLimits.IsSupportedDataRange(parsedRange))
+            {
+                range = default;
+                return false;
+            }
+
+            range = parsedRange;
             return true;
         }
         catch

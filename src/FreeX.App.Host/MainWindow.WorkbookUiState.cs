@@ -177,6 +177,8 @@ public partial class MainWindow
 
     private void RefreshToolbarAfterSelectionChange()
     {
+        RefreshPivotFieldListPaneAfterSelectionChange();
+
         if (CanSkipSelectionToolbarRefresh())
             return;
 
@@ -347,12 +349,12 @@ public partial class MainWindow
             return;
 
         var uiText = SheetProtectionWorkflow.GetUiText(sheet);
-        ProtectSheetButton.Content = uiText.ButtonContent;
+        SetRibbonCommandButtonLabel(ProtectSheetButton, uiText.ButtonContent);
         RibbonTooltip.SetTitle(ProtectSheetButton, uiText.TooltipTitle);
         RibbonTooltip.SetDescription(ProtectSheetButton, uiText.TooltipDescription);
 
         if (AllowEditRangesButton is not null)
-            AllowEditRangesButton.IsEnabled = !sheet.IsProtected;
+            AllowEditRangesButton.IsEnabled = true;
     }
 
     private void RefreshWorkbookProtectionUi()
@@ -360,7 +362,7 @@ public partial class MainWindow
         var uiText = WorkbookProtectionWorkflow.GetUiText(_workbook);
         if (ProtectWorkbookButton is not null)
         {
-            ProtectWorkbookButton.Content = uiText.ButtonContent;
+            SetRibbonCommandButtonLabel(ProtectWorkbookButton, uiText.ButtonContent);
             RibbonTooltip.SetTitle(ProtectWorkbookButton, uiText.TooltipTitle);
             RibbonTooltip.SetDescription(ProtectWorkbookButton, uiText.TooltipDescription);
         }

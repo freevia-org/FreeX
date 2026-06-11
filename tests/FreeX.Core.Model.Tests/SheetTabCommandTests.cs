@@ -7,6 +7,28 @@ namespace FreeX.Core.Model.Tests;
 public class SheetTabCommandTests
 {
     [Fact]
+    public void AddSheetCommand_InitializesNewSheetViewStateAtA1()
+    {
+        var wb = new Workbook("test");
+        var source = wb.AddSheet("Sheet1");
+        source.ActiveRow = 12;
+        source.ActiveCol = 5;
+        source.ViewTopRow = 10;
+        source.ViewLeftCol = 4;
+        var ctx = new TestCommandContext(wb);
+
+        var outcome = new AddSheetCommand("Sheet2").Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        wb.Sheets.Should().HaveCount(2);
+        var created = wb.Sheets[1];
+        created.ActiveRow.Should().Be(1);
+        created.ActiveCol.Should().Be(1);
+        created.ViewTopRow.Should().Be(1);
+        created.ViewLeftCol.Should().Be(1);
+    }
+
+    [Fact]
     public void DuplicateSheetCommand_CopiesSheetContentAndUndoRemovesCopy()
     {
         var wb = new Workbook("test");
@@ -19,6 +41,10 @@ public class SheetTabCommandTests
         sheet.Comments[a1] = "note";
         sheet.TabColor = new CellColor(255, 192, 0);
         sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
+        sheet.ActiveRow = 8;
+        sheet.ActiveCol = 4;
+        sheet.ViewTopRow = 6;
+        sheet.ViewLeftCol = 3;
         sheet.SplitRow = 5;
         sheet.SplitColumn = 3;
         sheet.PageHeader = new WorksheetHeaderFooter("Left header", "Center header", "Right header");
@@ -148,6 +174,10 @@ public class SheetTabCommandTests
         copy.Comments[new CellAddress(copy.Id, 1, 1)].Should().Be("note");
         copy.TabColor.Should().Be(new CellColor(255, 192, 0));
         copy.ViewMode.Should().Be(WorksheetViewMode.PageBreakPreview);
+        copy.ActiveRow.Should().Be(1);
+        copy.ActiveCol.Should().Be(1);
+        copy.ViewTopRow.Should().Be(1);
+        copy.ViewLeftCol.Should().Be(1);
         copy.SplitRow.Should().Be(5);
         copy.SplitColumn.Should().Be(3);
         copy.PageHeader.Should().Be(new WorksheetHeaderFooter("Left header", "Center header", "Right header"));

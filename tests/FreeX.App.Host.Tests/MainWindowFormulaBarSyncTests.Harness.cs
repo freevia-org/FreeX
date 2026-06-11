@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FluentAssertions;
 using FreeX.App.UI;
@@ -27,6 +28,9 @@ public sealed partial class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _commitEdit;
         private readonly MethodInfo _commitEditAcrossSelection;
         private readonly MethodInfo _insertNewSheet;
+        private readonly MethodInfo _selectSingleSheetTab;
+        private readonly MethodInfo _updateViewport;
+        private readonly MethodInfo _refreshSheetTabs;
         private readonly MethodInfo _setActiveCell;
         private readonly MethodInfo _showInlineEditor;
         private readonly MethodInfo _executeClearSelection;
@@ -65,6 +69,15 @@ public sealed partial class MainWindowFormulaBarSyncTests
             _insertNewSheet = typeof(MainWindow)
                 .GetMethod("InsertNewSheet", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "InsertNewSheet");
+            _selectSingleSheetTab = typeof(MainWindow)
+                .GetMethod("SelectSingleSheetTab", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SelectSingleSheetTab");
+            _updateViewport = typeof(MainWindow)
+                .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
+            _refreshSheetTabs = typeof(MainWindow)
+                .GetMethod("RefreshSheetTabs", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "RefreshSheetTabs");
             _setActiveCell = typeof(MainWindow)
                 .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
@@ -113,6 +126,10 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public SheetId CurrentSheetId => (SheetId)_currentSheetIdField.GetValue(_window)!;
 
         public GridRange? SelectedRange => ((SheetGridView)_window.FindName("SheetGrid")).SelectedRange;
+
+        public double VerticalScrollValue => ((ScrollBar)_window.FindName("VerticalScroll")).Value;
+
+        public double HorizontalScrollValue => ((ScrollBar)_window.FindName("HorizontalScroll")).Value;
 
         public string? InlineEditorText => InlineEditor?.Text;
 
@@ -222,6 +239,14 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public void InsertNewSheet()
         {
             _insertNewSheet.Invoke(_window, null);
+            PumpDispatcher();
+        }
+
+        public void SelectSheet(SheetId sheetId)
+        {
+            _selectSingleSheetTab.Invoke(_window, [sheetId]);
+            _updateViewport.Invoke(_window, null);
+            _refreshSheetTabs.Invoke(_window, null);
             PumpDispatcher();
         }
 

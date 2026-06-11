@@ -249,6 +249,10 @@ public sealed partial class PivotTableCommandTests
         var pivotSheet = workbook.GetSheet(command.CreatedSheetId!.Value);
         pivotSheet.Should().NotBeNull();
         pivotSheet!.Name.Should().Be("PivotTable 2");
+        pivotSheet.ActiveRow.Should().Be(1);
+        pivotSheet.ActiveCol.Should().Be(1);
+        pivotSheet.ViewTopRow.Should().Be(1);
+        pivotSheet.ViewLeftCol.Should().Be(1);
         var pivot = pivotSheet.PivotTables.Should().ContainSingle().Subject;
         pivot.Name.Should().Be("PivotTable1");
         pivot.SourceRange.Should().Be(Range(sourceSheet, "A1", "B3"));

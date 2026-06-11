@@ -45,7 +45,9 @@ public partial class MainWindow
     {
         sheet = _workbook.GetSheet(_currentSheetId)!;
         table = null!;
-        if (sheet is null || SheetGrid.SelectedRange?.Start is not { } activeCell)
+        if (sheet is null ||
+            SheetGrid.SelectedObjectKind != FreeX.App.UI.ObjectKind.None ||
+            SheetGrid.SelectedRange?.Start is not { } activeCell)
             return false;
 
         var smallestArea = uint.MaxValue;
@@ -178,15 +180,7 @@ public partial class MainWindow
                 return;
 
             if (command.CreatedSheetId is { } createdSheetId)
-            {
-                _currentSheetId = createdSheetId;
-                _groupedSheetIds.Clear();
-                _groupedSheetIds.Add(_currentSheetId);
-                SetActiveCell(new CellAddress(
-                    _currentSheetId,
-                    AddPivotTableToNewWorksheetCommand.InitialTargetRow,
-                    AddPivotTableToNewWorksheetCommand.InitialTargetColumn));
-            }
+                ActivateNewWorksheetAtA1(createdSheetId);
 
             RefreshSheetTabs();
             UpdateViewport();

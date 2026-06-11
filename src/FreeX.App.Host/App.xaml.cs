@@ -28,6 +28,7 @@ public partial class App : Application
         var options = FreeXOptions.Load();
         AppLocalization.ApplyAppLanguage(options.AppLanguage);
         AppLocalization.ApplyCurrentCultureToWpf();
+        DialogSizing.RegisterAppDialogSizing();
 
         // Configure Serilog
         Log.Logger = new LoggerConfiguration()
