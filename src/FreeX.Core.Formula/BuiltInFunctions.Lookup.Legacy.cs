@@ -31,12 +31,16 @@ public static partial class BuiltInFunctions
         if (rangeLookup)
         {
             // Approximate match: table must be sorted ascending on first column.
-            // Return last row where first-col value <= lookupValue
+            // Return last row where first-col value <= lookupValue.
+            // Excel skips entries whose type class differs from the lookup value's type class
+            // (blanks are always skipped; text headers above numeric data do not abort the scan).
+            int lookupClass = ApproxLookupTypeClass(lookupValue);
             int bestRow = -1;
             for (int r = 1; r <= table.RowCount; r++)
             {
                 var cv = table.At(r, 1);
                 if (cv is ErrorValue cvErr) return cvErr;
+                if (ApproxLookupTypeClass(cv) != lookupClass) continue;
                 if (CompareScalar(cv, lookupValue) <= 0)
                     bestRow = r;
                 else
@@ -85,11 +89,15 @@ public static partial class BuiltInFunctions
 
         if (rangeLookup)
         {
+            // Approximate match: scan first row ascending.
+            // Skip entries whose type class differs from the lookup value's type class.
+            int lookupClass = ApproxLookupTypeClass(lookupValue);
             int bestCol = -1;
             for (int c = 1; c <= table.ColCount; c++)
             {
                 var cv = table.At(1, c);
                 if (cv is ErrorValue cvErr) return cvErr;
+                if (ApproxLookupTypeClass(cv) != lookupClass) continue;
                 if (CompareScalar(cv, lookupValue) <= 0)
                     bestCol = c;
                 else
@@ -206,12 +214,15 @@ public static partial class BuiltInFunctions
         }
         else if (matchType == 1)
         {
-            // Ascending approximate: largest value <= lookupValue
+            // Ascending approximate: largest value <= lookupValue.
+            // Skip entries whose type class differs from the lookup value's type class.
+            int lookupClass = ApproxLookupTypeClass(lookupValue);
             int best = -1;
             for (int i = 0; i < vector.Count; i++)
             {
                 var candidate = vector[i];
                 if (candidate is ErrorValue fErr) return fErr;
+                if (ApproxLookupTypeClass(candidate) != lookupClass) continue;
                 if (CompareScalar(candidate, lookupValue) <= 0)
                     best = i;
                 else
@@ -224,11 +235,14 @@ public static partial class BuiltInFunctions
         {
             // Descending approximate: smallest value >= lookupValue.
             // Assumes the lookup vector is sorted descending, matching Excel's contract.
+            // Skip entries whose type class differs from the lookup value's type class.
+            int lookupClass = ApproxLookupTypeClass(lookupValue);
             int best = -1;
             for (int i = 0; i < vector.Count; i++)
             {
                 var candidate = vector[i];
                 if (candidate is ErrorValue fErr) return fErr;
+                if (ApproxLookupTypeClass(candidate) != lookupClass) continue;
                 if (CompareScalar(candidate, lookupValue) >= 0)
                     best = i;
                 else
@@ -266,10 +280,12 @@ public static partial class BuiltInFunctions
                 : new[] { args[2] })
             : lookupFlat;
         var lookupVal = args[0];
+        int lookupClass = ApproxLookupTypeClass(lookupVal);
         int matchIdx = -1;
         for (int i = 0; i < lookupFlat.Count; i++)
         {
             if (lookupFlat[i] is ErrorValue) continue;
+            if (ApproxLookupTypeClass(lookupFlat[i]) != lookupClass) continue;
             if (CompareScalar(lookupFlat[i], lookupVal) <= 0)
                 matchIdx = i;
         }
@@ -279,11 +295,13 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue LookupVectorForm(ScalarValue lookupVal, LookupRangeVector lookupVector, LookupValueVector resultVector)
     {
+        int lookupClass = ApproxLookupTypeClass(lookupVal);
         int matchIdx = -1;
         for (int i = 0; i < lookupVector.Count; i++)
         {
             var candidate = lookupVector[i];
             if (candidate is ErrorValue) continue;
+            if (ApproxLookupTypeClass(candidate) != lookupClass) continue;
             if (CompareScalar(candidate, lookupVal) <= 0)
                 matchIdx = i;
         }
