@@ -12,7 +12,21 @@ public readonly record struct DisplayCell(
     CellStyle? Style = null,
     ConditionalFormatIcon? ConditionalIcon = null,
     bool HasComment = false,
-    ConditionalFormatDataBar? ConditionalDataBar = null);
+    ConditionalFormatDataBar? ConditionalDataBar = null,
+    CellCommentDisplay? CommentDisplay = null);
+
+public enum CellCommentDisplayKind
+{
+    Note,
+    ThreadedComment,
+    Mixed
+}
+
+public sealed record CellCommentDisplay(
+    CellCommentDisplayKind Kind,
+    string Title,
+    string Body,
+    bool IsResolved = false);
 
 public readonly record struct ConditionalFormatIcon(
     string Style,
