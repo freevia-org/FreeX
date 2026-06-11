@@ -385,7 +385,7 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("FormatWorkbookRange(selectedRange)");
         source.Should().Contain("FormatWorkbookCellReference(selectedRange.Start, defaultSheetId)");
         source.Should().Contain("WorkbookRangeTextCodec.Format(");
-        source.Should().Contain("dialog.ApplyRangeSelection(session.Request.Target, rangeText);");
+        source.Should().Contain("session.Dialog.ApplyRangeSelection(session.Request.Target, rangeText);");
         source.Should().Contain("catch (Exception ex)");
     }
 
