@@ -444,7 +444,7 @@ public partial class GridView : FrameworkElement
 
     public double ActualRowHeaderWidth => ShowHeaders ? CalculateRowHeaderWidth(Viewport) : 0.0;
 
-    public double EffectiveColHeaderHeight => ShowHeaders ? ColHeaderHeight : 0.0;
+    public double EffectiveColHeaderHeight => ShowHeaders ? CalculateColumnHeaderHeight(Viewport) : 0.0;
 
     public static double CalculateRowHeaderWidth(ViewportModel? viewport)
     {
@@ -459,11 +459,17 @@ public partial class GridView : FrameworkElement
             >= 10_000    => 42,
             >= 1_000     => 36,
             _            => RowHeaderWidth,
-        };
+        } + CalculateRowOutlineGutterWidth(viewport);
     }
+
+    public static double CalculateColumnHeaderHeight(ViewportModel? viewport) =>
+        ColHeaderHeight + CalculateColumnOutlineGutterHeight(viewport);
 
     private const double ResizeHitZone = 4;
     private const double SplitDividerHitZone = 4;
+    private const double OutlineLevelPitch = 14;
+    private const double OutlineGutterPadding = 6;
+    private const double OutlineButtonSize = 13;
     private const double DefaultCellFontSizePoints = 11.0;
     private const double PageMarginGuideHitZone = 5;
     private const int MarchingAntsPhaseCount = 16;
@@ -473,6 +479,10 @@ public partial class GridView : FrameworkElement
     private static readonly Brush TextBrush = Brushes.Black;
     private static readonly Brush HeaderBackgroundBrush = MakeBrush(242, 242, 242);
     private static readonly Brush HeaderHighlightBrush = MakeBrush(218, 232, 218);
+    private static readonly Brush OutlineGlyphBrush = MakeBrush(84, 130, 53);
+    private static readonly Brush OutlineButtonBrush = MakeBrush(255, 255, 255);
+    private static readonly Pen OutlineGlyphPen = MakePen(MakeBrush(84, 130, 53), 1);
+    private static readonly Pen OutlineButtonPen = MakePen(MakeBrush(117, 117, 117), 1);
     private static readonly Pen GridPen = MakeGridPen();
     private static readonly Brush SelectionBrush = MakeBrushAlpha(32, 33, 115, 70);
     private static readonly Pen SelectionPen = MakePen(MakeBrush(33, 115, 70), 2);

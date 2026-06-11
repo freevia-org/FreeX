@@ -1,4 +1,5 @@
 using System.Windows;
+using FreeX.App.UI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -81,6 +82,25 @@ public partial class MainWindow
         if (!outcome.Success)
         {
             ShowCommandError(outcome, "Expand Group");
+            return;
+        }
+
+        _repeatPostAction = null;
+        UpdateViewport();
+    }
+
+    private void OnOutlineGroupToggleRequested(GridOutlineGroupToggleRequest request)
+    {
+        IWorkbookCommand CreateCommand() =>
+            request.Axis == GridOutlineGroupAxis.Columns
+                ? new SetColumnOutlineGroupCollapsedCommand(_currentSheetId, request.Start, request.End, request.Level, request.Collapse)
+                : new SetRowOutlineGroupCollapsedCommand(_currentSheetId, request.Start, request.End, request.Level, request.Collapse);
+
+        var label = request.Collapse ? "Collapse Group" : "Expand Group";
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, label);
             return;
         }
 

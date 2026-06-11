@@ -40,7 +40,7 @@ public partial class MainWindow
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? [range.Start]);
         SetActiveCell(outcome.AffectedCells is { Count: > 0 }
-            ? GetNextAutoSumCell(outcome.AffectedCells[0])
+            ? outcome.AffectedCells[0]
             : range.Start);
         UpdateViewport();
     }
@@ -52,9 +52,6 @@ public partial class MainWindow
     private void AutoSumMaxMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula("MAX");
     private void AutoSumMinMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula("MIN");
     private void AutoSumMoreMenuItem_Click(object sender, RoutedEventArgs e)  => InsertFunctionBtn_Click(sender, e);
-
-    private static CellAddress GetNextAutoSumCell(CellAddress address) =>
-        new(address.Sheet, address.Row < CellAddress.MaxRow ? address.Row + 1 : address.Row, address.Col);
 
     private void FillPickerBtn_Click(object sender, RoutedEventArgs e)
     {
