@@ -475,7 +475,11 @@ public partial class MainWindow
             SheetGrid.RenderTransform = new System.Windows.Media.ScaleTransform(_zoomLevel, _zoomLevel, 0, 0);
         }
         if (StatusZoomText is not null)
-            StatusZoomText.Text = $"{zoomPercent}%";
+        {
+            var zoomText = $"{zoomPercent}%";
+            StatusZoomText.Text = zoomText;
+            AutomationProperties.SetName(StatusZoomText, zoomText);
+        }
 
         if (!updateSlider || ZoomSlider is null)
             return;

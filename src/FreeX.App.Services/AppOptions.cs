@@ -60,6 +60,20 @@ public sealed class AppOptions
     public bool ShowHeadings { get; set; } = true;
     public AppOptionsObjectDisplay ObjectsDisplay { get; set; } = AppOptionsObjectDisplay.All;
 
+    public bool StatusBarShowCellMode { get; set; } = true;
+    public bool StatusBarShowEndMode { get; set; }
+    public bool StatusBarShowSelectionMode { get; set; }
+    public bool StatusBarShowPageNumber { get; set; }
+    public bool StatusBarShowAverage { get; set; } = true;
+    public bool StatusBarShowCount { get; set; } = true;
+    public bool StatusBarShowNumericalCount { get; set; }
+    public bool StatusBarShowMinimum { get; set; }
+    public bool StatusBarShowMaximum { get; set; }
+    public bool StatusBarShowSum { get; set; } = true;
+    public bool StatusBarShowViewShortcuts { get; set; } = true;
+    public bool StatusBarShowZoom { get; set; } = true;
+    public bool StatusBarShowZoomSlider { get; set; } = true;
+
     public string DefaultFormat { get; set; } = XlsxDefaultFormat;
 
     public bool QuickAccessToolbarBelowRibbon { get; set; }

@@ -238,6 +238,45 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     }
 
     [Fact]
+    public void SaveToPath_RoundTripsStatusBarOptions()
+    {
+        var path = Path.Combine(_temp.Path, "options.json");
+        var options = new FreeXOptions
+        {
+            StatusBarShowCellMode = false,
+            StatusBarShowEndMode = true,
+            StatusBarShowSelectionMode = true,
+            StatusBarShowPageNumber = true,
+            StatusBarShowAverage = false,
+            StatusBarShowCount = false,
+            StatusBarShowNumericalCount = true,
+            StatusBarShowMinimum = true,
+            StatusBarShowMaximum = true,
+            StatusBarShowSum = false,
+            StatusBarShowViewShortcuts = false,
+            StatusBarShowZoom = false,
+            StatusBarShowZoomSlider = false
+        };
+
+        options.SaveToPath(path).Should().BeTrue();
+
+        var reloaded = FreeXOptions.LoadFromPath(path);
+        reloaded.StatusBarShowCellMode.Should().BeFalse();
+        reloaded.StatusBarShowEndMode.Should().BeTrue();
+        reloaded.StatusBarShowSelectionMode.Should().BeTrue();
+        reloaded.StatusBarShowPageNumber.Should().BeTrue();
+        reloaded.StatusBarShowAverage.Should().BeFalse();
+        reloaded.StatusBarShowCount.Should().BeFalse();
+        reloaded.StatusBarShowNumericalCount.Should().BeTrue();
+        reloaded.StatusBarShowMinimum.Should().BeTrue();
+        reloaded.StatusBarShowMaximum.Should().BeTrue();
+        reloaded.StatusBarShowSum.Should().BeFalse();
+        reloaded.StatusBarShowViewShortcuts.Should().BeFalse();
+        reloaded.StatusBarShowZoom.Should().BeFalse();
+        reloaded.StatusBarShowZoomSlider.Should().BeFalse();
+    }
+
+    [Fact]
     public void FreeXOptions_CurrentDefaultsMatchPortableAppOptions()
     {
         var hostOptions = new FreeXOptions();
