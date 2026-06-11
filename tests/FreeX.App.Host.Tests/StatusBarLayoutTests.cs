@@ -60,9 +60,15 @@ public sealed class StatusBarLayoutTests
             harness.SelectRange(1, 1, 1, 2);
             harness.RefreshStatusBar();
 
+            harness.StatusAutomationId("StatusCountText").Should().Be("StatusCountText");
+            harness.StatusAutomationId("StatusNumericalCountText").Should().Be("StatusNumericalCountText");
             harness.StatusAutomationId("StatusMinText").Should().Be("StatusMinText");
             harness.StatusAutomationId("StatusMaxText").Should().Be("StatusMaxText");
             harness.StatusAutomationName("StatusAvgText").Should().Be("Average: 3");
+            harness.StatusAutomationName("StatusCountText").Should().Be("Count: 2");
+            harness.StatusAutomationName("StatusNumericalCountText").Should().Be("Numerical Count: 2");
+            harness.StatusAutomationHelpText("StatusNumericalCountText").Should().Be("Numerical Count: 2");
+            harness.StatusAutomationLiveSetting("StatusNumericalCountText").Should().Be(AutomationLiveSetting.Polite);
             harness.StatusAutomationName("StatusMinText").Should().Be("Min: 2");
             harness.StatusAutomationName("StatusMaxText").Should().Be("Max: 4");
 
@@ -71,6 +77,9 @@ public sealed class StatusBarLayoutTests
             harness.RefreshStatusBar();
 
             harness.StatusAutomationName("StatusAvgText").Should().Be("Average: 5");
+            harness.StatusAutomationName("StatusCountText").Should().Be("Count: 2");
+            harness.StatusAutomationName("StatusNumericalCountText").Should().Be("Numerical Count: 2");
+            harness.StatusAutomationHelpText("StatusNumericalCountText").Should().Be("Numerical Count: 2");
             harness.StatusAutomationName("StatusMaxText").Should().Be("Max: 8");
         });
     }
@@ -492,6 +501,12 @@ public sealed class StatusBarLayoutTests
 
         public string StatusAutomationName(string textBlockName) =>
             AutomationProperties.GetName((TextBlock)_window.FindName(textBlockName));
+
+        public string StatusAutomationHelpText(string textBlockName) =>
+            AutomationProperties.GetHelpText((TextBlock)_window.FindName(textBlockName));
+
+        public AutomationLiveSetting StatusAutomationLiveSetting(string textBlockName) =>
+            AutomationProperties.GetLiveSetting((TextBlock)_window.FindName(textBlockName));
 
         public string StatusAutomationId(string textBlockName) =>
             AutomationProperties.GetAutomationId((TextBlock)_window.FindName(textBlockName));
