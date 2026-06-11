@@ -42,17 +42,29 @@ public partial class MainWindow
         }
 
         var contentType = DrawingInputParser.GetImageContentType(dialog.FileName);
+        InsertPictureCommand? currentSheetCommand = null;
         if (!TryExecuteGroupedSheetCommand(
                 "Insert Picture",
-                sheetId => InsertObjectPlacementPlanner.CreateInsertPictureCommand(
-                    sheetId,
-                    new CellAddress(sheetId, range.Start.Row, range.Start.Col),
-                    bytes,
-                    contentType)))
+                sheetId =>
+                {
+                    var command = InsertObjectPlacementPlanner.CreateInsertPictureCommand(
+                        sheetId,
+                        new CellAddress(sheetId, range.Start.Row, range.Start.Col),
+                        bytes,
+                        contentType);
+                    if (sheetId == _currentSheetId)
+                        currentSheetCommand = command;
+                    return command;
+                }))
             return;
 
-        SetActiveCell(range.Start);
-        UpdateViewport();
+        if (currentSheetCommand is not null)
+            SelectInsertedDrawingObject(currentSheetCommand.PictureId, FreeX.App.UI.ObjectKind.Picture, range.Start);
+        else
+        {
+            SetActiveCell(range.Start);
+            UpdateViewport();
+        }
     }
 
     private void PictureSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -215,6 +227,9 @@ public partial class MainWindow
     private PictureModel? GetTargetPicture(SheetId sheetId)
     {
         var sheet = _workbook.GetSheet(sheetId);
+        if (GetSelectedPictureOnSheet(sheet) is { } selectedPicture)
+            return selectedPicture;
+
         return DrawingTargetResolver.GetTargetPicture(sheet, SheetGrid.SelectedRange?.Start);
     }
 
@@ -243,34 +258,61 @@ public partial class MainWindow
             "") { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
+        AddTextBoxCommand? currentSheetCommand = null;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Insert Text Box",
                 sheetId =>
                 {
                     var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
-                    return new AddTextBoxCommand(sheetId, new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col), dialog.Result.Text);
+                    var command = new AddTextBoxCommand(sheetId, new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col), dialog.Result.Text);
+                    if (sheetId == _currentSheetId)
+                        currentSheetCommand = command;
+                    return command;
                 }))
             return;
 
-        SetActiveCell(anchor);
-        EnsureCellVisible(anchor);
-        UpdateViewport();
+        if (currentSheetCommand is not null)
+            SelectInsertedDrawingObject(currentSheetCommand.TextBoxId, FreeX.App.UI.ObjectKind.TextBox, anchor);
+        else
+        {
+            SetActiveCell(anchor);
+            EnsureCellVisible(anchor);
+            UpdateViewport();
+        }
     }
 
     private void InsertDrawingShape(DrawingShapeKind kind)
     {
         var anchor = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
+        AddDrawingShapeCommand? currentSheetCommand = null;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Insert Shape",
                 sheetId =>
                 {
                     var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
-                    return new AddDrawingShapeCommand(sheetId, new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col), kind);
+                    var command = new AddDrawingShapeCommand(sheetId, new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col), kind);
+                    if (sheetId == _currentSheetId)
+                        currentSheetCommand = command;
+                    return command;
                 }))
             return;
 
+        if (currentSheetCommand is not null)
+            SelectInsertedDrawingObject(currentSheetCommand.ShapeId, FreeX.App.UI.ObjectKind.Shape, anchor);
+        else
+        {
+            SetActiveCell(anchor);
+            EnsureCellVisible(anchor);
+            UpdateViewport();
+        }
+    }
+
+    private void SelectInsertedDrawingObject(Guid objectId, FreeX.App.UI.ObjectKind kind, CellAddress anchor)
+    {
         SetActiveCell(anchor);
         EnsureCellVisible(anchor);
+        SheetGrid.SelectedObjectId = objectId;
+        SheetGrid.SelectedObjectKind = kind;
         UpdateViewport();
     }
 

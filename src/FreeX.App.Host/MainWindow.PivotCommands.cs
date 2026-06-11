@@ -339,7 +339,10 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var plan = PivotUiPlanner.CreateFieldListPanePlan(sheet, SheetGrid.SelectedRange);
         var pivotTable = plan.PivotTable;
-        if (sheet is null || !plan.ShouldShow || pivotTable is null)
+        if (sheet is null ||
+            SheetGrid.SelectedObjectKind != FreeX.App.UI.ObjectKind.None ||
+            !plan.ShouldShow ||
+            pivotTable is null)
         {
             PivotFieldListPane.Visibility = Visibility.Collapsed;
             SetPivotContextualTabsVisible(false);

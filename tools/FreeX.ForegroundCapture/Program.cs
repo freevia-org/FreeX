@@ -717,11 +717,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", "Excel sheet-tab navigation button bounds were not usable for a physical right-click.", options.OutputRoot, "excel", guard);
             }
 
-            var dialog = WindowFinder.FindProcessWindow(
-                pid.Value,
-                window => window.Handle != hwnd.ToInt64() &&
-                    window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase),
-                options.PopupTimeout);
+            var dialog = FindActivateDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
                 return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's Activate dialog after right-clicking the sheet-tab navigation button.", options.OutputRoot, "excel", guard);
@@ -1043,7 +1039,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked("freex-save-as-overwrite-prompt", "dialog-not-found", "Did not detect FreeX Save As common dialog before overwrite prompt.", options.OutputRoot, "freex", guard);
             }
 
-            TypeDialogPath(existingPath);
+            TypeDialogPath(dialog.Handle, existingPath);
             var prompt = WindowFinder.FindProcessWindow(
                 process.Id,
                 window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
@@ -1052,6 +1048,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                      window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) ||
                      window.Title.Contains("already exists", StringComparison.OrdinalIgnoreCase)),
                 options.PopupTimeout);
+            prompt ??= WindowFinder.FindForegroundWindow(
+                window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    window.Handle != dialog.Handle &&
+                    (window.Title.Contains("Confirm", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("already exists", StringComparison.OrdinalIgnoreCase)),
+                TimeSpan.FromMilliseconds(1500));
             if (prompt is null)
             {
                 return CaptureResult.Blocked("freex-save-as-overwrite-prompt", "overwrite-prompt-not-found", "Typed an existing .xlsx path but did not detect a native overwrite confirmation prompt.", options.OutputRoot, "freex", guard);
@@ -1106,7 +1109,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked("freex-save-as-invalid-path", "dialog-not-found", "Did not detect FreeX Save As common dialog before invalid path entry.", options.OutputRoot, "freex", guard);
             }
 
-            TypeDialogPath(invalidPath);
+            TypeDialogPath(dialog.Handle, invalidPath);
             var prompt = WindowFinder.FindProcessWindow(
                 process.Id,
                 window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
@@ -1116,6 +1119,14 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                      window.Title.Contains("path", StringComparison.OrdinalIgnoreCase) ||
                      window.Title.Contains("not found", StringComparison.OrdinalIgnoreCase)),
                 options.PopupTimeout);
+            prompt ??= WindowFinder.FindForegroundWindow(
+                window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    window.Handle != dialog.Handle &&
+                    (window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("Error", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("path", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("not found", StringComparison.OrdinalIgnoreCase)),
+                TimeSpan.FromMilliseconds(1500));
             if (prompt is null)
             {
                 return CaptureResult.Blocked("freex-save-as-invalid-path", "invalid-path-prompt-not-found", $"Typed a missing-directory .xlsx path but did not detect a native invalid-path prompt: {invalidPath}", options.OutputRoot, "freex", guard);
@@ -1211,15 +1222,24 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return blocked;
             }
 
-            TypeDialogPath(existingPath);
+            TypeDialogPath(dialog!.Handle, existingPath);
             var prompt = WindowFinder.FindProcessWindow(
                 process.Id,
                 window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
-                    window.Handle != dialog!.Handle &&
+                    window.Handle != dialog.Handle &&
                     (window.Title.Contains("Confirm", StringComparison.OrdinalIgnoreCase) ||
                      window.Title.Contains("Export as PDF / XPS", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) ||
                      window.Title.Contains("already exists", StringComparison.OrdinalIgnoreCase)),
                 options.PopupTimeout);
+            prompt ??= WindowFinder.FindForegroundWindow(
+                window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    window.Handle != dialog.Handle &&
+                    (window.Title.Contains("Confirm", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("Export as PDF / XPS", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("already exists", StringComparison.OrdinalIgnoreCase)),
+                TimeSpan.FromMilliseconds(1500));
             if (prompt is null)
             {
                 return CaptureResult.Blocked("freex-export-overwrite-prompt", "overwrite-prompt-not-found", "Typed an existing PDF path but did not detect a native export overwrite confirmation prompt.", options.OutputRoot, "freex", guard);
@@ -1276,13 +1296,18 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked("freex-export-xps-accept", "xps-filter-not-selected", "Could not select the XPS file type in the native export SaveFileDialog.", options.OutputRoot, "freex", guard);
             }
 
-            TypeDialogPath(xpsPath);
+            TypeDialogPath(dialog.Handle, xpsPath);
 
             var optionsDialog = WindowFinder.FindProcessWindow(
                 process.Id,
                 candidate => candidate.Handle != dialog.Handle &&
                     candidate.Title.Contains("PDF/XPS options", StringComparison.OrdinalIgnoreCase),
                 options.PopupTimeout);
+            optionsDialog ??= WindowFinder.FindForegroundWindow(
+                candidate => candidate.ProcessId == process.Id &&
+                    candidate.Handle != dialog.Handle &&
+                    candidate.Title.Contains("PDF/XPS options", StringComparison.OrdinalIgnoreCase),
+                TimeSpan.FromMilliseconds(1500));
             if (optionsDialog is null)
             {
                 return CaptureResult.Blocked("freex-export-xps-accept", "options-dialog-not-found", "Accepted an explicit .xps path but did not detect the PDF/XPS options dialog.", options.OutputRoot, "freex", guard);
@@ -1413,10 +1438,12 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase),
                 options.PopupTimeout);
             printDialog ??= WindowFinder.FindForegroundWindow(
-                candidate => candidate.ProcessId == process.Id &&
-                    candidate.Handle != preview.Handle &&
+                candidate => candidate.Handle != preview.Handle &&
                     candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
-                    candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase),
+                    (candidate.ProcessId == process.Id ||
+                     candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase)) &&
+                    candidate.Bounds.Width >= 300 &&
+                    candidate.Bounds.Height >= 200,
                 TimeSpan.FromMilliseconds(1200));
             if (printDialog is null)
             {
@@ -1903,6 +1930,130 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         SendKeys.SendWait("^v");
         Thread.Sleep(150);
         SendKeys.SendWait("{ENTER}");
+    }
+
+    private static void TypeDialogPath(long dialogHandle, string path)
+    {
+        if (TrySetCommonDialogFileName(dialogHandle, path) &&
+            TryInvokeCommonDialogDefaultButton(dialogHandle))
+        {
+            Thread.Sleep(250);
+            return;
+        }
+
+        TypeDialogPath(path);
+    }
+
+    private static bool TrySetCommonDialogFileName(long dialogHandle, string path)
+    {
+        try
+        {
+            var root = AutomationElement.FromHandle(new IntPtr(dialogHandle));
+            var edits = root.FindAll(
+                    TreeScope.Descendants,
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit))
+                .Cast<AutomationElement>()
+                .Where(IsVisibleElement)
+                .OrderByDescending(IsCommonDialogFileNameEdit)
+                .ToArray();
+
+            foreach (var edit in edits)
+            {
+                if (!edit.TryGetCurrentPattern(ValuePattern.Pattern, out var valueObject) ||
+                    valueObject is not ValuePattern value ||
+                    value.Current.IsReadOnly)
+                {
+                    continue;
+                }
+
+                edit.SetFocus();
+                Thread.Sleep(100);
+                value.SetValue(path);
+                Thread.Sleep(100);
+                return true;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (ElementNotAvailableException)
+        {
+        }
+
+        return false;
+    }
+
+    private static bool TryInvokeCommonDialogDefaultButton(long dialogHandle)
+    {
+        try
+        {
+            var root = AutomationElement.FromHandle(new IntPtr(dialogHandle));
+            var buttons = root.FindAll(
+                    TreeScope.Descendants,
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button))
+                .Cast<AutomationElement>()
+                .Where(IsVisibleElement)
+                .ToArray();
+
+            var button = buttons.FirstOrDefault(candidate =>
+                    candidate.Current.AutomationId.Equals("1", StringComparison.OrdinalIgnoreCase))
+                ?? buttons.FirstOrDefault(candidate =>
+                    candidate.Current.Name.Equals("Save", StringComparison.OrdinalIgnoreCase) ||
+                    candidate.Current.Name.Equals("&Save", StringComparison.OrdinalIgnoreCase) ||
+                    candidate.Current.Name.Equals("Open", StringComparison.OrdinalIgnoreCase) ||
+                    candidate.Current.Name.Equals("&Open", StringComparison.OrdinalIgnoreCase));
+
+            if (button is null)
+            {
+                return false;
+            }
+
+            if (button.TryGetCurrentPattern(InvokePattern.Pattern, out var invokeObject) &&
+                invokeObject is InvokePattern invoke)
+            {
+                invoke.Invoke();
+                Thread.Sleep(100);
+                return true;
+            }
+
+            var bounds = button.Current.BoundingRectangle;
+            if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+            {
+                return false;
+            }
+
+            NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
+            Thread.Sleep(100);
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(60);
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(100);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (ElementNotAvailableException)
+        {
+        }
+
+        return false;
+    }
+
+    private static bool IsCommonDialogFileNameEdit(AutomationElement element)
+    {
+        try
+        {
+            var automationId = element.Current.AutomationId;
+            var name = element.Current.Name;
+            return automationId.Equals("1148", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("File name", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("File name:", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
     }
 
     private static bool TrySelectDialogComboBoxItem(long dialogHandle, string itemTextContains)
@@ -2960,7 +3111,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not re-resolve Sheet2 before opening the Ungroup Sheets context menu.", options.OutputRoot, "freex");
             }
 
-            blocked = GuardedOpenContextMenuFromFocusedElement(options.Scenario, processId, handle, tab);
+            blocked = GuardedClickElement(options.Scenario, processId, handle, tab, MouseButtonKind.Right);
             if (blocked is not null)
             {
                 return blocked;
@@ -3006,7 +3157,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 handle,
                 (int)(sourceBounds.Left + sourceBounds.Width / 2.0),
                 (int)(sourceBounds.Top + sourceBounds.Height / 2.0),
-                (int)(targetBounds.Left + targetBounds.Width / 2.0),
+                (int)(targetBounds.Left + targetBounds.Width * 0.35),
                 (int)(targetBounds.Top + targetBounds.Height / 2.0));
             if (blocked is not null)
             {
@@ -3072,10 +3223,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return blocked;
             }
 
-            var dialog = WindowFinder.FindProcessWindow(
-                processId,
-                window => window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase),
-                options.PopupTimeout);
+            var dialog = FindActivateDialogWindow(processId, handle.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
                 return CaptureResult.Blocked(options.Scenario, "dialog-not-found", "Did not detect Activate Sheet dialog after right-clicking the sheet-tab overflow navigation button.", options.OutputRoot, "freex");
@@ -3470,6 +3618,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         var tabCenterY = tabBounds.Average(bounds => bounds.Top + bounds.Height / 2.0);
+        var tabLeft = tabBounds.Min(bounds => bounds.Left);
+        var tabRight = tabBounds.Max(bounds => bounds.Right);
         var buttons = AutomationElement.FromHandle(handle)
             .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button))
             .Cast<AutomationElement>()
@@ -3491,8 +3641,41 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return null;
         }
 
-        return right ? buttons[^1] : buttons[0];
+        if (right)
+        {
+            var beforeTabs = buttons
+                .Where(button => button.Current.BoundingRectangle.Right <= tabLeft + 2)
+                .OrderByDescending(button => button.Current.BoundingRectangle.Right)
+                .ToList();
+            if (beforeTabs.Count >= 2)
+                return beforeTabs[0];
+
+            return buttons
+                .OrderBy(button =>
+                {
+                    var bounds = button.Current.BoundingRectangle;
+                    return Math.Abs((bounds.Left + bounds.Width / 2.0) - tabRight);
+                })
+                .FirstOrDefault();
+        }
+
+        return buttons
+            .OrderBy(button =>
+            {
+                var bounds = button.Current.BoundingRectangle;
+                return Math.Abs((bounds.Left + bounds.Width / 2.0) - tabLeft);
+            })
+            .FirstOrDefault();
     }
+
+    private static WindowInfo? FindActivateDialogWindow(int processId, long ownerHandle, TimeSpan timeout)
+        => WindowFinder.FindProcessWindow(
+            processId,
+            window => window.Handle != ownerHandle &&
+                window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase) &&
+                window.Bounds.Width >= 120 &&
+                window.Bounds.Height >= 90,
+            timeout);
 
     private static List<string> GetVisibleSheetTabOrder(IntPtr handle)
     {
@@ -4025,40 +4208,70 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private static bool TryInvokeProcessMenuItem(int processId, string nameContains)
     {
-        var menuItems = AutomationElement.RootElement
-            .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem))
-            .Cast<AutomationElement>()
-            .Where(element => ElementMatchesProcessAndName(element, processId, nameContains))
-            .OrderBy(element => IsOffscreen(element) ? 1 : 0)
-            .ThenByDescending(element =>
-            {
-                var bounds = element.Current.BoundingRectangle;
-                return bounds.Width * bounds.Height;
-            })
-            .ToList();
+        List<AutomationElement> menuItems;
+        try
+        {
+            menuItems = AutomationElement.RootElement
+                .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem))
+                .Cast<AutomationElement>()
+                .Where(element => ElementMatchesProcessAndName(element, processId, nameContains))
+                .OrderBy(element => IsOffscreen(element) ? 1 : 0)
+                .ThenByDescending(GetElementArea)
+                .ToList();
+        }
+        catch (COMException)
+        {
+            return false;
+        }
 
         foreach (var item in menuItems)
         {
-            if (item.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
-                invokePatternObject is InvokePattern invokePattern)
+            try
             {
-                invokePattern.Invoke();
-                return true;
-            }
+                if (item.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
+                    invokePatternObject is InvokePattern invokePattern)
+                {
+                    invokePattern.Invoke();
+                    return true;
+                }
 
-            var bounds = item.Current.BoundingRectangle;
-            if (!bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0)
+                var bounds = item.Current.BoundingRectangle;
+                if (!bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0)
+                {
+                    NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
+                    Thread.Sleep(100);
+                    NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                    Thread.Sleep(60);
+                    NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+                    return true;
+                }
+            }
+            catch (COMException)
             {
-                NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
-                Thread.Sleep(100);
-                NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
-                Thread.Sleep(60);
-                NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
-                return true;
+            }
+            catch (ElementNotAvailableException)
+            {
             }
         }
 
         return false;
+    }
+
+    private static double GetElementArea(AutomationElement element)
+    {
+        try
+        {
+            var bounds = element.Current.BoundingRectangle;
+            return bounds.Width * bounds.Height;
+        }
+        catch (COMException)
+        {
+            return 0;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return 0;
+        }
     }
 
     private static bool ElementMatchesProcessAndName(AutomationElement element, int processId, string nameContains)
@@ -4080,6 +4293,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         {
             return false;
         }
+        catch (COMException)
+        {
+            return false;
+        }
     }
 
     private static bool IsOffscreen(AutomationElement element)
@@ -4089,6 +4306,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return element.Current.IsOffscreen;
         }
         catch (ElementNotAvailableException)
+        {
+            return true;
+        }
+        catch (COMException)
         {
             return true;
         }

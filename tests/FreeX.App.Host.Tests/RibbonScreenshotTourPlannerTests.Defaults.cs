@@ -52,6 +52,19 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void DrawingObjectContextTabs_ExtendDefaultTourWithShapeAndPictureFormatContextualTabs()
+    {
+        RibbonScreenshotTourPlanner.DrawingObjectContextTabs
+            .Should()
+            .Equal(
+            [
+                .. RibbonScreenshotTourPlanner.DefaultTabs,
+                new("Shape Format", "Shape_Format", "ShapeFormatTab"),
+                new("Picture Format", "Picture_Format", "PictureFormatTab")
+            ]);
+    }
+
+    [Fact]
     public void PivotContextTabs_ExtendDefaultTourWithPivotAnalyzeAndDesignContextualTabs()
     {
         RibbonScreenshotTourPlanner.PivotContextTabs

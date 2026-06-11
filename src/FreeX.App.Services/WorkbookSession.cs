@@ -622,7 +622,9 @@ public sealed class WorkbookSession
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var range = SelectedRange;
+        if (!SubtotalPlanner.TryCreateSourceRange(ActiveSheet, SelectedRange, out var range, out var sourceRangeError))
+            return new WorkbookCellEditResult(false, sourceRangeError, [], RecalcReport: null);
+
         var command = CreateGroupedSheetCommand(
             options.ReplaceExisting ? "Replace Subtotals" : "Subtotal",
             sheetId =>
@@ -658,7 +660,7 @@ public sealed class WorkbookSession
 
     public WorkbookCellEditResult RemoveSelectedRangeSubtotals()
     {
-        var range = SelectedRange;
+        var range = SubtotalPlanner.NormalizeSourceRange(ActiveSheet, SelectedRange);
         var command = CreateGroupedSheetCommand(
             "Remove Subtotals",
             sheetId =>

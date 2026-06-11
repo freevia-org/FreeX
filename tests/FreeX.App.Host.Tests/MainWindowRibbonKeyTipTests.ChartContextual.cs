@@ -13,6 +13,11 @@ public sealed partial class MainWindowRibbonKeyTipTests
             using var harness = MainWindowHarness.Create(ConfigureWorkbookWithChart);
             harness.RefreshViewport();
 
+            harness.ContextualTabIsVisible("ChartDesignTab").Should().BeFalse();
+            harness.ContextualTabIsVisible("ChartFormatTab").Should().BeFalse();
+
+            harness.SelectFirstChartObject();
+
             harness.ContextualTabIsVisible("ChartDesignTab").Should().BeTrue();
             harness.ContextualTabIsVisible("ChartFormatTab").Should().BeTrue();
 
@@ -34,6 +39,12 @@ public sealed partial class MainWindowRibbonKeyTipTests
             harness.SelectedRibbonTabHeader.Should().Be("Format");
             harness.KeyTipScope.Should().Be("Commands");
             harness.VisibleCommandKeyTips("F").Should().ContainSingle("Format Chart Area");
+
+            harness.SelectActiveCell();
+            harness.RefreshViewport();
+
+            harness.ContextualTabIsVisible("ChartDesignTab").Should().BeFalse();
+            harness.ContextualTabIsVisible("ChartFormatTab").Should().BeFalse();
 
             harness.ClearCharts();
             harness.RefreshViewport();

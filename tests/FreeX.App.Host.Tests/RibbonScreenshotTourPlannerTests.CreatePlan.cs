@@ -152,6 +152,27 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void CreatePlan_WithDrawingContext_AllowsShapeAndPictureFormatCaptures()
+    {
+        var plan = RibbonScreenshotTourPlanner.CreatePlan("Shape Format,Picture_Format", "900", burstMode: false, context: "shape");
+
+        plan.Context.Should().Be("drawing");
+        plan.Tabs.Should().Equal(
+        [
+            new("Shape Format", "Shape_Format", "ShapeFormatTab"),
+            new("Picture Format", "Picture_Format", "PictureFormatTab")
+        ]);
+        plan.Captures
+            .Select(capture => capture.OutputFileName)
+            .Should()
+            .Equal(
+            [
+                "900_Shape_Format.png",
+                "900_Picture_Format.png"
+            ]);
+    }
+
+    [Fact]
     public void CreatePlan_WithPivotContext_AllowsContextualPivotTabCaptures()
     {
         var plan = RibbonScreenshotTourPlanner.CreatePlan("PivotTable Analyze,PivotTable_Design", "900", burstMode: false, context: "pivot");
@@ -201,6 +222,16 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         act.Should()
             .Throw<InvalidOperationException>()
             .WithMessage("*unknown tab(s): Table Design*");
+    }
+
+    [Fact]
+    public void CreatePlan_RejectsContextualDrawingObjectTabsWithoutSeedContext()
+    {
+        var act = () => RibbonScreenshotTourPlanner.CreatePlan("Shape Format", "900");
+
+        act.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*unknown tab(s): Shape Format*");
     }
 
     [Fact]

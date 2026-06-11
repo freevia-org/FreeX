@@ -66,7 +66,7 @@ public partial class MainWindow
                 "Review tab",
                 "Review > Protect group",
                 "freex_review_protection_matrix_protected_disabled_state",
-                "Protected Review tab state shows Protect Sheet retitled to Unprotect Sheet while Allow Users to Edit Ranges is disabled."));
+                "Protected Review tab state shows Protect Sheet retitled to Unprotect Sheet while Allow Users to Edit Ranges remains available."));
 
             var lockedOutcome = ExecuteReviewProtectionMatrixCommand(
                 EditCellsCommand.ForValue(context.Sheet.Id, context.LockedCell, new TextValue("blocked edit")),
@@ -645,7 +645,7 @@ public partial class MainWindow
             CoveredStates:
             [
                 "Protect Sheet dialog with selected permissions.",
-                "Protected sheet Review command disabled state for Allow Users to Edit Ranges.",
+                "Protected sheet Review command state keeps Allow Users to Edit Ranges available.",
                 "Locked protected cell edit blocked through EditCellsCommand.",
                 "Unlocked protected cell edit allowed through EditCellsCommand.",
                 "Locked cell inside Allow Edit Range allowed through EditCellsCommand.",

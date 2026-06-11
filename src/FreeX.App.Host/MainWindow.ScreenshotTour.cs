@@ -6238,7 +6238,7 @@ public partial class MainWindow
                 outputDir,
                 "ribbon-baseline",
                 "freex_page_layout_setup_ribbon_baseline",
-                "Page Layout tab shows Themes, Page Setup, Scale to Fit, Sheet Options, and Arrange groups with a seeded print area and print-title state."));
+                "Page Layout tab shows Themes, Page Setup, Scale to Fit, and Sheet Options groups with a seeded print area and print-title state."));
 
             captures.Add(await CapturePageLayoutSetupMenuAsync(
                 outputDir,
@@ -9287,12 +9287,32 @@ public partial class MainWindow
 
     private async Task CaptureRibbonTabAsync(string outputDir, RibbonScreenshotTourCapture capture)
     {
+        PrepareRibbonScreenshotTourTabContext(capture);
         SelectRibbonTourTab(capture.Tab);
         UpdateLayout();
         await Task.Delay(350);
         UpdateLayout();
 
         await CaptureCurrentWindowAsync(outputDir, capture.FileName, ScreenshotTourCaptureHeight);
+    }
+
+    private void PrepareRibbonScreenshotTourTabContext(RibbonScreenshotTourCapture capture)
+    {
+        switch (capture.Tab.CatalogId)
+        {
+            case "ShapeFormatTab":
+            {
+                var context = EnsureDrawObjectFormattingTourContext();
+                SelectDrawObjectFormattingShape(context);
+                break;
+            }
+            case "PictureFormatTab":
+            {
+                var context = EnsureDrawObjectFormattingTourContext();
+                SelectDrawObjectFormattingPicture(context);
+                break;
+            }
+        }
     }
 
     private async Task PrepareRibbonScreenshotTourContextAsync(string? context)
@@ -9302,6 +9322,9 @@ public partial class MainWindow
 
         switch (context)
         {
+            case "drawing":
+                EnsureDrawObjectFormattingTourContext();
+                break;
             case "table":
                 EnsureTableDesignScreenshotTourContext();
                 break;
@@ -9479,7 +9502,11 @@ public partial class MainWindow
         }
 
         if (chart is not null && SheetGrid is not null)
+        {
             SheetGrid.SelectedRange = new GridRange(sourceRange.Start, sourceRange.Start);
+            SheetGrid.SelectedObjectId = chart.Id;
+            SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.Chart;
+        }
     }
 
     private Sheet? GetCurrentOrFirstScreenshotTourSheet()
@@ -10624,11 +10651,11 @@ public partial class MainWindow
             Captures: captures,
             CoveredStates:
             [
-                "Page Layout ribbon baseline with Page Setup, Scale to Fit, Sheet Options, and Arrange groups visible.",
+                "Page Layout ribbon baseline with Page Setup, Scale to Fit, and Sheet Options groups visible.",
                 "Margins, Orientation, Size, Print Area, Breaks, and Background menu surfaces.",
                 "Page Setup dialog Page, Margins, and Sheet tabs, including Print Titles fields.",
                 "Scale to Fit field state and Sheet Options print/display checkbox state.",
-                "Arrange representative Selection Pane dialog surface."
+                "Draw Arrange representative Selection Pane dialog surface."
             ],
             Limitations:
             [

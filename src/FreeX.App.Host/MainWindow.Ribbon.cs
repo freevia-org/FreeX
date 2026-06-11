@@ -158,7 +158,7 @@ public partial class MainWindow
                 normalizedCommandName is "pivottable" or
                     "recommended pivottables" or
                     "table",
-            "InsertIllustrationsGroup" =>
+            "DrawIllustrationsGroup" =>
                 normalizedCommandName is "pictures" or
                     "shapes",
             "InsertChartsGroup" =>
@@ -203,7 +203,7 @@ public partial class MainWindow
                     "theme effects",
             "PageLayoutScaleToFitGroup" =>
                 normalizedCommandName is "scale to fit",
-            "PageLayoutArrangeGroup" or "DrawArrangeGroup" =>
+            "DrawArrangeGroup" =>
                 normalizedCommandName is "bring forward" or
                     "send backward" or
                     "selection pane" or
@@ -745,6 +745,52 @@ public partial class MainWindow
         }
 
         return null;
+    }
+
+    private static void SetRibbonCommandButtonLabel(ButtonBase button, string label)
+    {
+        if (button.Content is string)
+        {
+            button.Content = label;
+            return;
+        }
+
+        if (TrySetRibbonContentLabel(button.Content, label))
+            return;
+
+        var commandName = GetRibbonButtonCommandName(button);
+        if (string.IsNullOrWhiteSpace(commandName))
+            commandName = label;
+
+        var layoutKind = GetRibbonCommandLayoutKind(button, commandName, label);
+        button.Content = CreateRibbonCommandContent(commandName, label, layoutKind);
+        button.HorizontalContentAlignment = layoutKind is RibbonCommandLayoutKind.Small
+            ? System.Windows.HorizontalAlignment.Left
+            : System.Windows.HorizontalAlignment.Center;
+    }
+
+    private static bool TrySetRibbonContentLabel(object? content, string label)
+    {
+        switch (content)
+        {
+            case TextBlock textBlock when RibbonMetadata.IsCommandLabel(textBlock):
+                textBlock.Text = label;
+                return true;
+            case Panel panel:
+                foreach (var child in panel.Children)
+                {
+                    if (TrySetRibbonContentLabel(child, label))
+                        return true;
+                }
+
+                return false;
+            case Decorator decorator:
+                return TrySetRibbonContentLabel(decorator.Child, label);
+            case ContentControl contentControl when !ReferenceEquals(contentControl.Content, content):
+                return TrySetRibbonContentLabel(contentControl.Content, label);
+            default:
+                return false;
+        }
     }
 
     private void AlignRibbonIconColumns(RibbonStaticSurfaceSnapshot surface)

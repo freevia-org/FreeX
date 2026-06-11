@@ -58,6 +58,14 @@ public sealed class SubtotalCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
+        if (SelectionRangeService.IsWholeColumnSelection(_range) ||
+            SelectionRangeService.IsWholeRowSelection(_range))
+        {
+            return new CommandOutcome(
+                false,
+                "Subtotal requires a bounded data range; select the occupied table range instead of whole rows or columns.");
+        }
+
         if (_range.RowCount < 2)
             return new CommandOutcome(false, "Subtotal requires a header row and at least one data row.");
         if (_groupByColumnOffset >= _range.ColCount ||

@@ -328,8 +328,47 @@ public sealed partial class MainWindowRibbonKeyTipTests
             var sheet = _workbook.Sheets[0];
             var address = new CellAddress(sheet.Id, 1, 1);
             if (_window.FindName("SheetGrid") is SheetGridView sheetGrid)
+            {
+                sheetGrid.SelectedObjectId = Guid.Empty;
+                sheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.None;
                 sheetGrid.SelectedRange = new GridRange(address, address);
+            }
             PumpDispatcher();
+        }
+
+        public void SelectFirstChartObject()
+        {
+            var chart = _workbook.Sheets[0].Charts[0];
+            SelectDrawingObject(chart.Id, FreeX.App.UI.ObjectKind.Chart);
+        }
+
+        public void SelectFirstShapeObject()
+        {
+            var shape = _workbook.Sheets[0].DrawingShapes[0];
+            SelectDrawingObject(shape.Id, FreeX.App.UI.ObjectKind.Shape);
+        }
+
+        public void SelectFirstPictureObject()
+        {
+            var picture = _workbook.Sheets[0].Pictures[0];
+            SelectDrawingObject(picture.Id, FreeX.App.UI.ObjectKind.Picture);
+        }
+
+        public void SelectFirstTextBoxObject()
+        {
+            var textBox = _workbook.Sheets[0].TextBoxes[0];
+            SelectDrawingObject(textBox.Id, FreeX.App.UI.ObjectKind.TextBox);
+        }
+
+        private void SelectDrawingObject(Guid objectId, FreeX.App.UI.ObjectKind kind)
+        {
+            if (_window.FindName("SheetGrid") is SheetGridView sheetGrid)
+            {
+                sheetGrid.SelectedObjectId = objectId;
+                sheetGrid.SelectedObjectKind = kind;
+            }
+
+            RefreshViewport();
         }
 
         public void SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
@@ -812,6 +851,10 @@ public sealed partial class MainWindowRibbonKeyTipTests
             }
             if (_window.FindName("NumberFormatBox") is ComboBox numberFormatBox)
                 numberFormatBox.IsDropDownOpen = false;
+            if (_window.FindName("ShapeFormatTab") is TabItem shapeFormatTab)
+                shapeFormatTab.Visibility = Visibility.Collapsed;
+            if (_window.FindName("PictureFormatTab") is TabItem pictureFormatTab)
+                pictureFormatTab.Visibility = Visibility.Collapsed;
             SelectActiveCell();
             _window.UpdateLayout();
             _updateRibbonCompactMode.Invoke(_window, [true]);
@@ -1013,6 +1056,36 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 new CellAddress(sheetId, 1, 1),
                 new CellAddress(sheetId, 3, 2)),
             Title = "Sales"
+        });
+    }
+
+    private static void ConfigureWorkbookWithDrawingObjects(Workbook workbook)
+    {
+        var sheet = workbook.Sheets[0];
+        var sheetId = sheet.Id;
+
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Name = "Rectangle 1",
+            Kind = DrawingShapeKind.Rectangle,
+            Anchor = new CellAddress(sheetId, 2, 2),
+            IsVisible = true
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Name = "Picture 1",
+            Kind = PictureKind.Image,
+            Anchor = new CellAddress(sheetId, 4, 2),
+            ImageBytes = [1, 2, 3],
+            ContentType = "image/png",
+            IsVisible = true
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Name = "Text Box 1",
+            Anchor = new CellAddress(sheetId, 6, 2),
+            Text = "Notes",
+            IsVisible = true
         });
     }
 

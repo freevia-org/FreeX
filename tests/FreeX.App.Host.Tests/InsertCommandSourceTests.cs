@@ -8,14 +8,12 @@ public sealed class InsertCommandSourceTests
     [Theory]
     [InlineData("PivotTable", "PivotTable", "PT", "PivotTableBtn_Click")]
     [InlineData("Table", "Table", "TB", "TableBtn_Click")]
-    [InlineData("Pictures", "Pictures", "IP", "InsertPictureBtn_Click")]
-    [InlineData("Shapes", "Shapes", "SH", "ShapesBtn_Click")]
     [InlineData("Line Sparkline", "Line", "SL", "SparklineLineBtn_Click")]
     [InlineData("Column Sparkline", "Column", "SK", "SparklineColumnBtn_Click")]
     [InlineData("Win/Loss Sparkline", "Win/Loss", "SW", "SparklineWinLossBtn_Click")]
     [InlineData("Insert Slicer", "Slicer", "SF", "PivotInsertSlicerBtn_Click")]
     [InlineData("Insert Timeline", "Timeline", "IT", "PivotInsertTimelineBtn_Click")]
-    public void InsertTablesIllustrationsSparklineAndFilterCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
+    public void InsertTablesSparklineAndFilterCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string content,
         string keyTip,
@@ -72,7 +70,7 @@ public sealed class InsertCommandSourceTests
     }
 
     [Fact]
-    public void InsertShapesCatalog_ExposesExcelLikeGroupedRenderableShapeGallery()
+    public void DrawShapesCatalog_ExposesExcelLikeGroupedRenderableShapeGallery()
     {
         var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
             .ExtractButtonElementByInvariantCommandName("Shapes");
@@ -107,10 +105,9 @@ public sealed class InsertCommandSourceTests
     }
 
     [Fact]
-    public void InsertTablesIllustrationsSparklineAndFilterHandlers_RouteThroughExpectedCommandsAndDialogs()
+    public void InsertTablesSparklineAndFilterHandlers_RouteThroughExpectedCommandsAndDialogs()
     {
         var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
-        var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
         var homeFormattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         var pivotSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotCommands.cs");
 
@@ -123,19 +120,6 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("private void SparklineWinLossBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"winloss\");");
         insertSource.Should().Contain("new SparklineDialog(");
         insertSource.Should().Contain("new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind)");
-
-        drawingSource.Should().Contain("private void InsertPictureBtn_Click(object sender, RoutedEventArgs e)");
-        drawingSource.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
-        drawingSource.Should().Contain("DrawRectBtn_Click(object sender, RoutedEventArgs e)");
-        drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Rectangle)");
-        drawingSource.Should().Contain("DrawEllipseBtn_Click(object sender, RoutedEventArgs e)");
-        drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Ellipse)");
-        drawingSource.Should().Contain("DrawLineBtn_Click(object sender, RoutedEventArgs e)");
-        drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Line)");
-        DialogSourceTestSupport.ReadHostSources("MainWindow.ShapeGallery.cs")
-            .Should()
-            .Contain("ShapeGalleryMenuItem_Click")
-            .And.Contain("InsertDrawingShape(kind)");
 
         pivotSource.Should().Contain("private void PivotTableBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("PivotTableSourceRangePlanner.CreatePlan(sheet, SheetGrid.SelectedRange)");
