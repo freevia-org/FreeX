@@ -49,6 +49,14 @@ public class SheetLayoutCommandTests
     }
 
     [Fact]
+    public void AutoFitSizingService_RowHeightKeepsLongUnwrappedTextAtDefaultHeight()
+    {
+        var height = AutoFitSizingService.EstimateRowHeight(["a much longer display value that should widen its column instead"], defaultHeight: 20);
+
+        height.Should().BeApproximately(20, 0.01);
+    }
+
+    [Fact]
     public void AutoFitSizingService_ClampsColumnWidthToBounds()
     {
         AutoFitSizingService.EstimateColumnWidth(["x"], defaultWidth: 8)
