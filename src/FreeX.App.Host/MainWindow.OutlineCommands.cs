@@ -1,4 +1,5 @@
 using System.Windows;
+using FreeX.App.UI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -88,10 +89,10 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void OnOutlineGroupToggleRequested(FreeX.App.UI.GridOutlineGroupToggleRequest request)
+    private void OnOutlineGroupToggleRequested(GridOutlineGroupToggleRequest request)
     {
         IWorkbookCommand CreateCommand() =>
-            request.Axis == FreeX.App.UI.GridOutlineGroupAxis.Columns
+            request.Axis == GridOutlineGroupAxis.Columns
                 ? new SetColumnOutlineGroupCollapsedCommand(_currentSheetId, request.Start, request.End, request.Level, request.Collapse)
                 : new SetRowOutlineGroupCollapsedCommand(_currentSheetId, request.Start, request.End, request.Level, request.Collapse);
 
