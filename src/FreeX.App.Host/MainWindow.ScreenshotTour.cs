@@ -9287,12 +9287,32 @@ public partial class MainWindow
 
     private async Task CaptureRibbonTabAsync(string outputDir, RibbonScreenshotTourCapture capture)
     {
+        PrepareRibbonScreenshotTourTabContext(capture);
         SelectRibbonTourTab(capture.Tab);
         UpdateLayout();
         await Task.Delay(350);
         UpdateLayout();
 
         await CaptureCurrentWindowAsync(outputDir, capture.FileName, ScreenshotTourCaptureHeight);
+    }
+
+    private void PrepareRibbonScreenshotTourTabContext(RibbonScreenshotTourCapture capture)
+    {
+        switch (capture.Tab.CatalogId)
+        {
+            case "ShapeFormatTab":
+            {
+                var context = EnsureDrawObjectFormattingTourContext();
+                SelectDrawObjectFormattingShape(context);
+                break;
+            }
+            case "PictureFormatTab":
+            {
+                var context = EnsureDrawObjectFormattingTourContext();
+                SelectDrawObjectFormattingPicture(context);
+                break;
+            }
+        }
     }
 
     private async Task PrepareRibbonScreenshotTourContextAsync(string? context)
@@ -9302,6 +9322,9 @@ public partial class MainWindow
 
         switch (context)
         {
+            case "drawing":
+                EnsureDrawObjectFormattingTourContext();
+                break;
             case "table":
                 EnsureTableDesignScreenshotTourContext();
                 break;
@@ -9479,7 +9502,11 @@ public partial class MainWindow
         }
 
         if (chart is not null && SheetGrid is not null)
+        {
             SheetGrid.SelectedRange = new GridRange(sourceRange.Start, sourceRange.Start);
+            SheetGrid.SelectedObjectId = chart.Id;
+            SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.Chart;
+        }
     }
 
     private Sheet? GetCurrentOrFirstScreenshotTourSheet()
