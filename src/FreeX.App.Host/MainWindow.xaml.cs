@@ -54,6 +54,8 @@ public partial class MainWindow : Window, IWorkbookWindow
     private SheetId? _sheetGroupAnchor;
     private SheetId? _dragSheetTabId;
     private System.Windows.Point _dragSheetTabStart;
+    private int? _dragSheetTabPendingToIndex;
+    private bool _activateSheetDialogOpenOrPending;
     private bool _suppressToolbarSync;
     private readonly ToolbarVisualStateCache _toolbarVisualStateCache = new();
     private ToolbarVisualState? _lastToolbarVisualState;

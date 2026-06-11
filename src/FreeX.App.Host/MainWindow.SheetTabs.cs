@@ -142,6 +142,7 @@ public partial class MainWindow
         RefreshSheetTabs();
         _dragSheetTabId = tab.Id;
         _dragSheetTabStart = dragStart;
+        _dragSheetTabPendingToIndex = null;
         CaptureSheetTabMouseForDrag(tab.Id, sender);
     }
 
@@ -151,7 +152,8 @@ public partial class MainWindow
             return;
         if (e.LeftButton != MouseButtonState.Pressed)
         {
-            _dragSheetTabId = null;
+            CommitPendingSheetTabDragDrop();
+            ClearSheetTabDragState();
             if (sender is System.Windows.UIElement element && element.IsMouseCaptured)
                 element.ReleaseMouseCapture();
             return;
@@ -172,19 +174,37 @@ public partial class MainWindow
         if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex)
             return;
 
-        if (!TryExecuteCommand(new MoveSheetCommand(fromIndex, toIndex), "Move Sheet"))
-            return;
-
-        _currentSheetId = draggedId;
-        _dragSheetTabStart = current;
-        RefreshSheetTabs();
+        _dragSheetTabPendingToIndex = toIndex;
     }
 
     private void SheetTab_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        _dragSheetTabId = null;
+        CommitPendingSheetTabDragDrop();
+        ClearSheetTabDragState();
         if (sender is System.Windows.UIElement element && element.IsMouseCaptured)
             element.ReleaseMouseCapture();
+    }
+
+    private void CommitPendingSheetTabDragDrop()
+    {
+        if (_dragSheetTabId is not { } draggedId || _dragSheetTabPendingToIndex is not { } toIndex)
+            return;
+
+        var fromIndex = FindWorkbookSheetIndex(draggedId);
+        if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex)
+            return;
+
+        if (!TryExecuteCommand(new MoveSheetCommand(fromIndex, toIndex), "Move Sheet"))
+            return;
+
+        _currentSheetId = draggedId;
+        RefreshSheetTabs();
+    }
+
+    private void ClearSheetTabDragState()
+    {
+        _dragSheetTabId = null;
+        _dragSheetTabPendingToIndex = null;
     }
 
     private void CaptureSheetTabMouseForDrag(SheetId sheetId, object sender)
@@ -266,7 +286,9 @@ public partial class MainWindow
 
     private void SheetTab_LostMouseCapture(object sender, MouseEventArgs e)
     {
-        _dragSheetTabId = null;
+        if (Mouse.LeftButton != MouseButtonState.Pressed)
+            CommitPendingSheetTabDragDrop();
+        ClearSheetTabDragState();
     }
 
     private void SheetTab_MouseRightButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -282,8 +304,7 @@ public partial class MainWindow
             SelectSingleSheetTab(tab.Id);
         }
 
-        UpdateViewport();
-        RefreshSheetTabs();
+        UpdateTitleBar();
     }
 
     private void SheetTab_LabelMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -363,10 +384,66 @@ public partial class MainWindow
             Math.Min(SheetTabsScroller.ScrollableWidth, SheetTabsScroller.HorizontalOffset + SheetTabNavScrollAmount));
     }
 
+    private void SheetNavButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not UIElement element)
+            return;
+
+        var downHandler = new MouseButtonEventHandler(SheetNavButton_MouseRightButtonDown);
+        var upHandler = new MouseButtonEventHandler(SheetNavButton_MouseRightButtonUp);
+        element.RemoveHandler(UIElement.PreviewMouseDownEvent, downHandler);
+        element.RemoveHandler(UIElement.PreviewMouseRightButtonDownEvent, downHandler);
+        element.RemoveHandler(UIElement.MouseRightButtonDownEvent, downHandler);
+        element.RemoveHandler(UIElement.PreviewMouseRightButtonUpEvent, upHandler);
+        element.RemoveHandler(UIElement.MouseRightButtonUpEvent, upHandler);
+        element.AddHandler(UIElement.PreviewMouseDownEvent, downHandler, true);
+        element.AddHandler(UIElement.PreviewMouseRightButtonDownEvent, downHandler, true);
+        element.AddHandler(UIElement.MouseRightButtonDownEvent, downHandler, true);
+        element.AddHandler(UIElement.PreviewMouseRightButtonUpEvent, upHandler, true);
+        element.AddHandler(UIElement.MouseRightButtonUpEvent, upHandler, true);
+    }
+
     private void SheetNavButton_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Right)
+            return;
+
         e.Handled = true;
-        Dispatcher.BeginInvoke(ShowActivateSheetDialogFromSheetNav, DispatcherPriority.Input);
+        BeginShowActivateSheetDialogFromSheetNav();
+    }
+
+    private void SheetNavButton_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Right)
+            return;
+
+        e.Handled = true;
+        BeginShowActivateSheetDialogFromSheetNav();
+    }
+
+    private void SheetNavButton_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        e.Handled = true;
+        BeginShowActivateSheetDialogFromSheetNav();
+    }
+
+    private void BeginShowActivateSheetDialogFromSheetNav()
+    {
+        if (_activateSheetDialogOpenOrPending)
+            return;
+
+        _activateSheetDialogOpenOrPending = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                ShowActivateSheetDialogFromSheetNav();
+            }
+            finally
+            {
+                _activateSheetDialogOpenOrPending = false;
+            }
+        }, DispatcherPriority.Input);
     }
 
     private void ShowActivateSheetDialogFromSheetNav()
