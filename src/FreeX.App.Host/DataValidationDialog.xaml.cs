@@ -23,6 +23,7 @@ public partial class DataValidationDialog : Window
 {
     /// <summary>Set to the resulting rule when the user clicks OK.</summary>
     public DataValidation? Result { get; private set; }
+    public bool Accepted { get; private set; }
     public string? LastValidationError { get; private set; }
     public bool ClearRequested { get; private set; }
     public bool ApplyToSameSettings { get; private set; }
@@ -94,6 +95,7 @@ public partial class DataValidationDialog : Window
         ErrorMessageBox.Text = "";
         ClearRequested = markClearRequested;
         Result = null;
+        Accepted = false;
         ApplyToSameSettings = false;
         UpdateVisibility();
         UpdateMessageEditorStates();
@@ -160,7 +162,7 @@ public partial class DataValidationDialog : Window
         SourcePickerButton.Visibility = !isAny
             ? Visibility.Visible
             : Visibility.Collapsed;
-        UseSelectionButton.Visibility = isList && !string.IsNullOrWhiteSpace(SelectionSource)
+        UseSelectionButton.Visibility = !isAny && !string.IsNullOrWhiteSpace(SelectionSource)
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -247,8 +249,7 @@ public partial class DataValidationDialog : Window
         ClearRequested = ClearRequested && IsClearAllState(typeTag, opTag, alertTag);
         LastValidationError = null;
 
-        DialogResult = true;
-        Close();
+        CompleteDialog(accepted: true);
     }
 
     private void FocusInvalidCriteriaInput(string typeTag, string opTag)
@@ -290,8 +291,20 @@ public partial class DataValidationDialog : Window
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = false;
-        Close();
+        CompleteDialog(accepted: false);
+    }
+
+    private void CompleteDialog(bool accepted)
+    {
+        Accepted = accepted;
+        try
+        {
+            DialogResult = accepted;
+        }
+        catch (InvalidOperationException)
+        {
+            Close();
+        }
     }
 
     private void ClearAllButton_Click(object sender, RoutedEventArgs e)
@@ -301,30 +314,36 @@ public partial class DataValidationDialog : Window
 
     private void UseSelectionButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(SelectionSource))
-            Formula1Box.Text = SelectionSource;
+        ApplySelectionSourceTo(Formula1Box);
     }
 
     private void SourcePickerButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(SelectionSource))
-            Formula1Box.Text = SelectionSource;
+        ApplySelectionSourceTo(Formula1Box);
 
         RequestRangeSelection(DataValidationRangeSelectionTarget.Formula1, Formula1Box);
     }
 
     private void SourcePicker2Button_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(SelectionSource))
-            Formula2Box.Text = SelectionSource;
+        ApplySelectionSourceTo(Formula2Box);
 
         RequestRangeSelection(DataValidationRangeSelectionTarget.Formula2, Formula2Box);
     }
 
     private void UseSelection2Button_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(SelectionSource))
-            Formula2Box.Text = SelectionSource;
+        ApplySelectionSourceTo(Formula2Box);
+    }
+
+    private void ApplySelectionSourceTo(TextBox textBox)
+    {
+        var selectionSource = SelectionSource?.Trim();
+        if (string.IsNullOrWhiteSpace(selectionSource))
+            return;
+
+        textBox.Text = selectionSource;
+        FocusRangeSelectionInput(textBox);
     }
 
     public void ApplyRangeSelection(DataValidationRangeSelectionTarget target, string formulaText)

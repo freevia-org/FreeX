@@ -242,6 +242,12 @@ public partial class GridView
                 return;
             }
 
+            if (TryHitTestOutlineGroupToggle(Viewport, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight, out _))
+            {
+                Cursor = Cursors.Hand;
+                return;
+            }
+
             var (target, _, _, _) = HitTestResize(pos);
             if (target == ResizeTarget.Column)
             {
@@ -393,6 +399,13 @@ public partial class GridView
         }
 
         var pos = e.GetPosition(this);
+
+        if (TryHitTestOutlineGroupToggle(Viewport, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var outlineToggle))
+        {
+            OutlineGroupToggleRequested?.Invoke(outlineToggle);
+            e.Handled = true;
+            return;
+        }
 
         if (TryHitTestAutoFilterButton(pos, out var autoFilterHeaderCell))
         {

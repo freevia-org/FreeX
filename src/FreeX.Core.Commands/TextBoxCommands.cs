@@ -10,6 +10,7 @@ public sealed class AddTextBoxCommand : IWorkbookCommand
     private bool _added;
 
     public string Label => "Insert Text Box";
+    public Guid TextBoxId => _textBox.Id;
 
     public AddTextBoxCommand(
         SheetId sheetId,

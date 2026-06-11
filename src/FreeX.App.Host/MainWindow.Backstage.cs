@@ -573,10 +573,13 @@ public partial class MainWindow
         ShowOptionsDialog();
     }
 
-    private void ShowOptionsDialog()
+    private void ErrorCheckingOptionsBtn_Click(object sender, RoutedEventArgs e) =>
+        ShowOptionsDialog(OptionsDialogInitialSection.FormulaErrorChecking);
+
+    private void ShowOptionsDialog(OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General)
     {
         var previousAppLanguage = AppLanguageCatalog.NormalizeCultureName(_options.AppLanguage);
-        var dlg = new OptionsDialog(_options, _workbook.DisabledFormulaErrorCodes);
+        var dlg = new OptionsDialog(_options, _workbook.DisabledFormulaErrorCodes, initialSection);
         if (ShowOwnedDialog(dlg) == true)
         {
             _options = dlg.Result;

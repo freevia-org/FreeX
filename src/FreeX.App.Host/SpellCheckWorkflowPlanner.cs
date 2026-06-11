@@ -10,6 +10,11 @@ public readonly record struct SpellingIssueKey(
     int ReplyIndex,
     int StartIndex);
 
+public sealed record SpellCheckScanResult(IReadOnlyList<SpellingIssue> Issues)
+{
+    public bool IsComplete => Issues.Count == 0;
+}
+
 public static class SpellCheckWorkflowPlanner
 {
     public static HashSet<string> CreateCustomDictionary(FreeXOptions options) =>
@@ -60,6 +65,17 @@ public static class SpellCheckWorkflowPlanner
 
         return filtered;
     }
+
+    public static SpellCheckScanResult ScanWorksheet(
+        Workbook workbook,
+        SheetId sheetId,
+        IReadOnlySet<string>? customDictionary,
+        ISet<string> ignoredWords,
+        ISet<SpellingIssueKey> ignoredIssues) =>
+        new(FilterIssues(
+            SpellCheckService.FindIssues(workbook, sheetId, customDictionary),
+            ignoredWords,
+            ignoredIssues));
 
     public static SpellingIssueKey CreateIssueKey(SpellingIssue issue) =>
         new(issue.Address, issue.Word, issue.Source, issue.ReplyIndex, issue.StartIndex);

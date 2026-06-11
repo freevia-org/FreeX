@@ -229,7 +229,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("SpellCheckDialogAction.Ignore");
         source.Should().Contain("SpellCheckDialogAction.Add");
         source.Should().Contain("while (true)");
-        source.Should().Contain("SpellCheckWorkflowPlanner.FilterIssues(");
+        source.Should().Contain("SpellCheckWorkflowPlanner.ScanWorksheet(");
         source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(issues, issue.Word, replacement)");
         source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, replacement)");
         source.Should().NotContain("BuildSpellCheckEdits");
@@ -240,6 +240,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var plannerSource = DialogSourceTestSupport.ReadHostSources("SpellCheckWorkflowPlanner.cs");
         plannerSource.Should().Contain("ContainsIgnoredWord(ignoredWords, issue.Word)");
         plannerSource.Should().Contain("ignoredIssues.Contains(CreateIssueKey(issue))");
+        plannerSource.Should().Contain("new(FilterIssues(");
         plannerSource.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
         plannerSource.Should().Contain("SpellingIssueSource.ThreadedCommentReply");
     }

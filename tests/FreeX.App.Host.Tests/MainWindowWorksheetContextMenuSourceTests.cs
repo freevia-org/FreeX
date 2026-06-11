@@ -123,6 +123,17 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     }
 
     [Fact]
+    public void WorksheetContextMenuItemsExposeStableAutomationNamesAndIds()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+
+        source.Should().Contain("AutomationProperties.SetName(item, command.Header);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(");
+        source.Should().Contain("WorksheetContextMenu_{command.Action}");
+        source.Should().Contain("NormalizeWorksheetContextMenuAutomationId(command.Header)");
+    }
+
+    [Fact]
     public void PivotTableContextMenuStateUsesClickedCell()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");

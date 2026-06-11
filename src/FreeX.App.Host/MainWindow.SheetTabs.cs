@@ -111,14 +111,14 @@ public partial class MainWindow
     private void SheetTab_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
-        _dragSheetTabId = tab.Id;
-        _dragSheetTabStart = e.GetPosition(SheetTabsControl);
-        if (sender is System.Windows.UIElement element)
-            element.CaptureMouse();
+        var dragStart = e.GetPosition(SheetTabsControl);
         _currentSheetId = tab.Id;
         UpdateGroupedSheetsForClick(tab.Id);
         UpdateViewport();
         RefreshSheetTabs();
+        _dragSheetTabId = tab.Id;
+        _dragSheetTabStart = dragStart;
+        CaptureSheetTabMouseForDrag(tab.Id, sender);
     }
 
     private void SheetTab_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
@@ -137,7 +137,7 @@ public partial class MainWindow
         if (Math.Abs(current.X - _dragSheetTabStart.X) < SystemParameters.MinimumHorizontalDragDistance)
             return;
 
-        var target = FindSheetTabViewModel(e.OriginalSource as System.Windows.DependencyObject);
+        var target = FindSheetTabViewModel(FindSheetTabDragHitTarget(current, draggedId) ?? e.OriginalSource as System.Windows.DependencyObject);
         if (target is null || target.Id == draggedId)
             return;
 
@@ -159,6 +159,49 @@ public partial class MainWindow
         _dragSheetTabId = null;
         if (sender is System.Windows.UIElement element && element.IsMouseCaptured)
             element.ReleaseMouseCapture();
+    }
+
+    private void CaptureSheetTabMouseForDrag(SheetId sheetId, object sender)
+    {
+        SheetTabsControl.UpdateLayout();
+        if (FindSheetTab(sheetId) is { } refreshedTab &&
+            FindSheetTabContextMenuTarget(refreshedTab) is UIElement refreshedElement)
+        {
+            refreshedElement.CaptureMouse();
+            return;
+        }
+
+        if (sender is UIElement fallbackElement)
+            fallbackElement.CaptureMouse();
+    }
+
+    private DependencyObject? FindSheetTabDragHitTarget(Point position, SheetId draggedId)
+    {
+        var hit = SheetTabsControl.InputHitTest(position) as DependencyObject;
+        var hitTab = FindSheetTabViewModel(hit);
+        if (hitTab is not null && hitTab.Id != draggedId)
+            return hit;
+
+        return FindSheetTabDragHitTargetByBounds(position, draggedId);
+    }
+
+    private DependencyObject? FindSheetTabDragHitTargetByBounds(Point position, SheetId draggedId)
+    {
+        return _sheetTabs
+            .Where(tab => tab.Id != draggedId)
+            .Select(tab => FindSheetTabContextMenuTarget(tab))
+            .Where(element => element is not null && element.ActualWidth > 0 && element.ActualHeight > 0)
+            .Select(element => new
+            {
+                Element = element!,
+                Bounds = element!.TransformToAncestor(SheetTabsControl)
+                    .TransformBounds(new Rect(new Point(0, 0), element.RenderSize))
+            })
+            .Where(candidate => candidate.Bounds.Contains(position))
+            .OrderByDescending(candidate => Panel.GetZIndex(candidate.Element))
+            .ThenBy(candidate => Math.Abs(position.X - (candidate.Bounds.Left + candidate.Bounds.Width / 2.0)))
+            .FirstOrDefault()
+            ?.Element;
     }
 
     private void SheetTab_LostMouseCapture(object sender, MouseEventArgs e)

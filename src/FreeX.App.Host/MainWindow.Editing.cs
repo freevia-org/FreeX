@@ -492,6 +492,41 @@ public partial class MainWindow
         CommitEdit();
     }
 
+    private bool TryCommitPendingSpellCheckEdit()
+    {
+        if (_inlineEditor?.IsVisible == true)
+        {
+            if (IsFormulaRangeEntryActive(_inlineEditor))
+                return false;
+
+            FormulaBar.Text = _inlineEditor.Text;
+            if (!CommitEdit())
+                return false;
+
+            HideInlineEditor(commit: false);
+            ClearFormulaRangeEntryState();
+            return true;
+        }
+
+        if (_formulaEditCell is not null)
+        {
+            if (IsFormulaRangeEntryActive(FormulaBar))
+                return false;
+
+            return CommitEdit();
+        }
+
+        if (SheetGrid.SelectedRange?.Start is not { } activeCell)
+            return true;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var currentText = FormatFormulaBarText(sheet?.GetCell(activeCell), activeCell);
+        if (string.Equals(FormulaBar.Text, currentText, StringComparison.Ordinal))
+            return true;
+
+        return CommitEdit();
+    }
+
     private void FocusSheetGridIfNeeded()
     {
         if (!ReferenceEquals(Keyboard.FocusedElement, SheetGrid))

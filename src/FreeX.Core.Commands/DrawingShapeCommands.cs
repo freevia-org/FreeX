@@ -9,6 +9,7 @@ public sealed class AddDrawingShapeCommand : IWorkbookCommand
     private bool _added;
 
     public string Label => "Insert Shape";
+    public Guid ShapeId => _shape.Id;
 
     public AddDrawingShapeCommand(
         SheetId sheetId,

@@ -20,7 +20,7 @@ internal static class DialogButtonRowFactory
         var ok = new Button
         {
             Content = resolvedAcceptContent,
-            Width = buttonWidth,
+            MinWidth = buttonWidth,
             Margin = new Thickness(0, 0, 8, 0),
             IsDefault = true
         };
@@ -32,7 +32,7 @@ internal static class DialogButtonRowFactory
         var cancel = new Button
         {
             Content = cancelContent,
-            Width = buttonWidth,
+            MinWidth = buttonWidth,
             IsCancel = true
         };
         AutomationProperties.SetName(cancel, UiText.CreateAutomationName(cancelContent));
@@ -53,7 +53,7 @@ internal static class DialogButtonRowFactory
         var ok = new Button
         {
             Content = resolvedAcceptContent,
-            Width = buttonWidth,
+            MinWidth = buttonWidth,
             IsDefault = true,
             IsCancel = true
         };

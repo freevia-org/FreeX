@@ -88,6 +88,29 @@ public sealed partial class DataToolDialogTests
     }
 
     [Theory]
+    [InlineData("A1:XFD1048576", "F1:G2", "Advanced Filter list range is too large.")]
+    [InlineData("A1:C5", "F1:XFD1048576", "Advanced Filter criteria range is too large.")]
+    public void AdvancedFilterDialog_RejectsOversizedListOrCriteriaRanges(
+        string listRangeText,
+        string criteriaRangeText,
+        string expectedErrorPrefix)
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = AdvancedFilterDialog.TryParse(
+            sheetId,
+            listRangeText: listRangeText,
+            criteriaRangeText: criteriaRangeText,
+            copyToCellText: "",
+            uniqueRecordsOnly: false,
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().StartWith(expectedErrorPrefix);
+    }
+
+    [Theory]
     [InlineData("", "F1:G2", "Enter a valid list range.")]
     [InlineData("   ", "F1:G2", "Enter a valid list range.")]
     [InlineData("A1:C5", "", "Enter a valid criteria range.")]
@@ -437,6 +460,7 @@ public sealed partial class DataToolDialogTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("new AdvancedFilterDialog(");
+        source.Should().Contain("AdvancedFilterDefaultListRangePlanner.Create(sheet, selected)");
         source.Should().Contain("ResolveSheetIdByName,");
         source.Should().Contain("request => ApplyAdvancedFilterRangeSelection(dialog, request)");
         source.Should().Contain("private void ApplyAdvancedFilterRangeSelection(");

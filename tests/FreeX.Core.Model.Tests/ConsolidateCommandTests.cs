@@ -151,6 +151,46 @@ public sealed class ConsolidateCommandTests
     }
 
     [Fact]
+    public void ConsolidateCommand_RejectsSourceRangeOutsideWorksheetBounds()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var source = new GridRange(
+            new CellAddress(sheet.Id, CellAddress.MaxRow + 1u, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow + 1u, 1));
+        var destination = new CellAddress(sheet.Id, 3, 1);
+
+        var command = new ConsolidateCommand([source], destination);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("source ranges");
+        sheet.GetCell(destination).Should().BeNull();
+    }
+
+    [Fact]
+    public void ConsolidateCommand_RejectsDestinationRangeOutsideWorksheetBounds()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var source = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 2));
+        var destination = new CellAddress(sheet.Id, 4, CellAddress.MaxCol);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(20));
+
+        var command = new ConsolidateCommand([source], destination);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("destination range");
+        sheet.GetCell(destination).Should().BeNull();
+    }
+
+    [Fact]
     public void ConsolidateCommand_UsesTopRowAndLeftColumnLabels()
     {
         var wb = new Workbook("test");

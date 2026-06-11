@@ -112,10 +112,17 @@ public sealed class FormulaCommandSourceTests
     public void FormulaCommandHandlers_RouteThroughExpectedDialogsMenusAndServices()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.FormulaCommands.cs");
+        var nameManagerSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         source.Should().Contain("var dlg = new InsertFunctionDialog();");
         source.Should().Contain("BeginFormulaBarFormulaEdit(\"=\" + dlg.SelectedFormula);");
-        source.Should().Contain("new NamedRangeDialog(");
+        nameManagerSource.Should().Contain("new NamedRangeDialog(");
+        source.Should().Contain("new NameDefinitionDialog(");
+        source.Should().Contain("request => ApplyNameDefinitionSelection(dialog, request)");
+        source.Should().Contain("new DefineNamedRangeCommand(");
+        source.Should().NotContain("new NamedRangeDialog(",
+            "Define Name should open a creation flow instead of duplicating Name Manager");
         source.Should().Contain("new CreateNamesFromSelectionDialog { Owner = this }");
         source.Should().Contain("new CreateNamedRangesFromSelectionCommand(");
         source.Should().Contain("FormulaInsertionService.InsertDefinedName(");
@@ -137,6 +144,9 @@ public sealed class FormulaCommandSourceTests
         source.Should().Contain("InsertRawFormulaFunction(normalizedName);");
         source.Should().Contain("BeginFormulaBarFormulaEdit($\"={funcName}(\");");
         source.Should().Contain("private void BeginFormulaBarFormulaEdit(string text, int? caretIndex = null)");
+        source.Should().Contain("ShowOptionsDialog(OptionsDialogInitialSection.FormulaErrorChecking)");
+        backstageSource.Should().Contain("private void ErrorCheckingOptionsBtn_Click(object sender, RoutedEventArgs e)");
+        backstageSource.Should().Contain("ShowOptionsDialog(OptionsDialogInitialSection.FormulaErrorChecking)");
     }
 
     private static string ReadFormulasTabXaml()

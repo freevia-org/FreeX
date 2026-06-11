@@ -378,6 +378,72 @@ public sealed class AdvancedFilterCommandTests
         command.Apply(ctx).Success.Should().BeFalse();
     }
 
+    [Fact]
+    public void AdvancedFilter_RejectsOversizedListRangeBeforeApplying()
+    {
+        var (wb, sheet, ctx) = Setup();
+        SeedList(sheet);
+        Set(sheet, 1, 6, "Region");
+        Set(sheet, 2, 6, "East");
+
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, CellAddress.MaxRow, CellAddress.MaxCol),
+            CriteriaRange: ListRange(sheet, 1, 6, 2, 6),
+            CopyTo: null,
+            UniqueRecordsOnly: false);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be(AdvancedFilterCommand.ListRangeTooLargeMessage);
+        sheet.FilterHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AdvancedFilter_RejectsOversizedCriteriaRangeBeforeScanningIt()
+    {
+        var (wb, sheet, ctx) = Setup();
+        SeedList(sheet);
+
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 5, 3),
+            CriteriaRange: ListRange(sheet, 1, 1, CellAddress.MaxRow, CellAddress.MaxCol),
+            CopyTo: null,
+            UniqueRecordsOnly: false);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be(AdvancedFilterCommand.CriteriaRangeTooLargeMessage);
+        sheet.FilterHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AdvancedFilter_CopyToLocation_RejectsOversizedCopyOutputBeforeMutating()
+    {
+        const uint cols = 200;
+        var rows = (uint)(AdvancedFilterCommand.MaxCopyOutputCells / cols) + 1;
+        var (wb, sheet, ctx) = Setup();
+        for (uint col = 1; col <= cols; col++)
+            Set(sheet, 1, col, "H" + col.ToString("000"));
+        for (uint row = 2; row <= rows + 1; row++)
+            Set(sheet, row, 1, "Keep");
+        Set(sheet, 1, cols + 2, "H001");
+        Set(sheet, 2, cols + 2, "Keep");
+
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, rows + 1, cols),
+            CriteriaRange: ListRange(sheet, 1, cols + 2, 2, cols + 2),
+            CopyTo: Addr(sheet, rows + 4, 1),
+            UniqueRecordsOnly: false);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be(AdvancedFilterCommand.CopyOutputTooLargeMessage);
+        sheet.GetCell(rows + 4, 1).Should().BeNull();
+    }
+
     [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_AdvancedFilterCopyUniqueDenseRows_ReportsTimingAndAllocatedBytes()

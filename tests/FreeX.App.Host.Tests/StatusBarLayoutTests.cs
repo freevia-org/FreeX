@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -41,6 +42,45 @@ public sealed class StatusBarLayoutTests
             harness.StatusText("StatusSumText").Should().Be("Sum: 12");
             harness.StatusText("StatusMinText").Should().Be("Min: 2");
             harness.StatusText("StatusMaxText").Should().Be("Max: 6");
+        });
+    }
+
+    [Fact]
+    public void NumericSelection_UpdatesAggregateAutomationNamesWithLiveStatusText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet = harness.ActiveWorkbook.GetSheet(harness.CurrentSheetId)
+                ?? throw new InvalidOperationException("The active sheet should exist.");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(2)));
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(4)));
+
+            harness.InvalidateNavigationCaches();
+            harness.SelectRange(1, 1, 1, 2);
+            harness.RefreshStatusBar();
+
+            harness.StatusAutomationId("StatusCountText").Should().Be("StatusCountText");
+            harness.StatusAutomationId("StatusNumericalCountText").Should().Be("StatusNumericalCountText");
+            harness.StatusAutomationId("StatusMinText").Should().Be("StatusMinText");
+            harness.StatusAutomationId("StatusMaxText").Should().Be("StatusMaxText");
+            harness.StatusAutomationName("StatusAvgText").Should().Be("Average: 3");
+            harness.StatusAutomationName("StatusCountText").Should().Be("Count: 2");
+            harness.StatusAutomationName("StatusNumericalCountText").Should().Be("Numerical Count: 2");
+            harness.StatusAutomationHelpText("StatusNumericalCountText").Should().Be("Numerical Count: 2");
+            harness.StatusAutomationLiveSetting("StatusNumericalCountText").Should().Be(AutomationLiveSetting.Polite);
+            harness.StatusAutomationName("StatusMinText").Should().Be("Min: 2");
+            harness.StatusAutomationName("StatusMaxText").Should().Be("Max: 4");
+
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(8)));
+            harness.InvalidateNavigationCaches();
+            harness.RefreshStatusBar();
+
+            harness.StatusAutomationName("StatusAvgText").Should().Be("Average: 5");
+            harness.StatusAutomationName("StatusCountText").Should().Be("Count: 2");
+            harness.StatusAutomationName("StatusNumericalCountText").Should().Be("Numerical Count: 2");
+            harness.StatusAutomationHelpText("StatusNumericalCountText").Should().Be("Numerical Count: 2");
+            harness.StatusAutomationName("StatusMaxText").Should().Be("Max: 8");
         });
     }
 
@@ -458,6 +498,18 @@ public sealed class StatusBarLayoutTests
 
         public string StatusText(string textBlockName) =>
             ((TextBlock)_window.FindName(textBlockName)).Text;
+
+        public string StatusAutomationName(string textBlockName) =>
+            AutomationProperties.GetName((TextBlock)_window.FindName(textBlockName));
+
+        public string StatusAutomationHelpText(string textBlockName) =>
+            AutomationProperties.GetHelpText((TextBlock)_window.FindName(textBlockName));
+
+        public AutomationLiveSetting StatusAutomationLiveSetting(string textBlockName) =>
+            AutomationProperties.GetLiveSetting((TextBlock)_window.FindName(textBlockName));
+
+        public string StatusAutomationId(string textBlockName) =>
+            AutomationProperties.GetAutomationId((TextBlock)_window.FindName(textBlockName));
 
         public Visibility StatusTextVisibility(string textBlockName) =>
             ((TextBlock)_window.FindName(textBlockName)).Visibility;

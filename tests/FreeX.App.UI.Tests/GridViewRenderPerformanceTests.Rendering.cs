@@ -326,19 +326,19 @@ public sealed partial class GridViewRenderPerformanceTests
 
         source.Should().Contain("private DrawingGroup? _headerBaseLayerCache;");
         source.Should().Contain("private HeaderBaseLayerCacheKey _headerBaseLayerCacheKey;");
-        renderHeaders.Should().Contain("RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);");
-        renderHeaders.Should().Contain("RenderSelectedHeaderLayer(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);");
+        renderHeaders.Should().Contain("RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight, visibleBottom, pixelsPerDip);");
+        renderHeaders.Should().Contain("RenderSelectedHeaderLayer(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight, visibleBottom, pixelsPerDip);");
         renderHeaderBaseLayer.Should().Contain("_headerBaseLayerCache is { } cached && _headerBaseLayerCacheKey == key");
         renderHeaderBaseLayer.Should().Contain("dc.DrawDrawing(cached);");
         renderHeaderBaseLayer.Should().NotContain("SelectedRange");
         renderHeaderBaseLayer.Should().NotContain("SelectedRanges");
-        buildHeaderBaseLayer.Should().Contain("RenderHeaderBase(groupContext, viewport, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);");
+        buildHeaderBaseLayer.Should().Contain("RenderHeaderBase(groupContext, viewport, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight, visibleBottom, pixelsPerDip);");
         buildHeaderBaseLayer.Should().Contain("group.Freeze();");
         source.Should().Contain("private DrawingGroup? _selectedHeaderLayerCache;");
         source.Should().Contain("private SelectedHeaderLayerCacheKey _selectedHeaderLayerCacheKey;");
         renderSelectedHeaderLayer.Should().Contain("_selectedHeaderLayerCache is { } cached && _selectedHeaderLayerCacheKey == key");
         renderSelectedHeaderLayer.Should().Contain("ShouldBuildSelectedHeaderLayerCache(key)");
-        renderSelectedHeaderLayer.Should().Contain("RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);");
+        renderSelectedHeaderLayer.Should().Contain("RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight, visibleBottom, pixelsPerDip);");
         source.Should().Contain("_hasLastSelectedHeaderLayerRenderKey && _lastSelectedHeaderLayerRenderKey == key");
         source.Should().Contain("BuildSelectedHeaderLayerCache(");
         source.Should().Contain("CalculateGridRangeListSignature(selectedRanges)");
@@ -377,6 +377,60 @@ public sealed partial class GridViewRenderPerformanceTests
             [],
             [new RowMetric(999_999, 20, 0), new RowMetric(1_000_000, 20, 20)],
             [])).Should().Be(54);
+    }
+
+    [Fact]
+    public void OutlineGroups_AddHeaderGuttersOnlyWhenPresent()
+    {
+        var plain = new ViewportModel(
+            [],
+            [new RowMetric(10, 20, 0)],
+            [new ColMetric(1, 64, 0)]);
+
+        var withRowOutline = plain with
+        {
+            RowOutlineGroups = [new OutlineGroupRange(1, 2, 3, 4, IsCollapsed: false)]
+        };
+        var withColumnOutline = plain with
+        {
+            ColumnOutlineGroups = [new OutlineGroupRange(2, 2, 3, 4, IsCollapsed: false)]
+        };
+
+        GridView.CalculateRowHeaderWidth(plain).Should().Be(GridView.RowHeaderWidth);
+        GridView.CalculateColumnHeaderHeight(plain).Should().Be(GridView.ColHeaderHeight);
+        GridView.CalculateRowHeaderWidth(withRowOutline).Should().Be(GridView.RowHeaderWidth + 26);
+        GridView.CalculateColumnHeaderHeight(withColumnOutline).Should().Be(GridView.ColHeaderHeight + 40);
+    }
+
+    [Fact]
+    public void OutlineGroupToggleHitTest_ReturnsRowAndColumnRequests()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(4, 20, 20)],
+            [new ColMetric(1, 64, 0), new ColMetric(4, 64, 64)],
+            RowOutlineGroups: [new OutlineGroupRange(1, 2, 3, 4, IsCollapsed: true)],
+            ColumnOutlineGroups: [new OutlineGroupRange(1, 2, 3, 4, IsCollapsed: false)]);
+        var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);
+        var columnHeaderHeight = GridView.CalculateColumnHeaderHeight(viewport);
+
+        GridView.TryHitTestOutlineGroupToggle(
+                viewport,
+                new Point(13, columnHeaderHeight + 30),
+                rowHeaderWidth,
+                columnHeaderHeight,
+                out var rowRequest)
+            .Should().BeTrue();
+        rowRequest.Should().Be(new GridOutlineGroupToggleRequest(GridOutlineGroupAxis.Rows, 1, 2, 3, Collapse: false));
+
+        GridView.TryHitTestOutlineGroupToggle(
+                viewport,
+                new Point(rowHeaderWidth + 96, 13),
+                rowHeaderWidth,
+                columnHeaderHeight,
+                out var columnRequest)
+            .Should().BeTrue();
+        columnRequest.Should().Be(new GridOutlineGroupToggleRequest(GridOutlineGroupAxis.Columns, 1, 2, 3, Collapse: true));
     }
 
     [Fact]

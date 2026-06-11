@@ -1,6 +1,8 @@
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Automation.Peers;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -69,12 +71,12 @@ public partial class MainWindow
         SetVisibilityIfChanged(StatusMinText, _options.StatusBarShowMinimum ? Visibility.Visible : Visibility.Collapsed);
         SetVisibilityIfChanged(StatusMaxText, _options.StatusBarShowMaximum ? Visibility.Visible : Visibility.Collapsed);
         SetTextIfChanged(StatusReadyText, state.ReadyText);
-        SetTextIfChanged(StatusAvgText, state.AverageText);
-        SetTextIfChanged(StatusCountText, state.CountText);
-        SetTextIfChanged(StatusNumericalCountText, state.NumericalCountText);
-        SetTextIfChanged(StatusSumText, state.SumText);
-        SetTextIfChanged(StatusMinText, state.MinText);
-        SetTextIfChanged(StatusMaxText, state.MaxText);
+        SetStatusStatisticTextIfChanged(StatusAvgText, state.AverageText, UiText.Get("StatusBar_Average"));
+        SetStatusStatisticTextIfChanged(StatusCountText, state.CountText, UiText.Get("StatusBar_Count"));
+        SetStatusStatisticTextIfChanged(StatusNumericalCountText, state.NumericalCountText, UiText.Get("StatusBar_NumericalCount"));
+        SetStatusStatisticTextIfChanged(StatusSumText, state.SumText, UiText.Get("StatusBar_Sum"));
+        SetStatusStatisticTextIfChanged(StatusMinText, state.MinText, UiText.Get("StatusBar_Minimum"));
+        SetStatusStatisticTextIfChanged(StatusMaxText, state.MaxText, UiText.Get("StatusBar_Maximum"));
         ApplyStatusBarInteractiveDisplayState();
         _lastStatusBarDisplayState = state;
     }
@@ -216,6 +218,47 @@ public partial class MainWindow
     {
         if (textBlock.Text != text)
             textBlock.Text = text;
+    }
+
+    private static void SetStatusStatisticTextIfChanged(TextBlock textBlock, string text, string fallbackAutomationName)
+    {
+        SetTextIfChanged(textBlock, text);
+
+        var automationName = string.IsNullOrWhiteSpace(text)
+            ? fallbackAutomationName
+            : text;
+        var previousAutomationName = AutomationProperties.GetName(textBlock);
+        if (!string.Equals(previousAutomationName, automationName, StringComparison.Ordinal))
+        {
+            AutomationProperties.SetName(textBlock, automationName);
+            NotifyStatusStatisticAutomationChanged(textBlock, previousAutomationName, automationName);
+        }
+
+        if (!string.Equals(AutomationProperties.GetHelpText(textBlock), automationName, StringComparison.Ordinal))
+            AutomationProperties.SetHelpText(textBlock, automationName);
+    }
+
+    private static void NotifyStatusStatisticAutomationChanged(
+        TextBlock textBlock,
+        string previousAutomationName,
+        string automationName)
+    {
+        if (!textBlock.IsLoaded)
+            return;
+
+        try
+        {
+            var peer = UIElementAutomationPeer.FromElement(textBlock) ??
+                       UIElementAutomationPeer.CreatePeerForElement(textBlock);
+            peer?.RaisePropertyChangedEvent(
+                AutomationElementIdentifiers.NameProperty,
+                previousAutomationName,
+                automationName);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+        catch (InvalidOperationException)
+        {
+        }
     }
 
     private (uint start, uint end) GetSelectedColRange(uint col)

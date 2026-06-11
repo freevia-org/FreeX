@@ -22,6 +22,68 @@ public class ViewportLayoutTests
     }
 
     [Fact]
+    public void GetViewport_IncludesVisibleRowAndColumnOutlineGroups()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.RowOutlineLevels[2] = 1;
+        sheet.RowOutlineLevels[3] = 1;
+        sheet.RowOutlineLevels[4] = 2;
+        sheet.RowOutlineLevels[5] = 2;
+        sheet.ColOutlineLevels[2] = 1;
+        sheet.ColOutlineLevels[3] = 1;
+        sheet.OutlineSummaryRight = false;
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 160, 400));
+
+        viewport.RowOutlineGroups.Should().Contain(new OutlineGroupRange(1, 2, 5, 6, IsCollapsed: false));
+        viewport.RowOutlineGroups.Should().Contain(new OutlineGroupRange(2, 4, 5, 6, IsCollapsed: false));
+        viewport.ColumnOutlineGroups.Should().ContainSingle()
+            .Which.Should().Be(new OutlineGroupRange(1, 2, 3, 1, IsCollapsed: false));
+    }
+
+    [Fact]
+    public void GetViewport_KeepsCollapsedOutlineGroupMetadataWhenRowsAreHidden()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.RowOutlineLevels[2] = 1;
+        sheet.RowOutlineLevels[3] = 1;
+        sheet.GroupHiddenRows.Add(2);
+        sheet.GroupHiddenRows.Add(3);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 120, 300));
+
+        viewport.RowMetrics.Select(row => row.Row).Should().StartWith([1u, 4u, 5u]);
+        viewport.RowOutlineGroups.Should().ContainSingle()
+            .Which.Should().Be(new OutlineGroupRange(1, 2, 3, 4, IsCollapsed: true));
+    }
+
+    [Fact]
+    public void GetViewport_RespectsHiddenOutlineSymbolsOption()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.RowOutlineLevels[2] = 1;
+        sheet.ColOutlineLevels[2] = 1;
+        sheet.ShowOutlineSymbols = false;
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 120, 300));
+
+        viewport.RowOutlineGroups.Should().BeEmpty();
+        viewport.ColumnOutlineGroups.Should().BeEmpty();
+    }
+
+    [Fact]
     public void GetViewport_NearLastRowAlignsBottomEdgeToWorksheetBoundary()
     {
         var workbook = new Workbook("test");

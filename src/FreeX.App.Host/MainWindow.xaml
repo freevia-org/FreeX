@@ -1269,31 +1269,6 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Illustrations ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertIllustrationsGroup">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="{local:Loc Key=MainWindow_Content_Pictures}" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PicturesBtn_Click"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Pictures}"
-                                        local:RibbonTooltip.KeyTip="IP"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertAPictureFromALocalImageFile}" local:RibbonMetadata.CommandName="Pictures">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_PicturePlaceOverCells}" local:RibbonTooltip.KeyTip="V" local:RibbonMetadata.CommandName="Place over Cells">
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureThisDevice}" local:RibbonTooltip.KeyTip="D" Click="InsertPictureBtn_Click" local:RibbonMetadata.CommandName="This Device Picture over Cells"/>
-                                            </MenuItem>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
-                                <Button x:Name="ShapesBtn" Content="{local:Loc Key=MainWindow_Content_Shapes}" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShapesBtn_Click"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Shapes}"
-                                        local:RibbonTooltip.KeyTip="SH"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertADrawingShapeOnTheSheet}" local:RibbonMetadata.CommandName="Shapes"/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Illustrations}" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-
                         <!-- ▌Charts ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertChartsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
@@ -1804,6 +1779,31 @@
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
+                        <!-- ▌Illustrations ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DrawIllustrationsGroup">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="{local:Loc Key=MainWindow_Content_Pictures}" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PicturesBtn_Click"
+                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Pictures}"
+                                        local:RibbonTooltip.KeyTip="IP"
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertAPictureFromALocalImageFile}" local:RibbonMetadata.CommandName="Pictures">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_PicturePlaceOverCells}" local:RibbonTooltip.KeyTip="V" local:RibbonMetadata.CommandName="Place over Cells">
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureThisDevice}" local:RibbonTooltip.KeyTip="D" Click="InsertPictureBtn_Click" local:RibbonMetadata.CommandName="This Device Picture over Cells"/>
+                                            </MenuItem>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <Button x:Name="ShapesBtn" Content="{local:Loc Key=MainWindow_Content_Shapes}" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShapesBtn_Click"
+                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Shapes}"
+                                        local:RibbonTooltip.KeyTip="SH"
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertADrawingShapeOnTheSheet}" local:RibbonMetadata.CommandName="Shapes"/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Illustrations}" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
                         <!-- ▌Arrange ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DrawArrangeGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
@@ -2149,7 +2149,7 @@
                         <!-- ▌Scale to Fit ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PageLayoutScaleToFitGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,1,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,1,22,0">
                                 <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
                                     <TextBlock Text="{local:Loc Key=MainWindow_Text_Width}" FontSize="11" Margin="2,0,2,0" Foreground="#444"/>
                                     <ComboBox x:Name="PageLayoutScaleWidthBox" Width="82" Height="22" Margin="1,0" Background="White" FontSize="12"
@@ -2186,13 +2186,19 @@
                                               local:RibbonTooltip.KeyTip="SC"
                                               local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale Percent"/>
                                 </StackPanel>
-                                <Button x:Name="PageLayoutScaleToFitDialogButton" Content="..." Width="24" Height="22" Margin="1,14,1,0" Style="{StaticResource RibbonBtn}" Click="ScaleToFitBtn_Click"
-                                        AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ScaleToFit}"
-                                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ScaleToFit}"
-                                        local:RibbonTooltip.KeyTip="SF"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale to Fit"/>
                             </StackPanel>
+                            <Button x:Name="PageLayoutScaleToFitDialogButton" Grid.Row="0" Width="18" Height="18" Margin="0,0,1,1"
+                                    HorizontalAlignment="Right" VerticalAlignment="Bottom" Style="{StaticResource RibbonBtn}" Click="ScaleToFitBtn_Click"
+                                    AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ScaleToFit}"
+                                    AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}"
+                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ScaleToFit}"
+                                    local:RibbonTooltip.KeyTip="SF"
+                                    local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale to Fit">
+                                <Viewbox Width="10" Height="10">
+                                    <Path Stroke="#444" StrokeThickness="1.4" StrokeStartLineCap="Square" StrokeEndLineCap="Square"
+                                          Data="M 2 8 L 8 2 M 4 2 H 8 V 6"/>
+                                </Viewbox>
+                            </Button>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_ScaleToFit}" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
@@ -2230,41 +2236,6 @@
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_SheetOptions}" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-
-                        <!-- ▌Arrange ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PageLayoutArrangeGroup">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="{local:Loc Key=MainWindow_Content_BringForward}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
-                                        Style="{StaticResource RibbonBtn}" Click="BringForwardBtn_Click"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_BringForward}"
-                                        local:RibbonTooltip.KeyTip="BF"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheFront}" local:RibbonMetadata.CommandName="Bring Forward"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_SendBackward}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
-                                        Style="{StaticResource RibbonBtn}" Click="SendBackwardBtn_Click"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SendBackward}"
-                                        local:RibbonTooltip.KeyTip="SB"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheBack}" local:RibbonMetadata.CommandName="Send Backward"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_SelectionPane}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
-                                        Style="{StaticResource RibbonBtn}" Click="SelectionPaneBtn_Click"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SelectionPane}"
-                                        local:RibbonTooltip.KeyTip="SP"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ListSheetObjectsAndControlVisibilityOrStackingOrder}" local:RibbonMetadata.CommandName="Selection Pane"/>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Rotate}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36" Style="{StaticResource RibbonBtn}" Click="ObjectRotateBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RotateObject}"
-                                            local:RibbonTooltip.KeyTip="RO"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RotateTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Rotate Object"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Size}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ObjectSize}"
-                                            local:RibbonTooltip.KeyTip="OZ"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ResizeTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Object Size"/>
-                                </StackPanel>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Arrange}" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-
                     </StackPanel>
                     </ScrollViewer>
                 </Border>
@@ -2420,7 +2391,7 @@
                                         <Button.ContextMenu>
                                             <ContextMenu>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_ErrorChecking}" local:RibbonTooltip.KeyTip="E" Click="ErrorCheckBtn_Click" local:RibbonMetadata.CommandName="Error Checking"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_ErrorCheckingOptions}" local:RibbonTooltip.KeyTip="O" Click="SsOptionsBtn_Click" local:RibbonMetadata.CommandName="Error Checking Options"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_ErrorCheckingOptions}" local:RibbonTooltip.KeyTip="O" Click="ErrorCheckingOptionsBtn_Click" local:RibbonMetadata.CommandName="Error Checking Options"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                     </Button>
@@ -3042,6 +3013,227 @@
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Window}" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                     </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <!-- SHAPE FORMAT -->
+            <TabItem x:Name="ShapeFormatTab" Header="{local:Loc Key=MainWindow_Header_ShapeFormat}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JS" local:RibbonMetadata.CatalogId="ShapeFormatTab">
+                <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
+                        <StackPanel Orientation="Horizontal" MinHeight="88">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ShapeFormatShapeStylesGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Fill}" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectFillBtn_Click"
+                                                AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ShapeFill}"
+                                                AutomationProperties.AutomationId="ShapeFormatShapeFillButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheFillColorOfTheSelectedDrawingObject}"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShapeFill}"
+                                                local:RibbonTooltip.KeyTip="F"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheFillColorOfTheSelectedDrawingObject}" local:RibbonMetadata.CommandName="Shape Fill"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Outline}" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectOutlineBtn_Click"
+                                                AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ObjectOutline}"
+                                                AutomationProperties.AutomationId="ShapeFormatObjectOutlineButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheOutlineColorOfTheSelectedDrawingObject}"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ObjectOutline}"
+                                                local:RibbonTooltip.KeyTip="O"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheOutlineColorOfTheSelectedDrawingObject}" local:RibbonMetadata.CommandName="Object Outline"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <Button x:Name="ShapeFormatGradientButton" Content="{local:Loc Key=MainWindow_Content_Gradient}" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectGradientBtn_Click"
+                                                AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ShapeGradient}"
+                                                AutomationProperties.AutomationId="ShapeFormatShapeGradientButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenGradientFillControlsForTheSelectedShape}"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShapeGradient}"
+                                                local:RibbonTooltip.KeyTip="G"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ApplyATwoColorGradientFillToTheSelectedShape}" local:RibbonMetadata.CommandName="Shape Gradient"/>
+                                        <Button x:Name="ShapeFormatEffectsButton" Content="{local:Loc Key=MainWindow_Content_Effects}" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectEffectsBtn_Click"
+                                                AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ShapeEffects}"
+                                                AutomationProperties.AutomationId="ShapeFormatShapeEffectsButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect}"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShapeEffects}"
+                                                local:RibbonTooltip.KeyTip="E"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape}" local:RibbonMetadata.CommandName="Shape Effects"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_ShapeStyles}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ShapeFormatArrangeGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_BringForward}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
+                                            Style="{StaticResource RibbonBtn}" Click="BringForwardBtn_Click"
+                                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_BringForward}"
+                                            AutomationProperties.AutomationId="ShapeFormatBringForwardButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheFront}"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_BringForward}"
+                                            local:RibbonTooltip.KeyTip="BF"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheFront}" local:RibbonMetadata.CommandName="Bring Forward"/>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_SendBackward}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
+                                            Style="{StaticResource RibbonBtn}" Click="SendBackwardBtn_Click"
+                                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_SendBackward}"
+                                            AutomationProperties.AutomationId="ShapeFormatSendBackwardButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheBack}"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SendBackward}"
+                                            local:RibbonTooltip.KeyTip="SB"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheBack}" local:RibbonMetadata.CommandName="Send Backward"/>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_SelectionPane}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
+                                            Style="{StaticResource RibbonBtn}" Click="SelectionPaneBtn_Click"
+                                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_SelectionPane}"
+                                            AutomationProperties.AutomationId="ShapeFormatSelectionPaneButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ListSheetObjectsAndControlVisibilityOrStackingOrder}"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SelectionPane}"
+                                            local:RibbonTooltip.KeyTip="SP"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ListSheetObjectsAndControlVisibilityOrStackingOrder}" local:RibbonMetadata.CommandName="Selection Pane"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0">
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Rotate}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36" Style="{StaticResource RibbonBtn}" Click="ObjectRotateBtn_Click"
+                                                AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_RotateObject}"
+                                                AutomationProperties.AutomationId="ShapeFormatRotateObjectButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_RotateTheSelectedOrMostRecentDrawingObject}"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RotateObject}"
+                                                local:RibbonTooltip.KeyTip="RO"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RotateTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Rotate Object"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Size}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
+                                                AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ObjectSize}"
+                                                AutomationProperties.AutomationId="ShapeFormatObjectSizeButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ResizeTheSelectedOrMostRecentDrawingObject}"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ObjectSize}"
+                                                local:RibbonTooltip.KeyTip="SZ"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ResizeTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Object Size"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Arrange}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ShapeFormatAccessibilityGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_AltText}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SetAltTextBtn_Click"
+                                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_AltText}"
+                                            AutomationProperties.AutomationId="ShapeFormatAltTextButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAltTextForTheSelectedObject}"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AltText}"
+                                            local:RibbonTooltip.KeyTip="AT"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAltTextForTheSelectedObject}" local:RibbonMetadata.CommandName="Alt Text"/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Accessibility}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <!-- PICTURE FORMAT -->
+            <TabItem x:Name="PictureFormatTab" Header="{local:Loc Key=MainWindow_Header_PictureFormat}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JP" local:RibbonMetadata.CatalogId="PictureFormatTab">
+                <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
+                        <StackPanel Orientation="Horizontal" MinHeight="88">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PictureFormatFormatGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=FormatPicture_Title}" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureSizeBtn_Click"
+                                                AutomationProperties.Name="{local:Loc Key=FormatPicture_Title}"
+                                                AutomationProperties.AutomationId="PictureFormatFormatPictureButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ResizeTheSelectedOrMostRecentDrawingObject}"
+                                                local:RibbonTooltip.Title="{local:Loc Key=FormatPicture_Title}"
+                                                local:RibbonTooltip.KeyTip="FP"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ResizeTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Format Picture"/>
+                                        <Button x:Name="PictureFormatCropButton" Content="{local:Loc Key=MainWindow_Content_Crop}" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureCropBtn_Click"
+                                                AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_CropPicture}"
+                                                AutomationProperties.AutomationId="PictureFormatCropPictureButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenCropControlsForTheSelectedOrMostRecentInsertedPicture}"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_CropPicture}"
+                                                local:RibbonTooltip.KeyTip="C"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CropTheSelectedOrMostRecentPictureByPercentageFromEachEdge}" local:RibbonMetadata.CommandName="Crop Picture">
+                                            <Button.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem x:Name="PictureFormatCropMenuItem"
+                                                              Header="{local:Loc Key=MainWindow_Header_Crop}"
+                                                              AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_CropPicture}"
+                                                              AutomationProperties.AutomationId="PictureFormatCropPictureMenuItem"
+                                                              local:RibbonTooltip.KeyTip="C" Click="PictureCropDialogMenuItem_Click" local:RibbonMetadata.CommandName="Crop"/>
+                                                    <MenuItem x:Name="PictureFormatResetCropMenuItem"
+                                                              Header="{local:Loc Key=MainWindow_Header_ResetCrop}"
+                                                              AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ResetPictureCrop}"
+                                                              AutomationProperties.AutomationId="PictureFormatResetPictureCropMenuItem"
+                                                              local:RibbonTooltip.KeyTip="R" Click="PictureResetCropMenuItem_Click" local:RibbonMetadata.CommandName="Reset Crop"/>
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
+                                        </Button>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Format}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PictureFormatArrangeGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_BringForward}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
+                                            Style="{StaticResource RibbonBtn}" Click="BringForwardBtn_Click"
+                                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_BringForward}"
+                                            AutomationProperties.AutomationId="PictureFormatBringForwardButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheFront}"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_BringForward}"
+                                            local:RibbonTooltip.KeyTip="BF"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheFront}" local:RibbonMetadata.CommandName="Bring Forward"/>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_SendBackward}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
+                                            Style="{StaticResource RibbonBtn}" Click="SendBackwardBtn_Click"
+                                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_SendBackward}"
+                                            AutomationProperties.AutomationId="PictureFormatSendBackwardButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheBack}"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SendBackward}"
+                                            local:RibbonTooltip.KeyTip="SB"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheBack}" local:RibbonMetadata.CommandName="Send Backward"/>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_SelectionPane}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
+                                            Style="{StaticResource RibbonBtn}" Click="SelectionPaneBtn_Click"
+                                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_SelectionPane}"
+                                            AutomationProperties.AutomationId="PictureFormatSelectionPaneButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ListSheetObjectsAndControlVisibilityOrStackingOrder}"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SelectionPane}"
+                                            local:RibbonTooltip.KeyTip="SP"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ListSheetObjectsAndControlVisibilityOrStackingOrder}" local:RibbonMetadata.CommandName="Selection Pane"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0">
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Rotate}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36" Style="{StaticResource RibbonBtn}" Click="ObjectRotateBtn_Click"
+                                                AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_RotateObject}"
+                                                AutomationProperties.AutomationId="PictureFormatRotateObjectButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_RotateTheSelectedOrMostRecentDrawingObject}"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RotateObject}"
+                                                local:RibbonTooltip.KeyTip="RO"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RotateTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Rotate Object"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Size}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
+                                                AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ObjectSize}"
+                                                AutomationProperties.AutomationId="PictureFormatObjectSizeButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ResizeTheSelectedOrMostRecentDrawingObject}"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ObjectSize}"
+                                                local:RibbonTooltip.KeyTip="SZ"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ResizeTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Object Size"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Arrange}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PictureFormatAccessibilityGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_AltText}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SetAltTextBtn_Click"
+                                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_AltText}"
+                                            AutomationProperties.AutomationId="PictureFormatAltTextButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAltTextForTheSelectedObject}"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AltText}"
+                                            local:RibbonTooltip.KeyTip="AT"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAltTextForTheSelectedObject}" local:RibbonMetadata.CommandName="Alt Text"/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Accessibility}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                        </StackPanel>
                     </ScrollViewer>
                 </Border>
             </TabItem>
@@ -4587,6 +4779,7 @@
              ROW 5  Status bar
              ═══════════════════════════════════════════════════════════════ -->
         <Border x:Name="StatusBarRoot" Grid.Row="6" Panel.ZIndex="6" Background="{StaticResource FreeXStatusSurfaceBrush}" Padding="8,3"
+                AutomationProperties.AutomationId="StatusBarRoot"
                 ClipToBounds="True">
             <Border.ContextMenu>
                 <ContextMenu x:Name="StatusBarCustomizeMenu"
@@ -4739,16 +4932,34 @@
                                     Visibility="Collapsed"
                                     ClipToBounds="True">
                             <TextBlock x:Name="StatusAvgText" Foreground="White" FontSize="12"
+                                       AutomationProperties.AutomationId="StatusAvgText"
+                                       AutomationProperties.Name="{local:Loc Key=StatusBar_Average}"
+                                       AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="12"
+                                       AutomationProperties.AutomationId="StatusCountText"
+                                       AutomationProperties.Name="{local:Loc Key=StatusBar_Count}"
+                                       AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="110" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusNumericalCountText" Foreground="White" FontSize="12"
+                                       AutomationProperties.AutomationId="StatusNumericalCountText"
+                                       AutomationProperties.Name="{local:Loc Key=StatusBar_NumericalCount}"
+                                       AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="160" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusSumText" Foreground="White" FontSize="12"
+                                       AutomationProperties.AutomationId="StatusSumText"
+                                       AutomationProperties.Name="{local:Loc Key=StatusBar_Sum}"
+                                       AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusMinText" Foreground="White" FontSize="12"
+                                       AutomationProperties.AutomationId="StatusMinText"
+                                       AutomationProperties.Name="{local:Loc Key=StatusBar_Minimum}"
+                                       AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="120" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusMaxText" Foreground="White" FontSize="12"
+                                       AutomationProperties.AutomationId="StatusMaxText"
+                                       AutomationProperties.Name="{local:Loc Key=StatusBar_Maximum}"
+                                       AutomationProperties.LiveSetting="Polite"
                                        MaxWidth="120" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
                     </Grid>
@@ -5615,13 +5826,13 @@
 
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
                             <Button x:Name="SsPrintPreviewButton"
-                                    Content="{local:Loc Key=PrintPreview_PrintButton}"
+                                    Content="{local:Loc Key=PageSetup_PrintPreviewAutomationName}"
                                     Width="220" Height="34"
                                     HorizontalAlignment="Left"
                                     Margin="0,0,0,10"
                                     Click="PrintButton_Click"
                                     AutomationProperties.AutomationId="BackstagePrintPreviewButton"
-                                    AutomationProperties.Name="{local:Loc Key=PrintPreview_PrintAutomationName}"
+                                    AutomationProperties.Name="{local:Loc Key=PageSetup_PrintPreviewAutomationName}"
                                     AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenPrintPreviewWithWorksheetSettingsAndNativePrintAccess}"
                                     local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Print}"
                                     local:RibbonTooltip.KeyTip="V"

@@ -61,7 +61,7 @@ public sealed class FlashFillCommand : IWorkbookCommand
 
             var sourceStr = ScalarToString(sourceValue);
 
-            if (fillValue is not BlankValue and not null)
+            if (!IsBlankForFlashFill(fillValue))
             {
                 // This row has a user-typed example
                 var expectedStr = ScalarToString(fillValue);
@@ -143,6 +143,9 @@ public sealed class FlashFillCommand : IWorkbookCommand
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         _ => string.Empty
     };
+
+    private static bool IsBlankForFlashFill(ScalarValue? value) =>
+        value is null or BlankValue || value is TextValue { Value: "" };
 
     private IReadOnlyList<string>? TryFillFromImmediateLeftColumns(
         Sheet sheet,

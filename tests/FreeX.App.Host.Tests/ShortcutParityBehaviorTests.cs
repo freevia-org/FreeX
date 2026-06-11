@@ -468,6 +468,32 @@ public sealed class ShortcutParityBehaviorTests
         homeEditingSource.Should().Contain("TryExecuteRepeatableCurrentRangeCommand");
     }
 
+    // --- Ctrl+Alt+= / Ctrl+Alt+- (Zoom) ---
+
+    [Theory]
+    [InlineData(Key.OemPlus)]
+    [InlineData(Key.Add)]
+    public void CtrlAltPlus_IsRegisteredAsZoomInCommand(Key key)
+    {
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+            key, Key.None, ModifierKeys.Control | ModifierKeys.Alt, out var shortcut)
+            .Should().BeTrue();
+
+        shortcut.Should().Be(KeyboardCommandShortcut.ZoomIn);
+    }
+
+    [Theory]
+    [InlineData(Key.OemMinus)]
+    [InlineData(Key.Subtract)]
+    public void CtrlAltMinus_IsRegisteredAsZoomOutCommand(Key key)
+    {
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+            key, Key.None, ModifierKeys.Control | ModifierKeys.Alt, out var shortcut)
+            .Should().BeTrue();
+
+        shortcut.Should().Be(KeyboardCommandShortcut.ZoomOut);
+    }
+
     // --- Alt / Ribbon Keytips ---
 
     [Fact]

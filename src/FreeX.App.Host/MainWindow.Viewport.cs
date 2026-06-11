@@ -327,10 +327,23 @@ public partial class MainWindow
 
     private readonly record struct ChartContextRefreshKey(
         Sheet? Sheet,
+        Guid SelectedObjectId,
+        FreeX.App.UI.ObjectKind SelectedObjectKind,
         bool HasVisibleNormalChart,
         ulong NavigationRevision,
         Visibility ChartDesignVisibility,
         Visibility ChartFormatVisibility);
+
+    private readonly record struct DrawingObjectContextRefreshKey(
+        Sheet? Sheet,
+        Guid SelectedObjectId,
+        FreeX.App.UI.ObjectKind SelectedObjectKind,
+        ulong NavigationRevision,
+        Visibility ShapeFormatVisibility,
+        Visibility PictureFormatVisibility,
+        bool ShapeGradientEnabled,
+        bool ShapeEffectsEnabled,
+        bool PictureCropEnabled);
 
     private readonly record struct PivotFieldListRefreshKey(
         Sheet? Sheet,
@@ -349,6 +362,7 @@ public partial class MainWindow
 
     private TableContextRefreshKey? _lastViewportTableContextRefreshKey;
     private ChartContextRefreshKey? _lastViewportChartContextRefreshKey;
+    private DrawingObjectContextRefreshKey? _lastViewportDrawingObjectContextRefreshKey;
     private PivotFieldListRefreshKey? _lastViewportPivotFieldListRefreshKey;
     private SlicerTimelineRefreshKey? _lastViewportSlicerTimelineRefreshKey;
 
@@ -360,7 +374,10 @@ public partial class MainWindow
 
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is not null)
+        {
             SyncZoomFromSheet(sheet.ZoomPercent);
+            SyncPageLayoutScaleToFitControls(sheet);
+        }
         EnsureActiveCellSelection(sheet);
 
         var (topRow, leftCol) = CalculateViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
@@ -477,6 +494,7 @@ public partial class MainWindow
         RefreshViewportValidationDropdown(sheet);
         RefreshViewportFormulaReferenceHighlights();
         RefreshViewportTableContextualTab(sheet);
+        RefreshViewportDrawingObjectContextualTabs(sheet);
         RefreshViewportChartContextualTabs(sheet);
         RefreshViewportPivotFieldListPane(sheet);
         RefreshViewportSlicerTimelinePane();
@@ -540,10 +558,34 @@ public partial class MainWindow
     private ChartContextRefreshKey CreateChartContextRefreshKey(Sheet? sheet) =>
         new(
             sheet,
+            SheetGrid.SelectedObjectId,
+            SheetGrid.SelectedObjectKind,
             HasChartContextualRibbonTarget(sheet),
             _navigationCacheRevision,
             ChartDesignTab?.Visibility ?? Visibility.Collapsed,
             ChartFormatTab?.Visibility ?? Visibility.Collapsed);
+
+    private void RefreshViewportDrawingObjectContextualTabs(Sheet? sheet)
+    {
+        var key = CreateDrawingObjectContextRefreshKey(sheet);
+        if (_lastViewportDrawingObjectContextRefreshKey == key)
+            return;
+
+        RefreshDrawingObjectContextualTabs();
+        _lastViewportDrawingObjectContextRefreshKey = CreateDrawingObjectContextRefreshKey(sheet);
+    }
+
+    private DrawingObjectContextRefreshKey CreateDrawingObjectContextRefreshKey(Sheet? sheet) =>
+        new(
+            sheet,
+            SheetGrid.SelectedObjectId,
+            SheetGrid.SelectedObjectKind,
+            _navigationCacheRevision,
+            ShapeFormatTab?.Visibility ?? Visibility.Collapsed,
+            PictureFormatTab?.Visibility ?? Visibility.Collapsed,
+            ShapeFormatGradientButton?.IsEnabled == true,
+            ShapeFormatEffectsButton?.IsEnabled == true,
+            PictureFormatCropButton?.IsEnabled == true);
 
     private void RefreshViewportPivotFieldListPane(Sheet? sheet)
     {

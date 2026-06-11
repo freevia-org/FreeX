@@ -31,12 +31,19 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
         {
             return new CommandOutcome(false, "Data validation range must be on the target sheet.");
         }
+        if (!IsValidWorksheetRange(_rule.AppliesTo) ||
+            _rule.AdditionalRanges.Any(range => !IsValidWorksheetRange(range)))
+        {
+            return new CommandOutcome(false, "Data validation range must be a valid worksheet range.");
+        }
         if (!Enum.IsDefined(_rule.Type))
             return new CommandOutcome(false, "Data validation type is not supported.");
         if (!Enum.IsDefined(_rule.Operator))
             return new CommandOutcome(false, "Data validation operator is not supported.");
         if (!Enum.IsDefined(_rule.AlertStyle))
             return new CommandOutcome(false, "Data validation alert style is not supported.");
+        if (!HasRequiredCriteria(_rule))
+            return new CommandOutcome(false, "Data validation criteria are incomplete.");
 
         var idx = FindDataValidationReplacementIndex(sheet, _rule);
         if (idx >= 0)
@@ -79,6 +86,27 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
         }
 
         return -1;
+    }
+
+    private static bool IsValidWorksheetRange(GridRange range) =>
+        IsValidWorksheetAddress(range.Start) &&
+        IsValidWorksheetAddress(range.End);
+
+    private static bool IsValidWorksheetAddress(CellAddress address) =>
+        address.Row is >= 1 and <= CellAddress.MaxRow &&
+        address.Col is >= 1 and <= CellAddress.MaxCol;
+
+    private static bool HasRequiredCriteria(DataValidation rule)
+    {
+        if (rule.Type == DvType.Any)
+            return true;
+
+        if (string.IsNullOrWhiteSpace(rule.Formula1))
+            return false;
+
+        return rule.Type is DvType.List or DvType.Custom ||
+               rule.Operator is not (DvOperator.Between or DvOperator.NotBetween) ||
+               !string.IsNullOrWhiteSpace(rule.Formula2);
     }
 
     private static int FindDataValidationIndex(Sheet sheet, Guid ruleId)

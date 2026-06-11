@@ -276,6 +276,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.HeaderContextMenuRequested += OnGridHeaderContextMenuRequested;
         SheetGrid.AutoFilterDropdownRequested += OnAutoFilterDropdownRequested;
         SheetGrid.PivotHeaderDropdownRequested += OnPivotHeaderDropdownRequested;
+        SheetGrid.OutlineGroupToggleRequested += OnOutlineGroupToggleRequested;
         SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested;
         SheetGrid.WaterfallChartPointContextMenuRequested += OnWaterfallChartPointContextMenuRequested;
         SheetGrid.PageMarginsChanged += OnPageMarginsChanged;
@@ -286,6 +287,12 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.ObjectResized += OnObjectResized;
         SheetGrid.ObjectResizedWithAnchor += OnObjectResizedWithAnchor;
         SheetGrid.ObjectRotated += OnObjectRotated;
+        DependencyPropertyDescriptor.FromProperty(
+            FreeX.App.UI.GridView.SelectedObjectIdProperty,
+            typeof(FreeX.App.UI.GridView))?.AddValueChanged(SheetGrid, OnSelectedObjectContextChanged);
+        DependencyPropertyDescriptor.FromProperty(
+            FreeX.App.UI.GridView.SelectedObjectKindProperty,
+            typeof(FreeX.App.UI.GridView))?.AddValueChanged(SheetGrid, OnSelectedObjectContextChanged);
         SheetGrid.MouseMove  += SheetGrid_MouseMove;
         SheetGrid.MouseUp    += SheetGrid_MouseUp;
         SheetGrid.LostMouseCapture += SheetGrid_LostMouseCapture;

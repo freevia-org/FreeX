@@ -119,6 +119,7 @@ public sealed partial class TextToColumnsDialog
         _previewGrid.Visibility = Visibility.Visible;
         SetVisible(_columnFormatPanel, plan.ShowColumnFormatPanel);
         SetVisible(_destinationPanel, plan.ShowDestinationPanel);
+        _wizardBodyScrollViewer.ScrollToTop();
 
         if (_backButton is not null)
             _backButton.IsEnabled = plan.BackEnabled;

@@ -35,19 +35,24 @@ internal sealed record SelectionPaneFilterChoice(string Value, string Label);
 
 public sealed partial class SelectionPaneDialog : Window
 {
+    private const double DialogDefaultWidth = 520d;
+    private const double DialogDefaultHeight = 440d;
+    private const double DialogMinimumWidth = 460d;
+    private const double DialogMinimumHeight = 360d;
+
     private readonly IReadOnlyList<SelectionPaneItem> _sourceItems;
     private readonly List<SelectionPaneDialogItem> _items;
     private readonly List<SelectionPaneMoveChange> _moveChanges = [];
-    private readonly ListBox _list = new();
-    private readonly TextBox _searchBox = new() { Width = 180, Margin = new Thickness(0, 0, 8, 0) };
-    private readonly ComboBox _filterBox = new() { Width = 110, Margin = new Thickness(0, 0, 0, 0) };
-    private readonly TextBox _renameBox = new() { Width = 180, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _renameButton = new() { Content = UiText.Get("SelectionPane_RenameButton"), Width = 78, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly ListBox _list = new() { MinHeight = 140 };
+    private readonly TextBox _searchBox = new() { MinWidth = 160, Margin = new Thickness(0, 0, 10, 0) };
+    private readonly ComboBox _filterBox = new() { MinWidth = 130, Margin = new Thickness(0, 0, 0, 0) };
+    private readonly TextBox _renameBox = new() { MinWidth = 160, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _renameButton = new() { Content = UiText.Get("SelectionPane_RenameButton"), MinWidth = 78, Margin = new Thickness(0, 0, 6, 0) };
     private readonly Button _toggleVisibilityButton = new() { Content = CreateEyeIcon(), Width = 32, Margin = new Thickness(0, 0, 6, 0), ToolTip = UiText.Get("SelectionPane_ToggleVisibilityToolTip") };
-    private readonly Button _moveUpButton = new() { Content = UiText.Get("SelectionPane_BringForwardButton"), Width = 104, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _moveDownButton = new() { Content = UiText.Get("SelectionPane_SendBackwardButton"), Width = 104, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _showAllButton = new() { Content = UiText.Get("SelectionPane_ShowAllButton"), Width = 82, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _hideAllButton = new() { Content = UiText.Get("SelectionPane_HideAllButton"), Width = 82, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _moveUpButton = new() { Content = UiText.Get("SelectionPane_BringForwardButton"), MinWidth = 104, Margin = new Thickness(0, 0, 6, 6) };
+    private readonly Button _moveDownButton = new() { Content = UiText.Get("SelectionPane_SendBackwardButton"), MinWidth = 104, Margin = new Thickness(0, 0, 6, 6) };
+    private readonly Button _showAllButton = new() { Content = UiText.Get("SelectionPane_ShowAllButton"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
+    private readonly Button _hideAllButton = new() { Content = UiText.Get("SelectionPane_HideAllButton"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
     private Point? _dragStartPoint;
     private SelectionPaneDialogItem? _dragItem;
 
@@ -58,10 +63,12 @@ public sealed partial class SelectionPaneDialog : Window
         _sourceItems = items;
         Result = new SelectionPaneDialogResult(SelectionPaneDialogAction.ApplyVisibility, null, [], [], []);
         Title = UiText.Get("SelectionPane_Title");
-        Width = 380;
-        Height = 360;
+        Width = DialogDefaultWidth;
+        Height = DialogDefaultHeight;
+        MinWidth = DialogMinimumWidth;
+        MinHeight = DialogMinimumHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ResizeMode = ResizeMode.NoResize;
+        ResizeMode = ResizeMode.CanResizeWithGrip;
         ShowInTaskbar = false;
         AutomationProperties.SetAutomationId(this, "SelectionPaneDialog");
 
@@ -136,40 +143,60 @@ public sealed partial class SelectionPaneDialog : Window
         AutomationProperties.SetAutomationId(cancelButton, "SelectionPaneCancelButton");
         AutomationProperties.SetHelpText(cancelButton, UiText.Get("SelectionPane_CancelHelpText"));
 
-        var searchRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        searchRow.Children.Add(new Label { Content = UiText.Get("SelectionPane_SearchLabel"), Target = _searchBox, Padding = new Thickness(0, 4, 6, 0) });
-        searchRow.Children.Add(_searchBox);
-        searchRow.Children.Add(new Label { Content = UiText.Get("SelectionPane_FilterLabel"), Target = _filterBox, Padding = new Thickness(0, 4, 6, 0) });
-        searchRow.Children.Add(_filterBox);
+        var searchRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        searchRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        searchRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 160 });
+        searchRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        searchRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        AddGridChild(searchRow, new Label { Content = UiText.Get("SelectionPane_SearchLabel"), Target = _searchBox, Padding = new Thickness(0, 4, 6, 0) }, 0);
+        AddGridChild(searchRow, _searchBox, 1);
+        AddGridChild(searchRow, new Label { Content = UiText.Get("SelectionPane_FilterLabel"), Target = _filterBox, Padding = new Thickness(0, 4, 6, 0) }, 2);
+        AddGridChild(searchRow, _filterBox, 3);
 
-        var renameRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
-        renameRow.Children.Add(new Label { Content = UiText.Get("SelectionPane_NameLabel"), Target = _renameBox, Padding = new Thickness(0, 4, 6, 0) });
-        renameRow.Children.Add(_renameBox);
-        renameRow.Children.Add(_renameButton);
-        renameRow.Children.Add(_toggleVisibilityButton);
+        var renameRow = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        renameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        renameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 160 });
+        renameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        renameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        AddGridChild(renameRow, new Label { Content = UiText.Get("SelectionPane_NameLabel"), Target = _renameBox, Padding = new Thickness(0, 4, 6, 0) }, 0);
+        AddGridChild(renameRow, _renameBox, 1);
+        AddGridChild(renameRow, _renameButton, 2);
+        AddGridChild(renameRow, _toggleVisibilityButton, 3);
 
-        var moveRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
-        moveRow.Children.Add(_moveUpButton);
-        moveRow.Children.Add(_moveDownButton);
-
-        var visibilityRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
-        visibilityRow.Children.Add(_showAllButton);
-        visibilityRow.Children.Add(_hideAllButton);
+        var commandRow = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+        commandRow.Children.Add(_showAllButton);
+        commandRow.Children.Add(_hideAllButton);
+        commandRow.Children.Add(_moveUpButton);
+        commandRow.Children.Add(_moveDownButton);
 
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
         buttonRow.Children.Add(okButton);
         buttonRow.Children.Add(cancelButton);
 
-        var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(searchRow);
-        stack.Children.Add(_list);
-        stack.Children.Add(renameRow);
-        stack.Children.Add(visibilityRow);
-        stack.Children.Add(moveRow);
-        stack.Children.Add(buttonRow);
-        Content = stack;
+        var root = new Grid { Margin = new Thickness(16) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 140 });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        AddGridChild(root, searchRow, 0, isRow: true);
+        AddGridChild(root, _list, 1, isRow: true);
+        AddGridChild(root, renameRow, 2, isRow: true);
+        AddGridChild(root, commandRow, 3, isRow: true);
+        AddGridChild(root, buttonRow, 4, isRow: true);
+        Content = root;
         UpdateMoveButtons();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private static void AddGridChild(Grid grid, UIElement child, int index, bool isRow = false)
+    {
+        if (isRow)
+            Grid.SetRow(child, index);
+        else
+            Grid.SetColumn(child, index);
+
+        grid.Children.Add(child);
     }
 
     private void FocusInitialKeyboardTarget()

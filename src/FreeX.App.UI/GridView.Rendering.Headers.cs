@@ -90,10 +90,12 @@ public partial class GridView
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var rowHeaderWidth = ActualRowHeaderWidth;
         var columnHeaderHeight = EffectiveColHeaderHeight;
+        var rowOutlineWidth = CalculateRowOutlineGutterWidth(viewport);
+        var columnOutlineHeight = CalculateColumnOutlineGutterHeight(viewport);
         var visibleBottom = GetRenderVisibleBottom();
 
-        RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
-        RenderSelectedHeaderLayer(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
+        RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight, visibleBottom, pixelsPerDip);
+        RenderSelectedHeaderLayer(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight, visibleBottom, pixelsPerDip);
     }
 
     private void RenderHeaderBaseLayer(
@@ -101,6 +103,8 @@ public partial class GridView
         ViewportModel viewport,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double rowOutlineWidth,
+        double columnOutlineHeight,
         double visibleBottom,
         double pixelsPerDip)
     {
@@ -118,7 +122,7 @@ public partial class GridView
             return;
         }
 
-        var rebuilt = BuildHeaderBaseLayerCache(viewport, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
+        var rebuilt = BuildHeaderBaseLayerCache(viewport, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight, visibleBottom, pixelsPerDip);
         _headerBaseLayerCache = rebuilt;
         _headerBaseLayerCacheKey = key;
         dc.DrawDrawing(rebuilt);
@@ -128,12 +132,14 @@ public partial class GridView
         ViewportModel viewport,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double rowOutlineWidth,
+        double columnOutlineHeight,
         double visibleBottom,
         double pixelsPerDip)
     {
         var group = new DrawingGroup();
         using (var groupContext = group.Open())
-            RenderHeaderBase(groupContext, viewport, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
+            RenderHeaderBase(groupContext, viewport, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight, visibleBottom, pixelsPerDip);
 
         if (group.CanFreeze)
             group.Freeze();
@@ -148,6 +154,8 @@ public partial class GridView
         GridRange? selRange,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double rowOutlineWidth,
+        double columnOutlineHeight,
         double visibleBottom,
         double pixelsPerDip)
     {
@@ -182,6 +190,8 @@ public partial class GridView
                 selRange,
                 rowHeaderWidth,
                 columnHeaderHeight,
+                rowOutlineWidth,
+                columnOutlineHeight,
                 visibleBottom,
                 pixelsPerDip);
             _selectedHeaderLayerCache = rebuilt;
@@ -191,7 +201,7 @@ public partial class GridView
             return;
         }
 
-        RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
+        RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight, visibleBottom, pixelsPerDip);
         RememberSelectedHeaderLayerRenderKey(key);
     }
 
@@ -231,12 +241,14 @@ public partial class GridView
         GridRange? selRange,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double rowOutlineWidth,
+        double columnOutlineHeight,
         double visibleBottom,
         double pixelsPerDip)
     {
         var group = new DrawingGroup();
         using (var groupContext = group.Open())
-            RenderSelectedHeaders(groupContext, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
+            RenderSelectedHeaders(groupContext, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight, visibleBottom, pixelsPerDip);
 
         if (group.CanFreeze)
             group.Freeze();
@@ -272,17 +284,54 @@ public partial class GridView
         ViewportModel viewport,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double rowOutlineWidth,
+        double columnOutlineHeight,
         double visibleBottom,
         double pixelsPerDip)
     {
-        foreach (var col in viewport.ColMetrics)
-            DrawColumnHeader(dc, col, rowHeaderWidth, columnHeaderHeight, HeaderBackgroundBrush, pixelsPerDip);
-
-        foreach (var row in viewport.RowMetrics)
-            DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, visibleBottom, HeaderBackgroundBrush, pixelsPerDip);
-
         dc.DrawRectangle(HeaderBackgroundBrush, GridPen,
             new Rect(0, 0, rowHeaderWidth, columnHeaderHeight));
+
+        DrawOutlineHeaderSurfaces(dc, viewport, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight);
+
+        foreach (var col in viewport.ColMetrics)
+            DrawColumnHeader(dc, col, rowHeaderWidth, columnOutlineHeight, HeaderBackgroundBrush, pixelsPerDip);
+
+        foreach (var row in viewport.RowMetrics)
+            DrawRowHeader(dc, row, rowHeaderWidth, rowOutlineWidth, columnHeaderHeight, visibleBottom, HeaderBackgroundBrush, pixelsPerDip);
+
+        DrawOutlineGroups(dc, viewport, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight, visibleBottom, pixelsPerDip);
+    }
+
+    private static void DrawOutlineHeaderSurfaces(
+        DrawingContext dc,
+        ViewportModel viewport,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double rowOutlineWidth,
+        double columnOutlineHeight)
+    {
+        if (columnOutlineHeight > 0)
+        {
+            foreach (var column in viewport.ColMetrics)
+            {
+                dc.DrawRectangle(
+                    HeaderBackgroundBrush,
+                    GridPen,
+                    new Rect(rowHeaderWidth + column.LeftOffset, 0, column.Width, columnOutlineHeight));
+            }
+        }
+
+        if (rowOutlineWidth > 0)
+        {
+            foreach (var row in viewport.RowMetrics)
+            {
+                dc.DrawRectangle(
+                    HeaderBackgroundBrush,
+                    GridPen,
+                    new Rect(0, columnHeaderHeight + row.TopOffset, rowOutlineWidth, row.Height));
+            }
+        }
     }
 
     private void RenderSelectedHeaders(
@@ -292,6 +341,8 @@ public partial class GridView
         GridRange? selRange,
         double rowHeaderWidth,
         double columnHeaderHeight,
+        double rowOutlineWidth,
+        double columnOutlineHeight,
         double visibleBottom,
         double pixelsPerDip)
     {
@@ -309,13 +360,13 @@ public partial class GridView
         foreach (var col in viewport.ColMetrics)
         {
             if (IsHeaderSelected(col.Col, columnIntervals, ref columnIntervalIndex))
-                DrawColumnHeader(dc, col, rowHeaderWidth, columnHeaderHeight, HeaderHighlightBrush, pixelsPerDip);
+                DrawColumnHeader(dc, col, rowHeaderWidth, columnOutlineHeight, HeaderHighlightBrush, pixelsPerDip);
         }
 
         foreach (var row in viewport.RowMetrics)
         {
             if (IsHeaderSelected(row.Row, rowIntervals, ref rowIntervalIndex))
-                DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, visibleBottom, HeaderHighlightBrush, pixelsPerDip);
+                DrawRowHeader(dc, row, rowHeaderWidth, rowOutlineWidth, columnHeaderHeight, visibleBottom, HeaderHighlightBrush, pixelsPerDip);
         }
     }
 
@@ -334,9 +385,9 @@ public partial class GridView
 
         var lookups = GetRenderMetricLookups(viewport);
         if (lookups.Columns.TryGetValue(range.Start.Col, out var column))
-            DrawColumnHeader(dc, column, rowHeaderWidth, columnHeaderHeight, HeaderHighlightBrush, pixelsPerDip);
+            DrawColumnHeader(dc, column, rowHeaderWidth, CalculateColumnOutlineGutterHeight(viewport), HeaderHighlightBrush, pixelsPerDip);
         if (lookups.Rows.TryGetValue(range.Start.Row, out var row))
-            DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, visibleBottom, HeaderHighlightBrush, pixelsPerDip);
+            DrawRowHeader(dc, row, rowHeaderWidth, CalculateRowOutlineGutterWidth(viewport), columnHeaderHeight, visibleBottom, HeaderHighlightBrush, pixelsPerDip);
 
         return true;
     }
@@ -360,11 +411,11 @@ public partial class GridView
         DrawingContext dc,
         ColMetric col,
         double rowHeaderWidth,
-        double columnHeaderHeight,
+        double columnOutlineHeight,
         Brush background,
         double pixelsPerDip)
     {
-        var rect = new Rect(col.LeftOffset + rowHeaderWidth, 0, col.Width, columnHeaderHeight);
+        var rect = new Rect(col.LeftOffset + rowHeaderWidth, columnOutlineHeight, col.Width, ColHeaderHeight);
         dc.DrawRectangle(background, GridPen, rect);
 
         var textValue = FormatColumnHeader(col.Col, UseR1C1ReferenceStyle);
@@ -379,12 +430,13 @@ public partial class GridView
         DrawingContext dc,
         RowMetric row,
         double rowHeaderWidth,
+        double rowOutlineWidth,
         double columnHeaderHeight,
         double visibleBottom,
         Brush background,
         double pixelsPerDip)
     {
-        var rect = new Rect(0, row.TopOffset + columnHeaderHeight, rowHeaderWidth, row.Height);
+        var rect = new Rect(rowOutlineWidth, row.TopOffset + columnHeaderHeight, Math.Max(0, rowHeaderWidth - rowOutlineWidth), row.Height);
         dc.DrawRectangle(background, GridPen, rect);
         if (!ShouldDrawRowHeaderText(rect, visibleBottom))
             return;
@@ -395,6 +447,381 @@ public partial class GridView
         DrawHeaderText(dc, textValue, text, 11, pixelsPerDip, new Point(
             rect.Left + (rect.Width - text.Width) / 2,
             rect.Top + (rect.Height - text.Height) / 2));
+    }
+
+    private void DrawOutlineGroups(
+        DrawingContext dc,
+        ViewportModel viewport,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double rowOutlineWidth,
+        double columnOutlineHeight,
+        double visibleBottom,
+        double pixelsPerDip)
+    {
+        if (rowOutlineWidth > 0)
+        {
+            DrawRowOutlineLevelButtons(dc, viewport.RowOutlineGroups, rowOutlineWidth, columnHeaderHeight, columnOutlineHeight, pixelsPerDip);
+            DrawRowOutlineGroups(dc, viewport, rowOutlineWidth, columnHeaderHeight, visibleBottom, pixelsPerDip);
+        }
+
+        if (columnOutlineHeight > 0)
+        {
+            DrawColumnOutlineLevelButtons(dc, viewport.ColumnOutlineGroups, rowHeaderWidth, rowOutlineWidth, columnOutlineHeight, pixelsPerDip);
+            DrawColumnOutlineGroups(dc, viewport, rowHeaderWidth, columnOutlineHeight, pixelsPerDip);
+        }
+    }
+
+    private void DrawRowOutlineGroups(
+        DrawingContext dc,
+        ViewportModel viewport,
+        double rowOutlineWidth,
+        double columnHeaderHeight,
+        double visibleBottom,
+        double pixelsPerDip)
+    {
+        var groups = viewport.RowOutlineGroups;
+        if (groups is not { Count: > 0 })
+            return;
+
+        var lookups = GetRenderMetricLookups(viewport);
+        foreach (var group in groups)
+        {
+            var centerX = GetRowOutlineLevelCenter(rowOutlineWidth, group.Level);
+            if (TryGetRowOutlineSpan(viewport.RowMetrics, group, columnHeaderHeight, visibleBottom, out var top, out var bottom))
+                DrawRowOutlineBracket(dc, centerX, top, bottom);
+
+            if (lookups.Rows.TryGetValue(group.ToggleIndex, out var toggleRow))
+            {
+                var center = new Point(centerX, columnHeaderHeight + toggleRow.TopOffset + toggleRow.Height / 2);
+                DrawOutlineToggleButton(dc, center, group.IsCollapsed, pixelsPerDip);
+            }
+        }
+    }
+
+    private void DrawColumnOutlineGroups(
+        DrawingContext dc,
+        ViewportModel viewport,
+        double rowHeaderWidth,
+        double columnOutlineHeight,
+        double pixelsPerDip)
+    {
+        var groups = viewport.ColumnOutlineGroups;
+        if (groups is not { Count: > 0 })
+            return;
+
+        var lookups = GetRenderMetricLookups(viewport);
+        foreach (var group in groups)
+        {
+            var centerY = GetColumnOutlineLevelCenter(columnOutlineHeight, group.Level);
+            if (TryGetColumnOutlineSpan(viewport.ColMetrics, group, rowHeaderWidth, out var left, out var right))
+                DrawColumnOutlineBracket(dc, centerY, left, right);
+
+            if (lookups.Columns.TryGetValue(group.ToggleIndex, out var toggleColumn))
+            {
+                var center = new Point(rowHeaderWidth + toggleColumn.LeftOffset + toggleColumn.Width / 2, centerY);
+                DrawOutlineToggleButton(dc, center, group.IsCollapsed, pixelsPerDip);
+            }
+        }
+    }
+
+    private void DrawRowOutlineLevelButtons(
+        DrawingContext dc,
+        IReadOnlyList<OutlineGroupRange>? groups,
+        double rowOutlineWidth,
+        double columnHeaderHeight,
+        double columnOutlineHeight,
+        double pixelsPerDip)
+    {
+        var maxLevel = GetMaxOutlineLevel(groups);
+        if (maxLevel <= 0)
+            return;
+
+        var top = columnOutlineHeight > 0
+            ? Math.Max(1, columnOutlineHeight - OutlineButtonSize - 2)
+            : Math.Max(1, (columnHeaderHeight - OutlineButtonSize) / 2);
+        for (var level = 1; level <= maxLevel; level++)
+        {
+            var center = new Point(GetRowOutlineLevelCenter(rowOutlineWidth, level), top + OutlineButtonSize / 2);
+            DrawOutlineLevelButton(dc, center, level, pixelsPerDip);
+        }
+    }
+
+    private void DrawColumnOutlineLevelButtons(
+        DrawingContext dc,
+        IReadOnlyList<OutlineGroupRange>? groups,
+        double rowHeaderWidth,
+        double rowOutlineWidth,
+        double columnOutlineHeight,
+        double pixelsPerDip)
+    {
+        var maxLevel = GetMaxOutlineLevel(groups);
+        if (maxLevel <= 0)
+            return;
+
+        var left = rowOutlineWidth > 0
+            ? Math.Max(1, rowOutlineWidth - OutlineButtonSize - 2)
+            : Math.Max(1, (rowHeaderWidth - OutlineButtonSize) / 2);
+        for (var level = 1; level <= maxLevel; level++)
+        {
+            var center = new Point(left + OutlineButtonSize / 2, GetColumnOutlineLevelCenter(columnOutlineHeight, level));
+            DrawOutlineLevelButton(dc, center, level, pixelsPerDip);
+        }
+    }
+
+    private static void DrawRowOutlineBracket(DrawingContext dc, double x, double top, double bottom)
+    {
+        if (bottom <= top)
+            return;
+
+        var tickEnd = x + 5;
+        var topY = top + 3;
+        var bottomY = bottom - 3;
+        dc.DrawLine(OutlineGlyphPen, new Point(x, topY), new Point(x, bottomY));
+        dc.DrawLine(OutlineGlyphPen, new Point(x, topY), new Point(tickEnd, topY));
+        dc.DrawLine(OutlineGlyphPen, new Point(x, bottomY), new Point(tickEnd, bottomY));
+    }
+
+    private static void DrawColumnOutlineBracket(DrawingContext dc, double y, double left, double right)
+    {
+        if (right <= left)
+            return;
+
+        var tickEnd = y + 5;
+        var leftX = left + 3;
+        var rightX = right - 3;
+        dc.DrawLine(OutlineGlyphPen, new Point(leftX, y), new Point(rightX, y));
+        dc.DrawLine(OutlineGlyphPen, new Point(leftX, y), new Point(leftX, tickEnd));
+        dc.DrawLine(OutlineGlyphPen, new Point(rightX, y), new Point(rightX, tickEnd));
+    }
+
+    private void DrawOutlineLevelButton(DrawingContext dc, Point center, int level, double pixelsPerDip)
+    {
+        var rect = CreateOutlineButtonRect(center);
+        dc.DrawRectangle(OutlineButtonBrush, OutlineButtonPen, rect);
+        var textValue = level.ToString(CultureInfo.InvariantCulture);
+        var text = GetDefaultFormattedText(textValue, 9, pixelsPerDip);
+        DrawHeaderText(dc, textValue, text, 9, pixelsPerDip, new Point(
+            rect.Left + (rect.Width - text.Width) / 2,
+            rect.Top + (rect.Height - text.Height) / 2));
+    }
+
+    private static void DrawOutlineToggleButton(DrawingContext dc, Point center, bool isCollapsed, double pixelsPerDip)
+    {
+        var rect = CreateOutlineButtonRect(center);
+        dc.DrawRectangle(OutlineButtonBrush, OutlineButtonPen, rect);
+
+        var midY = rect.Top + rect.Height / 2;
+        dc.DrawLine(OutlineGlyphPen, new Point(rect.Left + 3, midY), new Point(rect.Right - 3, midY));
+        if (isCollapsed)
+        {
+            var midX = rect.Left + rect.Width / 2;
+            dc.DrawLine(OutlineGlyphPen, new Point(midX, rect.Top + 3), new Point(midX, rect.Bottom - 3));
+        }
+    }
+
+    private static bool TryGetRowOutlineSpan(
+        IReadOnlyList<RowMetric> rows,
+        OutlineGroupRange group,
+        double columnHeaderHeight,
+        double visibleBottom,
+        out double top,
+        out double bottom)
+    {
+        top = 0;
+        bottom = 0;
+        var found = false;
+        foreach (var row in rows)
+        {
+            if (row.Row < group.Start)
+                continue;
+            if (row.Row > group.End)
+                break;
+
+            var rowTop = columnHeaderHeight + row.TopOffset;
+            var rowBottom = rowTop + row.Height;
+            if (rowTop >= visibleBottom)
+                break;
+
+            if (!found)
+            {
+                top = rowTop;
+                found = true;
+            }
+
+            bottom = Math.Min(rowBottom, visibleBottom);
+        }
+
+        return found && bottom > top;
+    }
+
+    private static bool TryGetColumnOutlineSpan(
+        IReadOnlyList<ColMetric> columns,
+        OutlineGroupRange group,
+        double rowHeaderWidth,
+        out double left,
+        out double right)
+    {
+        left = 0;
+        right = 0;
+        var found = false;
+        foreach (var column in columns)
+        {
+            if (column.Col < group.Start)
+                continue;
+            if (column.Col > group.End)
+                break;
+
+            var columnLeft = rowHeaderWidth + column.LeftOffset;
+            if (!found)
+            {
+                left = columnLeft;
+                found = true;
+            }
+
+            right = columnLeft + column.Width;
+        }
+
+        return found && right > left;
+    }
+
+    internal static double CalculateRowOutlineGutterWidth(ViewportModel? viewport)
+    {
+        var maxLevel = GetMaxOutlineLevel(viewport?.RowOutlineGroups);
+        return maxLevel <= 0 ? 0 : OutlineGutterPadding * 2 + maxLevel * OutlineLevelPitch;
+    }
+
+    internal static double CalculateColumnOutlineGutterHeight(ViewportModel? viewport)
+    {
+        var maxLevel = GetMaxOutlineLevel(viewport?.ColumnOutlineGroups);
+        return maxLevel <= 0 ? 0 : OutlineGutterPadding * 2 + maxLevel * OutlineLevelPitch;
+    }
+
+    private static int GetMaxOutlineLevel(IReadOnlyList<OutlineGroupRange>? groups)
+    {
+        if (groups is not { Count: > 0 })
+            return 0;
+
+        var maxLevel = 0;
+        foreach (var group in groups)
+        {
+            if (group.Level > maxLevel)
+                maxLevel = group.Level;
+        }
+
+        return maxLevel;
+    }
+
+    private static double GetRowOutlineLevelCenter(double rowOutlineWidth, int level) =>
+        OutlineGutterPadding + (Math.Max(1, level) - 0.5) * OutlineLevelPitch;
+
+    private static double GetColumnOutlineLevelCenter(double columnOutlineHeight, int level) =>
+        OutlineGutterPadding + (Math.Max(1, level) - 0.5) * OutlineLevelPitch;
+
+    private static Rect CreateOutlineButtonRect(Point center) =>
+        new(
+            center.X - OutlineButtonSize / 2,
+            center.Y - OutlineButtonSize / 2,
+            OutlineButtonSize,
+            OutlineButtonSize);
+
+    internal static bool TryHitTestOutlineGroupToggle(
+        ViewportModel? viewport,
+        Point position,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        out GridOutlineGroupToggleRequest request)
+    {
+        request = default;
+        if (viewport is null)
+            return false;
+
+        var rowOutlineWidth = CalculateRowOutlineGutterWidth(viewport);
+        if (rowOutlineWidth > 0 &&
+            position.X <= rowOutlineWidth &&
+            TryHitTestRowOutlineGroupToggle(viewport, position, rowOutlineWidth, columnHeaderHeight, out request))
+        {
+            return true;
+        }
+
+        var columnOutlineHeight = CalculateColumnOutlineGutterHeight(viewport);
+        return columnOutlineHeight > 0 &&
+            position.Y <= columnOutlineHeight &&
+            TryHitTestColumnOutlineGroupToggle(viewport, position, rowHeaderWidth, columnOutlineHeight, out request);
+    }
+
+    private static bool TryHitTestRowOutlineGroupToggle(
+        ViewportModel viewport,
+        Point position,
+        double rowOutlineWidth,
+        double columnHeaderHeight,
+        out GridOutlineGroupToggleRequest request)
+    {
+        request = default;
+        var groups = viewport.RowOutlineGroups;
+        if (groups is not { Count: > 0 })
+            return false;
+
+        for (var groupIndex = groups.Count - 1; groupIndex >= 0; groupIndex--)
+        {
+            var group = groups[groupIndex];
+            var row = FindRowMetric(viewport.RowMetrics, group.ToggleIndex);
+            if (row is null)
+                continue;
+
+            var center = new Point(
+                GetRowOutlineLevelCenter(rowOutlineWidth, group.Level),
+                columnHeaderHeight + row.TopOffset + row.Height / 2);
+            if (!CreateOutlineButtonRect(center).Contains(position))
+                continue;
+
+            request = new GridOutlineGroupToggleRequest(
+                GridOutlineGroupAxis.Rows,
+                group.Level,
+                group.Start,
+                group.End,
+                Collapse: !group.IsCollapsed);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryHitTestColumnOutlineGroupToggle(
+        ViewportModel viewport,
+        Point position,
+        double rowHeaderWidth,
+        double columnOutlineHeight,
+        out GridOutlineGroupToggleRequest request)
+    {
+        request = default;
+        var groups = viewport.ColumnOutlineGroups;
+        if (groups is not { Count: > 0 })
+            return false;
+
+        for (var groupIndex = groups.Count - 1; groupIndex >= 0; groupIndex--)
+        {
+            var group = groups[groupIndex];
+            var column = FindColMetric(viewport.ColMetrics, group.ToggleIndex);
+            if (column is null)
+                continue;
+
+            var center = new Point(
+                rowHeaderWidth + column.LeftOffset + column.Width / 2,
+                GetColumnOutlineLevelCenter(columnOutlineHeight, group.Level));
+            if (!CreateOutlineButtonRect(center).Contains(position))
+                continue;
+
+            request = new GridOutlineGroupToggleRequest(
+                GridOutlineGroupAxis.Columns,
+                group.Level,
+                group.Start,
+                group.End,
+                Collapse: !group.IsCollapsed);
+            return true;
+        }
+
+        return false;
     }
 
     internal static bool ShouldDrawRowHeaderText(Rect rowHeaderRect, double visibleBottom) =>

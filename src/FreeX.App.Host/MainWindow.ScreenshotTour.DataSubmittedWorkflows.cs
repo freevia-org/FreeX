@@ -115,6 +115,36 @@ public partial class MainWindow
                 "autofilter-cleared-all-rows-visible",
                 "autofilter-reapplied-open"));
 
+            ExecuteDataSubmittedWorkflowsTourCommand(
+                new AdvancedFilterCommand(
+                    context.AdvancedFilterListRange,
+                    context.AdvancedFilterCriteriaRange,
+                    context.AdvancedFilterCopyToCell,
+                    UniqueRecordsOnly: false),
+                "Advanced Filter");
+            await WaitForDataSubmittedWorkflowsWindowAsync(context.AdvancedFilterCopyToCell);
+            var advancedFilterOutputRange = new GridRange(
+                context.AdvancedFilterCriteriaRange.Start,
+                new CellAddress(
+                    context.Sheet.Id,
+                    context.AdvancedFilterCopyToCell.Row + 2,
+                    context.AdvancedFilterCopyToCell.Col + context.AdvancedFilterListRange.ColCount - 1));
+            captures.Add(await CaptureDataSubmittedWorkflowsWindowStateAsync(
+                outputDir,
+                context,
+                "UI-CMD-DATA-003",
+                "advanced-filter-copy-to-result",
+                "Worksheet grid",
+                "freex_data_submitted_workflows_advanced_filter_copy_to_result",
+                advancedFilterOutputRange,
+                "Worksheet grid after AdvancedFilterCommand copied North records to the requested output range.",
+                "TryExecuteCommand(new AdvancedFilterCommand(listRange, criteriaRange, copyToCell, uniqueRecordsOnly: false), \"Advanced Filter\")"));
+            workflows.Add(CreateActualDataSubmittedWorkflow(
+                "Advanced Filter copy-to submitted result",
+                ["UI-CAT-DATA-002", "UI-CMD-DATA-003"],
+                "AdvancedFilterCommand through TryExecuteCommand",
+                "advanced-filter-copy-to-result"));
+
             var textToColumnsResult = TextToColumnsDialog.CreateResult(
                 TextToColumnsDelimiterKind.Comma,
                 destination: context.TextToColumnsDestination,
@@ -296,6 +326,9 @@ public partial class MainWindow
         sheet.SetCell(new CellAddress(sheet.Id, 13, 1), new TextValue("West,98,Closed"));
         sheet.SetCell(new CellAddress(sheet.Id, 14, 1), new TextValue("East,143,Open"));
 
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 7), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 7), new TextValue("North"));
+
         sheet.SetCell(new CellAddress(sheet.Id, 17, 1), new TextValue("Data Validation"));
         sheet.SetCell(new CellAddress(sheet.Id, 18, 1), new TextValue("North"));
         sheet.SetCell(new CellAddress(sheet.Id, 19, 1), new TextValue("Mars"));
@@ -330,6 +363,8 @@ public partial class MainWindow
         ClearRememberedAutoFilterCommand();
 
         var filterRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 9, 5));
+        var advancedFilterCriteriaRange = new GridRange(new CellAddress(sheet.Id, 1, 7), new CellAddress(sheet.Id, 2, 7));
+        var advancedFilterCopyToCell = new CellAddress(sheet.Id, 4, 7);
         var textToColumnsRange = new GridRange(new CellAddress(sheet.Id, 12, 1), new CellAddress(sheet.Id, 14, 1));
         var validationRange = new GridRange(new CellAddress(sheet.Id, 18, 1), new CellAddress(sheet.Id, 20, 1));
         var subtotalRange = new GridRange(new CellAddress(sheet.Id, 23, 1), new CellAddress(sheet.Id, 29, 3));
@@ -347,6 +382,9 @@ public partial class MainWindow
             new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 9, 5)),
             filterRange,
             new CellAddress(sheet.Id, 1, 4),
+            filterRange,
+            advancedFilterCriteriaRange,
+            advancedFilterCopyToCell,
             textToColumnsRange,
             new CellAddress(sheet.Id, 12, 2),
             validationRange,
@@ -357,7 +395,7 @@ public partial class MainWindow
     {
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
-            new CellAddress(sheet.Id, 60, 10));
+            new CellAddress(sheet.Id, 60, 12));
         foreach (var address in range.AllCells())
             sheet.ClearCell(address);
     }
@@ -540,10 +578,12 @@ public partial class MainWindow
             OutputDirectory: outputDir,
             OutputNaming: "freex_data_submitted_workflows_<Workflow>_<State>.png",
             CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md#UI-CAT-DATA-001",
-            CatalogRows: ["UI-CAT-DATA-001", "UI-CAT-DATA-002", "UI-CAT-DATA-003", "UI-CMD-DATA-002", "UI-CMD-DATA-004", "UI-CMD-DATA-005", "UI-CMD-DATA-007"],
+            CatalogRows: ["UI-CAT-DATA-001", "UI-CAT-DATA-002", "UI-CAT-DATA-003", "UI-CMD-DATA-002", "UI-CMD-DATA-003", "UI-CMD-DATA-004", "UI-CMD-DATA-005", "UI-CMD-DATA-007"],
             SheetName: context.Sheet.Name,
             SortRange: context.SortHeaderRange.ToString(),
             FilterRange: context.FilterRange.ToString(),
+            AdvancedFilterCriteriaRange: context.AdvancedFilterCriteriaRange.ToString(),
+            AdvancedFilterCopyToCell: context.AdvancedFilterCopyToCell.ToA1(),
             TextToColumnsRange: context.TextToColumnsSourceRange.ToString(),
             ValidationRange: context.ValidationRange.ToString(),
             SubtotalRange: context.SubtotalRange.ToString(),
@@ -564,6 +604,7 @@ public partial class MainWindow
             [
                 "Sort before and after submitted SortCommand",
                 "AutoFilter applied, cleared, and reapplied visible-row states",
+                "Advanced Filter copy-to submitted result",
                 "Text to Columns submitted result grid",
                 "Data Validation invalid-cell selection through Circle Invalid Data",
                 "Subtotal submitted mutation result",
@@ -590,6 +631,9 @@ public partial class MainWindow
         GridRange SortDataRowsRange,
         GridRange FilterRange,
         CellAddress FilterHeaderCell,
+        GridRange AdvancedFilterListRange,
+        GridRange AdvancedFilterCriteriaRange,
+        CellAddress AdvancedFilterCopyToCell,
         GridRange TextToColumnsSourceRange,
         CellAddress TextToColumnsDestination,
         GridRange ValidationRange,
@@ -608,6 +652,8 @@ public partial class MainWindow
         string SheetName,
         string SortRange,
         string FilterRange,
+        string AdvancedFilterCriteriaRange,
+        string AdvancedFilterCopyToCell,
         string TextToColumnsRange,
         string ValidationRange,
         string SubtotalRange,
