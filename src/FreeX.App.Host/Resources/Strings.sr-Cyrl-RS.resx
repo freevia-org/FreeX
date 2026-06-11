@@ -14584,6 +14584,12 @@
   <data name="MainWindowMessage_PictureWasNotFound" xml:space="preserve">
     <value>Слика није пронађена.</value>
   </data>
+  <data name="MainWindowMessage_ClearFilterNoFilter" xml:space="preserve">
+    <value>No active filters were found in the current range.</value>
+  </data>
+  <data name="MainWindowMessage_ClearFilterTitle" xml:space="preserve">
+    <value>Clear Filter</value>
+  </data>
   <data name="MainWindowMessage_ReapplyFilterNoFilter" xml:space="preserve">
     <value>Примените филтар пре кориштења Поновне примене.</value>
   </data>

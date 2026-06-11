@@ -14588,6 +14588,12 @@ Mentett XPS fájl:
   <data name="MainWindowMessage_PictureWasNotFound" xml:space="preserve">
     <value>A kép nem található.</value>
   </data>
+  <data name="MainWindowMessage_ClearFilterNoFilter" xml:space="preserve">
+    <value>No active filters were found in the current range.</value>
+  </data>
+  <data name="MainWindowMessage_ClearFilterTitle" xml:space="preserve">
+    <value>Clear Filter</value>
+  </data>
   <data name="MainWindowMessage_ReapplyFilterNoFilter" xml:space="preserve">
     <value>Az Újbóli alkalmazás használata előtt alkalmazzon szűrőt.</value>
   </data>

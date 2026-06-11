@@ -13741,6 +13741,12 @@ Lagret XPS-fil:
   <data name="MainWindowMessage_PictureWasNotFound" xml:space="preserve">
     <value>Bildet ble ikke funnet.</value>
   </data>
+  <data name="MainWindowMessage_ClearFilterNoFilter" xml:space="preserve">
+    <value>No active filters were found in the current range.</value>
+  </data>
+  <data name="MainWindowMessage_ClearFilterTitle" xml:space="preserve">
+    <value>Clear Filter</value>
+  </data>
   <data name="MainWindowMessage_ReapplyFilterNoFilter" xml:space="preserve">
     <value>Bruk et filter før du bruker Bruk på nytt.</value>
   </data>

@@ -14588,6 +14588,12 @@ ZX
   <data name="MainWindowMessage_PictureWasNotFound" xml:space="preserve">
     <value>Η εικόνα δεν βρέθηκε.</value>
   </data>
+  <data name="MainWindowMessage_ClearFilterNoFilter" xml:space="preserve">
+    <value>No active filters were found in the current range.</value>
+  </data>
+  <data name="MainWindowMessage_ClearFilterTitle" xml:space="preserve">
+    <value>Clear Filter</value>
+  </data>
   <data name="MainWindowMessage_ReapplyFilterNoFilter" xml:space="preserve">
     <value>Εφαρμόστε ένα φίλτρο πριν χρησιμοποιήσετε το Reapply.</value>
   </data>

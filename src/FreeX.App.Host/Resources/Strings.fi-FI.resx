@@ -14588,6 +14588,12 @@ Tallennettu XPS-tiedosto:
   <data name="MainWindowMessage_PictureWasNotFound" xml:space="preserve">
     <value>Kuvaa ei löytynyt.</value>
   </data>
+  <data name="MainWindowMessage_ClearFilterNoFilter" xml:space="preserve">
+    <value>No active filters were found in the current range.</value>
+  </data>
+  <data name="MainWindowMessage_ClearFilterTitle" xml:space="preserve">
+    <value>Clear Filter</value>
+  </data>
   <data name="MainWindowMessage_ReapplyFilterNoFilter" xml:space="preserve">
     <value>Käytä suodatinta ennen kuin käytät Käytä uudelleen.</value>
   </data>
