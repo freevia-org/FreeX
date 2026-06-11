@@ -164,7 +164,7 @@ public partial class GridView
                 double previewWidth = GridResizeSizePlanner.ClampColumnSize(_resizeSizeStart + delta);
                 if ((_resizeCollapsedBoundary && delta > 0) || (!_resizeCollapsedBoundary && previewWidth > 0))
                 {
-                    _resizeLinePos = _resizeDragStart - _resizeSizeStart + previewWidth;
+                    _resizeLinePos = GridResizeSizePlanner.CalculateLinePosition(_resizeSizeStart, _resizeDragStart, previewWidth);
                     ColumnResizing?.Invoke(_resizeIndex, previewWidth);
                     InvalidateVisual();
                 }
@@ -174,7 +174,7 @@ public partial class GridView
                 return;
             }
             double newWidth = GridResizeSizePlanner.ClampColumnSize(_resizeSizeStart + (pos.X - _resizeDragStart));
-            _resizeLinePos = col.LeftOffset + newWidth + ActualRowHeaderWidth;
+            _resizeLinePos = GridResizeSizePlanner.CalculateLinePosition(_resizeSizeStart, _resizeDragStart, newWidth);
             ColumnResizing?.Invoke(_resizeIndex, newWidth);
             Cursor = Cursors.SizeWE;
             InvalidateVisual();
@@ -197,7 +197,7 @@ public partial class GridView
                 double previewHeight = GridResizeSizePlanner.ClampRowSize(_resizeSizeStart + delta);
                 if ((_resizeCollapsedBoundary && delta > 0) || (!_resizeCollapsedBoundary && previewHeight > 0))
                 {
-                    _resizeLinePos = _resizeDragStart - _resizeSizeStart + previewHeight;
+                    _resizeLinePos = GridResizeSizePlanner.CalculateLinePosition(_resizeSizeStart, _resizeDragStart, previewHeight);
                     RowResizing?.Invoke(_resizeIndex, previewHeight);
                     InvalidateVisual();
                 }
@@ -207,7 +207,7 @@ public partial class GridView
                 return;
             }
             double newHeight = GridResizeSizePlanner.ClampRowSize(_resizeSizeStart + (pos.Y - _resizeDragStart));
-            _resizeLinePos = row.TopOffset + newHeight + EffectiveColHeaderHeight;
+            _resizeLinePos = GridResizeSizePlanner.CalculateLinePosition(_resizeSizeStart, _resizeDragStart, newHeight);
             RowResizing?.Invoke(_resizeIndex, newHeight);
             Cursor = Cursors.SizeNS;
             InvalidateVisual();
@@ -608,6 +608,7 @@ public partial class GridView
                 _resizeLinePos = col is null
                     ? pos.X
                     : col.LeftOffset + col.Width + ActualRowHeaderWidth;
+                _resizeDragStart = _resizeLinePos;
             }
             else
             {
@@ -615,6 +616,7 @@ public partial class GridView
                 _resizeLinePos = row is null
                     ? pos.Y
                     : row.TopOffset + row.Height + EffectiveColHeaderHeight;
+                _resizeDragStart = _resizeLinePos;
             }
 
             CaptureMouse();

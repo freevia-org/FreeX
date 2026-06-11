@@ -58,12 +58,14 @@ public sealed class MainWindowMouseResizeTests
 
             harness.ViewportCallCount.Should().BeGreaterThan(0);
             harness.SheetGrid.Viewport.Should().NotBeSameAs(initialViewport);
-            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(18, 0.0001);
+            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(ColumnWidthPixelMapper.PixelsToColumnWidth(144), 0.0001);
+            harness.GetRenderedColumnWidth(3).Should().Be(144);
 
             harness.CommitColumnResize(3, 144);
 
             harness.ViewportCallCount.Should().BeGreaterThan(0);
-            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(18, 0.0001);
+            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(ColumnWidthPixelMapper.PixelsToColumnWidth(144), 0.0001);
+            harness.GetRenderedColumnWidth(3).Should().Be(144);
         });
     }
 
@@ -100,10 +102,10 @@ public sealed class MainWindowMouseResizeTests
             harness.CurrentSheet.ColumnWidths[3] = 10;
 
             harness.PreviewColumnResize(3, 160);
-            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(20, 0.0001);
+            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(ColumnWidthPixelMapper.PixelsToColumnWidth(160), 0.0001);
 
             harness.CommitColumnResize(3, 144);
-            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(18, 0.0001);
+            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(ColumnWidthPixelMapper.PixelsToColumnWidth(144), 0.0001);
 
             harness.Undo().Should().BeTrue();
             harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(10, 0.0001);
@@ -141,9 +143,10 @@ public sealed class MainWindowMouseResizeTests
             harness.SelectRange(1, 6, 1, 6);
             harness.CommitColumnResize(3, 160);
 
-            harness.CurrentSheet.ColumnWidths[2].Should().BeApproximately(20, 0.0001);
-            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(20, 0.0001);
-            harness.CurrentSheet.ColumnWidths[4].Should().BeApproximately(20, 0.0001);
+            var expectedWidth = ColumnWidthPixelMapper.PixelsToColumnWidth(160);
+            harness.CurrentSheet.ColumnWidths[2].Should().BeApproximately(expectedWidth, 0.0001);
+            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(expectedWidth, 0.0001);
+            harness.CurrentSheet.ColumnWidths[4].Should().BeApproximately(expectedWidth, 0.0001);
             harness.CurrentSheet.ColumnWidths.ContainsKey(6).Should().BeFalse();
         });
     }
@@ -182,9 +185,10 @@ public sealed class MainWindowMouseResizeTests
 
             harness.CurrentSheet.HiddenCols.Should().NotContain([2u, 3u, 4u]);
             harness.CurrentSheet.ColumnWidths.Should().ContainKeys(2u, 3u, 4u);
-            harness.CurrentSheet.ColumnWidths[2].Should().BeApproximately(12, 0.0001);
-            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(12, 0.0001);
-            harness.CurrentSheet.ColumnWidths[4].Should().BeApproximately(12, 0.0001);
+            var expectedWidth = ColumnWidthPixelMapper.PixelsToColumnWidth(96);
+            harness.CurrentSheet.ColumnWidths[2].Should().BeApproximately(expectedWidth, 0.0001);
+            harness.CurrentSheet.ColumnWidths[3].Should().BeApproximately(expectedWidth, 0.0001);
+            harness.CurrentSheet.ColumnWidths[4].Should().BeApproximately(expectedWidth, 0.0001);
             harness.CurrentSheet.ColumnWidths.ContainsKey(1).Should().BeFalse();
             harness.CurrentSheet.ColumnWidths.ContainsKey(5).Should().BeFalse();
         });
@@ -206,7 +210,7 @@ public sealed class MainWindowMouseResizeTests
             harness.CurrentSheet.ColumnWidths.ContainsKey(2).Should().BeFalse();
             harness.CurrentSheet.ColumnWidths.ContainsKey(3).Should().BeFalse();
             harness.CurrentSheet.ColumnWidths.ContainsKey(4).Should().BeFalse();
-            harness.CurrentSheet.ColumnWidths[6].Should().BeApproximately(15, 0.0001);
+            harness.CurrentSheet.ColumnWidths[6].Should().BeApproximately(ColumnWidthPixelMapper.PixelsToColumnWidth(120), 0.0001);
         });
     }
 
@@ -381,6 +385,13 @@ public sealed class MainWindowMouseResizeTests
         {
             _onColumnResized.Invoke(_window, [col, width]);
             PumpDispatcher();
+        }
+
+        public double GetRenderedColumnWidth(uint col)
+        {
+            var metric = SheetGrid.Viewport?.ColMetrics.FirstOrDefault(metric => metric.Col == col);
+            return metric?.Width
+                   ?? throw new InvalidOperationException($"Column {col} is not in the current viewport.");
         }
 
         public void CancelResizePreview()

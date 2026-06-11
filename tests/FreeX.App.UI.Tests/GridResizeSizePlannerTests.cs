@@ -1,6 +1,7 @@
 using System.IO;
 using FluentAssertions;
 using FreeX.App.UI;
+using FreeX.Core.Calc;
 
 namespace FreeX.App.UI.Tests;
 
@@ -34,6 +35,9 @@ public sealed class GridResizeSizePlannerTests
         GridResizeSizePlanner.ClampColumnSize(GridResizeSizePlanner.MaximumColumnSizePixels + 100)
             .Should()
             .Be(GridResizeSizePlanner.MaximumColumnSizePixels);
+        GridResizeSizePlanner.MaximumColumnSizePixels
+            .Should()
+            .Be(ColumnWidthPixelMapper.MaximumColumnWidthPixels);
     }
 
     [Fact]
@@ -53,6 +57,22 @@ public sealed class GridResizeSizePlannerTests
         source.Should().Contain("GridResizeSizePlanner.ClampRowSize(_resizeSizeStart + (pos.Y - _resizeDragStart))");
         source.Should().Contain("GridResizeSizePlanner.ClampColumnSize(_resizeSizeStart + delta)");
         source.Should().Contain("GridResizeSizePlanner.ClampRowSize(_resizeSizeStart + delta)");
+        source.Should().Contain("_resizeDragStart = _resizeLinePos;");
+        source.Should().Contain("GridResizeSizePlanner.CalculateLinePosition(_resizeSizeStart, _resizeDragStart, newWidth)");
         source.Should().NotContain("Math.Max(MinCellSize");
+    }
+
+    [Fact]
+    public void CalculateLinePosition_TracksPointerWhenResizeIsUnclamped()
+    {
+        const double originalSize = 64;
+        const double originalEdge = 140;
+        const double pointer = 173.5;
+
+        var resizedSize = GridResizeSizePlanner.ClampColumnSize(originalSize + pointer - originalEdge);
+
+        GridResizeSizePlanner.CalculateLinePosition(originalSize, originalEdge, resizedSize)
+            .Should()
+            .Be(pointer);
     }
 }
