@@ -172,6 +172,28 @@ public sealed class FlashFillCommandTests
     }
 
     [Fact]
+    public void FlashFillCommand_Apply_TreatsEmptyTextTargetsAsBlankCells()
+    {
+        var (wb, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("John Smith"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jane Doe"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Bob Brown"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("John"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue(""));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue(""));
+
+        var cmd = new FlashFillCommand(sheet.Id, fillColIndex: 2, sourceColIndex: 1, startRow: 1, endRow: 3);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.AffectedCells.Should().Equal(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 2));
+        sheet.GetValue(2, 2).Should().Be(new TextValue("Jane"));
+        sheet.GetValue(3, 2).Should().Be(new TextValue("Bob"));
+    }
+
+    [Fact]
     public void FlashFillCommand_RejectsLockedTargetsOnProtectedSheet()
     {
         var (wb, sheet, ctx) = Setup();
