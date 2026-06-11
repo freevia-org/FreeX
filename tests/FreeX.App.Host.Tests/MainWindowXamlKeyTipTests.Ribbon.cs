@@ -699,13 +699,13 @@ public sealed partial class MainWindowXamlKeyTipTests
 
         var cropButton = document
             .Descendants(presentation + "Button")
-            .Single(button => button.Attribute("Click")?.Value == "PictureCropBtn_Click");
+            .Single(button => button.Attribute("AutomationProperties.AutomationId")?.Value == "DrawCropPictureButton");
         var gradientButton = document
             .Descendants(presentation + "Button")
-            .Single(button => button.Attribute("Click")?.Value == "ObjectGradientBtn_Click");
+            .Single(button => button.Attribute("AutomationProperties.AutomationId")?.Value == "DrawShapeGradientButton");
         var effectsButton = document
             .Descendants(presentation + "Button")
-            .Single(button => button.Attribute("Click")?.Value == "ObjectEffectsBtn_Click");
+            .Single(button => button.Attribute("AutomationProperties.AutomationId")?.Value == "DrawShapeEffectsButton");
 
         cropButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("C");
         cropButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureButton\"");
@@ -713,6 +713,26 @@ public sealed partial class MainWindowXamlKeyTipTests
         gradientButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"DrawShapeGradientButton\"");
         effectsButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("FX");
         effectsButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"DrawShapeEffectsButton\"");
+        effectsButton
+            .Descendants(presentation + "MenuItem")
+            .Select(item => new
+            {
+                Header = LocalizedAttribute(item, "Header"),
+                KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
+                Click = item.Attribute("Click")?.Value,
+                Markup = item.ToString()
+            })
+            .Should()
+            .Contain(item =>
+                item.Header == "No Effect" &&
+                item.KeyTip == "N" &&
+                item.Click == "ShapeEffectPresetMenuItem_Click" &&
+                item.Markup.Contains("AutomationProperties.AutomationId=\"DrawShapeEffectsNoneMenuItem\""))
+            .And.Contain(item =>
+                item.Header == "Glow" &&
+                item.KeyTip == "G" &&
+                item.Click == "ShapeEffectPresetMenuItem_Click" &&
+                item.Markup.Contains("AutomationProperties.AutomationId=\"DrawShapeEffectsGlowMenuItem\""));
 
         var cropMenuItems = cropButton
             .Descendants(presentation + "MenuItem")

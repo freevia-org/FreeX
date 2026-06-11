@@ -299,7 +299,7 @@ public sealed partial class MainWindowXamlKeyTipTests
 
         var altTextButton = document
             .Descendants(presentation + "Button")
-            .Single(element => element.Attribute("Click")?.Value == "SetAltTextBtn_Click");
+            .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "ShapeFormatAltTextButton");
 
         LocalizedAttribute(altTextButton, local + "RibbonTooltip.Description").Should().Contain("anchored at the selected cell");
     }

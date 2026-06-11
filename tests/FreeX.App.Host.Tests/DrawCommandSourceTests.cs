@@ -107,6 +107,45 @@ public sealed class DrawCommandSourceTests
         item.Should().Contain($"Click=\"{handler}\"");
     }
 
+    [Theory]
+    [InlineData("DrawShapeEffectsButton", "DrawShapeEffects")]
+    [InlineData("ShapeFormatShapeEffectsButton", "ShapeFormatShapeEffects")]
+    public void ShapeEffectsMenu_OffersDirectPresetCommandsAndCurrentStateHook(
+        string buttonAutomationId,
+        string menuItemAutomationIdPrefix)
+    {
+        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractElementByAttributeValue("Button", "AutomationProperties.AutomationId", buttonAutomationId);
+
+        button.Should().Contain("<Button.ContextMenu>");
+        button.Should().Contain("Opened=\"ShapeEffectsMenu_Opened\"");
+
+        foreach (var (header, preset, automationSuffix, keyTip, helpText) in new[]
+        {
+            ("No Effect", "None", "None", "N", "Remove authored shape effects."),
+            ("Shadow", "Shadow", "Shadow", "S", "Apply an outside shadow effect to the selected shape."),
+            ("Inner Shadow", "InnerShadow", "InnerShadow", "I", "Apply a bounded inside shadow effect to the selected shape."),
+            ("Reflection", "Reflection", "Reflection", "R", "Apply a bounded reflection effect below the selected shape."),
+            ("Glow", "Glow", "Glow", "G", "Apply a glow outline effect to the selected shape."),
+            ("Soft Edges", "SoftEdges", "SoftEdges", "E", "Apply a softened edge effect to the selected shape."),
+            ("Bevel", "Bevel", "Bevel", "B", "Apply a raised bevel edge effect to the selected shape."),
+            ("3-D Rotation", "ThreeDRotation", "ThreeDRotation", "D", "Apply a bounded 3-D rotation cue to the selected shape.")
+        })
+        {
+            var item = button.ExtractElementByLocalizedAttributeValue(
+                "MenuItem",
+                "Header",
+                header,
+                $"AutomationProperties.AutomationId=\"{menuItemAutomationIdPrefix}{automationSuffix}MenuItem\"");
+
+            item.Should().Contain("IsCheckable=\"True\"");
+            item.Should().Contain($"Tag=\"{{x:Static model:DrawingShapeEffectPreset.{preset}}}\"");
+            item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
+            item.Should().Contain("Click=\"ShapeEffectPresetMenuItem_Click\"");
+            item.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", helpText);
+        }
+    }
+
     [Fact]
     public void DrawHandlers_RouteThroughExpectedDrawingCommandsDialogsAndTargetResolution()
     {
@@ -135,7 +174,12 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("private void ObjectFillBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: true);");
         source.Should().Contain("private void ObjectOutlineBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: false);");
         source.Should().Contain("private void ObjectGradientBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingShapeGradient();");
-        source.Should().Contain("private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingShapeEffect();");
+        source.Should().Contain("private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("OpenRibbonContextMenu(button, menu);");
+        source.Should().Contain("private void ShapeEffectsMenu_Opened(object sender, RoutedEventArgs e)");
+        source.Should().Contain("menuItem.IsChecked = preset == currentPreset;");
+        source.Should().Contain("private void ShapeEffectPresetMenuItem_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("SetSelectedDrawingShapeEffect(preset);");
         source.Should().Contain("new MoveSelectionPaneObjectCommand(");
         source.Should().Contain("var target = GetTargetDrawingZOrderObject(sheetId, currentTarget.Kind);");
         source.Should().Contain("private DrawingObjectTarget? GetTargetTransformDrawingObject(");
@@ -149,9 +193,9 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("new SetTextBoxColorsCommand(");
         source.Should().Contain("new ShapeGradientDialog");
         source.Should().Contain("new SetDrawingShapeGradientCommand(");
-        source.Should().Contain("new ShapeEffectsDialog(shape.GetEffectiveEffectPreset())");
         source.Should().Contain("new SetDrawingShapeEffectCommand(");
-        source.Should().Contain("dialog.Result.Preset");
+        source.Should().NotContain("new ShapeEffectsDialog(shape.GetEffectiveEffectPreset())");
+        source.Should().NotContain("dialog.Result.Preset");
         source.Should().NotContain("shape.GetEffectiveEffectPreset() == DrawingShapeEffectPreset.None");
         source.Should().Contain("new PictureCropDialog(picture)");
         source.Should().Contain("private void PictureCropDialogMenuItem_Click(object sender, RoutedEventArgs e) =>");
