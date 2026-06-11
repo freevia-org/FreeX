@@ -75,6 +75,19 @@ public sealed class SheetTabListPlannerTests
     }
 
     [Fact]
+    public void Build_CarriesSheetProtectionStateIntoTabs()
+    {
+        var workbook = new Workbook("Book");
+        var visible = workbook.AddSheet("Visible");
+        visible.IsProtected = true;
+        var grouped = new HashSet<SheetId>();
+
+        var plan = SheetTabListPlanner.Build(workbook, visible.Id, grouped);
+
+        plan.Tabs.Should().ContainSingle().Which.IsProtected.Should().BeTrue();
+    }
+
+    [Fact]
     public void GenerateUniqueSheetName_SkipsExistingWorkbookNames()
     {
         var workbook = new Workbook("Book");
