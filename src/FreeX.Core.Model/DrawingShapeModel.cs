@@ -68,6 +68,9 @@ public enum DrawingShapeGradientDirection
 
 public sealed class DrawingShapeModel
 {
+    public static readonly CellColor DefaultFillColor = new(0x5B, 0x9B, 0xD5);
+    public static readonly CellColor DefaultOutlineColor = new(0x2F, 0x55, 0x97);
+
     public Guid Id { get; init; } = Guid.NewGuid();
     public string? Name { get; set; }
     public CellAddress Anchor { get; set; }
@@ -93,6 +96,16 @@ public sealed class DrawingShapeModel
 
     public CellColor GetEffectiveOutlineColor(WorkbookTheme theme, CellColor fallback) =>
         OutlineThemeColor?.Resolve(theme) ?? OutlineColor ?? fallback;
+
+    public static CellColor ResolveDefaultFillColor(WorkbookTheme theme) =>
+        theme.ObjectDefaults?.Shape?.FillThemeColor?.Resolve(theme) ??
+        theme.ObjectDefaults?.Shape?.FillColor ??
+        DefaultFillColor;
+
+    public static CellColor ResolveDefaultOutlineColor(WorkbookTheme theme) =>
+        theme.ObjectDefaults?.Shape?.OutlineThemeColor?.Resolve(theme) ??
+        theme.ObjectDefaults?.Shape?.OutlineColor ??
+        DefaultOutlineColor;
 
     public DrawingShapeGradientDirection GetEffectiveGradientFillDirection() =>
         Enum.IsDefined(GradientFillDirection)

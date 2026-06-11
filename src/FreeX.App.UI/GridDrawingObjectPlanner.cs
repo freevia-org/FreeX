@@ -124,8 +124,8 @@ internal static class GridDrawingObjectPlanner
 
     public static DrawingObjectColors ResolveDrawingShapeColors(DrawingShapeModel shape, WorkbookTheme theme) =>
         new(
-            shape.GetEffectiveFillColor(theme, new CellColor(31, 119, 180)),
-            shape.GetEffectiveOutlineColor(theme, new CellColor(68, 68, 68)));
+            shape.GetEffectiveFillColor(theme, DrawingShapeModel.ResolveDefaultFillColor(theme)),
+            shape.GetEffectiveOutlineColor(theme, DrawingShapeModel.ResolveDefaultOutlineColor(theme)));
 
     public static DrawingObjectColors ResolveTextBoxColors(TextBoxModel textBox, WorkbookTheme theme) =>
         new(

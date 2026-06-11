@@ -21,10 +21,22 @@ public sealed class SheetTabViewModelTests
     {
         var vm = new SheetTabViewModel(SheetId.New(), "Sheet1", null);
         var raised = false;
+        var automationNameRaised = false;
         vm.PropertyChanged += (_, e) => raised |= e.PropertyName == nameof(SheetTabViewModel.Name);
+        vm.PropertyChanged += (_, e) => automationNameRaised |= e.PropertyName == nameof(SheetTabViewModel.AutomationName);
 
         vm.Name = "Budget";
 
         raised.Should().BeTrue();
+        automationNameRaised.Should().BeTrue();
+        vm.AutomationName.Should().Be("Budget");
+    }
+
+    [Fact]
+    public void AutomationName_AnnouncesProtectedSheetState()
+    {
+        var vm = new SheetTabViewModel(SheetId.New(), "Sheet1", null, isProtected: true);
+
+        vm.AutomationName.Should().Be("Sheet1 (protected sheet)");
     }
 }

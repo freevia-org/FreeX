@@ -22,6 +22,21 @@ public sealed class DrawingObjectThemeColorTests
     }
 
     [Fact]
+    public void DrawingShapeModel_ResolvesDefaultColorsFromThemeObjectDefaults()
+    {
+        var theme = WorkbookTheme.Office.WithSupplementalMetadata(
+            alternateColorSchemes: null,
+            hasObjectDefaults: true,
+            objectDefaults: new WorkbookThemeObjectDefaults(
+                Shape: new WorkbookThemeShapeObjectDefault(
+                    FillColor: new CellColor(0xEE, 0xDD, 0xCC),
+                    OutlineColor: new CellColor(0x11, 0x22, 0x33))));
+
+        DrawingShapeModel.ResolveDefaultFillColor(theme).Should().Be(new CellColor(0xEE, 0xDD, 0xCC));
+        DrawingShapeModel.ResolveDefaultOutlineColor(theme).Should().Be(new CellColor(0x11, 0x22, 0x33));
+    }
+
+    [Fact]
     public void TextBoxModel_ResolvesThemeFillAndOutlineColors()
     {
         var theme = WorkbookTheme.Office

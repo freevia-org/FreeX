@@ -91,7 +91,9 @@ public sealed class DrawingTargetResolverTests
             Height = 55,
             RotationDegrees = 15,
             FillColor = new CellColor(1, 2, 3),
-            OutlineColor = new CellColor(4, 5, 6)
+            OutlineColor = new CellColor(4, 5, 6),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25)
         };
         sheet.DrawingShapes.Add(shape);
         sheet.TextBoxes.Add(new TextBoxModel { Anchor = new CellAddress(sheet.Id, 2, 2) });
@@ -106,6 +108,8 @@ public sealed class DrawingTargetResolverTests
         target.RotationDegrees.Should().Be(15);
         target.FillColor.Should().Be(new CellColor(1, 2, 3));
         target.OutlineColor.Should().Be(new CellColor(4, 5, 6));
+        target.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
+        target.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
     }
 
     [Fact]

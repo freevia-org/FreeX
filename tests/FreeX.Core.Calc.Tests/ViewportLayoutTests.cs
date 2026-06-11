@@ -668,6 +668,34 @@ public class ViewportLayoutTests
     }
 
     [Fact]
+    public void GetViewport_DrawingShapeWithoutAuthoredColorsExposesEffectiveDefaults()
+    {
+        var workbook = new Workbook("test");
+        workbook.Theme = WorkbookTheme.Office.WithSupplementalMetadata(
+            alternateColorSchemes: null,
+            hasObjectDefaults: true,
+            objectDefaults: new WorkbookThemeObjectDefaults(
+                Shape: new WorkbookThemeShapeObjectDefault(
+                    FillColor: new CellColor(0xEE, 0xDD, 0xCC),
+                    OutlineColor: new CellColor(0x11, 0x22, 0x33))));
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = DrawingShapeKind.Rectangle
+        });
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 120, 300));
+
+        var shapeBounds = viewport.DrawingObjects.Should().ContainSingle().Subject;
+        shapeBounds.FillColor.Should().Be(new CellColor(0xEE, 0xDD, 0xCC));
+        shapeBounds.OutlineColor.Should().Be(new CellColor(0x11, 0x22, 0x33));
+    }
+
+    [Fact]
     public void HitTest_UniformRowAndColumnSizes_FastPathMatchesExpectedCell()
     {
         // DefaultRowHeight = 20.0 px, DefaultColumnWidth = 8.43 chars → 8.43*8 = 67.44 px.

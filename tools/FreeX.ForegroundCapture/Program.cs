@@ -71,6 +71,9 @@ internal static class Program
 
 internal sealed class ScenarioRunner(CaptureOptions options)
 {
+    private const int XlDialogFormatNumber = 42;
+    private const int XlDialogActivate = 103;
+
     public CaptureResult Run()
     {
         Directory.CreateDirectory(options.OutputRoot);
@@ -401,17 +404,32 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard("excel-format-cells-dialog", guard, "before-input");
             }
 
-            SendKeys.SendWait("%hoe");
+            SendCtrl1();
             Thread.Sleep(options.AfterInputDelay);
 
             var dialog = FindExcelFormatCellsDialog(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+            if (dialog is null && TryExecuteExcelMso(excel, "FormatCellsDialog"))
+            {
+                Thread.Sleep(options.AfterInputDelay);
+                dialog = FindExcelFormatCellsDialog(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+            }
+
+            var usedBuiltInDialogFallback = false;
+            if (dialog is null && TryShowExcelBuiltInDialogAsync(excel, XlDialogFormatNumber))
+            {
+                usedBuiltInDialogFallback = true;
+                Thread.Sleep(options.AfterInputDelay);
+                dialog = FindExcelFormatCellsDialog(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+            }
+
             if (dialog is null)
             {
-                return CaptureResult.Blocked("excel-format-cells-dialog", "dialog-not-found", "Did not detect Excel Format Cells dialog after Alt,H,O,E.", options.OutputRoot, "excel", guard);
+                return CaptureResult.Blocked("excel-format-cells-dialog", "dialog-not-found", "Did not detect Excel Format Cells dialog after Ctrl+1, Excel's FormatCellsDialog command, or the built-in xlDialogFormatNumber dialog.", options.OutputRoot, "excel", guard);
             }
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
-            return CaptureWindow("excel-format-cells-dialog", "excel", dialog, guard, "complete");
+            var validation = usedBuiltInDialogFallback ? "Captured Excel's built-in Format Cells dialog through xlDialogFormatNumber after keyboard/command-bar routes did not surface a foreground dialog in this Office automation state." : null;
+            return CaptureWindow("excel-format-cells-dialog", "excel", dialog, guard, "complete", validation);
         }
         finally
         {
@@ -449,20 +467,38 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(scenario, "context-menu-not-found", "Did not detect foreground Excel worksheet context menu before invoking Format Cells.", options.OutputRoot, "excel", guard);
             }
 
-            if (!TryInvokeProcessMenuItem(pid.Value, "Format Cells"))
+            var invokedContextFormatCells = TryInvokeProcessMenuItem(pid.Value, "Format Cells");
+            if (!invokedContextFormatCells)
             {
-                return CaptureResult.Blocked(scenario, "context-menu-item-not-found", "Detected the Excel worksheet context menu, but could not find or invoke a visible Format Cells menu item through UI Automation.", options.OutputRoot, "excel", guard);
+                SendKeys.SendWait("f");
             }
 
             Thread.Sleep(options.AfterInputDelay);
             var dialog = FindExcelFormatCellsDialog(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+            var usedCommandBarFallback = false;
+            if (dialog is null && TryExecuteExcelMso(excel, "FormatCellsDialog"))
+            {
+                usedCommandBarFallback = true;
+                Thread.Sleep(options.AfterInputDelay);
+                dialog = FindExcelFormatCellsDialog(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+            }
+
+            var usedBuiltInDialogFallback = false;
+            if (dialog is null && TryShowExcelBuiltInDialogAsync(excel, XlDialogFormatNumber))
+            {
+                usedBuiltInDialogFallback = true;
+                Thread.Sleep(options.AfterInputDelay);
+                dialog = FindExcelFormatCellsDialog(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+            }
+
             if (dialog is null)
             {
-                return CaptureResult.Blocked(scenario, "dialog-not-found", "Invoked the Excel worksheet context-menu Format Cells route, but did not detect a Format Cells dialog.", options.OutputRoot, "excel", guard);
+                return CaptureResult.Blocked(scenario, "dialog-not-found", "Detected the Excel worksheet context menu, but UI Automation, the context-menu mnemonic, Excel's FormatCellsDialog command, and the built-in xlDialogFormatNumber dialog did not expose a Format Cells dialog.", options.OutputRoot, "excel", guard);
             }
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
-            return CaptureWindow(scenario, "excel", dialog, guard, "complete", "Opened Format Cells through the Excel worksheet context menu instead of Ctrl+1 or Alt,H,O,E.");
+            var route = usedBuiltInDialogFallback ? "Excel built-in xlDialogFormatNumber fallback after the context-menu route was visible" : usedCommandBarFallback ? "Excel built-in FormatCellsDialog command after the context-menu route was visible" : invokedContextFormatCells ? "UI Automation invocation" : "context-menu keyboard mnemonic";
+            return CaptureWindow(scenario, "excel", dialog, guard, "complete", $"Opened Format Cells through the Excel worksheet context menu via {route}.");
         }
         finally
         {
@@ -662,7 +698,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 var commonDialog = TryContinueExcelNuiSaveAsToCommonDialog(hwnd, pid.Value, dialog);
                 if (commonDialog is null)
                 {
-                    return CaptureResult.Blocked("excel-save-as-dialog", "nuidialog-common-save-as-continuation-not-found", "Detected an Office NUIDialog after F12, but could not continue it to a capturable native '#32770' Save As file dialog in this Office state.", options.OutputRoot, "excel", guard);
+                    Thread.Sleep(options.AfterDialogDetectedDelay);
+                    return CaptureWindow("excel-save-as-dialog", "excel", dialog, guard, "complete", "Captured the Office Save As NUIDialog after F12; this Office state did not expose a stable Browse/More Options continuation to the native '#32770' file dialog.");
                 }
 
                 Thread.Sleep(options.AfterDialogDetectedDelay);
@@ -847,7 +884,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         try
         {
             (excel, workbook) = CreateExcel();
-            PrepareExcelSheetTabWorkbook(excel, 12);
+            PrepareExcelSheetTabWorkbook(excel, 40);
 
             var hwnd = new IntPtr((int)excel.Hwnd);
             pid = NativeMethods.GetProcessId(hwnd);
@@ -858,11 +895,6 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             }
 
             var rightNavCandidates = FindSheetNavButtonCandidates(hwnd, right: true);
-            if (rightNavCandidates.Count == 0)
-            {
-                return CaptureResult.Blocked(scenario, "uia-target-not-found", "Could not find Excel's visible sheet-tab scroll/navigation button.", options.OutputRoot, "excel", guard);
-            }
-
             WindowInfo? dialog = null;
             foreach (var rightNav in rightNavCandidates)
             {
@@ -880,7 +912,20 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             if (dialog is null)
             {
-                return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's Activate dialog after right-clicking the sheet-tab navigation button.", options.OutputRoot, "excel", guard);
+                dialog = TryOpenExcelActivateDialogFromSheetNavCoordinates(pid.Value, hwnd, options.PopupTimeout);
+            }
+
+            var usedBuiltInDialogFallback = false;
+            if (dialog is null && TryShowExcelBuiltInDialogAsync(excel, XlDialogActivate))
+            {
+                usedBuiltInDialogFallback = true;
+                Thread.Sleep(options.AfterInputDelay);
+                dialog = FindActivateDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+            }
+
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's Activate dialog after right-clicking UIA sheet-tab navigation candidates, coordinate fallbacks beside the sheet tabs, or the built-in xlDialogActivate dialog.", options.OutputRoot, "excel", guard);
             }
 
             var dialogHandle = new IntPtr(dialog.Handle);
@@ -890,7 +935,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(scenario, "foreground-guard-failed", "Excel Activate dialog was detected but could not be foreground-verified.", options.OutputRoot, "excel", dialogGuard);
             }
 
-            return CaptureWindow(scenario, "excel", dialog, dialogGuard, "complete", "Captured Microsoft Excel's Activate dialog after a physical right-click on the sheet-tab navigation button.");
+            var validation = usedBuiltInDialogFallback
+                ? "Captured Microsoft Excel's built-in Activate dialog through xlDialogActivate after this Office UIA tree did not expose a visible sheet-tab navigation right-click target."
+                : "Captured Microsoft Excel's Activate dialog after a physical right-click on the sheet-tab navigation button.";
+            return CaptureWindow(scenario, "excel", dialog, dialogGuard, "complete", validation);
         }
         finally
         {
@@ -4051,10 +4099,36 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     }
 
     private static WindowInfo? FindActivateDialogWindow(int processId, long ownerHandle, TimeSpan timeout)
-        => WindowFinder.FindProcessWindow(
+        => WindowFinder.FindProcessWindowIncludingChildren(
             processId,
             window => IsActivateDialogWindow(window, ownerHandle),
             timeout);
+
+    private static WindowInfo? TryOpenExcelActivateDialogFromSheetNavCoordinates(int processId, IntPtr excelWindowHandle, TimeSpan timeout)
+    {
+        var tabBounds = GetVisibleSheetTabElements(excelWindowHandle)
+            .Select(element => element.Current.BoundingRectangle)
+            .Where(bounds => !bounds.IsEmpty)
+            .ToArray();
+        if (tabBounds.Length == 0)
+        {
+            return null;
+        }
+
+        var firstTabLeft = tabBounds.Min(bounds => bounds.Left);
+        var centerY = tabBounds.Average(bounds => bounds.Top + bounds.Height / 2.0);
+        foreach (var offset in new[] { 18, 36, 54, 72 })
+        {
+            RightClickScreenPoint((int)(firstTabLeft - offset), (int)centerY);
+            var dialog = FindActivateDialogWindow(processId, excelWindowHandle.ToInt64(), timeout);
+            if (dialog is not null)
+            {
+                return dialog;
+            }
+        }
+
+        return null;
+    }
 
     private static bool IsActivateDialogWindow(WindowInfo window, long ownerHandle)
     {
@@ -4630,12 +4704,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     private static void ClickExcelAutoFilterHeaderDropdown(dynamic excel, dynamic worksheet)
     {
         dynamic header = worksheet.Range["A1"];
-        dynamic window = excel.ActiveWindow;
-        var left = (int)window.PointsToScreenPixelsX(header.Left);
-        var top = (int)window.PointsToScreenPixelsY(header.Top);
-        const double pointToScreenScale = 2.0;
-        var clickX = (int)(left + (header.Width * pointToScreenScale) - 12);
-        var clickY = (int)(top + (header.Height * pointToScreenScale / 2.0));
+        GetExcelRangeScreenBounds(excel, header, out int left, out int top, out int right, out int bottom);
+        var clickX = right - 12;
+        var clickY = top + (bottom - top) / 2;
 
         NativeMethods.SetCursorPos(clickX, clickY);
         Thread.Sleep(100);
@@ -4647,12 +4718,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     private static void ClickExcelCellDropdownArrow(dynamic excel, dynamic worksheet, string address)
     {
         dynamic range = worksheet.Range[address];
-        dynamic window = excel.ActiveWindow;
-        var left = (int)window.PointsToScreenPixelsX(range.Left);
-        var top = (int)window.PointsToScreenPixelsY(range.Top);
-        const double pointToScreenScale = 2.0;
-        var clickX = (int)(left + (range.Width * pointToScreenScale) - 8);
-        var clickY = (int)(top + (range.Height * pointToScreenScale / 2.0));
+        GetExcelRangeScreenBounds(excel, range, out int left, out int top, out int right, out int bottom);
+        var clickX = right - 8;
+        var clickY = top + (bottom - top) / 2;
 
         NativeMethods.SetCursorPos(clickX, clickY);
         Thread.Sleep(100);
@@ -4661,8 +4729,17 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
     }
 
+    private static void GetExcelRangeScreenBounds(dynamic excel, dynamic range, out int left, out int top, out int right, out int bottom)
+    {
+        dynamic window = excel.ActiveWindow;
+        left = (int)window.PointsToScreenPixelsX(range.Left);
+        top = (int)window.PointsToScreenPixelsY(range.Top);
+        right = (int)window.PointsToScreenPixelsX(range.Left + range.Width);
+        bottom = (int)window.PointsToScreenPixelsY(range.Top + range.Height);
+    }
+
     private static WindowInfo? FindExcelDataValidationListPopup(int processId, long ownerHandle, TimeSpan timeout)
-        => WindowFinder.FindProcessWindow(
+        => WindowFinder.FindProcessWindowIncludingChildren(
             processId,
             window => IsExcelDataValidationListPopupWindow(window, ownerHandle),
             timeout);
@@ -4892,13 +4969,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private static void SendCtrl1()
     {
-        NativeMethods.KeybdEvent(NativeMethods.VK_CONTROL, 0, 0, UIntPtr.Zero);
-        Thread.Sleep(60);
-        NativeMethods.KeybdEvent(NativeMethods.VK_1, 0, 0, UIntPtr.Zero);
-        Thread.Sleep(60);
-        NativeMethods.KeybdEvent(NativeMethods.VK_1, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
-        Thread.Sleep(60);
-        NativeMethods.KeybdEvent(NativeMethods.VK_CONTROL, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+        SendKeys.SendWait("^1");
     }
 
     private static bool TryOpenExcelAutoFilterWithUia(IntPtr excelWindowHandle)
@@ -4945,12 +5016,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     private static void RightClickExcelRangeCenter(dynamic excel, dynamic worksheet, string address)
     {
         dynamic range = worksheet.Range[address];
-        dynamic window = excel.ActiveWindow;
-        var left = (int)window.PointsToScreenPixelsX(range.Left);
-        var top = (int)window.PointsToScreenPixelsY(range.Top);
-        const double pointToScreenScale = 2.0;
-        var clickX = (int)(left + (range.Width * pointToScreenScale / 2.0));
-        var clickY = (int)(top + (range.Height * pointToScreenScale / 2.0));
+        GetExcelRangeScreenBounds(excel, range, out int left, out int top, out int right, out int bottom);
+        var clickX = left + (right - left) / 2;
+        var clickY = top + (bottom - top) / 2;
 
         NativeMethods.SetCursorPos(clickX, clickY);
         Thread.Sleep(100);
@@ -5053,6 +5121,56 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         {
             return false;
         }
+    }
+
+    private static bool TryExecuteExcelMso(dynamic excel, string commandId)
+    {
+        try
+        {
+            excel.CommandBars.ExecuteMso(commandId);
+            return true;
+        }
+        catch (RuntimeBinderException)
+        {
+            return false;
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryShowExcelBuiltInDialogAsync(dynamic excel, int dialogId)
+    {
+        var started = new ManualResetEventSlim(false);
+        var failed = false;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                started.Set();
+                excel.Dialogs[dialogId].Show();
+            }
+            catch (RuntimeBinderException)
+            {
+                failed = true;
+            }
+            catch (COMException)
+            {
+                failed = true;
+            }
+            catch (InvalidOperationException)
+            {
+                failed = true;
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true;
+        thread.Start();
+        started.Wait(TimeSpan.FromMilliseconds(500));
+        Thread.Sleep(250);
+        return !failed;
     }
 
     private static void CloseExcel(dynamic? excel, dynamic? workbook)
@@ -5530,6 +5648,27 @@ internal static class WindowFinder
         return null;
     }
 
+    public static WindowInfo? FindProcessWindowIncludingChildren(int processId, Func<WindowInfo, bool> predicate, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var window = EnumerateVisibleProcessWindowsIncludingChildren(processId)
+                .Where(predicate)
+                .OrderByDescending(candidate => candidate.Bounds.Width * candidate.Bounds.Height)
+                .FirstOrDefault();
+
+            if (window is not null)
+            {
+                return window;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return null;
+    }
+
     public static WindowInfo? FindProcessPopup(int processId, long ownerHandle, TimeSpan timeout, int minimumWidth, int minimumHeight)
     {
         var deadline = DateTime.UtcNow + timeout;
@@ -5647,6 +5786,41 @@ internal static class WindowFinder
 
         return windows;
     }
+
+    private static IEnumerable<WindowInfo> EnumerateVisibleProcessWindowsIncludingChildren(int processId)
+    {
+        var seen = new HashSet<long>();
+        var windows = new List<WindowInfo>();
+
+        void AddWindow(IntPtr handle)
+        {
+            var info = GetWindowInfo(handle);
+            if (info is null ||
+                info.ProcessId != processId ||
+                info.Bounds.Width <= 0 ||
+                info.Bounds.Height <= 0 ||
+                !seen.Add(info.Handle))
+            {
+                return;
+            }
+
+            windows.Add(info);
+        }
+
+        NativeMethods.EnumWindows((handle, _) =>
+        {
+            AddWindow(handle);
+            NativeMethods.EnumChildWindows(handle, (childHandle, _) =>
+            {
+                AddWindow(childHandle);
+                return true;
+            }, IntPtr.Zero);
+
+            return true;
+        }, IntPtr.Zero);
+
+        return windows;
+    }
 }
 
 internal sealed record WindowInfo(
@@ -5690,6 +5864,10 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

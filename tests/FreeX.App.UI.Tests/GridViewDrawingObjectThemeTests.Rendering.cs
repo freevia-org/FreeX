@@ -551,6 +551,52 @@ public sealed partial class GridViewDrawingObjectThemeTests
         source.Should().Contain("DrawingShapeGradientDirection.DiagonalUp");
         source.Should().Contain("DrawingObjectGradientBrushKey(");
         source.Should().Contain("DrawingShapeGradientDirection Direction");
+        source.Should().Contain("Color.FromRgb(startColor.R, startColor.G, startColor.B)");
+        source.Should().Contain("Color.FromRgb(endColor.R, endColor.G, endColor.B)");
+        source.Should().NotContain("Color.FromArgb(72, startColor.R");
+        source.Should().NotContain("Color.FromArgb(72, endColor.R");
+    }
+
+    [Fact]
+    public void DrawingObjectRendering_UsesOpaqueChosenShapeFill()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var grid = new GridView();
+            var createFill = typeof(GridView).GetMethod(
+                "CreateDrawingShapeFill",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            createFill.Should().NotBeNull();
+
+            var brush = (Brush)createFill!.Invoke(
+                grid,
+                [
+                    new DrawingShapeModel { Kind = DrawingShapeKind.Rectangle },
+                    new CellColor(10, 120, 230)
+                ])!;
+            var visual = new DrawingVisual();
+            using (var drawingContext = visual.RenderOpen())
+            {
+                drawingContext.DrawRectangle(brush, null, new Rect(0, 0, 20, 20));
+            }
+
+            var bitmap = new RenderTargetBitmap(
+                20,
+                20,
+                96,
+                96,
+                PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+
+            var pixels = new byte[20 * 20 * 4];
+            bitmap.CopyPixels(pixels, stride: 20 * 4, offset: 0);
+            var center = (10 * 20 + 10) * 4;
+
+            pixels[center + 3].Should().Be(255);
+            pixels[center + 2].Should().Be(10);
+            pixels[center + 1].Should().Be(120);
+            pixels[center].Should().Be(230);
+        });
     }
 
     [Fact]

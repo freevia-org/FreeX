@@ -284,7 +284,11 @@ public sealed record DrawingObjectTarget(
             shape.Height,
             shape.RotationDegrees,
             shape.FillColor,
-            shape.OutlineColor);
+            shape.OutlineColor)
+        {
+            FillThemeColor = shape.FillThemeColor,
+            OutlineThemeColor = shape.OutlineThemeColor
+        };
 
     public static DrawingObjectTarget FromTextBox(TextBoxModel textBox) =>
         new(
@@ -295,7 +299,14 @@ public sealed record DrawingObjectTarget(
             textBox.Height,
             textBox.RotationDegrees,
             textBox.FillColor,
-            textBox.OutlineColor);
+            textBox.OutlineColor)
+        {
+            FillThemeColor = textBox.FillThemeColor,
+            OutlineThemeColor = textBox.OutlineThemeColor
+        };
+
+    public WorkbookThemeColorReference? FillThemeColor { get; init; }
+    public WorkbookThemeColorReference? OutlineThemeColor { get; init; }
 }
 
 public sealed record DrawingObjectZOrderTarget(

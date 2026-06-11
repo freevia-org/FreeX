@@ -64,7 +64,7 @@ public static class SheetTabListPlanner
             if (groupedSheetIds.Count == 0 && sheet.Id == currentSheetId)
                 groupedSheetIds.Add(sheet.Id);
 
-            tabs.Add(new SheetTabViewModel(sheet.Id, sheet.Name, sheet.TabColor)
+            tabs.Add(new SheetTabViewModel(sheet.Id, sheet.Name, sheet.TabColor, sheet.IsProtected)
             {
                 IsActive = sheet.Id == currentSheetId,
                 IsGrouped = groupedSheetIds.Contains(sheet.Id),

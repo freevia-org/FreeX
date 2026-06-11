@@ -625,7 +625,7 @@ public partial class GridView
         if (shape.GradientFillEndColor is { } endColor && !DrawingShapeKindSupport.IsLineLike(shape.Kind))
             return GetDrawingObjectGradientBrush(startColor, endColor, shape.GetEffectiveGradientFillDirection());
 
-        return GetDrawingObjectBrush(32, startColor);
+        return GetDrawingObjectBrush(255, startColor);
     }
 
     private static void DrawShapeGeometry(
@@ -1248,8 +1248,8 @@ public partial class GridView
 
         var (startPoint, endPoint) = GetDrawingObjectGradientPoints(effectiveDirection);
         var brush = new LinearGradientBrush(
-            Color.FromArgb(72, startColor.R, startColor.G, startColor.B),
-            Color.FromArgb(72, endColor.R, endColor.G, endColor.B),
+            Color.FromRgb(startColor.R, startColor.G, startColor.B),
+            Color.FromRgb(endColor.R, endColor.G, endColor.B),
             startPoint,
             endPoint);
         brush.Freeze();
