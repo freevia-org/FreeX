@@ -27,6 +27,21 @@ public sealed partial class ConsolidateDialog
             out updatedReferences,
             out error);
 
+    public static bool TryAddReference(
+        SheetId sheetId,
+        Func<string, SheetId?> resolveSheetId,
+        IEnumerable<string> existingReferences,
+        string referenceText,
+        out IReadOnlyList<string> updatedReferences,
+        out string? error) =>
+        ConsolidateDialogPlanner.TryAddReference(
+            sheetId,
+            resolveSheetId,
+            existingReferences,
+            referenceText,
+            out updatedReferences,
+            out error);
+
     public static ConsolidateDialogResult CreateResult(
         IEnumerable<GridRange> sourceRanges,
         CellAddress destinationCell,
@@ -60,6 +75,21 @@ public sealed partial class ConsolidateDialog
 
     public static bool TryParse(
         SheetId sheetId,
+        Func<string, SheetId?> resolveSheetId,
+        string sourceRangesText,
+        string destinationCellText,
+        out ConsolidateDialogResult result,
+        out string? error) =>
+        ConsolidateDialogPlanner.TryParse(
+            sheetId,
+            resolveSheetId,
+            sourceRangesText,
+            destinationCellText,
+            out result,
+            out error);
+
+    public static bool TryParse(
+        SheetId sheetId,
         string sourceRangesText,
         string destinationCellText,
         ConsolidateFunction function,
@@ -70,6 +100,29 @@ public sealed partial class ConsolidateDialog
         out string? error) =>
         ConsolidateDialogPlanner.TryParse(
             sheetId,
+            sourceRangesText,
+            destinationCellText,
+            function,
+            useTopRowLabels,
+            useLeftColumnLabels,
+            createLinksToSourceData,
+            out result,
+            out error);
+
+    public static bool TryParse(
+        SheetId sheetId,
+        Func<string, SheetId?> resolveSheetId,
+        string sourceRangesText,
+        string destinationCellText,
+        ConsolidateFunction function,
+        bool useTopRowLabels,
+        bool useLeftColumnLabels,
+        bool createLinksToSourceData,
+        out ConsolidateDialogResult result,
+        out string? error) =>
+        ConsolidateDialogPlanner.TryParse(
+            sheetId,
+            resolveSheetId,
             sourceRangesText,
             destinationCellText,
             function,

@@ -29,6 +29,7 @@ public sealed record ConsolidateRangeSelectionRequest(
 public sealed partial class ConsolidateDialog : Window
 {
     private readonly SheetId _sheetId;
+    private readonly Func<string, SheetId?> _resolveSheetId;
     private readonly ComboBox _functionBox = new();
     private readonly TextBox _referenceBox = new();
     private readonly ListBox _referencesList = new() { Height = 72 };
@@ -41,18 +42,22 @@ public sealed partial class ConsolidateDialog : Window
 
     public ConsolidateDialogResult? Result { get; private set; }
     public ConsolidateRangeSelectionRequest? RangeSelectionRequest { get; private set; }
+    public SheetId DefaultSheetId => _sheetId;
 
     public ConsolidateDialog(
         SheetId sheetId,
         string defaultSource,
         string defaultDestination,
-        Action<ConsolidateRangeSelectionRequest>? requestRangeSelection = null)
+        Action<ConsolidateRangeSelectionRequest>? requestRangeSelection = null,
+        Func<string, SheetId?>? resolveSheetId = null)
     {
         _sheetId = sheetId;
+        _resolveSheetId = resolveSheetId ?? (_ => null);
         _requestRangeSelection = requestRangeSelection;
         Title = UiText.Get("Consolidate_Consolidate");
-        Width = 380;
-        Height = 420;
+        Width = 420;
+        MaxHeight = 560;
+        SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -74,15 +79,27 @@ public sealed partial class ConsolidateDialog : Window
         AutomationProperties.SetAutomationId(_destinationBox, "ConsolidateDestinationCellBox");
         AutomationProperties.SetHelpText(_destinationBox, UiText.Get("Consolidate_EnterTheUpperLeftDestinationCellForTheConsolidatedResult"));
         ApplyAutomationMetadata();
-        var root = new StackPanel { Margin = new Thickness(12) };
-        root.Children.Add(new Label { Content = UiText.Get("Consolidate_Function"), Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
+        var root = new DockPanel { Margin = new Thickness(12), LastChildFill = true };
+        var buttonRow = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        root.Children.Add(buttonRow);
+        var content = new StackPanel();
+        var scrollViewer = new ScrollViewer
+        {
+            Content = content,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        root.Children.Add(scrollViewer);
+
+        content.Children.Add(new Label { Content = UiText.Get("Consolidate_Function"), Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
         foreach (var function in Enum.GetValues<ConsolidateFunction>())
             _functionBox.Items.Add(new ComboBoxItem { Content = FunctionLabel(function), Tag = function });
         _functionBox.SelectedIndex = 0;
         _functionBox.Margin = new Thickness(0, 0, 0, 8);
-        root.Children.Add(_functionBox);
-        root.Children.Add(new Label { Content = UiText.Get("Consolidate_Reference"), Target = _referenceBox, Padding = new Thickness(0) });
-        root.Children.Add(CreateReferenceEditor(_referenceBox, UiText.Get("Consolidate_SelectReferenceRange"), ConsolidateRangeSelectionTarget.Reference));
+        content.Children.Add(_functionBox);
+        content.Children.Add(new Label { Content = UiText.Get("Consolidate_Reference"), Target = _referenceBox, Padding = new Thickness(0) });
+        content.Children.Add(CreateReferenceEditor(_referenceBox, UiText.Get("Consolidate_SelectReferenceRange"), ConsolidateRangeSelectionTarget.Reference));
         var referenceButtons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -100,21 +117,20 @@ public sealed partial class ConsolidateDialog : Window
         _deleteReferenceButton.Click += DeleteReferenceButton_Click;
         referenceButtons.Children.Add(addReferenceButton);
         referenceButtons.Children.Add(_deleteReferenceButton);
-        root.Children.Add(referenceButtons);
-        root.Children.Add(new Label { Content = UiText.Get("Consolidate_AllReferences"), Target = _referencesList, Padding = new Thickness(0) });
-        root.Children.Add(_referencesList);
-        root.Children.Add(new Label { Content = UiText.Get("Consolidate_DestinationCell"), Target = _destinationBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(CreateReferenceEditor(_destinationBox, UiText.Get("Consolidate_SelectDestinationCell"), ConsolidateRangeSelectionTarget.DestinationCell));
-        root.Children.Add(new TextBlock { Text = UiText.Get("Consolidate_UseLabelsIn"), Margin = new Thickness(0, 8, 0, 2) });
+        content.Children.Add(referenceButtons);
+        content.Children.Add(new Label { Content = UiText.Get("Consolidate_AllReferences"), Target = _referencesList, Padding = new Thickness(0) });
+        content.Children.Add(_referencesList);
+        content.Children.Add(new Label { Content = UiText.Get("Consolidate_DestinationCell"), Target = _destinationBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
+        content.Children.Add(CreateReferenceEditor(_destinationBox, UiText.Get("Consolidate_SelectDestinationCell"), ConsolidateRangeSelectionTarget.DestinationCell));
+        content.Children.Add(new TextBlock { Text = UiText.Get("Consolidate_UseLabelsIn"), Margin = new Thickness(0, 8, 0, 2) });
         var labelOptions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         _topRowBox.Margin = new Thickness(0, 0, 16, 0);
         labelOptions.Children.Add(_topRowBox);
         labelOptions.Children.Add(_leftColumnBox);
-        root.Children.Add(labelOptions);
+        content.Children.Add(labelOptions);
         _createLinksBox.Margin = new Thickness(0, 0, 0, 12);
         _createLinksBox.ToolTip = UiText.Get("Consolidate_WriteFormulasThatReferenceTheSourceCellsWhileKeepingTheConsolidatedResul");
-        root.Children.Add(_createLinksBox);
-        root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
+        content.Children.Add(_createLinksBox);
         Content = root;
         UpdateReferenceButtons();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
@@ -179,6 +195,7 @@ public sealed partial class ConsolidateDialog : Window
     {
         if (!TryAddReference(
                 _sheetId,
+                _resolveSheetId,
                 _referencesList.Items.Cast<string>(),
                 _referenceBox.Text,
                 out var references,
@@ -226,6 +243,7 @@ public sealed partial class ConsolidateDialog : Window
         var sourceRangesText = JoinSourceRanges(_referencesList.Items.Cast<string>());
         if (!TryParse(
                 _sheetId,
+                _resolveSheetId,
                 sourceRangesText,
                 _destinationBox.Text,
                 SelectedFunction(),
