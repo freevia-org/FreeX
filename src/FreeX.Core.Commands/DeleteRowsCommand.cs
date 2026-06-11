@@ -107,13 +107,14 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
                 uint newStart = m.Start.Row < _startRow ? m.Start.Row : _startRow;
                 uint newEnd   = m.End.Row   > endRow    ? m.End.Row - _count
                               : _startRow > 1           ? _startRow - 1 : 0;
-                if (newEnd > 0 && newEnd >= newStart)
+                // Keep only if it still spans ≥2 rows (height > 1); a 1×1 merge is invalid per Excel.
+                if (newEnd > 0 && newEnd > newStart)
                 {
                     adjustedMerges.Add(new GridRange(
                         new CellAddress(m.Start.Sheet, newStart, m.Start.Col),
                         new CellAddress(m.End.Sheet,   newEnd,   m.End.Col)));
                 }
-                // if newEnd < newStart the merge was entirely deleted — drop it
+                // if newEnd <= newStart the merge shrunk to a single cell or was entirely deleted — drop it
             }
         }
         sheet.ReplaceMergedRegions(adjustedMerges);

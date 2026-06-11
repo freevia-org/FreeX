@@ -255,4 +255,110 @@ public sealed class MoveRangeCommandTests
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("outside");
     }
+
+    [Fact]
+    public void Apply_MovesFullyContainedDvAndCfRulesWithCells_AndUndoRestores()
+    {
+        // B2:B10 has a DV dropdown and a CF rule both covering exactly B2:B10.
+        // Move B2:B10 → D2:D10; rules must follow to D2:D10.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+
+        var sourceStart = new CellAddress(sheet.Id, 2, 2); // B2
+        var sourceEnd   = new CellAddress(sheet.Id, 10, 2); // B10
+        var destination = new CellAddress(sheet.Id, 2, 4);  // D2
+        var sourceRange = new GridRange(sourceStart, sourceEnd);
+
+        // Add a cell with a value so move is non-trivial.
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), Cell.FromValue(new TextValue("drop")));
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = sourceRange,
+            Type = DvType.List,
+            Formula1 = "Yes,No"
+        };
+        var cfRule = new ConditionalFormat
+        {
+            AppliesTo = sourceRange,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0"
+        };
+        sheet.DataValidations.Add(dvRule);
+        sheet.ConditionalFormats.Add(cfRule);
+
+        var command = new MoveRangeCommand(sheet.Id, sourceRange, destination);
+        command.Apply(context).Success.Should().BeTrue();
+
+        // Rules should have moved to D2:D10 (col 4).
+        dvRule.AppliesTo.Start.Col.Should().Be(4, "DV rule AppliesTo should follow the move to column D");
+        dvRule.AppliesTo.End.Col.Should().Be(4);
+        dvRule.AppliesTo.Start.Row.Should().Be(2);
+        dvRule.AppliesTo.End.Row.Should().Be(10);
+
+        cfRule.AppliesTo.Start.Col.Should().Be(4, "CF rule AppliesTo should follow the move to column D");
+        cfRule.AppliesTo.End.Col.Should().Be(4);
+
+        // DV lookup: should work at D5 (row 5, col 4), not B5.
+        var b5 = new CellAddress(sheet.Id, 5, 2);
+        var d5 = new CellAddress(sheet.Id, 5, 4);
+        DataValidationService.GetApplicable(sheet, b5).Should().BeEmpty("rule left B column");
+        DataValidationService.GetApplicable(sheet, d5).Should().ContainSingle("rule now in D column");
+
+        command.Revert(context);
+
+        // After undo, rules back to B2:B10.
+        dvRule.AppliesTo.Start.Col.Should().Be(2, "DV rule should be restored to column B on undo");
+        dvRule.AppliesTo.End.Col.Should().Be(2);
+        cfRule.AppliesTo.Start.Col.Should().Be(2, "CF rule should be restored to column B on undo");
+        cfRule.AppliesTo.End.Col.Should().Be(2);
+
+        DataValidationService.GetApplicable(sheet, b5).Should().ContainSingle("rule restored to B column");
+        DataValidationService.GetApplicable(sheet, d5).Should().BeEmpty("D column has no rule after undo");
+    }
+
+    [Fact]
+    public void Apply_PartiallyOverlappingDvAndCfRules_AreNotTranslated()
+    {
+        // Documented limitation: rules that only partially overlap the moved range are left unchanged.
+        // DV/CF covers B2:C10; move B2:B10 — partial overlap — rule stays at B2:C10.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+
+        var sourceStart = new CellAddress(sheet.Id, 2, 2); // B2
+        var sourceEnd   = new CellAddress(sheet.Id, 10, 2); // B10
+        var destination = new CellAddress(sheet.Id, 2, 4);  // D2
+        var sourceRange = new GridRange(sourceStart, sourceEnd);
+
+        // Rule spans B2:C10 — wider than the moved range.
+        var ruleStart = new CellAddress(sheet.Id, 2, 2);
+        var ruleEnd   = new CellAddress(sheet.Id, 10, 3);
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(ruleStart, ruleEnd),
+            Type = DvType.List,
+            Formula1 = "A,B"
+        };
+        var cfRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(ruleStart, ruleEnd),
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0"
+        };
+        sheet.DataValidations.Add(dvRule);
+        sheet.ConditionalFormats.Add(cfRule);
+
+        var command = new MoveRangeCommand(sheet.Id, sourceRange, destination);
+        command.Apply(context).Success.Should().BeTrue();
+
+        // Rule must be unchanged because it's only partially contained.
+        dvRule.AppliesTo.Start.Col.Should().Be(2, "partially-overlapping DV rule must not move");
+        dvRule.AppliesTo.End.Col.Should().Be(3);
+        cfRule.AppliesTo.Start.Col.Should().Be(2, "partially-overlapping CF rule must not move");
+        cfRule.AppliesTo.End.Col.Should().Be(3);
+    }
 }
