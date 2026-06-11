@@ -21,6 +21,68 @@ public sealed record MoveRangeOp(
 public sealed record RenameSheetOp(string OldSheetName, string NewSheetName)    : RewriteOperation;
 public sealed record DeleteSheetOp(string SheetName)                            : RewriteOperation;
 
+// ── Partial-range (Insert/Delete Cells) operations ────────────────────────────
+// These shift only cells whose address falls inside the constrained band
+// (StartRow..EndRow × StartCol..MaxCol for ShiftRight, StartRow..MaxRow × StartCol..EndCol for ShiftDown).
+// References completely outside the band are left untouched.
+// References to cells that are removed by a delete-cells op become #REF!.
+
+/// <summary>
+/// Insert Cells / Shift Down: cells in rows [<see cref="BandStartRow"/>..<see cref="BandEndRow"/>]
+/// inside column [<see cref="RangeStartCol"/>..<see cref="RangeEndCol"/>] were pushed down by <see cref="Count"/> rows.
+/// </summary>
+public sealed record InsertCellsShiftDownOp(
+    string SheetName,
+    uint BandStartRow,  // _range.Start.Row
+    uint BandEndRow,    // CellAddress.MaxRow (the full shift region goes to the bottom)
+    uint RangeStartCol, // _range.Start.Col
+    uint RangeEndCol,   // _range.End.Col
+    uint InsertBeforeRow, // _range.Start.Row (first blank row after insert)
+    uint Count)         // _range.RowCount
+    : RewriteOperation;
+
+/// <summary>
+/// Insert Cells / Shift Right: cells in rows [<see cref="BandStartRow"/>..<see cref="BandEndRow"/>]
+/// in column [<see cref="RangeStartCol"/>..<see cref="BandEndCol"/>] were pushed right by <see cref="Count"/> columns.
+/// </summary>
+public sealed record InsertCellsShiftRightOp(
+    string SheetName,
+    uint BandStartRow,    // _range.Start.Row
+    uint BandEndRow,      // _range.End.Row
+    uint RangeStartCol,   // _range.Start.Col
+    uint BandEndCol,      // CellAddress.MaxCol (the full shift region goes to the right)
+    uint InsertBeforeCol, // _range.Start.Col
+    uint Count)           // _range.ColCount
+    : RewriteOperation;
+
+/// <summary>
+/// Delete Cells / Shift Up: cells in rows [<see cref="DeletedStartRow"/>..<see cref="DeletedEndRow"/>]
+/// inside column [<see cref="RangeStartCol"/>..<see cref="RangeEndCol"/>] were removed, and cells below shifted up.
+/// </summary>
+public sealed record DeleteCellsShiftUpOp(
+    string SheetName,
+    uint DeletedStartRow, // _range.Start.Row
+    uint DeletedEndRow,   // _range.End.Row
+    uint BandEndRow,      // CellAddress.MaxRow
+    uint RangeStartCol,   // _range.Start.Col
+    uint RangeEndCol,     // _range.End.Col
+    uint Count)           // _range.RowCount
+    : RewriteOperation;
+
+/// <summary>
+/// Delete Cells / Shift Left: cells in rows [<see cref="BandStartRow"/>..<see cref="BandEndRow"/>]
+/// in columns [<see cref="DeletedStartCol"/>..<see cref="DeletedEndCol"/>] were removed, and cells to the right shifted left.
+/// </summary>
+public sealed record DeleteCellsShiftLeftOp(
+    string SheetName,
+    uint BandStartRow,    // _range.Start.Row
+    uint BandEndRow,      // _range.End.Row
+    uint DeletedStartCol, // _range.Start.Col
+    uint DeletedEndCol,   // _range.End.Col
+    uint BandEndCol,      // CellAddress.MaxCol
+    uint Count)           // _range.ColCount
+    : RewriteOperation;
+
 // ── Rewriter ─────────────────────────────────────────────────────────────────
 
 /// <summary>
@@ -100,6 +162,10 @@ public static class FormulaRewriter
             MoveRangeOp move => RewriteCellRefMove(cr, move, ref changed),
             RenameSheetOp rename => RewriteCellRefRenameSheet(cr, rename, ref changed),
             DeleteSheetOp => RewriteSheetQualifiedRefDeleteSheet(ref changed),
+            InsertCellsShiftDownOp ins => RewriteCellRefInsertCellsShiftDown(cr, ins, ref changed),
+            InsertCellsShiftRightOp ins => RewriteCellRefInsertCellsShiftRight(cr, ins, ref changed),
+            DeleteCellsShiftUpOp del => RewriteCellRefDeleteCellsShiftUp(cr, del, ref changed),
+            DeleteCellsShiftLeftOp del => RewriteCellRefDeleteCellsShiftLeft(cr, del, ref changed),
             _ => cr
         };
     }
@@ -255,6 +321,102 @@ public static class FormulaRewriter
         }
 
         return cr;
+    }
+
+    // ── Insert Cells Shift Down ───────────────────────────────────────────────
+
+    private static FormulaNode RewriteCellRefInsertCellsShiftDown(
+        CellRefNode cr, InsertCellsShiftDownOp op, ref bool changed)
+    {
+        // Only cells in the band column range that are at or below the insert row are shifted.
+        if (cr.ColumnNumber < op.RangeStartCol || cr.ColumnNumber > op.RangeEndCol)
+            return cr;  // outside column band: untouched
+        if (cr.Row < op.InsertBeforeRow)
+            return cr;  // above insert point: untouched
+
+        long newRow = (long)cr.Row + op.Count;
+        if (newRow > CellAddress.MaxRow)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        changed = true;
+        return cr with { Row = (uint)newRow };
+    }
+
+    // ── Insert Cells Shift Right ──────────────────────────────────────────────
+
+    private static FormulaNode RewriteCellRefInsertCellsShiftRight(
+        CellRefNode cr, InsertCellsShiftRightOp op, ref bool changed)
+    {
+        // Only cells in the band row range that are at or to the right of the insert column are shifted.
+        if (cr.Row < op.BandStartRow || cr.Row > op.BandEndRow)
+            return cr;  // outside row band: untouched
+        if (cr.ColumnNumber < op.InsertBeforeCol)
+            return cr;  // left of insert point: untouched
+
+        long newColNum = (long)cr.ColumnNumber + op.Count;
+        if (newColNum > CellAddress.MaxCol)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        changed = true;
+        return cr with { ColumnName = CellAddress.NumberToColumnName((uint)newColNum) };
+    }
+
+    // ── Delete Cells Shift Up ─────────────────────────────────────────────────
+
+    private static FormulaNode RewriteCellRefDeleteCellsShiftUp(
+        CellRefNode cr, DeleteCellsShiftUpOp op, ref bool changed)
+    {
+        // Only cells in the band column range are affected.
+        if (cr.ColumnNumber < op.RangeStartCol || cr.ColumnNumber > op.RangeEndCol)
+            return cr;  // outside column band: untouched
+
+        if (cr.Row >= op.DeletedStartRow && cr.Row <= op.DeletedEndRow)
+        {
+            // Cell was deleted → #REF!
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        if (cr.Row > op.DeletedEndRow)
+        {
+            // Below the deleted band: shift up
+            changed = true;
+            return cr with { Row = cr.Row - op.Count };
+        }
+
+        return cr;  // above deleted band: untouched
+    }
+
+    // ── Delete Cells Shift Left ───────────────────────────────────────────────
+
+    private static FormulaNode RewriteCellRefDeleteCellsShiftLeft(
+        CellRefNode cr, DeleteCellsShiftLeftOp op, ref bool changed)
+    {
+        // Only cells in the band row range are affected.
+        if (cr.Row < op.BandStartRow || cr.Row > op.BandEndRow)
+            return cr;  // outside row band: untouched
+
+        if (cr.ColumnNumber >= op.DeletedStartCol && cr.ColumnNumber <= op.DeletedEndCol)
+        {
+            // Cell was deleted → #REF!
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        if (cr.ColumnNumber > op.DeletedEndCol)
+        {
+            // Right of the deleted band: shift left
+            changed = true;
+            return cr with { ColumnName = CellAddress.NumberToColumnName(cr.ColumnNumber - op.Count) };
+        }
+
+        return cr;  // left of deleted band: untouched
     }
 
     // ── Paste offset ──────────────────────────────────────────────────────────
@@ -614,6 +776,10 @@ public static class FormulaRewriter
             InsertColsOp ins => ins.SheetName,
             DeleteColsOp del => del.SheetName,
             MoveRangeOp move => move.SheetName,
+            InsertCellsShiftDownOp ins => ins.SheetName,
+            InsertCellsShiftRightOp ins => ins.SheetName,
+            DeleteCellsShiftUpOp del => del.SheetName,
+            DeleteCellsShiftLeftOp del => del.SheetName,
             _ => null
         };
 

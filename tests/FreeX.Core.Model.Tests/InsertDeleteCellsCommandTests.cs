@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using FluentAssertions;
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Model.Tests;
@@ -291,5 +292,457 @@ public sealed class InsertDeleteCellsCommandTests
         }
 
         return (workbook, sheet, new TestCommandContext(workbook));
+    }
+
+    // ── Formula rewrite tests ─────────────────────────────────────────────────
+
+    [Fact]
+    public void InsertCellsShiftDown_RewritesFormulaInBandColumn()
+    {
+        // B5 has =A5. Insert cells shift-down at A1:A1 → A5 moves to A6.
+        // B5's formula =A5 is inside band column A (col=1), so it should rewrite to =A6.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new NumberValue(99));  // A5
+        var b5 = new Cell { Value = new NumberValue(0) };
+        b5.FormulaText = "A5";
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), b5);  // B5 has =A5
+
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        var cmd = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Down);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // A5 moved to A6
+        sheet.GetValue(6, 1).Should().Be(new NumberValue(99));
+        sheet.GetCell(5, 1).Should().BeNull();
+
+        // B5's formula should have been rewritten: A5 → A6
+        var b5After = sheet.GetCell(5, 2)!;
+        b5After.FormulaText.Should().Be("A6");
+
+        // Undo restores formulas and cells
+        cmd.Revert(ctx);
+        sheet.GetValue(5, 1).Should().Be(new NumberValue(99));
+        sheet.GetCell(6, 1).Should().BeNull();
+        sheet.GetCell(5, 2)!.FormulaText.Should().Be("A5");
+    }
+
+    [Fact]
+    public void InsertCellsShiftDown_FormulaOutsideBandColumnUntouched()
+    {
+        // C5 has =B5. Insert cells shift-down at A1:A1 only affects column A band.
+        // B5 and C5 are outside the band columns, so =B5 stays unchanged.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var c5 = new Cell { Value = new NumberValue(0) };
+        c5.FormulaText = "B5";
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 3), c5);  // C5 has =B5
+
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        var cmd = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Down);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // C5's formula should remain =B5 (B is outside band column A)
+        sheet.GetCell(5, 3)!.FormulaText.Should().Be("B5");
+    }
+
+    [Fact]
+    public void InsertCellsShiftDown_FormulaOutsideBandReferencingBandCellRewrites()
+    {
+        // C1 (outside band col A) has =A5. Insert at A1 shifts A5→A6.
+        // =A5 references a cell inside the band column, so it should rewrite to =A6.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var c1 = new Cell { Value = new NumberValue(0) };
+        c1.FormulaText = "A5";
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), c1);  // C1 has =A5
+
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        var cmd = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Down);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetCell(1, 3)!.FormulaText.Should().Be("A6");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_ReferenceToCellInDeletedRangeBecomesRefError()
+    {
+        // B1 has =A2. Delete A2 shift-up → A2 is removed. =A2 should become =#REF!.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var b1 = new Cell { Value = new NumberValue(0) };
+        b1.FormulaText = "A2";
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), b1);  // B1 has =A2
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var cmd = new DeleteCellsCommand(sheet.Id, range, DeleteCellsShiftDirection.Up);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetCell(1, 2)!.FormulaText.Should().Be("#REF!");
+
+        // Undo restores original formula
+        cmd.Revert(ctx);
+        sheet.GetCell(1, 2)!.FormulaText.Should().Be("A2");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_ReferenceBelowDeletedRangeShiftsUp()
+    {
+        // B1 has =A3. Delete A2 shift-up → A3 slides to A2. =A3 should become =A2.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var b1 = new Cell { Value = new NumberValue(0) };
+        b1.FormulaText = "A3";
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), b1);  // B1 has =A3
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var cmd = new DeleteCellsCommand(sheet.Id, range, DeleteCellsShiftDirection.Up);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetCell(1, 2)!.FormulaText.Should().Be("A2");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_ReferenceOutsideBandColumnUntouched()
+    {
+        // B1 has =B3. Delete A2 shift-up only affects column A; B3 is outside band.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var b1 = new Cell { Value = new NumberValue(0) };
+        b1.FormulaText = "B3";
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), b1);
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var cmd = new DeleteCellsCommand(sheet.Id, range, DeleteCellsShiftDirection.Up);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // B3 is outside band col A; formula unchanged
+        sheet.GetCell(1, 2)!.FormulaText.Should().Be("B3");
+    }
+
+    [Fact]
+    public void InsertCellsShiftRight_RewritesFormulaInBandRow()
+    {
+        // Insert cells shift-right at A2:A2 (band: row 2, cols 1..MaxCol).
+        // A2 has value 42; E2 (col 5) has formula =B2.
+        // After insert: A2→blank, B2←original A2 (42), and all cols ≥1 in row 2 shift right by 1.
+        // E2 moves to F2 and its formula =B2 (col 2 ≥ 1, in band) rewrites to =C2.
+        // A formula in row 3 (=A2) is outside the band row [2..2] and stays unchanged.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(42));  // A2
+
+        var e2 = new Cell { Value = new NumberValue(0) };
+        e2.FormulaText = "B2";
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 5), e2);  // E2 has =B2
+
+        // Row-3 formula referencing row-2 cell (outside band row) should still rewrite
+        // because the referenced cell (A2, band row 2) shifted
+        var a3 = new Cell { Value = new NumberValue(0) };
+        a3.FormulaText = "A2";
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), a3);  // A3 has =A2
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var cmd = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Right);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // A2 now blank; B2 has original A2 value
+        sheet.GetCell(2, 1).Should().BeNull();
+        sheet.GetValue(2, 2).Should().Be(new NumberValue(42));
+
+        // E2 moved to F2 (col 6), its formula =B2 → =C2 (B in band shifted to C)
+        sheet.GetCell(2, 5).Should().BeNull();
+        sheet.GetCell(2, 6)!.FormulaText.Should().Be("C2");
+
+        // A3's formula =A2: A2 is in band (row 2, col A ≥ col 1) and was shifted to B2
+        sheet.GetCell(3, 1)!.FormulaText.Should().Be("B2");
+
+        cmd.Revert(ctx);
+        // After undo: back to original
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(42));
+        sheet.GetCell(2, 6).Should().BeNull();
+        sheet.GetCell(2, 5)!.FormulaText.Should().Be("B2");
+        sheet.GetCell(3, 1)!.FormulaText.Should().Be("A2");
+    }
+
+    [Fact]
+    public void InsertCellsShiftRight_FormulaInDifferentRowUntouched()
+    {
+        // Insert shift-right at A2:A2 (band row 2 only).
+        // Row 3 formula =A3: row 3 is outside band [2..2], untouched.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var c3 = new Cell { Value = new NumberValue(0) };
+        c3.FormulaText = "A3";
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), c3);  // C3 has =A3
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var cmd = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Right);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // Row 3 is outside the band; formula unchanged
+        sheet.GetCell(3, 3)!.FormulaText.Should().Be("A3");
+    }
+
+    // ── Merge guard tests ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void InsertCellsShiftDown_PartialMergeOverlapRejectsOperation()
+    {
+        // A merge spanning A1:B1 (across row boundary of band col A).
+        // Insert shift-down at A2:A2 (band: col A, rows 2+).
+        // Merge A1:B1 is partially inside band col A but also in band col B (not in band).
+        // Actually let's use: merge A1:A3 spans rows 1..3, band col A rows 2+.
+        // The merge straddles the band start row (row 2): start.Row < bandStartRow but end.Row >= bandStartRow.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        // Merge A1:A3 spans band rows (col A, rows 2+) and before-band row (row 1)
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1)));
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var outcome = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Down).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("merged");
+        // Model unchanged
+        sheet.MergedRegions.Should().HaveCount(1);
+        sheet.GetCell(1, 1).Should().BeNull();
+    }
+
+    [Fact]
+    public void InsertCellsShiftDown_MergeFullyInsideBandMovesWithShift()
+    {
+        // Merge A3:A4 is fully inside band (col A, rows 3+), should NOT block.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 3, 1),
+            new CellAddress(sheet.Id, 4, 1)));
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var outcome = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Down).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        // Merge should have shifted down by 1
+        sheet.MergedRegions.Should().HaveCount(1);
+        sheet.MergedRegions[0].Start.Row.Should().Be(4u);
+        sheet.MergedRegions[0].End.Row.Should().Be(5u);
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_PartialMergeOverlapRejectsOperation()
+    {
+        // Merge A2:A3 where delete is A2:A2. The merge is partially deleted.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 2, 1),
+            new CellAddress(sheet.Id, 3, 1)));
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var outcome = new DeleteCellsCommand(sheet.Id, range, DeleteCellsShiftDirection.Up).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("merged");
+    }
+
+    [Fact]
+    public void InsertCellsShiftRight_PartialMergeOverlapRejectsOperation()
+    {
+        // Merge A1:A3 (column A, rows 1-3). Insert shift-right at A2:A2 (band rows 2..2).
+        // Merge spans rows 1-3, band is rows 2..2 only, so merge straddles band boundary.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1)));
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var outcome = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Right).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("merged");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftLeft_PartialMergeOverlapRejectsOperation()
+    {
+        // Merge A2:C2 where delete is B2:C2. Merge has col A which is outside the band (band rows 2..2, deleted cols B..C).
+        // Actually the band rows are the same, but the merge straddles the col edge of the deleted range.
+        // Delete B2:B2 shift-left. Merge B2:C2 is partially in deleted range [B2:B2] and partially in shifted [C2+].
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 2, 3)));
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 2, 2));
+        var outcome = new DeleteCellsCommand(sheet.Id, range, DeleteCellsShiftDirection.Left).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("merged");
+    }
+
+    // ── Comments/hyperlinks move with cells ───────────────────────────────────
+
+    [Fact]
+    public void InsertCellsShiftDown_CommentMovesWithCell()
+    {
+        // Comment at A2. Insert shift-down at A1:A1 → comment should move to A3.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        sheet.Comments[a2] = "my comment";
+
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        var cmd = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Down);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Comments.Should().NotContainKey(a2);
+        sheet.Comments[new CellAddress(sheet.Id, 3, 1)].Should().Be("my comment");
+
+        cmd.Revert(ctx);
+        sheet.Comments[a2].Should().Be("my comment");
+        sheet.Comments.Should().NotContainKey(new CellAddress(sheet.Id, 3, 1));
+    }
+
+    [Fact]
+    public void InsertCellsShiftRight_HyperlinkMovesWithCell()
+    {
+        // Hyperlink at B2. Insert shift-right at A2:A2 (band row 2) → hyperlink moves to C2.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        sheet.Hyperlinks[b2] = "https://example.com";
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var cmd = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Right);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Hyperlinks.Should().NotContainKey(b2);
+        sheet.Hyperlinks[new CellAddress(sheet.Id, 2, 3)].Should().Be("https://example.com");
+
+        cmd.Revert(ctx);
+        sheet.Hyperlinks[b2].Should().Be("https://example.com");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_CommentOnDeletedCellRemoved_CommentBelowMoves()
+    {
+        // Comment at A2 (deleted). Comment at A4 (below, shifts to A3).
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var a4 = new CellAddress(sheet.Id, 4, 1);
+        sheet.Comments[a2] = "deleted comment";
+        sheet.Comments[a4] = "shifted comment";
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var cmd = new DeleteCellsCommand(sheet.Id, range, DeleteCellsShiftDirection.Up);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Comments.Should().NotContainKey(a2);
+        sheet.Comments.Should().NotContainKey(a4);
+        sheet.Comments[new CellAddress(sheet.Id, 3, 1)].Should().Be("shifted comment");
+
+        cmd.Revert(ctx);
+        sheet.Comments[a2].Should().Be("deleted comment");
+        sheet.Comments[a4].Should().Be("shifted comment");
+        sheet.Comments.Should().NotContainKey(new CellAddress(sheet.Id, 3, 1));
+    }
+
+    [Fact]
+    public void DeleteCellsShiftLeft_CommentOutsideBandRowUntouched()
+    {
+        // Comment at A5 (band row is 2..2). Delete shift-left at B2:B2 should not move A5's comment.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var a5 = new CellAddress(sheet.Id, 5, 1);
+        sheet.Comments[a5] = "outside band";
+
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 2, 2));
+        var cmd = new DeleteCellsCommand(sheet.Id, range, DeleteCellsShiftDirection.Left);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // A5's comment should be untouched
+        sheet.Comments[a5].Should().Be("outside band");
+    }
+
+    // ── Range reference endpoint behavior across band edge ────────────────────
+
+    [Fact]
+    public void FormulaRewriter_InsertCellsShiftDown_RangeStartInsideBandShifts()
+    {
+        // A1:A5 where insert is at col A, rows 3+. Start A1 is above band, end A5 is inside band.
+        // Per Excel: endpoints inside the band shift, endpoints outside don't.
+        var op = new InsertCellsShiftDownOp("Sheet1", 3, CellAddress.MaxRow, 1, 1, 3, 1);
+        var result = FormulaRewriter.Rewrite("A1:A5", op, "Sheet1");
+        // A1 (row 1) is above band start row 3 → stays A1
+        // A5 (row 5) is inside band col A, row >= 3 → shifts to A6
+        result.Should().Be("A1:A6");
+    }
+
+    [Fact]
+    public void FormulaRewriter_InsertCellsShiftRight_RangeShiftedInBandRow()
+    {
+        // Insert shift-right at col 2, band rows 1..1. B1:C1 reference.
+        // Both B1 (col 2) and C1 (col 3) are at/right of insert col 2, in band row 1.
+        var op = new InsertCellsShiftRightOp("Sheet1", 1, 1, 1, CellAddress.MaxCol, 2, 1);
+        var result = FormulaRewriter.Rewrite("B1:C1", op, "Sheet1");
+        result.Should().Be("C1:D1");
+    }
+
+    [Fact]
+    public void FormulaRewriter_DeleteCellsShiftUp_RangeEndpointDeletedBecomesRefError()
+    {
+        // Delete A2:A2 shift-up. Formula =A2:A3 has A2 in deleted range → #REF!
+        var op = new DeleteCellsShiftUpOp("Sheet1", 2, 2, CellAddress.MaxRow, 1, 1, 1);
+        var result = FormulaRewriter.Rewrite("A2:A3", op, "Sheet1");
+        result.Should().Be("#REF!");
+    }
+
+    [Fact]
+    public void FormulaRewriter_DeleteCellsShiftLeft_RangeEndpointDeletedBecomesRefError()
+    {
+        // Delete B1:B1 shift-left. Formula =B1:C1 has B1 in deleted range → #REF!
+        var op = new DeleteCellsShiftLeftOp("Sheet1", 1, 1, 2, 2, CellAddress.MaxCol, 1);
+        var result = FormulaRewriter.Rewrite("B1:C1", op, "Sheet1");
+        result.Should().Be("#REF!");
     }
 }
