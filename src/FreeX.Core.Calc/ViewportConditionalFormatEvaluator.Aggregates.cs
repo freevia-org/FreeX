@@ -24,7 +24,7 @@ internal static partial class ViewportConditionalFormatEvaluator
             List<double>? numericValues = RequiresSortedNumericValues(cf) ? [] : null;
             foreach (var (a, v) in EnumerateAggregateValues(sheet, cf.AppliesTo))
             {
-                if (valueCounts is not null)
+                if (valueCounts is not null && !IsBlankValue(v))
                 {
                     var key = NormalizeDisplayValue(v);
                     valueCounts[key] = valueCounts.GetValueOrDefault(key) + 1;
@@ -327,6 +327,10 @@ internal static partial class ViewportConditionalFormatEvaluator
         Dictionary<ConditionalFormat, CfAggregateCache> cfCache,
         bool duplicate)
     {
+        // Blanks are never considered duplicates or unique values (matches Excel behavior).
+        if (IsBlankValue(value))
+            return false;
+
         if (!cfCache.TryGetValue(cf, out var cache) || cache.ValueCounts is null)
             return false;
 
