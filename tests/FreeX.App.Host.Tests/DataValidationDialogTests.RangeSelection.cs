@@ -77,7 +77,7 @@ public sealed partial class DataValidationDialogTests
                 requests.Should().Equal(new DataValidationRangeSelectionRequest(
                     DataValidationRangeSelectionTarget.Formula1,
                     "=$A$1:$A$10",
-                    CollapseDialog: true));
+                    CollapseDialog: false));
                 dialog.RangeSelectionRequest.Should().Be(requests[0]);
             }
             finally
@@ -108,6 +108,31 @@ public sealed partial class DataValidationDialogTests
     }
 
     [Fact]
+    public void UseSelectionButton_PopulatesFormula1ForNonListValidationTypes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new DataValidationDialog { SelectionSource = "  =Sheet1!$C$2  " };
+            dialog.Show();
+            try
+            {
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "WholeNumber");
+
+                InvokePrivate(dialog, "UseSelectionButton_Click");
+
+                var formula1Box = GetControl<TextBox>(dialog, "Formula1Box");
+                formula1Box.Text.Should().Be("=Sheet1!$C$2");
+                formula1Box.IsKeyboardFocusWithin.Should().BeTrue();
+                formula1Box.SelectionLength.Should().Be(formula1Box.Text.Length);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void SourcePicker2Button_PopulatesAndFocusesFormula2()
     {
         StaTestRunner.Run(() =>
@@ -126,7 +151,7 @@ public sealed partial class DataValidationDialogTests
                 dialog.RangeSelectionRequest.Should().Be(new DataValidationRangeSelectionRequest(
                     DataValidationRangeSelectionTarget.Formula2,
                     "=Sheet1!$C$2:$C$8",
-                    CollapseDialog: true));
+                    CollapseDialog: false));
                 formula2Box.IsKeyboardFocusWithin.Should().BeTrue();
                 formula2Box.SelectionLength.Should().Be(formula2Box.Text.Length);
             }
@@ -161,6 +186,55 @@ public sealed partial class DataValidationDialogTests
     }
 
     [Fact]
+    public void OkAfterSourcePickerHideShow_AcceptsWithoutDialogResultCrash()
+    {
+        StaTestRunner.Run(() =>
+        {
+            DataValidationDialog? dialog = null;
+            dialog = new DataValidationDialog(request =>
+            {
+                if (request.CollapseDialog)
+                    dialog!.Hide();
+
+                try
+                {
+                    dialog!.ApplyRangeSelection(request.Target, "=Sheet1!$A$1");
+                }
+                finally
+                {
+                    if (request.CollapseDialog)
+                    {
+                        dialog!.Show();
+                        dialog.Activate();
+                    }
+                }
+            });
+
+            dialog.Show();
+            try
+            {
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "List");
+                InvokePrivate(dialog, "SourcePickerButton_Click");
+                dialog.Hide();
+                dialog.Show();
+
+                Action accept = () => InvokePrivate(dialog, "OkButton_Click");
+
+                accept.Should().NotThrow();
+                dialog.Accepted.Should().BeTrue();
+                dialog.Result.Should().NotBeNull();
+                dialog.Result!.Type.Should().Be(DvType.List);
+                dialog.Result.Formula1.Should().Be("=Sheet1!$A$1");
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void RangePickerButtons_RefocusFormulaInputAfterRequest()
     {
         var source = DialogSourceTestSupport.ReadHostSources("DataValidationDialog.xaml.cs");
@@ -175,7 +249,7 @@ public sealed partial class DataValidationDialogTests
     }
 
     [Fact]
-    public void DataValidationRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    public void DataValidationRangeSelectionRequest_TrimsCurrentTextAndKeepsDialogOpen()
     {
         DataValidationDialog.CreateRangeSelectionRequest(
                 DataValidationRangeSelectionTarget.Formula2,
@@ -184,6 +258,6 @@ public sealed partial class DataValidationDialogTests
             .Be(new DataValidationRangeSelectionRequest(
                 DataValidationRangeSelectionTarget.Formula2,
                 "=Sheet1!$C$2:$C$8",
-                CollapseDialog: true));
+                CollapseDialog: false));
     }
 }

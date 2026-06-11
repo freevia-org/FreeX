@@ -282,7 +282,7 @@ public partial class MainWindow
             Owner = this,
             SelectionSource = DataValidationService.FormatListSourceRange(range, sheet?.Name, sheet?.Name)
         };
-        if (dlg.ShowDialog() != true) return;
+        if (dlg.ShowDialog() != true && !dlg.Accepted) return;
 
         if (dlg.ClearRequested)
         {
@@ -304,18 +304,28 @@ public partial class MainWindow
         dv.AdditionalRanges.Clear();
         dv.AdditionalRanges.AddRange(ranges.Skip(1));
 
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Data Validation",
-                sheetId =>
-                {
-                    var rule = GroupedSheetRangePlanner.CloneDataValidationForSheet(dv, sheetId);
-                    return CreateDataValidationCommand(
-                        sheetId,
-                        rule,
-                        existingRule,
-                        dlg.ApplyToSameSettings);
-                }))
+        try
+        {
+            if (!TryExecuteRepeatableGroupedSheetCommand(
+                    "Data Validation",
+                    sheetId =>
+                    {
+                        var rule = GroupedSheetRangePlanner.CloneDataValidationForSheet(dv, sheetId);
+                        return CreateDataValidationCommand(
+                            sheetId,
+                            rule,
+                            existingRule,
+                            dlg.ApplyToSameSettings);
+                    }))
+                return;
+        }
+        catch (Exception ex)
+        {
+            ShowCommandError(
+                new CommandOutcome(false, $"Data validation could not be applied. {ex.Message}"),
+                UiText.Get("MainWindowMessage_DataValidationTitle"));
             return;
+        }
         UpdateViewport();
     }
 
