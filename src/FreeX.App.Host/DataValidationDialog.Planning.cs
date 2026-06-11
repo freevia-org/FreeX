@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Services;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -189,7 +190,20 @@ public partial class DataValidationDialog
 
     private static bool TryValidateListCriteria(string text, out string? error)
     {
-        if (IsFormulaCriteria(text) || TryParseInlineListCriteria(text))
+        if (IsFormulaCriteria(text))
+        {
+            if (TryGetSimpleFormulaRangeCellCount(text, out var cellCount) &&
+                cellCount > DataValidationDropdownPlanner.MaximumDropdownItems)
+            {
+                error = UiText.Get("DataValidation_InvalidListCriteria");
+                return false;
+            }
+
+            error = null;
+            return true;
+        }
+
+        if (TryParseInlineListCriteria(text))
         {
             error = null;
             return true;
@@ -275,6 +289,90 @@ public partial class DataValidationDialog
         return !inQuotes && (hasItemText || currentHasText);
     }
 
+    private static bool TryGetSimpleFormulaRangeCellCount(string text, out long cellCount)
+    {
+        cellCount = 0;
+        var formulaBody = text.AsSpan().Trim();
+        if (formulaBody.IsEmpty || formulaBody[0] != '=')
+            return false;
+
+        formulaBody = formulaBody[1..].Trim();
+        var sheetSeparator = formulaBody.LastIndexOf('!');
+        if (sheetSeparator >= 0)
+            formulaBody = formulaBody[(sheetSeparator + 1)..].Trim();
+
+        var colon = formulaBody.IndexOf(':');
+        if (colon < 0)
+        {
+            if (!TryParseA1Address(formulaBody, out _, out _))
+                return false;
+
+            cellCount = 1;
+            return true;
+        }
+
+        if (!TryParseA1Address(formulaBody[..colon], out var startRow, out var startCol) ||
+            !TryParseA1Address(formulaBody[(colon + 1)..], out var endRow, out var endCol))
+        {
+            return false;
+        }
+
+        var rowCount = Math.Abs((long)endRow - startRow) + 1;
+        var colCount = Math.Abs((long)endCol - startCol) + 1;
+        cellCount = rowCount * colCount;
+        return true;
+    }
+
+    private static bool TryParseA1Address(ReadOnlySpan<char> text, out uint row, out uint col)
+    {
+        row = 0;
+        col = 0;
+
+        var value = text.Trim();
+        var index = 0;
+        if (index < value.Length && value[index] == '$')
+            index++;
+
+        var columnStart = index;
+        while (index < value.Length)
+        {
+            var ch = value[index];
+            if (ch is >= 'a' and <= 'z')
+                ch = (char)(ch - ('a' - 'A'));
+            if (ch is < 'A' or > 'Z')
+                break;
+
+            col = col * 26 + (uint)(ch - 'A' + 1);
+            if (col > CellAddress.MaxCol)
+                return false;
+
+            index++;
+        }
+
+        if (index == columnStart)
+            return false;
+
+        if (index < value.Length && value[index] == '$')
+            index++;
+
+        var rowStart = index;
+        while (index < value.Length)
+        {
+            var ch = value[index];
+            if (ch is < '0' or > '9')
+                return false;
+
+            var digit = (uint)(ch - '0');
+            if (row > CellAddress.MaxRow / 10 || row == CellAddress.MaxRow / 10 && digit > CellAddress.MaxRow % 10)
+                return false;
+
+            row = row * 10 + digit;
+            index++;
+        }
+
+        return index > rowStart && row > 0 && index == value.Length;
+    }
+
     private static bool TryParseNumber(string text, out double value) =>
         double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
 
@@ -287,7 +385,7 @@ public partial class DataValidationDialog
     public static DataValidationRangeSelectionRequest CreateRangeSelectionRequest(
         DataValidationRangeSelectionTarget target,
         string currentText) =>
-        new(target, currentText.Trim(), CollapseDialog: true);
+        new(target, currentText.Trim(), CollapseDialog: false);
 
     private static string TypeTag(DvType type) => type switch
     {

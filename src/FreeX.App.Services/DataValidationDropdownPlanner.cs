@@ -23,6 +23,7 @@ public sealed record DataValidationDropdownPlan(
 
 public static class DataValidationDropdownPlanner
 {
+    public const int MaximumDropdownItems = 10_000;
     public const double MinimumWidth = 18;
     public const double MaximumWidth = 160;
     public const double MinimumHeight = 18;
@@ -45,8 +46,17 @@ public static class DataValidationDropdownPlanner
         if (rule is null)
             return false;
 
-        var items = DataValidationService.GetListItems(rule, sheet, workbook);
-        if (items.Count == 0)
+        IReadOnlyList<string> items;
+        try
+        {
+            items = DataValidationService.GetListItems(rule, sheet, workbook);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (items.Count == 0 || items.Count > MaximumDropdownItems)
             return false;
 
         var currentText = FormatCellValue(sheet.GetCell(activeCell)?.Value);
