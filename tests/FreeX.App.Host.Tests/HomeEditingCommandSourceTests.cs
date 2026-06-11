@@ -72,6 +72,8 @@ public sealed class HomeEditingCommandSourceTests
 
         source.Should().Contain("AutoSumFormulaPlanner.TryCreatePlan(_workbook.GetSheet(_currentSheetId), func, currentRange, out var plan)");
         source.Should().Contain("(plan.Target, Cell.FromFormula(plan.Formula))");
+        source.Should().Contain("? outcome.AffectedCells[0]");
+        source.Should().NotContain("GetNextAutoSumCell");
         var autoSumButtonHandler = SourceMethodExtractor.ExtractMethodSource(source, "private void AutoSumPickerBtn_Click(");
         autoSumButtonHandler.Should().Contain("InsertAutoSumFormula(\"SUM\");");
         autoSumButtonHandler.Should().NotContain("OpenRibbonContextMenu");

@@ -1504,7 +1504,8 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("public WorkbookCellEditResult InsertAutoSumFormula(string functionName)");
         sessionSource.Should().Contain("AutoSumFormulaPlanner.TryCreatePlan(ActiveSheet, functionName, SelectedRange, out var plan)");
         sessionSource.Should().Contain("CreateEditCellsCommand([(plan.Target, Cell.FromFormula(plan.Formula))])");
-        sessionSource.Should().Contain("SelectCell(GetNextAutoSumCell(plan.Target));");
+        sessionSource.Should().Contain("ApplySuccessfulEditResult(result, plan.Target);");
+        sessionSource.Should().NotContain("GetNextAutoSumCell");
 
         source.Should().Contain("private readonly DropDownButton _autoSumButton = new();");
         source.Should().Contain("private readonly MenuItem _autoSumSumFlyoutItem = new();");
