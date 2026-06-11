@@ -353,7 +353,7 @@ Write-Host "Screen DPI: $dpi  Scale: $scale"
 
 $exe = Resolve-FreeXExecutablePath $ExePath
 
-$proc = Start-Process -FilePath $exe -PassThru
+$proc = Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) -PassThru
 Write-Host "Launched PID $($proc.Id)"
 
 $hwnd = [IntPtr]::Zero
@@ -361,6 +361,17 @@ for ($i = 0; $i -lt 40; $i++) {
     Start-Sleep -Milliseconds 500
     $hwnd = [Win32c]::FindWindowByPid($proc.Id)
     if ($hwnd -ne [IntPtr]::Zero) { break }
+}
+if ($hwnd -eq [IntPtr]::Zero) {
+    $visibleProcess = Get-Process FreeX.App.Host -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -eq $exe -and $_.MainWindowHandle -ne 0 } |
+        Sort-Object StartTime -Descending |
+        Select-Object -First 1
+    if ($null -ne $visibleProcess) {
+        $proc = $visibleProcess
+        $hwnd = [IntPtr]$visibleProcess.MainWindowHandle
+        Write-Host "Reusing visible FreeX window PID $($proc.Id)"
+    }
 }
 if ($hwnd -eq [IntPtr]::Zero) { Write-Error "No window"; $proc.Kill(); exit 1 }
 

@@ -7,16 +7,16 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowRibbonKeyTipTests
 {
     [Fact]
-    public void InsertShapesKeyTip_OpensShapeMenuAndInsertsRectangle()
+    public void DrawShapesKeyTip_OpensShapeMenuAndInsertsRectangle()
     {
         RunSta(() =>
         {
             using var harness = MainWindowHarness.Create();
             harness.SelectRange(3, 2, 3, 2);
 
-            harness.OpenRibbonMenu(Key.N, Key.S, Key.H);
+            harness.OpenRibbonMenu(Key.J, Key.S, Key.H);
 
-            harness.SelectedRibbonTabHeader.Should().Be("Insert");
+            harness.SelectedRibbonTabHeader.Should().Be("Draw");
             harness.KeyTipScope.Should().Be("Menu");
             harness.ActiveMenuItemGestureText("Lines").Should().Be("1");
             harness.ActiveMenuItemGestureText("Rectangles").Should().Be("2");
@@ -93,7 +93,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
     [InlineData(Key.D6, Key.D, DrawingShapeKind.FlowchartDecision)]
     [InlineData(Key.D7, Key.D5, DrawingShapeKind.Star5)]
     [InlineData(Key.D8, Key.V, DrawingShapeKind.OvalCallout)]
-    public void InsertShapesMenuKeyTips_InsertVisibleDrawingCommands(
+    public void DrawShapesMenuKeyTips_InsertVisibleDrawingCommands(
         Key groupKeyTip,
         Key shapeKeyTip,
         DrawingShapeKind expectedKind)
@@ -103,7 +103,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
             using var harness = MainWindowHarness.Create();
             harness.SelectRange(4, 3, 4, 3);
 
-            harness.OpenRibbonMenu(Key.N, Key.S, Key.H);
+            harness.OpenRibbonMenu(Key.J, Key.S, Key.H);
             harness.HandleKeyTip(groupKeyTip);
             harness.HandleKeyTip(shapeKeyTip);
 

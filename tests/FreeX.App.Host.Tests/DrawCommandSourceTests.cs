@@ -24,6 +24,24 @@ public sealed class DrawCommandSourceTests
     }
 
     [Theory]
+    [InlineData("Pictures", "Pictures", "IP", "PicturesBtn_Click")]
+    [InlineData("Shapes", "Shapes", "SH", "ShapesBtn_Click")]
+    public void DrawIllustrationsCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
+        string title,
+        string content,
+        string keyTip,
+        string handler)
+    {
+        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractButtonElementByInvariantCommandName(title, $"Click=\"{handler}\"");
+
+        button.ShouldContainLocalizedAttribute("Content", content);
+        button.ShouldContainInvariantCommandName(title);
+        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
+        button.Should().Contain($"Click=\"{handler}\"");
+    }
+
+    [Theory]
     [InlineData("Bring Forward", "Bring Forward", "BF", "BringForwardBtn_Click")]
     [InlineData("Send Backward", "Send Backward", "SB", "SendBackwardBtn_Click")]
     [InlineData("Selection Pane", "Selection Pane", "SP", "SelectionPaneBtn_Click")]
@@ -92,8 +110,23 @@ public sealed class DrawCommandSourceTests
     [Fact]
     public void DrawHandlers_RouteThroughExpectedDrawingCommandsDialogsAndTargetResolution()
     {
+        var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
+        insertSource.Should().Contain("private void PicturesBtn_Click(object sender, RoutedEventArgs e) => InsertPictureBtn_Click(sender, e);");
+        insertSource.Should().Contain("private void ShapesBtn_Click(object sender, RoutedEventArgs e) => DrawRectBtn_Click(sender, e);");
+        source.Should().Contain("private void InsertPictureBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
+        source.Should().Contain("DrawRectBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("InsertDrawingShape(DrawingShapeKind.Rectangle)");
+        source.Should().Contain("DrawEllipseBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("InsertDrawingShape(DrawingShapeKind.Ellipse)");
+        source.Should().Contain("DrawLineBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("InsertDrawingShape(DrawingShapeKind.Line)");
+        DialogSourceTestSupport.ReadHostSources("MainWindow.ShapeGallery.cs")
+            .Should()
+            .Contain("ShapeGalleryMenuItem_Click")
+            .And.Contain("InsertDrawingShape(kind)");
         source.Should().Contain("private void BringForwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingObject(forward: true);");
         source.Should().Contain("private void SendBackwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingObject(forward: false);");
         source.Should().Contain("private void SelectionPaneBtn_Click(object sender, RoutedEventArgs e) => ShowSelectionPaneDialog();");

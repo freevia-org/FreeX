@@ -88,6 +88,13 @@ internal static class RibbonScreenshotTourPlanner
         new("Table Design", "Table_Design", "TableDesignTab")
     ];
 
+    public static IReadOnlyList<RibbonScreenshotTourTab> DrawingObjectContextTabs { get; } =
+    [
+        .. DefaultTabs,
+        new("Shape Format", "Shape_Format", "ShapeFormatTab"),
+        new("Picture Format", "Picture_Format", "PictureFormatTab")
+    ];
+
     public static IReadOnlyList<RibbonScreenshotTourTab> PivotContextTabs { get; } =
     [
         .. DefaultTabs,
@@ -152,11 +159,12 @@ internal static class RibbonScreenshotTourPlanner
         NormalizeContext(context) switch
         {
             null => DefaultTabs,
+            "drawing" => DrawingObjectContextTabs,
             "table" => TableContextTabs,
             "pivot" => PivotContextTabs,
             "chart" => ChartContextTabs,
             var unknown => throw new InvalidOperationException(
-                $"Ribbon screenshot tour context '{unknown}' is not supported. Valid contexts: table, pivot, chart.")
+                $"Ribbon screenshot tour context '{unknown}' is not supported. Valid contexts: drawing, table, pivot, chart.")
         };
 
     public static string? NormalizeContext(string? context)
@@ -167,6 +175,7 @@ internal static class RibbonScreenshotTourPlanner
         var normalized = context.Trim().Replace('_', '-').ToLowerInvariant();
         return normalized switch
         {
+            "drawing" or "draw-object" or "object" or "shape" or "shape-format" or "picture" or "picture-format" => "drawing",
             "table" or "table-design" or "structured-table" => "table",
             "pivot" or "pivot-table" or "pivottable" => "pivot",
             "chart" or "chart-design" or "chart-format" or "embedded-chart" => "chart",

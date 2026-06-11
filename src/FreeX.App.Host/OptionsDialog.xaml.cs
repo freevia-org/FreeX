@@ -9,6 +9,12 @@ using Microsoft.Win32;
 
 namespace FreeX.App.Host;
 
+public enum OptionsDialogInitialSection
+{
+    General,
+    FormulaErrorChecking
+}
+
 public partial class OptionsDialog : Window
 {
     private readonly FreeXOptions _opts;
@@ -16,6 +22,7 @@ public partial class OptionsDialog : Window
     private readonly Dictionary<string, CheckBox> _errorRuleBoxes = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _quickAccessCommandIds = [];
     private readonly List<string> _customDictionaryWords = [];
+    private readonly OptionsDialogInitialSection _initialSection;
     private const string QuickAccessImportMenuHeader = "_Import customization file...";
     private const string QuickAccessExportMenuHeader = "_Export customization file...";
     public FreeXOptions Result { get; private set; }
@@ -29,19 +36,23 @@ public partial class OptionsDialog : Window
     private static readonly string[] Sizes =
         ["8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36"];
 
-    public OptionsDialog(FreeXOptions opts, IEnumerable<string>? disabledFormulaErrorCodes = null)
+    public OptionsDialog(
+        FreeXOptions opts,
+        IEnumerable<string>? disabledFormulaErrorCodes = null,
+        OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General)
     {
         _opts = opts;
         _disabledFormulaErrorCodes = new HashSet<string>(disabledFormulaErrorCodes ?? [], StringComparer.OrdinalIgnoreCase);
         DisabledFormulaErrorCodesResult = new HashSet<string>(_disabledFormulaErrorCodes, StringComparer.OrdinalIgnoreCase);
+        _initialSection = initialSection;
         Result = opts;
         InitializeComponent();
+        TabList.SelectedIndex = _initialSection == OptionsDialogInitialSection.FormulaErrorChecking ? 1 : 0;
         Loaded += (_, _) =>
         {
             Populate();
             FocusInitialKeyboardTarget();
         };
-        TabList.SelectedIndex = 0;
     }
 
     private void Populate()
@@ -147,6 +158,17 @@ public partial class OptionsDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
+        if (_initialSection == OptionsDialogInitialSection.FormulaErrorChecking)
+        {
+            TabList.SelectedIndex = 1;
+            if (_errorRuleBoxes.Values.FirstOrDefault() is { } firstRule)
+            {
+                firstRule.Focus();
+                Keyboard.Focus(firstRule);
+                return;
+            }
+        }
+
         TabList.Focus();
         Keyboard.Focus(TabList);
     }

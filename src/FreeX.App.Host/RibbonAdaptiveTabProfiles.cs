@@ -31,7 +31,7 @@ internal static class RibbonAdaptiveTabProfiles
         new(
             Name: "Insert",
             CatalogId: "InsertTab",
-            RequiredGroups: ["Tables", "Illustrations"],
+            RequiredGroups: ["Tables", "Charts"],
             Defaults:
             [
                 State("Tables", RibbonAdaptiveGroupState.Full)
@@ -119,22 +119,20 @@ internal static class RibbonAdaptiveTabProfiles
             RequiredGroups: ["Themes", "Page Setup"],
             Defaults:
             [
-                State("Page Setup", RibbonAdaptiveGroupState.Full),
-                State("Arrange", RibbonAdaptiveGroupState.Full)
+                State("Page Setup", RibbonAdaptiveGroupState.Full)
             ],
             Breakpoints:
             [
-                Rule(1120, collapseGroups: ["Themes", "Arrange"])
+                Rule(1120, collapseGroups: ["Themes"])
             ],
             RuntimeVisibility:
             [
-                Runtime(1120, "Arrange", RibbonAdaptiveGroupState.IconOnly, ["Scale to Fit", "Sheet Options"]),
                 Runtime(1120, "Sheet Options", RibbonAdaptiveGroupState.Collapsed)
             ],
             ProtectedGroups:
             [
-                Protected(1120, ["Themes", "Page Setup", "Arrange"]),
-                Protected(double.PositiveInfinity, ["Page Setup", "Arrange"])
+                Protected(1120, ["Themes", "Page Setup"]),
+                Protected(double.PositiveInfinity, ["Page Setup"])
             ],
             RequiresMeasuredCorrection: true),
         new(
@@ -177,7 +175,7 @@ internal static class RibbonAdaptiveTabProfiles
         new(
             Name: "Draw",
             CatalogId: "DrawTab",
-            RequiredGroups: ["Arrange", "Format"],
+            RequiredGroups: ["Illustrations", "Arrange", "Format"],
             Defaults: [],
             Breakpoints:
             [
@@ -555,7 +553,7 @@ internal static class RibbonAdaptiveTabProfiles
             ["Cells"] = ["HomeCellsGroup"],
             ["Editing"] = ["HomeEditingGroup"],
             ["Tables"] = ["InsertTablesGroup"],
-            ["Illustrations"] = ["InsertIllustrationsGroup"],
+            ["Illustrations"] = ["DrawIllustrationsGroup"],
             ["Charts"] = ["InsertChartsGroup"],
             ["Sparklines"] = ["InsertSparklinesGroup"],
             ["Filters"] = ["InsertFiltersGroup"],
@@ -564,7 +562,7 @@ internal static class RibbonAdaptiveTabProfiles
             ["Text"] = ["InsertTextGroup"],
             ["Symbols"] = ["InsertSymbolsGroup"],
             ["Tools"] = ["PivotTableAnalyzeToolsGroup"],
-            ["Arrange"] = ["DrawArrangeGroup", "PageLayoutArrangeGroup"],
+            ["Arrange"] = ["DrawArrangeGroup"],
             ["Format"] = ["DrawFormatGroup"],
             ["Themes"] = ["PageLayoutThemesGroup"],
             ["Page Setup"] = ["PageLayoutPageSetupGroup"],

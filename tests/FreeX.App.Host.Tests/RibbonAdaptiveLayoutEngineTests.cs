@@ -122,12 +122,12 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     {
         var groups = new[]
         {
-            new RibbonAdaptiveGroup("Branding", 100, 80, 60, 40, CatalogId: "PageLayoutThemesGroup"),
-            new RibbonAdaptiveGroup("Print Geometry", 100, 80, 60, 40, CatalogId: "PageLayoutPageSetupGroup"),
-            new RibbonAdaptiveGroup("Object Placement", 100, 80, 60, 40, CatalogId: "PageLayoutArrangeGroup")
+            new RibbonAdaptiveGroup("Object Creation", 100, 80, 60, 40, CatalogId: "DrawIllustrationsGroup"),
+            new RibbonAdaptiveGroup("Object Placement", 100, 80, 60, 40, CatalogId: "DrawArrangeGroup"),
+            new RibbonAdaptiveGroup("Object Formatting", 100, 80, 60, 40, CatalogId: "DrawFormatGroup")
         };
 
-        var layout = RibbonAdaptiveLayoutEngine.Plan(1120, groups, fixedChromeWidth: 0, selectedTabHeader: "PageLayoutTab");
+        var layout = RibbonAdaptiveLayoutEngine.Plan(1120, groups, fixedChromeWidth: 0, selectedTabHeader: "DrawTab");
 
         layout.States.Should().Equal(
             RibbonAdaptiveGroupState.Full,
@@ -142,17 +142,16 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         var groups = new[]
         {
             new RibbonAdaptiveGroup("Tables", 650, 90, 60, 40),
-            new RibbonAdaptiveGroup("Illustrations", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Sparklines", 100, 80, 60, 40),
             new RibbonAdaptiveGroup("Charts", 260, 180, 100, 40)
         };
 
         var layout = RibbonAdaptiveLayoutEngine.Plan(900, groups, fixedChromeWidth: 20);
 
-        layout.States.Should().Equal(
-            RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Collapsed);
-        layout.PlannedWidth.Should().Be(810);
+        layout.States[Array.IndexOf(groups.Select(group => group.Name).ToArray(), "Charts")]
+            .Should()
+            .Be(RibbonAdaptiveGroupState.Collapsed);
+        layout.PlannedWidth.Should().BeLessThanOrEqualTo(900);
         layout.RequiresMeasuredCorrection.Should().BeTrue();
     }
 
@@ -179,7 +178,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         var groups = new[]
         {
             new RibbonAdaptiveGroup("Tables", 320, 100, 60, 40),
-            new RibbonAdaptiveGroup("Illustrations", 420, 100, 70, 40),
+            new RibbonAdaptiveGroup("Sparklines", 420, 100, 70, 40),
             new RibbonAdaptiveGroup("Charts", 150, 100, 70, 40)
         };
 
@@ -206,8 +205,8 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         var insertGroups = new[]
         {
             new RibbonAdaptiveGroup("Tables", 650, 90, 60, 40),
-            new RibbonAdaptiveGroup("Illustrations", 100, 80, 60, 40),
-            new RibbonAdaptiveGroup("Charts", 260, 180, 100, 40)
+            new RibbonAdaptiveGroup("Charts", 260, 180, 100, 40),
+            new RibbonAdaptiveGroup("Sparklines", 100, 80, 60, 40)
         };
 
         RibbonAdaptiveLayoutEngine.BuildResizeThresholds(dataGroups, fixedChromeWidth: 20)

@@ -189,6 +189,7 @@ public partial class MainWindow
 
         _lastViewportTableContextRefreshKey = null;
         _lastViewportChartContextRefreshKey = null;
+        _lastViewportDrawingObjectContextRefreshKey = null;
         _lastViewportPivotFieldListRefreshKey = null;
         _lastViewportSlicerTimelineRefreshKey = null;
     }

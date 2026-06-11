@@ -22,6 +22,8 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             "Data",
             "Review",
             "View",
+            "Shape Format",
+            "Picture Format",
             "Chart Design",
             "Format",
             "Table Design",
@@ -42,6 +44,8 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             "Help");
 
         catalog.ContextualTabs.Select(tab => tab.Header).Should().Equal(
+            "Shape Format",
+            "Picture Format",
             "Chart Design",
             "Format",
             "Table Design",
@@ -49,13 +53,15 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             "Design");
 
         AssertGroups(catalog, "Home", "Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing");
-        AssertGroups(catalog, "Insert", "Tables", "Illustrations", "Charts", "Sparklines", "Filters", "Links", "Comments", "Text", "Symbols");
-        AssertGroups(catalog, "Draw", "Arrange", "Format");
-        AssertGroups(catalog, "Page Layout", "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange");
+        AssertGroups(catalog, "Insert", "Tables", "Charts", "Sparklines", "Filters", "Links", "Comments", "Text", "Symbols");
+        AssertGroups(catalog, "Draw", "Illustrations", "Arrange", "Format");
+        AssertGroups(catalog, "Page Layout", "Themes", "Page Setup", "Scale to Fit", "Sheet Options");
         AssertGroups(catalog, "Formulas", "Function Library", "Defined Names", "Formula Auditing", "Calculation");
         AssertGroups(catalog, "Data", "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline");
         AssertGroups(catalog, "Review", "Proofing", "Accessibility", "Comments", "Notes", "Protect");
         AssertGroups(catalog, "View", "Workbook Views", "Show", "Zoom", "Window");
+        AssertGroups(catalog, "Shape Format", "Shape Styles", "Arrange", "Accessibility");
+        AssertGroups(catalog, "Picture Format", "Format", "Arrange", "Accessibility");
         AssertGroups(catalog, "Chart Design", "Chart Layouts", "Chart Styles", "Data", "Type", "Location");
         AssertGroups(catalog, "Format", "Current Selection", "Shape Styles", "Text", "Axes");
         AssertGroups(catalog, "Table Design", "Properties", "Tools", "Table Style Options", "Table Styles");
@@ -72,13 +78,15 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         {
             ["File"] = ("FileTab", []),
             ["Home"] = ("HomeTab", ["HomeClipboardGroup", "HomeFontGroup", "HomeAlignmentGroup", "HomeNumberGroup", "HomeStylesGroup", "HomeCellsGroup", "HomeEditingGroup"]),
-            ["Insert"] = ("InsertTab", ["InsertTablesGroup", "InsertIllustrationsGroup", "InsertChartsGroup", "InsertSparklinesGroup", "InsertFiltersGroup", "InsertLinksGroup", "InsertCommentsGroup", "InsertTextGroup", "InsertSymbolsGroup"]),
-            ["Draw"] = ("DrawTab", ["DrawArrangeGroup", "DrawFormatGroup"]),
-            ["Page Layout"] = ("PageLayoutTab", ["PageLayoutThemesGroup", "PageLayoutPageSetupGroup", "PageLayoutScaleToFitGroup", "PageLayoutSheetOptionsGroup", "PageLayoutArrangeGroup"]),
+            ["Insert"] = ("InsertTab", ["InsertTablesGroup", "InsertChartsGroup", "InsertSparklinesGroup", "InsertFiltersGroup", "InsertLinksGroup", "InsertCommentsGroup", "InsertTextGroup", "InsertSymbolsGroup"]),
+            ["Draw"] = ("DrawTab", ["DrawIllustrationsGroup", "DrawArrangeGroup", "DrawFormatGroup"]),
+            ["Page Layout"] = ("PageLayoutTab", ["PageLayoutThemesGroup", "PageLayoutPageSetupGroup", "PageLayoutScaleToFitGroup", "PageLayoutSheetOptionsGroup"]),
             ["Formulas"] = ("FormulasTab", ["FormulasFunctionLibraryGroup", "FormulasDefinedNamesGroup", "FormulasFormulaAuditingGroup", "FormulasCalculationGroup"]),
             ["Data"] = ("DataTab", ["DataGetTransformGroup", "DataQueriesConnectionsGroup", "DataSortFilterGroup", "DataToolsGroup", "DataForecastGroup", "DataOutlineGroup"]),
             ["Review"] = ("ReviewTab", ["ReviewProofingGroup", "ReviewAccessibilityGroup", "ReviewCommentsGroup", "ReviewNotesGroup", "ReviewProtectGroup"]),
             ["View"] = ("ViewTab", ["ViewWorkbookViewsGroup", "ViewShowGroup", "ViewZoomGroup", "ViewWindowGroup"]),
+            ["Shape Format"] = ("ShapeFormatTab", ["ShapeFormatShapeStylesGroup", "ShapeFormatArrangeGroup", "ShapeFormatAccessibilityGroup"]),
+            ["Picture Format"] = ("PictureFormatTab", ["PictureFormatFormatGroup", "PictureFormatArrangeGroup", "PictureFormatAccessibilityGroup"]),
             ["Chart Design"] = ("ChartDesignTab", ["ChartDesignLayoutsGroup", "ChartDesignStylesGroup", "ChartDesignDataGroup", "ChartDesignTypeGroup", "ChartDesignLocationGroup"]),
             ["Format"] = ("ChartFormatTab", ["ChartFormatCurrentSelectionGroup", "ChartFormatShapeStylesGroup", "ChartFormatTextGroup", "ChartFormatAxesGroup"]),
             ["Table Design"] = ("TableDesignTab", ["TableDesignPropertiesGroup", "TableDesignToolsGroup", "TableDesignStyleOptionsGroup", "TableDesignStylesGroup"]),
@@ -121,7 +129,7 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
                        command.ClickHandler == "LegalNoticesBtn_Click" &&
                        command.AutomationName == "Legal Notices");
 
-        foreach (var tab in new[] { "Draw", "Page Layout" })
+        foreach (var tab in new[] { "Draw", "Shape Format", "Picture Format" })
         {
             Group(catalog, tab, "Arrange").Commands.Select(command => command.Title)
                 .Should()
@@ -136,10 +144,10 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
     {
         var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
 
-        var shapes = Command(catalog, "Insert", "Illustrations", "Shapes");
+        var shapes = Command(catalog, "Draw", "Illustrations", "Shapes");
         shapes.MenuItems.Should().BeEmpty("the expanded shape gallery is generated from InsertShapeGalleryCatalog at runtime");
 
-        Group(catalog, "Insert", "Illustrations").Commands.Select(command => command.Title)
+        Group(catalog, "Draw", "Illustrations").Commands.Select(command => command.Title)
             .Should()
             .Equal("Pictures", "Shapes");
 
@@ -407,11 +415,11 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         new("Home", "Find & Select", "Find"),
 
         new("Insert", "PivotTable", "PivotTable"),
-        new("Insert", "Pictures", "Picture (from file)"),
         new("Insert", "Insert Link", "Hyperlink"),
         new("Insert", "Comment", "Comment/Note"),
         new("Insert", "Symbol", "Symbols"),
 
+        new("Draw", "Pictures", "Picture (from file)"),
         new("Draw", "Bring Forward", "Bring Forward"),
         new("Draw", "Send Backward", "Send Backward"),
         new("Draw", "Selection Pane", "Selection Pane"),

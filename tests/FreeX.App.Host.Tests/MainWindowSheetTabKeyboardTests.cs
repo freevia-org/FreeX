@@ -421,6 +421,9 @@ public sealed class MainWindowSheetTabKeyboardTests
         var mouseDown = source[
             source.IndexOf("private void SheetTab_MouseLeftButtonDown", StringComparison.Ordinal)..
             source.IndexOf("private void SheetTab_MouseMove", StringComparison.Ordinal)];
+        var captureHelper = source[
+            source.IndexOf("private void CaptureSheetTabMouseForDrag", StringComparison.Ordinal)..
+            source.IndexOf("private DependencyObject? FindSheetTabDragHitTarget", StringComparison.Ordinal)];
         var mouseMove = source[
             source.IndexOf("private void SheetTab_MouseMove", StringComparison.Ordinal)..
             source.IndexOf("private void SheetTab_MouseLeftButtonUp", StringComparison.Ordinal)];
@@ -429,10 +432,15 @@ public sealed class MainWindowSheetTabKeyboardTests
             source.IndexOf("private void SheetTab_MouseRightButtonDown", StringComparison.Ordinal)];
 
         xaml.Should().Contain("LostMouseCapture=\"SheetTab_LostMouseCapture\"");
-        mouseDown.Should().Contain("element.CaptureMouse();");
-        mouseDown.IndexOf("element.CaptureMouse();", StringComparison.Ordinal)
+        mouseDown.Should().Contain("CaptureSheetTabMouseForDrag(tab.Id, sender);");
+        mouseDown.IndexOf("RefreshSheetTabs();", StringComparison.Ordinal)
             .Should()
-            .BeGreaterThan(mouseDown.IndexOf("_dragSheetTabStart = e.GetPosition(SheetTabsControl);", StringComparison.Ordinal));
+            .BeLessThan(mouseDown.IndexOf("_dragSheetTabId = tab.Id;", StringComparison.Ordinal));
+        mouseDown.IndexOf("_dragSheetTabStart = dragStart;", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseDown.IndexOf("CaptureSheetTabMouseForDrag(tab.Id, sender);", StringComparison.Ordinal));
+        captureHelper.Should().Contain("FindSheetTabContextMenuTarget(refreshedTab)");
+        captureHelper.Should().Contain("refreshedElement.CaptureMouse();");
         mouseMove.Should().Contain("element.ReleaseMouseCapture();");
         mouseMove.IndexOf("element.ReleaseMouseCapture();", StringComparison.Ordinal)
             .Should()
@@ -486,13 +494,15 @@ public sealed class MainWindowSheetTabKeyboardTests
         xaml.Should().Contain("MouseRightButtonDown=\"SheetNavButton_MouseRightButtonDown\"");
 
         mouseDown.Should().Contain("_dragSheetTabId = tab.Id;");
-        mouseDown.Should().Contain("_dragSheetTabStart = e.GetPosition(SheetTabsControl);");
-        mouseDown.Should().Contain("element.CaptureMouse();");
+        mouseDown.Should().Contain("var dragStart = e.GetPosition(SheetTabsControl);");
+        mouseDown.Should().Contain("_dragSheetTabStart = dragStart;");
+        mouseDown.Should().Contain("CaptureSheetTabMouseForDrag(tab.Id, sender);");
         mouseDown.Should().Contain("UpdateGroupedSheetsForClick(tab.Id);");
 
         mouseMove.Should().Contain("SystemParameters.MinimumHorizontalDragDistance");
-        mouseMove.Should().Contain("FindSheetTabViewModel(FindSheetTabDragHitTarget(current) ?? e.OriginalSource as System.Windows.DependencyObject)");
+        mouseMove.Should().Contain("FindSheetTabViewModel(FindSheetTabDragHitTarget(current, draggedId) ?? e.OriginalSource as System.Windows.DependencyObject)");
         source.Should().Contain("SheetTabsControl.InputHitTest(position)");
+        source.Should().Contain("FindSheetTabDragHitTargetByBounds(position, draggedId)");
         mouseMove.Should().Contain("new MoveSheetCommand(fromIndex, toIndex)");
         mouseMove.Should().Contain("_currentSheetId = draggedId;");
 

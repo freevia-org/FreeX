@@ -79,6 +79,28 @@ public sealed class SubtotalCommandTests
     }
 
     [Fact]
+    public void SubtotalCommand_RejectsWholeColumnRangeBeforeScanning()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 2));
+
+        var outcome = new SubtotalCommand(sheet.Id, range, 0, 1).Apply(context);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("bounded data range");
+        sheet.GetValue(2, 1).Should().Be(new TextValue("East"));
+        sheet.GetCell(3, 1).Should().BeNull();
+    }
+
+    [Fact]
     public void SubtotalCommand_WithPageBreakBetweenGroups_AddsBreakBeforeNextGroupAndUndoRestores()
     {
         var workbook = new Workbook("test");
