@@ -213,13 +213,8 @@ public static class PivotUiPlanner
         return sheetName;
     }
 
-    public static string QuoteSheetNameForReference(string sheetName)
-    {
-        if (sheetName.All(ch => char.IsLetterOrDigit(ch) || ch == '_'))
-            return sheetName;
-
-        return $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'";
-    }
+    public static string QuoteSheetNameForReference(string sheetName) =>
+        SheetNameFormatter.QuoteIfNeeded(sheetName);
 
     public static PivotDataFieldModel CreateDefaultDataField(
         Sheet sheet,

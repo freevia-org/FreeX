@@ -393,12 +393,8 @@ internal static partial class XlsxChartXmlWriter
             ? sheet.Name
             : chart.PivotSourceSheetName;
         return new XElement(chartNs + "pivotSource",
-            new XElement(chartNs + "name", $"{QuoteSheetName(sourceSheetName)}!{chart.PivotTableName}"),
+            new XElement(chartNs + "name", $"{SheetNameFormatter.QuoteIfNeeded(sourceSheetName)}!{chart.PivotTableName}"),
             new XElement(chartNs + "fmtId", new XAttribute("val", Math.Max(0, chart.PivotSourceFormatId ?? 0))));
     }
 
-    private static string QuoteSheetName(string sheetName) =>
-        sheetName.Any(ch => char.IsWhiteSpace(ch) || ch == '\'')
-            ? $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'"
-            : sheetName;
 }

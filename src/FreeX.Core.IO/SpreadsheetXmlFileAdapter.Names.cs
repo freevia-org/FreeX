@@ -159,11 +159,6 @@ public sealed partial class SpreadsheetXmlFileAdapter
         var reference = range.Start == range.End
             ? range.Start.ToA1()
             : $"{range.Start.ToA1()}:{range.End.ToA1()}";
-        return $"={QuoteSheetName(sheetName)}!{reference}";
+        return $"={SheetNameFormatter.QuoteIfNeeded(sheetName)}!{reference}";
     }
-
-    private static string QuoteSheetName(string sheetName) =>
-        sheetName.Any(ch => !char.IsLetterOrDigit(ch) && ch != '_')
-            ? $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'"
-            : sheetName;
 }

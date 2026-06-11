@@ -152,7 +152,7 @@ internal static class XlsxSparklineMapper
                 x14Ns + "sparklines",
                 sparklines.Select(sparkline => new XElement(
                     x14Ns + "sparkline",
-                    new XElement(xmNs + "f", $"{QuoteSheetName(sheet.Name)}!{sparkline.DataRange}"),
+                    new XElement(xmNs + "f", $"{SheetNameFormatter.QuoteIfNeeded(sheet.Name)}!{sparkline.DataRange}"),
                     new XElement(xmNs + "sqref", sparkline.Location.ToA1())))));
 
     private static string ToSparklineType(SparklineKind kind) =>
@@ -163,8 +163,4 @@ internal static class XlsxSparklineMapper
             _ => "line"
         };
 
-    private static string QuoteSheetName(string sheetName) =>
-        sheetName.Any(ch => char.IsWhiteSpace(ch) || ch == '\'')
-            ? $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'"
-            : sheetName;
 }

@@ -77,8 +77,7 @@ internal static class XlsxNamedRangeMapper
 
                 var startA1 = range.Start.ToA1();
                 var endA1 = range.End.ToA1();
-                var sheetName = sheet.Name.Replace("'", "''");
-                var address = $"'{sheetName}'!{startA1}:{endA1}";
+                var address = $"{SheetNameFormatter.QuoteIfNeeded(sheet.Name)}!{startA1}:{endA1}";
 
                 xlWorkbook.DefinedNames.Add(name, address);
             }

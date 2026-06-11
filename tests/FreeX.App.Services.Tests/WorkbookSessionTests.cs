@@ -2985,8 +2985,8 @@ public sealed class WorkbookSessionTests
         session.SelectedRange.Should().Be(new GridRange(d3, e3));
         session.IsDirty.Should().BeTrue();
         session.CanUndo.Should().BeTrue();
-        sheet.GetCell(d3)!.FormulaText.Should().Be("'Sheet1'!A1");
-        sheet.GetCell(e3)!.FormulaText.Should().Be("'Sheet1'!B1");
+        sheet.GetCell(d3)!.FormulaText.Should().Be("Sheet1!A1");
+        sheet.GetCell(e3)!.FormulaText.Should().Be("Sheet1!B1");
         workbook.GetStyle(sheet.GetCell(d3)!.StyleId).FontColor.Should().Be(new CellColor(0x21, 0x43, 0x65));
 
         var undo = session.UndoLastEdit();
@@ -3054,8 +3054,8 @@ public sealed class WorkbookSessionTests
         session.SelectedRange.Should().Be(new GridRange(d3, d4));
         sheet.GetValue(a1).Should().Be(new TextValue("first"));
         sheet.GetValue(b1).Should().Be(new TextValue("second"));
-        sheet.GetCell(d3)!.FormulaText.Should().Be("'Sheet1'!A1");
-        sheet.GetCell(d4)!.FormulaText.Should().Be("'Sheet1'!B1");
+        sheet.GetCell(d3)!.FormulaText.Should().Be("Sheet1!A1");
+        sheet.GetCell(d4)!.FormulaText.Should().Be("Sheet1!B1");
         sheet.ColumnWidths[4].Should().Be(22);
         sheet.ColumnWidths.Should().NotContainKey(5);
 
@@ -3510,10 +3510,10 @@ public sealed class WorkbookSessionTests
         result.AffectedCells.Should().Equal(summaryD3, summaryE3, detailsD3, detailsE3);
         session.SelectedRange.Should().Be(new GridRange(summaryD3, summaryE3));
         session.IsWorkbookGrouped.Should().BeTrue();
-        summary.GetCell(summaryD3)!.FormulaText.Should().Be("'Sheet1'!A1");
-        summary.GetCell(summaryE3)!.FormulaText.Should().Be("'Sheet1'!B1");
-        details.GetCell(detailsD3)!.FormulaText.Should().Be("'Sheet1'!A1");
-        details.GetCell(detailsE3)!.FormulaText.Should().Be("'Sheet1'!B1");
+        summary.GetCell(summaryD3)!.FormulaText.Should().Be("Sheet1!A1");
+        summary.GetCell(summaryE3)!.FormulaText.Should().Be("Sheet1!B1");
+        details.GetCell(detailsD3)!.FormulaText.Should().Be("Sheet1!A1");
+        details.GetCell(detailsE3)!.FormulaText.Should().Be("Sheet1!B1");
         details.GetCell(detailsD3)!.StyleId.Should().Be(detailsStyle);
         hidden.GetValue(hiddenD3).Should().Be(new TextValue("hidden"));
 

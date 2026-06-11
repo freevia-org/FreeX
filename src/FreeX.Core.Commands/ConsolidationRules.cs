@@ -70,15 +70,7 @@ internal static class ConsolidationRules
             return reference;
 
         var sheetName = workbook.GetSheet(address.Sheet)?.Name ?? "Sheet";
-        return $"{QuoteSheetName(sheetName)}!{reference}";
-    }
-
-    private static string QuoteSheetName(string sheetName)
-    {
-        var escaped = sheetName.Replace("'", "''", StringComparison.Ordinal);
-        return sheetName.Any(ch => !char.IsLetterOrDigit(ch) && ch != '_')
-            ? $"'{escaped}'"
-            : escaped;
+        return $"{SheetNameFormatter.QuoteIfNeeded(sheetName)}!{reference}";
     }
 
     private static double StandardDeviation(IReadOnlyList<double> values, bool sample) =>
