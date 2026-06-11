@@ -118,6 +118,40 @@ public class GroupCommandTests
     }
 
     [Fact]
+    public void SetRowOutlineGroupCollapsed_CollapsesOnlyRequestedRangeAndReverts()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        new GroupRowsCommand(sheet.Id, 8, 9, 1).Apply(ctx);
+
+        var command = new SetRowOutlineGroupCollapsedCommand(sheet.Id, 2, 4, 1, collapsed: true);
+        command.Apply(ctx);
+
+        sheet.GroupHiddenRows.Should().BeEquivalentTo([2u, 3u, 4u]);
+        sheet.GroupHiddenRows.Should().NotContain(8u);
+
+        command.Revert(ctx);
+
+        sheet.GroupHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SetRowOutlineGroupCollapsed_ExpandsRequestedNestedLevelOnly()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 5, 1).Apply(ctx);
+        new GroupRowsCommand(sheet.Id, 3, 4, 2).Apply(ctx);
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 2, 5, 1, collapsed: true).Apply(ctx);
+
+        var command = new SetRowOutlineGroupCollapsedCommand(sheet.Id, 3, 4, 2, collapsed: false);
+        command.Apply(ctx);
+
+        sheet.GroupHiddenRows.Should().Contain(2u).And.Contain(5u);
+        sheet.GroupHiddenRows.Should().NotContain(3u);
+        sheet.GroupHiddenRows.Should().NotContain(4u);
+    }
+
+    [Fact]
     public void ExpandRows_RejectsProtectedSheetWithoutFormatRowsPermission()
     {
         var (_, sheet, ctx) = Setup();
@@ -241,6 +275,24 @@ public class GroupCommandTests
         new ExpandColGroupCommand(sheet.Id, 1).Apply(ctx);
         sheet.GroupHiddenCols.Should().NotContain(2);
         sheet.IsColEffectivelyHidden(2).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetColumnOutlineGroupCollapsed_CollapsesOnlyRequestedRangeAndReverts()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupColumnsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        new GroupColumnsCommand(sheet.Id, 8, 9, 1).Apply(ctx);
+
+        var command = new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 2, 4, 1, collapsed: true);
+        command.Apply(ctx);
+
+        sheet.GroupHiddenCols.Should().BeEquivalentTo([2u, 3u, 4u]);
+        sheet.GroupHiddenCols.Should().NotContain(8u);
+
+        command.Revert(ctx);
+
+        sheet.GroupHiddenCols.Should().BeEmpty();
     }
 
     [Fact]

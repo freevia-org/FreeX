@@ -78,7 +78,16 @@ public sealed record ViewportModel(
     IReadOnlyList<OverlayPrimitive> Overlays = null!,
     SplitPaneState? SplitPanes = null,
     IReadOnlyList<ChartDataCell> ChartDataCells = null!,
-    IReadOnlyList<DrawingObjectBounds> DrawingObjects = null!);
+    IReadOnlyList<DrawingObjectBounds> DrawingObjects = null!,
+    IReadOnlyList<OutlineGroupRange> RowOutlineGroups = null!,
+    IReadOnlyList<OutlineGroupRange> ColumnOutlineGroups = null!);
+
+public sealed record OutlineGroupRange(
+    int Level,
+    uint Start,
+    uint End,
+    uint ToggleIndex,
+    bool IsCollapsed);
 
 public sealed record ChartDataCell(
     SheetId SheetId,
