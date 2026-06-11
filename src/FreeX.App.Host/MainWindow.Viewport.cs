@@ -375,6 +375,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is not null)
         {
+            SyncWorkbookActiveSheetIndex();
             SyncZoomFromSheet(sheet.ZoomPercent);
             SyncPageLayoutScaleToFitControls(sheet);
         }
@@ -389,6 +390,11 @@ public partial class MainWindow
             leftCol,
             CellAddress.MaxCol,
             SheetGrid.Viewport is null ? 15 : (uint)CountScrollableColumns(SheetGrid.Viewport, sheet));
+        if (sheet is not null)
+        {
+            sheet.ViewTopRow = topRow;
+            sheet.ViewLeftCol = leftCol;
+        }
 
         var rowHeaderWidth = SheetGrid.ActualRowHeaderWidth;
         var viewport = CreateViewport(sheet, topRow, leftCol, rowHeaderWidth);
@@ -477,11 +483,16 @@ public partial class MainWindow
         SheetGrid.RowPageBreaks = sheet?.RowPageBreaks;
         SheetGrid.ColumnPageBreaks = sheet?.ColumnPageBreaks;
         SheetGrid.PrintArea = sheet?.PrintArea;
+        SheetGrid.PagePreviewRange = CalculatePagePreviewRange(sheet, viewport);
         SheetGrid.SplitRow = sheet?.SplitRow;
         SheetGrid.SplitColumn = sheet?.SplitColumn;
         SheetGrid.PageMargins = sheet?.PageMargins ?? WorksheetPageMargins.Narrow;
         SheetGrid.PageOrientation = sheet?.PageOrientation ?? WorksheetPageOrientation.Portrait;
         SheetGrid.PaperSize = sheet?.PaperSize ?? WorksheetPaperSize.A4;
+        SheetGrid.PageOrder = sheet?.PageOrder ?? WorksheetPageOrder.DownThenOver;
+        SheetGrid.ScaleToFit = sheet?.ScaleToFit ?? WorksheetScaleToFit.Default;
+        SheetGrid.PrintTitleRows = sheet?.PrintTitleRows;
+        SheetGrid.PrintTitleColumns = sheet?.PrintTitleColumns;
 
         // Adjust scrollbar range to the used data range + buffer, thumb to visible area
         UpdateScrollbarMaximums(sheet);
@@ -646,6 +657,45 @@ public partial class MainWindow
         return new SplitPaneViewportOffsets(
             sheet.SplitColumn.HasValue ? offsets?.TopRightLeftCol ?? leftCol : null,
             sheet.SplitRow.HasValue ? offsets?.BottomLeftTopRow ?? topRow : null);
+    }
+
+    private static GridRange? CalculatePagePreviewRange(Sheet? sheet, ViewportModel viewport)
+    {
+        if (sheet is null || sheet.PrintArea is not null)
+            return null;
+
+        var usedRange = sheet.GetUsedRange();
+        if (viewport.RowMetrics.Count == 0 || viewport.ColMetrics.Count == 0)
+            return usedRange;
+
+        var firstRow = uint.MaxValue;
+        var lastRow = 0u;
+        foreach (var row in viewport.RowMetrics)
+        {
+            firstRow = Math.Min(firstRow, row.Row);
+            lastRow = Math.Max(lastRow, row.Row);
+        }
+
+        var firstColumn = uint.MaxValue;
+        var lastColumn = 0u;
+        foreach (var column in viewport.ColMetrics)
+        {
+            firstColumn = Math.Min(firstColumn, column.Col);
+            lastColumn = Math.Max(lastColumn, column.Col);
+        }
+
+        if (firstRow == uint.MaxValue || firstColumn == uint.MaxValue || lastRow == 0 || lastColumn == 0)
+            return usedRange;
+
+        return new GridRange(
+            new CellAddress(
+                sheet.Id,
+                Math.Min(usedRange?.Start.Row ?? firstRow, firstRow),
+                Math.Min(usedRange?.Start.Col ?? firstColumn, firstColumn)),
+            new CellAddress(
+                sheet.Id,
+                Math.Max(usedRange?.End.Row ?? lastRow, lastRow),
+                Math.Max(usedRange?.End.Col ?? lastColumn, lastColumn)));
     }
 
     private static int CountScrollableRows(ViewportModel viewport, Sheet? sheet)

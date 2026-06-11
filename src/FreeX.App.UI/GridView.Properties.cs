@@ -358,6 +358,15 @@ public partial class GridView
         set => SetValue(PrintAreaProperty, value);
     }
 
+    public static readonly DependencyProperty PagePreviewRangeProperty =
+        DependencyProperty.Register(nameof(PagePreviewRange), typeof(GridRange?), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public GridRange? PagePreviewRange
+    {
+        get => (GridRange?)GetValue(PagePreviewRangeProperty);
+        set => SetValue(PagePreviewRangeProperty, value);
+    }
+
     public static readonly DependencyProperty SplitRowProperty =
         DependencyProperty.Register(nameof(SplitRow), typeof(uint?), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -401,6 +410,42 @@ public partial class GridView
     {
         get => (WorksheetPaperSize)GetValue(PaperSizeProperty);
         set => SetValue(PaperSizeProperty, value);
+    }
+
+    public static readonly DependencyProperty PageOrderProperty =
+        DependencyProperty.Register(nameof(PageOrder), typeof(WorksheetPageOrder), typeof(GridView),
+            new FrameworkPropertyMetadata(WorksheetPageOrder.DownThenOver, FrameworkPropertyMetadataOptions.AffectsRender));
+    public WorksheetPageOrder PageOrder
+    {
+        get => (WorksheetPageOrder)GetValue(PageOrderProperty);
+        set => SetValue(PageOrderProperty, value);
+    }
+
+    public static readonly DependencyProperty ScaleToFitProperty =
+        DependencyProperty.Register(nameof(ScaleToFit), typeof(WorksheetScaleToFit), typeof(GridView),
+            new FrameworkPropertyMetadata(WorksheetScaleToFit.Default, FrameworkPropertyMetadataOptions.AffectsRender));
+    public WorksheetScaleToFit ScaleToFit
+    {
+        get => (WorksheetScaleToFit)GetValue(ScaleToFitProperty);
+        set => SetValue(ScaleToFitProperty, value);
+    }
+
+    public static readonly DependencyProperty PrintTitleRowsProperty =
+        DependencyProperty.Register(nameof(PrintTitleRows), typeof(WorksheetRepeatRange?), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public WorksheetRepeatRange? PrintTitleRows
+    {
+        get => (WorksheetRepeatRange?)GetValue(PrintTitleRowsProperty);
+        set => SetValue(PrintTitleRowsProperty, value);
+    }
+
+    public static readonly DependencyProperty PrintTitleColumnsProperty =
+        DependencyProperty.Register(nameof(PrintTitleColumns), typeof(WorksheetRepeatRange?), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public WorksheetRepeatRange? PrintTitleColumns
+    {
+        get => (WorksheetRepeatRange?)GetValue(PrintTitleColumnsProperty);
+        set => SetValue(PrintTitleColumnsProperty, value);
     }
 
     // ClipboardRange: when set, draws marching ants around this range

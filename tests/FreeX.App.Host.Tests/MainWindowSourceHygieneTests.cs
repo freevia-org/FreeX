@@ -38,6 +38,24 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void UpdateViewport_SyncsWorkbookViewStateAndPagePreviewInputs()
+    {
+        var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
+        var sheetTabsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
+
+        viewportSource.Should().Contain("SyncWorkbookActiveSheetIndex();");
+        viewportSource.Should().Contain("sheet.ViewTopRow = topRow;");
+        viewportSource.Should().Contain("sheet.ViewLeftCol = leftCol;");
+        viewportSource.Should().Contain("SheetGrid.PagePreviewRange = CalculatePagePreviewRange(sheet, viewport);");
+        viewportSource.Should().Contain("SheetGrid.PageOrder = sheet?.PageOrder ?? WorksheetPageOrder.DownThenOver;");
+        viewportSource.Should().Contain("SheetGrid.ScaleToFit = sheet?.ScaleToFit ?? WorksheetScaleToFit.Default;");
+        viewportSource.Should().Contain("SheetGrid.PrintTitleRows = sheet?.PrintTitleRows;");
+        viewportSource.Should().Contain("SheetGrid.PrintTitleColumns = sheet?.PrintTitleColumns;");
+        sheetTabsSource.Should().Contain("private void SyncWorkbookActiveSheetIndex()");
+        sheetTabsSource.Should().Contain("private bool TrySelectWorkbookActiveSheet()");
+    }
+
+    [Fact]
     public void LiveUiE2eAppProcessLaunch_IsCentralizedInSharedHarness()
     {
         var testsDirectory = new DirectoryInfo(WorkspaceFileLocator.FindAppHostTestsDirectory());

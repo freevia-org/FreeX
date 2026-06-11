@@ -161,6 +161,22 @@ public sealed class DrawCommandSourceTests
     }
 
     [Fact]
+    public void DrawShapeFormatting_RemembersCurrentShapeFillAndOutlineForFutureInsertions()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs", "MainWindow.Drawing.cs");
+
+        source.Should().Contain("private CellColor? _currentShapeFillColor;");
+        source.Should().Contain("private CellColor? _currentShapeOutlineColor;");
+        source.Should().Contain("fillColor: ResolveCurrentShapeFillColor()");
+        source.Should().Contain("outlineColor: ResolveCurrentShapeOutlineColor()");
+        source.Should().Contain("RememberCurrentShapeColor(target.Kind, isFill, color);");
+        source.Should().Contain("target.FillThemeColor?.Resolve(_workbook.Theme)");
+        source.Should().Contain("target.OutlineThemeColor?.Resolve(_workbook.Theme)");
+        source.Should().Contain("updateFill: isFill");
+        source.Should().Contain("updateOutline: !isFill");
+    }
+
+    [Fact]
     public void PictureCropDialog_RoutesThroughUndoableCropCommandWithoutGridCropHandles()
     {
         var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");

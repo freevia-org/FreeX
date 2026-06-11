@@ -26,10 +26,37 @@ public sealed class ShapeCommandTests
         sheet.DrawingShapes[0].Kind.Should().Be(kind);
         sheet.DrawingShapes[0].Width.Should().Be(120);
         sheet.DrawingShapes[0].Height.Should().Be(70);
+        sheet.DrawingShapes[0].FillColor.Should().Be(
+            DrawingShapeKindSupport.IsLineLike(kind) ? null : DrawingShapeModel.DefaultFillColor);
+        sheet.DrawingShapes[0].OutlineColor.Should().Be(DrawingShapeModel.DefaultOutlineColor);
 
         command.Revert(ctx);
 
         sheet.DrawingShapes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddDrawingShapeCommand_UsesRequestedInitialFillAndOutlineColors()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var anchor = new CellAddress(sheet.Id, 4, 2);
+        var fill = new CellColor(200, 210, 220);
+        var outline = new CellColor(30, 40, 50);
+
+        var command = new AddDrawingShapeCommand(
+            sheet.Id,
+            anchor,
+            DrawingShapeKind.Diamond,
+            fillColor: fill,
+            outlineColor: outline);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var shape = sheet.DrawingShapes.Should().ContainSingle().Subject;
+        shape.FillColor.Should().Be(fill);
+        shape.OutlineColor.Should().Be(outline);
     }
 
     [Fact]
@@ -348,6 +375,50 @@ public sealed class ShapeCommandTests
         command.Revert(ctx);
 
         shape.FillColor.Should().Be(new CellColor(10, 20, 30));
+        shape.GradientFillEndColor.Should().Be(new CellColor(200, 210, 220));
+        shape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.Vertical);
+    }
+
+    [Fact]
+    public void SetDrawingShapeColorsCommand_UpdatesOnlyRequestedColorSide()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            FillColor = new CellColor(10, 20, 30),
+            OutlineColor = new CellColor(40, 50, 60),
+            GradientFillEndColor = new CellColor(200, 210, 220),
+            GradientFillDirection = DrawingShapeGradientDirection.Vertical,
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25)
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var command = new SetDrawingShapeColorsCommand(
+            sheet.Id,
+            shape.Id,
+            null,
+            new CellColor(70, 80, 90),
+            updateFill: false,
+            updateOutline: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        shape.FillColor.Should().Be(new CellColor(10, 20, 30));
+        shape.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
+        shape.GradientFillEndColor.Should().Be(new CellColor(200, 210, 220));
+        shape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.Vertical);
+        shape.OutlineColor.Should().Be(new CellColor(70, 80, 90));
+        shape.OutlineThemeColor.Should().BeNull();
+
+        command.Revert(ctx);
+
+        shape.FillColor.Should().Be(new CellColor(10, 20, 30));
+        shape.OutlineColor.Should().Be(new CellColor(40, 50, 60));
+        shape.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
+        shape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
         shape.GradientFillEndColor.Should().Be(new CellColor(200, 210, 220));
         shape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.Vertical);
     }

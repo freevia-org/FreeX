@@ -494,7 +494,7 @@ public partial class MainWindow
         }
 
         _messageService.ShowInfo(action.SuccessMessage, action.Title);
-        RefreshSheetProtectionUi();
+        RefreshSheetTabs();
     }
 
     private bool TryConfirmSheetUnprotectPassword(Sheet sheet, out string? password) =>

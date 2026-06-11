@@ -547,9 +547,15 @@ public partial class GridView : FrameworkElement
     private static readonly Pen ResizeLinePen = MakeResizeLinePen();
     private static readonly Pen AutofillPreviewPen = MakeAutofillPreviewPen();
     private static readonly Pen FreezePen = MakeFreezePen();
-    private static readonly Brush PageBreakPreviewBrush = MakeBrushAlpha(28, 0, 103, 192);
+    private static readonly Brush PageBreakPreviewBrush = MakeBrushAlpha(46, 0, 103, 192);
+    private static readonly Brush PageBreakOutsideMaskBrush = MakeBrushAlpha(96, 188, 206, 228);
+    private static readonly Brush PageBreakWatermarkBrush = MakeBrushAlpha(92, 0, 103, 192);
+    private static readonly Brush PageLayoutPageSurfaceBrush = MakeBrushAlpha(42, 255, 255, 255);
     private static readonly Pen PageBreakPen = MakePageBreakPen();
+    private static readonly Pen PageBreakAutomaticPen = MakePageBreakAutomaticPen();
+    private static readonly Pen PageBreakPreviewPagePen = MakePageBreakPreviewPagePen();
     private static readonly Pen PageLayoutPen = MakePageLayoutPen();
+    private static readonly Pen PageLayoutHeaderFooterCuePen = MakePageLayoutHeaderFooterCuePen();
     private static readonly Pen PageMarginGuidePen = MakePageMarginGuidePen();
     private static readonly Pen PageMarginRulerHandlePen = MakePen(MakeBrush(75, 75, 75), 1);
     private static readonly Brush PageMarginRulerHandleBrush = MakeBrush(238, 238, 238);
@@ -705,9 +711,36 @@ public partial class GridView : FrameworkElement
         return pen;
     }
 
+    private static Pen MakePageBreakAutomaticPen()
+    {
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0, 103, 192)), 1.25)
+        {
+            DashStyle = new DashStyle([2.0, 3.0], 0)
+        };
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Pen MakePageBreakPreviewPagePen()
+    {
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0, 103, 192)), 1.5);
+        pen.Freeze();
+        return pen;
+    }
+
     private static Pen MakePageLayoutPen()
     {
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(128, 128, 128)), 1.5);
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Pen MakePageLayoutHeaderFooterCuePen()
+    {
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(156, 156, 156)), 1)
+        {
+            DashStyle = new DashStyle([4.0, 4.0], 0)
+        };
         pen.Freeze();
         return pen;
     }

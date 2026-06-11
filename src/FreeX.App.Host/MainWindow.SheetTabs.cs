@@ -53,6 +53,30 @@ public partial class MainWindow
         return -1;
     }
 
+    private void SyncWorkbookActiveSheetIndex()
+    {
+        var index = FindWorkbookSheetIndex(_currentSheetId);
+        if (index >= 0)
+            _workbook.ActiveSheetIndex = index;
+    }
+
+    private bool TrySelectWorkbookActiveSheet()
+    {
+        if (_workbook.ActiveSheetIndex is not { } index ||
+            index < 0 ||
+            index >= _workbook.Sheets.Count)
+        {
+            return false;
+        }
+
+        var sheet = _workbook.Sheets[index];
+        if (sheet.IsHidden)
+            return false;
+
+        SelectSingleSheetTab(sheet.Id);
+        return true;
+    }
+
     private IReadOnlyList<SheetId> GetVisibleSheetIds()
         => _workbook.Sheets.Where(sheet => !sheet.IsHidden).Select(sheet => sheet.Id).ToList();
 
@@ -503,6 +527,7 @@ public partial class MainWindow
         {
             tabHash.Add(tab.Id);
             tabHash.Add(tab.Name, StringComparer.Ordinal);
+            tabHash.Add(tab.IsProtected);
             if (tab.TabColor is { } color)
             {
                 tabHash.Add(color.R);
@@ -581,7 +606,10 @@ public partial class MainWindow
     }
 
     private static double EstimateSheetTabWidth(SheetTabViewModel tab)
-        => Math.Max(86, 54 + (tab.Name?.Length ?? 0) * 7.5);
+    {
+        var protectedIndicatorWidth = tab.IsProtected ? 16.0 : 0.0;
+        return Math.Max(86, 54 + protectedIndicatorWidth + (tab.Name?.Length ?? 0) * 7.5);
+    }
 
     private static double ResolveLayoutWidth(FrameworkElement element)
     {
@@ -735,6 +763,7 @@ public partial class MainWindow
             var tab = visibleTabs[i];
             tabHash.Add(tab.Id);
             tabHash.Add(tab.IsGrouped);
+            tabHash.Add(tab.IsProtected);
             tabHash.Add(tab.IsLeftSideCoveredByActive);
             tabHash.Add(tab.IsRightSideCoveredByActive);
             if (tab.TabColor is { } color)
@@ -858,10 +887,10 @@ public partial class MainWindow
         if (SheetTabsControl.ItemContainerGenerator.ContainerFromItem(tab) is not DependencyObject container)
             return null;
 
-        var label = FindVisualDescendant<TextBlock>(
+        var label = FindVisualDescendant<FrameworkElement>(
             container,
-            textBlock => ReferenceEquals(textBlock.DataContext, tab) &&
-                         string.Equals(textBlock.Text, tab.Name, StringComparison.Ordinal));
+            element => ReferenceEquals(element.DataContext, tab) &&
+                       string.Equals(element.Name, "SheetTabLabelContent", StringComparison.Ordinal));
         return label is { ActualWidth: > 0, ActualHeight: > 0 }
             ? SheetTabsLayerBounds(label)
             : null;

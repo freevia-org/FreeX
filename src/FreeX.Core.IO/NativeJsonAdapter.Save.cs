@@ -91,6 +91,9 @@ public sealed partial class NativeJsonAdapter
                     Id = view.Id,
                     IncludePrintSettings = view.IncludePrintSettings,
                     IncludeHiddenRowsColumnsAndFilterSettings = view.IncludeHiddenRowsColumnsAndFilterSettings,
+                    ActiveSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(
+                        view.ActiveSheetIndex,
+                        Math.Max(0, workbook.Sheets.Count - 1)),
                     Sheets = (view.Sheets ?? [])
                         .OfType<WorksheetCustomViewState>()
                         .Select(ToCustomViewSheetDto)

@@ -16,7 +16,9 @@ public sealed class AddDrawingShapeCommand : IWorkbookCommand
         CellAddress anchor,
         DrawingShapeKind kind,
         double width = 120,
-        double height = 70)
+        double height = 70,
+        CellColor? fillColor = null,
+        CellColor? outlineColor = null)
     {
         _sheetId = sheetId;
         _shape = new DrawingShapeModel
@@ -24,7 +26,11 @@ public sealed class AddDrawingShapeCommand : IWorkbookCommand
             Anchor = anchor,
             Kind = kind,
             Width = width,
-            Height = height
+            Height = height,
+            FillColor = DrawingShapeKindSupport.IsLineLike(kind)
+                ? null
+                : fillColor ?? DrawingShapeModel.DefaultFillColor,
+            OutlineColor = outlineColor ?? DrawingShapeModel.DefaultOutlineColor
         };
     }
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using FreeX.Core.Model;
@@ -314,23 +315,112 @@ public partial class GridView
     {
         if (Viewport == null || WorksheetViewMode == WorksheetViewMode.Normal) return;
 
+        var logicalWidth = GetLogicalViewportWidth();
+        var logicalHeight = GetLogicalViewportHeight();
+        var previewRange = PrintArea ?? PagePreviewRange;
+        var layout = previewRange is { } range
+            ? PageBreakPreviewLayoutPlanner.Calculate(
+                Viewport,
+                range,
+                RowPageBreaks,
+                ColumnPageBreaks,
+                PageOrder,
+                ScaleToFit,
+                PrintTitleRows,
+                PrintTitleColumns,
+                PaperSize,
+                PageOrientation,
+                PageMargins,
+                ActualRowHeaderWidth,
+                EffectiveColHeaderHeight,
+                logicalWidth,
+                logicalHeight)
+            : new PageBreakPreviewLayout([], [], []);
+
         if (WorksheetViewMode == WorksheetViewMode.PageBreakPreview)
         {
             dc.DrawRectangle(PageBreakPreviewBrush, null,
                 new Rect(ActualRowHeaderWidth, EffectiveColHeaderHeight,
-                    Math.Max(0, ActualWidth - ActualRowHeaderWidth),
-                    Math.Max(0, ActualHeight - EffectiveColHeaderHeight)));
+                    Math.Max(0, logicalWidth - ActualRowHeaderWidth),
+                    Math.Max(0, logicalHeight - EffectiveColHeaderHeight)));
+
+            RenderPageBreakPreviewLayout(dc, layout);
+        }
+        else if (WorksheetViewMode == WorksheetViewMode.PageLayout)
+        {
+            RenderPageLayoutPages(dc, layout);
         }
 
-        if (PrintArea is { } printArea)
+        if (previewRange is { } pageRange)
         {
-            RenderPrintAreaBoundary(dc, printArea,
-                WorksheetViewMode == WorksheetViewMode.PageLayout ? PageLayoutPen : PageBreakPen);
+            RenderPrintAreaBoundary(dc, pageRange,
+                WorksheetViewMode == WorksheetViewMode.PageLayout ? PageLayoutPen : PageBreakPreviewPagePen);
             if (WorksheetViewMode == WorksheetViewMode.PageLayout)
-                RenderPageMarginGuides(dc, printArea);
+                RenderPageMarginGuides(dc, pageRange);
         }
 
         RenderManualPageBreaks(dc);
+    }
+
+    private void RenderPageBreakPreviewLayout(DrawingContext dc, PageBreakPreviewLayout layout)
+    {
+        foreach (var mask in layout.OutsidePrintAreaMasks)
+            dc.DrawRectangle(PageBreakOutsideMaskBrush, null, mask);
+
+        foreach (var page in layout.Pages)
+        {
+            dc.DrawRectangle(null, PageBreakPreviewPagePen, page.Bounds);
+            DrawPageBreakWatermark(dc, page);
+        }
+
+        foreach (var line in layout.AutomaticBreakLines)
+            dc.DrawLine(PageBreakAutomaticPen, line.Start, line.End);
+    }
+
+    private void RenderPageLayoutPages(DrawingContext dc, PageBreakPreviewLayout layout)
+    {
+        foreach (var page in layout.Pages)
+        {
+            dc.DrawRectangle(PageLayoutPageSurfaceBrush, PageLayoutPen, page.Bounds);
+            DrawPageLayoutHeaderFooterCues(dc, page.Bounds);
+        }
+
+        foreach (var line in layout.AutomaticBreakLines)
+            dc.DrawLine(PageBreakAutomaticPen, line.Start, line.End);
+    }
+
+    private void DrawPageBreakWatermark(DrawingContext dc, PageBreakPreviewPageLayout page)
+    {
+        if (page.Bounds.Width <= 8 || page.Bounds.Height <= 8)
+            return;
+
+        var text = new FormattedText(
+            $"Page {page.PageNumber}",
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            DefaultTypeface,
+            PageBreakPreviewLayoutPlanner.CalculateWatermarkFontSize(page.Bounds),
+            PageBreakWatermarkBrush,
+            VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        text.SetFontWeight(FontWeights.Bold);
+
+        dc.DrawText(
+            text,
+            new Point(
+                page.Bounds.Left + Math.Max(0, (page.Bounds.Width - text.Width) / 2.0),
+                page.Bounds.Top + Math.Max(0, (page.Bounds.Height - text.Height) / 2.0)));
+    }
+
+    private void DrawPageLayoutHeaderFooterCues(DrawingContext dc, Rect pageBounds)
+    {
+        if (!ShowRulers || pageBounds.Width <= 24 || pageBounds.Height <= 48)
+            return;
+
+        var inset = Math.Min(28.0, Math.Max(12.0, pageBounds.Width * 0.08));
+        var headerY = pageBounds.Top + Math.Min(28.0, Math.Max(16.0, pageBounds.Height * 0.08));
+        var footerY = pageBounds.Bottom - Math.Min(28.0, Math.Max(16.0, pageBounds.Height * 0.08));
+        dc.DrawLine(PageLayoutHeaderFooterCuePen, new Point(pageBounds.Left + inset, headerY), new Point(pageBounds.Right - inset, headerY));
+        dc.DrawLine(PageLayoutHeaderFooterCuePen, new Point(pageBounds.Left + inset, footerY), new Point(pageBounds.Right - inset, footerY));
     }
 
     private void RenderPageMarginGuides(DrawingContext dc, GridRange printArea)
@@ -388,8 +478,8 @@ public partial class GridView
         var (top, left, bottom, right) = GetRangePixels(Viewport, printArea);
         var drawTop = top ?? EffectiveColHeaderHeight;
         var drawLeft = left ?? ActualRowHeaderWidth;
-        var drawBottom = bottom ?? ActualHeight;
-        var drawRight = right ?? ActualWidth;
+        var drawBottom = bottom ?? GetLogicalViewportHeight();
+        var drawRight = right ?? GetLogicalViewportWidth();
 
         dc.DrawRectangle(null, pen, new Rect(
             new Point(drawLeft, drawTop),
@@ -409,7 +499,7 @@ public partial class GridView
                     continue;
 
                 var y = metric.TopOffset + EffectiveColHeaderHeight;
-                dc.DrawLine(PageBreakPen, new Point(ActualRowHeaderWidth, y), new Point(ActualWidth, y));
+                dc.DrawLine(PageBreakPen, new Point(ActualRowHeaderWidth, y), new Point(GetLogicalViewportWidth(), y));
             }
         }
 
@@ -422,7 +512,7 @@ public partial class GridView
                     continue;
 
                 var x = metric.LeftOffset + ActualRowHeaderWidth;
-                dc.DrawLine(PageBreakPen, new Point(x, EffectiveColHeaderHeight), new Point(x, ActualHeight));
+                dc.DrawLine(PageBreakPen, new Point(x, EffectiveColHeaderHeight), new Point(x, GetLogicalViewportHeight()));
             }
         }
     }

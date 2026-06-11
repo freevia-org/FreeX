@@ -543,7 +543,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     states,
                     customView.Id,
                     customView.IncludePrintSettings,
-                    customView.IncludeHiddenRowsColumnsAndFilterSettings));
+                    customView.IncludeHiddenRowsColumnsAndFilterSettings,
+                    customView.ActiveSheetIndex is >= 0 && customView.ActiveSheetIndex < workbook.Sheets.Count
+                        ? customView.ActiveSheetIndex
+                        : null));
         }
 
         SourcePackages.Remove(workbook);

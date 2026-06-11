@@ -405,7 +405,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 sheets,
                 string.IsNullOrWhiteSpace(viewDto.Id) ? null : viewDto.Id,
                 viewDto.IncludePrintSettings ?? true,
-                viewDto.IncludeHiddenRowsColumnsAndFilterSettings ?? true));
+                viewDto.IncludeHiddenRowsColumnsAndFilterSettings ?? true,
+                NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(
+                    viewDto.ActiveSheetIndex,
+                    Math.Max(0, workbook.Sheets.Count - 1))));
         }
 
         foreach (var watchDto in dto.WatchedCells ?? [])

@@ -1002,8 +1002,13 @@ public partial class FileAdapterSmokeTests
                 ShowHeadings: false,
                 ShowRulers: false,
                 ZoomPercent: 125,
-                ShowFormulas: true)],
-            "{11111111-1111-1111-1111-111111111111}"));
+                ShowFormulas: true,
+                ActiveRow: 12,
+                ActiveCol: 4,
+                ViewTopRow: 9,
+                ViewLeftCol: 3)],
+            "{11111111-1111-1111-1111-111111111111}",
+            ActiveSheetIndex: 0));
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -1015,6 +1020,7 @@ public partial class FileAdapterSmokeTests
         var view = loaded.CustomViews.Should().ContainSingle().Subject;
         view.Name.Should().Be("Review");
         view.Id.Should().Be("{11111111-1111-1111-1111-111111111111}");
+        view.ActiveSheetIndex.Should().Be(0);
         var state = view.Sheets.Should().ContainSingle().Subject;
         state.SheetName.Should().Be("Sheet1");
         state.ViewMode.Should().Be(WorksheetViewMode.PageLayout);
@@ -1023,6 +1029,10 @@ public partial class FileAdapterSmokeTests
         state.ShowRulers.Should().BeFalse();
         state.ZoomPercent.Should().Be(125);
         state.ShowFormulas.Should().BeTrue();
+        state.ActiveRow.Should().Be(12);
+        state.ActiveCol.Should().Be(4);
+        state.ViewTopRow.Should().Be(9);
+        state.ViewLeftCol.Should().Be(3);
         state.FrozenRows.Should().Be(0);
         state.SplitColumn.Should().Be(3);
     }

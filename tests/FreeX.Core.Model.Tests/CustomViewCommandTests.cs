@@ -17,8 +17,13 @@ public sealed class CustomViewCommandTests
         sheet.ShowRulers = false;
         sheet.ZoomPercent = 125;
         sheet.ShowFormulas = true;
+        sheet.ActiveRow = 12;
+        sheet.ActiveCol = 4;
+        sheet.ViewTopRow = 10;
+        sheet.ViewLeftCol = 3;
         sheet.FrozenRows = 1;
         sheet.SplitColumn = 3;
+        workbook.ActiveSheetIndex = 0;
         var ctx = new TestCommandContext(workbook);
 
         var command = new SaveCustomViewCommand("Audit View");
@@ -27,6 +32,7 @@ public sealed class CustomViewCommandTests
 
         var view = workbook.CustomViews.Should().ContainSingle().Subject;
         view.Name.Should().Be("Audit View");
+        view.ActiveSheetIndex.Should().Be(0);
         var state = view.Sheets.Should().ContainSingle().Subject;
         state.SplitColumn.Should().BeNull();
         state.ShowGridlines.Should().BeFalse();
@@ -34,12 +40,59 @@ public sealed class CustomViewCommandTests
         state.ShowRulers.Should().BeFalse();
         state.ZoomPercent.Should().Be(125);
         state.ShowFormulas.Should().BeTrue();
+        state.ActiveRow.Should().Be(12);
+        state.ActiveCol.Should().Be(4);
+        state.ViewTopRow.Should().Be(10);
+        state.ViewLeftCol.Should().Be(3);
         state.SplitRow.Should().BeNull();
         state.SplitColumn.Should().BeNull();
 
         command.Revert(ctx);
 
         workbook.CustomViews.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ApplyCustomViewCommand_RestoresActiveSheetSelectionScrollAndUndo()
+    {
+        var workbook = new Workbook("test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("Sheet2");
+        workbook.ActiveSheetIndex = 1;
+        sheet2.ViewMode = WorksheetViewMode.PageLayout;
+        sheet2.ActiveRow = 22;
+        sheet2.ActiveCol = 6;
+        sheet2.ViewTopRow = 18;
+        sheet2.ViewLeftCol = 4;
+        new SaveCustomViewCommand("Saved").Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+
+        workbook.ActiveSheetIndex = 0;
+        sheet1.ViewMode = WorksheetViewMode.PageBreakPreview;
+        sheet2.ViewMode = WorksheetViewMode.Normal;
+        sheet2.ActiveRow = 1;
+        sheet2.ActiveCol = 1;
+        sheet2.ViewTopRow = 1;
+        sheet2.ViewLeftCol = 1;
+        var command = new ApplyCustomViewCommand("Saved");
+
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+
+        workbook.ActiveSheetIndex.Should().Be(1);
+        sheet2.ViewMode.Should().Be(WorksheetViewMode.PageLayout);
+        sheet2.ActiveRow.Should().Be(22);
+        sheet2.ActiveCol.Should().Be(6);
+        sheet2.ViewTopRow.Should().Be(18);
+        sheet2.ViewLeftCol.Should().Be(4);
+
+        command.Revert(new TestCommandContext(workbook));
+
+        workbook.ActiveSheetIndex.Should().Be(0);
+        sheet1.ViewMode.Should().Be(WorksheetViewMode.PageBreakPreview);
+        sheet2.ViewMode.Should().Be(WorksheetViewMode.Normal);
+        sheet2.ActiveRow.Should().Be(1);
+        sheet2.ActiveCol.Should().Be(1);
+        sheet2.ViewTopRow.Should().Be(1);
+        sheet2.ViewLeftCol.Should().Be(1);
     }
 
     [Fact]
@@ -225,6 +278,7 @@ public sealed class CustomViewCommandTests
 
         source.Should().Contain("CustomViewStatePlanner.FindViewIndex(workbook, name)");
         source.Should().Contain("CustomViewStatePlanner.CaptureSheetState(sheet)");
+        source.Should().Contain("CustomViewStatePlanner.CaptureActiveSheetIndex(workbook)");
         source.Should().Contain("CustomViewStatePlanner.SanitizePaneState(state)");
         source.Should().Contain("CustomViewStatePlanner.CaptureWorkbookState(workbook)");
         source.Should().Contain("CustomViewStatePlanner.ApplyState(sheet, state)");
