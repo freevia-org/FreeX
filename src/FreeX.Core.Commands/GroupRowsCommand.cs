@@ -146,3 +146,64 @@ public sealed class ExpandRowGroupCommand : IWorkbookCommand
             sheet.GroupHiddenRows.Add(row);
     }
 }
+
+public sealed class SetRowOutlineGroupCollapsedCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly uint _startRow;
+    private readonly uint _endRow;
+    private readonly int _level;
+    private readonly bool _collapsed;
+    private Dictionary<uint, bool>? _previousHiddenStates;
+
+    public string Label => _collapsed ? "Collapse Row Group" : "Expand Row Group";
+
+    public SetRowOutlineGroupCollapsedCommand(SheetId sheetId, uint startRow, uint endRow, int level, bool collapsed)
+    {
+        OutlineGroupingService.ValidateOutlineLevel(level);
+        if (level == 0)
+            throw new ArgumentOutOfRangeException(nameof(level), "Outline level must be 1-8.");
+
+        _sheetId = sheetId;
+        _startRow = startRow;
+        _endRow = endRow;
+        _level = level;
+        _collapsed = collapsed;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
+            return protectedOutcome;
+
+        _previousHiddenStates = [];
+        foreach (var (row, level) in sheet.RowOutlineLevels)
+        {
+            if (row < _startRow || row > _endRow || level < _level)
+                continue;
+
+            _previousHiddenStates[row] = sheet.GroupHiddenRows.Contains(row);
+            if (_collapsed)
+                sheet.GroupHiddenRows.Add(row);
+            else
+                sheet.GroupHiddenRows.Remove(row);
+        }
+
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previousHiddenStates is null) return;
+
+        var sheet = ctx.GetSheet(_sheetId);
+        foreach (var (row, wasHidden) in _previousHiddenStates)
+        {
+            if (wasHidden)
+                sheet.GroupHiddenRows.Add(row);
+            else
+                sheet.GroupHiddenRows.Remove(row);
+        }
+    }
+}

@@ -274,6 +274,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.HeaderContextMenuRequested += OnGridHeaderContextMenuRequested;
         SheetGrid.AutoFilterDropdownRequested += OnAutoFilterDropdownRequested;
         SheetGrid.PivotHeaderDropdownRequested += OnPivotHeaderDropdownRequested;
+        SheetGrid.OutlineGroupToggleRequested += OnOutlineGroupToggleRequested;
         SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested;
         SheetGrid.WaterfallChartPointContextMenuRequested += OnWaterfallChartPointContextMenuRequested;
         SheetGrid.PageMarginsChanged += OnPageMarginsChanged;
