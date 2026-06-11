@@ -14760,6 +14760,19 @@ Saved XPS file:
 
 and {0} more.</value>
   </data>
+  <data name="MainWindowMessage_XlsxSaveWarningsBodyFormat" xml:space="preserve">
+    <value>Some features could not be saved to the file and may be missing:
+
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_XlsxSaveWarningsMoreFormat" xml:space="preserve">
+    <value>
+
+and {0} more.</value>
+  </data>
+  <data name="MainWindowMessage_FileSavedWithWarningsTitle" xml:space="preserve">
+    <value>File Saved with Warnings</value>
+  </data>
   <data name="MainWindowMessage_UnsupportedChartCommand" xml:space="preserve">
     <value>This chart command is not supported for the selected chart.</value>
   </data>
