@@ -30,11 +30,20 @@ public partial class App : Application
         AppLocalization.ApplyCurrentCultureToWpf();
         DialogSizing.RegisterAppDialogSizing();
 
-        // Configure Serilog
+        // Configure Serilog — resolve the log directory under LocalApplicationData so that
+        // file-association launches (which may use System32 or a read-only install dir as cwd)
+        // always write to a stable, writable location.  PlatformApplicationDataPathProvider.LocalInstance
+        // is a static singleton with no DI dependency, safe to call this early in startup.
+        var logDirectory = Path.Combine(
+            PlatformApplicationDataPathProvider.LocalInstance.GetApplicationDataDirectory(),
+            AppStoragePathPlanner.ProductDirectoryName,
+            "Logs");
+        Directory.CreateDirectory(logDirectory);
+        var logFilePath = Path.Combine(logDirectory, "FreeX-.log");
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .WriteTo.Console()
-            .WriteTo.File("logs/FreeX-.log",
+            .WriteTo.File(logFilePath,
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 7)
             .CreateLogger();
