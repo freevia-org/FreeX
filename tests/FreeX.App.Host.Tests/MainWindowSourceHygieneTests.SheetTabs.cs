@@ -513,9 +513,9 @@ public sealed partial class MainWindowSourceHygieneTests
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusSumText\"", StringComparison.Ordinal));
 
         gridStatusSource.Should().Contain("ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(stats))");
-        gridStatusSource.Should().Contain("SetTextIfChanged(StatusCountText, state.CountText)");
-        gridStatusSource.Should().Contain("SetTextIfChanged(StatusNumericalCountText, state.NumericalCountText)");
-        gridStatusSource.Should().Contain("SetTextIfChanged(StatusSumText, state.SumText)");
+        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusCountText, state.CountText");
+        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusNumericalCountText, state.NumericalCountText");
+        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusSumText, state.SumText");
         gridStatusSource.Should().Contain("_statusBarDisplayStateCache.GetReady(UiText.Get(\"MainWindow_Text_Ready\"))");
         DialogSourceTestSupport.ReadHostSources("StatusBarDisplayState.cs")
             .Should()
