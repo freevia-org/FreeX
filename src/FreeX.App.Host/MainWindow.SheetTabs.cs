@@ -304,6 +304,8 @@ public partial class MainWindow
             SelectSingleSheetTab(tab.Id);
         }
 
+        UpdateViewport();
+        RefreshSheetTabs();
         UpdateTitleBar();
     }
 
@@ -396,11 +398,11 @@ public partial class MainWindow
         element.RemoveHandler(UIElement.MouseRightButtonDownEvent, downHandler);
         element.RemoveHandler(UIElement.PreviewMouseRightButtonUpEvent, upHandler);
         element.RemoveHandler(UIElement.MouseRightButtonUpEvent, upHandler);
-        element.AddHandler(UIElement.PreviewMouseDownEvent, downHandler, true);
-        element.AddHandler(UIElement.PreviewMouseRightButtonDownEvent, downHandler, true);
-        element.AddHandler(UIElement.MouseRightButtonDownEvent, downHandler, true);
-        element.AddHandler(UIElement.PreviewMouseRightButtonUpEvent, upHandler, true);
-        element.AddHandler(UIElement.MouseRightButtonUpEvent, upHandler, true);
+        element.AddHandler(UIElement.PreviewMouseDownEvent, downHandler, handledEventsToo: true);
+        element.AddHandler(UIElement.PreviewMouseRightButtonDownEvent, downHandler, handledEventsToo: true);
+        element.AddHandler(UIElement.MouseRightButtonDownEvent, downHandler, handledEventsToo: true);
+        element.AddHandler(UIElement.PreviewMouseRightButtonUpEvent, upHandler, handledEventsToo: true);
+        element.AddHandler(UIElement.MouseRightButtonUpEvent, upHandler, handledEventsToo: true);
     }
 
     private void SheetNavButton_MouseRightButtonDown(object sender, MouseButtonEventArgs e)

@@ -101,7 +101,7 @@ public sealed class PivotSortOptionsDialog : Window
         _valueFieldBox.ItemsSource = _dataFields.Select(field => field.Name).ToList();
         _valueFieldBox.SelectedIndex = _dataFields.Count == 0 ? -1 : 0;
         AutomationProperties.SetAutomationId(_valueFieldBox, "PivotSortOptionsValueFieldBox");
-        AutomationProperties.SetHelpText(_valueFieldBox, "Choose the value field used for value sorting.");
+        AutomationProperties.SetHelpText(_valueFieldBox, UiText.Get("PivotSortOptions_ValueFieldHelpText"));
 
         foreach (var button in new[] { _labelAscendingButton, _labelDescendingButton, _valueAscendingButton, _valueDescendingButton })
         {

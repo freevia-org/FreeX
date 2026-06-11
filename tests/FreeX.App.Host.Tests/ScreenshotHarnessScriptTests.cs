@@ -24,7 +24,10 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain($"OutputNaming = \"{namingPattern}\"");
         script.Should().Contain($"CatalogEvidenceTarget = \"docs/testing/ui-test-catalog.md\"");
         script.Should().Contain("WidthSource = \"RibbonScreenshotTourPlanner.DefaultWidths\"");
-        script.Should().Contain("$plannedCaptureCount = $tabNames.Count * $widths.Count");
+        var plannedCaptureCountSource = scriptName == "screenshot_excel.ps1"
+            ? "$plannedCaptureCount = $script:availableTabNames.Count * $widths.Count"
+            : "$plannedCaptureCount = $tabNames.Count * $widths.Count";
+        script.Should().Contain(plannedCaptureCountSource);
         script.Should().Contain("PlannedCaptureCount = $plannedCaptureCount");
         script.Should().Contain("ActualCaptureCount = $files.Count");
         script.Should().Contain("CaptureStatus = \"complete\"");
@@ -52,7 +55,17 @@ public sealed class ScreenshotHarnessScriptTests
 
         script.Should().Contain("trap {");
         script.Should().Contain("$tabNames = @(\"Home\", \"Insert\", \"Draw\", \"Page Layout\", \"Formulas\", \"Data\", \"Review\", \"View\", \"Help\")");
-        script.Should().Contain("foreach ($tabName in $tabNames)");
+        if (scriptName == "screenshot_excel.ps1")
+        {
+            script.Should().Contain("foreach ($tabName in $script:requestedTabNames)");
+            script.Should().Contain("foreach ($tabName in $script:availableTabNames)");
+            script.Should().Contain("SkippedTabs = $script:skippedTabNames");
+            script.Should().Contain("SkippedCaptures = $skippedCaptures");
+        }
+        else
+        {
+            script.Should().Contain("foreach ($tabName in $tabNames)");
+        }
         script.Should().Contain("Transient popups, dropdowns, native dialogs, and context menus require separate guarded captures.");
         script.Should().Contain("Ribbon tab captures cover the top window band only.");
         script.Should().Contain("Global input and screen capture are blocked unless the expected process and window title own the foreground window.");
@@ -120,7 +133,10 @@ public sealed class ScreenshotHarnessScriptTests
 
         missingTabBranch.Success.Should().BeTrue($"{scriptName} should make missing planned tabs a hard failure");
         missingTabBranch.Groups["body"].Value.Should().Contain("Clear-ScreenshotEvidenceArtifacts");
-        missingTabBranch.Groups["body"].Value.Should().Contain("throw \"Ribbon screenshot tab '$tabName' was not found");
+        var expectedMessage = scriptName == "screenshot_excel.ps1"
+            ? "throw \"Ribbon screenshot tab '$tabName' was discovered during preflight but was not found during capture"
+            : "throw \"Ribbon screenshot tab '$tabName' was not found";
+        missingTabBranch.Groups["body"].Value.Should().Contain(expectedMessage);
         missingTabBranch.Groups["body"].Value.Should().NotContain("Write-Warning");
         missingTabBranch.Groups["body"].Value.Should().NotContain("return");
     }
@@ -284,7 +300,7 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain($"Get-ChildItem -LiteralPath $binRoot -Recurse -Filter \"{FreeXUiRun.AppExecutableName}\" -File");
         script.Should().Contain("Sort-Object LastWriteTimeUtc -Descending");
         script.Should().Contain("$exe = Resolve-FreeXExecutablePath $ExePath");
-        script.Should().Contain("$proc = Start-Process -FilePath $exe -PassThru");
+        script.Should().Contain("$proc = Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) -PassThru");
     }
 
     [Fact]
@@ -349,7 +365,7 @@ public sealed class ScreenshotHarnessScriptTests
 
         script.Should().Contain("Test-Path -LiteralPath $exe");
         script.Should().Contain("Excel executable was not found at $exe. Install Microsoft Excel or update tools\\screenshot_excel.ps1 before running this capture.");
-        script.Should().Contain("Start-Process -FilePath $exe -ArgumentList \"/e\"");
+        script.Should().Contain("Start-Process -FilePath $exe -ArgumentList @(\"/x\", \"/e\") -PassThru");
     }
 
     [Fact]

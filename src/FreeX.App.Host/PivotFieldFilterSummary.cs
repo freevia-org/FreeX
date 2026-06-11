@@ -61,7 +61,7 @@ public static class PivotFieldFilterSummary
     {
         var explicitItems = selectedItems.Where(IsExplicitSelection).ToList();
         if (explicitItems.Count == 0 || explicitItems.Count >= allItemCount)
-            return "No item filter";
+            return UiText.Get("PivotFieldFilter_NoItemFilter");
 
         return explicitItems.Count == 1
             ? $"Item filter: {Quote(explicitItems[0])}"
@@ -70,14 +70,14 @@ public static class PivotFieldFilterSummary
 
     public static string FormatLabelFilterSummary(PivotLabelFilterModel? filter) =>
         filter is null
-            ? "No label filter"
+            ? UiText.Get("PivotFieldFilter_NoLabelFilter")
             : $"Label filter: {FormatLabelFilter(filter)}";
 
     public static string FormatValueFilterSummary(
         PivotValueFilterModel? filter,
         IReadOnlyList<PivotDataFieldModel> dataFields) =>
         filter is null
-            ? "No value filter"
+            ? UiText.Get("PivotFieldFilter_NoValueFilter")
             : $"Value filter: {FormatValueFilter(filter, dataFields)}";
 
     public static string FormatOverallSummary(PivotFieldFilterState state)

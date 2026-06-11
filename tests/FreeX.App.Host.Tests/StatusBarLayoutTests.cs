@@ -577,6 +577,7 @@ public sealed class StatusBarLayoutTests
 
         public void CycleShellFocus(bool reverse)
         {
+            _window.Activate();
             _cycleShellFocus.Invoke(_window, [reverse]);
             PumpDispatcher();
         }
@@ -650,7 +651,8 @@ public sealed class StatusBarLayoutTests
                 [],
                 workbookRef,
                 workbook,
-                NullUserMessageService.Instance)
+                NullUserMessageService.Instance,
+                options: new FreeXOptions())
             {
                 WindowState = WindowState.Normal,
                 Width = 1280,
@@ -658,6 +660,7 @@ public sealed class StatusBarLayoutTests
             };
 
             window.Show();
+            window.Activate();
             if (window.FindName("FormulaBarBorder") is FrameworkElement formulaBarBorder)
                 formulaBarBorder.Visibility = Visibility.Visible;
             window.UpdateLayout();

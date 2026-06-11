@@ -2859,7 +2859,26 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard(options.Scenario, guard, "before-uia-rangevalue-set");
             }
 
-            rangePattern.SetValue(targetSliderValue);
+            try
+            {
+                rangePattern.SetValue(targetSliderValue);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ElementNotAvailableException or TimeoutException or COMException)
+            {
+                var candidate = string.Empty;
+                try
+                {
+                    candidate = slider.Current.Name ?? string.Empty;
+                }
+                catch (Exception candidateEx) when (candidateEx is InvalidOperationException or ElementNotAvailableException or COMException)
+                {
+                }
+
+                var suffix = string.IsNullOrWhiteSpace(candidate)
+                    ? string.Empty
+                    : $" Last UIA candidate was '{candidate}'.";
+                return CaptureResult.Blocked(options.Scenario, "uia-rangevalue-set-failed", $"Could not set the Zoom slider RangeValue to {targetSliderValue:0.###}: {ex.GetType().Name}: {ex.Message}.{suffix}", options.OutputRoot, "freex", guard);
+            }
             Thread.Sleep(options.AfterInputDelay);
 
             return ValidateZoomSliderValue(handle, targetSliderValue, $"native UIA RangeValue.SetValue({targetSliderValue:0.###})");

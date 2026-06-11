@@ -7,7 +7,7 @@ public sealed class SheetTabViewModel(SheetId id, string name, CellColor? tabCol
     public SheetId Id { get; } = id;
     public CellColor? TabColor { get; } = tabColor;
     public bool IsProtected { get; } = isProtected;
-    public string AutomationName => IsProtected ? $"{Name} (protected sheet)" : Name;
+    public string AutomationName => IsProtected ? UiText.Format("SheetTab_ProtectedSheetAutomationNameFormat", Name) : Name;
     public System.Windows.Media.Brush TabBrush => TabColor is { } color
         ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(color.R, color.G, color.B))
         : System.Windows.Media.Brushes.Transparent;

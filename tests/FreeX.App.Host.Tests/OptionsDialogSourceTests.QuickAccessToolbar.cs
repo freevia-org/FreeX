@@ -340,13 +340,7 @@ public sealed partial class OptionsDialogSourceTests
 
 
 
-                var removeKey = CreateKeyDownEvent(dialog, Key.Delete);
-
-                selectedList.RaiseEvent(removeKey);
-
-
-
-                removeKey.Handled.Should().BeTrue();
+                InvokeQuickAccessSelectedKeyHandler(dialog, Key.Delete, ModifierKeys.None).Should().BeTrue();
 
                 GetListDisplayNames(availableList).Should().Equal("Bold");
 

@@ -15823,4 +15823,53 @@ et {0} plus.</value>
   </data>
   <data name="MainWindowMessage_FlashFillTitle" xml:space="preserve">
     <value>Flash Fill</value>
-  </data></root>
+  </data>
+  <data name="PivotSortOptions_ValueFieldHelpText" xml:space="preserve">
+    <value>Choose the value field used for value sorting.</value>
+  </data>
+  <data name="SheetTab_ProtectedSheetIconAutomationName" xml:space="preserve">
+    <value>Protected sheet</value>
+  </data>
+  <data name="SheetTab_ProtectedSheetAutomationNameFormat" xml:space="preserve">
+    <value>{0} (protected sheet)</value>
+  </data>
+  <data name="PivotFieldFilter_NoLabelFilter" xml:space="preserve">
+    <value>No label filter</value>
+  </data>
+  <data name="PivotFieldFilter_NoValueFilter" xml:space="preserve">
+    <value>No value filter</value>
+  </data>
+  <data name="PivotFieldFilter_NoItemFilter" xml:space="preserve">
+    <value>No item filter</value>
+  </data>
+  <data name="PivotFieldFilter_ClearFiltersFromThisField" xml:space="preserve">
+    <value>Clear Filters from This Field</value>
+  </data>
+  <data name="PivotFieldFilter_ClearFiltersFromThisFieldAutomationName" xml:space="preserve">
+    <value>Clear filters from this PivotTable field</value>
+  </data>
+  <data name="PivotFieldFilter_ClearItemFilter" xml:space="preserve">
+    <value>Clear Item Filter</value>
+  </data>
+  <data name="PivotFieldFilter_ClearItemFilterAutomationName" xml:space="preserve">
+    <value>Clear the item checklist filter for this PivotTable field</value>
+  </data>
+  <data name="PivotFieldFilter_ManageLabelFiltersDescription" xml:space="preserve">
+    <value>Manage label filters for this PivotTable field.</value>
+  </data>
+  <data name="PivotFieldFilter_RemoveLabelFilter" xml:space="preserve">
+    <value>Remove Label Filter</value>
+  </data>
+  <data name="PivotFieldFilter_RemoveLabelFilterAutomationName" xml:space="preserve">
+    <value>Remove the active label filter for this PivotTable field</value>
+  </data>
+  <data name="PivotFieldFilter_ManageValueFiltersDescription" xml:space="preserve">
+    <value>Manage value filters for this PivotTable field.</value>
+  </data>
+  <data name="PivotFieldFilter_RemoveValueFilter" xml:space="preserve">
+    <value>Remove Value Filter</value>
+  </data>
+  <data name="PivotFieldFilter_RemoveValueFilterAutomationName" xml:space="preserve">
+    <value>Remove the active value filter for this PivotTable field</value>
+  </data>
+</root>

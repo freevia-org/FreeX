@@ -270,7 +270,8 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("SubtotalDialogAction.RemoveAll");
         source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
         source.Should().Contain("new RemoveSubtotalRowsCommand(");
-        source.Should().Contain("SubtotalPlanner.TryCreateSourceRange(sheet, range, out var sourceRange");
+        source.Should().Contain("SubtotalPlanner.TryCreateSourceRange(");
+        source.Should().Contain("out var sourceRange");
         source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId)");
         source.Should().Contain("dialog.Result.ReplaceCurrentSubtotals");
         source.Should().Contain("new CompositeWorkbookCommand(\"Subtotal\", [new RemoveSubtotalRowsCommand(sheetId, sheetRange), subtotalCommand])");

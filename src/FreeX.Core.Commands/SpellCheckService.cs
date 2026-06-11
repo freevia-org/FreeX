@@ -262,30 +262,29 @@ public static partial class SpellCheckService
 
     private static string ApplyCorrectionOccurrences(SpellingIssue issue, string replacement, bool replaceAll)
     {
-        if (replaceAll &&
-            TryGetRepeatedWordReplacement(issue, replacement, out var repeatedWord))
+        if (TryGetRepeatedWordReplacement(issue, replacement, out var repeatedWord))
         {
-            return ApplyRepeatedWordRunCorrection(issue.CellText, repeatedWord, replacement);
+            return ApplyRepeatedWordRunCorrection(issue.CellText, repeatedWord, replacement, replaceAll);
         }
-
-        var regex = new Regex(
-            $@"\b{Regex.Escape(issue.Word)}\b",
-            RegexOptions.IgnoreCase,
-            TimeSpan.FromMilliseconds(100));
 
         var ignoredSpans = FindIgnoredSpans(issue.CellText);
         StringBuilder? builder = null;
         var appendStart = 0;
         var replaced = false;
-        foreach (Match match in regex.Matches(issue.CellText))
+        var index = 0;
+        while (TryReadNextWord(issue.CellText, index, out var word))
         {
-            if (OverlapsIgnoredSpan(match.Index, match.Length, ignoredSpans))
+            index = word.End;
+            if (OverlapsIgnoredSpan(word.Start, word.Length, ignoredSpans) ||
+                !EqualWordsIgnoreCase(issue.CellText.AsSpan(word.Start, word.Length), issue.Word.AsSpan()))
+            {
                 continue;
+            }
 
             builder ??= new StringBuilder(issue.CellText.Length);
-            builder.Append(issue.CellText, appendStart, match.Index - appendStart);
-            builder.Append(MatchCapitalization(match.Value, replacement));
-            appendStart = match.Index + match.Length;
+            builder.Append(issue.CellText, appendStart, word.Start - appendStart);
+            builder.Append(MatchCapitalization(issue.CellText.AsSpan(word.Start, word.Length), replacement));
+            appendStart = word.End;
             replaced = true;
 
             if (!replaceAll)
@@ -322,11 +321,12 @@ public static partial class SpellCheckService
         return true;
     }
 
-    private static string ApplyRepeatedWordRunCorrection(string text, string repeatedWord, string replacement)
+    private static string ApplyRepeatedWordRunCorrection(string text, string repeatedWord, string replacement, bool replaceAll)
     {
         var ignoredSpans = FindIgnoredSpans(text);
         StringBuilder? builder = null;
         var appendStart = 0;
+        var replaced = false;
         WordToken? runFirst = null;
         WordToken? runLast = null;
         var runCount = 0;
@@ -339,6 +339,8 @@ public static partial class SpellCheckService
                 !EqualWordsIgnoreCase(text.AsSpan(word.Start, word.Length), repeatedWord.AsSpan()))
             {
                 FlushRepeatedRun();
+                if (replaced && !replaceAll)
+                    break;
                 continue;
             }
 
@@ -351,6 +353,8 @@ public static partial class SpellCheckService
             }
 
             FlushRepeatedRun();
+            if (replaced && !replaceAll)
+                break;
             runFirst = word;
             runLast = word;
             runCount = 1;
@@ -365,12 +369,16 @@ public static partial class SpellCheckService
 
         void FlushRepeatedRun()
         {
-            if (runCount >= 2 && runFirst is { } first && runLast is { } last)
+            if ((!replaced || replaceAll) &&
+                runCount >= 2 &&
+                runFirst is { } first &&
+                runLast is { } last)
             {
                 builder ??= new StringBuilder(text.Length);
                 builder.Append(text, appendStart, first.Start - appendStart);
                 builder.Append(MatchCapitalization(text.AsSpan(first.Start, first.Length), replacement));
                 appendStart = last.End;
+                replaced = true;
             }
 
             runFirst = null;
