@@ -21,13 +21,10 @@ public static class PasteLinkService
                     ? new CellAddress(destination.Sheet, destination.Row + colOffset, destination.Col + rowOffset)
                     : new CellAddress(destination.Sheet, destination.Row + rowOffset, destination.Col + colOffset);
                 var sourceAddress = new CellAddress(sourceRange.Start.Sheet, row, col);
-                linkedCells.Add((target, Cell.FromFormula($"{QuoteSheetName(sourceSheetName)}!{sourceAddress.ToA1()}")));
+                linkedCells.Add((target, Cell.FromFormula($"{SheetNameFormatter.QuoteIfNeeded(sourceSheetName)}!{sourceAddress.ToA1()}")));
             }
         }
 
         return linkedCells;
     }
-
-    private static string QuoteSheetName(string sheetName) =>
-        "'" + sheetName.Replace("'", "''", StringComparison.Ordinal) + "'";
 }

@@ -12242,12 +12242,7 @@ public static partial class AccessibilityCheckerService
         }
 
         private static string FormulaFormatAddressSheetText(string sheetText) =>
-            FormulaIsSimpleSheetQualifier(sheetText)
-                ? sheetText
-                : $"'{sheetText.Replace("'", "''")}'";
-
-        private static bool FormulaIsSimpleSheetQualifier(string sheetName) =>
-            sheetName.Length > 0 && sheetName.All(static ch => char.IsLetterOrDigit(ch) || ch is '_' or '.');
+            SheetNameFormatter.QuoteIfNeeded(sheetText);
 
         private static string FormulaCellPrefixCode(CellStyle? style) =>
             (style?.HorizontalAlignment ?? HorizontalAlignment.General) switch

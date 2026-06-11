@@ -257,7 +257,7 @@ public static partial class DataValidationService
             string.Equals(sourceSheetName, hostSheetName, StringComparison.OrdinalIgnoreCase))
             return "=" + reference;
 
-        return $"='{sourceSheetName.Replace("'", "''")}'!{reference}";
+        return $"={SheetNameFormatter.QuoteIfNeeded(sourceSheetName)}!{reference}";
     }
 
     public static DataValidationInvalidEntryAction GetInvalidEntryAction(DataValidation dv)

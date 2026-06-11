@@ -259,20 +259,6 @@ public static class FormulaSerializer
         sb.Append(sheetName);
     }
 
-    private static bool RequiresQuoting(string sheetName)
-    {
-        if (sheetName.Length == 0)
-            return true;
-        // Sheet names starting with a digit must be quoted: "1Q24!A1" would lex as number "1" + name "Q24"
-        if (char.IsDigit(sheetName[0]))
-            return true;
-        for (var i = 0; i < sheetName.Length; i++)
-        {
-            var ch = sheetName[i];
-            if (!char.IsLetterOrDigit(ch) && ch != '_' && ch != '.')
-                return true;
-        }
-
-        return false;
-    }
+    private static bool RequiresQuoting(string sheetName) =>
+        SheetNameFormatter.NeedsQuoting(sheetName);
 }

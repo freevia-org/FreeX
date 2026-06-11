@@ -176,12 +176,7 @@ public static partial class BuiltInFunctions
         return new TextValue(addr);
     }
 
-    private static string FormatAddressSheetText(string sheetText)
-    {
-        bool needsQuotes = !IsSimpleSheetQualifier(sheetText);
-        return needsQuotes
-            ? $"'{sheetText.Replace("'", "''")}'"
-            : sheetText;
-    }
+    private static string FormatAddressSheetText(string sheetText) =>
+        SheetNameFormatter.QuoteIfNeeded(sheetText);
 }
 

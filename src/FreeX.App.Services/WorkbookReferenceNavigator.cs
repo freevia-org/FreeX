@@ -250,11 +250,6 @@ public static class WorkbookReferenceNavigator
         return sheetName;
     }
 
-    private static string QuoteSheetNameForReference(string sheetName)
-    {
-        if (sheetName.All(ch => char.IsLetterOrDigit(ch) || ch == '_'))
-            return sheetName;
-
-        return $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'";
-    }
+    private static string QuoteSheetNameForReference(string sheetName) =>
+        SheetNameFormatter.QuoteIfNeeded(sheetName);
 }
