@@ -88,6 +88,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "excel-data-validation-dropdown-prepared" => RunExcelDataValidationDropdownPreparedScenario(),
             "excel-open-dialog" => RunExcelDialogScenario("excel-open-dialog", PrepareExcelBlankWorkbook, "^{F12}", "#32770", "Open"),
             "excel-save-as-dialog" => RunExcelSaveAsDialogScenario(),
+            "excel-sheet-tab-context-menu" => RunExcelSheetTabContextMenuScenario(),
+            "excel-sheet-tab-overflow-activate-dialog" => RunExcelSheetTabOverflowActivateDialogScenario(),
             "freex-open-dialog" => RunFreeXDialogScenario("freex-open-dialog", "^{F12}", "#32770", "Open"),
             "freex-save-as-dialog" => RunFreeXDialogScenario("freex-save-as-dialog", "{F12}", "#32770", "Save As"),
             "freex-format-cells-dialog" => RunFreeXFormatCellsDialogScenario(),
@@ -115,6 +117,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-sheet-tab-double-click-rename" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-double-click-rename", SheetTabDoubleClickRename()),
             "freex-sheet-tab-ctrl-click-grouping" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-ctrl-click-grouping", SheetTabModifierGrouping(NativeMethods.VK_CONTROL, "Ctrl+click", "Sheet3")),
             "freex-sheet-tab-shift-click-grouping" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-shift-click-grouping", SheetTabModifierGrouping(NativeMethods.VK_SHIFT, "Shift+click", "Sheet5")),
+            "freex-sheet-tab-grouped-commands" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-grouped-commands", SheetTabGroupedCommands()),
             "freex-sheet-tab-drag-reorder" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-drag-reorder", SheetTabDragReorder()),
             "freex-sheet-tab-overflow-nav-click" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-overflow-nav-click", SheetTabOverflowNavClick()),
             "freex-sheet-tab-overflow-activate-dialog" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-overflow-activate-dialog", SheetTabOverflowActivateDialog()),
@@ -625,6 +628,109 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
             return CaptureWindow("excel-save-as-dialog", "excel", dialog, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunExcelSheetTabContextMenuScenario()
+    {
+        const string scenario = "excel-sheet-tab-context-menu";
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelSheetTabWorkbook(excel, 4);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-sheet-tab-context-menu");
+            }
+
+            var tab = FindVisibleSheetTabElement(hwnd, "Sheet1");
+            if (tab is null)
+            {
+                return CaptureResult.Blocked(scenario, "uia-target-not-found", "Could not find the visible Excel Sheet1 sheet tab.", options.OutputRoot, "excel", guard);
+            }
+
+            if (!TryRightClickAutomationElement(tab))
+            {
+                return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", "Excel Sheet1 tab bounds were not usable for a physical right-click.", options.OutputRoot, "excel", guard);
+            }
+
+            var popup = WindowFinder.FindProcessPopup(pid.Value, hwnd.ToInt64(), options.PopupTimeout, 120, 120);
+            if (popup is null)
+            {
+                return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect Excel sheet-tab context menu after a guarded physical right-click on Sheet1.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow(scenario, "excel", popup, guard, "complete", "Captured Microsoft Excel's sheet-tab context menu after a physical right-click on Sheet1.");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunExcelSheetTabOverflowActivateDialogScenario()
+    {
+        const string scenario = "excel-sheet-tab-overflow-activate-dialog";
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelSheetTabWorkbook(excel, 12);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-sheet-tab-overflow-activate");
+            }
+
+            var rightNav = FindSheetNavButton(hwnd, right: true);
+            if (rightNav is null)
+            {
+                return CaptureResult.Blocked(scenario, "uia-target-not-found", "Could not find Excel's visible sheet-tab scroll/navigation button.", options.OutputRoot, "excel", guard);
+            }
+
+            if (!TryRightClickAutomationElement(rightNav))
+            {
+                return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", "Excel sheet-tab navigation button bounds were not usable for a physical right-click.", options.OutputRoot, "excel", guard);
+            }
+
+            var dialog = WindowFinder.FindProcessWindow(
+                pid.Value,
+                window => window.Handle != hwnd.ToInt64() &&
+                    window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase),
+                options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's Activate dialog after right-clicking the sheet-tab navigation button.", options.OutputRoot, "excel", guard);
+            }
+
+            var dialogHandle = new IntPtr(dialog.Handle);
+            var dialogGuard = ForegroundGuard.FocusAndVerify(dialogHandle, pid.Value, "Activate", options.FocusTimeout);
+            if (!dialogGuard.Success)
+            {
+                return CaptureResult.Blocked(scenario, "foreground-guard-failed", "Excel Activate dialog was detected but could not be foreground-verified.", options.OutputRoot, "excel", dialogGuard);
+            }
+
+            return CaptureWindow(scenario, "excel", dialog, dialogGuard, "complete", "Captured Microsoft Excel's Activate dialog after a physical right-click on the sheet-tab navigation button.");
         }
         finally
         {
@@ -2589,6 +2695,79 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return null;
         };
 
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabGroupedCommands()
+        => (handle, processId, _, _) =>
+        {
+            var blocked = SeedSheetsWithAddButton(handle, processId, 4);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var tab = FindVisibleSheetTabElement(handle, "Sheet2");
+            if (tab is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find seeded sheet tab 'Sheet2' for grouped command proof.", options.OutputRoot, "freex");
+            }
+
+            blocked = GuardedClickElement(options.Scenario, processId, handle, tab, MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            tab = FindVisibleSheetTabElement(handle, "Sheet2");
+            if (tab is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not re-resolve Sheet2 before opening the Select All Sheets context menu.", options.OutputRoot, "freex");
+            }
+
+            blocked = GuardedClickElement(options.Scenario, processId, handle, tab, MouseButtonKind.Right);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryInvokeProcessMenuItem(processId, "Select All Sheets"))
+            {
+                return CaptureResult.Blocked(options.Scenario, "context-menu-item-not-found", "Opened the sheet-tab context menu but could not invoke Select All Sheets.", options.OutputRoot, "freex");
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+            var groupedTitle = WindowFinder.GetWindowInfo(handle)?.Title ?? string.Empty;
+            if (!groupedTitle.Contains("[Group]", StringComparison.OrdinalIgnoreCase))
+            {
+                return CaptureResult.Blocked(options.Scenario, "select-all-validation-failed", $"Expected workbook title to include [Group] after Select All Sheets; observed '{groupedTitle}'.", options.OutputRoot, "freex");
+            }
+
+            tab = FindVisibleSheetTabElement(handle, "Sheet2");
+            if (tab is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not re-resolve Sheet2 before opening the Ungroup Sheets context menu.", options.OutputRoot, "freex");
+            }
+
+            blocked = GuardedOpenContextMenuFromFocusedElement(options.Scenario, processId, handle, tab);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryInvokeProcessMenuItem(processId, "Ungroup Sheets"))
+            {
+                return CaptureResult.Blocked(options.Scenario, "context-menu-item-not-found", "Opened the grouped sheet-tab context menu but could not invoke Ungroup Sheets.", options.OutputRoot, "freex");
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+            var ungroupedTitle = WindowFinder.GetWindowInfo(handle)?.Title ?? string.Empty;
+            if (ungroupedTitle.Contains("[Group]", StringComparison.OrdinalIgnoreCase))
+            {
+                return CaptureResult.Blocked(options.Scenario, "ungroup-validation-failed", $"Expected workbook title to clear [Group] after Ungroup Sheets; observed '{ungroupedTitle}'.", options.OutputRoot, "freex");
+            }
+
+            _lastResultValidation = $"Created Sheet2-Sheet4 through physical Insert Sheet clicks, invoked Select All Sheets from the sheet-tab context menu, verified grouped title '{groupedTitle}', then invoked Ungroup Sheets from the focused sheet-tab keyboard context menu and verified title '{ungroupedTitle}'.";
+            return null;
+        };
+
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabDragReorder()
         => (handle, processId, _, _) =>
         {
@@ -2865,6 +3044,33 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             NativeMethods.KeybdEvent(modifierKey, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
             Thread.Sleep(80);
         }
+    }
+
+    private CaptureResult? GuardedOpenContextMenuFromFocusedElement(string scenario, int processId, IntPtr handle, AutomationElement element)
+    {
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(scenario, guard, "before-focused-context-menu");
+        }
+
+        try
+        {
+            element.SetFocus();
+        }
+        catch (InvalidOperationException)
+        {
+            return CaptureResult.Blocked(scenario, "uia-focus-failed", "Could not focus the sheet tab before opening its keyboard context menu.", options.OutputRoot, "freex", guard);
+        }
+        catch (ElementNotAvailableException)
+        {
+            return CaptureResult.Blocked(scenario, "uia-target-stale", "The sheet tab became unavailable before opening its keyboard context menu.", options.OutputRoot, "freex", guard);
+        }
+
+        Thread.Sleep(100);
+        SendKeys.SendWait("+{F10}");
+        Thread.Sleep(options.AfterInputDelay);
+        return null;
     }
 
     private CaptureResult? GuardedDrag(string scenario, int processId, IntPtr handle, int startX, int startY, int endX, int endY)
@@ -3350,6 +3556,25 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         worksheet.Range["A1"].Select();
     }
 
+    private static void PrepareExcelSheetTabWorkbook(dynamic excel, int targetSheetCount)
+    {
+        dynamic workbook = excel.ActiveWorkbook;
+        while ((int)workbook.Worksheets.Count < targetSheetCount)
+        {
+            workbook.Worksheets.Add(After: workbook.Worksheets[workbook.Worksheets.Count]);
+        }
+
+        for (var i = 1; i <= (int)workbook.Worksheets.Count; i++)
+        {
+            workbook.Worksheets[i].Name = $"Sheet{i}";
+        }
+
+        workbook.Worksheets[1].Activate();
+        dynamic worksheet = excel.ActiveSheet;
+        worksheet.Range["A1"].Value2 = "Sheet tab parity";
+        worksheet.Range["A1"].Select();
+    }
+
     private static dynamic PrepareExcelAutoFilter(dynamic excel)
     {
         dynamic worksheet = excel.ActiveSheet;
@@ -3480,6 +3705,20 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, UIntPtr.Zero);
         Thread.Sleep(60);
         NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_RIGHTUP, 0, 0, 0, UIntPtr.Zero);
+    }
+
+    private static bool TryRightClickAutomationElement(AutomationElement element)
+    {
+        var bounds = element.Current.BoundingRectangle;
+        if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+        {
+            return false;
+        }
+
+        RightClickScreenPoint(
+            (int)(bounds.Left + bounds.Width / 2.0),
+            (int)(bounds.Top + bounds.Height / 2.0));
+        return true;
     }
 
     private static bool TryInvokeProcessMenuItem(int processId, string nameContains)
@@ -3798,6 +4037,8 @@ internal sealed record CaptureOptions(
           excel-data-validation-dropdown-prepared
           excel-open-dialog
           excel-save-as-dialog
+          excel-sheet-tab-context-menu
+          excel-sheet-tab-overflow-activate-dialog
           freex-open-dialog
           freex-save-as-dialog
           freex-format-cells-context-dialog
@@ -3823,6 +4064,7 @@ internal sealed record CaptureOptions(
           freex-sheet-tab-double-click-rename
           freex-sheet-tab-ctrl-click-grouping
           freex-sheet-tab-shift-click-grouping
+          freex-sheet-tab-grouped-commands
           freex-sheet-tab-drag-reorder
           freex-sheet-tab-overflow-nav-click
           freex-sheet-tab-overflow-activate-dialog
