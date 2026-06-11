@@ -678,7 +678,7 @@ public sealed partial class XlsxFileAdapter
             : null;
 
     private static int ParseZoomPercent(string? value) =>
-        int.TryParse(value, out var zoom) && zoom is >= 10 and <= 400 ? zoom : 100;
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var zoom) && zoom is >= 10 and <= 400 ? zoom : 100;
 
     private static double? ReadDefaultRowHeight(XElement? sheetFormatPr, XDocument? stylesXml)
     {

@@ -422,7 +422,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             rowHeights[rowNumber] = height;
 
         var outlineStr = row.Attribute("outlineLevel")?.Value;
-        if (int.TryParse(outlineStr, out var outlineLevel) && outlineLevel > 0)
+        if (int.TryParse(outlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0)
         {
             rowOutlineLevels[rowNumber] = outlineLevel;
             if (XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("collapsed")?.Value))
@@ -460,9 +460,9 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         HashSet<uint> groupHiddenCols,
         Dictionary<uint, double> columnWidths)
     {
-        if (!uint.TryParse(col.Attribute("min")?.Value, out var min))
+        if (!uint.TryParse(col.Attribute("min")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var min))
             return;
-        if (!uint.TryParse(col.Attribute("max")?.Value, out var max))
+        if (!uint.TryParse(col.Attribute("max")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var max))
             return;
         if (min > max)
             return;
@@ -474,7 +474,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         }
 
         var colOutlineStr = col.Attribute("outlineLevel")?.Value;
-        if (int.TryParse(colOutlineStr, out var colOutlineLevel) && colOutlineLevel > 0)
+        if (int.TryParse(colOutlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var colOutlineLevel) && colOutlineLevel > 0)
         {
             var collapsed = XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("collapsed")?.Value);
             for (var colNumber = min; colNumber <= max; colNumber++)

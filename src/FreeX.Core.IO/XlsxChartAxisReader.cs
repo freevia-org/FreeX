@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -534,18 +535,16 @@ internal static class XlsxChartAxisReader
         XlsxChartScalarReader.ReadOptionalDouble(value);
 
     private static int? ReadInt(string? value) =>
-        int.TryParse(value, out var result) ? result : null;
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : null;
 
     private static bool ReadBool(string? value) =>
-        value is "1" or "true";
+        XlsxWorksheetXmlValueParser.IsTruthy(value);
 
     private static bool? ReadNullableBool(string? value) =>
-        value switch
-        {
-            "1" or "true" => true,
-            "0" or "false" => false,
-            _ => null
-        };
+        value is null ? null
+        : XlsxWorksheetXmlValueParser.IsTruthy(value) ? true
+        : XlsxWorksheetXmlValueParser.IsFalse(value) ? false
+        : null;
 
     private static bool IsReverseOrientation(XElement? scaling) =>
         scaling?.Element(ChartNs + "orientation")?.Attribute("val")?.Value == "maxMin";

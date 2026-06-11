@@ -1,6 +1,7 @@
-using FreeX.Core.Model;
+using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
+using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
 
@@ -312,7 +313,7 @@ public static class XlsxWorkbookThemeReader
     private static double? ReadLineWidthPoints(XElement? line)
     {
         var widthText = line?.Attribute("w")?.Value;
-        return int.TryParse(widthText, out var emus) && emus > 0
+        return int.TryParse(widthText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus) && emus > 0
             ? Math.Round(emus / 12700.0, 3)
             : null;
     }
