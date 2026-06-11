@@ -139,6 +139,21 @@ public sealed class MainWindowUiaPropertiesTests
             .Should().Be("ZoomSlider");
     }
 
+    [Fact]
+    public void StatusZoomText_ExposesAutomationId()
+    {
+        var document = LoadMainWindowXaml();
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var zoomText = document
+            .Descendants(presentation + "TextBlock")
+            .Single(element => element.Attribute(x + "Name")?.Value == "StatusZoomText");
+
+        zoomText.Attribute("AutomationProperties.AutomationId")?.Value
+            .Should().Be("StatusZoomText");
+    }
+
     // Worksheet grid
 
     [Fact]
