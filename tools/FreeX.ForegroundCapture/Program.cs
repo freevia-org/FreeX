@@ -111,7 +111,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-status-zoom-out-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-out-click", ClickAutomationIdExpectZoom("StatusZoomOutButton", 95)),
             "freex-status-zoom-slider-drag" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-drag", DragFirstSliderExpectChangedZoom("Zoom", 100)),
             "freex-status-zoom-slider-rangevalue-set" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-rangevalue-set", SetFirstSliderRangeValue("Zoom", 150)),
+            "freex-status-zoom-min-max-rangevalue-set" => RunFreeXMainWindowPointerScenario("freex-status-zoom-min-max-rangevalue-set", SetZoomSliderMinMaxRangeValues()),
             "freex-status-ctrl-wheel-grid-zoom" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-wheel-grid-zoom", CtrlWheelRelativeExpectZoom(0.36, 0.56, 120, 110)),
+            "freex-status-wheel-modifier-breadth" => RunFreeXMainWindowPointerScenario("freex-status-wheel-modifier-breadth", WheelModifierBreadth()),
             "freex-status-view-shortcuts-click" => RunFreeXMainWindowPointerScenario("freex-status-view-shortcuts-click", ClickStatusViewShortcuts()),
             "freex-status-zoom-text-dialog-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-text-dialog-click", ClickZoomTextExpectDialog()),
             "freex-status-ctrl-alt-zoom-keys" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-alt-zoom-keys", CtrlAltZoomKeysExpectRoundTrip()),
@@ -2422,6 +2424,46 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return ValidateZoomSliderValue(handle, targetSliderValue, $"native UIA RangeValue.SetValue({targetSliderValue:0.###})");
         };
 
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SetZoomSliderMinMaxRangeValues()
+        => (handle, processId, _, guard) =>
+        {
+            var slider = FindFirstSlider(handle, "Zoom");
+            if (slider is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the status Zoom slider.", options.OutputRoot, "freex", guard);
+            }
+
+            if (!slider.TryGetCurrentPattern(RangeValuePattern.Pattern, out var patternObject) ||
+                patternObject is not RangeValuePattern rangePattern)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-rangevalue-unavailable", "Status Zoom slider did not expose RangeValuePattern.", options.OutputRoot, "freex", guard);
+            }
+
+            var validations = new List<string>();
+            foreach (var (value, label) in new[] { (0d, "minimum"), (200d, "maximum") })
+            {
+                guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+                if (!guard.Success)
+                {
+                    return BlockedWithGuard(options.Scenario, guard, $"before-uia-rangevalue-set-{label}");
+                }
+
+                rangePattern.SetValue(value);
+                Thread.Sleep(options.AfterInputDelay);
+
+                var blocked = ValidateZoomSliderValue(handle, value, $"native UIA RangeValue.SetValue({value:0.###}) {label}");
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+
+                validations.Add($"{label} slider={value:0.###} visible zoom about {SliderToZoomPercent(value):0}%");
+            }
+
+            _lastResultValidation = "Status zoom min/max RangeValue proof: " + string.Join("; ", validations) + ".";
+            return null;
+        };
+
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> CtrlWheelRelativeExpectZoom(
         double x,
         double y,
@@ -2947,6 +2989,27 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             }
 
             _lastResultValidation = $"foreground wheel scroll; vertical scrollbar {verticalBefore:0.###}->{verticalAfter:0.###}; Shift+wheel horizontal scrollbar {horizontalBefore:0.###}->{horizontalAfter:0.###}";
+            return null;
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> WheelModifierBreadth()
+        => (handle, processId, window, guard) =>
+        {
+            var blocked = WheelVerticalThenShiftHorizontal()(handle, processId, window, guard);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var scrollValidation = _lastResultValidation ?? "foreground ordinary wheel and Shift+wheel passed";
+            blocked = CtrlWheelRelativeExpectZoom(0.36, 0.56, 120, 110)(handle, processId, window, guard);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var ctrlValidation = _lastResultValidation ?? "foreground Ctrl+wheel zoom passed";
+            _lastResultValidation = $"{scrollValidation}; {ctrlValidation}.";
             return null;
         };
 
@@ -3950,26 +4013,65 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private static bool TryGetAutomationElementNameOrVisibleText(IntPtr handle, string automationId, string expectedName, out string name)
     {
-        if (TryGetAutomationElementName(handle, automationId, out name))
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+        do
         {
-            return true;
-        }
-
-        var root = AutomationElement.FromHandle(handle);
-        var matches = root.FindAll(
-            TreeScope.Descendants,
-            new PropertyCondition(AutomationElement.NameProperty, expectedName));
-        foreach (AutomationElement match in matches)
-        {
-            if (!match.Current.BoundingRectangle.IsEmpty)
+            var element = FindVisibleElementByAutomationId(handle, automationId);
+            if (element is not null)
             {
-                name = match.Current.Name ?? string.Empty;
-                return !string.IsNullOrWhiteSpace(name);
+                foreach (var candidate in ReadAutomationTextCandidates(element))
+                {
+                    if (string.Equals(candidate, expectedName, StringComparison.Ordinal))
+                    {
+                        name = candidate;
+                        return true;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(candidate))
+                    {
+                        name = candidate;
+                    }
+                }
             }
+
+            var root = AutomationElement.FromHandle(handle);
+            var matches = root.FindAll(
+                TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.NameProperty, expectedName));
+            foreach (AutomationElement match in matches)
+            {
+                if (IsVisibleElement(match))
+                {
+                    name = match.Current.Name ?? string.Empty;
+                    return !string.IsNullOrWhiteSpace(name);
+                }
+            }
+
+            Thread.Sleep(100);
         }
+        while (DateTime.UtcNow < deadline);
 
         name = string.Empty;
         return false;
+    }
+
+    private static IEnumerable<string> ReadAutomationTextCandidates(AutomationElement element)
+    {
+        yield return element.Current.Name ?? string.Empty;
+        yield return element.Current.HelpText ?? string.Empty;
+
+        if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var valuePatternObject) &&
+            valuePatternObject is ValuePattern valuePattern)
+        {
+            yield return valuePattern.Current.Value ?? string.Empty;
+        }
+
+        if (element.TryGetCurrentPattern(TextPattern.Pattern, out var textPatternObject) &&
+            textPatternObject is TextPattern textPattern)
+        {
+            yield return textPattern.DocumentRange.GetText(256).TrimEnd('\r', '\n');
+        }
+
     }
 
     private static int CenterX(System.Windows.Rect bounds) => (int)(bounds.Left + bounds.Width / 2.0);
@@ -4581,7 +4683,9 @@ internal sealed record CaptureOptions(
           freex-status-zoom-out-click
           freex-status-zoom-slider-drag
           freex-status-zoom-slider-rangevalue-set
+          freex-status-zoom-min-max-rangevalue-set
           freex-status-ctrl-wheel-grid-zoom
+          freex-status-wheel-modifier-breadth
           freex-status-view-shortcuts-click
           freex-status-zoom-text-dialog-click
           freex-status-ctrl-alt-zoom-keys
