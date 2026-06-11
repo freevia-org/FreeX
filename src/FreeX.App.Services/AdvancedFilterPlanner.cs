@@ -23,8 +23,11 @@ public enum AdvancedFilterPlanError
     ListRangeRequiresDataRows,
     InvalidCriteriaRange,
     CriteriaRangeRequiresCriteriaRows,
+    ListRangeTooLarge,
+    CriteriaRangeTooLarge,
     CopyDestinationRequired,
     InvalidCopyDestinationRange,
+    CopyDestinationRangeTooLarge,
     CopyDestinationMustBeOnListSheet
 }
 
@@ -108,6 +111,11 @@ public static class AdvancedFilterPlanner
                 AdvancedFilterPlanError.ListRangeRequiresDataRows,
                 NormalizeInput(listRangeText));
 
+        if (!AdvancedFilterCommand.IsListRangeWithinSupportedBounds(listRange))
+            return AdvancedFilterPlanResult.Invalid(
+                AdvancedFilterPlanError.ListRangeTooLarge,
+                NormalizeInput(listRangeText));
+
         if (!TryParseRange(currentSheetId, criteriaRangeText, resolveSheetId, out var criteriaRange))
             return AdvancedFilterPlanResult.Invalid(
                 AdvancedFilterPlanError.InvalidCriteriaRange,
@@ -116,6 +124,11 @@ public static class AdvancedFilterPlanner
         if (criteriaRange.RowCount < 2)
             return AdvancedFilterPlanResult.Invalid(
                 AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows,
+                NormalizeInput(criteriaRangeText));
+
+        if (!AdvancedFilterCommand.IsCriteriaRangeWithinSupportedBounds(criteriaRange))
+            return AdvancedFilterPlanResult.Invalid(
+                AdvancedFilterPlanError.CriteriaRangeTooLarge,
                 NormalizeInput(criteriaRangeText));
 
         GridRange? copyToRange = null;
@@ -129,6 +142,14 @@ public static class AdvancedFilterPlanner
                 return AdvancedFilterPlanResult.Invalid(
                     AdvancedFilterPlanError.InvalidCopyDestinationRange,
                     copyInput);
+
+            if (copyToRange is { } parsedCopyRange &&
+                parsedCopyRange.ColCount > AdvancedFilterCommand.MaxListColumns)
+            {
+                return AdvancedFilterPlanResult.Invalid(
+                    AdvancedFilterPlanError.CopyDestinationRangeTooLarge,
+                    copyInput);
+            }
 
             if (copyToRange is { } destinationRange &&
                 destinationRange.Start.Sheet != listRange.Start.Sheet)
