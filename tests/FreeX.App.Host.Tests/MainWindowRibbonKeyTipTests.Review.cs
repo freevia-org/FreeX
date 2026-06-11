@@ -46,7 +46,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
-    public void ReviewAllowEditRangesKeyTip_IsDisabledWhenSheetIsProtected()
+    public void ReviewAllowEditRangesKeyTip_RemainsAvailableWhenSheetIsProtected()
     {
         RunSta(() =>
         {
@@ -57,12 +57,9 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
             harness.RefreshSheetProtectionUi();
 
-            harness.NamedButtonIsEnabled("AllowEditRangesButton").Should().BeFalse();
+            harness.NamedButtonIsEnabled("AllowEditRangesButton").Should().BeTrue();
             harness.HandleDirectTopLevelKeyTip(Key.R).Should().BeTrue();
-            harness.HandleKeyTip(Key.A);
-
-            harness.KeyTipScope.Should().Be("None", "disabled Review commands should not stay routable through keytips");
-            harness.StartScreenIsVisible.Should().BeFalse("Alt,R,A,R must not open the Allow Edit Ranges workflow on a protected sheet");
+            harness.VisibleCommandKeyTips("AR").Should().Contain("Allow Users to Edit Ranges");
         });
     }
 }

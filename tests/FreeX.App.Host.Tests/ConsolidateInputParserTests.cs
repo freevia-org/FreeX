@@ -19,6 +19,32 @@ public sealed class ConsolidateInputParserTests
         ranges[1].Should().Be(new GridRange(new CellAddress(SheetId, 3, 3), new CellAddress(SheetId, 4, 4)));
     }
 
+    [Fact]
+    public void TryParseSourceRanges_ParsesSheetQualifiedRanges()
+    {
+        var dataSheetId = SheetId.New();
+        var reportSheetId = SheetId.New();
+
+        ConsolidateInputParser.TryParseSourceRanges(
+                "Data!A1:B2; 'FY 26'!C3:D4",
+                SheetId,
+                sheetName => sheetName switch
+                {
+                    "Data" => dataSheetId,
+                    "FY 26" => reportSheetId,
+                    _ => null
+                },
+                out var ranges,
+                out var invalidPart)
+            .Should()
+            .BeTrue();
+
+        invalidPart.Should().BeNull();
+        ranges.Should().Equal(
+            new GridRange(new CellAddress(dataSheetId, 1, 1), new CellAddress(dataSheetId, 2, 2)),
+            new GridRange(new CellAddress(reportSheetId, 3, 3), new CellAddress(reportSheetId, 4, 4)));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("  ")]
@@ -42,5 +68,29 @@ public sealed class ConsolidateInputParserTests
         result.Should().Be(expected);
         if (expected)
             destination.Should().Be(new CellAddress(SheetId, row, col));
+    }
+
+    [Fact]
+    public void TryParseDestination_ParsesSheetQualifiedDestinationCell()
+    {
+        var targetSheetId = SheetId.New();
+
+        ConsolidateInputParser.TryParseDestination(
+                "'FY 26'!K5",
+                SheetId,
+                sheetName => sheetName == "FY 26" ? targetSheetId : null,
+                out var destination)
+            .Should()
+            .BeTrue();
+
+        destination.Should().Be(new CellAddress(targetSheetId, 5, 11));
+    }
+
+    [Fact]
+    public void TryParseDestination_RejectsMultiCellDestinationRange()
+    {
+        ConsolidateInputParser.TryParseDestination("A1:B2", SheetId, out _)
+            .Should()
+            .BeFalse();
     }
 }

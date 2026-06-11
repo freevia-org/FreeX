@@ -196,10 +196,11 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         StaTestRunner.Run(() =>
         {
             using var harness = MainWindowHarness.Create();
+            harness.ShowDrawingObjectContextualTabs();
             harness.ShowChartContextualTabs();
             harness.ShowPivotContextualTabs();
 
-            foreach (var tab in new[] { "Chart Design", "Format", "PivotTable Analyze", "Design" })
+            foreach (var tab in new[] { "Shape Format", "Picture Format", "Chart Design", "Format", "PivotTable Analyze", "Design" })
             {
                 harness.SelectRibbonTab(tab, 1100);
 
@@ -227,11 +228,12 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         StaTestRunner.Run(() =>
         {
             using var harness = MainWindowHarness.Create();
+            harness.ShowDrawingObjectContextualTabs();
             harness.ShowChartContextualTabs();
             harness.ShowTableDesignContextualTab();
             harness.ShowPivotContextualTabs();
 
-            foreach (var tab in new[] { "Chart Design", "Format", "Table Design", "PivotTable Analyze", "Design" })
+            foreach (var tab in new[] { "Shape Format", "Picture Format", "Chart Design", "Format", "Table Design", "PivotTable Analyze", "Design" })
             {
                 foreach (var width in new[] { 1100.0, 900.0, 750.0 })
                 {

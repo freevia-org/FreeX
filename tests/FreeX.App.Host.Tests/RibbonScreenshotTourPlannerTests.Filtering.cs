@@ -57,6 +57,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     [InlineData("chart-design", "chart")]
     [InlineData("chart_format", "chart")]
     [InlineData("embedded-chart", "chart")]
+    [InlineData("drawing", "drawing")]
+    [InlineData("shape-format", "drawing")]
+    [InlineData("picture", "drawing")]
     public void NormalizeContext_AcceptsExcelContextAliases(string? context, string? expected)
     {
         RibbonScreenshotTourPlanner.NormalizeContext(context)
@@ -67,10 +70,10 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     [Fact]
     public void TabsForContext_RejectsUnsupportedContexts()
     {
-        var act = () => RibbonScreenshotTourPlanner.TabsForContext("drawing");
+        var act = () => RibbonScreenshotTourPlanner.TabsForContext("slides");
 
         act.Should()
             .Throw<InvalidOperationException>()
-            .WithMessage("*context 'drawing' is not supported*Valid contexts: table, pivot, chart*");
+            .WithMessage("*context 'slides' is not supported*Valid contexts: drawing, table, pivot, chart*");
     }
 }

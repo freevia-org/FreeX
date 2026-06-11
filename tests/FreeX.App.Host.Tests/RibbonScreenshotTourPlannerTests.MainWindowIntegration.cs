@@ -49,9 +49,17 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
+        source.Should().Contain("case \"drawing\":");
+        source.Should().Contain("EnsureDrawObjectFormattingTourContext");
+        source.Should().Contain("PrepareRibbonScreenshotTourTabContext(capture)");
+        source.Should().Contain("case \"ShapeFormatTab\":");
+        source.Should().Contain("case \"PictureFormatTab\":");
+        source.Should().Contain("SelectDrawObjectFormattingPicture(context)");
         source.Should().Contain("EnsureTableDesignScreenshotTourContext");
         source.Should().Contain("EnsurePivotTableScreenshotTourContext");
         source.Should().Contain("EnsureChartScreenshotTourContext");
+        source.Should().Contain("SheetGrid.SelectedObjectId = chart.Id");
+        source.Should().Contain("SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.Chart");
         source.Should().Contain("new AddChartCommand(sheet.Id, sourceRange, ChartType.Column, ScreenshotTourChartName)");
         source.Should().Contain("FindScreenshotTourChart");
         source.Should().Contain("CaptureAutoFilterFlyoutTourAsync");

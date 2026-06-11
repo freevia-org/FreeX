@@ -82,16 +82,39 @@ public partial class MainWindow
     private void DefineNameBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        NamedRangeDialog? dialog = null;
-        dialog = new NamedRangeDialog(
-            _workbook,
-            _commandBus,
-            range,
-            request => ApplyNamedRangeSelection(dialog, request))
+
+        NameDefinitionDialog? dialog = null;
+        dialog = new NameDefinitionDialog(
+            new NameDefinitionDialogResult("", "Workbook", "", FormatWorkbookRange(range)),
+            GetNameDefinitionScopeOptions(),
+            request => ApplyNameDefinitionSelection(dialog, request),
+            isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _),
+            validateName: _workbook.ValidateNamedRangeName)
         {
             Owner = this
         };
-        dialog.ShowDialog();
+
+        if (ShowOwnedDialog(dialog) != true)
+            return;
+
+        if (!NamedRangeInputParser.TryParseRange(_workbook, dialog.Result.RefersTo, out var namedRange))
+        {
+            ShowOwnedMessage(
+                UiText.Get("NameDefinition_InvalidRangeFormatMessage"),
+                UiText.Get("NameDefinition_NewNameTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!TryExecuteCommand(
+                new DefineNamedRangeCommand(
+                    dialog.Result.Name,
+                    namedRange,
+                    new NamedRangeMetadata(dialog.Result.Scope.Trim(), dialog.Result.Comment.Trim())),
+                UiText.Get("MainWindow_Content_DefineName")))
+            return;
+
         RefreshStatusBar();
     }
 
@@ -321,7 +344,7 @@ public partial class MainWindow
                 };
                 evaluationDialog.ShowDialog();
             },
-            openOptions: ShowOptionsDialog)
+            openOptions: () => ShowOptionsDialog(OptionsDialogInitialSection.FormulaErrorChecking))
         {
             Owner = this
         };
@@ -576,6 +599,12 @@ public partial class MainWindow
     private void Formula_ABS_Click(object sender, RoutedEventArgs e)     => InsertFormulaFunction("ABS");
     private void Formula_SQRT_Click(object sender, RoutedEventArgs e)    => InsertFormulaFunction("SQRT");
 
+    private IReadOnlyList<string> GetNameDefinitionScopeOptions() =>
+        new[] { "Workbook" }
+            .Concat(_workbook.Sheets.Select(sheet => sheet.Name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
     private void ApplyNamedRangeSelection(
         NamedRangeDialog? dialog,
         NamedRangeSelectionRequest request)
@@ -590,6 +619,31 @@ public partial class MainWindow
         try
         {
             dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
+    private void ApplyNameDefinitionSelection(
+        NameDefinitionDialog? dialog,
+        NamedRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(rangeText);
         }
         finally
         {

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -13,6 +14,8 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private ConsolidateRangePickerSession? _consolidateRangePickerSession;
+
     private async void GetDataBtn_Click(object sender, RoutedEventArgs e)
     {
         string[] dataExtensions = [".csv", ".txt", ".tsv", ".tab", ".xml"];
@@ -317,30 +320,19 @@ public partial class MainWindow
     private void ConsolidateBtn_Click(object sender, RoutedEventArgs e)
     {
         var selected = SheetGrid.SelectedRange;
-        var defaultSource = selected?.ToString() ?? "A1:B2";
+        var defaultSource = selected is { } selectedRange ? FormatWorkbookRange(selectedRange) : "A1:B2";
         var defaultDestination = selected?.Start.ToA1() ?? "A1";
         ConsolidateDialog? dialog = null;
         dialog = new ConsolidateDialog(
             _currentSheetId,
             defaultSource,
             defaultDestination,
-            request => ApplyConsolidateRangeSelection(dialog, request)) { Owner = this };
+            request => ApplyConsolidateRangeSelection(dialog, request),
+            ResolveSheetIdByName) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
-        var outcome = _commandBus.ExecuteRepeatable(
-            _workbook.Id,
-            () => new ConsolidateCommand(
-                dialog.Result.SourceRanges,
-                dialog.Result.DestinationCell,
-                dialog.Result.Function,
-                dialog.Result.UseTopRowLabels,
-                dialog.Result.UseLeftColumnLabels,
-                dialog.Result.CreateLinksToSourceData));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Consolidate");
+        if (!TryExecuteRepeatableConsolidateCommand(dialog.Result, out var outcome))
             return;
-        }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         SetActiveCell(dialog.Result.DestinationCell);
@@ -387,28 +379,165 @@ public partial class MainWindow
         ConsolidateDialog? dialog,
         ConsolidateRangeSelectionRequest request)
     {
-        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+        BeginConsolidateRangeSelection(dialog, request);
+    }
+
+    private void BeginConsolidateRangeSelection(
+        ConsolidateDialog? dialog,
+        ConsolidateRangeSelectionRequest request)
+    {
+        if (dialog is null)
             return;
 
-        var rangeText = request.Target == ConsolidateRangeSelectionTarget.DestinationCell
-            ? FormatCellReference(selectedRange.Start)
-            : FormatWorkbookRange(selectedRange);
+        CancelConsolidateRangeSelection(restoreDialog: false);
+        _consolidateRangePickerSession = new ConsolidateRangePickerSession(dialog, request, IsEnabled);
+        SheetGrid.AddHandler(
+            UIElement.PreviewMouseLeftButtonUpEvent,
+            new MouseButtonEventHandler(ConsolidateRangePicker_MouseLeftButtonUp),
+            handledEventsToo: true);
+        PreviewKeyDown += ConsolidateRangePicker_KeyDown;
+        dialog.Closed += ConsolidateRangePickerDialog_Closed;
+
         if (request.CollapseDialog)
             dialog.Hide();
 
-        try
+        IsEnabled = true;
+        Activate();
+        SheetGrid.Focus();
+    }
+
+    private void ConsolidateRangePicker_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_consolidateRangePickerSession is null)
+            return;
+
+        Dispatcher.BeginInvoke(
+            new Action(() => CompleteConsolidateRangeSelection(applySelection: true)),
+            System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    private void ConsolidateRangePicker_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (_consolidateRangePickerSession is null)
+            return;
+
+        if (e.Key == Key.Escape)
         {
-            dialog.ApplyRangeSelection(request.Target, rangeText);
+            CompleteConsolidateRangeSelection(applySelection: false);
+            e.Handled = true;
         }
-        finally
+        else if (e.Key == Key.Enter)
         {
-            if (request.CollapseDialog)
-            {
-                dialog.Show();
-                dialog.Activate();
-            }
+            CompleteConsolidateRangeSelection(applySelection: true);
+            e.Handled = true;
         }
     }
+
+    private void ConsolidateRangePickerDialog_Closed(object? sender, EventArgs e) =>
+        CancelConsolidateRangeSelection(restoreDialog: false);
+
+    private void CompleteConsolidateRangeSelection(bool applySelection)
+    {
+        var session = _consolidateRangePickerSession;
+        if (session is null)
+            return;
+
+        CancelConsolidateRangeSelection(restoreDialog: false);
+        if (applySelection && SheetGrid.SelectedRange is { } selectedRange)
+        {
+            var rangeText = FormatConsolidateRangeSelection(
+                session.Dialog.DefaultSheetId,
+                session.Request.Target,
+                selectedRange);
+            session.Dialog.ApplyRangeSelection(session.Request.Target, rangeText);
+        }
+
+        RestoreConsolidateDialogAfterRangeSelection(session);
+    }
+
+    private void CancelConsolidateRangeSelection(bool restoreDialog)
+    {
+        var session = _consolidateRangePickerSession;
+        if (session is null)
+            return;
+
+        _consolidateRangePickerSession = null;
+        SheetGrid.RemoveHandler(
+            UIElement.PreviewMouseLeftButtonUpEvent,
+            new MouseButtonEventHandler(ConsolidateRangePicker_MouseLeftButtonUp));
+        PreviewKeyDown -= ConsolidateRangePicker_KeyDown;
+        session.Dialog.Closed -= ConsolidateRangePickerDialog_Closed;
+        if (restoreDialog)
+            RestoreConsolidateDialogAfterRangeSelection(session);
+    }
+
+    private void RestoreConsolidateDialogAfterRangeSelection(ConsolidateRangePickerSession session)
+    {
+        IsEnabled = session.OwnerWasEnabled;
+        if (session.Request.CollapseDialog && !session.Dialog.IsVisible)
+            session.Dialog.Show();
+        session.Dialog.Activate();
+    }
+
+    private string FormatConsolidateRangeSelection(
+        SheetId defaultSheetId,
+        ConsolidateRangeSelectionTarget target,
+        GridRange selectedRange) =>
+        target == ConsolidateRangeSelectionTarget.DestinationCell
+            ? FormatWorkbookCellReference(selectedRange.Start, defaultSheetId)
+            : WorkbookRangeTextCodec.Format(
+                selectedRange,
+                defaultSheetId,
+                sheetId => _workbook.GetSheet(sheetId)?.Name);
+
+    private string FormatWorkbookCellReference(CellAddress address, SheetId defaultSheetId)
+    {
+        var reference = FormatCellReference(address);
+        var sheetName = _workbook.GetSheet(address.Sheet)?.Name;
+        return sheetName is null || address.Sheet.Equals(defaultSheetId)
+            ? reference
+            : $"{PivotUiPlanner.QuoteSheetNameForReference(sheetName)}!{reference}";
+    }
+
+    private bool TryExecuteRepeatableConsolidateCommand(
+        ConsolidateDialogResult result,
+        out CommandOutcome outcome)
+    {
+        IWorkbookCommand CreateCommand() =>
+            new ConsolidateCommand(
+                result.SourceRanges,
+                result.DestinationCell,
+                result.Function,
+                result.UseTopRowLabels,
+                result.UseLeftColumnLabels,
+                result.CreateLinksToSourceData);
+
+        try
+        {
+            outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        }
+        catch (Exception ex)
+        {
+            outcome = new CommandOutcome(false, ex.Message);
+        }
+
+        if (outcome.Success)
+        {
+            MarkWorkbookDirty();
+            _repeatPostAction = null;
+            InvalidateNavigationCaches();
+            NotifyOtherWindowsOfWorkbookChange();
+            return true;
+        }
+
+        ShowCommandError(outcome, "Consolidate");
+        return false;
+    }
+
+    private sealed record ConsolidateRangePickerSession(
+        ConsolidateDialog Dialog,
+        ConsolidateRangeSelectionRequest Request,
+        bool OwnerWasEnabled);
 
     // ── What-If Analysis ─────────────────────────────────────────────────────
 

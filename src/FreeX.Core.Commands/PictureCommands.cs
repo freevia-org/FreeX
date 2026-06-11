@@ -9,6 +9,7 @@ public sealed class InsertPictureCommand : IWorkbookCommand
     private bool _added;
 
     public string Label => "Insert Picture";
+    public Guid PictureId => _picture.Id;
 
     public InsertPictureCommand(
         SheetId sheetId,
