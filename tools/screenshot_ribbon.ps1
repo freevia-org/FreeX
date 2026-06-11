@@ -29,13 +29,19 @@ public class Win32c {
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern IntPtr SetActiveWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, ref RECT lpRect);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
     [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
     [DllImport("gdi32.dll")]  public static extern int GetDeviceCaps(IntPtr hDC, int nIndex);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT { public int Left, Top, Right, Bottom; }
     public static IntPtr FindWindowByPid(int pid) {
@@ -108,6 +114,7 @@ function Clear-ScreenshotEvidenceArtifacts {
     Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath (Join-Path $outDir "screenshot_manifest.json") -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $outDir "screenshot_blocker_manifest.json") -Force -ErrorAction SilentlyContinue
 }
 
 function Clear-OpenWorkbookDialogEvidenceArtifacts {
@@ -363,10 +370,57 @@ function Get-WindowTitle($windowHandle) {
     return $title.ToString()
 }
 
+function Get-ForegroundWindowInfo {
+    $foreground = [Win32c]::GetForegroundWindow()
+    if ($foreground -eq [IntPtr]::Zero) {
+        return [pscustomobject]@{
+            Handle = "0"
+            ProcessId = $null
+            Title = ""
+        }
+    }
+
+    $actualPid = 0
+    [Win32c]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    $title = New-Object System.Text.StringBuilder 512
+    [Win32c]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+    return [pscustomobject]@{
+        Handle = $foreground.ToString()
+        ProcessId = $actualPid
+        Title = $title.ToString()
+    }
+}
+
+function Write-RootCaptureBlockerManifest($operation, $expectedPid, $expectedTitle, $reason) {
+    $manifestPath = Join-Path $outDir "screenshot_blocker_manifest.json"
+    [pscustomobject]@{
+        Tool = "screenshot_ribbon.ps1"
+        EvidenceFamily = "ribbon"
+        EvidenceSubject = "freex"
+        EvidenceApp = "FreeX"
+        CaptureStatus = "blocked"
+        BlockedAt = (Get-Date).ToString("o")
+        Operation = $operation
+        Reason = $reason
+        OutputDirectory = $outDir
+        ValidEvidenceManifest = "screenshot_manifest.json"
+        ExpectedForeground = [pscustomobject]@{
+            ProcessId = $expectedPid
+            WindowTitle = $expectedTitle
+        }
+        ActualForeground = Get-ForegroundWindowInfo
+        RequestedWidths = @($captureWidths | ForEach-Object { $_.Label })
+        RequestedTabs = $tabNames
+        Policy = "Root ribbon screenshots and screenshot_manifest.json are discarded unless the expected FreeX process and window title own foreground immediately before global input and screen capture."
+    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+    Write-Warning "Saved blocker manifest $manifestPath"
+}
+
 function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operation = "capture") {
     $foreground = [Win32c]::GetForegroundWindow()
     if ($foreground -eq [IntPtr]::Zero) {
         Clear-ScreenshotEvidenceArtifacts
+        Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle "No foreground window was available."
         throw "Blocked: no foreground window before $operation."
     }
 
@@ -377,6 +431,7 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operati
     $actualTitle = $title.ToString()
     if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
         Clear-ScreenshotEvidenceArtifacts
+        Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle "Foreground window '$actualTitle' (PID $actualPid) did not match expected '$expectedTitle' (PID $expectedPid)."
         throw "Blocked: foreground window '$actualTitle' (PID $actualPid) does not match expected '$expectedTitle' (PID $expectedPid) before $operation."
     }
 }
@@ -405,15 +460,53 @@ function Set-FreeXForegroundWindow($windowHandle, $expectedPid, $expectedTitle, 
         $shell = $null
     }
 
-    for ($attempt = 0; $attempt -lt 10; $attempt++) {
-        [Win32c]::ShowWindow($windowHandle, 1) | Out-Null
+    for ($attempt = 0; $attempt -lt 16; $attempt++) {
+        [Win32c]::ShowWindow($windowHandle, 9) | Out-Null
         [Win32c]::SetWindowPos($windowHandle, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null
-        [Win32c]::SetForegroundWindow($windowHandle) | Out-Null
+        Start-Sleep -Milliseconds 40
+        [Win32c]::SetWindowPos($windowHandle, [IntPtr](-2), 0, 0, 0, 0, 0x0043) | Out-Null
+
+        $foreground = [Win32c]::GetForegroundWindow()
+        $foregroundPid = 0
+        $targetPid = 0
+        $foregroundThread = if ($foreground -ne [IntPtr]::Zero) { [Win32c]::GetWindowThreadProcessId($foreground, [ref]$foregroundPid) } else { 0 }
+        $targetThread = [Win32c]::GetWindowThreadProcessId($windowHandle, [ref]$targetPid)
+        $currentThread = [Win32c]::GetCurrentThreadId()
+        $attachedTarget = $false
+        $attachedForeground = $false
+        try {
+            if ($targetThread -ne 0 -and $targetThread -ne $currentThread) {
+                $attachedTarget = [Win32c]::AttachThreadInput($currentThread, $targetThread, $true)
+            }
+            if ($foregroundThread -ne 0 -and $foregroundThread -ne $currentThread -and $foregroundThread -ne $targetThread) {
+                $attachedForeground = [Win32c]::AttachThreadInput($currentThread, $foregroundThread, $true)
+            }
+
+            [Win32c]::BringWindowToTop($windowHandle) | Out-Null
+            [Win32c]::SetActiveWindow($windowHandle) | Out-Null
+            [Win32c]::SetFocus($windowHandle) | Out-Null
+            [Win32c]::SetForegroundWindow($windowHandle) | Out-Null
+        }
+        finally {
+            if ($attachedForeground) {
+                [Win32c]::AttachThreadInput($currentThread, $foregroundThread, $false) | Out-Null
+            }
+            if ($attachedTarget) {
+                [Win32c]::AttachThreadInput($currentThread, $targetThread, $false) | Out-Null
+            }
+        }
+
+        if (($attempt % 4) -eq 3) {
+            [Win32c]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
+            [Win32c]::SetForegroundWindow($windowHandle) | Out-Null
+            [Win32c]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+        }
+
         if ($null -ne $shell) {
             $shell.AppActivate([int]$expectedPid) | Out-Null
         }
 
-        Start-Sleep -Milliseconds 250
+        Start-Sleep -Milliseconds 300
 
         $foreground = [Win32c]::GetForegroundWindow()
         if ($foreground -eq [IntPtr]::Zero) {

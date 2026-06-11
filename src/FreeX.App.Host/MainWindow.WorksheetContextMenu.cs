@@ -48,6 +48,12 @@ public partial class MainWindow
         }
 
         var item = new MenuItem { Header = command.AccessHeader, IsEnabled = command.IsEnabled };
+        System.Windows.Automation.AutomationProperties.SetName(item, command.Header);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(
+            item,
+            command.Action == WorksheetContextMenuAction.None
+                ? $"WorksheetContextMenu_{NormalizeWorksheetContextMenuAutomationId(command.Header)}"
+                : $"WorksheetContextMenu_{command.Action}");
         if (command.HasChildren)
         {
             foreach (var child in command.Children)
@@ -59,6 +65,18 @@ public partial class MainWindow
         }
 
         items.Add(item);
+    }
+
+    private static string NormalizeWorksheetContextMenuAutomationId(string header)
+    {
+        var builder = new System.Text.StringBuilder(header.Length);
+        foreach (var character in header)
+        {
+            if (char.IsLetterOrDigit(character))
+                builder.Append(character);
+        }
+
+        return builder.Length == 0 ? "Item" : builder.ToString();
     }
 
     private void OnWaterfallChartPointContextMenuRequested(ChartModel chart, int pointIndex, System.Windows.Point gridPos)
