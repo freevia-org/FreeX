@@ -27,6 +27,7 @@ public partial class ExportPlannerTests
         printExport.Should().Contain("ApplyExportPageRange(options");
         printExport.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
         printExport.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
+        printExport.Should().Contain("using (var pkg = System.IO.Packaging.Package.Open(");
         printExport.Should().Contain("ResolveExportRange(options)");
         printExport.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions)");
         printExport.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions))");

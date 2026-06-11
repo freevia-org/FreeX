@@ -173,29 +173,30 @@ public partial class MainWindow
 
             var paginator = RenderExportPaginator(effectiveOptions);
 
-            // Open the XPS package for write
-            var pkg = System.IO.Packaging.Package.Open(
+            // Open the XPS package for write and close it before reporting success.
+            using (var pkg = System.IO.Packaging.Package.Open(
                 xpsPath,
                 System.IO.FileMode.Create,
-                System.IO.FileAccess.ReadWrite);
-            XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions));
+                System.IO.FileAccess.ReadWrite))
+            {
+                XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions));
 
-            using var xpsDoc = new System.Windows.Xps.Packaging.XpsDocument(pkg);
+                using var xpsDoc = new System.Windows.Xps.Packaging.XpsDocument(pkg);
 
-            // XpsDocumentWriter(XpsDocument) is internal in ReachFramework; create it via reflection
-            var writerType = typeof(System.Windows.Xps.XpsDocumentWriter);
-            var ctor = writerType.GetConstructor(
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
-                null,
-                [typeof(System.Windows.Xps.Packaging.XpsDocument)],
-                null);
+                // XpsDocumentWriter(XpsDocument) is internal in ReachFramework; create it via reflection
+                var writerType = typeof(System.Windows.Xps.XpsDocumentWriter);
+                var ctor = writerType.GetConstructor(
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+                    null,
+                    [typeof(System.Windows.Xps.Packaging.XpsDocument)],
+                    null);
 
-            if (ctor == null)
-                throw new InvalidOperationException("XpsDocumentWriter(XpsDocument) constructor not found in ReachFramework.");
+                if (ctor == null)
+                    throw new InvalidOperationException("XpsDocumentWriter(XpsDocument) constructor not found in ReachFramework.");
 
-            var writer = (System.Windows.Xps.XpsDocumentWriter)ctor.Invoke([xpsDoc]);
-            writer.Write(paginator);
-            // xpsDoc closed by 'using'
+                var writer = (System.Windows.Xps.XpsDocumentWriter)ctor.Invoke([xpsDoc]);
+                writer.Write(paginator);
+            }
 
             if (showSuccessMessage)
             {
