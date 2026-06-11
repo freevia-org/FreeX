@@ -371,4 +371,102 @@ public class FormulaRewriteCommandTests
         wb.Sheets.Select(s => s.Name).Should().Equal("First", "Second");
     }
 
+    // ── RemoveSheet formula rewrite ───────────────────────────────────────────
+
+    [Fact]
+    public void RemoveSheet_RewritesCrossSheetFormulaReferencesToRefError()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+        sheet1.SetFormula(new CellAddress(sheet1.Id, 1, 1), "Sheet2!B1*2");
+
+        new RemoveSheetCommand(sheet2.Id).Apply(ctx);
+
+        sheet1.GetCell(1, 1)!.FormulaText.Should().Be("#REF!*2");
+    }
+
+    [Fact]
+    public void RemoveSheet_QuotedSheetName_RewritesToRefError()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var myData = wb.AddSheet("My Data");
+        var ctx = new TestCommandContext(wb);
+        sheet1.SetFormula(new CellAddress(sheet1.Id, 1, 1), "'My Data'!B1");
+
+        new RemoveSheetCommand(myData.Id).Apply(ctx);
+
+        sheet1.GetCell(1, 1)!.FormulaText.Should().Be("#REF!");
+    }
+
+    [Fact]
+    public void RemoveSheet_CaseInsensitiveSheetName_RewritesToRefError()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+        // Formula uses all-caps; sheet is named "Sheet2"
+        sheet1.SetFormula(new CellAddress(sheet1.Id, 1, 1), "SHEET2!B1");
+
+        new RemoveSheetCommand(sheet2.Id).Apply(ctx);
+
+        sheet1.GetCell(1, 1)!.FormulaText.Should().Be("#REF!");
+    }
+
+    [Fact]
+    public void RemoveSheet_Undo_RestoresFormulaReferences()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+        sheet1.SetFormula(new CellAddress(sheet1.Id, 1, 1), "Sheet2!B1*2");
+
+        var cmd = new RemoveSheetCommand(sheet2.Id);
+        cmd.Apply(ctx);
+        sheet1.GetCell(1, 1)!.FormulaText.Should().Be("#REF!*2");
+
+        cmd.Revert(ctx);
+
+        wb.Sheets.Should().HaveCount(2);
+        sheet1.GetCell(1, 1)!.FormulaText.Should().Be("Sheet2!B1*2");
+    }
+
+    [Fact]
+    public void RemoveSheet_NewSheetWithSameName_DoesNotResurrectOldRefErrors()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+        sheet1.SetFormula(new CellAddress(sheet1.Id, 1, 1), "Sheet2!B1*2");
+
+        new RemoveSheetCommand(sheet2.Id).Apply(ctx);
+        sheet1.GetCell(1, 1)!.FormulaText.Should().Be("#REF!*2");
+
+        // Create a new sheet with the same name
+        new AddSheetCommand("Sheet2").Apply(ctx);
+
+        // Formula is still #REF!*2 — not silently rebound
+        sheet1.GetCell(1, 1)!.FormulaText.Should().Be("#REF!*2");
+    }
+
+    [Fact]
+    public void RemoveSheet_ReferencesToOtherSheets_Untouched()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var sheet3 = wb.AddSheet("Sheet3");
+        var ctx = new TestCommandContext(wb);
+        sheet1.SetFormula(new CellAddress(sheet1.Id, 1, 1), "Sheet3!A1");
+
+        new RemoveSheetCommand(sheet2.Id).Apply(ctx);
+
+        sheet1.GetCell(1, 1)!.FormulaText.Should().Be("Sheet3!A1", "formula referencing Sheet3 must be unchanged");
+    }
+
 }
