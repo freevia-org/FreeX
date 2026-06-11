@@ -29,6 +29,7 @@ public sealed partial class FormulaEvaluator
     private const int CachedIntegerNumberMax = 64;
     private static readonly BoolValue TrueValue = new(true);
     private static readonly BoolValue FalseValue = new(false);
+    private static readonly TextValue EmptyTextValue = new(string.Empty);
     private static readonly NumberValue[] CachedIntegerNumberValues = CreateCachedIntegerNumberValues();
 
     private static NumberValue NumberValueFor(double value)

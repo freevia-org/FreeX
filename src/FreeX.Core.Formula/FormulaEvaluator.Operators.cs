@@ -436,6 +436,16 @@ public sealed partial class FormulaEvaluator
 
     private static int CompareValues(ScalarValue left, ScalarValue right)
     {
+        // Blank coercion: Excel coerces a blank operand to match the other operand's type class
+        // so that =A1=0, =A1="", and =A1=FALSE all return TRUE when A1 is empty.
+        bool lBlank = left is BlankValue;
+        bool rBlank = right is BlankValue;
+        if (lBlank && !rBlank)
+            return CompareValues(CoerceBlankTo(right), right);
+        if (rBlank && !lBlank)
+            return CompareValues(left, CoerceBlankTo(left));
+        // blank vs blank falls through — both will be BlankValue and TypeOrder gives 0==0.
+
         // Numbers and dates compare as numbers (dates are OADate serial numbers)
         bool lNum = left is NumberValue or DateTimeValue;
         bool rNum = right is NumberValue or DateTimeValue;
@@ -453,6 +463,19 @@ public sealed partial class FormulaEvaluator
         // Mixed types: numbers/dates < text < booleans (Excel convention)
         return TypeOrder(left).CompareTo(TypeOrder(right));
     }
+
+    /// <summary>
+    /// Returns the zero/empty/false value of the same type class as <paramref name="other"/>,
+    /// used to coerce a blank operand before a comparison.
+    /// Number/DateTime → 0, Text → "", Bool → FALSE, anything else → blank (unchanged).
+    /// </summary>
+    private static ScalarValue CoerceBlankTo(ScalarValue other) => other switch
+    {
+        NumberValue or DateTimeValue => CachedIntegerNumberValues[0],
+        TextValue => EmptyTextValue,
+        BoolValue => FalseValue,
+        _ => BlankValue.Instance
+    };
 
     private static int TypeOrder(ScalarValue v) => v switch
     {
