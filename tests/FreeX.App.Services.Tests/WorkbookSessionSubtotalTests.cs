@@ -142,6 +142,40 @@ public sealed class WorkbookSessionSubtotalTests
         details.GetValue(4, 1).Should().Be(new TextValue("West"));
     }
 
+    [Fact]
+    public void ExecuteSubtotalOptions_TrimsWholeColumnSelectionBeforeApplying()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        SeedSubtotalRows(sheet);
+        var session = CreateSession(workbook);
+        session.SelectRange(Range(sheet, 1, 1, CellAddress.MaxRow, 2));
+
+        var result = session.ExecuteSubtotalOptions(CreateSumOptions());
+
+        result.Success.Should().BeTrue();
+        sheet.GetValue(4, 1).Should().Be(new TextValue("East Total"));
+        sheet.GetCell(Address(sheet, 4, 2))!.FormulaText.Should().Be("SUBTOTAL(9,B2:B3)");
+        sheet.GetValue(8, 1).Should().Be(new TextValue("Grand Total"));
+        session.SelectedRange.Should().Be(Range(sheet, 1, 1, 5, 2));
+    }
+
+    [Fact]
+    public void ExecuteSubtotalOptions_ReturnsBoundedValidationForEmptyWholeSheetSelection()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var session = CreateSession(workbook);
+        session.SelectRange(Range(sheet, 1, 1, CellAddress.MaxRow, CellAddress.MaxCol));
+
+        var result = session.ExecuteSubtotalOptions(CreateSumOptions());
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be(SubtotalPlanner.NoOccupiedDataMessage);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
     private static WorkbookSession CreateSession(Workbook workbook) =>
         new WorkbookSessionFactory().Create(
             new StartupWorkbookLoadResult(workbook, "Book.fxl", "Opened .fxl.", IsFallback: false),

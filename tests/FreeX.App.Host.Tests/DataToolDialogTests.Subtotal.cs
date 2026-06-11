@@ -134,10 +134,10 @@ public sealed partial class DataToolDialogTests
                 AutomationProperties.GetName(functionBox).Should().Be("Use function");
                 AutomationProperties.GetHelpText(functionBox).Should().Be("Choose the function used to calculate each subtotal.");
 
-                var columnsPanel = WpfTestTree.FindVisualDescendants<StackPanel>(dialog)
-                    .Single(panel => AutomationProperties.GetAutomationId(panel) == "SubtotalColumnsPanel");
-                AutomationProperties.GetName(columnsPanel).Should().Be("Add subtotal to");
-                AutomationProperties.GetHelpText(columnsPanel).Should().Be("Choose columns that receive subtotal calculations.");
+                var columnsList = WpfTestTree.FindVisualDescendants<ListBox>(dialog)
+                    .Single(list => AutomationProperties.GetAutomationId(list) == "SubtotalColumnsPanel");
+                AutomationProperties.GetName(columnsList).Should().Be("Add subtotal to");
+                AutomationProperties.GetHelpText(columnsList).Should().Be("Choose columns that receive subtotal calculations.");
 
                 var salesBox = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                     .Single(box => AutomationProperties.GetAutomationId(box) == "SubtotalColumn1Box");
@@ -185,9 +185,9 @@ public sealed partial class DataToolDialogTests
         })
             source.Should().Contain($"UiText.Get(\"{key}\")");
 
-        source.Should().Contain("new Label { Content = UiText.Get(\"Subtotal_AddSubtotalTo\"), Target = _subtotalColumnPanel");
-        source.Should().Contain("_subtotalColumnPanel.Focusable = true");
-        source.Should().Contain("_subtotalColumnPanel.GotKeyboardFocus");
+        source.Should().Contain("new Label { Content = UiText.Get(\"Subtotal_AddSubtotalTo\"), Target = _subtotalColumnList");
+        source.Should().Contain("ConfigureVirtualizedItemsControl(_subtotalColumnList)");
+        source.Should().Contain("_subtotalColumnList.GotKeyboardFocus");
     }
 
     [Fact]
@@ -201,7 +201,7 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("SelectedValue = DefaultSubtotalFunction");
         source.Should().Contain("SelectedValuePath = nameof(SubtotalFunctionChoice.FunctionText)");
         source.Should().NotContain("Header = \"Add subtotal to:\"");
-        source.Should().Contain("_subtotalColumnPanel");
+        source.Should().Contain("_subtotalColumnList");
     }
 
     [Fact]
@@ -228,10 +228,24 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("Keyboard.Focus(_functionBox);");
         source.Should().Contain("FocusSubtotalColumnChoices();");
         source.Should().Contain("private void FocusSubtotalColumnChoices()");
-        source.Should().Contain("if (_subtotalColumnBoxes.Count > 0)");
-        source.Should().Contain("var firstColumnBox = _subtotalColumnBoxes[0];");
-        source.Should().Contain("firstColumnBox.Focus();");
-        source.Should().Contain("Keyboard.Focus(firstColumnBox);");
+        source.Should().Contain("if (_subtotalColumns.Count > 0 && !_isMovingSubtotalColumnFocus)");
+        source.Should().Contain("_subtotalColumnList.Focus();");
+        source.Should().Contain("Keyboard.Focus(_subtotalColumnList);");
+        source.Should().Contain("ContainerFromIndex(0)");
+    }
+
+    [Fact]
+    public void SubtotalDialog_ConfiguresVirtualizedDropdownAndChecklist()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("SubtotalDialog.cs");
+
+        source.Should().Contain("ConfigureVirtualizedItemsControl(_groupColumnBox)");
+        source.Should().Contain("ConfigureVirtualizedItemsControl(_subtotalColumnList)");
+        source.Should().Contain("CreateVirtualizingStackPanelTemplate");
+        source.Should().Contain("VirtualizingStackPanel.IsVirtualizingProperty");
+        source.Should().Contain("VirtualizingStackPanel.VirtualizationModeProperty");
+        source.Should().Contain("VirtualizationMode.Recycling");
+        source.Should().Contain("ItemTemplate = CreateSubtotalColumnTemplate()");
     }
 
     [Fact]
@@ -256,8 +270,8 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("SubtotalDialogAction.RemoveAll");
         source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
         source.Should().Contain("new RemoveSubtotalRowsCommand(");
-        source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
-        source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId)");
+        source.Should().Contain("SubtotalPlanner.TryCreateSourceRange(sheet, range, out var sourceRange");
+        source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId)");
         source.Should().Contain("dialog.Result.ReplaceCurrentSubtotals");
         source.Should().Contain("new CompositeWorkbookCommand(\"Subtotal\", [new RemoveSubtotalRowsCommand(sheetId, sheetRange), subtotalCommand])");
         source.Should().Contain("dialog.Result.PageBreakBetweenGroups");

@@ -111,7 +111,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-status-zoom-out-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-out-click", ClickAutomationIdExpectZoom("StatusZoomOutButton", 95)),
             "freex-status-zoom-slider-drag" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-drag", DragFirstSliderExpectChangedZoom("Zoom", 100)),
             "freex-status-zoom-slider-rangevalue-set" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-rangevalue-set", SetFirstSliderRangeValue("Zoom", 150)),
+            "freex-status-zoom-min-max-rangevalue-set" => RunFreeXMainWindowPointerScenario("freex-status-zoom-min-max-rangevalue-set", SetZoomSliderMinMaxRangeValues()),
             "freex-status-ctrl-wheel-grid-zoom" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-wheel-grid-zoom", CtrlWheelRelativeExpectZoom(0.36, 0.56, 120, 110)),
+            "freex-status-wheel-modifier-breadth" => RunFreeXMainWindowPointerScenario("freex-status-wheel-modifier-breadth", WheelModifierBreadth()),
             "freex-status-view-shortcuts-click" => RunFreeXMainWindowPointerScenario("freex-status-view-shortcuts-click", ClickStatusViewShortcuts()),
             "freex-status-zoom-text-dialog-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-text-dialog-click", ClickZoomTextExpectDialog()),
             "freex-status-ctrl-alt-zoom-keys" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-alt-zoom-keys", CtrlAltZoomKeysExpectRoundTrip()),
@@ -717,11 +719,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", "Excel sheet-tab navigation button bounds were not usable for a physical right-click.", options.OutputRoot, "excel", guard);
             }
 
-            var dialog = WindowFinder.FindProcessWindow(
-                pid.Value,
-                window => window.Handle != hwnd.ToInt64() &&
-                    window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase),
-                options.PopupTimeout);
+            var dialog = FindActivateDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
                 return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's Activate dialog after right-clicking the sheet-tab navigation button.", options.OutputRoot, "excel", guard);
@@ -2426,6 +2424,46 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return ValidateZoomSliderValue(handle, targetSliderValue, $"native UIA RangeValue.SetValue({targetSliderValue:0.###})");
         };
 
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SetZoomSliderMinMaxRangeValues()
+        => (handle, processId, _, guard) =>
+        {
+            var slider = FindFirstSlider(handle, "Zoom");
+            if (slider is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the status Zoom slider.", options.OutputRoot, "freex", guard);
+            }
+
+            if (!slider.TryGetCurrentPattern(RangeValuePattern.Pattern, out var patternObject) ||
+                patternObject is not RangeValuePattern rangePattern)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-rangevalue-unavailable", "Status Zoom slider did not expose RangeValuePattern.", options.OutputRoot, "freex", guard);
+            }
+
+            var validations = new List<string>();
+            foreach (var (value, label) in new[] { (0d, "minimum"), (200d, "maximum") })
+            {
+                guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+                if (!guard.Success)
+                {
+                    return BlockedWithGuard(options.Scenario, guard, $"before-uia-rangevalue-set-{label}");
+                }
+
+                rangePattern.SetValue(value);
+                Thread.Sleep(options.AfterInputDelay);
+
+                var blocked = ValidateZoomSliderValue(handle, value, $"native UIA RangeValue.SetValue({value:0.###}) {label}");
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+
+                validations.Add($"{label} slider={value:0.###} visible zoom about {SliderToZoomPercent(value):0}%");
+            }
+
+            _lastResultValidation = "Status zoom min/max RangeValue proof: " + string.Join("; ", validations) + ".";
+            return null;
+        };
+
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> CtrlWheelRelativeExpectZoom(
         double x,
         double y,
@@ -2954,6 +2992,27 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return null;
         };
 
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> WheelModifierBreadth()
+        => (handle, processId, window, guard) =>
+        {
+            var blocked = WheelVerticalThenShiftHorizontal()(handle, processId, window, guard);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var scrollValidation = _lastResultValidation ?? "foreground ordinary wheel and Shift+wheel passed";
+            blocked = CtrlWheelRelativeExpectZoom(0.36, 0.56, 120, 110)(handle, processId, window, guard);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var ctrlValidation = _lastResultValidation ?? "foreground Ctrl+wheel zoom passed";
+            _lastResultValidation = $"{scrollValidation}; {ctrlValidation}.";
+            return null;
+        };
+
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabClickSelect()
         => (handle, processId, _, _) =>
         {
@@ -3115,7 +3174,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not re-resolve Sheet2 before opening the Ungroup Sheets context menu.", options.OutputRoot, "freex");
             }
 
-            blocked = GuardedOpenContextMenuFromFocusedElement(options.Scenario, processId, handle, tab);
+            blocked = GuardedClickElement(options.Scenario, processId, handle, tab, MouseButtonKind.Right);
             if (blocked is not null)
             {
                 return blocked;
@@ -3161,7 +3220,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 handle,
                 (int)(sourceBounds.Left + sourceBounds.Width / 2.0),
                 (int)(sourceBounds.Top + sourceBounds.Height / 2.0),
-                (int)(targetBounds.Left + targetBounds.Width / 2.0),
+                (int)(targetBounds.Left + targetBounds.Width * 0.35),
                 (int)(targetBounds.Top + targetBounds.Height / 2.0));
             if (blocked is not null)
             {
@@ -3227,10 +3286,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return blocked;
             }
 
-            var dialog = WindowFinder.FindProcessWindow(
-                processId,
-                window => window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase),
-                options.PopupTimeout);
+            var dialog = FindActivateDialogWindow(processId, handle.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
                 return CaptureResult.Blocked(options.Scenario, "dialog-not-found", "Did not detect Activate Sheet dialog after right-clicking the sheet-tab overflow navigation button.", options.OutputRoot, "freex");
@@ -3625,6 +3681,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         var tabCenterY = tabBounds.Average(bounds => bounds.Top + bounds.Height / 2.0);
+        var tabLeft = tabBounds.Min(bounds => bounds.Left);
+        var tabRight = tabBounds.Max(bounds => bounds.Right);
         var buttons = AutomationElement.FromHandle(handle)
             .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button))
             .Cast<AutomationElement>()
@@ -3646,8 +3704,41 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return null;
         }
 
-        return right ? buttons[^1] : buttons[0];
+        if (right)
+        {
+            var beforeTabs = buttons
+                .Where(button => button.Current.BoundingRectangle.Right <= tabLeft + 2)
+                .OrderByDescending(button => button.Current.BoundingRectangle.Right)
+                .ToList();
+            if (beforeTabs.Count >= 2)
+                return beforeTabs[0];
+
+            return buttons
+                .OrderBy(button =>
+                {
+                    var bounds = button.Current.BoundingRectangle;
+                    return Math.Abs((bounds.Left + bounds.Width / 2.0) - tabRight);
+                })
+                .FirstOrDefault();
+        }
+
+        return buttons
+            .OrderBy(button =>
+            {
+                var bounds = button.Current.BoundingRectangle;
+                return Math.Abs((bounds.Left + bounds.Width / 2.0) - tabLeft);
+            })
+            .FirstOrDefault();
     }
+
+    private static WindowInfo? FindActivateDialogWindow(int processId, long ownerHandle, TimeSpan timeout)
+        => WindowFinder.FindProcessWindow(
+            processId,
+            window => window.Handle != ownerHandle &&
+                window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase) &&
+                window.Bounds.Width >= 120 &&
+                window.Bounds.Height >= 90,
+            timeout);
 
     private static List<string> GetVisibleSheetTabOrder(IntPtr handle)
     {
@@ -3922,26 +4013,65 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private static bool TryGetAutomationElementNameOrVisibleText(IntPtr handle, string automationId, string expectedName, out string name)
     {
-        if (TryGetAutomationElementName(handle, automationId, out name))
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+        do
         {
-            return true;
-        }
-
-        var root = AutomationElement.FromHandle(handle);
-        var matches = root.FindAll(
-            TreeScope.Descendants,
-            new PropertyCondition(AutomationElement.NameProperty, expectedName));
-        foreach (AutomationElement match in matches)
-        {
-            if (!match.Current.BoundingRectangle.IsEmpty)
+            var element = FindVisibleElementByAutomationId(handle, automationId);
+            if (element is not null)
             {
-                name = match.Current.Name ?? string.Empty;
-                return !string.IsNullOrWhiteSpace(name);
+                foreach (var candidate in ReadAutomationTextCandidates(element))
+                {
+                    if (string.Equals(candidate, expectedName, StringComparison.Ordinal))
+                    {
+                        name = candidate;
+                        return true;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(candidate))
+                    {
+                        name = candidate;
+                    }
+                }
             }
+
+            var root = AutomationElement.FromHandle(handle);
+            var matches = root.FindAll(
+                TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.NameProperty, expectedName));
+            foreach (AutomationElement match in matches)
+            {
+                if (IsVisibleElement(match))
+                {
+                    name = match.Current.Name ?? string.Empty;
+                    return !string.IsNullOrWhiteSpace(name);
+                }
+            }
+
+            Thread.Sleep(100);
         }
+        while (DateTime.UtcNow < deadline);
 
         name = string.Empty;
         return false;
+    }
+
+    private static IEnumerable<string> ReadAutomationTextCandidates(AutomationElement element)
+    {
+        yield return element.Current.Name ?? string.Empty;
+        yield return element.Current.HelpText ?? string.Empty;
+
+        if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var valuePatternObject) &&
+            valuePatternObject is ValuePattern valuePattern)
+        {
+            yield return valuePattern.Current.Value ?? string.Empty;
+        }
+
+        if (element.TryGetCurrentPattern(TextPattern.Pattern, out var textPatternObject) &&
+            textPatternObject is TextPattern textPattern)
+        {
+            yield return textPattern.DocumentRange.GetText(256).TrimEnd('\r', '\n');
+        }
+
     }
 
     private static int CenterX(System.Windows.Rect bounds) => (int)(bounds.Left + bounds.Width / 2.0);
@@ -4180,40 +4310,70 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private static bool TryInvokeProcessMenuItem(int processId, string nameContains)
     {
-        var menuItems = AutomationElement.RootElement
-            .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem))
-            .Cast<AutomationElement>()
-            .Where(element => ElementMatchesProcessAndName(element, processId, nameContains))
-            .OrderBy(element => IsOffscreen(element) ? 1 : 0)
-            .ThenByDescending(element =>
-            {
-                var bounds = element.Current.BoundingRectangle;
-                return bounds.Width * bounds.Height;
-            })
-            .ToList();
+        List<AutomationElement> menuItems;
+        try
+        {
+            menuItems = AutomationElement.RootElement
+                .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem))
+                .Cast<AutomationElement>()
+                .Where(element => ElementMatchesProcessAndName(element, processId, nameContains))
+                .OrderBy(element => IsOffscreen(element) ? 1 : 0)
+                .ThenByDescending(GetElementArea)
+                .ToList();
+        }
+        catch (COMException)
+        {
+            return false;
+        }
 
         foreach (var item in menuItems)
         {
-            if (item.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
-                invokePatternObject is InvokePattern invokePattern)
+            try
             {
-                invokePattern.Invoke();
-                return true;
-            }
+                if (item.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
+                    invokePatternObject is InvokePattern invokePattern)
+                {
+                    invokePattern.Invoke();
+                    return true;
+                }
 
-            var bounds = item.Current.BoundingRectangle;
-            if (!bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0)
+                var bounds = item.Current.BoundingRectangle;
+                if (!bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0)
+                {
+                    NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
+                    Thread.Sleep(100);
+                    NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                    Thread.Sleep(60);
+                    NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+                    return true;
+                }
+            }
+            catch (COMException)
             {
-                NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
-                Thread.Sleep(100);
-                NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
-                Thread.Sleep(60);
-                NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
-                return true;
+            }
+            catch (ElementNotAvailableException)
+            {
             }
         }
 
         return false;
+    }
+
+    private static double GetElementArea(AutomationElement element)
+    {
+        try
+        {
+            var bounds = element.Current.BoundingRectangle;
+            return bounds.Width * bounds.Height;
+        }
+        catch (COMException)
+        {
+            return 0;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return 0;
+        }
     }
 
     private static bool ElementMatchesProcessAndName(AutomationElement element, int processId, string nameContains)
@@ -4235,6 +4395,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         {
             return false;
         }
+        catch (COMException)
+        {
+            return false;
+        }
     }
 
     private static bool IsOffscreen(AutomationElement element)
@@ -4244,6 +4408,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return element.Current.IsOffscreen;
         }
         catch (ElementNotAvailableException)
+        {
+            return true;
+        }
+        catch (COMException)
         {
             return true;
         }
@@ -4515,7 +4683,9 @@ internal sealed record CaptureOptions(
           freex-status-zoom-out-click
           freex-status-zoom-slider-drag
           freex-status-zoom-slider-rangevalue-set
+          freex-status-zoom-min-max-rangevalue-set
           freex-status-ctrl-wheel-grid-zoom
+          freex-status-wheel-modifier-breadth
           freex-status-view-shortcuts-click
           freex-status-zoom-text-dialog-click
           freex-status-ctrl-alt-zoom-keys

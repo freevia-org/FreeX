@@ -1,7 +1,10 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Media;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -30,9 +33,24 @@ public sealed class SubtotalDialog : Window
 
     private sealed record SubtotalFunctionChoice(string Label, string FunctionText);
 
+    private sealed class SubtotalColumnSelection(SubtotalColumnChoice choice)
+    {
+        public uint Offset { get; } = choice.Offset;
+        public string Header { get; } = choice.Header;
+        public bool IsSelected { get; set; } = choice.IsSelected;
+        public string AutomationId => $"SubtotalColumn{Offset}Box";
+        public string AutomationName => UiText.Format("Subtotal_ColumnAutomationNameFormat", Header);
+        public string HelpText => UiText.Get("Subtotal_ColumnHelpText");
+    }
+
     private readonly ComboBox _groupColumnBox = new() { DisplayMemberPath = nameof(SubtotalColumnChoice.Header), SelectedValuePath = nameof(SubtotalColumnChoice.Offset) };
-    private readonly List<CheckBox> _subtotalColumnBoxes = [];
-    private readonly StackPanel _subtotalColumnPanel = new();
+    private readonly List<SubtotalColumnSelection> _subtotalColumns;
+    private readonly ListBox _subtotalColumnList = new()
+    {
+        MaxHeight = 118,
+        BorderThickness = new Thickness(0),
+        ItemTemplate = CreateSubtotalColumnTemplate()
+    };
     private readonly ComboBox _functionBox = new()
     {
         ItemsSource = CreateSubtotalFunctionChoices(),
@@ -43,12 +61,14 @@ public sealed class SubtotalDialog : Window
     private readonly CheckBox _replaceBox = new() { IsChecked = true };
     private readonly CheckBox _pageBreakBox = new();
     private readonly CheckBox _summaryBelowBox = new() { IsChecked = true };
+    private bool _isMovingSubtotalColumnFocus;
 
     public SubtotalDialogResult? Result { get; private set; }
 
     public SubtotalDialog(IEnumerable<SubtotalColumnChoice>? columns = null)
     {
         var columnChoices = NormalizeColumnChoices(columns);
+        _subtotalColumns = columnChoices.Select(static column => new SubtotalColumnSelection(column)).ToList();
 
         Title = UiText.Get("Subtotal_Subtotal");
         Width = 380;
@@ -60,30 +80,18 @@ public sealed class SubtotalDialog : Window
 
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new Label { Content = UiText.Get("Subtotal_AtEachChangeIn"), Target = _groupColumnBox, Padding = new Thickness(0) });
+        ConfigureVirtualizedItemsControl(_groupColumnBox);
+        _groupColumnBox.MaxDropDownHeight = 220;
         _groupColumnBox.ItemsSource = columnChoices;
         _groupColumnBox.SelectedValue = columnChoices[0].Offset;
         root.Children.Add(_groupColumnBox);
         root.Children.Add(new Label { Content = UiText.Get("Subtotal_UseFunction"), Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
         root.Children.Add(_functionBox);
-        root.Children.Add(new Label { Content = UiText.Get("Subtotal_AddSubtotalTo"), Target = _subtotalColumnPanel, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
-        _subtotalColumnPanel.Focusable = true;
-        _subtotalColumnPanel.GotKeyboardFocus += (_, _) => FocusSubtotalColumnChoices();
-        foreach (var column in columnChoices)
-        {
-            var box = new CheckBox
-            {
-                Content = column.Header,
-                Tag = column.Offset,
-                IsChecked = column.IsSelected,
-                Margin = new Thickness(0, 0, 0, 4)
-            };
-            AutomationProperties.SetName(box, UiText.Format("Subtotal_ColumnAutomationNameFormat", column.Header));
-            AutomationProperties.SetAutomationId(box, $"SubtotalColumn{column.Offset}Box");
-            AutomationProperties.SetHelpText(box, UiText.Get("Subtotal_ColumnHelpText"));
-            _subtotalColumnBoxes.Add(box);
-            _subtotalColumnPanel.Children.Add(box);
-        }
-        root.Children.Add(new GroupBox { Content = _subtotalColumnPanel });
+        root.Children.Add(new Label { Content = UiText.Get("Subtotal_AddSubtotalTo"), Target = _subtotalColumnList, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
+        ConfigureVirtualizedItemsControl(_subtotalColumnList);
+        _subtotalColumnList.ItemsSource = _subtotalColumns;
+        _subtotalColumnList.GotKeyboardFocus += MoveFocusIntoSubtotalColumnChoices;
+        root.Children.Add(new GroupBox { Content = _subtotalColumnList });
         _replaceBox.Content = UiText.Get("Subtotal_ReplaceCurrentSubtotals");
         _pageBreakBox.Content = UiText.Get("Subtotal_PageBreakBetweenGroups");
         _summaryBelowBox.Content = UiText.Get("Subtotal_SummaryBelowData");
@@ -105,9 +113,9 @@ public sealed class SubtotalDialog : Window
         AutomationProperties.SetAutomationId(_functionBox, "SubtotalFunctionBox");
         AutomationProperties.SetHelpText(_functionBox, UiText.Get("Subtotal_UseFunctionHelpText"));
 
-        AutomationProperties.SetName(_subtotalColumnPanel, UiText.Get("Subtotal_AddSubtotalToAutomationName"));
-        AutomationProperties.SetAutomationId(_subtotalColumnPanel, "SubtotalColumnsPanel");
-        AutomationProperties.SetHelpText(_subtotalColumnPanel, UiText.Get("Subtotal_AddSubtotalToHelpText"));
+        AutomationProperties.SetName(_subtotalColumnList, UiText.Get("Subtotal_AddSubtotalToAutomationName"));
+        AutomationProperties.SetAutomationId(_subtotalColumnList, "SubtotalColumnsPanel");
+        AutomationProperties.SetHelpText(_subtotalColumnList, UiText.Get("Subtotal_AddSubtotalToHelpText"));
 
         AutomationProperties.SetName(_replaceBox, UiText.Get("Subtotal_ReplaceCurrentSubtotalsAutomationName"));
         AutomationProperties.SetAutomationId(_replaceBox, "SubtotalReplaceCurrentBox");
@@ -175,9 +183,9 @@ public sealed class SubtotalDialog : Window
     private void Accept()
     {
         var groupColumnOffset = _groupColumnBox.SelectedValue is uint offset ? offset : 0;
-        var subtotalColumnOffsets = _subtotalColumnBoxes
-            .Where(box => box.IsChecked == true)
-            .Select(box => (uint)box.Tag)
+        var subtotalColumnOffsets = _subtotalColumns
+            .Where(static column => column.IsSelected)
+            .Select(static column => column.Offset)
             .ToList();
 
         try
@@ -219,12 +227,37 @@ public sealed class SubtotalDialog : Window
 
     private void FocusSubtotalColumnChoices()
     {
-        if (_subtotalColumnBoxes.Count > 0)
+        if (_subtotalColumns.Count > 0 && !_isMovingSubtotalColumnFocus)
         {
-            var firstColumnBox = _subtotalColumnBoxes[0];
-            firstColumnBox.Focus();
-            Keyboard.Focus(firstColumnBox);
+            _isMovingSubtotalColumnFocus = true;
+            try
+            {
+                _subtotalColumnList.Focus();
+                Keyboard.Focus(_subtotalColumnList);
+                if (_subtotalColumnList.ItemContainerGenerator.ContainerFromIndex(0) is ListBoxItem firstItem)
+                {
+                    if (FindVisualDescendant<CheckBox>(firstItem) is { } firstColumnBox)
+                    {
+                        firstColumnBox.Focus();
+                        Keyboard.Focus(firstColumnBox);
+                        return;
+                    }
+
+                    firstItem.Focus();
+                    Keyboard.Focus(firstItem);
+                }
+            }
+            finally
+            {
+                _isMovingSubtotalColumnFocus = false;
+            }
         }
+    }
+
+    private void MoveFocusIntoSubtotalColumnChoices(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, _subtotalColumnList))
+            FocusSubtotalColumnChoices();
     }
 
     private void RemoveAll()
@@ -272,6 +305,62 @@ public sealed class SubtotalDialog : Window
         return normalized.Count == 0
             ? [new SubtotalColumnChoice(0, UiText.Format("Subtotal_ColumnLabel", 1), false), new SubtotalColumnChoice(1, UiText.Format("Subtotal_ColumnLabel", 2), true)]
             : normalized;
+    }
+
+    private static void ConfigureVirtualizedItemsControl(ItemsControl control)
+    {
+        control.ItemsPanel = CreateVirtualizingStackPanelTemplate();
+        control.SetValue(ScrollViewer.CanContentScrollProperty, true);
+        control.SetValue(VirtualizingStackPanel.IsVirtualizingProperty, true);
+        control.SetValue(VirtualizingStackPanel.VirtualizationModeProperty, VirtualizationMode.Recycling);
+    }
+
+    private static ItemsPanelTemplate CreateVirtualizingStackPanelTemplate()
+    {
+        var factory = new FrameworkElementFactory(typeof(VirtualizingStackPanel));
+        var template = new ItemsPanelTemplate(factory);
+        template.Seal();
+        return template;
+    }
+
+    private static DataTemplate CreateSubtotalColumnTemplate()
+    {
+        var factory = new FrameworkElementFactory(typeof(CheckBox));
+        factory.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 0, 4));
+        factory.SetBinding(ContentControl.ContentProperty, new Binding(nameof(SubtotalColumnSelection.Header)));
+        factory.SetBinding(ToggleButton.IsCheckedProperty, new Binding(nameof(SubtotalColumnSelection.IsSelected))
+        {
+            Mode = BindingMode.TwoWay,
+            UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+        });
+        factory.SetBinding(AutomationProperties.AutomationIdProperty, new Binding(nameof(SubtotalColumnSelection.AutomationId)));
+        factory.SetBinding(AutomationProperties.NameProperty, new Binding(nameof(SubtotalColumnSelection.AutomationName)));
+        factory.SetBinding(AutomationProperties.HelpTextProperty, new Binding(nameof(SubtotalColumnSelection.HelpText)));
+
+        var template = new DataTemplate(typeof(SubtotalColumnSelection))
+        {
+            VisualTree = factory
+        };
+        template.Seal();
+        return template;
+    }
+
+    private static T? FindVisualDescendant<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < count; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is T match)
+                return match;
+
+            var nested = FindVisualDescendant<T>(child);
+            if (nested is not null)
+                return nested;
+        }
+
+        return null;
     }
 
     private static IReadOnlyList<SubtotalFunctionChoice> CreateSubtotalFunctionChoices() =>

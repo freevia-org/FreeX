@@ -4934,26 +4934,32 @@
                             <TextBlock x:Name="StatusAvgText" Foreground="White" FontSize="12"
                                        AutomationProperties.AutomationId="StatusAvgText"
                                        AutomationProperties.Name="{local:Loc Key=StatusBar_Average}"
+                                       AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="12"
                                        AutomationProperties.AutomationId="StatusCountText"
                                        AutomationProperties.Name="{local:Loc Key=StatusBar_Count}"
+                                       AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="110" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusNumericalCountText" Foreground="White" FontSize="12"
                                        AutomationProperties.AutomationId="StatusNumericalCountText"
                                        AutomationProperties.Name="{local:Loc Key=StatusBar_NumericalCount}"
+                                       AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="160" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusSumText" Foreground="White" FontSize="12"
                                        AutomationProperties.AutomationId="StatusSumText"
                                        AutomationProperties.Name="{local:Loc Key=StatusBar_Sum}"
+                                       AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusMinText" Foreground="White" FontSize="12"
                                        AutomationProperties.AutomationId="StatusMinText"
                                        AutomationProperties.Name="{local:Loc Key=StatusBar_Minimum}"
+                                       AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="120" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusMaxText" Foreground="White" FontSize="12"
                                        AutomationProperties.AutomationId="StatusMaxText"
                                        AutomationProperties.Name="{local:Loc Key=StatusBar_Maximum}"
+                                       AutomationProperties.LiveSetting="Polite"
                                        MaxWidth="120" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
                     </Grid>
