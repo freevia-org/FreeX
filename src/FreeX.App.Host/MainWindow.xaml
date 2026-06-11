@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:ui="clr-namespace:FreeX.App.UI;assembly=FreeX.App.UI"
         xmlns:local="clr-namespace:FreeX.App.Host"
+        xmlns:model="clr-namespace:FreeX.Core.Model;assembly=FreeX.Core.Model"
         mc:Ignorable="d"
         Title="FreeX"
         Icon="Resources/FreeX.ico"
@@ -1907,7 +1908,54 @@
                                             AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect}"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShapeEffects}"
                                             local:RibbonTooltip.KeyTip="FX"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape}" local:RibbonMetadata.CommandName="Shape Effects"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape}" local:RibbonMetadata.CommandName="Shape Effects">
+                                        <Button.ContextMenu>
+                                            <ContextMenu Opened="ShapeEffectsMenu_Opened"
+                                                         AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ShapeEffects}">
+                                                <MenuItem Header="{local:Loc Key=ShapeEffects_None}" Tag="{x:Static model:DrawingShapeEffectPreset.None}" IsCheckable="True"
+                                                          AutomationProperties.Name="{local:Loc Key=ShapeEffects_None}"
+                                                          AutomationProperties.AutomationId="DrawShapeEffectsNoneMenuItem"
+                                                          AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_NoneDescription}"
+                                                          local:RibbonTooltip.KeyTip="N" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="No Effect"/>
+                                                <Separator/>
+                                                <MenuItem Header="{local:Loc Key=ShapeEffects_Shadow}" Tag="{x:Static model:DrawingShapeEffectPreset.Shadow}" IsCheckable="True"
+                                                          AutomationProperties.Name="{local:Loc Key=ShapeEffects_Shadow}"
+                                                          AutomationProperties.AutomationId="DrawShapeEffectsShadowMenuItem"
+                                                          AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_ShadowDescription}"
+                                                          local:RibbonTooltip.KeyTip="S" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="Shadow"/>
+                                                <MenuItem Header="{local:Loc Key=ShapeEffects_InnerShadow}" Tag="{x:Static model:DrawingShapeEffectPreset.InnerShadow}" IsCheckable="True"
+                                                          AutomationProperties.Name="{local:Loc Key=ShapeEffects_InnerShadow}"
+                                                          AutomationProperties.AutomationId="DrawShapeEffectsInnerShadowMenuItem"
+                                                          AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_InnerShadowDescription}"
+                                                          local:RibbonTooltip.KeyTip="I" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="Inner Shadow"/>
+                                                <MenuItem Header="{local:Loc Key=ShapeEffects_Reflection}" Tag="{x:Static model:DrawingShapeEffectPreset.Reflection}" IsCheckable="True"
+                                                          AutomationProperties.Name="{local:Loc Key=ShapeEffects_Reflection}"
+                                                          AutomationProperties.AutomationId="DrawShapeEffectsReflectionMenuItem"
+                                                          AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_ReflectionDescription}"
+                                                          local:RibbonTooltip.KeyTip="R" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="Reflection"/>
+                                                <MenuItem Header="{local:Loc Key=ShapeEffects_Glow}" Tag="{x:Static model:DrawingShapeEffectPreset.Glow}" IsCheckable="True"
+                                                          AutomationProperties.Name="{local:Loc Key=ShapeEffects_Glow}"
+                                                          AutomationProperties.AutomationId="DrawShapeEffectsGlowMenuItem"
+                                                          AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_GlowDescription}"
+                                                          local:RibbonTooltip.KeyTip="G" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="Glow"/>
+                                                <MenuItem Header="{local:Loc Key=ShapeEffects_SoftEdges}" Tag="{x:Static model:DrawingShapeEffectPreset.SoftEdges}" IsCheckable="True"
+                                                          AutomationProperties.Name="{local:Loc Key=ShapeEffects_SoftEdges}"
+                                                          AutomationProperties.AutomationId="DrawShapeEffectsSoftEdgesMenuItem"
+                                                          AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_SoftEdgesDescription}"
+                                                          local:RibbonTooltip.KeyTip="E" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="Soft Edges"/>
+                                                <MenuItem Header="{local:Loc Key=ShapeEffects_Bevel}" Tag="{x:Static model:DrawingShapeEffectPreset.Bevel}" IsCheckable="True"
+                                                          AutomationProperties.Name="{local:Loc Key=ShapeEffects_Bevel}"
+                                                          AutomationProperties.AutomationId="DrawShapeEffectsBevelMenuItem"
+                                                          AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_BevelDescription}"
+                                                          local:RibbonTooltip.KeyTip="B" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="Bevel"/>
+                                                <MenuItem Header="{local:Loc Key=ShapeEffects_ThreeDRotation}" Tag="{x:Static model:DrawingShapeEffectPreset.ThreeDRotation}" IsCheckable="True"
+                                                          AutomationProperties.Name="{local:Loc Key=ShapeEffects_ThreeDRotation}"
+                                                          AutomationProperties.AutomationId="DrawShapeEffectsThreeDRotationMenuItem"
+                                                          AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_ThreeDRotationDescription}"
+                                                          local:RibbonTooltip.KeyTip="D" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="3-D Rotation"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Format}" Style="{StaticResource GroupLbl}"/></Border>
@@ -3057,7 +3105,54 @@
                                                 AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect}"
                                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShapeEffects}"
                                                 local:RibbonTooltip.KeyTip="E"
-                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape}" local:RibbonMetadata.CommandName="Shape Effects"/>
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape}" local:RibbonMetadata.CommandName="Shape Effects">
+                                            <Button.ContextMenu>
+                                                <ContextMenu Opened="ShapeEffectsMenu_Opened"
+                                                             AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ShapeEffects}">
+                                                    <MenuItem Header="{local:Loc Key=ShapeEffects_None}" Tag="{x:Static model:DrawingShapeEffectPreset.None}" IsCheckable="True"
+                                                              AutomationProperties.Name="{local:Loc Key=ShapeEffects_None}"
+                                                              AutomationProperties.AutomationId="ShapeFormatShapeEffectsNoneMenuItem"
+                                                              AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_NoneDescription}"
+                                                              local:RibbonTooltip.KeyTip="N" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="No Effect"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="{local:Loc Key=ShapeEffects_Shadow}" Tag="{x:Static model:DrawingShapeEffectPreset.Shadow}" IsCheckable="True"
+                                                              AutomationProperties.Name="{local:Loc Key=ShapeEffects_Shadow}"
+                                                              AutomationProperties.AutomationId="ShapeFormatShapeEffectsShadowMenuItem"
+                                                              AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_ShadowDescription}"
+                                                              local:RibbonTooltip.KeyTip="S" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="Shadow"/>
+                                                    <MenuItem Header="{local:Loc Key=ShapeEffects_InnerShadow}" Tag="{x:Static model:DrawingShapeEffectPreset.InnerShadow}" IsCheckable="True"
+                                                              AutomationProperties.Name="{local:Loc Key=ShapeEffects_InnerShadow}"
+                                                              AutomationProperties.AutomationId="ShapeFormatShapeEffectsInnerShadowMenuItem"
+                                                              AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_InnerShadowDescription}"
+                                                              local:RibbonTooltip.KeyTip="I" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="Inner Shadow"/>
+                                                    <MenuItem Header="{local:Loc Key=ShapeEffects_Reflection}" Tag="{x:Static model:DrawingShapeEffectPreset.Reflection}" IsCheckable="True"
+                                                              AutomationProperties.Name="{local:Loc Key=ShapeEffects_Reflection}"
+                                                              AutomationProperties.AutomationId="ShapeFormatShapeEffectsReflectionMenuItem"
+                                                              AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_ReflectionDescription}"
+                                                              local:RibbonTooltip.KeyTip="R" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="Reflection"/>
+                                                    <MenuItem Header="{local:Loc Key=ShapeEffects_Glow}" Tag="{x:Static model:DrawingShapeEffectPreset.Glow}" IsCheckable="True"
+                                                              AutomationProperties.Name="{local:Loc Key=ShapeEffects_Glow}"
+                                                              AutomationProperties.AutomationId="ShapeFormatShapeEffectsGlowMenuItem"
+                                                              AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_GlowDescription}"
+                                                              local:RibbonTooltip.KeyTip="G" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="Glow"/>
+                                                    <MenuItem Header="{local:Loc Key=ShapeEffects_SoftEdges}" Tag="{x:Static model:DrawingShapeEffectPreset.SoftEdges}" IsCheckable="True"
+                                                              AutomationProperties.Name="{local:Loc Key=ShapeEffects_SoftEdges}"
+                                                              AutomationProperties.AutomationId="ShapeFormatShapeEffectsSoftEdgesMenuItem"
+                                                              AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_SoftEdgesDescription}"
+                                                              local:RibbonTooltip.KeyTip="E" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="Soft Edges"/>
+                                                    <MenuItem Header="{local:Loc Key=ShapeEffects_Bevel}" Tag="{x:Static model:DrawingShapeEffectPreset.Bevel}" IsCheckable="True"
+                                                              AutomationProperties.Name="{local:Loc Key=ShapeEffects_Bevel}"
+                                                              AutomationProperties.AutomationId="ShapeFormatShapeEffectsBevelMenuItem"
+                                                              AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_BevelDescription}"
+                                                              local:RibbonTooltip.KeyTip="B" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="Bevel"/>
+                                                    <MenuItem Header="{local:Loc Key=ShapeEffects_ThreeDRotation}" Tag="{x:Static model:DrawingShapeEffectPreset.ThreeDRotation}" IsCheckable="True"
+                                                              AutomationProperties.Name="{local:Loc Key=ShapeEffects_ThreeDRotation}"
+                                                              AutomationProperties.AutomationId="ShapeFormatShapeEffectsThreeDRotationMenuItem"
+                                                              AutomationProperties.HelpText="{local:Loc Key=ShapeEffects_ThreeDRotationDescription}"
+                                                              local:RibbonTooltip.KeyTip="D" Click="ShapeEffectPresetMenuItem_Click" local:RibbonMetadata.CommandName="3-D Rotation"/>
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
+                                        </Button>
                                     </StackPanel>
                                 </StackPanel>
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_ShapeStyles}" Style="{StaticResource GroupLbl}"/></Border>
@@ -3116,10 +3211,10 @@
                                     <Button Content="{local:Loc Key=MainWindow_Content_AltText}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SetAltTextBtn_Click"
                                             AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_AltText}"
                                             AutomationProperties.AutomationId="ShapeFormatAltTextButton"
-                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAltTextForTheSelectedObject}"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAlternateTextForThePictureShapeOrTextBoxAnchoredAtTheSelectedCe_2199933B}"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AltText}"
                                             local:RibbonTooltip.KeyTip="AT"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAltTextForTheSelectedObject}" local:RibbonMetadata.CommandName="Alt Text"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAlternateTextForThePictureShapeOrTextBoxAnchoredAtTheSelectedCe_2199933B}" local:RibbonMetadata.CommandName="Alt Text"/>
                                 </StackPanel>
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Accessibility}" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
@@ -3226,10 +3321,10 @@
                                     <Button Content="{local:Loc Key=MainWindow_Content_AltText}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SetAltTextBtn_Click"
                                             AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_AltText}"
                                             AutomationProperties.AutomationId="PictureFormatAltTextButton"
-                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAltTextForTheSelectedObject}"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAlternateTextForThePictureShapeOrTextBoxAnchoredAtTheSelectedCe_2199933B}"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AltText}"
                                             local:RibbonTooltip.KeyTip="AT"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAltTextForTheSelectedObject}" local:RibbonMetadata.CommandName="Alt Text"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAlternateTextForThePictureShapeOrTextBoxAnchoredAtTheSelectedCe_2199933B}" local:RibbonMetadata.CommandName="Alt Text"/>
                                 </StackPanel>
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Accessibility}" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
