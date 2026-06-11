@@ -239,8 +239,9 @@ public partial class MainWindow
 
     private void AdvancedFilterBtn_Click(object sender, RoutedEventArgs e)
     {
-        var defaultList = SheetGrid.SelectedRange is { } selected
-            ? FormatWorkbookRange(selected)
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var defaultList = SheetGrid.SelectedRange is { } selected && sheet is not null
+            ? FormatWorkbookRange(AdvancedFilterDefaultListRangePlanner.Create(sheet, selected))
             : "A1:C10";
         AdvancedFilterDialog? dialog = null;
         dialog = new AdvancedFilterDialog(

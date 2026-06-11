@@ -8405,10 +8405,13 @@ public sealed class MainWindow : Window
             AdvancedFilterPlanError.None => "Ready to run Advanced Filter.",
             AdvancedFilterPlanError.InvalidListRange => "Enter a valid list range.",
             AdvancedFilterPlanError.ListRangeRequiresDataRows => "List range must include headers and at least one data row.",
+            AdvancedFilterPlanError.ListRangeTooLarge => AdvancedFilterCommand.ListRangeTooLargeMessage,
             AdvancedFilterPlanError.InvalidCriteriaRange => "Enter a valid criteria range.",
             AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows => "Criteria range must include headers and at least one criteria row.",
+            AdvancedFilterPlanError.CriteriaRangeTooLarge => AdvancedFilterCommand.CriteriaRangeTooLargeMessage,
             AdvancedFilterPlanError.CopyDestinationRequired => "Enter a copy-to range.",
             AdvancedFilterPlanError.InvalidCopyDestinationRange => "Enter a valid one-row copy-to range on the active sheet.",
+            AdvancedFilterPlanError.CopyDestinationRangeTooLarge => AdvancedFilterCommand.CopyOutputTooLargeMessage,
             AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => "Copy-to range must be on the list sheet.",
             _ => "Advanced Filter request is invalid."
         };
@@ -8427,11 +8430,14 @@ public sealed class MainWindow : Window
         var target = error switch
         {
             AdvancedFilterPlanError.InvalidListRange or
-            AdvancedFilterPlanError.ListRangeRequiresDataRows => listRangeBox,
+            AdvancedFilterPlanError.ListRangeRequiresDataRows or
+            AdvancedFilterPlanError.ListRangeTooLarge => listRangeBox,
             AdvancedFilterPlanError.InvalidCriteriaRange or
-            AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows => criteriaRangeBox,
+            AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows or
+            AdvancedFilterPlanError.CriteriaRangeTooLarge => criteriaRangeBox,
             AdvancedFilterPlanError.CopyDestinationRequired or
             AdvancedFilterPlanError.InvalidCopyDestinationRange or
+            AdvancedFilterPlanError.CopyDestinationRangeTooLarge or
             AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => copyToBox,
             _ => criteriaRangeBox
         };
