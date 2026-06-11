@@ -13,7 +13,8 @@ public sealed class DependencyGraph
     private readonly Dictionary<CellAddress, IReadOnlySet<CellAddress>> _precedents = [];
 
     // Cell -> cells that depend on it. Exact dependency inputs are deduplicated before insertion.
-    private readonly Dictionary<CellAddress, List<CellAddress>> _dependents = [];
+    // HashSet gives O(1) Remove instead of List's O(n), which matters during bulk formula rewrites.
+    private readonly Dictionary<CellAddress, HashSet<CellAddress>> _dependents = [];
 
     // Cell -> compact range precedents it depends on.
     private readonly Dictionary<CellAddress, IReadOnlyList<GridRange>> _rangePrecedents = [];
@@ -248,14 +249,16 @@ public sealed class DependencyGraph
             EnqueueUnvisitedDependents(cell, toRecalc, queue);
         }
 
-        // Topological sort via Kahn's algorithm
+        // Topological sort via Kahn's algorithm — build a candidate index once to accelerate
+        // CountPrecedentsWithin for cells that have compact range precedents.
+        var candidateIndex = CandidateIndex.Build(toRecalc);
         var inDegree = new Dictionary<CellAddress, int>(toRecalc.Count);
         foreach (var cell in toRecalc)
             inDegree[cell] = 0;
 
         foreach (var cell in toRecalc)
         {
-            inDegree[cell] = CountPrecedentsWithin(cell, toRecalc);
+            inDegree[cell] = CountPrecedentsWithin(cell, toRecalc, candidateIndex);
         }
 
         var sorted = new List<CellAddress>(toRecalc.Count);
@@ -304,7 +307,7 @@ public sealed class DependencyGraph
         if (dependents.Count != 1)
             return false;
 
-        var first = dependents[0];
+        var first = FirstOf(dependents);
         if (!TryCountSingleRootExactChain(first, out var count))
             return false;
 
@@ -314,7 +317,7 @@ public sealed class DependencyGraph
         {
             ordered.Add(current);
             if (i + 1 < count)
-                current = _dependents[current][0];
+                current = FirstOf(_dependents[current]);
         }
 
         plan = new RecalcPlan(ordered, []);
@@ -337,7 +340,7 @@ public sealed class DependencyGraph
             if (dependents.Count != 1)
                 return false;
 
-            current = dependents[0];
+            current = FirstOf(dependents);
         }
     }
 
@@ -356,9 +359,8 @@ public sealed class DependencyGraph
             if (!_dependents.TryGetValue(changedCells[i], out var dependents) || dependents.Count == 0)
                 continue;
 
-            for (var depIndex = 0; depIndex < dependents.Count; depIndex++)
+            foreach (var dependent in dependents)
             {
-                var dependent = dependents[depIndex];
                 if (!hasDependent)
                 {
                     leaf = dependent;
@@ -395,9 +397,9 @@ public sealed class DependencyGraph
 
         if (_dependents.TryGetValue(root, out var exactDependents))
         {
-            for (var i = 0; i < exactDependents.Count; i++)
+            foreach (var dep in exactDependents)
             {
-                if (!TryCollectSingleDependent(exactDependents[i], ref hasDependent, ref dependent))
+                if (!TryCollectSingleDependent(dep, ref hasDependent, ref dependent))
                     return false;
             }
         }
@@ -435,9 +437,13 @@ public sealed class DependencyGraph
             return EmptyPlan;
 
         var candidates = dirtyCells as HashSet<CellAddress> ?? new HashSet<CellAddress>(dirtyCells);
+
+        // Build a candidate index once so CountPrecedentsWithin avoids O(|candidates|) scans
+        // for each cell with compact range precedents.
+        var candidateIndex = CandidateIndex.Build(candidates);
         var inDegree = new Dictionary<CellAddress, int>(candidates.Count);
         foreach (var cell in candidates)
-            inDegree[cell] = CountPrecedentsWithin(cell, candidates);
+            inDegree[cell] = CountPrecedentsWithin(cell, candidates, candidateIndex);
 
         var sorted = new List<CellAddress>(candidates.Count);
         var ready = new Queue<CellAddress>();
@@ -516,7 +522,7 @@ public sealed class DependencyGraph
     }
 
     private static void EnqueueExactDependents(
-        List<CellAddress>? exactDeps,
+        HashSet<CellAddress>? exactDeps,
         HashSet<CellAddress> toRecalc,
         Queue<CellAddress> queue)
     {
@@ -557,7 +563,7 @@ public sealed class DependencyGraph
     }
 
     private static void DecrementExactDependentInDegrees(
-        List<CellAddress>? exactDeps,
+        HashSet<CellAddress>? exactDeps,
         Dictionary<CellAddress, int> inDegree,
         Queue<CellAddress> ready)
     {
@@ -624,9 +630,9 @@ public sealed class DependencyGraph
             if (!group.Range.Contains(cell))
                 continue;
 
-            for (var i = 0; i < group.Count; i++)
+            foreach (var dep in group.GetDependents())
             {
-                if (!TryCollectSingleDependent(group.GetDependent(i), ref hasDependent, ref dependent))
+                if (!TryCollectSingleDependent(dep, ref hasDependent, ref dependent))
                     return false;
             }
         }
@@ -685,9 +691,8 @@ public sealed class DependencyGraph
             if (!group.Range.Contains(cell))
                 continue;
 
-            for (var i = 0; i < group.Count; i++)
+            foreach (var dependent in group.GetDependents())
             {
-                var dependent = group.GetDependent(i);
                 rangeSeen ??= [];
                 if (rangeSeen.Add(dependent) && toRecalc.Add(dependent))
                     queue.Enqueue(dependent);
@@ -733,9 +738,8 @@ public sealed class DependencyGraph
             if (!group.Range.Contains(cell))
                 continue;
 
-            for (var i = 0; i < group.Count; i++)
+            foreach (var dependent in group.GetDependents())
             {
-                var dependent = group.GetDependent(i);
                 rangeSeen ??= [];
                 if (!rangeSeen.Add(dependent))
                     continue;
@@ -775,17 +779,26 @@ public sealed class DependencyGraph
             if (!group.Range.Contains(cell))
                 continue;
 
-            for (var i = 0; i < group.Count; i++)
+            foreach (var dep in group.GetDependents())
             {
                 result ??= [];
-                result.Add(group.GetDependent(i));
+                result.Add(dep);
             }
         }
 
         return result;
     }
 
-    private int CountPrecedentsWithin(CellAddress cell, HashSet<CellAddress> candidates)
+    /// <summary>
+    /// Count how many cells in <paramref name="candidates"/> are precedents of <paramref name="cell"/>,
+    /// counting both exact and compact-range precedents. Uses <paramref name="candidateIndex"/> to avoid
+    /// an O(|candidates|) scan for each compact range — instead only touches candidates that fall within
+    /// the range's bounding row buckets.
+    /// </summary>
+    private int CountPrecedentsWithin(
+        CellAddress cell,
+        HashSet<CellAddress> candidates,
+        CandidateIndex candidateIndex)
     {
         var count = 0;
 
@@ -802,15 +815,12 @@ public sealed class DependencyGraph
             AddExactPrecedentsWithin(exactPrecs, candidates, counted);
         }
 
-        foreach (var candidate in candidates)
+        foreach (var range in ranges)
         {
-            foreach (var range in ranges)
+            foreach (var candidate in candidateIndex.GetCandidatesInRange(range))
             {
-                if (range.Contains(candidate) && AddUnique(candidate))
-                {
+                if (AddUnique(candidate))
                     count++;
-                    break;
-                }
             }
         }
 
@@ -887,13 +897,112 @@ public sealed class DependencyGraph
                 counted.Add(prec);
         }
     }
+
+    /// <summary>Return the single element of a non-empty set without LINQ allocation.</summary>
+    private static CellAddress FirstOf(HashSet<CellAddress> set)
+    {
+        foreach (var item in set)
+            return item;
+        throw new InvalidOperationException("Set is empty.");
+    }
+}
+
+/// <summary>
+/// A per-invocation spatial index over a dirty candidate set.
+/// Built once per <c>GetRecalcOrder</c> / <c>GetEvaluationOrder</c> call and used by
+/// <c>CountPrecedentsWithin</c> to answer "which candidates fall inside this GridRange?"
+/// in O(candidates_in_overlapping_row_buckets) rather than O(|candidates|).
+///
+/// Strategy: mirror <see cref="RangeDependencyIndex"/>'s row-bucket approach.
+/// Candidates are grouped by (SheetId, rowBucket). For a given range [r0..r1]×[c0..c1]
+/// on sheet S, we visit only the buckets [bucket(r0)..bucket(r1)] for sheet S, and within
+/// each bucket filter by row ∈ [r0..r1] and col ∈ [c0..c1].  Full-column ranges span all
+/// row buckets; no special-casing is needed because those ranges are stored in the
+/// column-bucket side of <see cref="RangeDependencyIndex"/> and tend to have only a few
+/// dependent formula cells, so the Kahn init pass over range-precedent cells is bounded.
+/// </summary>
+internal sealed class CandidateIndex
+{
+    private const uint RowBucketSize = 256;
+
+    // sheet -> (rowBucket -> list of candidates in that bucket)
+    private readonly Dictionary<SheetId, Dictionary<uint, List<CellAddress>>> _bySheet;
+
+    private CandidateIndex(Dictionary<SheetId, Dictionary<uint, List<CellAddress>>> bySheet)
+    {
+        _bySheet = bySheet;
+    }
+
+    /// <summary>Build the index from a set of candidate cells.</summary>
+    internal static CandidateIndex Build(HashSet<CellAddress> candidates)
+    {
+        var bySheet = new Dictionary<SheetId, Dictionary<uint, List<CellAddress>>>();
+        foreach (var candidate in candidates)
+        {
+            if (!bySheet.TryGetValue(candidate.Sheet, out var sheetBuckets))
+            {
+                sheetBuckets = [];
+                bySheet[candidate.Sheet] = sheetBuckets;
+            }
+
+            var bucket = GetBucket(candidate.Row);
+            if (!sheetBuckets.TryGetValue(bucket, out var list))
+            {
+                list = [];
+                sheetBuckets[bucket] = list;
+            }
+
+            list.Add(candidate);
+        }
+
+        return new CandidateIndex(bySheet);
+    }
+
+    /// <summary>
+    /// Enumerate all candidates that fall within <paramref name="range"/>.
+    /// Never yields duplicates (each candidate is in exactly one row-bucket).
+    /// </summary>
+    internal IEnumerable<CellAddress> GetCandidatesInRange(GridRange range)
+    {
+        if (!_bySheet.TryGetValue(range.Start.Sheet, out var sheetBuckets))
+            yield break;
+
+        var startBucket = GetBucket(range.Start.Row);
+        var endBucket = GetBucket(range.End.Row);
+        var c0 = range.Start.Col;
+        var c1 = range.End.Col;
+        var r0 = range.Start.Row;
+        var r1 = range.End.Row;
+
+        for (var bucket = startBucket; bucket <= endBucket; bucket++)
+        {
+            if (!sheetBuckets.TryGetValue(bucket, out var list))
+                continue;
+
+            foreach (var candidate in list)
+            {
+                // Row is guaranteed to fall within [bucket*size..(bucket+1)*size-1], but the
+                // first and last buckets may extend beyond [r0..r1], so check row bounds too.
+                if (candidate.Row >= r0 && candidate.Row <= r1 &&
+                    candidate.Col >= c0 && candidate.Col <= c1)
+                {
+                    yield return candidate;
+                }
+            }
+        }
+    }
+
+    private static uint GetBucket(uint row) => (row - 1) / RowBucketSize;
 }
 
 internal readonly record struct RangeDependency(GridRange Range, CellAddress Dependent);
 
 internal sealed class RangeDependencyGroup
 {
-    private readonly List<CellAddress> _dependents = [];
+    // HashSet gives O(1) Remove instead of List's O(n); enumeration order is not required
+    // for correctness (the range-dependent fan-out feeds into a BFS/Kahn pass that is
+    // order-independent).
+    private readonly HashSet<CellAddress> _dependents = [];
 
     public RangeDependencyGroup(GridRange range)
     {
@@ -903,7 +1012,7 @@ internal sealed class RangeDependencyGroup
     public GridRange Range { get; }
     public int Count => _dependents.Count;
 
-    public CellAddress GetDependent(int index) => _dependents[index];
+    public IEnumerable<CellAddress> GetDependents() => _dependents;
 
     public void Add(CellAddress dependent) => _dependents.Add(dependent);
 
