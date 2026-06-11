@@ -6,7 +6,25 @@ namespace FreeX.Core.IO;
 
 public sealed partial class XlsxFileAdapter
 {
+    /// <summary>
+    /// Saves a workbook to the given stream and returns any non-fatal warnings collected during
+    /// the save (e.g. individual named ranges or data-validation rules that could not be serialized).
+    /// The file is always written; warnings indicate partial data loss.
+    /// </summary>
+    public XlsxSaveResult SaveWithWarnings(Workbook workbook, Stream stream)
+    {
+        var warnings = new List<string>();
+        SaveCore(workbook, stream, warnings);
+        return warnings.Count == 0 ? XlsxSaveResult.Clean : new XlsxSaveResult(warnings.AsReadOnly());
+    }
+
+    /// <inheritdoc/>
     public void Save(Workbook workbook, Stream stream)
+    {
+        SaveCore(workbook, stream, warnings: null);
+    }
+
+    private void SaveCore(Workbook workbook, Stream stream, List<string>? warnings)
     {
         LastSaveDiagnostics = XlsxSaveDiagnostics.NotRun;
         string? currentModelFingerprint = null;
@@ -299,8 +317,7 @@ public sealed partial class XlsxFileAdapter
             // emitted in the worksheet XML post-processing pass to avoid duplicate ClosedXML work.
             if (!XlsxDataValidationNativeMetadataMapper.HasNativeMetadata(sheet))
             {
-                try { XlsxDataValidationClosedXmlMapper.Save(sheet, xlSheet); }
-                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping data-validation save for sheet '{sheet.Name}': {ex.Message}"); }
+                XlsxDataValidationClosedXmlMapper.Save(sheet, xlSheet, warnings);
             }
 
             // Save merged regions
@@ -312,13 +329,17 @@ public sealed partial class XlsxFileAdapter
                                    $":{CellAddress.NumberToColumnName(region.End.Col)}{region.End.Row}";
                     xlSheet.Range(rangeStr).Merge();
                 }
-                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping merged-region save for sheet '{sheet.Name}': {ex.Message}"); }
+                catch (Exception ex)
+                {
+                    var regionDesc = $"{CellAddress.NumberToColumnName(region.Start.Col)}{region.Start.Row}:{CellAddress.NumberToColumnName(region.End.Col)}{region.End.Row}";
+                    System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping merged-region save for sheet '{sheet.Name}' region '{regionDesc}': {ex.Message}");
+                    warnings?.Add($"[merged-region] Merged region '{regionDesc}' on sheet '{sheet.Name}' could not be saved and was skipped.");
+                }
             }
         }
 
-        // Save named ranges
-        try { XlsxNamedRangeMapper.Save(workbook, xlWorkbook); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping named-range save: {ex.Message}"); }
+        // Save named ranges (per-item isolation is inside the mapper)
+        XlsxNamedRangeMapper.Save(workbook, xlWorkbook, warnings);
 
         if (CanSavePackageInPlace(stream))
         {

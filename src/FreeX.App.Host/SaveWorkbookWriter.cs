@@ -9,14 +9,14 @@ public sealed class SaveWorkbookWriter
 {
     private readonly WorkbookSaveService _saveService = new();
 
-    public async Task SaveAsync(
+    public async Task<IReadOnlyList<string>> SaveAsync(
         string path,
         IFileAdapter adapter,
         Workbook workbook,
         IProgress<SaveProgressUpdate> progress)
     {
         ArgumentNullException.ThrowIfNull(progress);
-        await _saveService.SaveAsync(
+        return await _saveService.SaveAsync(
             path,
             adapter,
             workbook,

@@ -59,7 +59,7 @@ internal static class XlsxNamedRangeMapper
         }
     }
 
-    public static void Save(Workbook workbook, XLWorkbook xlWorkbook)
+    public static void Save(Workbook workbook, XLWorkbook xlWorkbook, List<string>? warnings = null)
     {
         foreach (var (name, range) in workbook.NamedRanges)
         {
@@ -82,9 +82,10 @@ internal static class XlsxNamedRangeMapper
 
                 xlWorkbook.DefinedNames.Add(name, address);
             }
-            catch
+            catch (Exception ex)
             {
-                // Skip any named range that cannot be serialized to ClosedXML.
+                System.Diagnostics.Debug.WriteLine($"[XlsxNamedRangeMapper] Skipping named range '{name}': {ex.Message}");
+                warnings?.Add($"[named-range] Named range '{name}' could not be saved and was skipped.");
             }
         }
     }

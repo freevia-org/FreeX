@@ -809,7 +809,7 @@ public partial class MainWindow
                 1);
             var progress = new Progress<SaveProgressUpdate>(
                 update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
-            await new SaveWorkbookWriter().SaveAsync(target.Path, target.Adapter, _workbook, progress);
+            var saveWarnings = await new SaveWorkbookWriter().SaveAsync(target.Path, target.Adapter, _workbook, progress);
 
             var plan = SaveCompletionPlanner.Plan(
                 generationAtSaveStart,
@@ -827,6 +827,7 @@ public partial class MainWindow
                 MarkWorkbookSaved();
 
             UpdateTitleBar();
+            ShowXlsxSaveWarningsIfNeeded(saveWarnings);
             RecordDiagnosticEvent("workbook_saved", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
@@ -920,6 +921,26 @@ public partial class MainWindow
         ShowOwnedMessage(
             body,
             UiText.Get("MainWindowMessage_FileOpenedWithWarningsTitle"),
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+    }
+
+    private void ShowXlsxSaveWarningsIfNeeded(IReadOnlyList<string>? warnings)
+    {
+        if (warnings is not { Count: > 0 })
+            return;
+
+        const int maxShown = 10;
+        var lines = warnings.Take(maxShown).ToList();
+        var body = UiText.Format(
+            "MainWindowMessage_XlsxSaveWarningsBodyFormat",
+            string.Join("\n", lines.Select(w => UiText.Format("MainWindowMessage_BulletListItemFormat", w))));
+        if (warnings.Count > maxShown)
+            body += UiText.Format("MainWindowMessage_XlsxSaveWarningsMoreFormat", warnings.Count - maxShown);
+
+        ShowOwnedMessage(
+            body,
+            UiText.Get("MainWindowMessage_FileSavedWithWarningsTitle"),
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
     }

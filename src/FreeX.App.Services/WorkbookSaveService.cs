@@ -19,7 +19,7 @@ public sealed class WorkbookSaveService
         _fileOperations = fileOperations ?? throw new ArgumentNullException(nameof(fileOperations));
     }
 
-    public async Task SaveAsync(
+    public async Task<IReadOnlyList<string>> SaveAsync(
         string path,
         IFileAdapter adapter,
         Workbook workbook,
@@ -31,10 +31,11 @@ public sealed class WorkbookSaveService
 
         ReportProgress(progress, WorkbookSavePhase.Preparing, TimeSpan.Zero, 1);
         var tempPath = CreateTemporaryPath(path, ".tmp");
+        IReadOnlyList<string> saveWarnings = [];
 
         try
         {
-            await RunStageAsync(
+            saveWarnings = await RunStageAsync(
                 progress,
                 WorkbookSavePhase.Writing,
                 1,
@@ -49,8 +50,14 @@ public sealed class WorkbookSaveService
                         FileShare.None,
                         BufferSize,
                         FileOptions.Asynchronous | FileOptions.SequentialScan);
+                    if (adapter is XlsxFileAdapter xlsxAdapter)
+                    {
+                        var result = xlsxAdapter.SaveWithWarnings(workbook, file);
+                        return result.Warnings;
+                    }
+
                     adapter.Save(workbook, file);
-                    return true;
+                    return [];
                 }).ConfigureAwait(false);
 
             ReplaceTargetFile(tempPath, path);
@@ -62,6 +69,7 @@ public sealed class WorkbookSaveService
         }
 
         ReportProgress(progress, WorkbookSavePhase.Completed, TimeSpan.Zero, 100);
+        return saveWarnings;
     }
 
     private void ReplaceTargetFile(string tempPath, string path)

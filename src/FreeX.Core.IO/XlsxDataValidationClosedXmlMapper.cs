@@ -96,7 +96,7 @@ internal static class XlsxDataValidationClosedXmlMapper
         }
     }
 
-    public static void Save(Sheet sheet, IXLWorksheet xlSheet)
+    public static void Save(Sheet sheet, IXLWorksheet xlSheet, List<string>? warnings = null)
     {
         foreach (var dv in sheet.DataValidations)
         {
@@ -163,9 +163,11 @@ internal static class XlsxDataValidationClosedXmlMapper
                         break;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Skip rules that can't be serialized.
+                var rangeDesc = ToA1Range(dv.AppliesTo);
+                System.Diagnostics.Debug.WriteLine($"[XlsxDataValidationClosedXmlMapper] Skipping data-validation rule for '{rangeDesc}' on sheet '{sheet.Name}': {ex.Message}");
+                warnings?.Add($"[data-validation] Data validation rule for range '{rangeDesc}' on sheet '{sheet.Name}' could not be saved and was skipped.");
             }
         }
     }
