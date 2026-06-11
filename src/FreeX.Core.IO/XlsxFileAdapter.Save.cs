@@ -1,4 +1,5 @@
 using System.IO;
+using System.Xml;
 using ClosedXML.Excel;
 using FreeX.Core.Model;
 
@@ -37,15 +38,38 @@ public sealed partial class XlsxFileAdapter
         }
 
         var patchDiagnostics = XlsxSaveDiagnostics.FullSave("patch_not_attempted");
-        if (sourcePackage is not null &&
-            sourcePackage.TrySavePatchedCellValues(
-                workbook,
-                stream,
-                ref currentModelFingerprint,
-                out patchDiagnostics))
+        if (sourcePackage is not null)
         {
-            LastSaveDiagnostics = patchDiagnostics;
-            return;
+            bool patchSucceeded;
+            try
+            {
+                patchSucceeded = sourcePackage.TrySavePatchedCellValues(
+                    workbook,
+                    stream,
+                    ref currentModelFingerprint,
+                    out patchDiagnostics);
+            }
+            catch (ArgumentException ex) when (ex.Message.Contains("invalid character", StringComparison.OrdinalIgnoreCase))
+            {
+                // Patch-path XML serialisation failed due to a character that cannot be represented
+                // in XML (e.g. a control character that slipped through escaping).  Fall back to
+                // the full ClosedXML save so the user's data is never lost.
+                System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Patch-save XML error, falling back to full save: {ex.Message}");
+                patchDiagnostics = XlsxSaveDiagnostics.FullSave("patch_xml_serialization_error");
+                patchSucceeded = false;
+            }
+            catch (XmlException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Patch-save XML error, falling back to full save: {ex.Message}");
+                patchDiagnostics = XlsxSaveDiagnostics.FullSave("patch_xml_serialization_error");
+                patchSucceeded = false;
+            }
+
+            if (patchSucceeded)
+            {
+                LastSaveDiagnostics = patchDiagnostics;
+                return;
+            }
         }
 
         LastSaveDiagnostics = sourcePackage is null

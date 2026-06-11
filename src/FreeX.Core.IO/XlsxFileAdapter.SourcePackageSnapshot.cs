@@ -5624,7 +5624,7 @@ public sealed partial class XlsxFileAdapter
                 if (string.IsNullOrWhiteSpace(change.NewTooltip))
                     hyperlink.SetAttributeValue("tooltip", null);
                 else
-                    hyperlink.SetAttributeValue("tooltip", change.NewTooltip);
+                    hyperlink.SetAttributeValue("tooltip", XlsxXmlTextEscaper.EscapeForXml(change.NewTooltip));
             }
 
             return true;
@@ -5673,7 +5673,7 @@ public sealed partial class XlsxFileAdapter
                         return false;
                     }
 
-                    textElement.Value = change.NewText;
+                    textElement.Value = XlsxXmlTextEscaper.EscapeForXml(change.NewText);
                     if (change.NewText.Length > 0 &&
                         (char.IsWhiteSpace(change.NewText[0]) || char.IsWhiteSpace(change.NewText[^1])))
                     {
@@ -7029,7 +7029,7 @@ public sealed partial class XlsxFileAdapter
                     break;
                 case TextValue text:
                     cell.SetAttributeValue("t", "str");
-                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", text.Value));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", XlsxXmlTextEscaper.EscapeForXml(text.Value)));
                     break;
                 case BoolValue boolean:
                     cell.SetAttributeValue("t", "b");
@@ -7238,7 +7238,8 @@ public sealed partial class XlsxFileAdapter
 
         private static XElement CreateInlineTextElement(XNamespace worksheetNs, string value)
         {
-            var text = new XElement(worksheetNs + "t", value);
+            var escaped = XlsxXmlTextEscaper.EscapeForXml(value);
+            var text = new XElement(worksheetNs + "t", escaped);
             if (value.Length > 0 &&
                 (char.IsWhiteSpace(value[0]) || char.IsWhiteSpace(value[^1])))
             {
