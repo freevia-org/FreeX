@@ -51,6 +51,33 @@ public sealed partial class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialog_TryParse_ResolvesSheetQualifiedRangesAndDestination()
+    {
+        var currentSheetId = SheetId.New();
+        var dataSheetId = SheetId.New();
+        var reportSheetId = SheetId.New();
+
+        var parsed = ConsolidateDialog.TryParse(
+            currentSheetId,
+            sheetName => sheetName switch
+            {
+                "Data" => dataSheetId,
+                "Report" => reportSheetId,
+                _ => null
+            },
+            sourceRangesText: "Data!A1:B3; 'Report'!D5:E7",
+            destinationCellText: "Report!G10",
+            out var result,
+            out var error);
+
+        parsed.Should().BeTrue(error);
+        result.SourceRanges.Should().Equal(
+            new GridRange(new CellAddress(dataSheetId, 1, 1), new CellAddress(dataSheetId, 3, 2)),
+            new GridRange(new CellAddress(reportSheetId, 5, 4), new CellAddress(reportSheetId, 7, 5)));
+        result.DestinationCell.Should().Be(new CellAddress(reportSheetId, 10, 7));
+    }
+
+    [Fact]
     public void ConsolidateDialog_TryParse_CapturesSelectedFunctionAndOptions()
     {
         var sheetId = SheetId.New();
@@ -238,6 +265,38 @@ public sealed partial class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialog_UsesScrollableBodyWithPinnedSharedActionButtons()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConsolidateDialog(SheetId.New(), "A1:B3; D5:E7", "G10");
+            dialog.Show();
+            try
+            {
+                dialog.Width.Should().Be(420);
+                dialog.SizeToContent.Should().Be(SizeToContent.Height);
+                dialog.MaxHeight.Should().Be(560);
+
+                var root = dialog.Content.Should().BeOfType<DockPanel>().Subject;
+                var buttonRow = root.Children.OfType<StackPanel>()
+                    .Single(panel => panel.Children.OfType<Button>().Count() == 2);
+                DockPanel.GetDock(buttonRow).Should().Be(Dock.Bottom);
+                buttonRow.Children.OfType<Button>().Select(button => button.Content)
+                    .Should()
+                    .Equal(UiText.Ok, UiText.Cancel);
+
+                var scrollViewer = root.Children.OfType<ScrollViewer>().Single();
+                scrollViewer.VerticalScrollBarVisibility.Should().Be(ScrollBarVisibility.Auto);
+                scrollViewer.HorizontalScrollBarVisibility.Should().Be(ScrollBarVisibility.Disabled);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void ConsolidateDialogOpenedFromKeyboard_FocusesFunctionChoice()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
@@ -316,12 +375,18 @@ public sealed partial class DataToolDialogTests
 
         source.Should().Contain("new ConsolidateDialog(");
         source.Should().Contain("request => ApplyConsolidateRangeSelection(dialog, request)");
+        source.Should().Contain("ResolveSheetIdByName) { Owner = this };");
         source.Should().Contain("private void ApplyConsolidateRangeSelection(");
         source.Should().Contain("ConsolidateRangeSelectionRequest request");
-        source.Should().Contain("request.Target == ConsolidateRangeSelectionTarget.DestinationCell");
+        source.Should().Contain("BeginConsolidateRangeSelection(dialog, request);");
+        source.Should().Contain("PreviewMouseLeftButtonUpEvent");
+        source.Should().Contain("ConsolidateRangePicker_KeyDown");
+        source.Should().Contain("target == ConsolidateRangeSelectionTarget.DestinationCell");
         source.Should().Contain("FormatWorkbookRange(selectedRange)");
-        source.Should().Contain("FormatCellReference(selectedRange.Start)");
-        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+        source.Should().Contain("FormatWorkbookCellReference(selectedRange.Start, defaultSheetId)");
+        source.Should().Contain("WorkbookRangeTextCodec.Format(");
+        source.Should().Contain("dialog.ApplyRangeSelection(session.Request.Target, rangeText);");
+        source.Should().Contain("catch (Exception ex)");
     }
 
     [Fact]
