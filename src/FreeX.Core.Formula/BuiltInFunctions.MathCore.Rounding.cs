@@ -183,9 +183,7 @@ public static partial class BuiltInFunctions
         var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
         if (digits > 15) return new NumberValue(n);
-        double factor = Math.Pow(10, digits);
-        if (factor == 0) return new NumberValue(0);
-        return NumberResult((n >= 0 ? Math.Floor(n * factor) : Math.Ceiling(n * factor)) / factor);
+        return NumberResult(TruncateWithExcelDigits(n, digits));
     }
 
     private static ScalarValue Roundup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -209,9 +207,7 @@ public static partial class BuiltInFunctions
         var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
         if (digits > 15) return new NumberValue(n);
-        double factor = Math.Pow(10, digits);
-        if (factor == 0) return new NumberValue(0);
-        return NumberResult((n >= 0 ? Math.Ceiling(n * factor) : Math.Floor(n * factor)) / factor);
+        return NumberResult(RoundupWithExcelDigits(n, digits));
     }
 
     private static ScalarValue Trunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -231,15 +227,8 @@ public static partial class BuiltInFunctions
         return TruncScalar(value, (int)Math.Truncate(rawDigits));
     }
 
-    private static ScalarValue TruncScalar(ScalarValue value, int digits)
-    {
-        var n = ToNumber(value);
-        if (!double.IsFinite(n)) return ErrorValue.Num;
-        if (digits > 15) return new NumberValue(n);
-        double factor = Math.Pow(10, digits);
-        if (factor == 0) return new NumberValue(0);
-        return NumberResult(Math.Truncate(n * factor) / factor);
-    }
+    private static ScalarValue TruncScalar(ScalarValue value, int digits) =>
+        RounddownScalar(value, digits);
 
 
     private static ScalarValue Mround(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -296,6 +285,63 @@ public static partial class BuiltInFunctions
         int iabs = (int)abs;
         if (iabs % 2 != 0) iabs++;
         return new NumberValue(sign * iabs);
+    }
+
+    // Truncate toward zero using Excel's 15-significant-digit correction to avoid
+    // binary representation error (e.g. 4.35×100 = 434.99999... in raw double).
+    private static double TruncateWithExcelDigits(double number, int digits)
+    {
+        if (TryToExcelDecimal(number, out var decimalNumber) && digits <= 28)
+        {
+            if (digits >= 0)
+            {
+                var decimalFactor = DecimalPower10(digits);
+                if (decimalFactor is not null)
+                    return (double)(Math.Truncate(decimalNumber * decimalFactor.Value) / decimalFactor.Value);
+            }
+            else
+            {
+                var decimalFactor = DecimalPower10(-digits);
+                if (decimalFactor is not null)
+                    return (double)(Math.Truncate(decimalNumber / decimalFactor.Value) * decimalFactor.Value);
+            }
+        }
+
+        double factor = Math.Pow(10, digits);
+        if (!double.IsFinite(factor)) return 0.0;
+        return (number >= 0 ? Math.Floor(number * factor) : Math.Ceiling(number * factor)) / factor;
+    }
+
+    // Round away from zero using Excel's 15-significant-digit correction.
+    private static double RoundupWithExcelDigits(double number, int digits)
+    {
+        if (TryToExcelDecimal(number, out var decimalNumber) && digits <= 28)
+        {
+            if (digits >= 0)
+            {
+                var decimalFactor = DecimalPower10(digits);
+                if (decimalFactor is not null)
+                {
+                    var shifted = decimalNumber * decimalFactor.Value;
+                    var rounded = decimalNumber >= 0 ? Math.Ceiling(shifted) : Math.Floor(shifted);
+                    return (double)(rounded / decimalFactor.Value);
+                }
+            }
+            else
+            {
+                var decimalFactor = DecimalPower10(-digits);
+                if (decimalFactor is not null)
+                {
+                    var shifted = decimalNumber / decimalFactor.Value;
+                    var rounded = decimalNumber >= 0 ? Math.Ceiling(shifted) : Math.Floor(shifted);
+                    return (double)(rounded * decimalFactor.Value);
+                }
+            }
+        }
+
+        double factor = Math.Pow(10, digits);
+        if (!double.IsFinite(factor)) return 0.0;
+        return (number >= 0 ? Math.Ceiling(number * factor) : Math.Floor(number * factor)) / factor;
     }
 
     private static double MroundWithExcelDigits(double number, double multiple)
