@@ -2465,9 +2465,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             var validations = new List<string>();
             foreach (var (automationId, expectedName) in expected)
             {
-                if (!TryGetAutomationElementName(handle, automationId, out var actualName))
+                if (!TryGetAutomationElementNameOrVisibleText(handle, automationId, expectedName, out var actualName))
                 {
-                    return CaptureResult.Blocked(options.Scenario, "status-stat-validation-unavailable", $"Could not read AutomationProperties.Name for '{automationId}'.", options.OutputRoot, "freex", guard);
+                    return CaptureResult.Blocked(options.Scenario, "status-stat-validation-unavailable", $"Could not read a visible UIA name/text value for '{automationId}'.", options.OutputRoot, "freex", guard);
                 }
 
                 if (!string.Equals(actualName, expectedName, StringComparison.Ordinal))
@@ -3763,6 +3763,30 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
         name = element.Current.Name ?? string.Empty;
         return !string.IsNullOrWhiteSpace(name);
+    }
+
+    private static bool TryGetAutomationElementNameOrVisibleText(IntPtr handle, string automationId, string expectedName, out string name)
+    {
+        if (TryGetAutomationElementName(handle, automationId, out name))
+        {
+            return true;
+        }
+
+        var root = AutomationElement.FromHandle(handle);
+        var matches = root.FindAll(
+            TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.NameProperty, expectedName));
+        foreach (AutomationElement match in matches)
+        {
+            if (!match.Current.BoundingRectangle.IsEmpty)
+            {
+                name = match.Current.Name ?? string.Empty;
+                return !string.IsNullOrWhiteSpace(name);
+            }
+        }
+
+        name = string.Empty;
+        return false;
     }
 
     private static int CenterX(System.Windows.Rect bounds) => (int)(bounds.Left + bounds.Width / 2.0);
