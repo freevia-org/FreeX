@@ -33,8 +33,6 @@ public sealed class PasswordProtectionDialog : Window
         _requiresConfirmation = title.StartsWith("Protect ", StringComparison.OrdinalIgnoreCase) ||
             title.StartsWith(UiText.Get("Protection_ProtectTitlePrefix"), StringComparison.OrdinalIgnoreCase);
         Title = title;
-        Width = isProtectSheet ? 430 : 360;
-        Height = isProtectSheet ? 540 : 250;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -72,6 +70,7 @@ public sealed class PasswordProtectionDialog : Window
         root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
 
         Content = root;
+        DialogSizing.ApplyContentHeight(this, width: isProtectSheet ? 430 : 380, minHeight: isProtectSheet ? 540 : 280);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -145,8 +144,6 @@ public sealed class ConfirmPasswordDialog : Window
     {
         _password = password;
         Title = UiText.Get("Protection_ConfirmPassword");
-        Width = 360;
-        Height = 170;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -165,6 +162,7 @@ public sealed class ConfirmPasswordDialog : Window
         root.Children.Add(_confirmationBox);
         root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
         Content = root;
+        DialogSizing.ApplyContentHeight(this, width: 360, minHeight: 180);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
