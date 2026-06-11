@@ -100,6 +100,6 @@ public sealed partial class WorkbookThemeDialogXamlTests
         source.Should().Contain("UpdateColorPickerSwatches();");
         source.Should().Contain("private void UpdateColorPickerSwatches()");
         source.Should().Contain("ThemeColorFields()");
-        source.Should().Contain("field.Button.Background = new SolidColorBrush(ToMediaColor(ParsePreviewColor(field.TextBox.Text)));");
+        source.Should().Contain("field.Button.Background = ToBrush(ParsePreviewColor(field.TextBox.Text));");
     }
 }

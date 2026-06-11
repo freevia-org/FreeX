@@ -37,7 +37,12 @@ public partial class MainWindow
 
     private void ThemeCustomizeMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new WorkbookThemeDialog(_workbook.Theme) { Owner = this };
+        ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Theme);
+    }
+
+    private void ShowWorkbookThemeDialog(WorkbookThemeDialogMode mode)
+    {
+        var dialog = new WorkbookThemeDialog(_workbook.Theme, mode) { Owner = this };
         if (dialog.ShowDialog() == true)
             ApplyWorkbookTheme(dialog.ResultTheme);
     }
@@ -58,7 +63,7 @@ public partial class MainWindow
         ApplyWorkbookTheme(WorkbookThemeWorkflow.ApplyGrayscaleColors(_workbook.Theme).WithName(_workbook.Theme.Name));
 
     private void ThemeColorsCustomizeMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ThemeCustomizeMenuItem_Click(sender, e);
+        ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Colors);
 
     private void ThemeFontsBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -94,7 +99,7 @@ public partial class MainWindow
         ApplyWorkbookTheme(_workbook.Theme.WithEffects("Refined"));
 
     private void ThemeEffectsCustomizeMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ThemeCustomizeMenuItem_Click(sender, e);
+        ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Effects);
 
     private void ApplyWorkbookTheme(WorkbookTheme theme)
     {

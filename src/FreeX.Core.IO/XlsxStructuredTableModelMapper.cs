@@ -44,16 +44,30 @@ internal static class XlsxStructuredTableModelMapper
         if (table.FilterColumns.Count == 0)
             return;
 
-        var filters = BuildFilters(table).ToList();
-        if (filters.Count != table.FilterColumns.Count)
-            return;
-
         var lastDataRow = table.TotalsRowShown && table.Range.End.Row > table.Range.Start.Row
             ? table.Range.End.Row - 1
             : table.Range.End.Row;
-        for (var row = table.Range.Start.Row + 1; row <= lastDataRow; row++)
+        var firstDataRow = table.Range.Start.Row + 1;
+
+        var filters = BuildFilters(table).ToList();
+        if (filters.Count == table.FilterColumns.Count)
         {
-            if (!RowMatchesAllFilters(sheet, row, filters))
+            for (var row = firstDataRow; row <= lastDataRow; row++)
+            {
+                if (!RowMatchesAllFilters(sheet, row, filters))
+                    sheet.FilterHiddenRows.Add(row);
+            }
+
+            return;
+        }
+
+        // At least one filter column uses criteria FreeX cannot evaluate directly (icon/color/custom/dynamic/
+        // top-N filters, preserved only as native XML). Excel already saved the filtered rows as hidden, so
+        // reclassify the table's hidden data-body rows as filter-hidden. This lets SUBTOTAL/AGGREGATE codes
+        // 1-11 exclude them as Excel does, without having to re-evaluate the unsupported filter.
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+        {
+            if (sheet.HiddenRows.Contains(row))
                 sheet.FilterHiddenRows.Add(row);
         }
     }

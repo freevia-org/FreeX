@@ -88,6 +88,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "excel-data-validation-dropdown-prepared" => RunExcelDataValidationDropdownPreparedScenario(),
             "excel-open-dialog" => RunExcelDialogScenario("excel-open-dialog", PrepareExcelBlankWorkbook, "^{F12}", "#32770", "Open"),
             "excel-save-as-dialog" => RunExcelSaveAsDialogScenario(),
+            "excel-sheet-tab-context-menu" => RunExcelSheetTabContextMenuScenario(),
+            "excel-sheet-tab-overflow-activate-dialog" => RunExcelSheetTabOverflowActivateDialogScenario(),
             "freex-open-dialog" => RunFreeXDialogScenario("freex-open-dialog", "^{F12}", "#32770", "Open"),
             "freex-save-as-dialog" => RunFreeXDialogScenario("freex-save-as-dialog", "{F12}", "#32770", "Save As"),
             "freex-format-cells-dialog" => RunFreeXFormatCellsDialogScenario(),
@@ -95,12 +97,15 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             // S3 native-dialog continuation scenarios.
             "freex-save-as-dialog-cancel" => RunFreeXDialogCancelScenario("freex-save-as-dialog-cancel", "{F12}", "#32770", "Save As"),
             "freex-save-as-overwrite-prompt" => RunFreeXSaveAsOverwritePromptScenario(),
+            "freex-save-as-invalid-path" => RunFreeXSaveAsInvalidPathScenario(),
             "freex-export-pdf-save-dialog-cancel" => RunFreeXExportSaveDialogCancelScenario(),
             "freex-export-overwrite-prompt" => RunFreeXExportOverwritePromptScenario(),
             "freex-export-xps-accept" => RunFreeXExportXpsAcceptScenario(),
             "freex-native-print-dialog" => RunFreeXNativePrintDialogScenario(),
             "freex-background-picker-cancel" => RunFreeXBackgroundPickerCancelScenario(),
             "freex-background-picker-select" => RunFreeXBackgroundPickerSelectScenario(),
+            "freex-background-picker-replace" => RunFreeXBackgroundPickerReplaceScenario(),
+            "freex-background-clear" => RunFreeXBackgroundClearScenario(),
             "freex-status-zoom-in-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-in-click", ClickAutomationIdExpectZoom("StatusZoomInButton", 105)),
             "freex-status-zoom-out-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-out-click", ClickAutomationIdExpectZoom("StatusZoomOutButton", 95)),
             "freex-status-zoom-slider-drag" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-drag", DragFirstSliderExpectChangedZoom("Zoom", 100)),
@@ -112,6 +117,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-sheet-tab-double-click-rename" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-double-click-rename", SheetTabDoubleClickRename()),
             "freex-sheet-tab-ctrl-click-grouping" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-ctrl-click-grouping", SheetTabModifierGrouping(NativeMethods.VK_CONTROL, "Ctrl+click", "Sheet3")),
             "freex-sheet-tab-shift-click-grouping" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-shift-click-grouping", SheetTabModifierGrouping(NativeMethods.VK_SHIFT, "Shift+click", "Sheet5")),
+            "freex-sheet-tab-grouped-commands" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-grouped-commands", SheetTabGroupedCommands()),
             "freex-sheet-tab-drag-reorder" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-drag-reorder", SheetTabDragReorder()),
             "freex-sheet-tab-overflow-nav-click" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-overflow-nav-click", SheetTabOverflowNavClick()),
             "freex-sheet-tab-overflow-activate-dialog" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-overflow-activate-dialog", SheetTabOverflowActivateDialog()),
@@ -630,6 +636,109 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
+    private CaptureResult RunExcelSheetTabContextMenuScenario()
+    {
+        const string scenario = "excel-sheet-tab-context-menu";
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelSheetTabWorkbook(excel, 4);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-sheet-tab-context-menu");
+            }
+
+            var tab = FindVisibleSheetTabElement(hwnd, "Sheet1");
+            if (tab is null)
+            {
+                return CaptureResult.Blocked(scenario, "uia-target-not-found", "Could not find the visible Excel Sheet1 sheet tab.", options.OutputRoot, "excel", guard);
+            }
+
+            if (!TryRightClickAutomationElement(tab))
+            {
+                return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", "Excel Sheet1 tab bounds were not usable for a physical right-click.", options.OutputRoot, "excel", guard);
+            }
+
+            var popup = WindowFinder.FindProcessPopup(pid.Value, hwnd.ToInt64(), options.PopupTimeout, 120, 120);
+            if (popup is null)
+            {
+                return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect Excel sheet-tab context menu after a guarded physical right-click on Sheet1.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow(scenario, "excel", popup, guard, "complete", "Captured Microsoft Excel's sheet-tab context menu after a physical right-click on Sheet1.");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunExcelSheetTabOverflowActivateDialogScenario()
+    {
+        const string scenario = "excel-sheet-tab-overflow-activate-dialog";
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelSheetTabWorkbook(excel, 12);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-sheet-tab-overflow-activate");
+            }
+
+            var rightNav = FindSheetNavButton(hwnd, right: true);
+            if (rightNav is null)
+            {
+                return CaptureResult.Blocked(scenario, "uia-target-not-found", "Could not find Excel's visible sheet-tab scroll/navigation button.", options.OutputRoot, "excel", guard);
+            }
+
+            if (!TryRightClickAutomationElement(rightNav))
+            {
+                return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", "Excel sheet-tab navigation button bounds were not usable for a physical right-click.", options.OutputRoot, "excel", guard);
+            }
+
+            var dialog = WindowFinder.FindProcessWindow(
+                pid.Value,
+                window => window.Handle != hwnd.ToInt64() &&
+                    window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase),
+                options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's Activate dialog after right-clicking the sheet-tab navigation button.", options.OutputRoot, "excel", guard);
+            }
+
+            var dialogHandle = new IntPtr(dialog.Handle);
+            var dialogGuard = ForegroundGuard.FocusAndVerify(dialogHandle, pid.Value, "Activate", options.FocusTimeout);
+            if (!dialogGuard.Success)
+            {
+                return CaptureResult.Blocked(scenario, "foreground-guard-failed", "Excel Activate dialog was detected but could not be foreground-verified.", options.OutputRoot, "excel", dialogGuard);
+            }
+
+            return CaptureWindow(scenario, "excel", dialog, dialogGuard, "complete", "Captured Microsoft Excel's Activate dialog after a physical right-click on the sheet-tab navigation button.");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
     private CaptureResult RunFreeXDialogScenario(
         string scenario,
         string keys,
@@ -918,6 +1027,70 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
+    private CaptureResult RunFreeXSaveAsInvalidPathScenario()
+    {
+        Process? process = null;
+        var invalidDirectory = Path.Combine(options.OutputRoot, "s3-missing-save-as-directory");
+        var invalidPath = Path.Combine(invalidDirectory, "invalid-path.xlsx");
+        if (Directory.Exists(invalidDirectory))
+        {
+            Directory.Delete(invalidDirectory, recursive: true);
+        }
+
+        try
+        {
+            var launch = LaunchFreeX("freex-save-as-invalid-path");
+            if (launch.Result is not null)
+            {
+                return launch.Result;
+            }
+
+            process = launch.Process!;
+            var handle = new IntPtr(launch.Window!.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(handle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-save-as-invalid-path", guard, "before-input");
+            }
+
+            SendKeys.SendWait("{F12}");
+            Thread.Sleep(options.AfterInputDelay);
+            var dialog = WindowFinder.FindProcessWindow(process.Id, "#32770", "Save As", options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked("freex-save-as-invalid-path", "dialog-not-found", "Did not detect FreeX Save As common dialog before invalid path entry.", options.OutputRoot, "freex", guard);
+            }
+
+            TypeDialogPath(invalidPath);
+            var prompt = WindowFinder.FindProcessWindow(
+                process.Id,
+                window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    window.Handle != dialog.Handle &&
+                    (window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("Error", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("path", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("not found", StringComparison.OrdinalIgnoreCase)),
+                options.PopupTimeout);
+            if (prompt is null)
+            {
+                return CaptureResult.Blocked("freex-save-as-invalid-path", "invalid-path-prompt-not-found", $"Typed a missing-directory .xlsx path but did not detect a native invalid-path prompt: {invalidPath}", options.OutputRoot, "freex", guard);
+            }
+
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            var result = CaptureWindow("freex-save-as-invalid-path", "freex", prompt, guard, "complete", $"Missing-directory save path was rejected by the native Save As flow: {invalidPath}");
+            SendKeys.SendWait("{ESC}");
+            Thread.Sleep(options.AfterInputDelay);
+            return result with { OutputPath = invalidPath };
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
     private CaptureResult RunFreeXExportSaveDialogCancelScenario()
     {
         Process? process = null;
@@ -1070,6 +1243,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked("freex-export-xps-accept", "options-dialog-not-found", "Accepted an explicit .xps path but did not detect the PDF/XPS options dialog.", options.OutputRoot, "freex", guard);
             }
 
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            var result = CaptureWindow("freex-export-xps-accept", "freex", optionsDialog, guard, "complete", $"Explicit XPS save path accepted by native SaveFileDialog; awaiting output: {xpsPath}") with { OutputPath = xpsPath };
             SendKeys.SendWait("{ENTER}");
             Thread.Sleep(options.AfterInputDelay);
 
@@ -1080,22 +1255,42 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     (candidate.Title.Contains("Export XPS", StringComparison.OrdinalIgnoreCase) ||
                      candidate.Title.Contains("XPS", StringComparison.OrdinalIgnoreCase) ||
                      candidate.Title.Contains("Export Error", StringComparison.OrdinalIgnoreCase)),
-                options.PopupTimeout);
-            if (completion is null)
+                TimeSpan.FromMilliseconds(1500));
+            if (completion is not null)
             {
-                return CaptureResult.Blocked("freex-export-xps-accept", "completion-dialog-not-found", "Accepted XPS export options but did not detect a completion or error dialog.", options.OutputRoot, "freex", guard);
+                Thread.Sleep(options.AfterDialogDetectedDelay);
+                var existsAfterDialog = File.Exists(xpsPath);
+                var completionStatus = existsAfterDialog ? "complete" : "blocked";
+                var validationAfterDialog = existsAfterDialog
+                    ? $"Explicit .xps native save path was accepted and output exists: {xpsPath}"
+                    : $"Explicit .xps native save path reached '{completion.Title}', but output was not created: {xpsPath}";
+                var completionResult = CaptureWindow("freex-export-xps-accept", "freex", completion, guard, completionStatus, validationAfterDialog) with { OutputPath = xpsPath };
+                SendKeys.SendWait("{ENTER}");
+                Thread.Sleep(options.AfterInputDelay);
+                return completionResult;
             }
 
-            Thread.Sleep(options.AfterDialogDetectedDelay);
-            var exists = File.Exists(xpsPath);
-            var status = exists ? "complete" : "blocked";
-            var validation = exists
-                ? $"Explicit .xps native save path was accepted and output exists: {xpsPath}"
-                : $"Explicit .xps native save path reached '{completion.Title}', but output was not created: {xpsPath}";
-            var result = CaptureWindow("freex-export-xps-accept", "freex", completion, guard, status, validation) with { OutputPath = xpsPath };
-            SendKeys.SendWait("{ENTER}");
-            Thread.Sleep(options.AfterInputDelay);
-            return result;
+            if (!WaitForFile(xpsPath, options.PopupTimeout))
+            {
+                var blockedResult = result with
+                {
+                    CaptureStatus = "blocked",
+                    BlockReason = $"xps-output-not-created: Explicit .xps path returned from options without completion dialog, but output was not created: {xpsPath}"
+                };
+                RewriteManifest(blockedResult);
+                return blockedResult;
+            }
+
+            return AttachContinuationCapture(
+                result,
+                "freex-export-xps-accept",
+                process.Id,
+                mainHandle,
+                "FreeX",
+                $"Explicit .xps native save path was accepted, output exists, and foreground returned to FreeX: {xpsPath}") with
+            {
+                OutputPath = xpsPath
+            };
         }
         finally
         {
@@ -1172,13 +1367,20 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
                     candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase),
                 options.PopupTimeout);
+            printDialog ??= WindowFinder.FindForegroundWindow(
+                candidate => candidate.ProcessId == process.Id &&
+                    candidate.Handle != preview.Handle &&
+                    candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase),
+                TimeSpan.FromMilliseconds(1200));
             if (printDialog is null)
             {
                 return CaptureResult.Blocked("freex-native-print-dialog", "native-print-dialog-not-found", "Clicked Print Preview's Print button but did not detect a native Windows Print dialog.", options.OutputRoot, "freex", guard);
             }
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
-            var result = CaptureWindow("freex-native-print-dialog", "freex", printDialog, guard, "complete", "Print Preview's Print button opened the native Windows PrintDialog in the FreeX foreground-owned process.");
+            var dialogGuard = new ForegroundGuardResult(true, process.Id, printDialog.Handle, printDialog, null);
+            var result = CaptureWindow("freex-native-print-dialog", "freex", printDialog, dialogGuard, "complete", "Print Preview's Print button opened the native Windows PrintDialog in the FreeX foreground-owned process.");
             SendKeys.SendWait("{ESC}");
             Thread.Sleep(options.AfterInputDelay);
             return result;
@@ -1238,6 +1440,120 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     OutputPath = imagePath
                 };
             });
+    }
+
+    private CaptureResult RunFreeXBackgroundPickerReplaceScenario()
+    {
+        Process? process = null;
+        var firstImagePath = Path.Combine(options.OutputRoot, "s3-sheet-background-initial.png");
+        var replacementImagePath = Path.Combine(options.OutputRoot, "s3-sheet-background-replacement.png");
+        CreateTinyPng(firstImagePath, Color.LightSteelBlue, Color.DarkSlateBlue);
+        CreateTinyPng(replacementImagePath, Color.LightGoldenrodYellow, Color.Firebrick);
+
+        try
+        {
+            var launch = LaunchFreeX("freex-background-picker-replace");
+            if (launch.Result is not null)
+            {
+                return launch.Result;
+            }
+
+            process = launch.Process!;
+            var mainHandle = new IntPtr(launch.Window!.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(mainHandle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-background-picker-replace", guard, "before-initial-background");
+            }
+
+            var initial = SelectFreeXBackgroundImage(process, mainHandle, guard, firstImagePath, captureDialog: false);
+            if (initial is not null)
+            {
+                return initial;
+            }
+
+            guard = ForegroundGuard.FocusAndVerify(mainHandle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-background-picker-replace", guard, "before-replacement-background");
+            }
+
+            var replacement = SelectFreeXBackgroundImage(process, mainHandle, guard, replacementImagePath, captureDialog: true);
+            return replacement ?? CaptureResult.Blocked("freex-background-picker-replace", "replacement-result-missing", "Replacement picker flow returned no capture result.", options.OutputRoot, "freex", guard);
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
+    private CaptureResult RunFreeXBackgroundClearScenario()
+    {
+        Process? process = null;
+        var imagePath = Path.Combine(options.OutputRoot, "s3-sheet-background-clear-seed.png");
+        CreateTinyPng(imagePath, Color.Honeydew, Color.SeaGreen);
+
+        try
+        {
+            var launch = LaunchFreeX("freex-background-clear");
+            if (launch.Result is not null)
+            {
+                return launch.Result;
+            }
+
+            process = launch.Process!;
+            var mainHandle = new IntPtr(launch.Window!.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(mainHandle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-background-clear", guard, "before-background-seed");
+            }
+
+            var seed = SelectFreeXBackgroundImage(process, mainHandle, guard, imagePath, captureDialog: false);
+            if (seed is not null)
+            {
+                return seed;
+            }
+
+            guard = ForegroundGuard.FocusAndVerify(mainHandle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard("freex-background-clear", guard, "before-background-clear");
+            }
+
+            var blocked = OpenFreeXBackgroundContextMenu(process, mainHandle, guard);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryInvokeProcessMenuItem(process.Id, "Delete Background"))
+            {
+                return CaptureResult.Blocked("freex-background-clear", "delete-background-menu-item-not-found", "Opened the Background button context menu, but could not find or invoke Delete Background.", options.OutputRoot, "freex", guard);
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+            var window = WindowFinder.GetWindowInfo(mainHandle);
+            if (window is null)
+            {
+                return CaptureResult.Blocked("freex-background-clear", "main-window-not-found", "Could not read FreeX main window after Delete Background.", options.OutputRoot, "freex", guard);
+            }
+
+            return CaptureWindow("freex-background-clear", "freex", window, guard, "complete", $"Selected a PNG worksheet background and then invoked Delete Background; seed image: {imagePath}") with
+            {
+                OutputPath = imagePath
+            };
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
     }
 
     private CaptureResult RunFreeXNativeDialogOpenedByAction(
@@ -1341,6 +1657,89 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         return InvokeOrClickElement(options.Scenario, process.Id, mainHandle, backgroundButton, "freex");
+    }
+
+    private CaptureResult? SelectFreeXBackgroundImage(
+        Process process,
+        IntPtr mainHandle,
+        ForegroundGuardResult guard,
+        string imagePath,
+        bool captureDialog)
+    {
+        var blocked = OpenFreeXBackgroundPicker(process, mainHandle, guard);
+        if (blocked is not null)
+        {
+            return blocked;
+        }
+
+        var dialog = WindowFinder.FindProcessWindow(process.Id, "#32770", "Sheet Background", options.PopupTimeout);
+        if (dialog is null)
+        {
+            return CaptureResult.Blocked(options.Scenario, "dialog-not-found", "Did not detect FreeX native Sheet Background OpenFileDialog.", options.OutputRoot, "freex", guard);
+        }
+
+        CaptureResult? result = null;
+        if (captureDialog)
+        {
+            Thread.Sleep(options.AfterDialogDetectedDelay);
+            result = CaptureWindow(options.Scenario, "freex", dialog, guard, "complete", $"Replacing worksheet background through native picker with: {imagePath}");
+        }
+
+        TypeDialogPath(imagePath);
+        Thread.Sleep(options.AfterInputDelay);
+
+        if (result is null)
+        {
+            return null;
+        }
+
+        return AttachContinuationCapture(
+            result,
+            options.Scenario,
+            process.Id,
+            mainHandle,
+            "FreeX",
+            $"Selected replacement worksheet background path and returned focus to FreeX: {imagePath}") with
+        {
+            OutputPath = imagePath
+        };
+    }
+
+    private CaptureResult? OpenFreeXBackgroundContextMenu(Process process, IntPtr mainHandle, ForegroundGuardResult guard)
+    {
+        var pageLayoutTab = FindDescendantByNameAndType(mainHandle, "Page Layout", ControlType.TabItem);
+        if (pageLayoutTab is not null)
+        {
+            TrySelectOrInvoke(pageLayoutTab);
+            Thread.Sleep(options.AfterInputDelay);
+        }
+        else
+        {
+            SendKeys.SendWait("%p");
+            Thread.Sleep(options.AfterInputDelay);
+        }
+
+        var backgroundButton = FindDescendantByNameAndType(mainHandle, "Background", ControlType.Button);
+        if (backgroundButton is null)
+        {
+            return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the Page Layout Background button before opening its clear menu.", options.OutputRoot, "freex", guard);
+        }
+
+        var bounds = backgroundButton.Current.BoundingRectangle;
+        if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+        {
+            return CaptureResult.Blocked(options.Scenario, "uia-target-bounds-invalid", $"Background button bounds were not usable: {bounds}.", options.OutputRoot, "freex", guard);
+        }
+
+        var focused = ForegroundGuard.FocusAndVerify(mainHandle, process.Id, "FreeX", options.FocusTimeout);
+        if (!focused.Success)
+        {
+            return CaptureResult.Blocked(options.Scenario, "foreground-guard-failed", "Foreground guard failed before opening the Background context menu.", options.OutputRoot, "freex", focused);
+        }
+
+        RightClickScreenPoint(CenterX(bounds), CenterY(bounds));
+        Thread.Sleep(options.AfterInputDelay);
+        return null;
     }
 
     private CaptureResult? OpenFreeXExportSaveDialog(
@@ -1531,18 +1930,37 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return false;
     }
 
-    private static void CreateTinyPng(string path)
+    private static void CreateTinyPng(string path) =>
+        CreateTinyPng(path, Color.LightSteelBlue, Color.DarkSlateBlue);
+
+    private static void CreateTinyPng(string path, Color background, Color accent)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
         using var bitmap = new Bitmap(8, 8);
         using (var graphics = Graphics.FromImage(bitmap))
         {
-            graphics.Clear(Color.LightSteelBlue);
-            using var brush = new SolidBrush(Color.DarkSlateBlue);
+            graphics.Clear(background);
+            using var brush = new SolidBrush(accent);
             graphics.FillRectangle(brush, 2, 2, 4, 4);
         }
 
         bitmap.Save(path, ImageFormat.Png);
+    }
+
+    private static bool WaitForFile(string path, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (File.Exists(path))
+            {
+                return true;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return File.Exists(path);
     }
 
     private CaptureResult? InvokeOrClickElement(string scenario, int processId, IntPtr ownerHandle, AutomationElement element, string subject)
@@ -2277,6 +2695,79 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return null;
         };
 
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabGroupedCommands()
+        => (handle, processId, _, _) =>
+        {
+            var blocked = SeedSheetsWithAddButton(handle, processId, 4);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var tab = FindVisibleSheetTabElement(handle, "Sheet2");
+            if (tab is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find seeded sheet tab 'Sheet2' for grouped command proof.", options.OutputRoot, "freex");
+            }
+
+            blocked = GuardedClickElement(options.Scenario, processId, handle, tab, MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            tab = FindVisibleSheetTabElement(handle, "Sheet2");
+            if (tab is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not re-resolve Sheet2 before opening the Select All Sheets context menu.", options.OutputRoot, "freex");
+            }
+
+            blocked = GuardedClickElement(options.Scenario, processId, handle, tab, MouseButtonKind.Right);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryInvokeProcessMenuItem(processId, "Select All Sheets"))
+            {
+                return CaptureResult.Blocked(options.Scenario, "context-menu-item-not-found", "Opened the sheet-tab context menu but could not invoke Select All Sheets.", options.OutputRoot, "freex");
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+            var groupedTitle = WindowFinder.GetWindowInfo(handle)?.Title ?? string.Empty;
+            if (!groupedTitle.Contains("[Group]", StringComparison.OrdinalIgnoreCase))
+            {
+                return CaptureResult.Blocked(options.Scenario, "select-all-validation-failed", $"Expected workbook title to include [Group] after Select All Sheets; observed '{groupedTitle}'.", options.OutputRoot, "freex");
+            }
+
+            tab = FindVisibleSheetTabElement(handle, "Sheet2");
+            if (tab is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not re-resolve Sheet2 before opening the Ungroup Sheets context menu.", options.OutputRoot, "freex");
+            }
+
+            blocked = GuardedOpenContextMenuFromFocusedElement(options.Scenario, processId, handle, tab);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            if (!TryInvokeProcessMenuItem(processId, "Ungroup Sheets"))
+            {
+                return CaptureResult.Blocked(options.Scenario, "context-menu-item-not-found", "Opened the grouped sheet-tab context menu but could not invoke Ungroup Sheets.", options.OutputRoot, "freex");
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+            var ungroupedTitle = WindowFinder.GetWindowInfo(handle)?.Title ?? string.Empty;
+            if (ungroupedTitle.Contains("[Group]", StringComparison.OrdinalIgnoreCase))
+            {
+                return CaptureResult.Blocked(options.Scenario, "ungroup-validation-failed", $"Expected workbook title to clear [Group] after Ungroup Sheets; observed '{ungroupedTitle}'.", options.OutputRoot, "freex");
+            }
+
+            _lastResultValidation = $"Created Sheet2-Sheet4 through physical Insert Sheet clicks, invoked Select All Sheets from the sheet-tab context menu, verified grouped title '{groupedTitle}', then invoked Ungroup Sheets from the focused sheet-tab keyboard context menu and verified title '{ungroupedTitle}'.";
+            return null;
+        };
+
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabDragReorder()
         => (handle, processId, _, _) =>
         {
@@ -2553,6 +3044,33 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             NativeMethods.KeybdEvent(modifierKey, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
             Thread.Sleep(80);
         }
+    }
+
+    private CaptureResult? GuardedOpenContextMenuFromFocusedElement(string scenario, int processId, IntPtr handle, AutomationElement element)
+    {
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(scenario, guard, "before-focused-context-menu");
+        }
+
+        try
+        {
+            element.SetFocus();
+        }
+        catch (InvalidOperationException)
+        {
+            return CaptureResult.Blocked(scenario, "uia-focus-failed", "Could not focus the sheet tab before opening its keyboard context menu.", options.OutputRoot, "freex", guard);
+        }
+        catch (ElementNotAvailableException)
+        {
+            return CaptureResult.Blocked(scenario, "uia-target-stale", "The sheet tab became unavailable before opening its keyboard context menu.", options.OutputRoot, "freex", guard);
+        }
+
+        Thread.Sleep(100);
+        SendKeys.SendWait("+{F10}");
+        Thread.Sleep(options.AfterInputDelay);
+        return null;
     }
 
     private CaptureResult? GuardedDrag(string scenario, int processId, IntPtr handle, int startX, int startY, int endX, int endY)
@@ -3038,6 +3556,25 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         worksheet.Range["A1"].Select();
     }
 
+    private static void PrepareExcelSheetTabWorkbook(dynamic excel, int targetSheetCount)
+    {
+        dynamic workbook = excel.ActiveWorkbook;
+        while ((int)workbook.Worksheets.Count < targetSheetCount)
+        {
+            workbook.Worksheets.Add(After: workbook.Worksheets[workbook.Worksheets.Count]);
+        }
+
+        for (var i = 1; i <= (int)workbook.Worksheets.Count; i++)
+        {
+            workbook.Worksheets[i].Name = $"Sheet{i}";
+        }
+
+        workbook.Worksheets[1].Activate();
+        dynamic worksheet = excel.ActiveSheet;
+        worksheet.Range["A1"].Value2 = "Sheet tab parity";
+        worksheet.Range["A1"].Select();
+    }
+
     private static dynamic PrepareExcelAutoFilter(dynamic excel)
     {
         dynamic worksheet = excel.ActiveSheet;
@@ -3170,13 +3707,28 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_RIGHTUP, 0, 0, 0, UIntPtr.Zero);
     }
 
+    private static bool TryRightClickAutomationElement(AutomationElement element)
+    {
+        var bounds = element.Current.BoundingRectangle;
+        if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+        {
+            return false;
+        }
+
+        RightClickScreenPoint(
+            (int)(bounds.Left + bounds.Width / 2.0),
+            (int)(bounds.Top + bounds.Height / 2.0));
+        return true;
+    }
+
     private static bool TryInvokeProcessMenuItem(int processId, string nameContains)
     {
         var menuItems = AutomationElement.RootElement
             .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem))
             .Cast<AutomationElement>()
             .Where(element => ElementMatchesProcessAndName(element, processId, nameContains))
-            .OrderByDescending(element =>
+            .OrderBy(element => IsOffscreen(element) ? 1 : 0)
+            .ThenByDescending(element =>
             {
                 var bounds = element.Current.BoundingRectangle;
                 return bounds.Width * bounds.Height;
@@ -3211,14 +3763,52 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     {
         try
         {
-            return element.Current.ProcessId == processId &&
-                   (element.Current.Name ?? string.Empty).Contains(nameContains, StringComparison.OrdinalIgnoreCase) &&
-                   !element.Current.IsOffscreen;
+            if (element.Current.ProcessId != processId)
+            {
+                return false;
+            }
+
+            var expected = NormalizeMenuSearchText(nameContains);
+            var name = NormalizeMenuSearchText(element.Current.Name);
+            var automationId = NormalizeMenuSearchText(element.Current.AutomationId);
+            return name.Contains(expected, StringComparison.OrdinalIgnoreCase) ||
+                   automationId.Contains(expected, StringComparison.OrdinalIgnoreCase);
         }
         catch (ElementNotAvailableException)
         {
             return false;
         }
+    }
+
+    private static bool IsOffscreen(AutomationElement element)
+    {
+        try
+        {
+            return element.Current.IsOffscreen;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return true;
+        }
+    }
+
+    private static string NormalizeMenuSearchText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(text.Length);
+        foreach (var character in text)
+        {
+            if (char.IsLetterOrDigit(character) || char.IsWhiteSpace(character))
+            {
+                builder.Append(character);
+            }
+        }
+
+        return builder.ToString();
     }
 
     private static void SendCtrl1()
@@ -3447,14 +4037,22 @@ internal sealed record CaptureOptions(
           excel-data-validation-dropdown-prepared
           excel-open-dialog
           excel-save-as-dialog
+          excel-sheet-tab-context-menu
+          excel-sheet-tab-overflow-activate-dialog
           freex-open-dialog
           freex-save-as-dialog
           freex-format-cells-context-dialog
           freex-save-as-dialog-cancel
           freex-save-as-overwrite-prompt
+          freex-save-as-invalid-path
           freex-export-pdf-save-dialog-cancel
+          freex-export-overwrite-prompt
+          freex-export-xps-accept
+          freex-native-print-dialog
           freex-background-picker-cancel
           freex-background-picker-select
+          freex-background-picker-replace
+          freex-background-clear
           freex-status-zoom-in-click
           freex-status-zoom-out-click
           freex-status-zoom-slider-drag
@@ -3466,6 +4064,7 @@ internal sealed record CaptureOptions(
           freex-sheet-tab-double-click-rename
           freex-sheet-tab-ctrl-click-grouping
           freex-sheet-tab-shift-click-grouping
+          freex-sheet-tab-grouped-commands
           freex-sheet-tab-drag-reorder
           freex-sheet-tab-overflow-nav-click
           freex-sheet-tab-overflow-activate-dialog
@@ -3817,6 +4416,23 @@ internal static class WindowFinder
                 !foreground.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase) &&
                 foreground.Bounds.Width >= minimumWidth &&
                 foreground.Bounds.Height >= minimumHeight)
+            {
+                return foreground;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return null;
+    }
+
+    public static WindowInfo? FindForegroundWindow(Func<WindowInfo, bool> predicate, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var foreground = GetWindowInfo(NativeMethods.GetForegroundWindow());
+            if (foreground is not null && predicate(foreground))
             {
                 return foreground;
             }

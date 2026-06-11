@@ -137,7 +137,7 @@ public partial class MainWindow
         if (Math.Abs(current.X - _dragSheetTabStart.X) < SystemParameters.MinimumHorizontalDragDistance)
             return;
 
-        var target = FindSheetTabViewModel(e.OriginalSource as System.Windows.DependencyObject);
+        var target = FindSheetTabViewModel(FindSheetTabDragHitTarget(current) ?? e.OriginalSource as System.Windows.DependencyObject);
         if (target is null || target.Id == draggedId)
             return;
 
@@ -160,6 +160,9 @@ public partial class MainWindow
         if (sender is System.Windows.UIElement element && element.IsMouseCaptured)
             element.ReleaseMouseCapture();
     }
+
+    private DependencyObject? FindSheetTabDragHitTarget(Point position)
+        => SheetTabsControl.InputHitTest(position) as DependencyObject;
 
     private void SheetTab_LostMouseCapture(object sender, MouseEventArgs e)
     {
