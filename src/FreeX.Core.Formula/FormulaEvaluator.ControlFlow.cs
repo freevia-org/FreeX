@@ -18,20 +18,26 @@ public sealed partial class FormulaEvaluator
         };
     }
 
+    // Excel coerces text "TRUE"/"FALSE" (case-insensitive) to booleans in IF/IFS conditions.
+    // Any other text returns null (caller maps to #VALUE!).
+    private static bool? TryCoerceCondition(ScalarValue cond) => cond switch
+    {
+        BoolValue b     => b.Value,
+        NumberValue n   => n.Value != 0,
+        DateTimeValue d => d.Value != 0,
+        BlankValue      => false,
+        TextValue t when string.Equals(t.Value, "TRUE",  StringComparison.OrdinalIgnoreCase) => true,
+        TextValue t when string.Equals(t.Value, "FALSE", StringComparison.OrdinalIgnoreCase) => false,
+        _               => null   // any other text → #VALUE! in Excel
+    };
+
     private ScalarValue EvaluateIf(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count is < 2 or > 3) return ErrorValue.Value;
         var cond = EvaluateArrayOperand(node.Arguments[0], context);
         if (cond is ErrorValue e) return e;
         if (cond is RangeValue conditionRange) return EvaluateIfConditionRange(node, context, conditionRange);
-        bool? taken = cond switch
-        {
-            BoolValue b     => b.Value,
-            NumberValue n   => n.Value != 0,
-            DateTimeValue d => d.Value != 0,
-            BlankValue      => false,
-            _               => null   // text condition is #VALUE! in Excel
-        };
+        bool? taken = TryCoerceCondition(cond);
         if (taken is null) return ErrorValue.Value;
         if (taken.Value)  return EvaluateArrayOperand(node.Arguments[1], context);
         if (node.Arguments.Count == 3) return EvaluateArrayOperand(node.Arguments[2], context);
@@ -54,14 +60,7 @@ public sealed partial class FormulaEvaluator
                     continue;
                 }
 
-                bool? taken = condition switch
-                {
-                    BoolValue b     => b.Value,
-                    NumberValue n   => n.Value != 0,
-                    DateTimeValue d => d.Value != 0,
-                    BlankValue      => false,
-                    _               => null
-                };
+                bool? taken = TryCoerceCondition(condition);
                 if (taken is null)
                 {
                     cells[r, c] = ErrorValue.Value;
@@ -222,14 +221,7 @@ public sealed partial class FormulaEvaluator
             var cond = EvaluateArrayOperand(node.Arguments[i], context);
             if (cond is ErrorValue e) return e;
             if (cond is RangeValue conditionRange) return EvaluateIfsConditionRange(node, context, conditionRange);
-            bool? taken = cond switch
-            {
-                BoolValue b     => b.Value,
-                NumberValue n   => n.Value != 0,
-                DateTimeValue d => d.Value != 0,
-                BlankValue      => false,
-                _               => null
-            };
+            bool? taken = TryCoerceCondition(cond);
             if (taken is null) return ErrorValue.Value;
             if (taken.Value) return EvaluateArrayOperand(node.Arguments[i + 1], context);
         }
@@ -271,14 +263,7 @@ public sealed partial class FormulaEvaluator
                 : condition;
 
             if (conditionElement is ErrorValue error) return error;
-            bool? taken = conditionElement switch
-            {
-                BoolValue b     => b.Value,
-                NumberValue n   => n.Value != 0,
-                DateTimeValue d => d.Value != 0,
-                BlankValue      => false,
-                _               => null
-            };
+            bool? taken = TryCoerceCondition(conditionElement);
             if (taken is null) return ErrorValue.Value;
             if (!taken.Value) continue;
 

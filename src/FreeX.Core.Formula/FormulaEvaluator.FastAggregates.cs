@@ -577,12 +577,28 @@ public sealed partial class FormulaEvaluator
                 return FastAggregateRangeResolution.Unsupported;
 
             var gridRange = resolvedNamedRange.Value;
-            var resolvedRange = new FastAggregateRange(
-                context.TryGetSheetName(gridRange.Start.Sheet),
-                gridRange.Start.Row,
-                gridRange.Start.Col,
-                gridRange.End.Row,
-                gridRange.End.Col);
+            var sheetName = context.TryGetSheetName(gridRange.Start.Sheet);
+
+            var startRow = gridRange.Start.Row;
+            var startCol = gridRange.Start.Col;
+            var endRow = gridRange.End.Row;
+            var endCol = gridRange.End.Col;
+
+            // Apply the same full-column/full-row clamp that literal range and INDIRECT paths use.
+            // A named range like =Data where Data=$A:$B spans all 1,048,576 rows and would exceed
+            // MaxStreamingRangeCells, returning #REF! without this clamp.
+            bool isFullCol = startRow == 1 && endRow == CellAddress.MaxRow;
+            bool isFullRow = startCol == 1 && endCol == CellAddress.MaxCol;
+            if ((isFullCol || isFullRow) && kind != FastAggregateKind.CountBlank)
+            {
+                if (!TryClampFullRangeToUsed(sheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
+                {
+                    range = new FastAggregateRange(sheetName, 1, 1, 0, 0);
+                    return FastAggregateRangeResolution.Range;
+                }
+            }
+
+            var resolvedRange = new FastAggregateRange(sheetName, startRow, startCol, endRow, endCol);
 
             if (!TryAcceptFastAggregateRange(resolvedRange, kind, out error))
                 return FastAggregateRangeResolution.Error;

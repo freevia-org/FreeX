@@ -31,11 +31,22 @@ public class ShortCircuitEvaluationTests
     }
 
     [Fact]
-    public void IF_TextCondition_ReturnsValueError()
+    public void IF_TextTrueCondition_CoercesToTrue()
+    {
+        // Excel coerces "TRUE"/"FALSE" (case-insensitive) to booleans in IF conditions.
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        _evaluator.Evaluate("=IF(\"TRUE\",\"yes\",\"no\")", sheet, wb)
+            .Should().Be(new TextValue("yes"), "Excel coerces text TRUE to true in IF condition");
+        _evaluator.Evaluate("=IF(\"FALSE\",\"yes\",\"no\")", sheet, wb)
+            .Should().Be(new TextValue("no"), "Excel coerces text FALSE to false in IF condition");
+    }
+
+    [Fact]
+    public void IF_NonBoolTextCondition_ReturnsValueError()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
-        var result = _evaluator.Evaluate("=IF(\"TRUE\",\"yes\",\"no\")", sheet, wb);
-        result.Should().Be(ErrorValue.Value, "text condition should produce #VALUE! as in Excel");
+        var result = _evaluator.Evaluate("=IF(\"yes\",\"a\",\"b\")", sheet, wb);
+        result.Should().Be(ErrorValue.Value, "non-bool text condition produces #VALUE! in Excel");
     }
 
     [Fact]
