@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -428,7 +429,28 @@ public partial class MainWindow
         }
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var dialog = new SubtotalDialog(sheet is null ? null : SubtotalDialog.BuildColumnChoices(sheet, range)) { Owner = this };
+        if (sheet is null)
+        {
+            _messageService.ShowWarning(
+                SubtotalPlanner.NoOccupiedDataMessage,
+                UiText.Get("MainWindowMessage_SubtotalTitle"));
+            return;
+        }
+
+        if (!SubtotalPlanner.TryCreateSourceRange(
+                sheet,
+                range,
+                out var sourceRange,
+                out var sourceRangeError,
+                requireCompleteTableShape: false))
+        {
+            _messageService.ShowWarning(
+                sourceRangeError ?? SubtotalPlanner.NoOccupiedDataMessage,
+                UiText.Get("MainWindowMessage_SubtotalTitle"));
+            return;
+        }
+
+        var dialog = new SubtotalDialog(SubtotalDialog.BuildColumnChoices(sheet, sourceRange)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         if (dialog.Result.Action == SubtotalDialogAction.RemoveAll)
@@ -437,8 +459,7 @@ public partial class MainWindow
                     "Remove Subtotals",
                     sheetId =>
                     {
-                        var currentRange = SheetGrid.SelectedRange ?? range;
-                        var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId);
+                        var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId);
                         return new RemoveSubtotalRowsCommand(sheetId, sheetRange);
                     },
                     out var removeOutcome))
@@ -453,8 +474,7 @@ public partial class MainWindow
                 "Subtotal",
                 sheetId =>
                 {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId);
+                    var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId);
                     var subtotalCommand = new SubtotalCommand(
                         sheetId,
                         sheetRange,
