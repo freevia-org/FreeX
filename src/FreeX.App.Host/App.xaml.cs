@@ -64,12 +64,24 @@ public partial class App : Application
 
         crashAnalytics.Initialize(crashAnalyticsOptions, diagnosticsMetadata);
         var diagnostics = Services.GetRequiredService<IAppDiagnostics>();
-        RegisterCrashHandlers(diagnostics);
+        var snapshotStore = AutosaveSnapshotStore.CreateDefault(
+            Services.GetRequiredService<IApplicationDataPathProvider>());
+        RegisterCrashHandlers(diagnostics, snapshotStore);
         diagnostics.RecordEvent("app_start");
 
         // Show main window
         var mainWindow = Services.GetRequiredService<MainWindow>();
+
+        // Wire autosave before showing the window.
+        var autosaveService = new AutosaveService(snapshotStore);
+        mainWindow.AttachAutosaveService(autosaveService, snapshotStore);
+
         mainWindow.Show();
+
+        // Startup recovery: offer to restore any snapshots from previous crashed sessions.
+        // This runs after Show() so the window is visible as the host for any dialogs.
+        OfferStartupRecovery(mainWindow, snapshotStore);
+
         foreach (var startupWorkbookPath in e.Args)
         {
             if (!File.Exists(startupWorkbookPath))
@@ -142,23 +154,126 @@ public partial class App : Application
         services.AddTransient<MainWindow>();
     }
 
-    private static void RegisterCrashHandlers(IAppDiagnostics diagnostics)
+    private static void RegisterCrashHandlers(IAppDiagnostics diagnostics, AutosaveSnapshotStore snapshotStore)
     {
         Current.DispatcherUnhandledException += (_, args) =>
         {
             diagnostics.RecordCrash(args.Exception, "dispatcher");
+            TryEmergencySaveAllWindows(snapshotStore);
         };
 
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             if (args.ExceptionObject is Exception exception)
                 diagnostics.RecordCrash(exception, "appdomain");
+            TryEmergencySaveAllWindows(snapshotStore);
         };
 
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
             diagnostics.RecordCrash(args.Exception, "task");
         };
+    }
+
+    /// <summary>
+    /// Best-effort emergency snapshot of all open dirty windows. Called from crash handlers.
+    /// Must never throw.
+    /// </summary>
+    private static void TryEmergencySaveAllWindows(AutosaveSnapshotStore snapshotStore)
+    {
+        try
+        {
+            foreach (Window window in Current.Windows)
+            {
+                if (window is not MainWindow mainWindow)
+                    continue;
+
+                try
+                {
+                    var svc = mainWindow.AutosaveServiceForCrashHandler;
+                    if (svc is null)
+                        continue;
+
+                    svc.TryEmergencySnapshot(mainWindow);
+                }
+                catch
+                {
+                    // A crash handler must never throw.
+                }
+            }
+        }
+        catch
+        {
+            // Outer guard — crash handlers must never throw.
+        }
+    }
+
+    /// <summary>
+    /// Checks for recovery snapshots from previous crashed sessions and offers restore/discard.
+    /// Must be called after the main window is shown (it owns any dialogs).
+    /// Stale or corrupt snapshots are silently deleted.
+    /// </summary>
+    private static void OfferStartupRecovery(MainWindow mainWindow, AutosaveSnapshotStore snapshotStore)
+    {
+        try
+        {
+            var candidates = snapshotStore.EnumerateCandidates();
+            if (candidates.Count == 0)
+                return;
+
+            // For this first implementation we handle the first candidate (single-workbook app).
+            var candidate = candidates[0];
+
+            var displayName = candidate.Sidecar.DisplayName;
+            var prompt = string.IsNullOrWhiteSpace(displayName)
+                ? UiText.Get("Startup_RecoveryPrompt")
+                : UiText.Format("Startup_RecoveryPromptNamed", displayName);
+
+            var result = MessageBox.Show(
+                prompt,
+                UiText.Get("Startup_RecoveryTitle"),
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                try
+                {
+                    _ = mainWindow.Dispatcher.BeginInvoke(async () =>
+                    {
+                        try
+                        {
+                            await mainWindow.OpenStartupFileAsync(candidate.SnapshotPath);
+                            mainWindow.SetCurrentFilePathForRecovery(candidate.Sidecar.OriginalFilePath);
+                            // Mark dirty so the user knows this came from a recovery.
+                            mainWindow.MarkWorkbookDirtyForRecovery();
+                            AutosaveSnapshotStore.DeleteCandidate(candidate);
+                        }
+                        catch
+                        {
+                            // If recovery load fails, clean up the bad snapshot.
+                            AutosaveSnapshotStore.DeleteCandidate(candidate);
+                        }
+                    });
+                }
+                catch
+                {
+                    AutosaveSnapshotStore.DeleteCandidate(candidate);
+                }
+            }
+            else
+            {
+                // User chose to discard — delete all candidates.
+                foreach (var c in candidates)
+                {
+                    try { AutosaveSnapshotStore.DeleteCandidate(c); } catch { /* best-effort */ }
+                }
+            }
+        }
+        catch
+        {
+            // Startup recovery must never affect normal startup.
+        }
     }
 
     private static void PromptForCrashAnalyticsConsentIfNeeded(

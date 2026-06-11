@@ -30,6 +30,7 @@ public partial class MainWindow
     {
         _workbookDirty = false;
         UpdateTitleBar();
+        NotifyAutosaveSaved();
     }
 
     private async Task<SaveChangesConfirmation> ConfirmSaveBeforeDestructiveActionAsync(string message)

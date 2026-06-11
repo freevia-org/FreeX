@@ -2787,6 +2787,15 @@
   <data name="DeferredCommand_WorkbookTheme_Body" xml:space="preserve">
     <value>{0} is deferred until FreeX has a workbook theme model. It is tracked as a documented parity gap, not a silent partial implementation.</value>
   </data>
+  <data name="Startup_RecoveryTitle" xml:space="preserve">
+    <value>Recover Unsaved Work</value>
+  </data>
+  <data name="Startup_RecoveryPrompt" xml:space="preserve">
+    <value>FreeX found autosaved recovery files from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook?</value>
+  </data>
+  <data name="Startup_RecoveryPromptNamed" xml:space="preserve">
+    <value>FreeX found an autosaved recovery file for "{0}" from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook?</value>
+  </data>
   <data name="Startup_CrashReportsConsentPrompt" xml:space="preserve">
     <value>FreeX can send crash reports to help stabilize tester builds. Reports include app version, runtime, operating system, session ID, exception message, and stack trace. Workbook contents, formulas, filenames, and paths are not collected intentionally, but exception details can occasionally include sensitive values.&#x0A;&#x0A;Send crash reports for this tester build?</value>
   </data>
