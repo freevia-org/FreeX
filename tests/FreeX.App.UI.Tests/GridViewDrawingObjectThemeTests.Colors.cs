@@ -27,6 +27,23 @@ public sealed partial class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void ResolveDrawingShapeColors_UsesThemeObjectDefaultsBeforeStaticDefaults()
+    {
+        var theme = WorkbookTheme.Office.WithSupplementalMetadata(
+            alternateColorSchemes: null,
+            hasObjectDefaults: true,
+            objectDefaults: new WorkbookThemeObjectDefaults(
+                Shape: new WorkbookThemeShapeObjectDefault(
+                    FillColor: new CellColor(0xEE, 0xDD, 0xCC),
+                    OutlineColor: new CellColor(0x11, 0x22, 0x33))));
+
+        var colors = GridView.ResolveDrawingShapeColors(new DrawingShapeModel(), theme);
+
+        colors.Fill.Should().Be(new CellColor(0xEE, 0xDD, 0xCC));
+        colors.Outline.Should().Be(new CellColor(0x11, 0x22, 0x33));
+    }
+
+    [Fact]
     public void ResolveTextBoxColors_UsesThemeReferences()
     {
         var theme = WorkbookTheme.Office

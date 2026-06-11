@@ -105,6 +105,44 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         loadedKinds.Should().Equal(cases.Select(item => item.Kind));
     }
 
+    [Fact]
+    public void WorksheetDrawingShapes_WriteConcreteDefaultFillAndOutline()
+    {
+        var workbook = new Workbook("DefaultShapeStyle");
+        var sheet = workbook.AddSheet("Shapes");
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            FillColor = DrawingShapeModel.DefaultFillColor,
+            OutlineColor = DrawingShapeModel.DefaultOutlineColor
+        });
+
+        using var stream = Save(workbook);
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        var shapeProperties = ReadPackageRootElement(stream, "xl/drawings/drawing1.xml")
+            .Descendants(spreadsheetDrawingNs + "spPr")
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        shapeProperties.Element(drawingNs + "solidFill")!
+            .Element(drawingNs + "srgbClr")!
+            .Attribute("val")!
+            .Value
+            .Should()
+            .Be("5B9BD5");
+        shapeProperties.Element(drawingNs + "ln")!
+            .Element(drawingNs + "solidFill")!
+            .Element(drawingNs + "srgbClr")!
+            .Attribute("val")!
+            .Value
+            .Should()
+            .Be("2F5597");
+    }
+
     private static Workbook CreateWorksheetDrawingObjectsSourceWorkbook()
     {
         var workbook = new Workbook("WorksheetDrawingObjectsPatchSave");

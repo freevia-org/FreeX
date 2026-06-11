@@ -265,7 +265,12 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
-                    return new AddDrawingShapeCommand(sheetId, new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col), kind);
+                    return new AddDrawingShapeCommand(
+                        sheetId,
+                        new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col),
+                        kind,
+                        fillColor: ResolveCurrentShapeFillColor(),
+                        outlineColor: ResolveCurrentShapeOutlineColor());
                 }))
             return;
 
@@ -389,11 +394,15 @@ public partial class MainWindow
             return;
         }
 
-        var initial = isFill ? target.FillColor : target.OutlineColor;
+        var initial = isFill
+            ? ResolveDrawingObjectFillColor(target)
+            : ResolveDrawingObjectOutlineColor(target);
         var title = UiText.Get(isFill ? "MainWindowMessage_ObjectFillTitle" : "MainWindowMessage_ObjectOutlineTitle");
         if (!TryShowColorPicker(title, initial, allowNoColor: false, out var selectedColor)
             || selectedColor is not { } color)
             return;
+
+        RememberCurrentShapeColor(target.Kind, isFill, color);
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 isFill ? "Object Fill" : "Object Outline",
@@ -405,8 +414,10 @@ public partial class MainWindow
                         return new SetDrawingShapeColorsCommand(
                             sheetId,
                             groupedTarget?.Id ?? Guid.Empty,
-                            isFill ? color : groupedTarget?.FillColor,
-                            isFill ? groupedTarget?.OutlineColor : color);
+                            isFill ? color : null,
+                            isFill ? null : color,
+                            updateFill: isFill,
+                            updateOutline: !isFill);
                     }
 
                     return new SetTextBoxColorsCommand(
@@ -421,6 +432,51 @@ public partial class MainWindow
         EnsureCellVisible(target.Anchor);
         UpdateViewport();
     }
+
+    private CellColor ResolveCurrentShapeFillColor() =>
+        _currentShapeFillColor ?? DrawingShapeModel.ResolveDefaultFillColor(_workbook.Theme);
+
+    private CellColor ResolveCurrentShapeOutlineColor() =>
+        _currentShapeOutlineColor ?? DrawingShapeModel.ResolveDefaultOutlineColor(_workbook.Theme);
+
+    private void RememberCurrentShapeColor(DrawingObjectTargetKind kind, bool isFill, CellColor color)
+    {
+        if (kind != DrawingObjectTargetKind.Shape)
+            return;
+
+        if (isFill)
+            _currentShapeFillColor = color;
+        else
+            _currentShapeOutlineColor = color;
+    }
+
+    private CellColor ResolveDrawingObjectFillColor(DrawingObjectTarget target) =>
+        target.Kind switch
+        {
+            DrawingObjectTargetKind.Shape =>
+                target.FillThemeColor?.Resolve(_workbook.Theme) ??
+                target.FillColor ??
+                DrawingShapeModel.ResolveDefaultFillColor(_workbook.Theme),
+            DrawingObjectTargetKind.TextBox =>
+                target.FillThemeColor?.Resolve(_workbook.Theme) ??
+                target.FillColor ??
+                CellColor.White,
+            _ => CellColor.White
+        };
+
+    private CellColor ResolveDrawingObjectOutlineColor(DrawingObjectTarget target) =>
+        target.Kind switch
+        {
+            DrawingObjectTargetKind.Shape =>
+                target.OutlineThemeColor?.Resolve(_workbook.Theme) ??
+                target.OutlineColor ??
+                DrawingShapeModel.ResolveDefaultOutlineColor(_workbook.Theme),
+            DrawingObjectTargetKind.TextBox =>
+                target.OutlineThemeColor?.Resolve(_workbook.Theme) ??
+                target.OutlineColor ??
+                new CellColor(89, 89, 89),
+            _ => CellColor.Black
+        };
 
     private void SetSelectedDrawingShapeGradient()
     {

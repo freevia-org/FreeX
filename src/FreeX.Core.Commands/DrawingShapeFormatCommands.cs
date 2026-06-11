@@ -8,6 +8,8 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
     private readonly Guid _shapeId;
     private readonly CellColor? _fillColor;
     private readonly CellColor? _outlineColor;
+    private readonly bool _updateFill;
+    private readonly bool _updateOutline;
     private CellColor? _previousFillColor;
     private CellColor? _previousOutlineColor;
     private CellColor? _previousGradientFillEndColor;
@@ -22,12 +24,16 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         SheetId sheetId,
         Guid shapeId,
         CellColor? fillColor,
-        CellColor? outlineColor)
+        CellColor? outlineColor,
+        bool updateFill = true,
+        bool updateOutline = true)
     {
         _sheetId = sheetId;
         _shapeId = shapeId;
         _fillColor = fillColor;
         _outlineColor = outlineColor;
+        _updateFill = updateFill;
+        _updateOutline = updateOutline;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -45,12 +51,20 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         _previousGradientFillDirection = shape.GradientFillDirection;
         _previousFillThemeColor = shape.FillThemeColor;
         _previousOutlineThemeColor = shape.OutlineThemeColor;
-        shape.FillColor = _fillColor;
-        shape.OutlineColor = _outlineColor;
-        shape.GradientFillEndColor = null;
-        shape.GradientFillDirection = DrawingShapeGradientDirection.DiagonalDown;
-        shape.FillThemeColor = null;
-        shape.OutlineThemeColor = null;
+        if (_updateFill)
+        {
+            shape.FillColor = _fillColor;
+            shape.GradientFillEndColor = null;
+            shape.GradientFillDirection = DrawingShapeGradientDirection.DiagonalDown;
+            shape.FillThemeColor = null;
+        }
+
+        if (_updateOutline)
+        {
+            shape.OutlineColor = _outlineColor;
+            shape.OutlineThemeColor = null;
+        }
+
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
     }
