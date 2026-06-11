@@ -51,6 +51,40 @@ public sealed class DataValidationCommandTests
     }
 
     [Fact]
+    public void SetDataValidationCommand_RejectsIncompleteCriteria()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var rule = NewRule(sheet.Id);
+        rule.Formula2 = "";
+
+        var outcome = new SetDataValidationCommand(sheet.Id, rule).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("incomplete");
+        sheet.DataValidations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SetDataValidationCommand_RejectsInvalidWorksheetRange()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var rule = NewRule(sheet.Id);
+        rule.AppliesTo = new GridRange(
+            new CellAddress(sheet.Id, 0, 1),
+            new CellAddress(sheet.Id, 5, 1));
+
+        var outcome = new SetDataValidationCommand(sheet.Id, rule).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("valid worksheet range");
+        sheet.DataValidations.Should().BeEmpty();
+    }
+
+    [Fact]
     public void SetDataValidationCommand_RejectsRuleRangeOnAnotherSheet()
     {
         var wb = new Workbook("test");

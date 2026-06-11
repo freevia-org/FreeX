@@ -160,7 +160,7 @@ public partial class DataValidationDialog : Window
         SourcePickerButton.Visibility = !isAny
             ? Visibility.Visible
             : Visibility.Collapsed;
-        UseSelectionButton.Visibility = isList && !string.IsNullOrWhiteSpace(SelectionSource)
+        UseSelectionButton.Visibility = !isAny && !string.IsNullOrWhiteSpace(SelectionSource)
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -301,30 +301,36 @@ public partial class DataValidationDialog : Window
 
     private void UseSelectionButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(SelectionSource))
-            Formula1Box.Text = SelectionSource;
+        ApplySelectionSourceTo(Formula1Box);
     }
 
     private void SourcePickerButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(SelectionSource))
-            Formula1Box.Text = SelectionSource;
+        ApplySelectionSourceTo(Formula1Box);
 
         RequestRangeSelection(DataValidationRangeSelectionTarget.Formula1, Formula1Box);
     }
 
     private void SourcePicker2Button_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(SelectionSource))
-            Formula2Box.Text = SelectionSource;
+        ApplySelectionSourceTo(Formula2Box);
 
         RequestRangeSelection(DataValidationRangeSelectionTarget.Formula2, Formula2Box);
     }
 
     private void UseSelection2Button_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(SelectionSource))
-            Formula2Box.Text = SelectionSource;
+        ApplySelectionSourceTo(Formula2Box);
+    }
+
+    private void ApplySelectionSourceTo(TextBox textBox)
+    {
+        var selectionSource = SelectionSource?.Trim();
+        if (string.IsNullOrWhiteSpace(selectionSource))
+            return;
+
+        textBox.Text = selectionSource;
+        FocusRangeSelectionInput(textBox);
     }
 
     public void ApplyRangeSelection(DataValidationRangeSelectionTarget target, string formulaText)

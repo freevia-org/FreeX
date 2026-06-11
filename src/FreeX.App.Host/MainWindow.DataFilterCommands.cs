@@ -304,18 +304,28 @@ public partial class MainWindow
         dv.AdditionalRanges.Clear();
         dv.AdditionalRanges.AddRange(ranges.Skip(1));
 
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Data Validation",
-                sheetId =>
-                {
-                    var rule = GroupedSheetRangePlanner.CloneDataValidationForSheet(dv, sheetId);
-                    return CreateDataValidationCommand(
-                        sheetId,
-                        rule,
-                        existingRule,
-                        dlg.ApplyToSameSettings);
-                }))
+        try
+        {
+            if (!TryExecuteRepeatableGroupedSheetCommand(
+                    "Data Validation",
+                    sheetId =>
+                    {
+                        var rule = GroupedSheetRangePlanner.CloneDataValidationForSheet(dv, sheetId);
+                        return CreateDataValidationCommand(
+                            sheetId,
+                            rule,
+                            existingRule,
+                            dlg.ApplyToSameSettings);
+                    }))
+                return;
+        }
+        catch (Exception ex)
+        {
+            ShowCommandError(
+                new CommandOutcome(false, $"Data validation could not be applied. {ex.Message}"),
+                UiText.Get("MainWindowMessage_DataValidationTitle"));
             return;
+        }
         UpdateViewport();
     }
 

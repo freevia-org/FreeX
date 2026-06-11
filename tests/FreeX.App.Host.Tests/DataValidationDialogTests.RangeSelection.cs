@@ -108,6 +108,31 @@ public sealed partial class DataValidationDialogTests
     }
 
     [Fact]
+    public void UseSelectionButton_PopulatesFormula1ForNonListValidationTypes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new DataValidationDialog { SelectionSource = "  =Sheet1!$C$2  " };
+            dialog.Show();
+            try
+            {
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "WholeNumber");
+
+                InvokePrivate(dialog, "UseSelectionButton_Click");
+
+                var formula1Box = GetControl<TextBox>(dialog, "Formula1Box");
+                formula1Box.Text.Should().Be("=Sheet1!$C$2");
+                formula1Box.IsKeyboardFocusWithin.Should().BeTrue();
+                formula1Box.SelectionLength.Should().Be(formula1Box.Text.Length);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void SourcePicker2Button_PopulatesAndFocusesFormula2()
     {
         StaTestRunner.Run(() =>

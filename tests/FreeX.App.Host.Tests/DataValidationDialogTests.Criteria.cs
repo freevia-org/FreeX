@@ -60,6 +60,7 @@ public sealed partial class DataValidationDialogTests
     [InlineData("Time", "Equal", "25:00", "", "Time")]
     [InlineData("TextLength", "Equal", "2.5", "", "Text length")]
     [InlineData("List", "Between", "=\"unterminated", "", "Source")]
+    [InlineData("List", "Between", "=$A$1:$A$10001", "", "Source")]
     [InlineData("Custom", "Between", "=SUM(", "", "Formula")]
     [InlineData("WholeNumber", "Between", "1", "two", "Whole number")]
     public void ValidateCriteriaInputs_RejectsMalformedTypeSpecificCriteria(
@@ -90,6 +91,7 @@ public sealed partial class DataValidationDialogTests
     [InlineData("TextLength", "LessThanOrEqual", "12", "")]
     [InlineData("List", "Between", "Red,\"Blue, Green\"", "")]
     [InlineData("List", "Between", "=$A$1:$A$5", "")]
+    [InlineData("List", "Between", "=$A$1:$A$10000", "")]
     [InlineData("Custom", "Between", "=MOD(A1,2)=0", "")]
     public void ValidateCriteriaInputs_AllowsWellFormedTypeSpecificCriteria(
         string typeTag,

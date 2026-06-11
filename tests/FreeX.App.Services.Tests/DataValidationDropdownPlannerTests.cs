@@ -103,6 +103,54 @@ public sealed class DataValidationDropdownPlannerTests
             .BeFalse();
     }
 
+    [Fact]
+    public void TryPlan_RejectsOversizedDropdownSourceWithoutEnumeratingIt()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var target = new CellAddress(sheet.Id, 1, 2);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(target, target),
+            Type = DvType.List,
+            Formula1 = "=$A$1:$A$10001",
+            ShowDropdown = true
+        });
+
+        DataValidationDropdownPlanner.TryPlan(
+                workbook,
+                sheet,
+                target,
+                new DataValidationDropdownCellBounds(0, 0, 64, 20),
+                out _)
+            .Should()
+            .BeFalse();
+    }
+
+    [Fact]
+    public void TryPlan_RejectsHugeDropdownSourceWithoutThrowing()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var target = new CellAddress(sheet.Id, 1, 2);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(target, target),
+            Type = DvType.List,
+            Formula1 = "=$A$1:$XFD$1048576",
+            ShowDropdown = true
+        });
+
+        var act = () => DataValidationDropdownPlanner.TryPlan(
+            workbook,
+            sheet,
+            target,
+            new DataValidationDropdownCellBounds(0, 0, 64, 20),
+            out _);
+
+        act.Should().NotThrow().Which.Should().BeFalse();
+    }
+
     private static Workbook CreateWorkbook()
     {
         var workbook = new Workbook("Book");
