@@ -1443,7 +1443,6 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulEditResult(result, plan.Target);
-        SelectCell(GetNextAutoSumCell(plan.Target));
         return result;
     }
 
@@ -3120,9 +3119,6 @@ public sealed class WorkbookSession
             FillCellsDirection.Left => "Fill Left",
             _ => "Fill"
         };
-
-    private static CellAddress GetNextAutoSumCell(CellAddress address) =>
-        new(address.Sheet, address.Row < CellAddress.MaxRow ? address.Row + 1 : address.Row, address.Col);
 
     private static GridRange RemapRangeToSheet(GridRange range, SheetId sheetId) =>
         new(

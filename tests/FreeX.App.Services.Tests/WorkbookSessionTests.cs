@@ -4017,7 +4017,7 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
-    public void InsertAutoSumFormula_AggregatesUseVerticalSelectionAndMoveBelowFormula()
+    public void InsertAutoSumFormula_AggregatesUseVerticalSelectionAndKeepFormulaSelected()
     {
         var functionNames = new[] { "SUM", "AVERAGE", "COUNT", "COUNTA", "MAX", "MIN" };
 
@@ -4044,36 +4044,42 @@ public sealed class WorkbookSessionTests
             result.Success.Should().BeTrue(functionName);
             result.AffectedCells.Should().ContainSingle().Which.Should().Be(a4);
             sheet.GetCell(a4)!.FormulaText.Should().Be($"{functionName}(A1:A3)");
-            session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 5, 1));
+            session.ActiveCell.Should().Be(a4);
             session.SelectedRange.Should().Be(new GridRange(session.ActiveCell, session.ActiveCell));
         }
     }
 
     [Fact]
-    public void InsertAutoSumFormula_SumUsesHorizontalSelectionAndMovesBelowInsertedFormula()
+    public void InsertAutoSumFormula_AggregatesUseHorizontalSelectionAndKeepFormulaSelected()
     {
-        var workbook = CreateWorkbook();
-        var sheet = workbook.Sheets.Single();
-        var a1 = new CellAddress(sheet.Id, 1, 1);
-        var b1 = new CellAddress(sheet.Id, 1, 2);
-        var c1 = new CellAddress(sheet.Id, 1, 3);
-        var d1 = new CellAddress(sheet.Id, 1, 4);
-        sheet.SetCell(a1, new NumberValue(10));
-        sheet.SetCell(b1, new NumberValue(20));
-        sheet.SetCell(c1, new NumberValue(30));
-        var session = CreateSession(new StartupWorkbookLoadResult(
-            workbook,
-            "Book.fxl",
-            "Opened .fxl.",
-            IsFallback: false));
-        session.SelectRange(new GridRange(a1, c1));
+        var functionNames = new[] { "SUM", "AVERAGE", "COUNT", "COUNTA", "MAX", "MIN" };
 
-        var result = session.InsertAutoSumFormula("SUM");
+        foreach (var functionName in functionNames)
+        {
+            var workbook = CreateWorkbook();
+            var sheet = workbook.Sheets.Single();
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            var b1 = new CellAddress(sheet.Id, 1, 2);
+            var c1 = new CellAddress(sheet.Id, 1, 3);
+            var d1 = new CellAddress(sheet.Id, 1, 4);
+            sheet.SetCell(a1, new NumberValue(10));
+            sheet.SetCell(b1, new NumberValue(20));
+            sheet.SetCell(c1, new NumberValue(30));
+            var session = CreateSession(new StartupWorkbookLoadResult(
+                workbook,
+                "Book.fxl",
+                "Opened .fxl.",
+                IsFallback: false));
+            session.SelectRange(new GridRange(a1, c1));
 
-        result.Success.Should().BeTrue();
-        result.AffectedCells.Should().ContainSingle().Which.Should().Be(d1);
-        sheet.GetCell(d1)!.FormulaText.Should().Be("SUM(A1:C1)");
-        session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 2, 4));
+            var result = session.InsertAutoSumFormula(functionName);
+
+            result.Success.Should().BeTrue(functionName);
+            result.AffectedCells.Should().ContainSingle().Which.Should().Be(d1);
+            sheet.GetCell(d1)!.FormulaText.Should().Be($"{functionName}(A1:C1)");
+            session.ActiveCell.Should().Be(d1);
+            session.SelectedRange.Should().Be(new GridRange(d1, d1));
+        }
     }
 
     [Fact]
@@ -4102,7 +4108,7 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
-    public void InsertAutoSumFormula_SumUsesNumbersAboveMovesActiveCellAndUndoRestores()
+    public void InsertAutoSumFormula_SumUsesNumbersAboveKeepsFormulaSelectedAndUndoRestores()
     {
         var workbook = CreateWorkbook();
         var sheet = workbook.Sheets.Single();
@@ -4123,7 +4129,7 @@ public sealed class WorkbookSessionTests
         result.Success.Should().BeTrue();
         result.AffectedCells.Should().ContainSingle().Which.Should().Be(c4);
         sheet.GetCell(c4)!.FormulaText.Should().Be("SUM(C2:C3)");
-        session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 5, 3));
+        session.ActiveCell.Should().Be(c4);
         session.SelectedRange.Should().Be(new GridRange(session.ActiveCell, session.ActiveCell));
         session.IsDirty.Should().BeTrue();
         session.CanUndo.Should().BeTrue();
@@ -4136,50 +4142,63 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
-    public void InsertAutoSumFormula_AverageFallsBackToNumbersOnTheLeft()
+    public void InsertAutoSumFormula_AggregatesFallBackToNumbersOnTheLeftAndKeepFormulaSelected()
     {
-        var workbook = CreateWorkbook();
-        var sheet = workbook.Sheets.Single();
-        var a5 = new CellAddress(sheet.Id, 5, 1);
-        var b5 = new CellAddress(sheet.Id, 5, 2);
-        var c5 = new CellAddress(sheet.Id, 5, 3);
-        sheet.SetCell(a5, new NumberValue(10));
-        sheet.SetCell(b5, new NumberValue(20));
-        var session = CreateSession(new StartupWorkbookLoadResult(
-            workbook,
-            "Book.fxl",
-            "Opened .fxl.",
-            IsFallback: false));
-        session.SelectCell(c5);
+        var functionNames = new[] { "SUM", "AVERAGE", "COUNT", "COUNTA", "MAX", "MIN" };
 
-        var result = session.InsertAutoSumFormula("AVERAGE");
+        foreach (var functionName in functionNames)
+        {
+            var workbook = CreateWorkbook();
+            var sheet = workbook.Sheets.Single();
+            var a5 = new CellAddress(sheet.Id, 5, 1);
+            var b5 = new CellAddress(sheet.Id, 5, 2);
+            var c5 = new CellAddress(sheet.Id, 5, 3);
+            sheet.SetCell(a5, new NumberValue(10));
+            sheet.SetCell(b5, new NumberValue(20));
+            var session = CreateSession(new StartupWorkbookLoadResult(
+                workbook,
+                "Book.fxl",
+                "Opened .fxl.",
+                IsFallback: false));
+            session.SelectCell(c5);
 
-        result.Success.Should().BeTrue();
-        sheet.GetCell(c5)!.FormulaText.Should().Be("AVERAGE(A5:B5)");
-        session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 6, 3));
+            var result = session.InsertAutoSumFormula(functionName);
+
+            result.Success.Should().BeTrue(functionName);
+            sheet.GetCell(c5)!.FormulaText.Should().Be($"{functionName}(A5:B5)");
+            session.ActiveCell.Should().Be(c5);
+            session.SelectedRange.Should().Be(new GridRange(c5, c5));
+        }
     }
 
     [Fact]
-    public void InsertAutoSumFormula_CountAllUsesSameInferredRange()
+    public void InsertAutoSumFormula_AggregatesUseSameInferredRangeAndKeepFormulaSelected()
     {
-        var workbook = CreateWorkbook();
-        var sheet = workbook.Sheets.Single();
-        var a1 = new CellAddress(sheet.Id, 1, 1);
-        var a2 = new CellAddress(sheet.Id, 2, 1);
-        var a3 = new CellAddress(sheet.Id, 3, 1);
-        sheet.SetCell(a1, new NumberValue(10));
-        sheet.SetCell(a2, new NumberValue(20));
-        var session = CreateSession(new StartupWorkbookLoadResult(
-            workbook,
-            "Book.fxl",
-            "Opened .fxl.",
-            IsFallback: false));
-        session.SelectCell(a3);
+        var functionNames = new[] { "SUM", "AVERAGE", "COUNT", "COUNTA", "MAX", "MIN" };
 
-        var result = session.InsertAutoSumFormula("COUNTA");
+        foreach (var functionName in functionNames)
+        {
+            var workbook = CreateWorkbook();
+            var sheet = workbook.Sheets.Single();
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            var a2 = new CellAddress(sheet.Id, 2, 1);
+            var a3 = new CellAddress(sheet.Id, 3, 1);
+            sheet.SetCell(a1, new NumberValue(10));
+            sheet.SetCell(a2, new NumberValue(20));
+            var session = CreateSession(new StartupWorkbookLoadResult(
+                workbook,
+                "Book.fxl",
+                "Opened .fxl.",
+                IsFallback: false));
+            session.SelectCell(a3);
 
-        result.Success.Should().BeTrue();
-        sheet.GetCell(a3)!.FormulaText.Should().Be("COUNTA(A1:A2)");
+            var result = session.InsertAutoSumFormula(functionName);
+
+            result.Success.Should().BeTrue(functionName);
+            sheet.GetCell(a3)!.FormulaText.Should().Be($"{functionName}(A1:A2)");
+            session.ActiveCell.Should().Be(a3);
+            session.SelectedRange.Should().Be(new GridRange(a3, a3));
+        }
     }
 
     [Fact]
@@ -4215,7 +4234,8 @@ public sealed class WorkbookSessionTests
         summary.GetCell(summaryA2)!.FormulaText.Should().Be("MAX(A1:A1)");
         details.GetCell(detailsA2)!.FormulaText.Should().Be("MAX(A1:A1)");
         hidden.GetCell(hiddenA2).Should().BeNull();
-        session.ActiveCell.Should().Be(new CellAddress(summary.Id, 3, 1));
+        session.ActiveCell.Should().Be(summaryA2);
+        session.SelectedRange.Should().Be(new GridRange(summaryA2, summaryA2));
         session.IsWorkbookGrouped.Should().BeTrue();
 
         var undo = session.UndoLastEdit();

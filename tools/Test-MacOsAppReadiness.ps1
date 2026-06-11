@@ -2575,7 +2575,7 @@ function Test-SourceWiring {
                 "public WorkbookCellEditResult InsertAutoSumFormula(string functionName)",
                 "AutoSumFormulaPlanner.TryCreatePlan(ActiveSheet, functionName, SelectedRange, out var plan)",
                 "CreateEditCellsCommand([(plan.Target, Cell.FromFormula(plan.Formula))])",
-                "SelectCell(GetNextAutoSumCell(plan.Target));",
+                "ApplySuccessfulEditResult(result, plan.Target);",
                 "public bool CanFillSelectedRange(FillCellsDirection direction)",
                 "public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)",
                 "new FillCellsCommand(sheetId, sheetRange, direction)",
