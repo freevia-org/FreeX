@@ -23,6 +23,7 @@ public partial class DataValidationDialog : Window
 {
     /// <summary>Set to the resulting rule when the user clicks OK.</summary>
     public DataValidation? Result { get; private set; }
+    public bool Accepted { get; private set; }
     public string? LastValidationError { get; private set; }
     public bool ClearRequested { get; private set; }
     public bool ApplyToSameSettings { get; private set; }
@@ -94,6 +95,7 @@ public partial class DataValidationDialog : Window
         ErrorMessageBox.Text = "";
         ClearRequested = markClearRequested;
         Result = null;
+        Accepted = false;
         ApplyToSameSettings = false;
         UpdateVisibility();
         UpdateMessageEditorStates();
@@ -247,8 +249,7 @@ public partial class DataValidationDialog : Window
         ClearRequested = ClearRequested && IsClearAllState(typeTag, opTag, alertTag);
         LastValidationError = null;
 
-        DialogResult = true;
-        Close();
+        CompleteDialog(accepted: true);
     }
 
     private void FocusInvalidCriteriaInput(string typeTag, string opTag)
@@ -290,8 +291,20 @@ public partial class DataValidationDialog : Window
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = false;
-        Close();
+        CompleteDialog(accepted: false);
+    }
+
+    private void CompleteDialog(bool accepted)
+    {
+        Accepted = accepted;
+        try
+        {
+            DialogResult = accepted;
+        }
+        catch (InvalidOperationException)
+        {
+            Close();
+        }
     }
 
     private void ClearAllButton_Click(object sender, RoutedEventArgs e)

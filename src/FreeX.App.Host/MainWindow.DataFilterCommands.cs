@@ -282,7 +282,7 @@ public partial class MainWindow
             Owner = this,
             SelectionSource = DataValidationService.FormatListSourceRange(range, sheet?.Name, sheet?.Name)
         };
-        if (dlg.ShowDialog() != true) return;
+        if (dlg.ShowDialog() != true && !dlg.Accepted) return;
 
         if (dlg.ClearRequested)
         {

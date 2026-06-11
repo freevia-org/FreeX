@@ -385,7 +385,7 @@ public partial class DataValidationDialog
     public static DataValidationRangeSelectionRequest CreateRangeSelectionRequest(
         DataValidationRangeSelectionTarget target,
         string currentText) =>
-        new(target, currentText.Trim(), CollapseDialog: true);
+        new(target, currentText.Trim(), CollapseDialog: false);
 
     private static string TypeTag(DvType type) => type switch
     {
