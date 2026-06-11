@@ -973,6 +973,52 @@ public partial class FunctionLibraryTests
     [Fact] public void Trunc_ExcessiveDigits_ClampsLikeExcel() =>
         _eval.Evaluate("=TRUNC(1.2345,309)", MakeSheet()).Should().Be(new NumberValue(1.2345));
 
+    // Binary-representation precision fix: ROUNDDOWN/TRUNC/ROUNDUP now apply Excel's
+    // 15-significant-digit correction, matching Excel results for values whose raw
+    // double products land just below/above the target integer.
+
+    [Fact] public void Rounddown_4_35_2_Returns4_35() =>
+        _eval.Evaluate("=ROUNDDOWN(4.35,2)", MakeSheet()).Should().Be(new NumberValue(4.35));
+
+    [Fact] public void Trunc_4_35_2_Returns4_35() =>
+        _eval.Evaluate("=TRUNC(4.35,2)", MakeSheet()).Should().Be(new NumberValue(4.35));
+
+    [Fact] public void Rounddown_8_34_1_Returns8_3() =>
+        _eval.Evaluate("=ROUNDDOWN(8.34,1)", MakeSheet()).Should().Be(new NumberValue(8.3));
+
+    // Excel ROUNDDOWN(2.675,2) = 2.67 because 2.675 in double is 2.67499999...,
+    // so the correct truncation toward zero is 2.67.
+    [Fact] public void Rounddown_2_675_2_Returns2_67() =>
+        _eval.Evaluate("=ROUNDDOWN(2.675,2)", MakeSheet()).Should().Be(new NumberValue(2.67));
+
+    [Fact] public void Rounddown_Negative_4_35_2_ReturnsMinus4_35() =>
+        _eval.Evaluate("=ROUNDDOWN(-4.35,2)", MakeSheet()).Should().Be(new NumberValue(-4.35));
+
+    [Fact] public void Trunc_Negative_4_35_2_ReturnsMinus4_35() =>
+        _eval.Evaluate("=TRUNC(-4.35,2)", MakeSheet()).Should().Be(new NumberValue(-4.35));
+
+    // ROUNDUP away from zero: negative input goes more negative.
+    [Fact] public void Roundup_Negative_4_342_2_ReturnsMinus4_35() =>
+        _eval.Evaluate("=ROUNDUP(-4.342,2)", MakeSheet()).Should().Be(new NumberValue(-4.35));
+
+    [Fact] public void Roundup_4_342_2_Returns4_35() =>
+        _eval.Evaluate("=ROUNDUP(4.342,2)", MakeSheet()).Should().Be(new NumberValue(4.35));
+
+    [Fact] public void Rounddown_NegativeDigits_31415_Returns31400() =>
+        _eval.Evaluate("=ROUNDDOWN(31415.92654,-2)", MakeSheet()).Should().Be(new NumberValue(31400));
+
+    [Fact] public void Roundup_NegativeDigits_31415_Returns31500() =>
+        _eval.Evaluate("=ROUNDUP(31415.92654,-2)", MakeSheet()).Should().Be(new NumberValue(31500));
+
+    [Fact] public void Rounddown_AlreadyExact_4_3_1_Returns4_3() =>
+        _eval.Evaluate("=ROUNDDOWN(4.3,1)", MakeSheet()).Should().Be(new NumberValue(4.3));
+
+    [Fact] public void Rounddown_Zero_Returns0() =>
+        _eval.Evaluate("=ROUNDDOWN(0,5)", MakeSheet()).Should().Be(new NumberValue(0));
+
+    [Fact] public void Roundup_Zero_Returns0() =>
+        _eval.Evaluate("=ROUNDUP(0,5)", MakeSheet()).Should().Be(new NumberValue(0));
+
     [Fact] public void Mround_14_5_Returns15() =>
         _eval.Evaluate("=MROUND(14,5)", MakeSheet()).Should().Be(new NumberValue(15));
 
