@@ -2,6 +2,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Automation.Peers;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -226,8 +227,38 @@ public partial class MainWindow
         var automationName = string.IsNullOrWhiteSpace(text)
             ? fallbackAutomationName
             : text;
-        if (!string.Equals(AutomationProperties.GetName(textBlock), automationName, StringComparison.Ordinal))
+        var previousAutomationName = AutomationProperties.GetName(textBlock);
+        if (!string.Equals(previousAutomationName, automationName, StringComparison.Ordinal))
+        {
             AutomationProperties.SetName(textBlock, automationName);
+            NotifyStatusStatisticAutomationChanged(textBlock, previousAutomationName, automationName);
+        }
+
+        if (!string.Equals(AutomationProperties.GetHelpText(textBlock), automationName, StringComparison.Ordinal))
+            AutomationProperties.SetHelpText(textBlock, automationName);
+    }
+
+    private static void NotifyStatusStatisticAutomationChanged(
+        TextBlock textBlock,
+        string previousAutomationName,
+        string automationName)
+    {
+        if (!textBlock.IsLoaded)
+            return;
+
+        try
+        {
+            var peer = UIElementAutomationPeer.FromElement(textBlock) ??
+                       UIElementAutomationPeer.CreatePeerForElement(textBlock);
+            peer?.RaisePropertyChangedEvent(
+                AutomationElementIdentifiers.NameProperty,
+                previousAutomationName,
+                automationName);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+        catch (InvalidOperationException)
+        {
+        }
     }
 
     private (uint start, uint end) GetSelectedColRange(uint col)
