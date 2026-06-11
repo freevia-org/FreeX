@@ -82,6 +82,66 @@ public sealed partial class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialogStepThreeLayout_FitsContentAndNavigationAtDefaultSize()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var dialog = new TextToColumnsDialog(
+                [
+                    "East,42,Open",
+                    "West,7,Closed",
+                    "North,18,Pending"
+                ],
+                new CellAddress(sheetId, 2, 6));
+            dialog.Show();
+            try
+            {
+                var next = WpfTestTree.FindVisualDescendants<Button>(dialog)
+                    .Single(button => Equals(button.Content, "_Next >"));
+
+                DialogSourceTestSupport.ClickButton(next);
+                DialogSourceTestSupport.ClickButton(next);
+                dialog.UpdateLayout();
+
+                dialog.ResizeMode.Should().Be(ResizeMode.CanResizeWithGrip);
+                var root = dialog.Content.Should().BeOfType<Grid>().Subject;
+                root.RowDefinitions.Should().HaveCount(3);
+                root.RowDefinitions[1].Height.GridUnitType.Should().Be(GridUnitType.Star);
+
+                var bodyScroller = GetTextToColumnsField<ScrollViewer>(dialog, "_wizardBodyScrollViewer");
+                var preview = GetTextToColumnsField<ListView>(dialog, "_previewGrid");
+                var columnFormat = GetTextToColumnsField<FrameworkElement>(dialog, "_columnFormatPanel");
+                var destination = GetTextToColumnsField<FrameworkElement>(dialog, "_destinationPanel");
+                var back = GetTextToColumnsField<Button>(dialog, "_backButton");
+                var nextButton = GetTextToColumnsField<Button>(dialog, "_nextButton");
+                var finish = GetTextToColumnsField<Button>(dialog, "_finishButton");
+                var cancel = WpfTestTree.FindVisualDescendants<Button>(dialog).Single(button => button.IsCancel);
+
+                bodyScroller.ScrollableHeight.Should().BeLessThan(1);
+                preview.ActualHeight.Should().BeGreaterThan(70);
+                columnFormat.Visibility.Should().Be(Visibility.Visible);
+                destination.Visibility.Should().Be(Visibility.Visible);
+
+                var navigationButtons = new[] { back, nextButton, finish, cancel };
+                var navigationTop = navigationButtons.Min(button => BoundsRelativeTo(root, button).Top);
+                BoundsRelativeTo(root, destination).Bottom.Should().BeLessThanOrEqualTo(navigationTop + 0.5);
+
+                foreach (var element in new FrameworkElement[] { bodyScroller, preview, columnFormat, destination, back, nextButton, finish, cancel })
+                {
+                    element.ActualWidth.Should().BeGreaterThan(0);
+                    element.ActualHeight.Should().BeGreaterThan(0);
+                    AssertInside(root, element);
+                }
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void TextToColumnsDialogOpenedFromKeyboard_FocusesOriginalDataTypeChoice()
     {
         var source = ReadTextToColumnsDialogSources();

@@ -110,4 +110,58 @@ public sealed partial class ProtectionDialogTests
         source.Should().Contain("UiText.Get(\"Protection_ChooseWhichProtectedSheetActionsRemainAvailable\")");
         source.Should().NotContain("current enforcement is limited");
     }
+
+    [Fact]
+    public void ProtectionPasswordDialogs_UseContentHeightSizingInsteadOfFixedWindowHeights()
+    {
+        var source = ReadProtectionDialogSources();
+
+        source.Should().Contain("DialogSizing.ApplyContentHeight(this, width: isProtectSheet ? 430 : 380, minHeight: isProtectSheet ? 540 : 280);");
+        source.Should().Contain("DialogSizing.ApplyContentHeight(this, width: 360, minHeight: 180);");
+        source.Should().NotContain("Height = isProtectSheet ? 540 : 250;");
+        source.Should().NotContain("Height = 170;");
+    }
+
+    [Fact]
+    public void UnprotectSheetDialogLayout_KeepsPasswordAndActionsVisibleAtDefaultSize()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PasswordProtectionDialog(
+                UiText.Get("Protection_UnprotectSheetTitle"),
+                UiText.Get("Protection_Password2"));
+            dialog.Show();
+            try
+            {
+                dialog.UpdateLayout();
+
+                dialog.SizeToContent.Should().Be(SizeToContent.Height);
+                dialog.MinWidth.Should().Be(380);
+                dialog.MinHeight.Should().Be(280);
+                var root = dialog.Content.Should().BeAssignableTo<FrameworkElement>().Subject;
+                var passwordBox = DialogSourceTestSupport.GetPrivateField<PasswordBox>(dialog, "_passwordBox");
+                var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog)
+                    .Where(button => button.IsDefault || button.IsCancel)
+                    .ToArray();
+                buttons.Should().HaveCount(2);
+
+                var passwordBounds = BoundsRelativeTo(root, passwordBox);
+                var actionTop = buttons.Min(button => BoundsRelativeTo(root, button).Top);
+                actionTop.Should().BeGreaterThan(passwordBounds.Bottom);
+
+                foreach (var button in buttons)
+                {
+                    button.ActualWidth.Should().BeGreaterThanOrEqualTo(button.MinWidth);
+                    button.ActualHeight.Should().BeGreaterThan(0);
+                    AssertInside(root, button);
+                }
+
+                AssertInside(root, passwordBox);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
 }
