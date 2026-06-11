@@ -345,7 +345,7 @@ public class AutofillCommandTests
             source.IndexOf("public void Revert", StringComparison.Ordinal)];
 
         apply.Should().NotContain("_fillRange.AllCells().ToList()");
-        apply.Should().Contain("new List<(CellAddress Addr, Cell? OldCell)>(GetFillCellCapacity())");
+        apply.Should().Contain("new List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>(GetFillCellCapacity())");
         apply.Should().Contain("for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)");
         apply.Should().Contain("for (var col = _fillRange.Start.Col; col <= _fillRange.End.Col; col++)");
     }
