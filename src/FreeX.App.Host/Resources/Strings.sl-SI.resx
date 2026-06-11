@@ -14761,6 +14761,16 @@ in {0} več.</value>
   <data name="Progress_SavingWorkbook" xml:space="preserve">
     <value>Shranjevanje delovnega zvezka</value>
   </data>
+  <data name="Progress_ExportingFile" xml:space="preserve">
+    <value>Exporting file</value>
+  </data>
+  <data name="Progress_ExportingFileRendering" xml:space="preserve">
+    <value>Exporting file (rendering pages)</value>
+  </data>
+  <data name="Progress_ExportingFileWriting" xml:space="preserve">
+    <value>Exporting file (writing)</value>
+  </data>
+
   <data name="MainWindow_Header_ShapeFormat" xml:space="preserve">
     <value>Shape Format</value>
   </data>

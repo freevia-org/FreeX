@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Documents;
 using FreeX.Core.Model;
@@ -42,7 +43,7 @@ public partial class MainWindow
         return (document, plan);
     }
 
-    private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
+    private async void ExportPdfButton_Click(object sender, RoutedEventArgs e)
     {
         var saveDlg = new Microsoft.Win32.SaveFileDialog
         {
@@ -90,16 +91,26 @@ public partial class MainWindow
         }
 
         var exported = request.Format == ExportFormat.Pdf
-            ? ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)
-            : ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options);
+            ? await ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)
+            : await ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options);
         if (exported && request.Options.OpenAfterPublish)
             OpenExportedFile(request.ActualPath);
     }
 
-    private bool ExportAsPdf(string pdfPath, string optionSummary, ExportOptions options)
+    private async Task<bool> ExportAsPdf(string pdfPath, string optionSummary, ExportOptions options)
     {
+        if (_isExportingFile)
+            return false;
+
         try
         {
+            _isExportingFile = true;
+            RootGrid.IsEnabled = false;
+            ShowSaveProgress(
+                UiText.Get("Progress_ExportingFile"),
+                UiText.Get("Progress_ExportingFileRendering"),
+                null);
+
             var effectiveOptions = ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Pdf);
             if (!ExportPlanner.TryValidatePublishOptions(effectiveOptions, ExportFormat.Pdf, out var publishOptionsError))
                 throw new InvalidOperationException(publishOptionsError);
@@ -109,17 +120,27 @@ public partial class MainWindow
                 throw new InvalidOperationException(pageRangeError);
 
             var properties = PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions);
-            PdfDocumentExporter.Save(
+            var bookmarks = CreatePdfBookmarks(effectiveOptions);
+
+            // Render the PDF bytes on the UI thread (WPF visual tree access), then flush to disk on a
+            // background thread via temp+replace so the disk write does not block the message pump.
+            var pdfBytes = PdfDocumentExporter.RenderToBytes(
                 document,
-                pdfPath,
                 properties,
                 effectiveOptions.PageRange,
                 effectiveOptions.Quality,
-                CreatePdfBookmarks(effectiveOptions),
+                bookmarks,
                 effectiveOptions.InitialView,
                 effectiveOptions.OpenMode,
                 includeSelectableText: !effectiveOptions.BitmapTextWhenFontsMayNotBeEmbedded,
                 pdfLanguage: effectiveOptions.PdfLanguage);
+
+            ShowSaveProgress(
+                UiText.Get("Progress_ExportingFile"),
+                UiText.Get("Progress_ExportingFileWriting"),
+                50);
+
+            await Task.Run(() => ExportAtomicWriter.WriteAllBytes(pdfPath, pdfBytes));
 
             ShowOwnedMessage(
                 UiText.Format("MainWindowMessage_ExportPdfSavedFormat", optionSummary, pdfPath),
@@ -150,6 +171,12 @@ public partial class MainWindow
                 MessageBoxImage.Error);
             return false;
         }
+        finally
+        {
+            _isExportingFile = false;
+            RootGrid.IsEnabled = true;
+            HideSaveProgress();
+        }
     }
 
     /// <summary>
@@ -157,45 +184,92 @@ public partial class MainWindow
     /// Uses the internal <c>XpsDocumentWriter(XpsDocument)</c> constructor (available in
     /// ReachFramework on .NET 10 / .NET Framework) to write directly to a file without
     /// showing a print dialog.
+    /// <para>
+    /// The XPS write stays synchronous on the UI thread because <c>XpsDocumentWriter.Write</c>
+    /// drives the WPF visual tree (DocumentPaginator) and is thread-affine; promoting it to a
+    /// background thread would require a second STA thread and carries high regression risk.
+    /// Input is blocked and a progress indicator is shown for the duration so the window does
+    /// not appear frozen ("Not Responding") to the shell.
+    /// </para>
     /// </summary>
-
-    private bool ExportAsXps(
+    private async Task<bool> ExportAsXps(
         string xpsPath,
         string? optionSummary,
         ExportOptions options,
         bool showSuccessMessage = true)
     {
+        if (_isExportingFile)
+            return false;
+
         try
         {
+            _isExportingFile = true;
+            RootGrid.IsEnabled = false;
+            ShowSaveProgress(
+                UiText.Get("Progress_ExportingFile"),
+                UiText.Get("Progress_ExportingFileRendering"),
+                null);
+
             var effectiveOptions = ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Xps);
             if (!ExportPlanner.TryValidatePublishOptions(effectiveOptions, ExportFormat.Xps, out var publishOptionsError))
                 throw new InvalidOperationException(publishOptionsError);
 
             var paginator = RenderExportPaginator(effectiveOptions);
 
-            // Open the XPS package for write and close it before reporting success.
-            using (var pkg = System.IO.Packaging.Package.Open(
-                xpsPath,
-                System.IO.FileMode.Create,
-                System.IO.FileAccess.ReadWrite))
+            ShowSaveProgress(
+                UiText.Get("Progress_ExportingFile"),
+                UiText.Get("Progress_ExportingFileWriting"),
+                50);
+
+            // Allow at least one render pass so the progress indicator becomes visible before the
+            // synchronous XPS write begins.
+            await Task.Yield();
+
+            // Write to a sibling temp file so that a mid-write failure does not corrupt or lock the
+            // destination the user chose, then atomically replace the destination on success.
+            var tempPath = ExportAtomicWriter.CreateTempPath(xpsPath);
+            try
             {
-                XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions));
+                // Open the XPS package for write and close it before replacing the destination.
+                // XpsDocument takes ownership of the package when constructed — the package is
+                // disposed when XpsDocument is disposed, which is why the package using-block must
+                // nest OUTSIDE the XpsDocument using-block.
+                using (var pkg = System.IO.Packaging.Package.Open(
+                    tempPath,
+                    System.IO.FileMode.Create,
+                    System.IO.FileAccess.ReadWrite))
+                {
+                    XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions));
 
-                using var xpsDoc = new System.Windows.Xps.Packaging.XpsDocument(pkg);
+                    using var xpsDoc = new System.Windows.Xps.Packaging.XpsDocument(pkg);
 
-                // XpsDocumentWriter(XpsDocument) is internal in ReachFramework; create it via reflection
-                var writerType = typeof(System.Windows.Xps.XpsDocumentWriter);
-                var ctor = writerType.GetConstructor(
-                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
-                    null,
-                    [typeof(System.Windows.Xps.Packaging.XpsDocument)],
-                    null);
+                    // XpsDocumentWriter(XpsDocument) is internal in ReachFramework; create it via reflection
+                    var writerType = typeof(System.Windows.Xps.XpsDocumentWriter);
+                    var ctor = writerType.GetConstructor(
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+                        null,
+                        [typeof(System.Windows.Xps.Packaging.XpsDocument)],
+                        null);
 
-                if (ctor == null)
-                    throw new InvalidOperationException("XpsDocumentWriter(XpsDocument) constructor not found in ReachFramework.");
+                    if (ctor == null)
+                        throw new InvalidOperationException("XpsDocumentWriter(XpsDocument) constructor not found in ReachFramework.");
 
-                var writer = (System.Windows.Xps.XpsDocumentWriter)ctor.Invoke([xpsDoc]);
-                writer.Write(paginator);
+                    var writer = (System.Windows.Xps.XpsDocumentWriter)ctor.Invoke([xpsDoc]);
+                    writer.Write(paginator);
+                }
+
+                ExportAtomicWriter.ReplaceTarget(tempPath, xpsPath);
+            }
+            catch
+            {
+                // On any failure ensure the temp artifact is cleaned up.  The destination is
+                // untouched — ReplaceTarget has not been called yet.
+                if (File.Exists(tempPath))
+                {
+                    try { File.Delete(tempPath); } catch { /* best effort */ }
+                }
+
+                throw;
             }
 
             if (showSuccessMessage)
@@ -233,6 +307,12 @@ public partial class MainWindow
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             return false;
+        }
+        finally
+        {
+            _isExportingFile = false;
+            RootGrid.IsEnabled = true;
+            HideSaveProgress();
         }
     }
 
