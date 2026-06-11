@@ -4557,7 +4557,7 @@
                                     <Grid x:Name="TabChrome"
                                           Cursor="Hand"
                                           Focusable="True"
-                                          AutomationProperties.Name="{Binding Name}"
+                                          AutomationProperties.Name="{Binding AutomationName}"
                                           AutomationProperties.AutomationId="{Binding Name}"
                                           AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_SelectThisSheetRightClickOrPressShiftF10ForSheetTabOptions}"
                                           FocusVisualStyle="{x:Null}"
@@ -4613,13 +4613,45 @@
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="0"/>
                                                     </Grid.RowDefinitions>
-                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontFamily="Segoe UI">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
+                                                    <StackPanel x:Name="SheetTabLabelContent"
+                                                                Orientation="Horizontal"
+                                                                VerticalAlignment="Center">
+                                                        <Viewbox x:Name="ProtectedSheetLockIcon"
+                                                                 Width="10"
+                                                                 Height="11"
+                                                                 Margin="0,1,5,0"
+                                                                 VerticalAlignment="Center"
+                                                                 IsHitTestVisible="False"
+                                                                 AutomationProperties.Name="Protected sheet">
+                                                            <Viewbox.Style>
+                                                                <Style TargetType="Viewbox">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsProtected}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Viewbox.Style>
+                                                            <Grid Width="12" Height="12">
+                                                                <Path Data="M 3.7 5.2 V 4.1 C 3.7 2.1 5 0.9 6.5 0.9 C 8 0.9 9.3 2.1 9.3 4.1 V 5.2"
+                                                                      Stroke="{StaticResource FreeXAccentDarkBrush}"
+                                                                      StrokeThickness="1.35"
+                                                                      StrokeStartLineCap="Round"
+                                                                      StrokeEndLineCap="Round"
+                                                                      StrokeLineJoin="Round"/>
+                                                                <Path Data="M 2.2 5 H 10.8 V 11 H 2.2 Z"
+                                                                      Fill="{StaticResource FreeXAccentDarkBrush}"/>
+                                                            </Grid>
+                                                        </Viewbox>
+                                                        <TextBlock Text="{Binding Name}" FontSize="13" FontFamily="Segoe UI">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </StackPanel>
                                                 </Grid>
                                             </Grid>
                                         </Border>

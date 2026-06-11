@@ -397,6 +397,28 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
+    public void ProtectedSheetTab_ShowsPadlockAndUpdatesAutomationName()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SheetTabLockIsVisible("Sheet1").Should().BeFalse();
+            harness.SheetTabAutomationName("Sheet1").Should().Be("Sheet1");
+
+            harness.SetSheetProtected("Sheet1", isProtected: true);
+
+            harness.SheetTabLockIsVisible("Sheet1").Should().BeTrue();
+            harness.SheetTabAutomationName("Sheet1").Should().Be("Sheet1 (protected sheet)");
+
+            harness.SetSheetProtected("Sheet1", isProtected: false);
+
+            harness.SheetTabLockIsVisible("Sheet1").Should().BeFalse();
+            harness.SheetTabAutomationName("Sheet1").Should().Be("Sheet1");
+        });
+    }
+
+    [Fact]
     public void SheetTabMouseMove_CancelsStaleDragWhenLeftButtonIsReleased()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
@@ -569,6 +591,8 @@ public sealed class MainWindowSheetTabKeyboardTests
         private readonly MethodInfo _tryOpenFocusedSheetTabContextMenu;
         private readonly MethodInfo _tryHandleFocusedSheetTabKeyboardNavigation;
         private readonly MethodInfo _sheetTabContextMenuOpened;
+        private readonly MethodInfo _refreshSheetTabs;
+        private readonly FieldInfo _workbookField;
         private FrameworkElement? _routedSheetTabTarget;
 
         private MainWindowHarness(MainWindow window)
@@ -595,6 +619,12 @@ public sealed class MainWindowSheetTabKeyboardTests
             _sheetTabContextMenuOpened = typeof(MainWindow)
                 .GetMethod("SheetTabContextMenu_Opened", BindingFlags.Static | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SheetTabContextMenu_Opened");
+            _refreshSheetTabs = typeof(MainWindow)
+                .GetMethod("RefreshSheetTabs", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "RefreshSheetTabs");
+            _workbookField = typeof(MainWindow)
+                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
         }
 
         public string? FocusedSheetTabName =>
@@ -612,6 +642,12 @@ public sealed class MainWindowSheetTabKeyboardTests
         public bool AddSheetButtonHasKeyboardFocus =>
             _window.FindName("AddSheetButton") is FrameworkElement addSheet &&
             addSheet.IsKeyboardFocusWithin;
+
+        public string? SheetTabAutomationName(string name) =>
+            AutomationProperties.GetName(SheetTabTarget(name));
+
+        public bool SheetTabLockIsVisible(string name) =>
+            SheetTabLockIcon(name)?.Visibility == Visibility.Visible;
 
         public IReadOnlyList<string> GroupedSheetTabNames =>
             SheetTabViewModels
@@ -653,6 +689,16 @@ public sealed class MainWindowSheetTabKeyboardTests
             var focused = (bool)_tryFocusCurrentSheetTab.Invoke(_window, [])!;
             PumpDispatcher();
             return focused;
+        }
+
+        public void SetSheetProtected(string name, bool isProtected)
+        {
+            var sheet = CurrentWorkbook.Sheets.Single(sheet => string.Equals(sheet.Name, name, StringComparison.Ordinal));
+            sheet.IsProtected = isProtected;
+            _refreshSheetTabs.Invoke(_window, null);
+            _window.UpdateLayout();
+            PumpDispatcher();
+            _window.UpdateLayout();
         }
 
         public bool FocusSheetTab(string name)
@@ -806,6 +852,15 @@ public sealed class MainWindowSheetTabKeyboardTests
             SheetTabTargets.Single(element =>
                 element.DataContext is { } viewModel &&
                 string.Equals(GetStringProperty(viewModel, "Name"), name, StringComparison.Ordinal));
+
+        private FrameworkElement? SheetTabLockIcon(string name) =>
+            WpfTestTree.FindVisualDescendants<FrameworkElement>(SheetTabTarget(name))
+                .Concat(WpfTestTree.FindLogicalDescendants<FrameworkElement>(SheetTabTarget(name)))
+                .FirstOrDefault(element => string.Equals(element.Name, "ProtectedSheetLockIcon", StringComparison.Ordinal));
+
+        private Workbook CurrentWorkbook =>
+            (Workbook)(_workbookField.GetValue(_window)
+                ?? throw new InvalidOperationException("MainWindow workbook field was null."));
 
         private IReadOnlyList<FrameworkElement> SheetTabTargets
         {
