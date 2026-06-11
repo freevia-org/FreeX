@@ -90,6 +90,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "excel-save-as-dialog" => RunExcelSaveAsDialogScenario(),
             "excel-sheet-tab-context-menu" => RunExcelSheetTabContextMenuScenario(),
             "excel-sheet-tab-overflow-activate-dialog" => RunExcelSheetTabOverflowActivateDialogScenario(),
+            "excel-status-footer-reference" => RunExcelStatusFooterReferenceScenario(),
             "freex-open-dialog" => RunFreeXDialogScenario("freex-open-dialog", "^{F12}", "#32770", "Open"),
             "freex-save-as-dialog" => RunFreeXDialogScenario("freex-save-as-dialog", "{F12}", "#32770", "Save As"),
             "freex-format-cells-dialog" => RunFreeXFormatCellsDialogScenario(),
@@ -112,6 +113,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "freex-status-zoom-slider-rangevalue-set" => RunFreeXMainWindowPointerScenario("freex-status-zoom-slider-rangevalue-set", SetFirstSliderRangeValue("Zoom", 150)),
             "freex-status-ctrl-wheel-grid-zoom" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-wheel-grid-zoom", CtrlWheelRelativeExpectZoom(0.36, 0.56, 120, 110)),
             "freex-status-view-shortcuts-click" => RunFreeXMainWindowPointerScenario("freex-status-view-shortcuts-click", ClickStatusViewShortcuts()),
+            "freex-status-zoom-text-dialog-click" => RunFreeXMainWindowPointerScenario("freex-status-zoom-text-dialog-click", ClickZoomTextExpectDialog()),
+            "freex-status-ctrl-alt-zoom-keys" => RunFreeXMainWindowPointerScenario("freex-status-ctrl-alt-zoom-keys", CtrlAltZoomKeysExpectRoundTrip()),
+            "freex-status-live-stats-accessibility" => RunFreeXMainWindowPointerScenario("freex-status-live-stats-accessibility", StatusLiveStatsAccessibility(), CreateStatusStatsOptionsOverride),
             "freex-sheet-tab-context-menu" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-context-menu", RightClickNamedElement("Sheet1", ControlType.TabItem)),
             "freex-sheet-tab-click-select" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-click-select", SheetTabClickSelect()),
             "freex-sheet-tab-double-click-rename" => RunFreeXMainWindowPointerScenario("freex-sheet-tab-double-click-rename", SheetTabDoubleClickRename()),
@@ -731,6 +735,47 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             }
 
             return CaptureWindow(scenario, "excel", dialog, dialogGuard, "complete", "Captured Microsoft Excel's Activate dialog after a physical right-click on the sheet-tab navigation button.");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunExcelStatusFooterReferenceScenario()
+    {
+        const string scenario = "excel-status-footer-reference";
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelStatusFooterWorkbook(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-capture");
+            }
+
+            var window = WindowFinder.GetWindowInfo(hwnd);
+            if (window is null)
+            {
+                return CaptureResult.Blocked(scenario, "window-info-unavailable", "Could not resolve the foreground Excel window bounds.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow(
+                scenario,
+                "excel",
+                window,
+                guard,
+                "complete",
+                "Excel status/footer reference: workbook values in A1:A4 are selected with DisplayStatusBar enabled so the native footer/status bar can be paired with FreeX S6 captures.");
         }
         finally
         {
@@ -2044,7 +2089,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private CaptureResult RunFreeXMainWindowPointerScenario(
         string scenario,
-        Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> action)
+        Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> action,
+        Func<string, IReadOnlyDictionary<string, string>>? createEnvironmentOverride = null)
     {
         Process? process = null;
         _lastResultValidation = null;
@@ -2052,11 +2098,20 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         try
         {
             var exePath = ResolveFreeXExePath();
-            process = Process.Start(new ProcessStartInfo(exePath)
+            var startInfo = new ProcessStartInfo(exePath)
             {
                 UseShellExecute = false,
                 WorkingDirectory = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory
-            });
+            };
+            if (createEnvironmentOverride is not null)
+            {
+                foreach (var pair in createEnvironmentOverride(scenario))
+                {
+                    startInfo.Environment[pair.Key] = pair.Value;
+                }
+            }
+
+            process = Process.Start(startInfo);
 
             if (process is null)
             {
@@ -2099,6 +2154,36 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 process.Kill(entireProcessTree: true);
             }
         }
+    }
+
+    private static IReadOnlyDictionary<string, string> CreateStatusStatsOptionsOverride(string scenario)
+    {
+        var optionsPath = Path.Combine(
+            Path.GetTempPath(),
+            "FreeX.ForegroundCapture",
+            $"{scenario}-{Guid.NewGuid():N}",
+            "options.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(optionsPath)!);
+        File.WriteAllText(
+            optionsPath,
+            """
+            {
+              "StatusBarShowAverage": true,
+              "StatusBarShowCount": true,
+              "StatusBarShowNumericalCount": true,
+              "StatusBarShowSum": true,
+              "StatusBarShowMinimum": true,
+              "StatusBarShowMaximum": true,
+              "StatusBarShowViewShortcuts": true,
+              "StatusBarShowZoom": true,
+              "StatusBarShowZoomSlider": true
+            }
+            """);
+
+        return new Dictionary<string, string>
+        {
+            ["FREEX_OPTIONS_PATH"] = optionsPath
+        };
     }
 
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> ClickAutomationIdExpectZoom(
@@ -2265,6 +2350,135 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             }
 
             _lastResultValidation = "Physical footer view shortcut clicks: " + string.Join("; ", validations) + ".";
+            return null;
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> ClickZoomTextExpectDialog()
+        => (handle, processId, _, guard) =>
+        {
+            var element = FindElementByAutomationId(handle, "StatusZoomText");
+            if (element is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find AutomationId 'StatusZoomText'.", options.OutputRoot, "freex", guard);
+            }
+
+            var blocked = GuardedClickElement(options.Scenario, processId, handle, element, MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var dialog = WindowFinder.FindProcessWindow(
+                processId,
+                window => window.Title.Equals("Zoom", StringComparison.OrdinalIgnoreCase),
+                options.PopupTimeout);
+            if (dialog is null)
+            {
+                return CaptureResult.Blocked(options.Scenario, "dialog-not-found", "Did not detect the Zoom dialog after physically clicking the status zoom percentage text.", options.OutputRoot, "freex", guard);
+            }
+
+            var dialogHandle = new IntPtr(dialog.Handle);
+            guard = ForegroundGuard.FocusAndVerify(dialogHandle, processId, "Zoom", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(options.Scenario, guard, "before-zoom-dialog-capture");
+            }
+
+            return CaptureWindow(
+                options.Scenario,
+                "freex",
+                dialog,
+                guard,
+                "complete",
+                "Physically clicked the status zoom percentage text and captured the foreground-owned FreeX Zoom dialog.");
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> CtrlAltZoomKeysExpectRoundTrip()
+        => (handle, processId, _, guard) =>
+        {
+            var blocked = GuardedKeyChord(options.Scenario, processId, handle, [NativeMethods.VK_CONTROL, NativeMethods.VK_MENU], NativeMethods.VK_OEM_PLUS, "ctrl-alt-plus");
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            blocked = ValidateZoomSliderValue(handle, 105, "Ctrl+Alt+= key chord");
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            blocked = GuardedKeyChord(options.Scenario, processId, handle, [NativeMethods.VK_CONTROL, NativeMethods.VK_MENU], NativeMethods.VK_OEM_MINUS, "ctrl-alt-minus");
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            blocked = ValidateZoomSliderValue(handle, 100, "Ctrl+Alt+- key chord");
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            _lastResultValidation = "Foreground Ctrl+Alt+= then Ctrl+Alt+- changed the status zoom slider 100->105->100 and kept the visible zoom text in sync.";
+            return null;
+        };
+
+    private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> StatusLiveStatsAccessibility()
+        => (handle, processId, _, guard) =>
+        {
+            if (!TryGetCellBounds(handle, "Cell_A1", out var a1Bounds) ||
+                !TryGetCellBounds(handle, "Cell_A4", out var a4Bounds))
+            {
+                return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve A1/A4 bounds for status statistic setup.", options.OutputRoot, "freex", guard);
+            }
+
+            var blocked = PasteCellText(handle, processId, a1Bounds, "2\r\n4\r\n6\r\n8");
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            blocked = GuardedDrag(
+                options.Scenario,
+                processId,
+                handle,
+                CenterX(a1Bounds),
+                CenterY(a1Bounds),
+                CenterX(a4Bounds),
+                CenterY(a4Bounds));
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            var expected = new[]
+            {
+                ("StatusAvgText", "Average: 5"),
+                ("StatusCountText", "Count: 4"),
+                ("StatusNumericalCountText", "Numerical Count: 4"),
+                ("StatusSumText", "Sum: 20"),
+                ("StatusMinText", "Min: 2"),
+                ("StatusMaxText", "Max: 8")
+            };
+
+            var validations = new List<string>();
+            foreach (var (automationId, expectedName) in expected)
+            {
+                if (!TryGetAutomationElementName(handle, automationId, out var actualName))
+                {
+                    return CaptureResult.Blocked(options.Scenario, "status-stat-validation-unavailable", $"Could not read AutomationProperties.Name for '{automationId}'.", options.OutputRoot, "freex", guard);
+                }
+
+                if (!string.Equals(actualName, expectedName, StringComparison.Ordinal))
+                {
+                    return CaptureResult.Blocked(options.Scenario, "status-stat-validation-failed", $"Expected '{automationId}' automation name '{expectedName}', but UIA reported '{actualName}'.", options.OutputRoot, "freex", guard);
+                }
+
+                validations.Add($"{automationId}='{actualName}'");
+            }
+
+            _lastResultValidation = "Foreground status stats after physical paste/select with min/max enabled: " + string.Join("; ", validations) + ".";
             return null;
         };
 
@@ -2973,6 +3187,45 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return null;
     }
 
+    private CaptureResult? GuardedKeyChord(string scenario, int processId, IntPtr handle, byte[] modifiers, byte key, string phase)
+    {
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return BlockedWithGuard(scenario, guard, $"before-{phase}-keydown");
+        }
+
+        foreach (var modifier in modifiers)
+        {
+            NativeMethods.KeybdEvent(modifier, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(40);
+        }
+
+        try
+        {
+            guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, $"before-{phase}-key");
+            }
+
+            NativeMethods.KeybdEvent(key, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(50);
+            NativeMethods.KeybdEvent(key, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+            Thread.Sleep(options.AfterInputDelay);
+        }
+        finally
+        {
+            for (var i = modifiers.Length - 1; i >= 0; i--)
+            {
+                NativeMethods.KeybdEvent(modifiers[i], 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+                Thread.Sleep(40);
+            }
+        }
+
+        return null;
+    }
+
     private CaptureResult? GuardedDoubleClickElement(string scenario, int processId, IntPtr handle, AutomationElement element)
     {
         var bounds = element.Current.BoundingRectangle;
@@ -3499,6 +3752,19 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return false;
     }
 
+    private static bool TryGetAutomationElementName(IntPtr handle, string automationId, out string name)
+    {
+        name = string.Empty;
+        var element = FindElementByAutomationId(handle, automationId);
+        if (element is null)
+        {
+            return false;
+        }
+
+        name = element.Current.Name ?? string.Empty;
+        return !string.IsNullOrWhiteSpace(name);
+    }
+
     private static int CenterX(System.Windows.Rect bounds) => (int)(bounds.Left + bounds.Width / 2.0);
 
     private static int CenterY(System.Windows.Rect bounds) => (int)(bounds.Top + bounds.Height / 2.0);
@@ -3573,6 +3839,18 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         dynamic worksheet = excel.ActiveSheet;
         worksheet.Range["A1"].Value2 = "Sheet tab parity";
         worksheet.Range["A1"].Select();
+    }
+
+    private static void PrepareExcelStatusFooterWorkbook(dynamic excel)
+    {
+        excel.DisplayStatusBar = true;
+        dynamic worksheet = excel.ActiveSheet;
+        worksheet.Range["A1"].Value2 = 2;
+        worksheet.Range["A2"].Value2 = 4;
+        worksheet.Range["A3"].Value2 = 6;
+        worksheet.Range["A4"].Value2 = 8;
+        worksheet.Range["A1:A4"].Select();
+        excel.ActiveWindow.Zoom = 100;
     }
 
     private static dynamic PrepareExcelAutoFilter(dynamic excel)
@@ -4039,6 +4317,7 @@ internal sealed record CaptureOptions(
           excel-save-as-dialog
           excel-sheet-tab-context-menu
           excel-sheet-tab-overflow-activate-dialog
+          excel-status-footer-reference
           freex-open-dialog
           freex-save-as-dialog
           freex-format-cells-context-dialog
@@ -4059,6 +4338,9 @@ internal sealed record CaptureOptions(
           freex-status-zoom-slider-rangevalue-set
           freex-status-ctrl-wheel-grid-zoom
           freex-status-view-shortcuts-click
+          freex-status-zoom-text-dialog-click
+          freex-status-ctrl-alt-zoom-keys
+          freex-status-live-stats-accessibility
           freex-sheet-tab-context-menu
           freex-sheet-tab-click-select
           freex-sheet-tab-double-click-rename
@@ -4515,9 +4797,12 @@ internal static class NativeMethods
     public const int MOUSEEVENTF_WHEEL = 0x0800;
     public const int KEYEVENTF_KEYUP = 0x0002;
     public const byte VK_CONTROL = 0x11;
+    public const byte VK_MENU = 0x12;
     public const byte VK_1 = 0x31;
     public const byte VK_V = 0x56;
     public const byte VK_SHIFT = 0x10;
+    public const byte VK_OEM_PLUS = 0xBB;
+    public const byte VK_OEM_MINUS = 0xBD;
     public static readonly IntPtr HWND_TOPMOST = new(-1);
     public static readonly IntPtr HWND_NOTOPMOST = new(-2);
 

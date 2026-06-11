@@ -4587,6 +4587,7 @@
              ROW 5  Status bar
              ═══════════════════════════════════════════════════════════════ -->
         <Border x:Name="StatusBarRoot" Grid.Row="6" Panel.ZIndex="6" Background="{StaticResource FreeXStatusSurfaceBrush}" Padding="8,3"
+                AutomationProperties.AutomationId="StatusBarRoot"
                 ClipToBounds="True">
             <Border.ContextMenu>
                 <ContextMenu x:Name="StatusBarCustomizeMenu"
@@ -4739,16 +4740,28 @@
                                     Visibility="Collapsed"
                                     ClipToBounds="True">
                             <TextBlock x:Name="StatusAvgText" Foreground="White" FontSize="12"
+                                       AutomationProperties.AutomationId="StatusAvgText"
+                                       AutomationProperties.Name="{local:Loc Key=StatusBar_Average}"
                                        Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="12"
+                                       AutomationProperties.AutomationId="StatusCountText"
+                                       AutomationProperties.Name="{local:Loc Key=StatusBar_Count}"
                                        Margin="0,0,16,0" MaxWidth="110" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusNumericalCountText" Foreground="White" FontSize="12"
+                                       AutomationProperties.AutomationId="StatusNumericalCountText"
+                                       AutomationProperties.Name="{local:Loc Key=StatusBar_NumericalCount}"
                                        Margin="0,0,16,0" MaxWidth="160" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusSumText" Foreground="White" FontSize="12"
+                                       AutomationProperties.AutomationId="StatusSumText"
+                                       AutomationProperties.Name="{local:Loc Key=StatusBar_Sum}"
                                        Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusMinText" Foreground="White" FontSize="12"
+                                       AutomationProperties.AutomationId="StatusMinText"
+                                       AutomationProperties.Name="{local:Loc Key=StatusBar_Minimum}"
                                        Margin="0,0,16,0" MaxWidth="120" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="StatusMaxText" Foreground="White" FontSize="12"
+                                       AutomationProperties.AutomationId="StatusMaxText"
+                                       AutomationProperties.Name="{local:Loc Key=StatusBar_Maximum}"
                                        MaxWidth="120" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
                     </Grid>
