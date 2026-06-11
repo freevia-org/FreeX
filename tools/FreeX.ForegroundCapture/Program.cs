@@ -717,11 +717,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", "Excel sheet-tab navigation button bounds were not usable for a physical right-click.", options.OutputRoot, "excel", guard);
             }
 
-            var dialog = WindowFinder.FindProcessWindow(
-                pid.Value,
-                window => window.Handle != hwnd.ToInt64() &&
-                    window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase),
-                options.PopupTimeout);
+            var dialog = FindActivateDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
                 return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's Activate dialog after right-clicking the sheet-tab navigation button.", options.OutputRoot, "excel", guard);
@@ -3115,7 +3111,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not re-resolve Sheet2 before opening the Ungroup Sheets context menu.", options.OutputRoot, "freex");
             }
 
-            blocked = GuardedOpenContextMenuFromFocusedElement(options.Scenario, processId, handle, tab);
+            blocked = GuardedClickElement(options.Scenario, processId, handle, tab, MouseButtonKind.Right);
             if (blocked is not null)
             {
                 return blocked;
@@ -3161,7 +3157,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 handle,
                 (int)(sourceBounds.Left + sourceBounds.Width / 2.0),
                 (int)(sourceBounds.Top + sourceBounds.Height / 2.0),
-                (int)(targetBounds.Left + targetBounds.Width / 2.0),
+                (int)(targetBounds.Left + targetBounds.Width * 0.35),
                 (int)(targetBounds.Top + targetBounds.Height / 2.0));
             if (blocked is not null)
             {
@@ -3227,10 +3223,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return blocked;
             }
 
-            var dialog = WindowFinder.FindProcessWindow(
-                processId,
-                window => window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase),
-                options.PopupTimeout);
+            var dialog = FindActivateDialogWindow(processId, handle.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
                 return CaptureResult.Blocked(options.Scenario, "dialog-not-found", "Did not detect Activate Sheet dialog after right-clicking the sheet-tab overflow navigation button.", options.OutputRoot, "freex");
@@ -3625,6 +3618,8 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         var tabCenterY = tabBounds.Average(bounds => bounds.Top + bounds.Height / 2.0);
+        var tabLeft = tabBounds.Min(bounds => bounds.Left);
+        var tabRight = tabBounds.Max(bounds => bounds.Right);
         var buttons = AutomationElement.FromHandle(handle)
             .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button))
             .Cast<AutomationElement>()
@@ -3646,8 +3641,41 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return null;
         }
 
-        return right ? buttons[^1] : buttons[0];
+        if (right)
+        {
+            var beforeTabs = buttons
+                .Where(button => button.Current.BoundingRectangle.Right <= tabLeft + 2)
+                .OrderByDescending(button => button.Current.BoundingRectangle.Right)
+                .ToList();
+            if (beforeTabs.Count >= 2)
+                return beforeTabs[0];
+
+            return buttons
+                .OrderBy(button =>
+                {
+                    var bounds = button.Current.BoundingRectangle;
+                    return Math.Abs((bounds.Left + bounds.Width / 2.0) - tabRight);
+                })
+                .FirstOrDefault();
+        }
+
+        return buttons
+            .OrderBy(button =>
+            {
+                var bounds = button.Current.BoundingRectangle;
+                return Math.Abs((bounds.Left + bounds.Width / 2.0) - tabLeft);
+            })
+            .FirstOrDefault();
     }
+
+    private static WindowInfo? FindActivateDialogWindow(int processId, long ownerHandle, TimeSpan timeout)
+        => WindowFinder.FindProcessWindow(
+            processId,
+            window => window.Handle != ownerHandle &&
+                window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase) &&
+                window.Bounds.Width >= 120 &&
+                window.Bounds.Height >= 90,
+            timeout);
 
     private static List<string> GetVisibleSheetTabOrder(IntPtr handle)
     {
@@ -4180,40 +4208,70 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private static bool TryInvokeProcessMenuItem(int processId, string nameContains)
     {
-        var menuItems = AutomationElement.RootElement
-            .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem))
-            .Cast<AutomationElement>()
-            .Where(element => ElementMatchesProcessAndName(element, processId, nameContains))
-            .OrderBy(element => IsOffscreen(element) ? 1 : 0)
-            .ThenByDescending(element =>
-            {
-                var bounds = element.Current.BoundingRectangle;
-                return bounds.Width * bounds.Height;
-            })
-            .ToList();
+        List<AutomationElement> menuItems;
+        try
+        {
+            menuItems = AutomationElement.RootElement
+                .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem))
+                .Cast<AutomationElement>()
+                .Where(element => ElementMatchesProcessAndName(element, processId, nameContains))
+                .OrderBy(element => IsOffscreen(element) ? 1 : 0)
+                .ThenByDescending(GetElementArea)
+                .ToList();
+        }
+        catch (COMException)
+        {
+            return false;
+        }
 
         foreach (var item in menuItems)
         {
-            if (item.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
-                invokePatternObject is InvokePattern invokePattern)
+            try
             {
-                invokePattern.Invoke();
-                return true;
-            }
+                if (item.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
+                    invokePatternObject is InvokePattern invokePattern)
+                {
+                    invokePattern.Invoke();
+                    return true;
+                }
 
-            var bounds = item.Current.BoundingRectangle;
-            if (!bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0)
+                var bounds = item.Current.BoundingRectangle;
+                if (!bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0)
+                {
+                    NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
+                    Thread.Sleep(100);
+                    NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                    Thread.Sleep(60);
+                    NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+                    return true;
+                }
+            }
+            catch (COMException)
             {
-                NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
-                Thread.Sleep(100);
-                NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
-                Thread.Sleep(60);
-                NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
-                return true;
+            }
+            catch (ElementNotAvailableException)
+            {
             }
         }
 
         return false;
+    }
+
+    private static double GetElementArea(AutomationElement element)
+    {
+        try
+        {
+            var bounds = element.Current.BoundingRectangle;
+            return bounds.Width * bounds.Height;
+        }
+        catch (COMException)
+        {
+            return 0;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return 0;
+        }
     }
 
     private static bool ElementMatchesProcessAndName(AutomationElement element, int processId, string nameContains)
@@ -4235,6 +4293,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         {
             return false;
         }
+        catch (COMException)
+        {
+            return false;
+        }
     }
 
     private static bool IsOffscreen(AutomationElement element)
@@ -4244,6 +4306,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return element.Current.IsOffscreen;
         }
         catch (ElementNotAvailableException)
+        {
+            return true;
+        }
+        catch (COMException)
         {
             return true;
         }
