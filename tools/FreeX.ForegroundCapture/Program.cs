@@ -1493,6 +1493,23 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard("freex-export-xps-accept", guard, "before-export-open");
             }
 
+            const string seededExportValue = "FreeX XPS export parity";
+            if (!TryGetCellBounds(mainHandle, "Cell_A1", out var a1Bounds))
+            {
+                return CaptureResult.Blocked("freex-export-xps-accept", "uia-cell-bounds-unavailable", "Could not resolve A1 bounds before seeding printable content for XPS export.", options.OutputRoot, "freex", guard);
+            }
+
+            var seedBlocked = PasteCellText(mainHandle, process.Id, a1Bounds, seededExportValue);
+            if (seedBlocked is not null)
+            {
+                return seedBlocked;
+            }
+
+            if (!WaitForCellValue(mainHandle, "Cell_A1", seededExportValue, TimeSpan.FromSeconds(2), out var observedSeedValue))
+            {
+                return CaptureResult.Blocked("freex-export-xps-accept", "cell-seed-validation-failed", $"Expected A1 to contain printable export content before XPS export; observed '{observedSeedValue}'.", options.OutputRoot, "freex", guard);
+            }
+
             var blocked = OpenFreeXExportSaveDialog("freex-export-xps-accept", process.Id, mainHandle, guard, out var dialog);
             if (blocked is not null)
             {
@@ -1504,11 +1521,23 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked("freex-export-xps-accept", "xps-filter-not-selected", "Could not select the XPS file type in the native export SaveFileDialog.", options.OutputRoot, "freex", guard);
             }
 
-            TypeDialogPath(dialog.Handle, xpsPath);
+            TypeCommonDialogFileNamePath(dialog.Handle, xpsPath);
 
             var optionsDialog = FindFreeXExportOptionsDialog(process.Id, dialog.Handle, options.PopupTimeout);
             if (optionsDialog is null)
             {
+                var foreground = WindowFinder.GetWindowInfo(NativeMethods.GetForegroundWindow());
+                if (foreground is not null)
+                {
+                    return CaptureWindow(
+                        "freex-export-xps-accept",
+                        "freex",
+                        foreground,
+                        guard,
+                        "blocked",
+                        "options-dialog-not-found: Accepted an explicit .xps path but did not detect the PDF/XPS options dialog; captured the foreground window that remained after accepting the native SaveFileDialog.");
+                }
+
                 return CaptureResult.Blocked("freex-export-xps-accept", "options-dialog-not-found", "Accepted an explicit .xps path but did not detect the PDF/XPS options dialog.", options.OutputRoot, "freex", guard);
             }
 
@@ -1528,23 +1557,25 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             if (completion is not null)
             {
                 Thread.Sleep(options.AfterDialogDetectedDelay);
-                var existsAfterDialog = File.Exists(xpsPath);
-                var completionStatus = existsAfterDialog ? "complete" : "blocked";
-                var validationAfterDialog = existsAfterDialog
-                    ? $"Explicit .xps native save path was accepted and output exists: {xpsPath}"
-                    : $"Explicit .xps native save path reached '{completion.Title}', but output was not created: {xpsPath}";
+                var outputLength = TryGetFileLength(xpsPath);
+                var hasOutputAfterDialog = outputLength > 0;
+                var completionStatus = hasOutputAfterDialog ? "complete" : "blocked";
+                var validationAfterDialog = hasOutputAfterDialog
+                    ? $"Explicit .xps native save path was accepted and non-empty output exists ({outputLength} bytes): {xpsPath}"
+                    : $"Explicit .xps native save path reached '{completion.Title}', but non-empty output was not created: {xpsPath}";
                 var completionResult = CaptureWindow("freex-export-xps-accept", "freex", completion, guard, completionStatus, validationAfterDialog) with { OutputPath = xpsPath };
+                RewriteManifest(completionResult);
                 SendKeys.SendWait("{ENTER}");
                 Thread.Sleep(options.AfterInputDelay);
                 return completionResult;
             }
 
-            if (!WaitForFile(xpsPath, options.PopupTimeout))
+            if (!WaitForNonEmptyFile(xpsPath, options.PopupTimeout))
             {
                 var blockedResult = result with
                 {
                     CaptureStatus = "blocked",
-                    BlockReason = $"xps-output-not-created: Explicit .xps path returned from options without completion dialog, but output was not created: {xpsPath}"
+                    BlockReason = $"xps-output-not-created: Explicit .xps path returned from options without completion dialog, but non-empty output was not created: {xpsPath}"
                 };
                 RewriteManifest(blockedResult);
                 return blockedResult;
@@ -1556,7 +1587,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 process.Id,
                 mainHandle,
                 "FreeX",
-                $"Explicit .xps native save path was accepted, output exists, and foreground returned to FreeX: {xpsPath}") with
+                $"Explicit .xps native save path was accepted, non-empty output exists, and foreground returned to FreeX: {xpsPath}") with
             {
                 OutputPath = xpsPath
             };
@@ -2205,6 +2236,24 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         TypeDialogPath(path);
     }
 
+    private static void TypeCommonDialogFileNamePath(long dialogHandle, string path)
+    {
+        var handle = new IntPtr(dialogHandle);
+        NativeMethods.SetForegroundWindow(handle);
+        NativeMethods.SetFocus(handle);
+        Thread.Sleep(150);
+        SendKeys.SendWait("%n");
+        Thread.Sleep(100);
+        Clipboard.SetText(path);
+        Thread.Sleep(100);
+        SendKeys.SendWait("^a");
+        Thread.Sleep(50);
+        SendKeys.SendWait("^v");
+        Thread.Sleep(150);
+        SendKeys.SendWait("{ENTER}");
+        Thread.Sleep(300);
+    }
+
     private static bool TrySetCommonDialogFileName(long dialogHandle, string path)
     {
         try
@@ -2215,11 +2264,18 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit))
                 .Cast<AutomationElement>()
                 .Where(IsVisibleElement)
-                .OrderByDescending(IsCommonDialogFileNameEdit)
+                .Select(element => new
+                {
+                    Element = element,
+                    Score = CommonDialogFileNameEditScore(element)
+                })
+                .Where(candidate => candidate.Score > 0)
+                .OrderByDescending(candidate => candidate.Score)
                 .ToArray();
 
-            foreach (var edit in edits)
+            foreach (var candidate in edits)
             {
+                var edit = candidate.Element;
                 if (!edit.TryGetCurrentPattern(ValuePattern.Pattern, out var valueObject) ||
                     valueObject is not ValuePattern value ||
                     value.Current.IsReadOnly)
@@ -2230,8 +2286,24 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 edit.SetFocus();
                 Thread.Sleep(100);
                 value.SetValue(path);
+                Thread.Sleep(150);
+                if (TryReadElementValue(edit, out var observed) &&
+                    observed.Equals(path, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                Clipboard.SetText(path);
                 Thread.Sleep(100);
-                return true;
+                SendKeys.SendWait("^a");
+                Thread.Sleep(50);
+                SendKeys.SendWait("^v");
+                Thread.Sleep(150);
+                if (TryReadElementValue(edit, out observed) &&
+                    observed.Equals(path, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
             }
         }
         catch (InvalidOperationException)
@@ -2302,14 +2374,47 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     }
 
     private static bool IsCommonDialogFileNameEdit(AutomationElement element)
+        => CommonDialogFileNameEditScore(element) > 0;
+
+    private static int CommonDialogFileNameEditScore(AutomationElement element)
     {
         try
         {
             var automationId = element.Current.AutomationId;
             var name = element.Current.Name;
-            return automationId.Equals("1148", StringComparison.OrdinalIgnoreCase) ||
-                   name.Contains("File name", StringComparison.OrdinalIgnoreCase) ||
-                   name.Contains("File name:", StringComparison.OrdinalIgnoreCase);
+            if (automationId.Equals("1148", StringComparison.OrdinalIgnoreCase))
+            {
+                return 100;
+            }
+
+            return name.Contains("File name", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("File name:", StringComparison.OrdinalIgnoreCase)
+                ? 90
+                : 0;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return 0;
+        }
+    }
+
+    private static bool TryReadElementValue(AutomationElement element, out string value)
+    {
+        value = string.Empty;
+        try
+        {
+            if (!element.TryGetCurrentPattern(ValuePattern.Pattern, out var patternObject) ||
+                patternObject is not ValuePattern valuePattern)
+            {
+                return false;
+            }
+
+            value = valuePattern.Current.Value ?? string.Empty;
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
         }
         catch (ElementNotAvailableException)
         {
@@ -2418,6 +2523,38 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         return File.Exists(path);
+    }
+
+    private static bool WaitForNonEmptyFile(string path, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (TryGetFileLength(path) > 0)
+            {
+                return true;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return TryGetFileLength(path) > 0;
+    }
+
+    private static long TryGetFileLength(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? new FileInfo(path).Length : 0;
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return 0;
+        }
     }
 
     private CaptureResult? InvokeOrClickElement(string scenario, int processId, IntPtr ownerHandle, AutomationElement element, string subject)

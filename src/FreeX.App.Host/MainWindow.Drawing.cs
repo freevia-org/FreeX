@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -245,7 +247,11 @@ public partial class MainWindow
     private void ObjectFillBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: true);
     private void ObjectOutlineBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: false);
     private void ObjectGradientBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingShapeGradient();
-    private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingShapeEffect();
+    private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is ButtonBase button && button.ContextMenu is { } menu)
+            OpenRibbonContextMenu(button, menu);
+    }
 
     // ── Page Layout tab ───────────────────────────────────────────────────────
 
@@ -551,7 +557,29 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void SetSelectedDrawingShapeEffect()
+    private void ShapeEffectsMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+            return;
+
+        var currentPreset = GetTargetDrawingShape(_currentSheetId)?.GetEffectiveEffectPreset()
+            ?? DrawingShapeEffectPreset.None;
+        currentPreset = ShapeEffectsDialogPlanner.NormalizePreset(currentPreset);
+
+        foreach (var item in menu.Items)
+        {
+            if (item is MenuItem { Tag: DrawingShapeEffectPreset preset } menuItem)
+                menuItem.IsChecked = preset == currentPreset;
+        }
+    }
+
+    private void ShapeEffectPresetMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: DrawingShapeEffectPreset preset })
+            SetSelectedDrawingShapeEffect(preset);
+    }
+
+    private void SetSelectedDrawingShapeEffect(DrawingShapeEffectPreset preset)
     {
         var shape = GetTargetDrawingShape(_currentSheetId);
         if (shape is null)
@@ -564,8 +592,7 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new ShapeEffectsDialog(shape.GetEffectiveEffectPreset()) { Owner = this };
-        if (dialog.ShowDialog() != true)
+        if (!Enum.IsDefined(preset))
             return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -573,7 +600,7 @@ public partial class MainWindow
                 sheetId => new SetDrawingShapeEffectCommand(
                     sheetId,
                     GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty,
-                    dialog.Result.Preset)))
+                    preset)))
             return;
 
         SetActiveCell(shape.Anchor);
