@@ -95,6 +95,37 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void RibbonCommandButtonLabelRefresh_PreservesExistingIconContent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var createContent = typeof(MainWindow)
+                .GetMethod("CreateRibbonCommandContent", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCommandContent");
+            var refreshLabel = typeof(MainWindow)
+                .GetMethod("SetRibbonCommandButtonLabel", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SetRibbonCommandButtonLabel");
+            var content = (FrameworkElement)createContent.Invoke(null, ["Protect Sheet", "Protect Sheet", RibbonCommandLayoutKind.Large])!;
+            var button = new Button { Content = content };
+
+            refreshLabel.Invoke(null, [button, "Unprotect Sheet"]);
+
+            button.Content.Should().BeSameAs(content);
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>((DependencyObject)button.Content)
+                .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>((DependencyObject)button.Content))
+                .Distinct()
+                .OfType<FrameworkElement>()
+                .Should().Contain(element => RibbonMetadata.IsCommandIcon(element));
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>((DependencyObject)button.Content)
+                .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>((DependencyObject)button.Content))
+                .Distinct()
+                .OfType<TextBlock>()
+                .Single(RibbonMetadata.IsCommandLabel)
+                .Text.Should().Be("Unprotect Sheet");
+        });
+    }
+
+    [Fact]
     public void IconOnlyRibbonMenuButtonsPlaceChevronInSideSegment()
     {
         StaTestRunner.Run(() =>

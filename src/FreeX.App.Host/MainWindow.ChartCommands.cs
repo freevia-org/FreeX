@@ -335,8 +335,21 @@ public partial class MainWindow
         SetChartContextualTabsVisible(HasChartContextualRibbonTarget(sheet));
     }
 
-    private static bool HasChartContextualRibbonTarget(Sheet? sheet) =>
-        sheet?.Charts.Any(IsChartContextualRibbonTarget) == true;
+    private bool HasChartContextualRibbonTarget(Sheet? sheet)
+    {
+        if (sheet is null ||
+            SheetGrid.SelectedObjectKind != FreeX.App.UI.ObjectKind.Chart ||
+            SheetGrid.SelectedObjectId == Guid.Empty)
+            return false;
+
+        foreach (var chart in sheet.Charts)
+        {
+            if (chart.Id == SheetGrid.SelectedObjectId && IsChartContextualRibbonTarget(chart))
+                return true;
+        }
+
+        return false;
+    }
 
     private static bool IsChartContextualRibbonTarget(ChartModel chart) =>
         chart.IsVisible && !chart.IsPivotChart;

@@ -14755,6 +14755,12 @@ i jeszcze {0}.</value>
   <data name="Progress_SavingWorkbook" xml:space="preserve">
     <value>Zapisywanie skoroszytu</value>
   </data>
+  <data name="MainWindow_Header_ShapeFormat" xml:space="preserve">
+    <value>Shape Format</value>
+  </data>
+  <data name="MainWindow_Header_PictureFormat" xml:space="preserve">
+    <value>Picture Format</value>
+  </data>
   <data name="MainWindow_Header_TableDesign" xml:space="preserve">
     <value>Projekt stołu</value>
   </data>

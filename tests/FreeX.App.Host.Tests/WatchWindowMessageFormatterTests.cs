@@ -159,12 +159,45 @@ public sealed class WatchWindowMessageFormatterTests
     {
         var source = ReadWatchWindowSource();
 
+        source.Should().Contain("private const double WatchWindowColumnsWidth = 640;");
+        source.Should().Contain("Width = WatchWindowColumnsWidth + WatchWindowChromeAndPaddingWidth;");
+        source.Should().Contain("MinWidth = WatchWindowColumnsWidth + 80;");
         source.Should().Contain("Header = UiText.Get(\"WatchWindow_Book\")");
         source.Should().Contain("Header = UiText.Get(\"WatchWindow_Sheet\")");
         source.Should().Contain("Header = UiText.Get(\"WatchWindow_Name\")");
         source.Should().Contain("Header = UiText.Get(\"WatchWindow_Cell\")");
         source.Should().Contain("Header = UiText.Get(\"WatchWindow_Value\")");
         source.Should().Contain("Header = UiText.Get(\"WatchWindow_Formula\")");
+    }
+
+    [Fact]
+    public void WatchWindowDialog_InitialSizeFitsAllWatchColumns()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new WatchWindowDialog(
+                () => [],
+                addWatch: null,
+                getSelectionText: () => "Sheet1!A1",
+                navigateTo: _ => { },
+                removeWatch: _ => { });
+            try
+            {
+                var list = WpfTestTree.FindLogicalDescendants<ListView>(dialog)
+                    .Single(listView => AutomationProperties.GetAutomationId(listView) == "WatchWindowList");
+                var grid = (GridView)list.View;
+                var columnWidth = grid.Columns.Sum(column => column.Width);
+
+                dialog.Width.Should().BeGreaterThan(columnWidth);
+                dialog.MinWidth.Should().BeGreaterThan(columnWidth);
+                (dialog.Width - columnWidth).Should().BeGreaterThanOrEqualTo(100,
+                    "initial chrome and padding should leave the last Formula column fully visible");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]

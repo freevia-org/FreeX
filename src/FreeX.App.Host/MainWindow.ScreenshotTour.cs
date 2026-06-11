@@ -6238,7 +6238,7 @@ public partial class MainWindow
                 outputDir,
                 "ribbon-baseline",
                 "freex_page_layout_setup_ribbon_baseline",
-                "Page Layout tab shows Themes, Page Setup, Scale to Fit, Sheet Options, and Arrange groups with a seeded print area and print-title state."));
+                "Page Layout tab shows Themes, Page Setup, Scale to Fit, and Sheet Options groups with a seeded print area and print-title state."));
 
             captures.Add(await CapturePageLayoutSetupMenuAsync(
                 outputDir,
@@ -10624,11 +10624,11 @@ public partial class MainWindow
             Captures: captures,
             CoveredStates:
             [
-                "Page Layout ribbon baseline with Page Setup, Scale to Fit, Sheet Options, and Arrange groups visible.",
+                "Page Layout ribbon baseline with Page Setup, Scale to Fit, and Sheet Options groups visible.",
                 "Margins, Orientation, Size, Print Area, Breaks, and Background menu surfaces.",
                 "Page Setup dialog Page, Margins, and Sheet tabs, including Print Titles fields.",
                 "Scale to Fit field state and Sheet Options print/display checkbox state.",
-                "Arrange representative Selection Pane dialog surface."
+                "Draw Arrange representative Selection Pane dialog surface."
             ],
             Limitations:
             [

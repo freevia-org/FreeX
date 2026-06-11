@@ -492,12 +492,14 @@ public sealed class NamedRangeDialogXamlTests
         var dataSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
         var source = formulaSource + Environment.NewLine + dataSource;
 
-        formulaSource.Should().Contain("request => ApplyNamedRangeSelection(dialog, request)");
+        formulaSource.Should().Contain("request => ApplyNameDefinitionSelection(dialog, request)");
         dataSource.Should().Contain("request => ApplyNamedRangeSelection(dlg, request)");
         source.Should().Contain("private void ApplyNamedRangeSelection(");
+        source.Should().Contain("private void ApplyNameDefinitionSelection(");
         source.Should().Contain("NamedRangeSelectionRequest request");
         source.Should().Contain("FormatWorkbookRange(selectedRange)");
         source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+        source.Should().Contain("dialog.ApplyRangeSelection(rangeText);");
         source.Should().Contain("dialog.Hide();");
         source.Should().Contain("dialog.Show();");
         source.Should().Contain("dialog.Activate();");

@@ -7,7 +7,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     [Fact]
     public void ApplyRuntimePriorityStates_CollapsesInsertChartsAtNarrowWidths()
     {
-        var groupNames = new[] { "Tables", "Illustrations", "Charts" };
+        var groupNames = new[] { "Tables", "Charts", "Sparklines" };
 
         var states = RibbonAdaptivePriorityPlanner.ApplyRuntimePriorityStates(
             900,
@@ -21,7 +21,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     [Fact]
     public void ApplyRuntimePriorityStates_UsesCatalogIdsAsStableInsertGroupKeys()
     {
-        var groupKeys = new[] { "InsertTablesGroup", "InsertIllustrationsGroup", "InsertChartsGroup" };
+        var groupKeys = new[] { "InsertTablesGroup", "InsertChartsGroup", "InsertSparklinesGroup" };
 
         var states = RibbonAdaptivePriorityPlanner.ApplyRuntimePriorityStates(
             900,
@@ -168,7 +168,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
             .Should()
             .BeEmpty("Review keeps its proofing/accessibility/comment block stable after measured fallback");
 
-        var pageLayoutGroups = new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange" };
+        var pageLayoutGroups = new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options" };
         RibbonAdaptivePriorityPlanner.GetExpandableGroupIndexes(pageLayoutGroups, 1120)
             .Should()
             .Equal(
@@ -216,7 +216,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     public void RuntimeVisibilityProtectedGroupIndexes_ProtectOnlyVisibleRuntimeOverrides()
     {
         var dataGroups = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast" };
-        var insertGroups = new[] { "Tables", "Illustrations", "Charts" };
+        var insertGroups = new[] { "Tables", "Charts", "Sparklines" };
 
         RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityProtectedGroupIndexes(dataGroups, 1120)
             .Should()
@@ -237,14 +237,14 @@ public sealed class RibbonAdaptivePriorityPlannerTests
             .BeTrue();
 
         RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
-                ["Tables", "Illustrations", "Charts"])
+                ["Tables", "Charts", "Sparklines"])
             .Should()
             .BeTrue("Insert needs measured correction to avoid clipping at common Excel widths");
 
         RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
-                ["Arrange", "Format"])
+                ["Illustrations", "Arrange", "Format"])
             .Should()
-            .BeFalse("Draw no longer surfaces the wide out-of-scope ink groups that needed measured correction");
+            .BeFalse("Draw keeps a compact object creation/arrange/format surface instead of the wide out-of-scope ink groups");
 
         RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
                 ["Properties", "Tools", "Table Style Options", "Table Styles"])
