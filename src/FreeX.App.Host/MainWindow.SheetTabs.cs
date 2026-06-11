@@ -137,12 +137,14 @@ public partial class MainWindow
         if (Math.Abs(current.X - _dragSheetTabStart.X) < SystemParameters.MinimumHorizontalDragDistance)
             return;
 
-        var target = FindSheetTabViewModel(FindSheetTabDragHitTarget(current, draggedId) ?? e.OriginalSource as System.Windows.DependencyObject);
-        if (target is null || target.Id == draggedId)
+        var dragTarget = FindSheetTabDragTarget(current, draggedId, e.OriginalSource as System.Windows.DependencyObject);
+        if (dragTarget is null || dragTarget.Tab.Id == draggedId)
             return;
 
         var fromIndex = FindWorkbookSheetIndex(draggedId);
-        var toIndex = FindWorkbookSheetIndex(target.Id);
+        var targetIndex = FindWorkbookSheetIndex(dragTarget.Tab.Id);
+        var insertAfterTarget = current.X >= dragTarget.Bounds.Left + dragTarget.Bounds.Width / 2.0;
+        var toIndex = CalculateSheetTabDragToIndex(fromIndex, targetIndex, insertAfterTarget);
         if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex)
             return;
 
@@ -175,33 +177,67 @@ public partial class MainWindow
             fallbackElement.CaptureMouse();
     }
 
-    private DependencyObject? FindSheetTabDragHitTarget(Point position, SheetId draggedId)
+    private static int CalculateSheetTabDragToIndex(int fromIndex, int targetIndex, bool insertAfterTarget)
     {
-        var hit = SheetTabsControl.InputHitTest(position) as DependencyObject;
-        var hitTab = FindSheetTabViewModel(hit);
-        if (hitTab is not null && hitTab.Id != draggedId)
-            return hit;
+        if (fromIndex < 0 || targetIndex < 0)
+            return -1;
 
-        return FindSheetTabDragHitTargetByBounds(position, draggedId);
+        var insertBeforeIndex = insertAfterTarget ? targetIndex + 1 : targetIndex;
+        return fromIndex < insertBeforeIndex
+            ? insertBeforeIndex - 1
+            : insertBeforeIndex;
     }
 
-    private DependencyObject? FindSheetTabDragHitTargetByBounds(Point position, SheetId draggedId)
+    private SheetTabDragTarget? FindSheetTabDragTarget(Point position, SheetId draggedId, DependencyObject? fallbackHit)
+    {
+        var hit = SheetTabsControl.InputHitTest(position) as DependencyObject;
+        return FindSheetTabDragTargetFromHit(hit, draggedId)
+            ?? FindSheetTabDragTargetByBounds(position, draggedId)
+            ?? FindSheetTabDragTargetFromHit(fallbackHit, draggedId);
+    }
+
+    private SheetTabDragTarget? FindSheetTabDragTargetFromHit(DependencyObject? hit, SheetId draggedId)
+    {
+        var hitTab = FindSheetTabViewModel(hit);
+        if (hitTab is null || hitTab.Id == draggedId)
+            return null;
+
+        return CreateSheetTabDragTarget(hitTab);
+    }
+
+    private SheetTabDragTarget? CreateSheetTabDragTarget(SheetTabViewModel tab)
+    {
+        var element = FindSheetTabContextMenuTarget(tab);
+        if (element is null || element.ActualWidth <= 0 || element.ActualHeight <= 0)
+            return null;
+
+        var bounds = element.TransformToAncestor(SheetTabsControl)
+            .TransformBounds(new Rect(new Point(0, 0), element.RenderSize));
+        return new SheetTabDragTarget(tab, bounds);
+    }
+
+    private SheetTabDragTarget? FindSheetTabDragTargetByBounds(Point position, SheetId draggedId)
     {
         return _sheetTabs
             .Where(tab => tab.Id != draggedId)
-            .Select(tab => FindSheetTabContextMenuTarget(tab))
-            .Where(element => element is not null && element.ActualWidth > 0 && element.ActualHeight > 0)
-            .Select(element => new
+            .Select(tab => new { Tab = tab, Element = FindSheetTabContextMenuTarget(tab) })
+            .Where(candidate => candidate.Element is not null &&
+                                candidate.Element.ActualWidth > 0 &&
+                                candidate.Element.ActualHeight > 0)
+            .Select(candidate => new
             {
-                Element = element!,
-                Bounds = element!.TransformToAncestor(SheetTabsControl)
-                    .TransformBounds(new Rect(new Point(0, 0), element.RenderSize))
+                candidate.Tab,
+                Element = candidate.Element!,
+                Bounds = candidate.Element!.TransformToAncestor(SheetTabsControl)
+                    .TransformBounds(new Rect(new Point(0, 0), candidate.Element.RenderSize))
             })
             .Where(candidate => candidate.Bounds.Contains(position))
             .OrderByDescending(candidate => Panel.GetZIndex(candidate.Element))
             .ThenBy(candidate => Math.Abs(position.X - (candidate.Bounds.Left + candidate.Bounds.Width / 2.0)))
             .FirstOrDefault()
-            ?.Element;
+            is { } match
+                ? new SheetTabDragTarget(match.Tab, match.Bounds)
+                : null;
     }
 
     private void SheetTab_LostMouseCapture(object sender, MouseEventArgs e)
@@ -212,7 +248,16 @@ public partial class MainWindow
     private void SheetTab_MouseRightButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
-        SelectSingleSheetTab(tab.Id);
+        if (_groupedSheetIds.Count > 1 && _groupedSheetIds.Contains(tab.Id))
+        {
+            _currentSheetId = tab.Id;
+            _sheetGroupAnchor = tab.Id;
+        }
+        else
+        {
+            SelectSingleSheetTab(tab.Id);
+        }
+
         UpdateViewport();
         RefreshSheetTabs();
     }
@@ -296,6 +341,12 @@ public partial class MainWindow
 
     private void SheetNavButton_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
+        e.Handled = true;
+        Dispatcher.BeginInvoke(ShowActivateSheetDialogFromSheetNav, DispatcherPriority.Input);
+    }
+
+    private void ShowActivateSheetDialogFromSheetNav()
+    {
         var dialog = new ActivateSheetDialog(_workbook, _currentSheetId) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
@@ -307,7 +358,6 @@ public partial class MainWindow
         UpdateViewport();
         RefreshSheetTabs();
         FocusSheetGridIfNeeded();
-        e.Handled = true;
     }
 
     // ── Sheet tab context menu ────────────────────────────────────────────────
@@ -1698,4 +1748,6 @@ public partial class MainWindow
         SheetId CurrentSheetId,
         int TabCount,
         int TabHash);
+
+    private sealed record SheetTabDragTarget(SheetTabViewModel Tab, Rect Bounds);
 }

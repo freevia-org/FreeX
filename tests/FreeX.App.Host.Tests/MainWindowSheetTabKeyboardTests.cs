@@ -419,6 +419,23 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
+    public void RightClickGroupedSheetTab_PreservesGroupForUngroupMenuCommand()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(sheetCount: 3);
+
+            harness.SelectAllSheetsFromContextMenu();
+            harness.GroupedSheetTabNames.Should().BeEquivalentTo("Sheet1", "Sheet2", "Sheet3");
+
+            harness.RightClickSheetTab("Sheet2");
+
+            harness.ActiveSheetTabName.Should().Be("Sheet2");
+            harness.GroupedSheetTabNames.Should().BeEquivalentTo("Sheet1", "Sheet2", "Sheet3");
+        });
+    }
+
+    [Fact]
     public void SheetTabMouseMove_CancelsStaleDragWhenLeftButtonIsReleased()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
@@ -445,7 +462,7 @@ public sealed class MainWindowSheetTabKeyboardTests
             source.IndexOf("private void SheetTab_MouseMove", StringComparison.Ordinal)];
         var captureHelper = source[
             source.IndexOf("private void CaptureSheetTabMouseForDrag", StringComparison.Ordinal)..
-            source.IndexOf("private DependencyObject? FindSheetTabDragHitTarget", StringComparison.Ordinal)];
+            source.IndexOf("private static int CalculateSheetTabDragToIndex", StringComparison.Ordinal)];
         var mouseMove = source[
             source.IndexOf("private void SheetTab_MouseMove", StringComparison.Ordinal)..
             source.IndexOf("private void SheetTab_MouseLeftButtonUp", StringComparison.Ordinal)];
@@ -522,9 +539,10 @@ public sealed class MainWindowSheetTabKeyboardTests
         mouseDown.Should().Contain("UpdateGroupedSheetsForClick(tab.Id);");
 
         mouseMove.Should().Contain("SystemParameters.MinimumHorizontalDragDistance");
-        mouseMove.Should().Contain("FindSheetTabViewModel(FindSheetTabDragHitTarget(current, draggedId) ?? e.OriginalSource as System.Windows.DependencyObject)");
+        mouseMove.Should().Contain("FindSheetTabDragTarget(current, draggedId, e.OriginalSource as System.Windows.DependencyObject)");
+        mouseMove.Should().Contain("CalculateSheetTabDragToIndex(fromIndex, targetIndex, insertAfterTarget)");
         source.Should().Contain("SheetTabsControl.InputHitTest(position)");
-        source.Should().Contain("FindSheetTabDragHitTargetByBounds(position, draggedId)");
+        source.Should().Contain("FindSheetTabDragTargetByBounds(position, draggedId)");
         mouseMove.Should().Contain("new MoveSheetCommand(fromIndex, toIndex)");
         mouseMove.Should().Contain("_currentSheetId = draggedId;");
 
@@ -539,7 +557,10 @@ public sealed class MainWindowSheetTabKeyboardTests
         leftNav.Should().Contain("SheetTabsScroller.HorizontalOffset - SheetTabNavScrollAmount");
         rightNav.Should().Contain("SheetTabsScroller.ScrollToHorizontalOffset");
         rightNav.Should().Contain("SheetTabsScroller.HorizontalOffset + SheetTabNavScrollAmount");
-        navRightClick.Should().Contain("new ActivateSheetDialog(_workbook, _currentSheetId)");
+        navRightClick.Should().Contain("e.Handled = true;");
+        navRightClick.Should().Contain("Dispatcher.BeginInvoke(ShowActivateSheetDialogFromSheetNav, DispatcherPriority.Input)");
+        source.Should().Contain("private void ShowActivateSheetDialogFromSheetNav()");
+        source.Should().Contain("new ActivateSheetDialog(_workbook, _currentSheetId)");
         navRightClick.Should().Contain("e.Handled = true;");
 
         xaml.Should().Contain("<ContextMenu Opened=\"SheetTabContextMenu_XamlOpened\">");
@@ -558,6 +579,27 @@ public sealed class MainWindowSheetTabKeyboardTests
             end.Should().BeGreaterThan(start, $"expected to find {endMarker} after {startMarker}");
             return text[start..end];
         }
+    }
+
+    [Theory]
+    [InlineData(3, 2, true, 3)]
+    [InlineData(3, 2, false, 2)]
+    [InlineData(3, 1, false, 1)]
+    [InlineData(0, 2, false, 1)]
+    [InlineData(0, 2, true, 2)]
+    public void SheetTabDragIndexPlanner_UsesTargetHalfForBeforeAfterInsertion(
+        int fromIndex,
+        int targetIndex,
+        bool insertAfterTarget,
+        int expectedToIndex)
+    {
+        var method = typeof(MainWindow)
+            .GetMethod("CalculateSheetTabDragToIndex", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(nameof(MainWindow), "CalculateSheetTabDragToIndex");
+
+        var toIndex = (int)method.Invoke(null, [fromIndex, targetIndex, insertAfterTarget])!;
+
+        toIndex.Should().Be(expectedToIndex);
     }
 
     [Fact]
@@ -593,6 +635,7 @@ public sealed class MainWindowSheetTabKeyboardTests
         private readonly MethodInfo _sheetTabContextMenuOpened;
         private readonly MethodInfo _refreshSheetTabs;
         private readonly FieldInfo _workbookField;
+        private readonly MethodInfo _sheetCtxSelectAllSheetsClick;
         private FrameworkElement? _routedSheetTabTarget;
 
         private MainWindowHarness(MainWindow window)
@@ -625,6 +668,9 @@ public sealed class MainWindowSheetTabKeyboardTests
             _workbookField = typeof(MainWindow)
                 .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
+            _sheetCtxSelectAllSheetsClick = typeof(MainWindow)
+                .GetMethod("SheetCtxSelectAllSheets_Click", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SheetCtxSelectAllSheets_Click");
         }
 
         public string? FocusedSheetTabName =>
@@ -762,6 +808,13 @@ public sealed class MainWindowSheetTabKeyboardTests
             };
 
             _sheetTabMouseRightButtonDown.Invoke(_window, [target, args]);
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
+        public void SelectAllSheetsFromContextMenu()
+        {
+            _sheetCtxSelectAllSheetsClick.Invoke(_window, [this, new RoutedEventArgs()]);
             _window.UpdateLayout();
             PumpDispatcher();
         }

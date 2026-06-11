@@ -44,7 +44,7 @@ public static class AutoFitSizingService
 
         var lineCount = 0;
         foreach (var line in EnumerateLines(text))
-            lineCount += Math.Max(1, (int)Math.Ceiling(line.Length / 40.0));
+            lineCount += 1;
 
         return lineCount;
     }

@@ -170,7 +170,60 @@ public class ViewportStyleTests
 
         var dc = vp.Cells.Single(c => c.Row == 2 && c.Col == 2);
         dc.HasComment.Should().BeTrue();
+        dc.CommentDisplay.Should().NotBeNull();
+        dc.CommentDisplay!.Kind.Should().Be(CellCommentDisplayKind.Note);
+        dc.CommentDisplay.Title.Should().Be("Note");
+        dc.CommentDisplay.Body.Should().Be("Review total");
         dc.DisplayText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetViewport_ThreadedCommentOnlyCell_PopulatesDisplayCellWithCommentPreview()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 3, 3);
+        sheet.ThreadedComments[address] = new ThreadedComment("Root review", "Quinn")
+        {
+            Replies = [new CommentReply("Looks good", "Codex")]
+        };
+
+        var vp = new ViewportService().GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        var dc = vp.Cells.Single(c => c.Row == 3 && c.Col == 3);
+        dc.HasComment.Should().BeTrue();
+        dc.CommentDisplay.Should().NotBeNull();
+        dc.CommentDisplay!.Kind.Should().Be(CellCommentDisplayKind.ThreadedComment);
+        dc.CommentDisplay.Title.Should().Be("Comment");
+        dc.CommentDisplay.Body.Should().Contain("Quinn: Root review");
+        dc.CommentDisplay.Body.Should().Contain("Codex: Looks good");
+        dc.DisplayText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetViewport_CellWithNoteAndThreadedComment_CombinesPreviewBody()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 4, 4);
+        sheet.Comments[address] = "Legacy note";
+        sheet.ThreadedComments[address] = new ThreadedComment("Thread body", "FreeX")
+        {
+            IsResolved = true
+        };
+
+        var vp = new ViewportService().GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        var dc = vp.Cells.Single(c => c.Row == 4 && c.Col == 4);
+        dc.HasComment.Should().BeTrue();
+        dc.CommentDisplay.Should().NotBeNull();
+        dc.CommentDisplay!.Kind.Should().Be(CellCommentDisplayKind.Mixed);
+        dc.CommentDisplay.Title.Should().Be("Resolved comment and note");
+        dc.CommentDisplay.IsResolved.Should().BeTrue();
+        dc.CommentDisplay.Body.Should().Contain("Note:");
+        dc.CommentDisplay.Body.Should().Contain("Legacy note");
+        dc.CommentDisplay.Body.Should().Contain("Comment:");
+        dc.CommentDisplay.Body.Should().Contain("FreeX: Thread body");
     }
 
     [Fact]
