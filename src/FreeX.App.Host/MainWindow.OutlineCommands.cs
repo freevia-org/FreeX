@@ -88,6 +88,25 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void OnOutlineGroupToggleRequested(FreeX.App.UI.GridOutlineGroupToggleRequest request)
+    {
+        IWorkbookCommand CreateCommand() =>
+            request.Axis == FreeX.App.UI.GridOutlineGroupAxis.Columns
+                ? new SetColumnOutlineGroupCollapsedCommand(_currentSheetId, request.Start, request.End, request.Level, request.Collapse)
+                : new SetRowOutlineGroupCollapsedCommand(_currentSheetId, request.Start, request.End, request.Level, request.Collapse);
+
+        var label = request.Collapse ? "Collapse Group" : "Expand Group";
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, label);
+            return;
+        }
+
+        _repeatPostAction = null;
+        UpdateViewport();
+    }
+
     private IWorkbookCommand CreateGroupCommand(GridRange range)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
