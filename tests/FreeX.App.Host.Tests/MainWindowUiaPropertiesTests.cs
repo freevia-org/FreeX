@@ -256,6 +256,39 @@ public sealed class MainWindowUiaPropertiesTests
                 "sheet tabs should have a stable automation ID so UIA clients can distinguish them");
     }
 
+    [Theory]
+    [InlineData("SheetNavLeftBtn", "MainWindow_TooltipTitle_ScrollTabsLeft")]
+    [InlineData("SheetNavRightBtn", "MainWindow_TooltipTitle_ScrollTabsRight")]
+    public void SheetTabNavigationButton_ExposesAutomationNameAndPreviewRightClick(string buttonName, string expectedNameKey)
+    {
+        var document = LoadMainWindowXaml();
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var button = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute(x + "Name")?.Value == buttonName);
+
+        button.Attribute("AutomationProperties.Name")?.Value
+            .Should().Be(UiText.Get(expectedNameKey));
+        button.Attribute("AutomationProperties.AutomationId")?.Value
+            .Should().Be(buttonName);
+        button.Attribute("Loaded")?.Value
+            .Should().Be("SheetNavButton_Loaded");
+        button.Attribute("PreviewMouseDown")?.Value
+            .Should().Be("SheetNavButton_MouseRightButtonDown");
+        button.Attribute("PreviewMouseRightButtonDown")?.Value
+            .Should().Be("SheetNavButton_MouseRightButtonDown");
+        button.Attribute("MouseRightButtonDown")?.Value
+            .Should().Be("SheetNavButton_MouseRightButtonDown");
+        button.Attribute("PreviewMouseRightButtonUp")?.Value
+            .Should().Be("SheetNavButton_MouseRightButtonUp");
+        button.Attribute("MouseRightButtonUp")?.Value
+            .Should().Be("SheetNavButton_MouseRightButtonUp");
+        button.Attribute("ContextMenuOpening")?.Value
+            .Should().Be("SheetNavButton_ContextMenuOpening");
+    }
+
     // Add sheet button
 
     [Fact]

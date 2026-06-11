@@ -3700,7 +3700,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 handle,
                 (int)(sourceBounds.Left + sourceBounds.Width / 2.0),
                 (int)(sourceBounds.Top + sourceBounds.Height / 2.0),
-                (int)(targetBounds.Left + targetBounds.Width * 0.35),
+                (int)(targetBounds.Left + Math.Max(4.0, targetBounds.Width * 0.08)),
                 (int)(targetBounds.Top + targetBounds.Height / 2.0));
             if (blocked is not null)
             {
@@ -3723,13 +3723,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabOverflowNavClick()
         => (handle, processId, _, _) =>
         {
-            var blocked = SeedSheetsWithAddButton(handle, processId, 8);
+            var blocked = SeedSheetsWithAddButton(handle, processId, 18);
             if (blocked is not null)
             {
                 return blocked;
             }
 
-            var rightNav = FindSheetNavButton(handle, right: true);
+            var rightNav = FindSheetNavButtonByAutomationId(handle, right: true);
             if (rightNav is null)
             {
                 return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the visible sheet-tab Scroll Tabs Right button after seeding overflow sheets.", options.OutputRoot, "freex");
@@ -3741,25 +3741,28 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return blocked;
             }
 
-            _lastResultValidation = "Created Sheet2-Sheet8 through physical Insert Sheet button clicks, then physically clicked the visible Scroll Tabs Right overflow navigation button.";
+            _lastResultValidation = "Created Sheet2-Sheet18 through physical Insert Sheet button clicks, then physically clicked the visible Scroll Tabs Right overflow navigation button.";
             return null;
         };
 
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SheetTabOverflowActivateDialog()
         => (handle, processId, _, _) =>
         {
-            var blocked = SeedSheetsWithAddButton(handle, processId, 8);
+            var blocked = SeedSheetsWithAddButton(handle, processId, 18);
             if (blocked is not null)
             {
                 return blocked;
             }
 
-            var rightNavCandidates = FindSheetNavButtonCandidates(handle, right: true);
-            if (rightNavCandidates.Count == 0)
+            var rightNavCandidates = FindSheetNavButtonByAutomationId(handle, right: true) is { } rightNavButton
+                ? new[] { rightNavButton }
+                : [];
+            if (rightNavCandidates.Length == 0)
             {
                 return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the visible sheet-tab Scroll Tabs Right button after seeding overflow sheets.", options.OutputRoot, "freex");
             }
 
+            var candidateDiagnostics = DescribeSheetNavButtonCandidates(rightNavCandidates);
             WindowInfo? dialog = null;
             CaptureResult? lastBlocked = null;
             foreach (var rightNav in rightNavCandidates)
@@ -3784,7 +3787,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     return lastBlocked;
                 }
 
-                return CaptureResult.Blocked(options.Scenario, "dialog-not-found", "Did not detect Activate Sheet dialog after right-clicking the sheet-tab overflow navigation button.", options.OutputRoot, "freex");
+                return CaptureResult.Blocked(options.Scenario, "dialog-not-found", $"Did not detect Activate Sheet dialog after right-clicking the sheet-tab overflow navigation button. Candidates: {candidateDiagnostics}.", options.OutputRoot, "freex");
             }
 
             var dialogHandle = new IntPtr(dialog.Handle);
@@ -3800,7 +3803,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 dialog,
                 guard,
                 "complete",
-                "Created Sheet2-Sheet8 through physical Insert Sheet button clicks, then physically right-clicked the sheet-tab overflow navigation button and captured the foreground Activate Sheet dialog.");
+                "Created Sheet2-Sheet18 through physical Insert Sheet button clicks, then physically right-clicked the sheet-tab overflow navigation button and captured the foreground Activate Sheet dialog.");
         };
 
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> DragRelative(double startX, double startY, double endX, double endY)
@@ -4167,8 +4170,32 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     private static AutomationElement? FindSheetNavButton(IntPtr handle, bool right)
         => FindSheetNavButtonCandidates(handle, right).FirstOrDefault();
 
+    private static AutomationElement? FindSheetNavButtonByAutomationId(IntPtr handle, bool right)
+    {
+        var expectedAutomationId = right ? "SheetNavRightBtn" : "SheetNavLeftBtn";
+        return AutomationElement.FromHandle(handle)
+            .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.AutomationIdProperty, expectedAutomationId))
+            .Cast<AutomationElement>()
+            .Where(IsVisibleElement)
+            .OrderByDescending(element => element.Current.BoundingRectangle.Width * element.Current.BoundingRectangle.Height)
+            .FirstOrDefault();
+    }
+
+    private static string DescribeSheetNavButtonCandidates(IReadOnlyList<AutomationElement> candidates)
+        => string.Join("; ", candidates.Take(8).Select((element, index) =>
+        {
+            var bounds = element.Current.BoundingRectangle;
+            return $"#{index + 1} '{element.Current.Name}' {element.Current.ControlType.ProgrammaticName} [{bounds.Left:0},{bounds.Top:0},{bounds.Width:0}x{bounds.Height:0}]";
+        }));
+
     private static IReadOnlyList<AutomationElement> FindSheetNavButtonCandidates(IntPtr handle, bool right)
     {
+        var root = AutomationElement.FromHandle(handle);
+        if (FindSheetNavButtonByAutomationId(handle, right) is { } automationIdMatch)
+        {
+            return [automationIdMatch];
+        }
+
         var tabBounds = GetVisibleSheetTabElements(handle)
             .Select(element => element.Current.BoundingRectangle)
             .Where(bounds => !bounds.IsEmpty)
@@ -4181,7 +4208,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         var tabCenterY = tabBounds.Average(bounds => bounds.Top + bounds.Height / 2.0);
         var tabLeft = tabBounds.Min(bounds => bounds.Left);
         var tabRight = tabBounds.Max(bounds => bounds.Right);
-        var buttons = AutomationElement.FromHandle(handle)
+        var buttons = root
             .FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button))
             .Cast<AutomationElement>()
             .Where(IsVisibleElement)
@@ -4200,6 +4227,18 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         if (buttons.Count == 0)
         {
             return [];
+        }
+
+        var expectedName = right ? "Scroll Tabs Right" : "Scroll Tabs Left";
+        var namedButtons = buttons
+            .Where(button => (button.Current.Name ?? string.Empty).Equals(expectedName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (namedButtons.Count > 0)
+        {
+            return namedButtons
+                .Concat(buttons.Except(namedButtons))
+                .Distinct()
+                .ToList();
         }
 
         if (right)

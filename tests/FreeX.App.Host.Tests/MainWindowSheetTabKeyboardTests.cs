@@ -530,21 +530,32 @@ public sealed class MainWindowSheetTabKeyboardTests
         xaml.Should().Contain("MouseDown=\"SheetTab_LabelMouseDown\"");
         xaml.Should().Contain("Click=\"SheetNavLeftBtn_Click\"");
         xaml.Should().Contain("Click=\"SheetNavRightBtn_Click\"");
+        xaml.Should().Contain("Loaded=\"SheetNavButton_Loaded\"");
+        xaml.Should().Contain("PreviewMouseDown=\"SheetNavButton_MouseRightButtonDown\"");
+        xaml.Should().Contain("PreviewMouseRightButtonDown=\"SheetNavButton_MouseRightButtonDown\"");
         xaml.Should().Contain("MouseRightButtonDown=\"SheetNavButton_MouseRightButtonDown\"");
+        xaml.Should().Contain("PreviewMouseRightButtonUp=\"SheetNavButton_MouseRightButtonUp\"");
+        xaml.Should().Contain("MouseRightButtonUp=\"SheetNavButton_MouseRightButtonUp\"");
+        xaml.Should().Contain("ContextMenuOpening=\"SheetNavButton_ContextMenuOpening\"");
 
         mouseDown.Should().Contain("_dragSheetTabId = tab.Id;");
         mouseDown.Should().Contain("var dragStart = e.GetPosition(SheetTabsControl);");
         mouseDown.Should().Contain("_dragSheetTabStart = dragStart;");
+        mouseDown.Should().Contain("_dragSheetTabPendingToIndex = null;");
         mouseDown.Should().Contain("CaptureSheetTabMouseForDrag(tab.Id, sender);");
         mouseDown.Should().Contain("UpdateGroupedSheetsForClick(tab.Id);");
 
         mouseMove.Should().Contain("SystemParameters.MinimumHorizontalDragDistance");
         mouseMove.Should().Contain("FindSheetTabDragTarget(current, draggedId, e.OriginalSource as System.Windows.DependencyObject)");
         mouseMove.Should().Contain("CalculateSheetTabDragToIndex(fromIndex, targetIndex, insertAfterTarget)");
+        mouseMove.Should().Contain("_dragSheetTabPendingToIndex = toIndex;");
+        mouseMove.Should().NotContain("new MoveSheetCommand(fromIndex, toIndex)");
         source.Should().Contain("SheetTabsControl.InputHitTest(position)");
         source.Should().Contain("FindSheetTabDragTargetByBounds(position, draggedId)");
-        mouseMove.Should().Contain("new MoveSheetCommand(fromIndex, toIndex)");
-        mouseMove.Should().Contain("_currentSheetId = draggedId;");
+        source.Should().Contain("private void CommitPendingSheetTabDragDrop()");
+        source.Should().Contain("new MoveSheetCommand(fromIndex, toIndex)");
+        source.Should().Contain("private void ClearSheetTabDragState()");
+        source.Should().Contain("_currentSheetId = draggedId;");
 
         groupClick.Should().Contain("var modifiers = Keyboard.Modifiers;");
         groupClick.Should().Contain("(modifiers & ModifierKeys.Shift) != 0");
@@ -558,7 +569,15 @@ public sealed class MainWindowSheetTabKeyboardTests
         rightNav.Should().Contain("SheetTabsScroller.ScrollToHorizontalOffset");
         rightNav.Should().Contain("SheetTabsScroller.HorizontalOffset + SheetTabNavScrollAmount");
         navRightClick.Should().Contain("e.Handled = true;");
-        navRightClick.Should().Contain("Dispatcher.BeginInvoke(ShowActivateSheetDialogFromSheetNav, DispatcherPriority.Input)");
+        navRightClick.Should().Contain("e.ChangedButton != MouseButton.Right");
+        navRightClick.Should().Contain("BeginShowActivateSheetDialogFromSheetNav();");
+        source.Should().Contain("private void SheetNavButton_Loaded");
+        source.Should().Contain("handledEventsToo");
+        source.Should().Contain("private void SheetNavButton_MouseRightButtonUp");
+        source.Should().Contain("private void SheetNavButton_ContextMenuOpening");
+        source.Should().Contain("private void BeginShowActivateSheetDialogFromSheetNav()");
+        source.Should().Contain("_activateSheetDialogOpenOrPending");
+        source.Should().Contain("Dispatcher.BeginInvoke(() =>");
         source.Should().Contain("private void ShowActivateSheetDialogFromSheetNav()");
         source.Should().Contain("new ActivateSheetDialog(_workbook, _currentSheetId)");
         navRightClick.Should().Contain("e.Handled = true;");
