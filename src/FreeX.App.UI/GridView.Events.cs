@@ -8,6 +8,19 @@ public enum GridHeaderContextMenuTarget
     Column
 }
 
+public enum GridOutlineGroupAxis
+{
+    Rows,
+    Columns
+}
+
+public readonly record struct GridOutlineGroupToggleRequest(
+    GridOutlineGroupAxis Axis,
+    int Level,
+    uint Start,
+    uint End,
+    bool Collapse);
+
 public partial class GridView
 {
     /// <summary>Fired while the user drags a column border (real-time).</summary>
@@ -46,6 +59,9 @@ public partial class GridView
 
     /// <summary>Fired when the user activates a rendered PivotTable row/column header dropdown button.</summary>
     public event Action<CellAddress, System.Windows.Point>? PivotHeaderDropdownRequested;
+
+    /// <summary>Fired when the user activates a rendered outline group collapse/expand button.</summary>
+    public event Action<GridOutlineGroupToggleRequest>? OutlineGroupToggleRequested;
 
     /// <summary>Fired when the user activates a rendered PivotChart field button.</summary>
     public event Action<ChartModel, string, System.Windows.Point>? PivotChartFieldButtonRequested;
