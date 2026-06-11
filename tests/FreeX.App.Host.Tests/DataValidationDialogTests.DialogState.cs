@@ -69,6 +69,31 @@ public sealed partial class DataValidationDialogTests
     }
 
     [Fact]
+    public void DataValidationDialog_ShowsUseSelectionWhereRangePickerCanFillFirstFormula()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new DataValidationDialog { SelectionSource = "=Sheet1!$B$2:$B$8" };
+            dialog.Show();
+            try
+            {
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "Any");
+                GetControl<Button>(dialog, "UseSelectionButton").Visibility.Should().Be(Visibility.Collapsed);
+
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "WholeNumber");
+                GetControl<Button>(dialog, "UseSelectionButton").Visibility.Should().Be(Visibility.Visible);
+
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "Custom");
+                GetControl<Button>(dialog, "UseSelectionButton").Visibility.Should().Be(Visibility.Visible);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void InputMessageToggle_DisablesPromptEditors()
     {
         StaTestRunner.Run(() =>
