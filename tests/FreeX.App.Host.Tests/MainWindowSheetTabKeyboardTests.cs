@@ -492,7 +492,7 @@ public sealed class MainWindowSheetTabKeyboardTests
 
         mouseMove.Should().Contain("SystemParameters.MinimumHorizontalDragDistance");
         mouseMove.Should().Contain("FindSheetTabViewModel(FindSheetTabDragHitTarget(current) ?? e.OriginalSource as System.Windows.DependencyObject)");
-        mouseMove.Should().Contain("SheetTabsControl.InputHitTest(position)");
+        source.Should().Contain("SheetTabsControl.InputHitTest(position)");
         mouseMove.Should().Contain("new MoveSheetCommand(fromIndex, toIndex)");
         mouseMove.Should().Contain("_currentSheetId = draggedId;");
 

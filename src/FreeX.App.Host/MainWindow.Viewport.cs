@@ -374,7 +374,10 @@ public partial class MainWindow
 
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is not null)
+        {
             SyncZoomFromSheet(sheet.ZoomPercent);
+            SyncPageLayoutScaleToFitControls(sheet);
+        }
         EnsureActiveCellSelection(sheet);
 
         var (topRow, leftCol) = CalculateViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
