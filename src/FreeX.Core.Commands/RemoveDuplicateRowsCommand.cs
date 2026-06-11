@@ -3,12 +3,22 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Removes duplicate rows in a range as one undoable command.</summary>
+/// <remarks>
+/// Only cells within the selected range columns are written or cleared — data in columns
+/// outside the range is never touched, and no sheet-wide row deletion occurs.
+/// </remarks>
 public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly IReadOnlyList<uint>? _columnOffsets;
-    private readonly List<DeleteRowsCommand> _deletes = [];
+
+    // Snapshot of every in-range cell before Apply, used by Revert.
+    private List<CellSnapshot>? _snapshot;
+    private Dictionary<CellAddress, string>? _commentSnapshot;
+    private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
+    private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
+    private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
 
     public int RemovedRowCount { get; private set; }
 
@@ -32,42 +42,136 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        _deletes.Clear();
         RemovedRowCount = 0;
 
+        // ── 1. Identify surviving rows (de-duplicate) ──────────────────────
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var rowsToDelete = new List<uint>();
+        var survivingRows = new List<uint>();
         for (uint row = _range.Start.Row; row <= _range.End.Row; row++)
         {
-            var keyParts = new List<string>();
-            foreach (var col in DuplicateKeyColumns())
-                keyParts.Add(sheet.GetValue(row, col).ToString() ?? string.Empty);
-
-            if (!seen.Add(string.Join("\t", keyParts)))
-                rowsToDelete.Add(row);
+            var key = BuildKey(sheet, row);
+            if (seen.Add(key))
+                survivingRows.Add(row);
         }
 
-        foreach (var row in rowsToDelete.OrderByDescending(r => r))
+        RemovedRowCount = (int)(_range.RowCount - survivingRows.Count);
+        if (RemovedRowCount == 0)
         {
-            var delete = new DeleteRowsCommand(_sheetId, row);
-            var outcome = delete.Apply(ctx);
-            if (!outcome.Success)
+            // Nothing to do — take an empty snapshot so Revert is a no-op.
+            _snapshot = [];
+            _commentSnapshot = [];
+            _threadedCommentSnapshot = [];
+            _hyperlinkSnapshot = [];
+            _hyperlinkMetadataSnapshot = [];
+            return new CommandOutcome(true);
+        }
+
+        // ── 2. Snapshot the entire in-range area ───────────────────────────
+        var allInRangeAddresses = _range.AllCells().ToList();
+        _snapshot = CaptureCellSnapshots(sheet, allInRangeAddresses);
+        _commentSnapshot = CaptureDictionary(sheet.Comments, allInRangeAddresses);
+        _threadedCommentSnapshot = CaptureDictionary(sheet.ThreadedComments, allInRangeAddresses);
+        _hyperlinkSnapshot = CaptureDictionary(sheet.Hyperlinks, allInRangeAddresses);
+        _hyperlinkMetadataSnapshot = CaptureDictionary(sheet.HyperlinkMetadata, allInRangeAddresses);
+
+        // ── 3. Clear the entire in-range area ─────────────────────────────
+        foreach (var address in allInRangeAddresses)
+            ClearAddress(sheet, address);
+
+        // Build a fast lookup from the snapshot list.
+        var snapshotMap = _snapshot.ToDictionary(s => s.Address);
+
+        // ── 4. Write surviving rows compacted upward into the range ────────
+        uint targetRow = _range.Start.Row;
+        foreach (var sourceRow in survivingRows)
+        {
+            for (uint col = _range.Start.Col; col <= _range.End.Col; col++)
             {
-                Revert(ctx);
-                return outcome;
+                var source = new CellAddress(_sheetId, sourceRow, col);
+                var target = new CellAddress(_sheetId, targetRow, col);
+
+                // Cell value / formula / style
+                if (snapshotMap.TryGetValue(source, out var snap))
+                {
+                    if (snap.Cell is not null)
+                    {
+                        sheet.SetCell(target, snap.Cell.Clone());
+                    }
+                    else if (snap.StyleOnly.HasValue)
+                    {
+                        sheet.SetStyleOnly(target.Row, target.Col, snap.StyleOnly.Value);
+                    }
+                }
+
+                // Comments
+                if (_commentSnapshot.TryGetValue(source, out var comment))
+                    sheet.Comments[target] = comment;
+
+                if (_threadedCommentSnapshot.TryGetValue(source, out var threadedComment))
+                    sheet.ThreadedComments[target] = CloneThreadedComment(threadedComment);
+
+                // Hyperlinks
+                if (_hyperlinkSnapshot.TryGetValue(source, out var hyperlink))
+                    sheet.Hyperlinks[target] = hyperlink;
+
+                if (_hyperlinkMetadataSnapshot.TryGetValue(source, out var hyperlinkMetadata))
+                    sheet.HyperlinkMetadata[target] = hyperlinkMetadata;
             }
 
-            _deletes.Add(delete);
+            targetRow++;
         }
 
-        RemovedRowCount = _deletes.Count;
-        return new CommandOutcome(true);
+        // Vacated trailing rows are already cleared (step 3).
+
+        var affectedCells = allInRangeAddresses;
+        return new CommandOutcome(true, AffectedCells: affectedCells);
     }
 
     public void Revert(ICommandContext ctx)
     {
-        for (int i = _deletes.Count - 1; i >= 0; i--)
-            _deletes[i].Revert(ctx);
+        if (_snapshot is null)
+            return;
+
+        var sheet = ctx.GetSheet(_sheetId);
+
+        // Clear everything that Apply may have written in-range.
+        foreach (var snapshot in _snapshot)
+            ClearAddress(sheet, snapshot.Address);
+
+        // Restore cells and style-only entries.
+        foreach (var snapshot in _snapshot)
+            RestoreCellSnapshot(sheet, snapshot);
+
+        // Restore metadata dictionaries.
+        var allInRangeAddresses = _snapshot.Select(s => s.Address).ToList();
+        RestoreDictionary(sheet.Comments, _commentSnapshot, allInRangeAddresses);
+        RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot, allInRangeAddresses);
+        RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot, allInRangeAddresses);
+        RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot, allInRangeAddresses);
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a collision-proof key for a row by length-prefixing each cell value before
+    /// joining, so that tab characters inside values cannot merge across column boundaries.
+    /// E.g. columns ("a\tb", "c") and ("a", "b\tc") produce distinct keys.
+    /// </summary>
+    private string BuildKey(Sheet sheet, uint row)
+    {
+        var parts = new System.Text.StringBuilder();
+        var first = true;
+        foreach (var col in DuplicateKeyColumns())
+        {
+            if (!first) parts.Append('\t');
+            first = false;
+            var part = sheet.GetValue(row, col).ToString() ?? string.Empty;
+            parts.Append(part.Length);
+            parts.Append(':');
+            parts.Append(part);
+        }
+
+        return parts.ToString();
     }
 
     private IEnumerable<uint> DuplicateKeyColumns()
@@ -83,4 +187,75 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
             if (offset < _range.ColCount)
                 yield return _range.Start.Col + offset;
     }
+
+    private static List<CellSnapshot> CaptureCellSnapshots(Sheet sheet, IReadOnlyList<CellAddress> addresses)
+    {
+        var snapshots = new List<CellSnapshot>(addresses.Count);
+        foreach (var address in addresses)
+        {
+            snapshots.Add(new CellSnapshot(
+                address,
+                sheet.GetCell(address)?.Clone(),
+                sheet.GetStyleOnly(address.Row, address.Col)));
+        }
+
+        return snapshots;
+    }
+
+    private static Dictionary<CellAddress, TValue> CaptureDictionary<TValue>(
+        Dictionary<CellAddress, TValue> source,
+        IReadOnlyList<CellAddress> addresses)
+    {
+        var snapshot = new Dictionary<CellAddress, TValue>();
+        foreach (var address in addresses)
+        {
+            if (source.TryGetValue(address, out var value))
+                snapshot[address] = value;
+        }
+
+        return snapshot;
+    }
+
+    private static void ClearAddress(Sheet sheet, CellAddress address)
+    {
+        sheet.ClearCell(address);
+        sheet.ClearStyleOnly(address.Row, address.Col);
+        sheet.Comments.Remove(address);
+        sheet.ThreadedComments.Remove(address);
+        sheet.Hyperlinks.Remove(address);
+        sheet.HyperlinkMetadata.Remove(address);
+    }
+
+    private static void RestoreCellSnapshot(Sheet sheet, CellSnapshot snapshot)
+    {
+        if (snapshot.Cell is null)
+        {
+            if (snapshot.StyleOnly.HasValue)
+                sheet.SetStyleOnly(snapshot.Address.Row, snapshot.Address.Col, snapshot.StyleOnly.Value);
+        }
+        else
+        {
+            sheet.SetCell(snapshot.Address, snapshot.Cell.Clone());
+        }
+    }
+
+    private static void RestoreDictionary<TValue>(
+        Dictionary<CellAddress, TValue> target,
+        Dictionary<CellAddress, TValue>? snapshot,
+        IReadOnlyList<CellAddress> affected)
+    {
+        foreach (var address in affected)
+            target.Remove(address);
+
+        if (snapshot is null)
+            return;
+
+        foreach (var (address, value) in snapshot)
+            target[address] = value;
+    }
+
+    private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
+        comment with { Replies = comment.Replies.Select(reply => reply with { }).ToList() };
+
+    private sealed record CellSnapshot(CellAddress Address, Cell? Cell, StyleId? StyleOnly);
 }
