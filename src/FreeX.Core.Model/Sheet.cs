@@ -45,9 +45,16 @@ public sealed partial class Sheet
     private MergeRegionIndex? _mergeIndex;
     private GridRange? _usedRangeCache;
     private bool _usedRangeCacheDirty = true;
+    private int _contentVersion;
 
     /// <summary>Unique identifier for this sheet.</summary>
     public SheetId Id { get; }
+
+    /// <summary>
+    /// Monotonically increasing counter bumped whenever cell content changes (SetCell, ClearCell,
+    /// SetFormula, SetSpillRange, ClearSpillRange). Used by caches that depend on cell values.
+    /// </summary>
+    public int ContentVersion => _contentVersion;
 
     /// <summary>Display name of the sheet (shown on tab).</summary>
     public string Name { get; set; }
@@ -338,7 +345,7 @@ public sealed partial class Sheet
     public List<SparklineModel> Sparklines { get; } = [];
 
     /// <summary>Conditional formatting rules applied to this sheet, ordered by priority.</summary>
-    public List<ConditionalFormat> ConditionalFormats { get; } = [];
+    public ConditionalFormatCollection ConditionalFormats { get; } = [];
 
     /// <summary>Data validation rules applied to this sheet.</summary>
     public DataValidationCollection DataValidations { get; } = [];
@@ -461,6 +468,7 @@ public sealed partial class Sheet
             _cells[(address.Row, address.Col)] = Cell.FromValue(value);
         }
         ClearStyleOnly(address.Row, address.Col);
+        _contentVersion++;
     }
 
     /// <summary>
@@ -483,6 +491,7 @@ public sealed partial class Sheet
             _formulaCells.Add((address.Row, address.Col));
         }
         ClearStyleOnly(address.Row, address.Col);
+        _contentVersion++;
     }
 
     /// <summary>Set a cell directly.</summary>
@@ -497,6 +506,7 @@ public sealed partial class Sheet
 
         _cells[(address.Row, address.Col)] = cell;
         ClearStyleOnly(address.Row, address.Col);
+        _contentVersion++;
     }
 
     /// <summary>Remove a cell (clear its contents).</summary>
@@ -508,6 +518,7 @@ public sealed partial class Sheet
             if (removed.HasFormula)
                 _formulaCells.Remove((row, col));
             TrackUsedRangeCellCleared(row, col);
+            _contentVersion++;
         }
     }
 
@@ -520,6 +531,7 @@ public sealed partial class Sheet
             if (removed.HasFormula)
                 _formulaCells.Remove((address.Row, address.Col));
             TrackUsedRangeCellCleared(address.Row, address.Col);
+            _contentVersion++;
         }
     }
 
@@ -559,6 +571,7 @@ public sealed partial class Sheet
                 _spillValues[(anchor.Row + (uint)r, anchor.Col + (uint)c)] = rv.Cells[r, c];
             }
         _spillAnchors[(anchor.Row, anchor.Col)] = ((uint)rows, (uint)cols);
+        _contentVersion++;
     }
 
     /// <summary>
@@ -589,6 +602,7 @@ public sealed partial class Sheet
                 _spillValues.Remove((anchor.Row + r, anchor.Col + c));
             }
         _spillAnchors.Remove((anchor.Row, anchor.Col));
+        _contentVersion++;
     }
 
     /// <summary>Get the value at a cell address, returning BlankValue if no cell exists.</summary>

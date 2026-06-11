@@ -4,8 +4,35 @@ namespace FreeX.Core.Calc;
 
 public sealed partial class ViewportService
 {
-    private static CfEvaluationContext BuildConditionalFormatContext(Sheet sheet, Workbook workbook) =>
-        ViewportConditionalFormatEvaluator.BuildContext(sheet, workbook);
+    // Keyed by (SheetId, contentVersion, cfRuleVersion).
+    // A small bounded dictionary: we evict the oldest entry when the cache grows beyond MaxCachedSheets
+    // to prevent unbounded memory growth in multi-sheet workbooks. In practice a single host instance
+    // serves one active sheet at a time, so one entry is the common case.
+    private const int MaxCachedContexts = 8;
+
+    private readonly Dictionary<CfContextCacheKey, CfEvaluationContext> _cfContextCache = new(MaxCachedContexts);
+    private readonly Queue<CfContextCacheKey> _cfContextCacheOrder = new(MaxCachedContexts);
+
+    // Exposed internal so tests can verify cache hits/misses without reflection.
+    internal int CfContextBuildCount { get; private set; }
+
+    private CfEvaluationContext BuildConditionalFormatContext(Sheet sheet, Workbook workbook)
+    {
+        var key = new CfContextCacheKey(sheet.Id, sheet.ContentVersion, sheet.ConditionalFormats.Version);
+
+        if (_cfContextCache.TryGetValue(key, out var cached))
+            return cached;
+
+        var context = ViewportConditionalFormatEvaluator.BuildContext(sheet, workbook);
+        CfContextBuildCount++;
+
+        if (_cfContextCache.Count >= MaxCachedContexts && _cfContextCacheOrder.TryDequeue(out var oldest))
+            _cfContextCache.Remove(oldest);
+
+        _cfContextCache[key] = context;
+        _cfContextCacheOrder.Enqueue(key);
+        return context;
+    }
 
     private static CfStyleResult? EvaluateConditionalFormats(
         Sheet sheet,
@@ -32,3 +59,5 @@ public sealed partial class ViewportService
         CfEvaluationContext cfContext) =>
         ViewportConditionalFormatEvaluator.EvaluateDataBar(sheet, addr, value, workbook, cfContext);
 }
+
+internal readonly record struct CfContextCacheKey(SheetId SheetId, int ContentVersion, int CfRuleVersion);
