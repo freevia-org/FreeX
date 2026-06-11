@@ -81,7 +81,8 @@ public sealed partial class SpellCheckWorkflowPlannerTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options);");
-        source.Should().Contain("SpellCheckService.FindIssues(_workbook, _currentSheetId, customDictionary)");
+        source.Should().Contain("SpellCheckWorkflowPlanner.ScanWorksheet(");
+        source.Should().Contain("customDictionary,");
         source.Should().Contain("dialog.Result.Action == SpellCheckDialogAction.Add");
         source.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord(_options, customDictionary, issue.Word)");
         source.Should().Contain("_options.Save();");

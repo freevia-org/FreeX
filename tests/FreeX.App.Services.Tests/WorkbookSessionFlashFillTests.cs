@@ -30,6 +30,52 @@ public sealed class WorkbookSessionFlashFillTests
     }
 
     [Fact]
+    public void FlashFillSelectedRange_SourceColumnSelectionFillsAdjacentBlankCells()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        SeedFirstNameData(sheet, "John Smith", "John", "Jane Doe", "Bob Brown");
+        var selectedRange = new GridRange(Address(sheet, 1, 1), Address(sheet, 3, 1));
+        var session = CreateSession(workbook);
+        session.SelectRange(selectedRange);
+
+        var result = session.FlashFillSelectedRange();
+
+        result.Success.Should().BeTrue();
+        result.ErrorMessage.Should().BeNull();
+        result.AffectedCells.Should().Equal(Address(sheet, 2, 2), Address(sheet, 3, 2));
+        sheet.GetValue(2, 2).Should().Be(new TextValue("Jane"));
+        sheet.GetValue(3, 2).Should().Be(new TextValue("Bob"));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.SelectedRange.Should().Be(selectedRange);
+    }
+
+    [Fact]
+    public void FlashFillSelectedRange_SourceColumnSelectionFillsEmptyTextAdjacentCells()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        SeedFirstNameData(sheet, "John Smith", "John", "Jane Doe", "Bob Brown");
+        SetText(sheet, 2, 2, "");
+        SetText(sheet, 3, 2, "");
+        var selectedRange = new GridRange(Address(sheet, 1, 1), Address(sheet, 3, 1));
+        var session = CreateSession(workbook);
+        session.SelectRange(selectedRange);
+
+        var result = session.FlashFillSelectedRange();
+
+        result.Success.Should().BeTrue();
+        result.ErrorMessage.Should().BeNull();
+        result.AffectedCells.Should().Equal(Address(sheet, 2, 2), Address(sheet, 3, 2));
+        sheet.GetValue(2, 2).Should().Be(new TextValue("Jane"));
+        sheet.GetValue(3, 2).Should().Be(new TextValue("Bob"));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.SelectedRange.Should().Be(selectedRange);
+    }
+
+    [Fact]
     public void FlashFillSelectedRange_NoBlankCellsToFillReturnsNoMutation()
     {
         var workbook = CreateWorkbook();
@@ -52,6 +98,32 @@ public sealed class WorkbookSessionFlashFillTests
         session.IsDirty.Should().BeFalse();
         session.CanUndo.Should().BeFalse();
         session.ActiveCell.Should().Be(selected);
+        session.SelectedRange.Should().Be(selectedRange);
+    }
+
+    [Fact]
+    public void FlashFillSelectedRange_SourceColumnSelectionWithoutExamplesReturnsNoExamples()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        SetText(sheet, 1, 1, "John Smith");
+        SetText(sheet, 2, 1, "Jane Doe");
+        SetText(sheet, 3, 1, "Bob Brown");
+        var selectedRange = new GridRange(Address(sheet, 1, 1), Address(sheet, 3, 1));
+        var session = CreateSession(workbook);
+        session.SelectRange(selectedRange);
+
+        var result = session.FlashFillSelectedRange();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("No examples found");
+        result.ErrorMessage.Should().NotContain("adjacent");
+        result.AffectedCells.Should().BeEmpty();
+        sheet.GetValue(1, 2).Should().BeOfType<BlankValue>();
+        sheet.GetValue(2, 2).Should().BeOfType<BlankValue>();
+        sheet.GetValue(3, 2).Should().BeOfType<BlankValue>();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
         session.SelectedRange.Should().Be(selectedRange);
     }
 

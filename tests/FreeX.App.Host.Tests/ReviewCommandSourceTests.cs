@@ -76,7 +76,7 @@ public sealed class ReviewCommandSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
-        source.Should().Contain("SpellCheckWorkflowPlanner.FilterIssues(");
+        source.Should().Contain("SpellCheckWorkflowPlanner.ScanWorksheet(");
         source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(");
         source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementCommand(");
         source.Should().Contain("WorkbookStatisticsService.GetStatistics(_workbook)");

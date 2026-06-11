@@ -8,6 +8,36 @@ namespace FreeX.Core.Model.Tests;
 public sealed class SpellCheckServiceTests
 {
     [Fact]
+    public void FindIssues_DetectsObviousWorksheetMisspelling()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new TextValue("A mispelled worksheet heading."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+
+        issues.Should().ContainSingle().Which.Should().Be(new SpellingIssue(
+            address,
+            "mispelled",
+            "misspelled",
+            "A mispelled worksheet heading.",
+            2,
+            9));
+    }
+
+    [Fact]
+    public void FindIssues_ReturnsEmptyForCleanWorksheetText()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A clean worksheet heading."));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(42));
+
+        SpellCheckService.FindIssues(wb, sheet.Id).Should().BeEmpty();
+    }
+
+    [Fact]
     public void FindIssues_ReturnsKnownMisspellingsInSheetRowOrder()
     {
         var wb = new Workbook("test");

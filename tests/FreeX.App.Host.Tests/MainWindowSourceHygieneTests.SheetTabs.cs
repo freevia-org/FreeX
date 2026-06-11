@@ -527,6 +527,20 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void StatusForegroundHarness_PreparesLiveStatAndRangeValueReadback()
+    {
+        var foregroundSource = WorkspaceFileLocator.ReadAllText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundSource.Should().Contain("\"freex-status-live-stats-accessibility\"");
+        foregroundSource.Should().Contain("ResizeForStatusStatisticReadback(handle, processId, guard)");
+        foregroundSource.Should().Contain("NativeMethods.SetWindowPos(handle, NativeMethods.HWND_NOTOPMOST, x, y, width, height, NativeMethods.SWP_SHOWWINDOW)");
+        foregroundSource.Should().Contain("FindFirstSlider(handle, \"Zoom\")");
+        foregroundSource.Should().Contain("catch (Exception ex) when (ex is InvalidOperationException or ElementNotAvailableException or TimeoutException or COMException)");
+        foregroundSource.Should().Contain("\"uia-rangevalue-set-failed\"");
+        foregroundSource.Should().Contain("Last UIA candidate was");
+    }
+
+    [Fact]
     public void FocusedPivotFieldListTaskPane_TabTraversalIsNotHijackedByWorksheetMovement()
     {
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");

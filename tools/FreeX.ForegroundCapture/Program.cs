@@ -80,7 +80,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "excel-autofilter" => RunExcelAutoFilterScenario(),
             "excel-number-format" => RunExcelNumberFormatScenario(),
             "excel-borders" => RunExcelPopupScenario("excel-borders", PrepareExcelBlankWorkbook, "%hb", "Net UI Tool Window"),
-            "excel-cell-styles-gallery" => RunExcelPopupScenario("excel-cell-styles-gallery", PrepareExcelBlankWorkbook, "%hj", "Net UI Tool Window"),
+            "excel-cell-styles-gallery" => RunExcelCellStylesGalleryScenario(),
             "excel-context-menu" => RunExcelContextMenuScenario(),
             "excel-format-cells-dialog" => RunExcelFormatCellsDialogScenario(),
             "excel-format-cells-context-dialog" => RunExcelFormatCellsContextDialogScenario(),
@@ -303,6 +303,48 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
+    private CaptureResult RunExcelCellStylesGalleryScenario()
+    {
+        const string scenario = "excel-cell-styles-gallery";
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelBlankWorkbook(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-input");
+            }
+
+            if (!TryOpenExcelCellStylesGallery(hwnd))
+            {
+                SendKeys.SendWait("%hj");
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+
+            var popup = FindExcelRibbonGalleryPopup(pid.Value, hwnd.ToInt64(), "Cell Styles", options.PopupTimeout);
+            if (popup is null)
+            {
+                return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect foreground Excel Cell Styles gallery popup after UIA open or Alt,H,J fallback.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow(scenario, "excel", popup, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
     private CaptureResult RunExcelContextMenuScenario()
     {
         dynamic? excel = null;
@@ -362,13 +404,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             SendKeys.SendWait("%hoe");
             Thread.Sleep(options.AfterInputDelay);
 
-            var dialog = WindowFinder.FindProcessWindow(
-                pid.Value,
-                window => window.Handle != hwnd.ToInt64() &&
-                    window.Title.Contains("Format Cells", StringComparison.OrdinalIgnoreCase) &&
-                    window.Bounds.Width > 350 &&
-                    window.Bounds.Height > 250,
-                options.PopupTimeout);
+            var dialog = FindExcelFormatCellsDialog(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
                 return CaptureResult.Blocked("excel-format-cells-dialog", "dialog-not-found", "Did not detect Excel Format Cells dialog after Alt,H,O,E.", options.OutputRoot, "excel", guard);
@@ -419,13 +455,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             }
 
             Thread.Sleep(options.AfterInputDelay);
-            var dialog = WindowFinder.FindProcessWindow(
-                pid.Value,
-                window => window.Handle != hwnd.ToInt64() &&
-                    window.Title.Contains("Format Cells", StringComparison.OrdinalIgnoreCase) &&
-                    window.Bounds.Width > 350 &&
-                    window.Bounds.Height > 250,
-                options.PopupTimeout);
+            var dialog = FindExcelFormatCellsDialog(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
                 return CaptureResult.Blocked(scenario, "dialog-not-found", "Invoked the Excel worksheet context-menu Format Cells route, but did not detect a Format Cells dialog.", options.OutputRoot, "excel", guard);
@@ -629,7 +659,14 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             if (dialog.ClassName.Equals("NUIDialog", StringComparison.OrdinalIgnoreCase))
             {
-                return CaptureResult.Blocked("excel-save-as-dialog", "nuidialog-not-capturable", "Detected an Office NUIDialog after F12, but it is not a capturable native Save As file dialog in this Office state.", options.OutputRoot, "excel", guard);
+                var commonDialog = TryContinueExcelNuiSaveAsToCommonDialog(hwnd, pid.Value, dialog);
+                if (commonDialog is null)
+                {
+                    return CaptureResult.Blocked("excel-save-as-dialog", "nuidialog-common-save-as-continuation-not-found", "Detected an Office NUIDialog after F12, but could not continue it to a capturable native '#32770' Save As file dialog in this Office state.", options.OutputRoot, "excel", guard);
+                }
+
+                Thread.Sleep(options.AfterDialogDetectedDelay);
+                return CaptureWindow("excel-save-as-dialog", "excel", commonDialog, guard, "complete", "Continued the Office NUIDialog Save As surface to the native common '#32770' Save As dialog.");
             }
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
@@ -639,6 +676,118 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         {
             CloseExcel(excel, workbook);
             KillProcess(pid);
+        }
+    }
+
+    private WindowInfo? TryContinueExcelNuiSaveAsToCommonDialog(IntPtr excelHwnd, int processId, WindowInfo nuiDialog)
+    {
+        var nuiHandle = new IntPtr(nuiDialog.Handle);
+        var guard = ForegroundGuard.FocusAndVerify(nuiHandle, processId, "Save", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return null;
+        }
+
+        foreach (var action in FindExcelNuiSaveAsContinuationElements(nuiHandle))
+        {
+            if (!TryInvokeOrClickAutomationElement(action))
+            {
+                continue;
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+            var commonDialog = WindowFinder.FindProcessWindow(
+                processId,
+                candidate => candidate.Handle != excelHwnd.ToInt64() &&
+                    candidate.Handle != nuiDialog.Handle &&
+                    candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Bounds.Width > 400 &&
+                    candidate.Bounds.Height > 250,
+                TimeSpan.FromMilliseconds(Math.Max(1200, options.PopupTimeout.TotalMilliseconds / 2.0)));
+            commonDialog ??= WindowFinder.FindForegroundWindow(
+                candidate => candidate.ProcessId == processId &&
+                    candidate.Handle != excelHwnd.ToInt64() &&
+                    candidate.Handle != nuiDialog.Handle &&
+                    candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Bounds.Width > 400 &&
+                    candidate.Bounds.Height > 250,
+                TimeSpan.FromMilliseconds(1200));
+            if (commonDialog is not null)
+            {
+                return commonDialog;
+            }
+
+            guard = ForegroundGuard.FocusAndVerify(nuiHandle, processId, "Save", TimeSpan.FromMilliseconds(1200));
+            if (!guard.Success)
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<AutomationElement> FindExcelNuiSaveAsContinuationElements(IntPtr nuiHandle)
+    {
+        static int Rank(string name)
+        {
+            if (name.Equals("Browse", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("Browse...", StringComparison.OrdinalIgnoreCase))
+            {
+                return 0;
+            }
+
+            if (name.Contains("Browse", StringComparison.OrdinalIgnoreCase))
+            {
+                return 1;
+            }
+
+            if (name.Contains("More options", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("More Options", StringComparison.OrdinalIgnoreCase))
+            {
+                return 2;
+            }
+
+            if (name.Contains("Save As", StringComparison.OrdinalIgnoreCase))
+            {
+                return 3;
+            }
+
+            if (name.Contains("This PC", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Computer", StringComparison.OrdinalIgnoreCase))
+            {
+                return 4;
+            }
+
+            return 100;
+        }
+
+        try
+        {
+            var root = AutomationElement.FromHandle(nuiHandle);
+            var controlTypes = new[] { ControlType.Button, ControlType.Hyperlink, ControlType.MenuItem, ControlType.ListItem };
+            return controlTypes
+                .SelectMany(controlType => root.FindAll(
+                        TreeScope.Descendants,
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, controlType))
+                    .Cast<AutomationElement>())
+                .Where(IsVisibleElement)
+                .Select(element => new { Element = element, Name = GetElementName(element) })
+                .Where(candidate => Rank(candidate.Name) < 100)
+                .OrderBy(candidate => Rank(candidate.Name))
+                .ThenByDescending(candidate => GetElementArea(candidate.Element))
+                .Select(candidate => candidate.Element)
+                .ToArray();
+        }
+        catch (COMException)
+        {
+            return [];
+        }
+        catch (ElementNotAvailableException)
+        {
+            return [];
         }
     }
 
@@ -708,18 +857,27 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard(scenario, guard, "before-sheet-tab-overflow-activate");
             }
 
-            var rightNav = FindSheetNavButton(hwnd, right: true);
-            if (rightNav is null)
+            var rightNavCandidates = FindSheetNavButtonCandidates(hwnd, right: true);
+            if (rightNavCandidates.Count == 0)
             {
                 return CaptureResult.Blocked(scenario, "uia-target-not-found", "Could not find Excel's visible sheet-tab scroll/navigation button.", options.OutputRoot, "excel", guard);
             }
 
-            if (!TryRightClickAutomationElement(rightNav))
+            WindowInfo? dialog = null;
+            foreach (var rightNav in rightNavCandidates)
             {
-                return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", "Excel sheet-tab navigation button bounds were not usable for a physical right-click.", options.OutputRoot, "excel", guard);
+                if (!TryRightClickAutomationElement(rightNav))
+                {
+                    continue;
+                }
+
+                dialog = FindActivateDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+                if (dialog is not null)
+                {
+                    break;
+                }
             }
 
-            var dialog = FindActivateDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
                 return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's Activate dialog after right-clicking the sheet-tab navigation button.", options.OutputRoot, "excel", guard);
@@ -1300,16 +1458,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             TypeDialogPath(dialog.Handle, xpsPath);
 
-            var optionsDialog = WindowFinder.FindProcessWindow(
-                process.Id,
-                candidate => candidate.Handle != dialog.Handle &&
-                    candidate.Title.Contains("PDF/XPS options", StringComparison.OrdinalIgnoreCase),
-                options.PopupTimeout);
-            optionsDialog ??= WindowFinder.FindForegroundWindow(
-                candidate => candidate.ProcessId == process.Id &&
-                    candidate.Handle != dialog.Handle &&
-                    candidate.Title.Contains("PDF/XPS options", StringComparison.OrdinalIgnoreCase),
-                TimeSpan.FromMilliseconds(1500));
+            var optionsDialog = FindFreeXExportOptionsDialog(process.Id, dialog.Handle, options.PopupTimeout);
             if (optionsDialog is null)
             {
                 return CaptureResult.Blocked("freex-export-xps-accept", "options-dialog-not-found", "Accepted an explicit .xps path but did not detect the PDF/XPS options dialog.", options.OutputRoot, "freex", guard);
@@ -1427,26 +1576,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked("freex-native-print-dialog", "print-button-not-found", "Print Preview opened, but the Print button automation target was not visible.", options.OutputRoot, "freex", guard);
             }
 
-            blocked = InvokeOrClickElement("freex-native-print-dialog", process.Id, new IntPtr(preview.Handle), printButton, "freex");
+            blocked = ClickPrintPreviewPrintButton("freex-native-print-dialog", process.Id, preview, printButton);
             if (blocked is not null)
             {
                 return blocked;
             }
 
-            var printDialog = WindowFinder.FindProcessWindow(
-                process.Id,
-                candidate => candidate.Handle != preview.Handle &&
-                    candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
-                    candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase),
-                options.PopupTimeout);
-            printDialog ??= WindowFinder.FindForegroundWindow(
-                candidate => candidate.Handle != preview.Handle &&
-                    candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
-                    (candidate.ProcessId == process.Id ||
-                     candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase)) &&
-                    candidate.Bounds.Width >= 300 &&
-                    candidate.Bounds.Height >= 200,
-                TimeSpan.FromMilliseconds(1200));
+            var printDialog = FindNativePrintDialog(process.Id, preview.Handle, options.PopupTimeout);
             if (printDialog is null)
             {
                 return CaptureResult.Blocked("freex-native-print-dialog", "native-print-dialog-not-found", "Clicked Print Preview's Print button but did not detect a native Windows Print dialog.", options.OutputRoot, "freex", guard);
@@ -1837,6 +1973,81 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         return null;
+    }
+
+    private static WindowInfo? FindFreeXExportOptionsDialog(int processId, long saveDialogHandle, TimeSpan timeout)
+    {
+        return WindowFinder.FindProcessWindow(
+            processId,
+            candidate => candidate.Handle != saveDialogHandle &&
+                candidate.Bounds.Width >= 300 &&
+                candidate.Bounds.Height >= 250 &&
+                (candidate.Title.Contains("Export Options", StringComparison.OrdinalIgnoreCase) ||
+                 candidate.Title.Contains("PDF/XPS options", StringComparison.OrdinalIgnoreCase) ||
+                 candidate.Title.Contains("PDF/XPS", StringComparison.OrdinalIgnoreCase) ||
+                 candidate.Title.Contains("Publish", StringComparison.OrdinalIgnoreCase)),
+            timeout);
+    }
+
+    private CaptureResult? ClickPrintPreviewPrintButton(string scenario, int processId, WindowInfo preview, AutomationElement printButton)
+    {
+        var bounds = printButton.Current.BoundingRectangle;
+        if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+        {
+            return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", $"Print Preview Print button bounds were not usable: {bounds}.", options.OutputRoot, "freex");
+        }
+
+        var previewHandle = new IntPtr(preview.Handle);
+        var guard = ForegroundGuard.FocusAndVerify(previewHandle, processId, "Print Preview", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return CaptureResult.Blocked(scenario, "foreground-guard-failed", "Foreground guard failed before clicking Print Preview's Print button.", options.OutputRoot, "freex", guard);
+        }
+
+        NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
+        Thread.Sleep(100);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(options.AfterInputDelay);
+        return null;
+    }
+
+    private static WindowInfo? FindNativePrintDialog(int processId, long previewHandle, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var foreground = WindowFinder.GetWindowInfo(NativeMethods.GetForegroundWindow());
+            if (IsNativePrintDialog(foreground, previewHandle, allowAnyProcess: true))
+            {
+                return foreground;
+            }
+
+            var processDialog = WindowFinder.FindProcessWindow(
+                processId,
+                candidate => IsNativePrintDialog(candidate, previewHandle, allowAnyProcess: false),
+                TimeSpan.FromMilliseconds(150));
+            if (processDialog is not null)
+            {
+                return processDialog;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        return null;
+    }
+
+    private static bool IsNativePrintDialog(WindowInfo? candidate, long previewHandle, bool allowAnyProcess)
+    {
+        return candidate is not null &&
+            candidate.Handle != previewHandle &&
+            candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+            candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase) &&
+            candidate.Bounds.Width >= 300 &&
+            candidate.Bounds.Height >= 200 &&
+            (allowAnyProcess || candidate.ProcessId != 0);
     }
 
     private CaptureResult? InvokeFreeXBackstageButton(
@@ -2240,6 +2451,51 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
+    private static bool TryInvokeOrClickAutomationElement(AutomationElement element)
+    {
+        try
+        {
+            if (element.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
+                invokePatternObject is InvokePattern invoke)
+            {
+                invoke.Invoke();
+                return true;
+            }
+
+            if (element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out var selectionPatternObject) &&
+                selectionPatternObject is SelectionItemPattern selection)
+            {
+                selection.Select();
+                return true;
+            }
+
+            var bounds = element.Current.BoundingRectangle;
+            if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+            {
+                return false;
+            }
+
+            NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
+            Thread.Sleep(100);
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(60);
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            return true;
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     private CaptureResult RunFreeXMainWindowPointerScenario(
         string scenario,
         Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> action,
@@ -2427,18 +2683,6 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SetZoomSliderMinMaxRangeValues()
         => (handle, processId, _, guard) =>
         {
-            var slider = FindFirstSlider(handle, "Zoom");
-            if (slider is null)
-            {
-                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the status Zoom slider.", options.OutputRoot, "freex", guard);
-            }
-
-            if (!slider.TryGetCurrentPattern(RangeValuePattern.Pattern, out var patternObject) ||
-                patternObject is not RangeValuePattern rangePattern)
-            {
-                return CaptureResult.Blocked(options.Scenario, "uia-rangevalue-unavailable", "Status Zoom slider did not expose RangeValuePattern.", options.OutputRoot, "freex", guard);
-            }
-
             var validations = new List<string>();
             foreach (var (value, label) in new[] { (0d, "minimum"), (200d, "maximum") })
             {
@@ -2448,7 +2692,27 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     return BlockedWithGuard(options.Scenario, guard, $"before-uia-rangevalue-set-{label}");
                 }
 
-                rangePattern.SetValue(value);
+                var slider = FindFirstSlider(handle, "Zoom");
+                if (slider is null)
+                {
+                    return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the status Zoom slider.", options.OutputRoot, "freex", guard);
+                }
+
+                if (!slider.TryGetCurrentPattern(RangeValuePattern.Pattern, out var patternObject) ||
+                    patternObject is not RangeValuePattern rangePattern)
+                {
+                    return CaptureResult.Blocked(options.Scenario, "uia-rangevalue-unavailable", "Status Zoom slider did not expose RangeValuePattern.", options.OutputRoot, "freex", guard);
+                }
+
+                try
+                {
+                    rangePattern.SetValue(value);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or ElementNotAvailableException or TimeoutException or COMException)
+                {
+                    return CaptureResult.Blocked(options.Scenario, "uia-rangevalue-set-failed", $"RangeValue.SetValue({value:0.###}) for the {label} bound failed: {ex.GetType().Name}: {ex.Message}", options.OutputRoot, "freex", guard);
+                }
+
                 Thread.Sleep(options.AfterInputDelay);
 
                 var blocked = ValidateZoomSliderValue(handle, value, $"native UIA RangeValue.SetValue({value:0.###}) {label}");
@@ -2620,6 +2884,12 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> StatusLiveStatsAccessibility()
         => (handle, processId, _, guard) =>
         {
+            var resizeBlocked = ResizeForStatusStatisticReadback(handle, processId, guard);
+            if (resizeBlocked is not null)
+            {
+                return resizeBlocked;
+            }
+
             if (!TryGetCellBounds(handle, "Cell_A1", out var a1Bounds) ||
                 !TryGetCellBounds(handle, "Cell_A4", out var a4Bounds))
             {
@@ -2660,7 +2930,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             {
                 if (!TryGetAutomationElementNameOrVisibleText(handle, automationId, expectedName, out var actualName))
                 {
-                    return CaptureResult.Blocked(options.Scenario, "status-stat-validation-unavailable", $"Could not read a visible UIA name/text value for '{automationId}'.", options.OutputRoot, "freex", guard);
+                    var suffix = string.IsNullOrWhiteSpace(actualName)
+                        ? string.Empty
+                        : $" Last UIA candidate was '{actualName}'.";
+                    return CaptureResult.Blocked(options.Scenario, "status-stat-validation-unavailable", $"Could not read a visible UIA name/text value for '{automationId}'.{suffix}", options.OutputRoot, "freex", guard);
                 }
 
                 if (!string.Equals(actualName, expectedName, StringComparison.Ordinal))
@@ -2674,6 +2947,23 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             _lastResultValidation = "Foreground status stats after physical paste/select with min/max enabled: " + string.Join("; ", validations) + ".";
             return null;
         };
+
+    private CaptureResult? ResizeForStatusStatisticReadback(IntPtr handle, int processId, ForegroundGuardResult guard)
+    {
+        var workingArea = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1600, 900);
+        var width = Math.Min(1600, Math.Max(1200, workingArea.Width));
+        var height = Math.Min(900, Math.Max(720, workingArea.Height));
+        var x = workingArea.Left + Math.Max(0, (workingArea.Width - width) / 2);
+        var y = workingArea.Top + Math.Max(0, (workingArea.Height - height) / 2);
+
+        NativeMethods.SetWindowPos(handle, NativeMethods.HWND_NOTOPMOST, x, y, width, height, NativeMethods.SWP_SHOWWINDOW);
+        Thread.Sleep(options.AfterInputDelay);
+
+        guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        return guard.Success
+            ? null
+            : BlockedWithGuard(options.Scenario, guard, "after-status-stat-window-resize");
+    }
 
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> RightClickNamedElement(string name, ControlType controlType)
         => (handle, processId, _, guard) =>
@@ -2808,10 +3098,16 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve A1 bounds before AutoFit.", options.OutputRoot, "freex", guard);
             }
 
-            var blocked = PasteCellText(handle, processId, originalA1, "A very long foreground AutoFit validation value for S4");
+            const string autoFitSeedText = "A very long foreground AutoFit validation value for S4";
+            var blocked = PasteCellText(handle, processId, originalA1, autoFitSeedText);
             if (blocked is not null)
             {
                 return blocked;
+            }
+
+            if (!WaitForCellValue(handle, "Cell_A1", autoFitSeedText, TimeSpan.FromSeconds(2), out var observedA1Value))
+            {
+                return CaptureResult.Blocked(options.Scenario, "cell-paste-validation-failed", $"Expected A1 to contain the AutoFit seed text before double-click; observed '{observedA1Value}'.", options.OutputRoot, "freex", guard);
             }
 
             if (!TryGetCellBounds(handle, "Cell_A1", out originalA1))
@@ -2823,7 +3119,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 options.Scenario,
                 processId,
                 handle,
-                (int)originalA1.Right,
+                (int)(originalA1.Right - 1),
                 (int)(originalA1.Top - 9));
             if (blocked is not null)
             {
@@ -3274,21 +3570,36 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return blocked;
             }
 
-            var rightNav = FindSheetNavButton(handle, right: true);
-            if (rightNav is null)
+            var rightNavCandidates = FindSheetNavButtonCandidates(handle, right: true);
+            if (rightNavCandidates.Count == 0)
             {
                 return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the visible sheet-tab Scroll Tabs Right button after seeding overflow sheets.", options.OutputRoot, "freex");
             }
 
-            blocked = GuardedClickElement(options.Scenario, processId, handle, rightNav, MouseButtonKind.Right);
-            if (blocked is not null)
+            WindowInfo? dialog = null;
+            CaptureResult? lastBlocked = null;
+            foreach (var rightNav in rightNavCandidates)
             {
-                return blocked;
+                lastBlocked = GuardedClickElement(options.Scenario, processId, handle, rightNav, MouseButtonKind.Right);
+                if (lastBlocked is not null)
+                {
+                    continue;
+                }
+
+                dialog = FindActivateDialogWindow(processId, handle.ToInt64(), options.PopupTimeout);
+                if (dialog is not null)
+                {
+                    break;
+                }
             }
 
-            var dialog = FindActivateDialogWindow(processId, handle.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
+                if (lastBlocked is not null)
+                {
+                    return lastBlocked;
+                }
+
                 return CaptureResult.Blocked(options.Scenario, "dialog-not-found", "Did not detect Activate Sheet dialog after right-clicking the sheet-tab overflow navigation button.", options.OutputRoot, "freex");
             }
 
@@ -3670,6 +3981,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             .FirstOrDefault();
 
     private static AutomationElement? FindSheetNavButton(IntPtr handle, bool right)
+        => FindSheetNavButtonCandidates(handle, right).FirstOrDefault();
+
+    private static IReadOnlyList<AutomationElement> FindSheetNavButtonCandidates(IntPtr handle, bool right)
     {
         var tabBounds = GetVisibleSheetTabElements(handle)
             .Select(element => element.Current.BoundingRectangle)
@@ -3677,7 +3991,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             .ToList();
         if (tabBounds.Count == 0)
         {
-            return null;
+            return [];
         }
 
         var tabCenterY = tabBounds.Average(bounds => bounds.Top + bounds.Height / 2.0);
@@ -3701,7 +4015,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
         if (buttons.Count == 0)
         {
-            return null;
+            return [];
         }
 
         if (right)
@@ -3711,7 +4025,12 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 .OrderByDescending(button => button.Current.BoundingRectangle.Right)
                 .ToList();
             if (beforeTabs.Count >= 2)
-                return beforeTabs[0];
+            {
+                return beforeTabs
+                    .Concat(buttons.Except(beforeTabs))
+                    .Distinct()
+                    .ToList();
+            }
 
             return buttons
                 .OrderBy(button =>
@@ -3719,7 +4038,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     var bounds = button.Current.BoundingRectangle;
                     return Math.Abs((bounds.Left + bounds.Width / 2.0) - tabRight);
                 })
-                .FirstOrDefault();
+                .ToList();
         }
 
         return buttons
@@ -3728,17 +4047,60 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 var bounds = button.Current.BoundingRectangle;
                 return Math.Abs((bounds.Left + bounds.Width / 2.0) - tabLeft);
             })
-            .FirstOrDefault();
+            .ToList();
     }
 
     private static WindowInfo? FindActivateDialogWindow(int processId, long ownerHandle, TimeSpan timeout)
         => WindowFinder.FindProcessWindow(
             processId,
-            window => window.Handle != ownerHandle &&
-                window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase) &&
-                window.Bounds.Width >= 120 &&
-                window.Bounds.Height >= 90,
+            window => IsActivateDialogWindow(window, ownerHandle),
             timeout);
+
+    private static bool IsActivateDialogWindow(WindowInfo window, long ownerHandle)
+    {
+        if (window.Handle == ownerHandle ||
+            window.Bounds.Width < 120 ||
+            window.Bounds.Height < 90)
+        {
+            return false;
+        }
+
+        if (window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return WindowContainsSheetActivationList(window);
+    }
+
+    private static bool WindowContainsSheetActivationList(WindowInfo window)
+    {
+        try
+        {
+            var root = AutomationElement.FromHandle(new IntPtr(window.Handle));
+            var descendants = root
+                .FindAll(TreeScope.Descendants, Condition.TrueCondition)
+                .Cast<AutomationElement>()
+                .ToList();
+            var hasSheetListEntry = descendants.Any(element =>
+                Equals(element.Current.ControlType, ControlType.ListItem) &&
+                IsDefaultSheetName(element.Current.Name));
+            var hasConfirmationButton = descendants.Any(element =>
+                Equals(element.Current.ControlType, ControlType.Button) &&
+                (element.Current.Name.Equals("OK", StringComparison.OrdinalIgnoreCase) ||
+                 element.Current.Name.Equals("Cancel", StringComparison.OrdinalIgnoreCase)));
+
+            return hasSheetListEntry && hasConfirmationButton;
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
+    }
 
     private static List<string> GetVisibleSheetTabOrder(IntPtr handle)
     {
@@ -3908,6 +4270,25 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return true;
     }
 
+    private static bool WaitForCellValue(IntPtr handle, string cellId, string expectedValue, TimeSpan timeout, out string observedValue)
+    {
+        observedValue = string.Empty;
+        var deadline = DateTime.UtcNow + timeout;
+        do
+        {
+            if (TryGetCellValue(handle, cellId, out observedValue) &&
+                observedValue.Equals(expectedValue, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            Thread.Sleep(100);
+        }
+        while (DateTime.UtcNow < deadline);
+
+        return false;
+    }
+
     private static bool TryGetSelectedCellIds(IntPtr handle, out HashSet<string> selectedIds)
     {
         selectedIds = [];
@@ -4013,6 +4394,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private static bool TryGetAutomationElementNameOrVisibleText(IntPtr handle, string automationId, string expectedName, out string name)
     {
+        var lastCandidate = string.Empty;
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
         do
         {
@@ -4030,6 +4412,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     if (!string.IsNullOrWhiteSpace(candidate))
                     {
                         name = candidate;
+                        lastCandidate = candidate;
                     }
                 }
             }
@@ -4051,7 +4434,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
         while (DateTime.UtcNow < deadline);
 
-        name = string.Empty;
+        name = lastCandidate;
         return false;
     }
 
@@ -4072,6 +4455,22 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             yield return textPattern.DocumentRange.GetText(256).TrimEnd('\r', '\n');
         }
 
+    }
+
+    private static string GetElementName(AutomationElement element)
+    {
+        try
+        {
+            return element.Current.Name ?? string.Empty;
+        }
+        catch (COMException)
+        {
+            return string.Empty;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return string.Empty;
+        }
     }
 
     private static int CenterX(System.Windows.Rect bounds) => (int)(bounds.Left + bounds.Width / 2.0);
@@ -4263,26 +4662,81 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     }
 
     private static WindowInfo? FindExcelDataValidationListPopup(int processId, long ownerHandle, TimeSpan timeout)
+        => WindowFinder.FindProcessWindow(
+            processId,
+            window => IsExcelDataValidationListPopupWindow(window, ownerHandle),
+            timeout);
+
+    private static bool IsExcelDataValidationListPopupWindow(WindowInfo window, long ownerHandle)
     {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
+        return window.Handle != ownerHandle &&
+               !window.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase) &&
+               !window.ClassName.Equals("NUIDialog", StringComparison.OrdinalIgnoreCase) &&
+               window.Bounds.Width is >= 70 and <= 450 &&
+               window.Bounds.Height is >= 40 and <= 500;
+    }
+
+    private static WindowInfo? FindExcelFormatCellsDialog(int processId, long ownerHandle, TimeSpan timeout)
+        => WindowFinder.FindProcessWindow(
+            processId,
+            window => window.Handle != ownerHandle &&
+                window.Bounds.Width > 350 &&
+                window.Bounds.Height > 250 &&
+                (window.Title.Contains("Format Cells", StringComparison.OrdinalIgnoreCase) ||
+                 WindowHasUiaText(window.Handle, "Format Cells")),
+            timeout);
+
+    private static WindowInfo? FindExcelRibbonGalleryPopup(int processId, long ownerHandle, string galleryName, TimeSpan timeout)
+        => WindowFinder.FindProcessWindow(
+            processId,
+            window => window.Handle != ownerHandle &&
+                !window.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase) &&
+                !window.ClassName.Equals("NUIDialog", StringComparison.OrdinalIgnoreCase) &&
+                window.Bounds.Width >= 120 &&
+                window.Bounds.Height >= 80 &&
+                (window.ClassName.Equals("Net UI Tool Window", StringComparison.OrdinalIgnoreCase) ||
+                 WindowHasUiaText(window.Handle, galleryName)),
+            timeout);
+
+    private static bool WindowHasUiaText(long handle, string text)
+    {
+        try
         {
-            var foreground = WindowFinder.GetWindowInfo(NativeMethods.GetForegroundWindow());
-            if (foreground is not null &&
-                foreground.ProcessId == processId &&
-                foreground.Handle != ownerHandle &&
-                !foreground.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase) &&
-                !foreground.ClassName.Equals("NUIDialog", StringComparison.OrdinalIgnoreCase) &&
-                foreground.Bounds.Width is >= 70 and <= 450 &&
-                foreground.Bounds.Height is >= 40 and <= 500)
+            var normalizedText = NormalizeMenuSearchText(text);
+            var root = AutomationElement.FromHandle(new IntPtr(handle));
+            if ((root.Current.Name ?? string.Empty).Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                (root.Current.AutomationId ?? string.Empty).Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                NormalizeMenuSearchText(root.Current.Name).Contains(normalizedText, StringComparison.OrdinalIgnoreCase) ||
+                NormalizeMenuSearchText(root.Current.AutomationId).Contains(normalizedText, StringComparison.OrdinalIgnoreCase))
             {
-                return foreground;
+                return true;
             }
 
-            Thread.Sleep(150);
+            var descendants = root.FindAll(TreeScope.Descendants, Condition.TrueCondition);
+            foreach (AutomationElement descendant in descendants)
+            {
+                var name = descendant.Current.Name ?? string.Empty;
+                var automationId = descendant.Current.AutomationId ?? string.Empty;
+                if (name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                    automationId.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                    NormalizeMenuSearchText(name).Contains(normalizedText, StringComparison.OrdinalIgnoreCase) ||
+                    NormalizeMenuSearchText(automationId).Contains(normalizedText, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (COMException)
+        {
+        }
+        catch (ElementNotAvailableException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
         }
 
-        return null;
+        return false;
     }
 
     private static void RightClickScreenPoint(int x, int y)
@@ -4523,6 +4977,82 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
         expandCollapse.Expand();
         return true;
+    }
+
+    private static bool TryOpenExcelCellStylesGallery(IntPtr excelWindowHandle)
+    {
+        try
+        {
+            var root = AutomationElement.FromHandle(excelWindowHandle);
+            var candidates = root.FindAll(TreeScope.Descendants, Condition.TrueCondition)
+                .Cast<AutomationElement>()
+                .Where(IsVisibleElement)
+                .Where(element => ElementTextContains(element, "Cell Styles"))
+                .OrderBy(element => element.Current.BoundingRectangle.Top)
+                .ThenByDescending(element => element.Current.BoundingRectangle.Width * element.Current.BoundingRectangle.Height)
+                .ToArray();
+
+            foreach (var candidate in candidates)
+            {
+                if (candidate.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out var expandPatternObject) &&
+                    expandPatternObject is ExpandCollapsePattern expandPattern)
+                {
+                    expandPattern.Expand();
+                    return true;
+                }
+
+                if (candidate.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
+                    invokePatternObject is InvokePattern invokePattern)
+                {
+                    invokePattern.Invoke();
+                    return true;
+                }
+
+                var bounds = candidate.Current.BoundingRectangle;
+                if (!bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0)
+                {
+                    NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
+                    Thread.Sleep(100);
+                    NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                    Thread.Sleep(60);
+                    NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+                    return true;
+                }
+            }
+        }
+        catch (COMException)
+        {
+        }
+        catch (ElementNotAvailableException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        return false;
+    }
+
+    private static bool ElementTextContains(AutomationElement element, string text)
+    {
+        try
+        {
+            var name = element.Current.Name ?? string.Empty;
+            var automationId = element.Current.AutomationId ?? string.Empty;
+            var normalizedText = NormalizeMenuSearchText(text);
+            return name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                   automationId.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                   NormalizeMenuSearchText(name).Contains(normalizedText, StringComparison.OrdinalIgnoreCase) ||
+                   NormalizeMenuSearchText(automationId).Contains(normalizedText, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
     }
 
     private static void CloseExcel(dynamic? excel, dynamic? workbook)
