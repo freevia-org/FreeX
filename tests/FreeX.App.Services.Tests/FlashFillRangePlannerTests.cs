@@ -60,6 +60,67 @@ public sealed class FlashFillRangePlannerTests
     }
 
     [Fact]
+    public void Plan_SourceColumnSelectionWithAdjacentExample_UsesAdjacentBlankFillColumn()
+    {
+        var sheet = CreateSheet();
+        SetText(sheet, 1, 1, "John Smith");
+        SetText(sheet, 1, 2, "John");
+        SetText(sheet, 2, 1, "Jane Doe");
+        SetText(sheet, 3, 1, "Bob Brown");
+
+        var plan = FlashFillRangePlanner.Plan(sheet, Range(sheet, 1, 1, 3, 1));
+
+        plan.Should().Be(new FlashFillCommandPlan(
+            FillColumn: 2,
+            SourceColumn: 1,
+            StartRow: 1,
+            EndRow: 3));
+        FlashFillRangePlanner.HasExamples(sheet, plan).Should().BeTrue();
+        FlashFillRangePlanner.HasFillTargets(sheet, plan).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Plan_SourceColumnSelectionWithAdjacentExample_TreatsEmptyTextTargetsAsBlank()
+    {
+        var sheet = CreateSheet();
+        SetText(sheet, 1, 1, "John Smith");
+        SetText(sheet, 1, 2, "John");
+        SetText(sheet, 2, 1, "Jane Doe");
+        SetText(sheet, 2, 2, "");
+        SetText(sheet, 3, 1, "Bob Brown");
+        SetText(sheet, 3, 2, "");
+
+        var plan = FlashFillRangePlanner.Plan(sheet, Range(sheet, 1, 1, 3, 1));
+
+        plan.Should().Be(new FlashFillCommandPlan(
+            FillColumn: 2,
+            SourceColumn: 1,
+            StartRow: 1,
+            EndRow: 3));
+        FlashFillRangePlanner.HasExamples(sheet, plan).Should().BeTrue();
+        FlashFillRangePlanner.HasFillTargets(sheet, plan).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Plan_SourceColumnSelectionWithBlankAdjacentColumn_UsesAdjacentTargetForNoExampleValidation()
+    {
+        var sheet = CreateSheet();
+        SetText(sheet, 1, 1, "John Smith");
+        SetText(sheet, 2, 1, "Jane Doe");
+        SetText(sheet, 3, 1, "Bob Brown");
+
+        var plan = FlashFillRangePlanner.Plan(sheet, Range(sheet, 1, 1, 3, 1));
+
+        plan.Should().Be(new FlashFillCommandPlan(
+            FillColumn: 2,
+            SourceColumn: 1,
+            StartRow: 1,
+            EndRow: 3));
+        FlashFillRangePlanner.HasExamples(sheet, plan).Should().BeFalse();
+        FlashFillRangePlanner.HasFillTargets(sheet, plan).Should().BeTrue();
+    }
+
+    [Fact]
     public void Plan_SingleCellBelowSeparatedExamples_OnlyIncludesContiguousExampleRows()
     {
         var sheet = CreateSheet();
