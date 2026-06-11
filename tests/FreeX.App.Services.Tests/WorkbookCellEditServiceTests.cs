@@ -81,6 +81,21 @@ public sealed class WorkbookCellEditServiceTests
         sheet.GetCell(a1).Should().BeNull();
     }
 
+    [Fact]
+    public void CommitCellText_AllowsLockedCellInsideAllowedEditRangeOnProtectedSheet()
+    {
+        var (workbook, sheet, commandBus, service, _) = CreateEditService();
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        sheet.AllowEditRanges.Add(new GridRange(b2, b2));
+        sheet.IsProtected = true;
+
+        var result = service.CommitCellText(workbook, sheet.Id, b2, "allowed");
+
+        result.Success.Should().BeTrue();
+        commandBus.CanUndo(workbook.Id).Should().BeTrue();
+        sheet.GetCell(b2)!.Value.Should().Be(new TextValue("allowed"));
+    }
+
     private static (
         Workbook Workbook,
         Sheet Sheet,

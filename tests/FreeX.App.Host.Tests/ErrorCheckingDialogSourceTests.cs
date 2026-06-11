@@ -39,8 +39,25 @@ public sealed class ErrorCheckingDialogSourceTests
         dialogSource.Should().Contain("Action? openOptions");
         dialogSource.Should().Contain("Content = UiText.Get(\"ErrorChecking_OptionsButton\")");
         dialogSource.Should().Contain("_openOptions?.Invoke()");
-        formulaSource.Should().Contain("ShowOptionsDialog");
-        backstageSource.Should().Contain("private void ShowOptionsDialog()");
+        formulaSource.Should().Contain("ShowOptionsDialog(OptionsDialogInitialSection.FormulaErrorChecking)");
+        backstageSource.Should().Contain("private void ShowOptionsDialog(OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General)");
+        backstageSource.Should().Contain("new OptionsDialog(_options, _workbook.DisabledFormulaErrorCodes, initialSection)");
+        backstageSource.Should().Contain("private void ErrorCheckingOptionsBtn_Click(object sender, RoutedEventArgs e)");
+    }
+
+    [Fact]
+    public void ErrorCheckingOptionsCommand_FocusesFormulaErrorCheckingOptions()
+    {
+        var xamlSource = LocalizedXamlTestSupport.ReadMainWindowXaml();
+        var optionsSource = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
+
+        xamlSource.Should().Contain("Click=\"ErrorCheckingOptionsBtn_Click\"");
+        xamlSource.Should().NotContain("MainWindow_Header_ErrorCheckingOptions\" local:RibbonTooltip.KeyTip=\"O\" Click=\"SsOptionsBtn_Click\"");
+        optionsSource.Should().Contain("public enum OptionsDialogInitialSection");
+        optionsSource.Should().Contain("FormulaErrorChecking");
+        optionsSource.Should().Contain("TabList.SelectedIndex = _initialSection == OptionsDialogInitialSection.FormulaErrorChecking ? 1 : 0;");
+        optionsSource.Should().Contain("if (_errorRuleBoxes.Values.FirstOrDefault() is { } firstRule)");
+        optionsSource.Should().Contain("Keyboard.Focus(firstRule)");
     }
 
     [Fact]

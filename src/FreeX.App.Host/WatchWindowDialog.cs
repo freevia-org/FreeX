@@ -10,6 +10,8 @@ namespace FreeX.App.Host;
 
 public sealed class WatchWindowDialog : Window
 {
+    private const double WatchWindowColumnsWidth = 640;
+    private const double WatchWindowChromeAndPaddingWidth = 120;
     private readonly Func<IReadOnlyList<WatchWindowEntry>> _getEntries;
     private readonly Action? _addWatch;
     private readonly Func<string> _getSelectionText;
@@ -33,9 +35,9 @@ public sealed class WatchWindowDialog : Window
         _removeWatch = removeWatch;
 
         Title = UiText.Get("WatchWindow_WatchWindow");
-        Width = 620;
+        Width = WatchWindowColumnsWidth + WatchWindowChromeAndPaddingWidth;
         Height = 320;
-        MinWidth = 480;
+        MinWidth = WatchWindowColumnsWidth + 80;
         MinHeight = 220;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 

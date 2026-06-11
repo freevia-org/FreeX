@@ -732,6 +732,17 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             PumpDispatcher();
         }
 
+        public void ShowDrawingObjectContextualTabs()
+        {
+            if (_window.FindName("ShapeFormatTab") is TabItem shapeTab)
+                shapeTab.Visibility = Visibility.Visible;
+            if (_window.FindName("PictureFormatTab") is TabItem pictureTab)
+                pictureTab.Visibility = Visibility.Visible;
+
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
         public void ClickActiveRibbonButton(string title)
         {
             var button = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
@@ -814,6 +825,10 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 findSelect.IsEnabled = true;
             if (_window.FindName("TableDesignTab") is TabItem tableDesignTab)
                 tableDesignTab.Visibility = Visibility.Collapsed;
+            if (_window.FindName("ShapeFormatTab") is TabItem shapeFormatTab)
+                shapeFormatTab.Visibility = Visibility.Collapsed;
+            if (_window.FindName("PictureFormatTab") is TabItem pictureFormatTab)
+                pictureFormatTab.Visibility = Visibility.Collapsed;
             if (_window.FindName("ChartDesignTab") is TabItem chartDesignTab)
                 chartDesignTab.Visibility = Visibility.Collapsed;
             if (_window.FindName("ChartFormatTab") is TabItem chartFormatTab)

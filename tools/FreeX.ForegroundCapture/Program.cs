@@ -1043,7 +1043,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked("freex-save-as-overwrite-prompt", "dialog-not-found", "Did not detect FreeX Save As common dialog before overwrite prompt.", options.OutputRoot, "freex", guard);
             }
 
-            TypeDialogPath(existingPath);
+            TypeDialogPath(dialog.Handle, existingPath);
             var prompt = WindowFinder.FindProcessWindow(
                 process.Id,
                 window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
@@ -1052,6 +1052,13 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                      window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) ||
                      window.Title.Contains("already exists", StringComparison.OrdinalIgnoreCase)),
                 options.PopupTimeout);
+            prompt ??= WindowFinder.FindForegroundWindow(
+                window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    window.Handle != dialog.Handle &&
+                    (window.Title.Contains("Confirm", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("already exists", StringComparison.OrdinalIgnoreCase)),
+                TimeSpan.FromMilliseconds(1500));
             if (prompt is null)
             {
                 return CaptureResult.Blocked("freex-save-as-overwrite-prompt", "overwrite-prompt-not-found", "Typed an existing .xlsx path but did not detect a native overwrite confirmation prompt.", options.OutputRoot, "freex", guard);
@@ -1106,7 +1113,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked("freex-save-as-invalid-path", "dialog-not-found", "Did not detect FreeX Save As common dialog before invalid path entry.", options.OutputRoot, "freex", guard);
             }
 
-            TypeDialogPath(invalidPath);
+            TypeDialogPath(dialog.Handle, invalidPath);
             var prompt = WindowFinder.FindProcessWindow(
                 process.Id,
                 window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
@@ -1116,6 +1123,14 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                      window.Title.Contains("path", StringComparison.OrdinalIgnoreCase) ||
                      window.Title.Contains("not found", StringComparison.OrdinalIgnoreCase)),
                 options.PopupTimeout);
+            prompt ??= WindowFinder.FindForegroundWindow(
+                window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    window.Handle != dialog.Handle &&
+                    (window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("Error", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("path", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("not found", StringComparison.OrdinalIgnoreCase)),
+                TimeSpan.FromMilliseconds(1500));
             if (prompt is null)
             {
                 return CaptureResult.Blocked("freex-save-as-invalid-path", "invalid-path-prompt-not-found", $"Typed a missing-directory .xlsx path but did not detect a native invalid-path prompt: {invalidPath}", options.OutputRoot, "freex", guard);
@@ -1211,15 +1226,24 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return blocked;
             }
 
-            TypeDialogPath(existingPath);
+            TypeDialogPath(dialog!.Handle, existingPath);
             var prompt = WindowFinder.FindProcessWindow(
                 process.Id,
                 window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
-                    window.Handle != dialog!.Handle &&
+                    window.Handle != dialog.Handle &&
                     (window.Title.Contains("Confirm", StringComparison.OrdinalIgnoreCase) ||
                      window.Title.Contains("Export as PDF / XPS", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) ||
                      window.Title.Contains("already exists", StringComparison.OrdinalIgnoreCase)),
                 options.PopupTimeout);
+            prompt ??= WindowFinder.FindForegroundWindow(
+                window => window.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
+                    window.Handle != dialog.Handle &&
+                    (window.Title.Contains("Confirm", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("Export as PDF / XPS", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("Save As", StringComparison.OrdinalIgnoreCase) ||
+                     window.Title.Contains("already exists", StringComparison.OrdinalIgnoreCase)),
+                TimeSpan.FromMilliseconds(1500));
             if (prompt is null)
             {
                 return CaptureResult.Blocked("freex-export-overwrite-prompt", "overwrite-prompt-not-found", "Typed an existing PDF path but did not detect a native export overwrite confirmation prompt.", options.OutputRoot, "freex", guard);
@@ -1276,13 +1300,18 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked("freex-export-xps-accept", "xps-filter-not-selected", "Could not select the XPS file type in the native export SaveFileDialog.", options.OutputRoot, "freex", guard);
             }
 
-            TypeDialogPath(xpsPath);
+            TypeDialogPath(dialog.Handle, xpsPath);
 
             var optionsDialog = WindowFinder.FindProcessWindow(
                 process.Id,
                 candidate => candidate.Handle != dialog.Handle &&
                     candidate.Title.Contains("PDF/XPS options", StringComparison.OrdinalIgnoreCase),
                 options.PopupTimeout);
+            optionsDialog ??= WindowFinder.FindForegroundWindow(
+                candidate => candidate.ProcessId == process.Id &&
+                    candidate.Handle != dialog.Handle &&
+                    candidate.Title.Contains("PDF/XPS options", StringComparison.OrdinalIgnoreCase),
+                TimeSpan.FromMilliseconds(1500));
             if (optionsDialog is null)
             {
                 return CaptureResult.Blocked("freex-export-xps-accept", "options-dialog-not-found", "Accepted an explicit .xps path but did not detect the PDF/XPS options dialog.", options.OutputRoot, "freex", guard);
@@ -1413,10 +1442,12 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase),
                 options.PopupTimeout);
             printDialog ??= WindowFinder.FindForegroundWindow(
-                candidate => candidate.ProcessId == process.Id &&
-                    candidate.Handle != preview.Handle &&
+                candidate => candidate.Handle != preview.Handle &&
                     candidate.ClassName.Equals("#32770", StringComparison.OrdinalIgnoreCase) &&
-                    candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase),
+                    (candidate.ProcessId == process.Id ||
+                     candidate.Title.Contains("Print", StringComparison.OrdinalIgnoreCase)) &&
+                    candidate.Bounds.Width >= 300 &&
+                    candidate.Bounds.Height >= 200,
                 TimeSpan.FromMilliseconds(1200));
             if (printDialog is null)
             {
@@ -1903,6 +1934,130 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         SendKeys.SendWait("^v");
         Thread.Sleep(150);
         SendKeys.SendWait("{ENTER}");
+    }
+
+    private static void TypeDialogPath(long dialogHandle, string path)
+    {
+        if (TrySetCommonDialogFileName(dialogHandle, path) &&
+            TryInvokeCommonDialogDefaultButton(dialogHandle))
+        {
+            Thread.Sleep(250);
+            return;
+        }
+
+        TypeDialogPath(path);
+    }
+
+    private static bool TrySetCommonDialogFileName(long dialogHandle, string path)
+    {
+        try
+        {
+            var root = AutomationElement.FromHandle(new IntPtr(dialogHandle));
+            var edits = root.FindAll(
+                    TreeScope.Descendants,
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit))
+                .Cast<AutomationElement>()
+                .Where(IsVisibleElement)
+                .OrderByDescending(IsCommonDialogFileNameEdit)
+                .ToArray();
+
+            foreach (var edit in edits)
+            {
+                if (!edit.TryGetCurrentPattern(ValuePattern.Pattern, out var valueObject) ||
+                    valueObject is not ValuePattern value ||
+                    value.Current.IsReadOnly)
+                {
+                    continue;
+                }
+
+                edit.SetFocus();
+                Thread.Sleep(100);
+                value.SetValue(path);
+                Thread.Sleep(100);
+                return true;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (ElementNotAvailableException)
+        {
+        }
+
+        return false;
+    }
+
+    private static bool TryInvokeCommonDialogDefaultButton(long dialogHandle)
+    {
+        try
+        {
+            var root = AutomationElement.FromHandle(new IntPtr(dialogHandle));
+            var buttons = root.FindAll(
+                    TreeScope.Descendants,
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button))
+                .Cast<AutomationElement>()
+                .Where(IsVisibleElement)
+                .ToArray();
+
+            var button = buttons.FirstOrDefault(candidate =>
+                    candidate.Current.AutomationId.Equals("1", StringComparison.OrdinalIgnoreCase))
+                ?? buttons.FirstOrDefault(candidate =>
+                    candidate.Current.Name.Equals("Save", StringComparison.OrdinalIgnoreCase) ||
+                    candidate.Current.Name.Equals("&Save", StringComparison.OrdinalIgnoreCase) ||
+                    candidate.Current.Name.Equals("Open", StringComparison.OrdinalIgnoreCase) ||
+                    candidate.Current.Name.Equals("&Open", StringComparison.OrdinalIgnoreCase));
+
+            if (button is null)
+            {
+                return false;
+            }
+
+            if (button.TryGetCurrentPattern(InvokePattern.Pattern, out var invokeObject) &&
+                invokeObject is InvokePattern invoke)
+            {
+                invoke.Invoke();
+                Thread.Sleep(100);
+                return true;
+            }
+
+            var bounds = button.Current.BoundingRectangle;
+            if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
+            {
+                return false;
+            }
+
+            NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
+            Thread.Sleep(100);
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(60);
+            NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(100);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (ElementNotAvailableException)
+        {
+        }
+
+        return false;
+    }
+
+    private static bool IsCommonDialogFileNameEdit(AutomationElement element)
+    {
+        try
+        {
+            var automationId = element.Current.AutomationId;
+            var name = element.Current.Name;
+            return automationId.Equals("1148", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("File name", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("File name:", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
     }
 
     private static bool TrySelectDialogComboBoxItem(long dialogHandle, string itemTextContains)

@@ -200,13 +200,13 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     {
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
             1120,
-            ["Tables", "Illustrations", "Charts", "Sparklines", "Filters", "Links", "Text", "Symbols"],
+            ["Tables", "Charts", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments"],
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 8).ToArray());
 
         states.Should().Equal(
             RibbonAdaptiveGroupState.SmallWithLabels,
             RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed,
@@ -217,7 +217,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_KeepsInsertChartsBeforeUtilityGroups()
     {
-        var groupNames = new[] { "Tables", "Illustrations", "Charts", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments" };
+        var groupNames = new[] { "Tables", "Charts", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments" };
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
             1320,
             groupNames,
@@ -231,7 +231,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_KeepsPageSetupBeforeThemesAtMediumWidths()
     {
-        var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange" };
+        var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options" };
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
             1120,
             groupNames,
@@ -244,7 +244,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_RecognizesPageLayoutProfileWhenSheetOptionsAreAbsent()
     {
-        var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit", "Arrange" };
+        var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit" };
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
             1120,
             groupNames,
@@ -259,7 +259,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_RestoresPageSetupAfterPlannerCollapse()
     {
-        var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange" };
+        var groupNames = new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options" };
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
             900,
             groupNames,
@@ -269,7 +269,6 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             RibbonAdaptiveGroupState.Full,
             "Page Layout should preserve direct access to the primary Page Setup commands before utility groups");
         states[Array.IndexOf(groupNames, "Themes")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
-        states[Array.IndexOf(groupNames, "Arrange")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
     }
 
     [Fact]
@@ -330,7 +329,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Theory]
-    [InlineData(760, new[] { "Arrange", "Format" }, 0)]
+    [InlineData(760, new[] { "Illustrations", "Arrange", "Format" }, 0)]
     public void ApplyBreakpointOverrides_AppliesExcelLikeTabSpecificCollapseOrder(
         double availableWidth,
         string[] groupNames,
@@ -392,13 +391,13 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
 
     [Theory]
     [InlineData("Clipboard|Font|Alignment|Number|Styles|Cells|Editing", "Home")]
-    [InlineData("Tables|Illustrations|Charts|Links", "Insert")]
+    [InlineData("Tables|Charts|Links", "Insert")]
     [InlineData("Function Library|Defined Names|Formula Auditing|Calculation", "Formulas")]
     [InlineData("Get & Transform Data|Queries & Connections|Sort & Filter|Data Tools|Forecast|Outline", "Data")]
-    [InlineData("Themes|Page Setup|Scale to Fit|Sheet Options|Arrange", "Page Layout")]
+    [InlineData("Themes|Page Setup|Scale to Fit|Sheet Options", "Page Layout")]
     [InlineData("Proofing|Accessibility|Comments|Notes|Protect", "Review")]
     [InlineData("Workbook Views|Show|Zoom|Window", "View")]
-    [InlineData("Arrange|Format", "Draw")]
+    [InlineData("Illustrations|Arrange|Format", "Draw")]
     [InlineData("PivotTable|Active Field|Group|Filter|Data|Actions|Calculations|Tools|Show", "PivotTable Analyze")]
     [InlineData("Help", "Tiny")]
     public void Profiles_ResolveKnownRibbonTabGroupSets(string groupNameList, string expectedProfile)

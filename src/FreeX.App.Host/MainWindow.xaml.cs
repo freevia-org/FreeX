@@ -284,6 +284,12 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.ObjectResized += OnObjectResized;
         SheetGrid.ObjectResizedWithAnchor += OnObjectResizedWithAnchor;
         SheetGrid.ObjectRotated += OnObjectRotated;
+        DependencyPropertyDescriptor.FromProperty(
+            FreeX.App.UI.GridView.SelectedObjectIdProperty,
+            typeof(FreeX.App.UI.GridView))?.AddValueChanged(SheetGrid, OnSelectedObjectContextChanged);
+        DependencyPropertyDescriptor.FromProperty(
+            FreeX.App.UI.GridView.SelectedObjectKindProperty,
+            typeof(FreeX.App.UI.GridView))?.AddValueChanged(SheetGrid, OnSelectedObjectContextChanged);
         SheetGrid.MouseMove  += SheetGrid_MouseMove;
         SheetGrid.MouseUp    += SheetGrid_MouseUp;
         SheetGrid.LostMouseCapture += SheetGrid_LostMouseCapture;

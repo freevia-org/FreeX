@@ -424,7 +424,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         menuItems.Should().Contain(item =>
             item.Header == "Error Checking Options..." &&
             item.KeyTip == "O" &&
-            item.Click == "SsOptionsBtn_Click");
+            item.Click == "ErrorCheckingOptionsBtn_Click");
     }
 
     [Fact]

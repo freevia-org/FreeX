@@ -62,9 +62,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
             var expectations = new[]
             {
-                new RibbonFallbackExpectation("Insert", 900, Expanded: ["Tables", "Illustrations"], Collapsed: ["Charts", "Sparklines"]),
+                new RibbonFallbackExpectation("Insert", 900, Expanded: ["Tables"], Collapsed: ["Charts", "Text"]),
                 new RibbonFallbackExpectation("Data", 1120, Expanded: ["Data Tools", "Forecast"], Collapsed: ["Sort & Filter"]),
-                new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup", "Arrange"], Collapsed: []),
+                new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup"], Collapsed: []),
                 new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show", "Zoom"], Collapsed: ["Window"]),
                 new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views", "Show", "Zoom"], Collapsed: ["Window"])
             };
@@ -104,8 +104,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             harness.SelectRibbonTab("Draw", 900);
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
-                ["Arrange", "Format"],
-                $"the current Draw tab has only arrange/format command groups, so normal widths should spend available space on the real commands; {harness.DebugActiveRibbonChildren}");
+                ["Illustrations", "Arrange", "Format"],
+                $"the current Draw tab has object creation, arrange, and format command groups, so normal widths should spend available space on the real commands; {harness.DebugActiveRibbonChildren}");
             harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                 0.5,
                 $"Draw at 900px should fit without hidden-scroll overflow; {harness.DebugActiveRibbonChildren}");
