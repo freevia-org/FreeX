@@ -2427,18 +2427,6 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SetZoomSliderMinMaxRangeValues()
         => (handle, processId, _, guard) =>
         {
-            var slider = FindFirstSlider(handle, "Zoom");
-            if (slider is null)
-            {
-                return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the status Zoom slider.", options.OutputRoot, "freex", guard);
-            }
-
-            if (!slider.TryGetCurrentPattern(RangeValuePattern.Pattern, out var patternObject) ||
-                patternObject is not RangeValuePattern rangePattern)
-            {
-                return CaptureResult.Blocked(options.Scenario, "uia-rangevalue-unavailable", "Status Zoom slider did not expose RangeValuePattern.", options.OutputRoot, "freex", guard);
-            }
-
             var validations = new List<string>();
             foreach (var (value, label) in new[] { (0d, "minimum"), (200d, "maximum") })
             {
@@ -2448,7 +2436,27 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     return BlockedWithGuard(options.Scenario, guard, $"before-uia-rangevalue-set-{label}");
                 }
 
-                rangePattern.SetValue(value);
+                var slider = FindFirstSlider(handle, "Zoom");
+                if (slider is null)
+                {
+                    return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the status Zoom slider.", options.OutputRoot, "freex", guard);
+                }
+
+                if (!slider.TryGetCurrentPattern(RangeValuePattern.Pattern, out var patternObject) ||
+                    patternObject is not RangeValuePattern rangePattern)
+                {
+                    return CaptureResult.Blocked(options.Scenario, "uia-rangevalue-unavailable", "Status Zoom slider did not expose RangeValuePattern.", options.OutputRoot, "freex", guard);
+                }
+
+                try
+                {
+                    rangePattern.SetValue(value);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or ElementNotAvailableException or TimeoutException or COMException)
+                {
+                    return CaptureResult.Blocked(options.Scenario, "uia-rangevalue-set-failed", $"RangeValue.SetValue({value:0.###}) for the {label} bound failed: {ex.GetType().Name}: {ex.Message}", options.OutputRoot, "freex", guard);
+                }
+
                 Thread.Sleep(options.AfterInputDelay);
 
                 var blocked = ValidateZoomSliderValue(handle, value, $"native UIA RangeValue.SetValue({value:0.###}) {label}");
@@ -2620,6 +2628,12 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> StatusLiveStatsAccessibility()
         => (handle, processId, _, guard) =>
         {
+            var resizeBlocked = ResizeForStatusStatisticReadback(handle, processId, guard);
+            if (resizeBlocked is not null)
+            {
+                return resizeBlocked;
+            }
+
             if (!TryGetCellBounds(handle, "Cell_A1", out var a1Bounds) ||
                 !TryGetCellBounds(handle, "Cell_A4", out var a4Bounds))
             {
@@ -2660,7 +2674,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             {
                 if (!TryGetAutomationElementNameOrVisibleText(handle, automationId, expectedName, out var actualName))
                 {
-                    return CaptureResult.Blocked(options.Scenario, "status-stat-validation-unavailable", $"Could not read a visible UIA name/text value for '{automationId}'.", options.OutputRoot, "freex", guard);
+                    var suffix = string.IsNullOrWhiteSpace(actualName)
+                        ? string.Empty
+                        : $" Last UIA candidate was '{actualName}'.";
+                    return CaptureResult.Blocked(options.Scenario, "status-stat-validation-unavailable", $"Could not read a visible UIA name/text value for '{automationId}'.{suffix}", options.OutputRoot, "freex", guard);
                 }
 
                 if (!string.Equals(actualName, expectedName, StringComparison.Ordinal))
@@ -2674,6 +2691,23 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             _lastResultValidation = "Foreground status stats after physical paste/select with min/max enabled: " + string.Join("; ", validations) + ".";
             return null;
         };
+
+    private CaptureResult? ResizeForStatusStatisticReadback(IntPtr handle, int processId, ForegroundGuardResult guard)
+    {
+        var workingArea = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1600, 900);
+        var width = Math.Min(1600, Math.Max(1200, workingArea.Width));
+        var height = Math.Min(900, Math.Max(720, workingArea.Height));
+        var x = workingArea.Left + Math.Max(0, (workingArea.Width - width) / 2);
+        var y = workingArea.Top + Math.Max(0, (workingArea.Height - height) / 2);
+
+        NativeMethods.SetWindowPos(handle, NativeMethods.HWND_NOTOPMOST, x, y, width, height, NativeMethods.SWP_SHOWWINDOW);
+        Thread.Sleep(options.AfterInputDelay);
+
+        guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        return guard.Success
+            ? null
+            : BlockedWithGuard(options.Scenario, guard, "after-status-stat-window-resize");
+    }
 
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> RightClickNamedElement(string name, ControlType controlType)
         => (handle, processId, _, guard) =>
@@ -4013,6 +4047,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private static bool TryGetAutomationElementNameOrVisibleText(IntPtr handle, string automationId, string expectedName, out string name)
     {
+        var lastCandidate = string.Empty;
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
         do
         {
@@ -4030,6 +4065,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     if (!string.IsNullOrWhiteSpace(candidate))
                     {
                         name = candidate;
+                        lastCandidate = candidate;
                     }
                 }
             }
@@ -4051,7 +4087,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
         while (DateTime.UtcNow < deadline);
 
-        name = string.Empty;
+        name = lastCandidate;
         return false;
     }
 
