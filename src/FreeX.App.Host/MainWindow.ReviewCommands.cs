@@ -16,17 +16,22 @@ public partial class MainWindow
 
     private void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
     {
+        if (!TryCommitPendingSpellCheckEdit())
+            return;
+
         var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options);
         var ignoredWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ignoredIssues = new HashSet<SpellingIssueKey>();
 
         while (true)
         {
-            var issues = SpellCheckWorkflowPlanner.FilterIssues(
-                SpellCheckService.FindIssues(_workbook, _currentSheetId, customDictionary),
+            var scan = SpellCheckWorkflowPlanner.ScanWorksheet(
+                _workbook,
+                _currentSheetId,
+                customDictionary,
                 ignoredWords,
                 ignoredIssues);
-            if (issues.Count == 0)
+            if (scan.IsComplete)
             {
                 _messageService.ShowInfo(
                     UiText.Get("MainWindowMessage_SpellCheckComplete"),
@@ -34,6 +39,7 @@ public partial class MainWindow
                 return;
             }
 
+            var issues = scan.Issues;
             var issue = issues[0];
             SetActiveCell(issue.Address);
             EnsureCellVisible(issue.Address);
