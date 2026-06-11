@@ -4,6 +4,23 @@ namespace FreeX.Core.Commands;
 
 public sealed class AdvancedFilterCommand : IWorkbookCommand
 {
+    public const uint MaxListRows = 100_000;
+    public const uint MaxListColumns = 256;
+    public const long MaxListCells = 2_000_000;
+    public const uint MaxCriteriaRows = 1_000;
+    public const uint MaxCriteriaColumns = 64;
+    public const long MaxCriteriaCells = 64_000;
+    public const ulong MaxCopyOutputCells = 1_000_000;
+
+    public const string ListRangeTooLargeMessage =
+        "Advanced Filter list range is too large. Select a bounded list range with at most 100,000 rows, 256 columns, and 2,000,000 cells.";
+
+    public const string CriteriaRangeTooLargeMessage =
+        "Advanced Filter criteria range is too large. Select a bounded criteria range with at most 1,000 rows, 64 columns, and 64,000 cells.";
+
+    public const string CopyOutputTooLargeMessage =
+        "Advanced Filter copy output is too large. Select a smaller list range or copy fewer columns.";
+
     private readonly GridRange _listRange;
     private readonly GridRange _criteriaRange;
     private readonly CellAddress? _copyTo;
@@ -30,9 +47,8 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        if (_listRange.Start.Sheet != _listRange.End.Sheet ||
-            _criteriaRange.Start.Sheet != _criteriaRange.End.Sheet)
-            return new CommandOutcome(false, "Advanced Filter list and criteria ranges must each stay on one sheet.");
+        if (ValidateRangeShape(_listRange, _criteriaRange, _copyTo, _copyToRange) is { } invalidRange)
+            return invalidRange;
 
         var sheet = ctx.Workbook.GetSheet(_listRange.Start.Sheet);
         if (sheet is null)
@@ -73,11 +89,81 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
         if (_copyTo.Value.Sheet != sheet.Id)
             return new CommandOutcome(false, "Copy destination must be on the filtered sheet.");
         var copyPlan = CreateCopyOutputPlan(sheet, matches.Count, headers);
+        if (RejectInvalidCopyOutput(copyPlan) is { } invalidCopyOutput)
+            return invalidCopyOutput;
         if (GetLockedCopyDestination(ctx.Workbook, sheet, copyPlan) is { } lockedDestination)
             return lockedDestination;
 
         CopyMatches(sheet, matches, copyPlan);
         return new CommandOutcome(true, AffectedCells: [_copyTo.Value]);
+    }
+
+    public static bool IsListRangeWithinSupportedBounds(GridRange range) =>
+        range.RowCount <= MaxListRows &&
+        range.ColCount <= MaxListColumns &&
+        range.CellCount <= MaxListCells;
+
+    public static bool IsCriteriaRangeWithinSupportedBounds(GridRange range) =>
+        range.RowCount <= MaxCriteriaRows &&
+        range.ColCount <= MaxCriteriaColumns &&
+        range.CellCount <= MaxCriteriaCells;
+
+    public static CommandOutcome? ValidateRangeShape(
+        GridRange listRange,
+        GridRange criteriaRange,
+        CellAddress? copyTo,
+        GridRange? copyToRange = null)
+    {
+        if (listRange.Start.Sheet != listRange.End.Sheet ||
+            criteriaRange.Start.Sheet != criteriaRange.End.Sheet)
+            return new CommandOutcome(false, "Advanced Filter list and criteria ranges must each stay on one sheet.");
+
+        if (!WorksheetBounds.IsValidAddress(listRange.Start) ||
+            !WorksheetBounds.IsValidAddress(listRange.End))
+            return new CommandOutcome(false, "Advanced Filter list range is outside the worksheet bounds.");
+
+        if (!WorksheetBounds.IsValidAddress(criteriaRange.Start) ||
+            !WorksheetBounds.IsValidAddress(criteriaRange.End))
+            return new CommandOutcome(false, "Advanced Filter criteria range is outside the worksheet bounds.");
+
+        if (listRange.RowCount < 2)
+            return new CommandOutcome(false, "Advanced Filter list range must include headers and at least one data row.");
+
+        if (criteriaRange.RowCount < 2)
+            return new CommandOutcome(false, "Advanced Filter criteria range must include headers and at least one criteria row.");
+
+        if (!IsListRangeWithinSupportedBounds(listRange))
+            return new CommandOutcome(false, ListRangeTooLargeMessage);
+
+        if (!IsCriteriaRangeWithinSupportedBounds(criteriaRange))
+            return new CommandOutcome(false, CriteriaRangeTooLargeMessage);
+
+        if (copyTo is not { } destination)
+            return null;
+
+        if (!WorksheetBounds.IsValidAddress(destination))
+            return new CommandOutcome(false, "Advanced Filter copy destination is outside the worksheet bounds.");
+
+        if (destination.Sheet != listRange.Start.Sheet)
+            return new CommandOutcome(false, "Copy destination must be on the filtered sheet.");
+
+        if (copyToRange is not { } range)
+            return null;
+
+        if (range.Start.Sheet != destination.Sheet || range.End.Sheet != destination.Sheet)
+            return new CommandOutcome(false, "Advanced Filter copy-to range must be on the filtered sheet.");
+
+        if (!WorksheetBounds.IsValidAddress(range.Start) ||
+            !WorksheetBounds.IsValidAddress(range.End))
+            return new CommandOutcome(false, "Advanced Filter copy-to range is outside the worksheet bounds.");
+
+        if (range.Start.Row != range.End.Row)
+            return new CommandOutcome(false, "Advanced Filter copy-to range must be one row.");
+
+        if (range.ColCount > MaxListColumns)
+            return new CommandOutcome(false, CopyOutputTooLargeMessage);
+
+        return null;
     }
 
     public void Revert(ICommandContext ctx)
@@ -236,6 +322,26 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
             ? new List<(CellAddress Address, Cell? OldCell)>((int)targetCount)
             : [];
     }
+
+    private CommandOutcome? RejectInvalidCopyOutput(CopyOutputPlan plan)
+    {
+        if (_copyTo is not { } destination)
+            return null;
+
+        if (!WorksheetBounds.TryGetRectangleEnd(destination, plan.RowsToReplace, plan.ClearWidth, out _))
+            return new CommandOutcome(false, "Advanced Filter copy output would exceed the worksheet bounds.");
+
+        if (ExceedsCellBudget(plan.RowsToReplace, plan.ClearWidth, MaxCopyOutputCells) ||
+            ExceedsCellBudget(plan.OutputRowCount, plan.OutputWidth, MaxCopyOutputCells))
+        {
+            return new CommandOutcome(false, CopyOutputTooLargeMessage);
+        }
+
+        return null;
+    }
+
+    private static bool ExceedsCellBudget(uint rows, uint columns, ulong budget) =>
+        columns != 0 && rows > budget / columns;
 
     private static bool CellsHaveSameContent(Cell left, Cell right)
     {

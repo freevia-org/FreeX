@@ -107,6 +107,28 @@ public sealed class AdvancedFilterPlannerTests
         result.InvalidText.Should().Be(expectedInvalidText);
     }
 
+    [Theory]
+    [InlineData("A1:XFD1048576", "F1:G2", AdvancedFilterPlanError.ListRangeTooLarge, "A1:XFD1048576")]
+    [InlineData("A1:C5", "F1:XFD1048576", AdvancedFilterPlanError.CriteriaRangeTooLarge, "F1:XFD1048576")]
+    public void CreatePlan_RejectsOversizedListOrCriteriaRanges(
+        string listRangeText,
+        string criteriaRangeText,
+        AdvancedFilterPlanError expectedError,
+        string expectedInvalidText)
+    {
+        var result = AdvancedFilterPlanner.CreatePlan(
+            SheetId,
+            listRangeText,
+            criteriaRangeText,
+            copyToRangeText: "",
+            outputMode: AdvancedFilterOutputMode.FilterInPlace,
+            uniqueRecordsOnly: false);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Be(expectedError);
+        result.InvalidText.Should().Be(expectedInvalidText);
+    }
+
     [Fact]
     public void CreatePlan_FilterInPlaceIgnoresCopyToText()
     {
@@ -128,6 +150,7 @@ public sealed class AdvancedFilterPlannerTests
     [InlineData("", AdvancedFilterPlanError.CopyDestinationRequired, "")]
     [InlineData("   ", AdvancedFilterPlanError.CopyDestinationRequired, "")]
     [InlineData("A8:C9", AdvancedFilterPlanError.InvalidCopyDestinationRange, "A8:C9")]
+    [InlineData("A8:XFD8", AdvancedFilterPlanError.CopyDestinationRangeTooLarge, "A8:XFD8")]
     [InlineData("Other!A1", AdvancedFilterPlanError.InvalidCopyDestinationRange, "Other!A1")]
     public void CreatePlan_CopyModeRequiresCurrentSheetSingleRowDestination(
         string copyToRangeText,
