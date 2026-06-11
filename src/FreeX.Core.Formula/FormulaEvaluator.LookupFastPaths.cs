@@ -425,6 +425,7 @@ public sealed partial class FormulaEvaluator
     {
         if (approximate)
         {
+            var lookupClass = BuiltInFunctions.ApproxLookupTypeClass(lookupValue);
             var best = -1;
             for (var index = 0; index < lookupReader.Count; index++)
             {
@@ -432,6 +433,7 @@ public sealed partial class FormulaEvaluator
                 if (candidate is ErrorValue error)
                     return error;
 
+                if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
                 if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)
                     best = index;
                 else
@@ -476,6 +478,7 @@ public sealed partial class FormulaEvaluator
 
         if (matchType == 1)
         {
+            var lookupClass = BuiltInFunctions.ApproxLookupTypeClass(lookupValue);
             var best = -1;
             for (var index = 0; index < reader.Count; index++)
             {
@@ -483,6 +486,7 @@ public sealed partial class FormulaEvaluator
                 if (candidate is ErrorValue error)
                     return error;
 
+                if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
                 if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)
                     best = index;
                 else
@@ -492,20 +496,24 @@ public sealed partial class FormulaEvaluator
             return best >= 0 ? new NumberValue(best + 1) : ErrorValue.NA;
         }
 
-        var descendingBest = -1;
-        for (var index = 0; index < reader.Count; index++)
         {
-            var candidate = reader.GetValue(index);
-            if (candidate is ErrorValue error)
-                return error;
+            var lookupClass = BuiltInFunctions.ApproxLookupTypeClass(lookupValue);
+            var descendingBest = -1;
+            for (var index = 0; index < reader.Count; index++)
+            {
+                var candidate = reader.GetValue(index);
+                if (candidate is ErrorValue error)
+                    return error;
 
-            if (BuiltInFunctions.CompareScalar(candidate, lookupValue) >= 0)
-                descendingBest = index;
-            else
-                break;
+                if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
+                if (BuiltInFunctions.CompareScalar(candidate, lookupValue) >= 0)
+                    descendingBest = index;
+                else
+                    break;
+            }
+
+            return descendingBest >= 0 ? new NumberValue(descendingBest + 1) : ErrorValue.NA;
         }
-
-        return descendingBest >= 0 ? new NumberValue(descendingBest + 1) : ErrorValue.NA;
     }
 
     private static ScalarValue EvaluateXmatchDirectRange(
@@ -840,6 +848,7 @@ public sealed partial class FormulaEvaluator
         DirectLookupRangeReader lookupReader,
         DirectLookupRangeReader resultReader)
     {
+        var lookupClass = BuiltInFunctions.ApproxLookupTypeClass(lookupValue);
         var matchIndex = -1;
         for (var index = 0; index < lookupReader.Count; index++)
         {
@@ -847,6 +856,7 @@ public sealed partial class FormulaEvaluator
             if (candidate is ErrorValue)
                 continue;
 
+            if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
             if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)
                 matchIndex = index;
         }

@@ -1131,4 +1131,119 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=LOOKUP(2,A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
     }
 
+    // ── Bug-fix regression: type-class skipping in approximate match ──────────
+
+    [Fact]
+    public void Vlookup_Approximate_SkipsTextHeaderAboveNumericData()
+    {
+        // Row 1 has a text header; rows 2–4 have sorted numeric keys.
+        // VLOOKUP(3, …, TRUE) must skip the text header and find the numeric section.
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Key")), (1, 2, new TextValue("Value")),
+            (2, 1, new NumberValue(1)),    (2, 2, new TextValue("one")),
+            (3, 1, new NumberValue(3)),    (3, 2, new TextValue("three")),
+            (4, 1, new NumberValue(5)),    (4, 2, new TextValue("five")));
+        _eval.Evaluate("=VLOOKUP(3,A1:B4,2,TRUE)", sheet).Should().Be(new TextValue("three"));
+    }
+
+    [Fact]
+    public void Hlookup_Approximate_SkipsTextHeaderBeforeNumericData()
+    {
+        // Col 1 has a text label; cols 2–4 have sorted numeric keys.
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Hdr")), (1, 2, new NumberValue(1)), (1, 3, new NumberValue(3)), (1, 4, new NumberValue(5)),
+            (2, 1, new TextValue("lbl")), (2, 2, new TextValue("one")), (2, 3, new TextValue("three")), (2, 4, new TextValue("five")));
+        _eval.Evaluate("=HLOOKUP(3,A1:D2,2,TRUE)", sheet).Should().Be(new TextValue("three"));
+    }
+
+    [Fact]
+    public void Vlookup_Approximate_BlankNotChosenAsBestMatch()
+    {
+        // A blank in the lookup column must be skipped (not treated as 0).
+        var sheet = MakeSheet(
+            (1, 1, BlankValue.Instance), (1, 2, new TextValue("blank-row")),
+            (2, 1, new NumberValue(1)),  (2, 2, new TextValue("one")),
+            (3, 1, new NumberValue(3)),  (3, 2, new TextValue("three")));
+        // Blank is type-class 0; lookup value 2 is numeric (class 1) — blank is skipped.
+        _eval.Evaluate("=VLOOKUP(2,A1:B3,2,TRUE)", sheet).Should().Be(new TextValue("one"));
+    }
+
+    [Fact]
+    public void Match_Approximate_Ascending_SkipsBoolEntriesWhenLookingUpText()
+    {
+        // Bool entries (class 3) must be skipped when the lookup value is text (class 2).
+        var sheet = MakeSheet(
+            (1, 1, new BoolValue(true)),
+            (2, 1, new BoolValue(false)));
+        _eval.Evaluate("=MATCH(\"x\",A1:A2,1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Match_Approximate_Descending_SkipsTextEntryAmongNumbers()
+    {
+        // A stray text entry in a descending numeric list must be skipped (not chosen as best match).
+        // Old code: CompareScalar("stray", 6) returned 1 (non-numeric > numeric under old ordering),
+        // so "stray" was incorrectly recorded as best → returned position 3.
+        // New code: type-class mismatch causes continue; 8 (position 2) is the correct answer.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(8)),
+            (3, 1, new TextValue("stray")),
+            (4, 1, new NumberValue(5)));
+        _eval.Evaluate("=MATCH(6,A1:A4,-1)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Vlookup_Approximate_NumericOnlySortedData_StillWorks()
+    {
+        // Regression: a clean numeric sorted table must still return the correct best fit.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),   (1, 2, new TextValue("one")),
+            (2, 1, new NumberValue(10)),  (2, 2, new TextValue("ten")),
+            (3, 1, new NumberValue(100)), (3, 2, new TextValue("hundred")));
+        _eval.Evaluate("=VLOOKUP(15,A1:B3,2,TRUE)", sheet).Should().Be(new TextValue("ten"));
+    }
+
+    [Fact]
+    public void Match_Approximate_Ascending_NumericOnlySortedData_StillWorks()
+    {
+        // Regression: existing ascending numeric approximate MATCH must be unaffected.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(5)),
+            (3, 1, new NumberValue(10)));
+        _eval.Evaluate("=MATCH(7,A1:A3,1)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Lookup_Approximate_SkipsTextEntriesWhenLookingUpNumber()
+    {
+        // LOOKUP vector form: text entries in a numeric lookup vector must be skipped.
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("hdr")),
+            (2, 1, new NumberValue(1)),
+            (3, 1, new NumberValue(3)),
+            (1, 2, new TextValue("lbl")),
+            (2, 2, new TextValue("one")),
+            (3, 2, new TextValue("three")));
+        _eval.Evaluate("=LOOKUP(2,A1:A3,B1:B3)", sheet).Should().Be(new TextValue("one"));
+    }
+
+    // ── Bug-fix regression: CompareScalar mixed-type ordering ─────────────────
+
+    [Fact]
+    public void Sort_MixedTypes_OrdersNumberBeforeTextBeforeBool()
+    {
+        // SORT uses CompareScalar; verify number < text < bool ordering after the fix.
+        var sheet = MakeSheet(
+            (1, 1, new BoolValue(true)),
+            (2, 1, new TextValue("alpha")),
+            (3, 1, new NumberValue(42)));
+        var result = _eval.Evaluate("=SORT(A1:A3)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        result.Cells[0, 0].Should().Be(new NumberValue(42),  "numbers come first");
+        result.Cells[1, 0].Should().Be(new TextValue("alpha"), "text comes second");
+        result.Cells[2, 0].Should().Be(new BoolValue(true),   "booleans come last");
+    }
+
 }

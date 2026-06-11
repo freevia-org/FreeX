@@ -169,17 +169,63 @@ public static partial class BuiltInFunctions
 
     internal static int CompareScalar(ScalarValue a, ScalarValue b)
     {
-        if (a is BlankValue && TryCellNumber(b, out _)) a = new NumberValue(0);
-        if (b is BlankValue && TryCellNumber(a, out _)) b = new NumberValue(0);
+        // Blank coercion: coerce blank to match the other operand's type class,
+        // consistent with CompareValues in FormulaEvaluator.Operators.cs.
+        bool aBlank = a is BlankValue;
+        bool bBlank = b is BlankValue;
+        if (aBlank && !bBlank) a = CoerceBlankForCompare(b);
+        else if (bBlank && !aBlank) b = CoerceBlankForCompare(a);
+        // blank vs blank falls through — both become blank, TypeOrderForCompare gives 0==0.
 
-        var aIsNumber = TryCellNumber(a, out double aNumber);
-        var bIsNumber = TryCellNumber(b, out double bNumber);
-        if (aIsNumber && bIsNumber)
-            return aNumber.CompareTo(bNumber);
+        // Numbers and dates compare as numbers (dates are OADate serial numbers).
+        bool aIsNum = a is NumberValue or DateTimeValue;
+        bool bIsNum = b is NumberValue or DateTimeValue;
+        if (aIsNum && bIsNum)
+        {
+            double av = a is DateTimeValue ad ? ad.Value : ((NumberValue)a).Value;
+            double bv = b is DateTimeValue bd ? bd.Value : ((NumberValue)b).Value;
+            return av.CompareTo(bv);
+        }
         if (a is TextValue ta && b is TextValue tb)
             return string.Compare(ta.Value, tb.Value, StringComparison.OrdinalIgnoreCase);
-        return (aIsNumber ? 0 : 1) - (bIsNumber ? 0 : 1);
+        if (a is BoolValue ba && b is BoolValue bb)
+            return ba.Value.CompareTo(bb.Value);
+
+        // Mixed types: numbers/dates < text < booleans (Excel sort/compare convention).
+        return TypeOrderForCompare(a).CompareTo(TypeOrderForCompare(b));
     }
+
+    // Coerces blank to the zero/empty/false of the other value's type class,
+    // mirroring FormulaEvaluator.CoerceBlankTo so CompareScalar and CompareValues agree.
+    private static ScalarValue CoerceBlankForCompare(ScalarValue other) => other switch
+    {
+        NumberValue or DateTimeValue => new NumberValue(0),
+        TextValue => new TextValue(""),
+        BoolValue => new BoolValue(false),
+        _ => BlankValue.Instance
+    };
+
+    // Excel type ordering for cross-type comparisons: number/date < text < bool.
+    // Blank is treated as the lowest possible value (coercion handles the normal blank case above).
+    private static int TypeOrderForCompare(ScalarValue v) => v switch
+    {
+        BlankValue => 0,
+        NumberValue or DateTimeValue => 1,
+        TextValue => 2,
+        BoolValue => 3,
+        _ => 4
+    };
+
+    // Returns the type class for approximate-lookup type-matching purposes.
+    // number/date → 1, text → 2, bool → 3, blank → 0 (always skipped in approximate match).
+    internal static int ApproxLookupTypeClass(ScalarValue v) => v switch
+    {
+        BlankValue => 0,
+        NumberValue or DateTimeValue => 1,
+        TextValue => 2,
+        BoolValue => 3,
+        _ => -1
+    };
 
     internal static bool ScalarEquals(ScalarValue a, ScalarValue b)
     {
