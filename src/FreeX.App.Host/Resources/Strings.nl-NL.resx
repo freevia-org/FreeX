@@ -14556,6 +14556,12 @@
   <data name="MainWindowMessage_PictureWasNotFound" xml:space="preserve">
     <value>Afbeelding is niet gevonden.</value>
   </data>
+  <data name="MainWindowMessage_ClearFilterNoFilter" xml:space="preserve">
+    <value>No active filters were found in the current range.</value>
+  </data>
+  <data name="MainWindowMessage_ClearFilterTitle" xml:space="preserve">
+    <value>Clear Filter</value>
+  </data>
   <data name="MainWindowMessage_ReapplyFilterNoFilter" xml:space="preserve">
     <value>Pas een filter toe voordat u Opnieuw toepassen gebruikt.</value>
   </data>

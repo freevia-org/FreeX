@@ -5223,6 +5223,7 @@
                                    ToolTip="{local:Loc Key=MainWindow_ToolTip_Zoom}"
                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomPercentage}"
                                    AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenTheZoomDialog}"
+                                   AutomationProperties.AutomationId="StatusZoomText"
                                    MouseLeftButtonUp="StatusZoomText_OpenZoomDialog"
                                    PreviewKeyDown="StatusZoomText_PreviewKeyDown"/>
                     </Grid>

@@ -14686,6 +14686,12 @@ Saved XPS file:
   <data name="MainWindowMessage_PictureWasNotFound" xml:space="preserve">
     <value>Picture was not found.</value>
   </data>
+  <data name="MainWindowMessage_ClearFilterNoFilter" xml:space="preserve">
+    <value>No active filters were found in the current range.</value>
+  </data>
+  <data name="MainWindowMessage_ClearFilterTitle" xml:space="preserve">
+    <value>Clear Filter</value>
+  </data>
   <data name="MainWindowMessage_ReapplyFilterNoFilter" xml:space="preserve">
     <value>Apply a filter before using Reapply.</value>
   </data>

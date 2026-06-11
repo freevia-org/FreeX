@@ -2868,48 +2868,47 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     private Func<IntPtr, int, WindowInfo, ForegroundGuardResult, CaptureResult?> SetZoomSliderMinMaxRangeValues()
         => (handle, processId, _, guard) =>
         {
+            var zoomOutCenter = ResolveStatusZoomButtonCenter(handle, processId, "StatusZoomOutButton", "minimum", guard);
+            if (zoomOutCenter.Blocked is not null)
+            {
+                return zoomOutCenter.Blocked;
+            }
+
+            var zoomInCenter = ResolveStatusZoomButtonCenter(handle, processId, "StatusZoomInButton", "maximum", guard);
+            if (zoomInCenter.Blocked is not null)
+            {
+                return zoomInCenter.Blocked;
+            }
+
             var validations = new List<string>();
-            foreach (var (value, label) in new[] { (0d, "minimum"), (200d, "maximum") })
+            foreach (var (value, label, x, y, clickCount) in new[]
+            {
+                (0d, "minimum", zoomOutCenter.X, zoomOutCenter.Y, 24),
+                (200d, "maximum", zoomInCenter.X, zoomInCenter.Y, 44)
+            })
             {
                 guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
                 if (!guard.Success)
                 {
-                    return BlockedWithGuard(options.Scenario, guard, $"before-uia-rangevalue-set-{label}");
+                    return BlockedWithGuard(options.Scenario, guard, $"before-zoom-button-clicks-{label}");
                 }
 
-                var slider = FindFirstSlider(handle, "Zoom");
-                if (slider is null)
-                {
-                    return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the status Zoom slider.", options.OutputRoot, "freex", guard);
-                }
-
-                if (!slider.TryGetCurrentPattern(RangeValuePattern.Pattern, out var patternObject) ||
-                    patternObject is not RangeValuePattern rangePattern)
-                {
-                    return CaptureResult.Blocked(options.Scenario, "uia-rangevalue-unavailable", "Status Zoom slider did not expose RangeValuePattern.", options.OutputRoot, "freex", guard);
-                }
-
-                try
-                {
-                    rangePattern.SetValue(value);
-                }
-                catch (Exception ex) when (ex is InvalidOperationException or ElementNotAvailableException or TimeoutException or COMException)
-                {
-                    return CaptureResult.Blocked(options.Scenario, "uia-rangevalue-set-failed", $"RangeValue.SetValue({value:0.###}) for the {label} bound failed: {ex.GetType().Name}: {ex.Message}", options.OutputRoot, "freex", guard);
-                }
-
-                Thread.Sleep(options.AfterInputDelay);
-
-                var blocked = ValidateZoomSliderValue(handle, value, $"native UIA RangeValue.SetValue({value:0.###}) {label}");
+                var blocked = ClickStatusZoomButtonRepeatedly(handle, processId, x, y, clickCount, label);
                 if (blocked is not null)
                 {
                     return blocked;
                 }
 
-                validations.Add($"{label} slider={value:0.###} visible zoom about {SliderToZoomPercent(value):0}%");
+                blocked = ValidateStatusZoomTextValue(handle, SliderToZoomPercent(value), $"foreground {label} zoom button clicks");
+                if (blocked is not null)
+                {
+                    return blocked;
+                }
+
+                validations.Add($"{label} visible zoom={SliderToZoomPercent(value):0}%");
             }
 
-            _lastResultValidation = "Status zoom min/max RangeValue proof: " + string.Join("; ", validations) + ".";
+            _lastResultValidation = "Status zoom min/max foreground button proof: " + string.Join("; ", validations) + ".";
             return null;
         };
 
@@ -4374,6 +4373,89 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
         var zoomPercent = SliderToZoomPercent(actualSliderValue);
         _lastResultValidation = $"{trigger}; UIA Zoom slider={actualSliderValue:0.###}; expected slider={expectedSliderValue:0.###}; expected visible zoom text about {zoomPercent:0}%";
+        return null;
+    }
+
+    private CaptureResult? ValidateStatusZoomTextValue(IntPtr handle, double expectedZoomPercent, string trigger)
+    {
+        var expectedText = $"{expectedZoomPercent:0}%";
+        if (!TryGetAutomationElementNameOrVisibleText(handle, "StatusZoomText", expectedText, out var actualText))
+        {
+            var suffix = string.IsNullOrWhiteSpace(actualText)
+                ? string.Empty
+                : $" Last UIA candidate was '{actualText}'.";
+            return CaptureResult.Blocked(options.Scenario, "zoom-text-validation-unavailable", $"Could not read status zoom text '{expectedText}' after {trigger}.{suffix}", options.OutputRoot, "freex");
+        }
+
+        if (!string.Equals(actualText, expectedText, StringComparison.Ordinal))
+        {
+            return CaptureResult.Blocked(
+                options.Scenario,
+                "zoom-text-validation-failed",
+                $"Expected status zoom text '{expectedText}' after {trigger}, but UIA reported '{actualText}'.",
+                options.OutputRoot,
+                "freex");
+        }
+
+        _lastResultValidation = $"{trigger}; status zoom text='{actualText}'.";
+        return null;
+    }
+
+    private (CaptureResult? Blocked, int X, int Y) ResolveStatusZoomButtonCenter(IntPtr handle, int processId, string automationId, string label, ForegroundGuardResult guard)
+    {
+        guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        if (!guard.Success)
+        {
+            return (BlockedWithGuard(options.Scenario, guard, $"before-resolve-zoom-button-{label}"), 0, 0);
+        }
+
+        double left;
+        double top;
+        double width;
+        double height;
+        try
+        {
+            var button = FindVisibleElementByAutomationId(handle, automationId);
+            if (button is null)
+            {
+                return (CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find status zoom button '{automationId}' for {label} bound proof.", options.OutputRoot, "freex", guard), 0, 0);
+            }
+
+            var bounds = button.Current.BoundingRectangle;
+            left = bounds.Left;
+            top = bounds.Top;
+            width = bounds.Width;
+            height = bounds.Height;
+        }
+        catch (Exception ex) when (ex is ElementNotAvailableException or COMException or InvalidOperationException)
+        {
+            return (CaptureResult.Blocked(options.Scenario, "uia-target-not-available", $"Could not resolve status zoom button '{automationId}' bounds for {label} bound proof: {ex.GetType().Name}: {ex.Message}", options.OutputRoot, "freex", guard), 0, 0);
+        }
+
+        if (width < 1 || height < 1)
+        {
+            return (CaptureResult.Blocked(options.Scenario, "uia-target-bounds-invalid", $"Status zoom button '{automationId}' bounds were not usable: {left:0.###},{top:0.###},{width:0.###},{height:0.###}.", options.OutputRoot, "freex", guard), 0, 0);
+        }
+
+        var x = (int)(left + width / 2.0);
+        var y = (int)(top + height / 2.0);
+        return (null, x, y);
+    }
+
+    private CaptureResult? ClickStatusZoomButtonRepeatedly(IntPtr handle, int processId, int x, int y, int clickCount, string label)
+    {
+        for (var i = 0; i < clickCount; i++)
+        {
+            var blocked = GuardedClickPoint(options.Scenario, processId, handle, x, y, MouseButtonKind.Left);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+
+            Thread.Sleep(25);
+        }
+
+        Thread.Sleep(options.AfterInputDelay);
         return null;
     }
 

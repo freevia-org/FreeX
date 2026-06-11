@@ -36,7 +36,8 @@ public sealed class DataCommandSourceTests
         filterSource.Should().Contain("new SortDialog(");
         var filterButtonHandler = SourceMethodExtractor.ExtractMethodSource(filterSource, "private void FilterButton_Click(");
         filterButtonHandler.Should().Contain("AutoFilterToggleRangePlanner.Create(sheet, selectedRange)");
-        filterButtonHandler.Should().Contain("new ToggleWorksheetAutoFilterCommand(_currentSheetId, plannedRange)");
+        filterButtonHandler.Should().Contain("new ToggleWorksheetAutoFilterCommand(_currentSheetId, range)");
+        filterButtonHandler.Should().NotContain("AutoFilterToggleRangePlanner.Create(currentSheet, currentRange)");
         filterButtonHandler.Should().NotContain("AutoFilterDialog");
         filterButtonHandler.Should().NotContain("ApplyFilterPrompt");
         filterSource.Should().NotContain("private void ApplyFilterPrompt(");

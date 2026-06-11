@@ -14578,6 +14578,12 @@ Fichier XPS enregistré :
   <data name="MainWindowMessage_PictureWasNotFound" xml:space="preserve">
     <value>L'image n'a pas été trouvée.</value>
   </data>
+  <data name="MainWindowMessage_ClearFilterNoFilter" xml:space="preserve">
+    <value>No active filters were found in the current range.</value>
+  </data>
+  <data name="MainWindowMessage_ClearFilterTitle" xml:space="preserve">
+    <value>Clear Filter</value>
+  </data>
   <data name="MainWindowMessage_ReapplyFilterNoFilter" xml:space="preserve">
     <value>Appliquez un filtre avant d'utiliser Réappliquer.</value>
   </data>
