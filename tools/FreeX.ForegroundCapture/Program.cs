@@ -80,7 +80,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "excel-autofilter" => RunExcelAutoFilterScenario(),
             "excel-number-format" => RunExcelNumberFormatScenario(),
             "excel-borders" => RunExcelPopupScenario("excel-borders", PrepareExcelBlankWorkbook, "%hb", "Net UI Tool Window"),
-            "excel-cell-styles-gallery" => RunExcelPopupScenario("excel-cell-styles-gallery", PrepareExcelBlankWorkbook, "%hj", "Net UI Tool Window"),
+            "excel-cell-styles-gallery" => RunExcelCellStylesGalleryScenario(),
             "excel-context-menu" => RunExcelContextMenuScenario(),
             "excel-format-cells-dialog" => RunExcelFormatCellsDialogScenario(),
             "excel-format-cells-context-dialog" => RunExcelFormatCellsContextDialogScenario(),
@@ -303,6 +303,48 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
     }
 
+    private CaptureResult RunExcelCellStylesGalleryScenario()
+    {
+        const string scenario = "excel-cell-styles-gallery";
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelBlankWorkbook(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-input");
+            }
+
+            if (!TryOpenExcelCellStylesGallery(hwnd))
+            {
+                SendKeys.SendWait("%hj");
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+
+            var popup = FindExcelRibbonGalleryPopup(pid.Value, hwnd.ToInt64(), "Cell Styles", options.PopupTimeout);
+            if (popup is null)
+            {
+                return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect foreground Excel Cell Styles gallery popup after UIA open or Alt,H,J fallback.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow(scenario, "excel", popup, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
     private CaptureResult RunExcelContextMenuScenario()
     {
         dynamic? excel = null;
@@ -362,13 +404,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             SendKeys.SendWait("%hoe");
             Thread.Sleep(options.AfterInputDelay);
 
-            var dialog = WindowFinder.FindProcessWindow(
-                pid.Value,
-                window => window.Handle != hwnd.ToInt64() &&
-                    window.Title.Contains("Format Cells", StringComparison.OrdinalIgnoreCase) &&
-                    window.Bounds.Width > 350 &&
-                    window.Bounds.Height > 250,
-                options.PopupTimeout);
+            var dialog = FindExcelFormatCellsDialog(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
                 return CaptureResult.Blocked("excel-format-cells-dialog", "dialog-not-found", "Did not detect Excel Format Cells dialog after Alt,H,O,E.", options.OutputRoot, "excel", guard);
@@ -419,13 +455,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             }
 
             Thread.Sleep(options.AfterInputDelay);
-            var dialog = WindowFinder.FindProcessWindow(
-                pid.Value,
-                window => window.Handle != hwnd.ToInt64() &&
-                    window.Title.Contains("Format Cells", StringComparison.OrdinalIgnoreCase) &&
-                    window.Bounds.Width > 350 &&
-                    window.Bounds.Height > 250,
-                options.PopupTimeout);
+            var dialog = FindExcelFormatCellsDialog(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
                 return CaptureResult.Blocked(scenario, "dialog-not-found", "Invoked the Excel worksheet context-menu Format Cells route, but did not detect a Format Cells dialog.", options.OutputRoot, "excel", guard);
@@ -4288,26 +4318,81 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     }
 
     private static WindowInfo? FindExcelDataValidationListPopup(int processId, long ownerHandle, TimeSpan timeout)
+        => WindowFinder.FindProcessWindow(
+            processId,
+            window => IsExcelDataValidationListPopupWindow(window, ownerHandle),
+            timeout);
+
+    private static bool IsExcelDataValidationListPopupWindow(WindowInfo window, long ownerHandle)
     {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
+        return window.Handle != ownerHandle &&
+               !window.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase) &&
+               !window.ClassName.Equals("NUIDialog", StringComparison.OrdinalIgnoreCase) &&
+               window.Bounds.Width is >= 70 and <= 450 &&
+               window.Bounds.Height is >= 40 and <= 500;
+    }
+
+    private static WindowInfo? FindExcelFormatCellsDialog(int processId, long ownerHandle, TimeSpan timeout)
+        => WindowFinder.FindProcessWindow(
+            processId,
+            window => window.Handle != ownerHandle &&
+                window.Bounds.Width > 350 &&
+                window.Bounds.Height > 250 &&
+                (window.Title.Contains("Format Cells", StringComparison.OrdinalIgnoreCase) ||
+                 WindowHasUiaText(window.Handle, "Format Cells")),
+            timeout);
+
+    private static WindowInfo? FindExcelRibbonGalleryPopup(int processId, long ownerHandle, string galleryName, TimeSpan timeout)
+        => WindowFinder.FindProcessWindow(
+            processId,
+            window => window.Handle != ownerHandle &&
+                !window.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase) &&
+                !window.ClassName.Equals("NUIDialog", StringComparison.OrdinalIgnoreCase) &&
+                window.Bounds.Width >= 120 &&
+                window.Bounds.Height >= 80 &&
+                (window.ClassName.Equals("Net UI Tool Window", StringComparison.OrdinalIgnoreCase) ||
+                 WindowHasUiaText(window.Handle, galleryName)),
+            timeout);
+
+    private static bool WindowHasUiaText(long handle, string text)
+    {
+        try
         {
-            var foreground = WindowFinder.GetWindowInfo(NativeMethods.GetForegroundWindow());
-            if (foreground is not null &&
-                foreground.ProcessId == processId &&
-                foreground.Handle != ownerHandle &&
-                !foreground.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase) &&
-                !foreground.ClassName.Equals("NUIDialog", StringComparison.OrdinalIgnoreCase) &&
-                foreground.Bounds.Width is >= 70 and <= 450 &&
-                foreground.Bounds.Height is >= 40 and <= 500)
+            var normalizedText = NormalizeMenuSearchText(text);
+            var root = AutomationElement.FromHandle(new IntPtr(handle));
+            if ((root.Current.Name ?? string.Empty).Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                (root.Current.AutomationId ?? string.Empty).Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                NormalizeMenuSearchText(root.Current.Name).Contains(normalizedText, StringComparison.OrdinalIgnoreCase) ||
+                NormalizeMenuSearchText(root.Current.AutomationId).Contains(normalizedText, StringComparison.OrdinalIgnoreCase))
             {
-                return foreground;
+                return true;
             }
 
-            Thread.Sleep(150);
+            var descendants = root.FindAll(TreeScope.Descendants, Condition.TrueCondition);
+            foreach (AutomationElement descendant in descendants)
+            {
+                var name = descendant.Current.Name ?? string.Empty;
+                var automationId = descendant.Current.AutomationId ?? string.Empty;
+                if (name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                    automationId.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                    NormalizeMenuSearchText(name).Contains(normalizedText, StringComparison.OrdinalIgnoreCase) ||
+                    NormalizeMenuSearchText(automationId).Contains(normalizedText, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (COMException)
+        {
+        }
+        catch (ElementNotAvailableException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
         }
 
-        return null;
+        return false;
     }
 
     private static void RightClickScreenPoint(int x, int y)
@@ -4548,6 +4633,82 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
         expandCollapse.Expand();
         return true;
+    }
+
+    private static bool TryOpenExcelCellStylesGallery(IntPtr excelWindowHandle)
+    {
+        try
+        {
+            var root = AutomationElement.FromHandle(excelWindowHandle);
+            var candidates = root.FindAll(TreeScope.Descendants, Condition.TrueCondition)
+                .Cast<AutomationElement>()
+                .Where(IsVisibleElement)
+                .Where(element => ElementTextContains(element, "Cell Styles"))
+                .OrderBy(element => element.Current.BoundingRectangle.Top)
+                .ThenByDescending(element => element.Current.BoundingRectangle.Width * element.Current.BoundingRectangle.Height)
+                .ToArray();
+
+            foreach (var candidate in candidates)
+            {
+                if (candidate.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out var expandPatternObject) &&
+                    expandPatternObject is ExpandCollapsePattern expandPattern)
+                {
+                    expandPattern.Expand();
+                    return true;
+                }
+
+                if (candidate.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
+                    invokePatternObject is InvokePattern invokePattern)
+                {
+                    invokePattern.Invoke();
+                    return true;
+                }
+
+                var bounds = candidate.Current.BoundingRectangle;
+                if (!bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0)
+                {
+                    NativeMethods.SetCursorPos((int)(bounds.Left + bounds.Width / 2.0), (int)(bounds.Top + bounds.Height / 2.0));
+                    Thread.Sleep(100);
+                    NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                    Thread.Sleep(60);
+                    NativeMethods.MouseEvent(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+                    return true;
+                }
+            }
+        }
+        catch (COMException)
+        {
+        }
+        catch (ElementNotAvailableException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        return false;
+    }
+
+    private static bool ElementTextContains(AutomationElement element, string text)
+    {
+        try
+        {
+            var name = element.Current.Name ?? string.Empty;
+            var automationId = element.Current.AutomationId ?? string.Empty;
+            var normalizedText = NormalizeMenuSearchText(text);
+            return name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                   automationId.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                   NormalizeMenuSearchText(name).Contains(normalizedText, StringComparison.OrdinalIgnoreCase) ||
+                   NormalizeMenuSearchText(automationId).Contains(normalizedText, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
     }
 
     private static void CloseExcel(dynamic? excel, dynamic? workbook)
