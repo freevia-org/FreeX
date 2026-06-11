@@ -708,18 +708,27 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard(scenario, guard, "before-sheet-tab-overflow-activate");
             }
 
-            var rightNav = FindSheetNavButton(hwnd, right: true);
-            if (rightNav is null)
+            var rightNavCandidates = FindSheetNavButtonCandidates(hwnd, right: true);
+            if (rightNavCandidates.Count == 0)
             {
                 return CaptureResult.Blocked(scenario, "uia-target-not-found", "Could not find Excel's visible sheet-tab scroll/navigation button.", options.OutputRoot, "excel", guard);
             }
 
-            if (!TryRightClickAutomationElement(rightNav))
+            WindowInfo? dialog = null;
+            foreach (var rightNav in rightNavCandidates)
             {
-                return CaptureResult.Blocked(scenario, "uia-target-bounds-invalid", "Excel sheet-tab navigation button bounds were not usable for a physical right-click.", options.OutputRoot, "excel", guard);
+                if (!TryRightClickAutomationElement(rightNav))
+                {
+                    continue;
+                }
+
+                dialog = FindActivateDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
+                if (dialog is not null)
+                {
+                    break;
+                }
             }
 
-            var dialog = FindActivateDialogWindow(pid.Value, hwnd.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
                 return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's Activate dialog after right-clicking the sheet-tab navigation button.", options.OutputRoot, "excel", guard);
@@ -3274,21 +3283,36 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return blocked;
             }
 
-            var rightNav = FindSheetNavButton(handle, right: true);
-            if (rightNav is null)
+            var rightNavCandidates = FindSheetNavButtonCandidates(handle, right: true);
+            if (rightNavCandidates.Count == 0)
             {
                 return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", "Could not find the visible sheet-tab Scroll Tabs Right button after seeding overflow sheets.", options.OutputRoot, "freex");
             }
 
-            blocked = GuardedClickElement(options.Scenario, processId, handle, rightNav, MouseButtonKind.Right);
-            if (blocked is not null)
+            WindowInfo? dialog = null;
+            CaptureResult? lastBlocked = null;
+            foreach (var rightNav in rightNavCandidates)
             {
-                return blocked;
+                lastBlocked = GuardedClickElement(options.Scenario, processId, handle, rightNav, MouseButtonKind.Right);
+                if (lastBlocked is not null)
+                {
+                    continue;
+                }
+
+                dialog = FindActivateDialogWindow(processId, handle.ToInt64(), options.PopupTimeout);
+                if (dialog is not null)
+                {
+                    break;
+                }
             }
 
-            var dialog = FindActivateDialogWindow(processId, handle.ToInt64(), options.PopupTimeout);
             if (dialog is null)
             {
+                if (lastBlocked is not null)
+                {
+                    return lastBlocked;
+                }
+
                 return CaptureResult.Blocked(options.Scenario, "dialog-not-found", "Did not detect Activate Sheet dialog after right-clicking the sheet-tab overflow navigation button.", options.OutputRoot, "freex");
             }
 
@@ -3670,6 +3694,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             .FirstOrDefault();
 
     private static AutomationElement? FindSheetNavButton(IntPtr handle, bool right)
+        => FindSheetNavButtonCandidates(handle, right).FirstOrDefault();
+
+    private static IReadOnlyList<AutomationElement> FindSheetNavButtonCandidates(IntPtr handle, bool right)
     {
         var tabBounds = GetVisibleSheetTabElements(handle)
             .Select(element => element.Current.BoundingRectangle)
@@ -3677,7 +3704,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             .ToList();
         if (tabBounds.Count == 0)
         {
-            return null;
+            return [];
         }
 
         var tabCenterY = tabBounds.Average(bounds => bounds.Top + bounds.Height / 2.0);
@@ -3701,7 +3728,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
         if (buttons.Count == 0)
         {
-            return null;
+            return [];
         }
 
         if (right)
@@ -3711,7 +3738,12 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 .OrderByDescending(button => button.Current.BoundingRectangle.Right)
                 .ToList();
             if (beforeTabs.Count >= 2)
-                return beforeTabs[0];
+            {
+                return beforeTabs
+                    .Concat(buttons.Except(beforeTabs))
+                    .Distinct()
+                    .ToList();
+            }
 
             return buttons
                 .OrderBy(button =>
@@ -3719,7 +3751,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     var bounds = button.Current.BoundingRectangle;
                     return Math.Abs((bounds.Left + bounds.Width / 2.0) - tabRight);
                 })
-                .FirstOrDefault();
+                .ToList();
         }
 
         return buttons
@@ -3728,17 +3760,60 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 var bounds = button.Current.BoundingRectangle;
                 return Math.Abs((bounds.Left + bounds.Width / 2.0) - tabLeft);
             })
-            .FirstOrDefault();
+            .ToList();
     }
 
     private static WindowInfo? FindActivateDialogWindow(int processId, long ownerHandle, TimeSpan timeout)
         => WindowFinder.FindProcessWindow(
             processId,
-            window => window.Handle != ownerHandle &&
-                window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase) &&
-                window.Bounds.Width >= 120 &&
-                window.Bounds.Height >= 90,
+            window => IsActivateDialogWindow(window, ownerHandle),
             timeout);
+
+    private static bool IsActivateDialogWindow(WindowInfo window, long ownerHandle)
+    {
+        if (window.Handle == ownerHandle ||
+            window.Bounds.Width < 120 ||
+            window.Bounds.Height < 90)
+        {
+            return false;
+        }
+
+        if (window.Title.Contains("Activate", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return WindowContainsSheetActivationList(window);
+    }
+
+    private static bool WindowContainsSheetActivationList(WindowInfo window)
+    {
+        try
+        {
+            var root = AutomationElement.FromHandle(new IntPtr(window.Handle));
+            var descendants = root
+                .FindAll(TreeScope.Descendants, Condition.TrueCondition)
+                .Cast<AutomationElement>()
+                .ToList();
+            var hasSheetListEntry = descendants.Any(element =>
+                Equals(element.Current.ControlType, ControlType.ListItem) &&
+                IsDefaultSheetName(element.Current.Name));
+            var hasConfirmationButton = descendants.Any(element =>
+                Equals(element.Current.ControlType, ControlType.Button) &&
+                (element.Current.Name.Equals("OK", StringComparison.OrdinalIgnoreCase) ||
+                 element.Current.Name.Equals("Cancel", StringComparison.OrdinalIgnoreCase)));
+
+            return hasSheetListEntry && hasConfirmationButton;
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
+    }
 
     private static List<string> GetVisibleSheetTabOrder(IntPtr handle)
     {
