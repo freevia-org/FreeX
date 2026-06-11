@@ -22,7 +22,7 @@ public static partial class BuiltInFunctions
         if (string.IsNullOrWhiteSpace(dataFieldCaption))
             return ErrorValue.Value;
 
-        var filters = new Dictionary<string, string>(StringComparer.CurrentCultureIgnoreCase);
+        var filters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         for (var index = 2; index < args.Count; index += 2)
         {
             if (args[index] is ErrorValue fieldError)
@@ -34,7 +34,7 @@ public static partial class BuiltInFunctions
             if (string.IsNullOrWhiteSpace(fieldName))
                 return ErrorValue.Value;
             if (filters.TryGetValue(fieldName, out var existingItem) &&
-                !string.Equals(existingItem, itemName, StringComparison.CurrentCultureIgnoreCase))
+                !string.Equals(existingItem, itemName, StringComparison.OrdinalIgnoreCase))
             {
                 return ErrorValue.Ref;
             }
@@ -79,7 +79,7 @@ public static partial class BuiltInFunctions
             .Concat(pivotTable.PageFields)
             .Select(field => PivotHeader(headers, field.SourceFieldIndex))
             .Where(header => !string.IsNullOrWhiteSpace(header))
-            .ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return filters.Keys.All(visibleFields.Contains);
     }
@@ -96,10 +96,10 @@ public static partial class BuiltInFunctions
                 continue;
 
             if (!string.IsNullOrWhiteSpace(pageField.SelectedItem))
-                return string.Equals(pageField.SelectedItem, expected, StringComparison.CurrentCultureIgnoreCase);
+                return string.Equals(pageField.SelectedItem, expected, StringComparison.OrdinalIgnoreCase);
 
             if (pageField.SelectedItems is { Count: > 0 } selectedItems)
-                return selectedItems.Contains(expected, StringComparer.CurrentCultureIgnoreCase);
+                return selectedItems.Contains(expected, StringComparer.OrdinalIgnoreCase);
         }
 
         return true;
@@ -148,7 +148,7 @@ public static partial class BuiltInFunctions
     {
         for (var i = 0; i < pivotTable.DataFields.Count; i++)
         {
-            if (string.Equals(pivotTable.DataFields[i].Name, caption, StringComparison.CurrentCultureIgnoreCase))
+            if (string.Equals(pivotTable.DataFields[i].Name, caption, StringComparison.OrdinalIgnoreCase))
                 return i;
         }
 
@@ -220,7 +220,7 @@ public static partial class BuiltInFunctions
                     continue;
 
                 var actual = ReadPivotRowItem(sheet, pivotTable, row, firstDataRow, index, rowFields.Count);
-                if (!string.Equals(actual, expected, StringComparison.CurrentCultureIgnoreCase))
+                if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
                 {
                     matches = false;
                     break;
@@ -259,7 +259,7 @@ public static partial class BuiltInFunctions
 
         var actual = PivotText(sheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value);
         var expectedCaption = string.Join(" ", expectedParts);
-        return string.Equals(actual, expectedCaption, StringComparison.CurrentCultureIgnoreCase);
+        return string.Equals(actual, expectedCaption, StringComparison.OrdinalIgnoreCase);
     }
 
     private static uint? ResolveGetPivotDataColumn(
@@ -308,11 +308,11 @@ public static partial class BuiltInFunctions
                 if (pivotTable.DataFields.Count > 1 && level == pivotTable.ColumnFields.Count - 1)
                 {
                     var dataFieldName = pivotTable.DataFields[dataFieldIndex].Name;
-                    if (caption.EndsWith(dataFieldName, StringComparison.CurrentCultureIgnoreCase))
+                    if (caption.EndsWith(dataFieldName, StringComparison.OrdinalIgnoreCase))
                         caption = caption[..^dataFieldName.Length].TrimEnd();
                 }
 
-                if (!string.Equals(caption, expected, StringComparison.CurrentCultureIgnoreCase))
+                if (!string.Equals(caption, expected, StringComparison.OrdinalIgnoreCase))
                 {
                     matches = false;
                     break;
@@ -348,7 +348,7 @@ public static partial class BuiltInFunctions
             else if (index < requestedRowFieldCount)
                 actual = ReadPivotRowItem(sheet, pivotTable, subtotalRow - 1, firstDataRow, index, pivotTable.RowFields.Count);
 
-            if (!string.Equals(actual, expected, StringComparison.CurrentCultureIgnoreCase))
+            if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
                 return false;
         }
 
@@ -423,14 +423,14 @@ public static partial class BuiltInFunctions
     }
 
     private static bool IsPivotGrandTotalText(ScalarValue? value) =>
-        value is TextValue text && text.Value.StartsWith("Grand Total", StringComparison.CurrentCultureIgnoreCase);
+        value is TextValue text && text.Value.StartsWith("Grand Total", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryReadPivotSubtotalCaption(ScalarValue? value, out string item)
     {
         item = "";
         if (value is not TextValue text ||
-            !text.Value.EndsWith(" Total", StringComparison.CurrentCultureIgnoreCase) ||
-            text.Value.StartsWith("Grand Total", StringComparison.CurrentCultureIgnoreCase))
+            !text.Value.EndsWith(" Total", StringComparison.OrdinalIgnoreCase) ||
+            text.Value.StartsWith("Grand Total", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }

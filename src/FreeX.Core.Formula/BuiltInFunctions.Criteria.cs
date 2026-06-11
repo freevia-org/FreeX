@@ -72,8 +72,10 @@ public static partial class BuiltInFunctions
 
         public static CriteriaMatcher Create(ScalarValue criteria)
         {
+            // Excel: a criteria that comes from an empty cell (BlankValue) matches cells equal to 0,
+            // NOT blank cells. This is distinct from the empty string "" (TextValue) which matches blanks.
             if (criteria is BlankValue)
-                return new CriteriaMatcher(CriteriaMatcherKind.TextEquals, text: string.Empty);
+                return new CriteriaMatcher(CriteriaMatcherKind.NumberEquals, number: 0);
 
             if (criteria is NumberValue cn)
                 return new CriteriaMatcher(CriteriaMatcherKind.NumberEquals, number: cn.Value);
