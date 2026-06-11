@@ -2808,10 +2808,16 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(options.Scenario, "uia-cell-bounds-unavailable", "Could not resolve A1 bounds before AutoFit.", options.OutputRoot, "freex", guard);
             }
 
-            var blocked = PasteCellText(handle, processId, originalA1, "A very long foreground AutoFit validation value for S4");
+            const string autoFitSeedText = "A very long foreground AutoFit validation value for S4";
+            var blocked = PasteCellText(handle, processId, originalA1, autoFitSeedText);
             if (blocked is not null)
             {
                 return blocked;
+            }
+
+            if (!WaitForCellValue(handle, "Cell_A1", autoFitSeedText, TimeSpan.FromSeconds(2), out var observedA1Value))
+            {
+                return CaptureResult.Blocked(options.Scenario, "cell-paste-validation-failed", $"Expected A1 to contain the AutoFit seed text before double-click; observed '{observedA1Value}'.", options.OutputRoot, "freex", guard);
             }
 
             if (!TryGetCellBounds(handle, "Cell_A1", out originalA1))
@@ -2823,7 +2829,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 options.Scenario,
                 processId,
                 handle,
-                (int)originalA1.Right,
+                (int)(originalA1.Right - 1),
                 (int)(originalA1.Top - 9));
             if (blocked is not null)
             {
@@ -3906,6 +3912,25 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
         value = valuePattern.Current.Value ?? string.Empty;
         return true;
+    }
+
+    private static bool WaitForCellValue(IntPtr handle, string cellId, string expectedValue, TimeSpan timeout, out string observedValue)
+    {
+        observedValue = string.Empty;
+        var deadline = DateTime.UtcNow + timeout;
+        do
+        {
+            if (TryGetCellValue(handle, cellId, out observedValue) &&
+                observedValue.Equals(expectedValue, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            Thread.Sleep(100);
+        }
+        while (DateTime.UtcNow < deadline);
+
+        return false;
     }
 
     private static bool TryGetSelectedCellIds(IntPtr handle, out HashSet<string> selectedIds)
