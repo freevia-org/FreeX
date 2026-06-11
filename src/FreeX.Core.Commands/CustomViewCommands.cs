@@ -36,7 +36,8 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
             _name,
             CustomViewStatePlanner.CaptureWorkbookState(workbook),
             IncludePrintSettings: _includePrintSettings,
-            IncludeHiddenRowsColumnsAndFilterSettings: _includeHiddenRowsColumnsAndFilterSettings);
+            IncludeHiddenRowsColumnsAndFilterSettings: _includeHiddenRowsColumnsAndFilterSettings,
+            ActiveSheetIndex: CustomViewStatePlanner.CaptureActiveSheetIndex(workbook));
 
         if (_hadPreviousView)
             workbook.CustomViews[index] = view;
@@ -77,6 +78,7 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
 {
     private readonly string _name;
     private List<WorksheetCustomViewState>? _previousStates;
+    private int? _previousActiveSheetIndex;
 
     public string Label => "Apply Custom View";
 
@@ -92,12 +94,16 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
             return new CommandOutcome(false, $"Custom view '{_name}' was not found.");
 
         _previousStates = Capture(ctx.Workbook);
-        foreach (var state in ctx.Workbook.CustomViews[index].Sheets)
+        _previousActiveSheetIndex = CustomViewStatePlanner.CaptureActiveSheetIndex(ctx.Workbook);
+        var view = ctx.Workbook.CustomViews[index];
+        foreach (var state in view.Sheets)
         {
             var sheet = ctx.Workbook.GetSheet(state.SheetName);
             if (sheet is null) continue;
             ApplyState(sheet, state);
         }
+        if (CustomViewStatePlanner.SanitizeActiveSheetIndex(ctx.Workbook, view.ActiveSheetIndex) is { } activeSheetIndex)
+            ctx.Workbook.ActiveSheetIndex = activeSheetIndex;
 
         return new CommandOutcome(true);
     }
@@ -111,6 +117,7 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
             if (sheet is null) continue;
             ApplyState(sheet, state);
         }
+        ctx.Workbook.ActiveSheetIndex = CustomViewStatePlanner.SanitizeActiveSheetIndex(ctx.Workbook, _previousActiveSheetIndex);
     }
 
     private static List<WorksheetCustomViewState> Capture(Workbook workbook) =>

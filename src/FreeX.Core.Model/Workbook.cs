@@ -497,7 +497,8 @@ public sealed record WorkbookCustomView(
     IReadOnlyList<WorksheetCustomViewState> Sheets,
     string? Id = null,
     bool IncludePrintSettings = true,
-    bool IncludeHiddenRowsColumnsAndFilterSettings = true);
+    bool IncludeHiddenRowsColumnsAndFilterSettings = true,
+    int? ActiveSheetIndex = null);
 
 public sealed record WorkbookScenario(
     string Name,
@@ -520,4 +521,8 @@ public sealed record WorksheetCustomViewState(
     bool ShowHeadings = true,
     bool ShowRulers = true,
     int ZoomPercent = 100,
-    bool ShowFormulas = false);
+    bool ShowFormulas = false,
+    uint? ActiveRow = null,
+    uint? ActiveCol = null,
+    uint? ViewTopRow = null,
+    uint? ViewLeftCol = null);

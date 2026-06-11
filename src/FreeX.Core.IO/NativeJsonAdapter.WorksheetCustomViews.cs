@@ -20,7 +20,11 @@ public sealed partial class NativeJsonAdapter
             sheetDto.ShowHeadings ?? true,
             sheetDto.ShowRulers ?? true,
             NativeJsonValueSanitizer.ValidZoomPercentOrDefault(sheetDto.ZoomPercent),
-            sheetDto.ShowFormulas ?? false);
+            sheetDto.ShowFormulas ?? false,
+            NativeJsonValueSanitizer.ValidRowPaneOrNull(sheetDto.ActiveRow),
+            NativeJsonValueSanitizer.ValidColumnPaneOrNull(sheetDto.ActiveCol),
+            NativeJsonValueSanitizer.ValidRowPaneOrNull(sheetDto.ViewTopRow),
+            NativeJsonValueSanitizer.ValidColumnPaneOrNull(sheetDto.ViewLeftCol));
     }
 
     private static WorksheetCustomViewState? ToWorksheetCustomViewState(
@@ -53,7 +57,11 @@ public sealed partial class NativeJsonAdapter
             ShowHeadings = state.ShowHeadings,
             ShowRulers = state.ShowRulers,
             ZoomPercent = NativeJsonValueSanitizer.ValidZoomPercentOrDefault(state.ZoomPercent),
-            ShowFormulas = state.ShowFormulas
+            ShowFormulas = state.ShowFormulas,
+            ActiveRow = NativeJsonValueSanitizer.ValidRowPaneOrNull(state.ActiveRow),
+            ActiveCol = NativeJsonValueSanitizer.ValidColumnPaneOrNull(state.ActiveCol),
+            ViewTopRow = NativeJsonValueSanitizer.ValidRowPaneOrNull(state.ViewTopRow),
+            ViewLeftCol = NativeJsonValueSanitizer.ValidColumnPaneOrNull(state.ViewLeftCol)
         };
     }
 }

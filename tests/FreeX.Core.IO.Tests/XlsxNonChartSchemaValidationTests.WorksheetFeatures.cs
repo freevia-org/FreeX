@@ -1538,6 +1538,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var reloadedCustomView = reloaded.CustomViews.Should().ContainSingle().Subject;
         reloadedCustomView.Name.Should().Be("Review");
         reloadedCustomView.Id.Should().Be("{33333333-3333-3333-3333-333333333333}");
+        reloadedCustomView.ActiveSheetIndex.Should().Be(0);
         var reloadedCustomSheet = reloadedCustomView.Sheets.Should().ContainSingle().Subject;
         reloadedCustomSheet.SheetName.Should().Be("Data");
         reloadedCustomSheet.ViewMode.Should().Be(WorksheetViewMode.PageLayout);
@@ -1548,6 +1549,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         reloadedCustomSheet.ShowRulers.Should().BeFalse();
         reloadedCustomSheet.ZoomPercent.Should().Be(125);
         reloadedCustomSheet.ShowFormulas.Should().BeTrue();
+        reloadedCustomSheet.ActiveRow.Should().Be(3);
+        reloadedCustomSheet.ActiveCol.Should().Be(2);
+        reloadedCustomSheet.ViewTopRow.Should().Be(2);
+        reloadedCustomSheet.ViewLeftCol.Should().Be(1);
     }
 
     [Fact]
@@ -4809,6 +4814,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     private static Workbook CreateCustomSheetViewsSourceWorkbook()
     {
         var workbook = new Workbook("CustomSheetViewsPatchSave");
+        workbook.ActiveSheetIndex = 0;
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("view state"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
@@ -4826,9 +4832,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                     ShowHeadings: false,
                     ShowRulers: false,
                     ZoomPercent: 125,
-                    ShowFormulas: true)
+                    ShowFormulas: true,
+                    ActiveRow: 3,
+                    ActiveCol: 2,
+                    ViewTopRow: 2,
+                    ViewLeftCol: 1)
             ],
-            Id: "{33333333-3333-3333-3333-333333333333}"));
+            Id: "{33333333-3333-3333-3333-333333333333}",
+            ActiveSheetIndex: 0));
         return workbook;
     }
 

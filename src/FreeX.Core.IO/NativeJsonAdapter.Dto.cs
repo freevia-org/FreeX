@@ -404,6 +404,8 @@ public sealed partial class NativeJsonAdapter
         public string? Id { get; set; }
         public bool? IncludePrintSettings { get; set; }
         public bool? IncludeHiddenRowsColumnsAndFilterSettings { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? ActiveSheetIndex { get; set; }
         public List<CustomViewSheetDto> Sheets { get; set; } = [];
     }
 
@@ -420,6 +422,14 @@ public sealed partial class NativeJsonAdapter
         public bool? ShowRulers { get; set; }
         public int? ZoomPercent { get; set; }
         public bool? ShowFormulas { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public uint? ActiveRow { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public uint? ActiveCol { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public uint? ViewTopRow { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public uint? ViewLeftCol { get; set; }
     }
 
     private class SheetDto

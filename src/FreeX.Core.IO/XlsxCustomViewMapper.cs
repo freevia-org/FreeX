@@ -1,3 +1,4 @@
+using System;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
@@ -29,6 +30,11 @@ internal static class XlsxCustomViewMapper
             var frozenCols = paneState is "frozen" or "frozenSplit" ? columnSplit ?? 0 : 0;
             var splitRow = frozenRows == 0 && frozenCols == 0 ? rowSplit : null;
             var splitColumn = frozenRows == 0 && frozenCols == 0 ? columnSplit : null;
+            var topLeftCell = customSheetView.Attribute("topLeftCell")?.Value;
+            var activeCell = customSheetView
+                .Elements(worksheetNs + "selection")
+                .Select(selection => selection.Attribute("activeCell")?.Value ?? selection.Attribute("sqref")?.Value)
+                .FirstOrDefault(reference => !string.IsNullOrWhiteSpace(reference));
 
             customViews.Add(new XlsxWorksheetCustomViewState(
                 id,
@@ -43,7 +49,11 @@ internal static class XlsxCustomViewMapper
                     ShowHeadings: !XlsxWorksheetXmlValueParser.IsFalse(customSheetView.Attribute("showRowCol")?.Value),
                     ShowRulers: !XlsxWorksheetXmlValueParser.IsFalse(customSheetView.Attribute("showRuler")?.Value),
                     ZoomPercent: XlsxWorksheetValueSanitizer.ValidZoomPercentOrDefault(XlsxXmlAttributeReader.ReadIntAttribute(customSheetView, "scale") ?? 100),
-                    ShowFormulas: XlsxWorksheetXmlValueParser.IsTruthy(customSheetView.Attribute("showFormulas")?.Value))));
+                    ShowFormulas: XlsxWorksheetXmlValueParser.IsTruthy(customSheetView.Attribute("showFormulas")?.Value),
+                    ActiveRow: ParseCellRow(activeCell),
+                    ActiveCol: ParseCellColumn(activeCell),
+                    ViewTopRow: ParseCellRow(topLeftCell),
+                    ViewLeftCol: ParseCellColumn(topLeftCell))));
         }
 
         return customViews;
@@ -91,7 +101,7 @@ internal static class XlsxCustomViewMapper
                 workbookNs + "customWorkbookView",
                 new XAttribute("name", item.View.Name),
                 new XAttribute("guid", item.Id),
-                new XAttribute("activeSheetId", "1"),
+                new XAttribute("activeSheetId", GetActiveSheetId(workbook, item.View)),
                 item.View.IncludePrintSettings ? new XAttribute("includePrintSettings", "1") : new XAttribute("includePrintSettings", "0"),
                 item.View.IncludeHiddenRowsColumnsAndFilterSettings ? new XAttribute("includeHiddenRowCol", "1") : new XAttribute("includeHiddenRowCol", "0"),
                 new XAttribute("autoUpdate", "0"),
@@ -172,6 +182,9 @@ internal static class XlsxCustomViewMapper
         var customSheetView = new XElement(
             workbookNs + "customSheetView",
             new XAttribute("guid", id),
+            ToCellReference(state.ViewTopRow, state.ViewLeftCol) is { } topLeftCell
+                ? new XAttribute("topLeftCell", topLeftCell)
+                : null,
             XlsxWorksheetViewWriter.ToXlsxWorksheetViewMode(XlsxWorksheetValueSanitizer.ValidEnumOrDefault(state.ViewMode, WorksheetViewMode.Normal)) is { } view
                 ? new XAttribute("view", view)
                 : null,
@@ -193,7 +206,57 @@ internal static class XlsxCustomViewMapper
                 new XAttribute("state", hasFrozenPanes ? "frozen" : "split")));
         }
 
+        if (ToCellReference(state.ActiveRow, state.ActiveCol) is { } activeCell)
+        {
+            customSheetView.Add(new XElement(
+                workbookNs + "selection",
+                new XAttribute("activeCell", activeCell),
+                new XAttribute("sqref", activeCell)));
+        }
+
         return customSheetView;
+    }
+
+    private static int GetActiveSheetId(Workbook workbook, WorkbookCustomView view)
+    {
+        var maxSheetId = Math.Max(1, workbook.Sheets.Count);
+        var index = view.ActiveSheetIndex ?? workbook.ActiveSheetIndex ?? 0;
+        return Math.Clamp(index + 1, 1, maxSheetId);
+    }
+
+    private static string? ToCellReference(uint? row, uint? column)
+    {
+        if (row is not (>= 1 and <= CellAddress.MaxRow) ||
+            column is not (>= 1 and <= CellAddress.MaxCol))
+        {
+            return null;
+        }
+
+        return new CellAddress(default, row.Value, column.Value).ToA1();
+    }
+
+    private static uint? ParseCellRow(string? reference) =>
+        TryParseCellReference(reference, out var address) ? address.Row : null;
+
+    private static uint? ParseCellColumn(string? reference) =>
+        TryParseCellReference(reference, out var address) ? address.Col : null;
+
+    private static bool TryParseCellReference(string? reference, out CellAddress address)
+    {
+        if (!string.IsNullOrWhiteSpace(reference))
+        {
+            var firstReference = reference
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(firstReference) &&
+                CellAddress.TryParse(firstReference, default, out address))
+            {
+                return true;
+            }
+        }
+
+        address = default;
+        return false;
     }
 
     private static void InsertWorkbookCustomViewsInOrder(

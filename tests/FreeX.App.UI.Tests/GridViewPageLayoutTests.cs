@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
+using System.Linq;
 using System.Windows;
 
 namespace FreeX.App.UI.Tests;
@@ -207,6 +208,70 @@ public sealed class GridViewPageLayoutTests
             new Point(115, 300));
 
         margins.Left.Should().BeApproximately(0.85, 0.001);
+    }
+
+    [Fact]
+    public void PageBreakPreviewLayoutPlanner_BuildsPagesAndAutomaticBreakLinesForPreviewRange()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            Enumerable.Range(1, 70).Select(row => new RowMetric((uint)row, (row - 1) * 20, 20)).ToList(),
+            Enumerable.Range(1, 20).Select(col => new ColMetric((uint)col, (col - 1) * 40, 40)).ToList(),
+            null,
+            []);
+        var previewRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 70, 20));
+
+        var layout = PageBreakPreviewLayoutPlanner.Calculate(
+            viewport,
+            previewRange,
+            rowPageBreaks: null,
+            columnPageBreaks: null,
+            WorksheetPageOrder.DownThenOver,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            actualWidth: 900,
+            actualHeight: 1500);
+
+        layout.Pages.Should().HaveCount(4);
+        layout.Pages.Select(page => page.PageNumber).Should().Equal(1, 3, 2, 4);
+        layout.Pages.Should().OnlyContain(page => page.Bounds.Width > 0 && page.Bounds.Height > 0);
+        layout.OutsidePrintAreaMasks.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void GridView_RenderWorksheetViewOverlay_DrawsDistinctPageBreakAndPageLayoutVisuals()
+    {
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.cs");
+
+        source.Should().Contain("PrintArea ?? PagePreviewRange");
+        source.Should().Contain("PageBreakPreviewLayoutPlanner.Calculate");
+        source.Should().Contain("RenderPageBreakPreviewLayout(dc, layout)");
+        source.Should().Contain("DrawPageBreakWatermark");
+        source.Should().Contain("RenderPageLayoutPages(dc, layout)");
+        source.Should().Contain("DrawPageLayoutHeaderFooterCues");
+        source.Should().Contain("RenderPageMarginGuides(dc, pageRange)");
+    }
+
+    [Fact]
+    public void GridView_PreSelectionCacheKeysPagePreviewAndPageSetupInputs()
+    {
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.RenderSurfaceCache.cs");
+
+        source.Should().Contain("GridRange? PagePreviewRange");
+        source.Should().Contain("WorksheetPageOrder PageOrder");
+        source.Should().Contain("WorksheetScaleToFit ScaleToFit");
+        source.Should().Contain("WorksheetRepeatRange? PrintTitleRows");
+        source.Should().Contain("WorksheetRepeatRange? PrintTitleColumns");
+        source.Should().Contain("PagePreviewRange,");
     }
 
 }

@@ -124,14 +124,25 @@ public partial class MainWindow
 
     private void CustomViewsBtn_Click(object sender, RoutedEventArgs e)
     {
+        SyncWorkbookActiveSheetIndex();
         var dialog = new CustomViewsDialog(_workbook, _commandBus) { Owner = this };
         dialog.ShowDialog();
         if (dialog.ViewApplied)
         {
-            UpdateViewport();
+            ApplyCustomViewWorkbookViewState();
             RefreshStatusBar();
             FocusSheetGridIfNeeded();
         }
+    }
+
+    private void ApplyCustomViewWorkbookViewState()
+    {
+        var selectedActiveSheet = TrySelectWorkbookActiveSheet();
+        if (selectedActiveSheet)
+            RefreshSheetTabs();
+
+        _worksheetSelections.Remove(_currentSheetId);
+        ApplyOpenedWorksheetViewState();
     }
 
     private void ArrangeAllPickerBtn_Click(object sender, RoutedEventArgs e)

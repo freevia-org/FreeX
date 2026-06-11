@@ -122,7 +122,10 @@ internal static class XlsxWorkbookMetadataMapper
             id ?? "",
             name ?? "",
             XlsxXmlAttributeReader.ReadBoolAttribute(view, "includePrintSettings", defaultValue: true),
-            XlsxXmlAttributeReader.ReadBoolAttribute(view, "includeHiddenRowCol", defaultValue: true));
+            XlsxXmlAttributeReader.ReadBoolAttribute(view, "includeHiddenRowCol", defaultValue: true),
+            XlsxXmlAttributeReader.ReadIntAttribute(view, "activeSheetId") is { } activeSheetId and > 0
+                ? activeSheetId - 1
+                : null);
     }
 
     private static WorkbookFunctionGroupModel ToFunctionGroup(XElement element)

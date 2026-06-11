@@ -646,5 +646,6 @@ internal sealed record XlsxWorkbookCustomView(
     string Id,
     string Name,
     bool IncludePrintSettings = true,
-    bool IncludeHiddenRowsColumnsAndFilterSettings = true);
+    bool IncludeHiddenRowsColumnsAndFilterSettings = true,
+    int? ActiveSheetIndex = null);
 

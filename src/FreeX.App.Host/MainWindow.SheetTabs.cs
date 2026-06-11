@@ -53,6 +53,30 @@ public partial class MainWindow
         return -1;
     }
 
+    private void SyncWorkbookActiveSheetIndex()
+    {
+        var index = FindWorkbookSheetIndex(_currentSheetId);
+        if (index >= 0)
+            _workbook.ActiveSheetIndex = index;
+    }
+
+    private bool TrySelectWorkbookActiveSheet()
+    {
+        if (_workbook.ActiveSheetIndex is not { } index ||
+            index < 0 ||
+            index >= _workbook.Sheets.Count)
+        {
+            return false;
+        }
+
+        var sheet = _workbook.Sheets[index];
+        if (sheet.IsHidden)
+            return false;
+
+        SelectSingleSheetTab(sheet.Id);
+        return true;
+    }
+
     private IReadOnlyList<SheetId> GetVisibleSheetIds()
         => _workbook.Sheets.Where(sheet => !sheet.IsHidden).Select(sheet => sheet.Id).ToList();
 
