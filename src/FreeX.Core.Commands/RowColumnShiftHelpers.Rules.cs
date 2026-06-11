@@ -18,11 +18,13 @@ internal static partial class RowColumnShiftHelpers
                 : sheet.ConditionalFormats.Select(rule => (rule, rule.AppliesTo)).ToList());
     }
 
-    internal static void RestoreRuleRanges(
+    internal static void RestoreRuleRangesInPlace(
+        Sheet sheet,
         List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? dataValidations,
         List<(ConditionalFormat Rule, GridRange AppliesTo)>? conditionalFormats)
     {
         if (dataValidations is not null)
+        {
             foreach (var (rule, appliesTo, additionalRanges) in dataValidations)
             {
                 rule.AppliesTo = appliesTo;
@@ -30,9 +32,16 @@ internal static partial class RowColumnShiftHelpers
                 rule.AdditionalRanges.AddRange(additionalRanges);
             }
 
+            sheet.DataValidations.NotifyRulesChanged();
+        }
+
         if (conditionalFormats is not null)
+        {
             foreach (var (rule, appliesTo) in conditionalFormats)
                 rule.AppliesTo = appliesTo;
+
+            sheet.ConditionalFormats.NotifyRulesChanged();
+        }
     }
 
     // Full rebuild variant: used when rules may have been removed (e.g. DeleteRows/DeleteColumns).

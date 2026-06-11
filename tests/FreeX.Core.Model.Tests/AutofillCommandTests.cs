@@ -304,6 +304,39 @@ public class AutofillCommandTests
     }
 
     [Fact]
+    public void FillRevert_RestoresStyleOnlyEntries()
+    {
+        // Autofill over a blank-but-styled cell wipes the style-only entry.
+        // Undo must restore the original style-only entry, not leave the cell plain.
+        var (workbook, sheet, ctx) = Setup();
+
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+
+        var greenStyle = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(0, 255, 0) });
+
+        // Source has a value; target is blank but has a style-only fill.
+        sheet.SetCell(source, new NumberValue(10));
+        sheet.SetStyleOnly(target.Row, target.Col, greenStyle);
+
+        var cmd = new AutofillCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            new GridRange(target, target));
+
+        cmd.Apply(ctx);
+
+        // After apply: target has the source value; style-only is gone (SetCell cleared it)
+        sheet.GetValue(target).Should().Be(new NumberValue(10));
+
+        cmd.Revert(ctx);
+
+        // After undo: target is blank again and style-only is restored
+        sheet.GetCell(target).Should().BeNull();
+        sheet.GetStyleOnly(target.Row, target.Col).Should().Be(greenStyle);
+    }
+
+    [Fact]
     public void Apply_ScansFillTargetsWithoutMaterializingAddressList()
     {
         var source = ModelSourceTestSupport.ReadCommandsSource("AutofillCommand.cs");
