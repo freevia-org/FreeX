@@ -23,7 +23,6 @@ public sealed class AddSheetCommand : IWorkbookCommand
             return new CommandOutcome(false, validationError);
 
         var sheet = ctx.Workbook.AddSheet(_name);
-        sheet.ResetViewStateToA1();
         _addedSheetId = sheet.Id;
         return new CommandOutcome(true);
     }
@@ -87,6 +86,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     private Sheet? _removedSheet;
     private int _removedIndex;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
+    private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => "Delete Sheet";
 
@@ -111,7 +111,11 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             if (range.Start.Sheet == _sheetId)
                 ctx.Workbook.RemoveNamedRange(name);
         }
+        var deletedSheetName = sheet.Name;
         ctx.Workbook.RemoveSheet(_sheetId);
+        _formulaSnapshot.Clear();
+        RowColumnShiftHelpers.RewriteAllFormulas(
+            ctx.Workbook, new DeleteSheetOp(deletedSheetName), _formulaSnapshot);
         return new CommandOutcome(true);
     }
 
@@ -119,6 +123,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     {
         if (_removedSheet is not null)
         {
+            RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
             ctx.Workbook.InsertSheet(_removedIndex, _removedSheet);
             RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         }
@@ -190,7 +195,7 @@ public sealed class SetSheetHiddenCommand : IWorkbookCommand
             return protectedOutcome;
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (_hidden && !ctx.Workbook.Sheets.Any(s => s.Id != _sheetId && !s.IsHidden && !s.IsVeryHidden))
+        if (_hidden && !ctx.Workbook.Sheets.Any(s => s.Id != _sheetId && !s.IsHidden))
             return new CommandOutcome(false, "Cannot hide the only visible sheet.");
 
         _previousHidden = sheet.IsHidden;
