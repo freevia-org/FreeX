@@ -517,12 +517,17 @@ public partial class GridView
         grid.ClearChartRenderCache();
         grid.ClearFormulaTraceArrowHeadGeometryCache();
         grid.ClearDrawingObjectLayerCache();
+        grid.DismissCommentPreview();
+        grid.UpdateCommentPreviewForSelection();
     }
 
     private static void OnSelectionVisualPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is GridView grid)
+        {
             grid.MarkSelectionVisualOnlyChange();
+            grid.UpdateCommentPreviewForSelection();
+        }
     }
 
     // Merge lookup (rebuilt once per render pass, O(1) per cell)
