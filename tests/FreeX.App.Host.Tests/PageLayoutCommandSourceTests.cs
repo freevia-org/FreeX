@@ -106,7 +106,10 @@ public sealed class PageLayoutCommandSourceTests
 
         source.Should().Contain("WorkbookThemeWorkflow.CreateColorfulTheme()");
         source.Should().Contain("WorkbookThemeWorkflow.CreateGrayscaleTheme()");
-        source.Should().Contain("new WorkbookThemeDialog(_workbook.Theme)");
+        source.Should().Contain("new WorkbookThemeDialog(_workbook.Theme, mode)");
+        source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Theme)");
+        source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Colors)");
+        source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Effects)");
         source.Should().Contain("new SetWorkbookThemeCommand(theme)");
         source.Should().Contain("new SetPageMarginsCommand(sheetId, WorksheetPageMargins.Normal)");
         source.Should().Contain("new SetPageOrientationCommand(sheetId, WorksheetPageOrientation.Portrait)");

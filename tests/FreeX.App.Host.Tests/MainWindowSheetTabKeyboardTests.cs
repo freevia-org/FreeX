@@ -491,7 +491,8 @@ public sealed class MainWindowSheetTabKeyboardTests
         mouseDown.Should().Contain("UpdateGroupedSheetsForClick(tab.Id);");
 
         mouseMove.Should().Contain("SystemParameters.MinimumHorizontalDragDistance");
-        mouseMove.Should().Contain("FindSheetTabViewModel(e.OriginalSource as System.Windows.DependencyObject)");
+        mouseMove.Should().Contain("FindSheetTabViewModel(FindSheetTabDragHitTarget(current) ?? e.OriginalSource as System.Windows.DependencyObject)");
+        mouseMove.Should().Contain("SheetTabsControl.InputHitTest(position)");
         mouseMove.Should().Contain("new MoveSheetCommand(fromIndex, toIndex)");
         mouseMove.Should().Contain("_currentSheetId = draggedId;");
 

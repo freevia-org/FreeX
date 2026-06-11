@@ -14,16 +14,27 @@ public sealed partial class WorkbookThemeDialogXamlTests
         xaml.Should().Contain("x:Name=\"PreviewHeadingText\"");
         xaml.Should().Contain("x:Name=\"PreviewBodyText\"");
         xaml.Should().Contain("x:Name=\"PreviewAccentStrip\"");
+        xaml.Should().Contain("x:Name=\"PreviewSheetHeader\"");
+        xaml.Should().Contain("x:Name=\"PreviewTableHeader\"");
+        xaml.Should().Contain("x:Name=\"PreviewTableBand\"");
+        xaml.Should().Contain("x:Name=\"PreviewShapeSample\"");
+        xaml.Should().Contain("x:Name=\"PreviewChartBar1\"");
+        xaml.Should().Contain("x:Name=\"PreviewChartBar2\"");
+        xaml.Should().Contain("x:Name=\"PreviewChartBar3\"");
         xaml.Should().Contain("Sample");
         source.Should().Contain("UpdatePreview");
         source.Should().Contain("WirePreviewRefresh");
         source.Should().Contain("HeadingFontBox.SelectionChanged += (_, _) => UpdatePreview()");
+        source.Should().Contain("EffectsBox.SelectionChanged += (_, _) => UpdatePreview()");
         source.Should().Contain("HeadingFontBox.AddHandler(TextBox.TextChangedEvent");
+        source.Should().Contain("EffectsBox.AddHandler(TextBox.TextChangedEvent");
         source.Should().Contain("colorBox.TextChanged += (_, _) =>");
         source.Should().Contain("UpdateColorPickerSwatches();");
         source.Should().Contain("ThemeColorTextBoxes");
         source.Should().Contain("PreviewHeadingText.FontFamily");
         source.Should().Contain("PreviewAccentStrip");
+        source.Should().Contain("ApplyPreviewBorder(PreviewShapeSample");
+        source.Should().Contain("PreviewShapeSample.Effect = CreatePreviewEffect");
     }
 
     [Fact]
