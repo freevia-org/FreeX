@@ -16,6 +16,10 @@ public partial class GridView
         }
 
         var pos = e.GetPosition(this);
+        if (HasActiveCapturedGridDrag())
+            DismissCommentPreview();
+        else
+            UpdateCommentPreviewForPointer(pos);
 
         if (_shapePlacementDragging)
         {
@@ -399,6 +403,7 @@ public partial class GridView
         }
 
         var pos = e.GetPosition(this);
+        DismissCommentPreview(CommentPreviewActivation.Hover);
 
         if (TryHitTestOutlineGroupToggle(Viewport, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var outlineToggle))
         {
@@ -905,14 +910,30 @@ public partial class GridView
     protected override void OnMouseLeave(MouseEventArgs e)
     {
         if (!HasActiveCapturedGridDrag())
+        {
             Cursor = null;
+            RestoreSelectedCommentPreview();
+        }
         base.OnMouseLeave(e);
     }
 
     protected override void OnLostMouseCapture(MouseEventArgs e)
     {
         CancelActiveCapturedGridDrag();
+        RestoreSelectedCommentPreview();
         base.OnLostMouseCapture(e);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && _activeCommentPreviewKey.HasValue)
+        {
+            DismissCommentPreview();
+            e.Handled = true;
+            return;
+        }
+
+        base.OnKeyDown(e);
     }
 
     private bool IsOnSelectionMoveBorder(Point pos) =>

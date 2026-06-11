@@ -1,3 +1,5 @@
+using System.Text;
+
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -413,6 +415,10 @@ public sealed partial class ViewportService : IViewportService
         var displayText = cfIcon?.ShowValue == false || cfDataBar?.ShowValue == false
             ? ""
             : GetDisplayText(workbook, sheet, cell, ref style, targetWidthCharacters);
+        var commentDisplay = hasComment
+            ? CreateCellCommentDisplay(sheet, new CellAddress(sheetId, row, col))
+            : null;
+        hasComment = commentDisplay is not null;
 
         cells.Add(new DisplayCell(
             row,
@@ -425,7 +431,8 @@ public sealed partial class ViewportService : IViewportService
             style,
             cfIcon,
             hasComment,
-            cfDataBar));
+            cfDataBar,
+            commentDisplay));
     }
 
     private struct ViewportStyleCache
@@ -674,9 +681,11 @@ public sealed partial class ViewportService : IViewportService
             var styleOnlyId = sheet.GetStyleOnly(row, col);
             if (!styleOnlyId.HasValue)
             {
+                var address = new CellAddress(sheetId, row, col);
                 if (hasAnyCellComments &&
-                    HasCellComment(sheet, new CellAddress(sheetId, row, col), hasAnyCellComments))
+                    HasCellComment(sheet, address, hasAnyCellComments))
                 {
+                    var commentOnlyDisplay = CreateCellCommentDisplay(sheet, address);
                     cells.Add(new DisplayCell(
                         row,
                         col,
@@ -687,7 +696,9 @@ public sealed partial class ViewportService : IViewportService
                         null,
                         styleCache.Get(workbook, StyleId.Default),
                         null,
-                        true));
+                        commentOnlyDisplay is not null,
+                        null,
+                        commentOnlyDisplay));
                 }
 
                 return;
@@ -715,6 +726,10 @@ public sealed partial class ViewportService : IViewportService
                     out cfIcon,
                     out cfDataBar,
                     out hasComment);
+            var commentDisplay = hasComment
+                ? CreateCellCommentDisplay(sheet, new CellAddress(sheetId, row, col))
+                : null;
+            hasComment = commentDisplay is not null;
 
             cells.Add(new DisplayCell(
                 row,
@@ -727,7 +742,8 @@ public sealed partial class ViewportService : IViewportService
                 style,
                 cfIcon,
                 hasComment,
-                cfDataBar));
+                cfDataBar,
+                commentDisplay));
             return;
         }
 
@@ -807,6 +823,63 @@ public sealed partial class ViewportService : IViewportService
         hasAnyCellComments &&
         (sheet.Comments.ContainsKey(address) ||
          sheet.ThreadedComments.ContainsKey(address));
+
+    private static CellCommentDisplay? CreateCellCommentDisplay(Sheet sheet, CellAddress address)
+    {
+        var hasNote = sheet.Comments.TryGetValue(address, out var note);
+        var hasThreadedComment = sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
+
+        if (hasNote && hasThreadedComment)
+        {
+            var body = new StringBuilder();
+            body.AppendLine("Note:");
+            body.AppendLine(note ?? string.Empty);
+            body.AppendLine();
+            body.AppendLine("Comment:");
+            body.Append(FormatThreadedComment(threadedComment!));
+
+            return new CellCommentDisplay(
+                CellCommentDisplayKind.Mixed,
+                threadedComment!.IsResolved ? "Resolved comment and note" : "Comment and note",
+                body.ToString(),
+                threadedComment.IsResolved);
+        }
+
+        if (hasThreadedComment)
+        {
+            return new CellCommentDisplay(
+                CellCommentDisplayKind.ThreadedComment,
+                threadedComment!.IsResolved ? "Resolved comment" : "Comment",
+                FormatThreadedComment(threadedComment),
+                threadedComment.IsResolved);
+        }
+
+        return hasNote
+            ? new CellCommentDisplay(CellCommentDisplayKind.Note, "Note", note ?? string.Empty)
+            : null;
+    }
+
+    private static string FormatThreadedComment(ThreadedComment comment)
+    {
+        var body = new StringBuilder();
+        AppendCommentLine(body, comment.Author, comment.Text);
+        foreach (var reply in comment.Replies)
+        {
+            body.AppendLine();
+            body.AppendLine();
+            AppendCommentLine(body, reply.Author, reply.Text);
+        }
+
+        return body.ToString();
+    }
+
+    private static void AppendCommentLine(StringBuilder body, string? author, string text)
+    {
+        if (!string.IsNullOrWhiteSpace(author))
+            body.Append(author.Trim()).Append(": ");
+
+        body.Append(text);
+    }
 
     // ── Conditional format evaluation ─────────────────────────────────────────
 
