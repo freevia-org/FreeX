@@ -70,6 +70,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _suppressAppViewOptionSync;
     private bool _isOpeningFile;
     private bool _isSavingFile;
+    private bool _isExportingFile;
     private bool _workbookDirty;
     private bool _suppressClosePrompt;
     private bool _closeAfterSaveInProgress;

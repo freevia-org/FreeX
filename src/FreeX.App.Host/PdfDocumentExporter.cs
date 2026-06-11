@@ -54,6 +54,35 @@ internal static class PdfDocumentExporter
         SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality), bookmarks, initialView, openMode, includeSelectableText, pdfLanguage);
     }
 
+    /// <summary>
+    /// Renders <paramref name="document"/> into PDF bytes without writing any file.  The caller
+    /// may then flush the bytes to disk on a background thread via
+    /// <see cref="ExportAtomicWriter.WriteAllBytes"/>.  This overload must be called on the
+    /// UI / STA thread because it accesses WPF visual objects.
+    /// </summary>
+    public static byte[] RenderToBytes(
+        FixedDocument document,
+        PdfDocumentProperties? properties,
+        ExportPageRange? pageRange,
+        ExportQuality quality = ExportQuality.Standard,
+        IReadOnlyList<PdfBookmark>? bookmarks = null,
+        PdfInitialView initialView = PdfInitialView.SinglePage,
+        PdfOpenMode openMode = PdfOpenMode.Normal,
+        bool includeSelectableText = false,
+        string pdfLanguage = ExportPlanner.DefaultPdfLanguage)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        if (!ExportPlanner.TryValidatePageRange(pageRange, document.Pages.Count, out var pageRangeError))
+            throw new InvalidOperationException(pageRangeError);
+
+        var firstPageIndex = Math.Max(0, (pageRange?.FromPage ?? 1) - 1);
+        var lastPageIndexInclusive = Math.Min(document.Pages.Count - 1, (pageRange?.ToPage ?? document.Pages.Count) - 1);
+        using var stream = new MemoryStream();
+        BuildPages(document, stream, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality), bookmarks, initialView, openMode, includeSelectableText, pdfLanguage);
+        return stream.ToArray();
+    }
+
     internal static double ResolveRasterDpi(ExportQuality quality) =>
         quality == ExportQuality.MinimumSize
             ? MinimumSizeDpi
@@ -78,6 +107,26 @@ internal static class PdfDocumentExporter
         var directory = Path.GetDirectoryName(Path.GetFullPath(path));
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
+
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        BuildPages(document, stream, properties, firstPageIndex, lastPageIndexInclusive, dpi, bookmarks, initialView, openMode, includeSelectableText, pdfLanguage);
+    }
+
+    private static void BuildPages(
+        FixedDocument document,
+        Stream outputStream,
+        PdfDocumentProperties? properties,
+        int firstPageIndex,
+        int lastPageIndexInclusive,
+        double dpi = StandardDpi,
+        IReadOnlyList<PdfBookmark>? bookmarks = null,
+        PdfInitialView initialView = PdfInitialView.SinglePage,
+        PdfOpenMode openMode = PdfOpenMode.Normal,
+        bool includeSelectableText = false,
+        string pdfLanguage = ExportPlanner.DefaultPdfLanguage)
+    {
+        if (firstPageIndex > lastPageIndexInclusive || document.Pages.Count == 0)
+            throw new InvalidOperationException("The requested page range does not contain any exportable pages.");
 
         using var pdf = new PdfDocument();
         if (includeSelectableText)
@@ -116,7 +165,7 @@ internal static class PdfDocumentExporter
 
         var hasBookmarks = AddBookmarks(pdf, bookmarks, firstPageIndex, lastPageIndexInclusive);
         ApplyOpenMode(pdf, openMode, hasBookmarks);
-        pdf.Save(path);
+        pdf.Save(outputStream);
     }
 
     private static bool AddBookmarks(
