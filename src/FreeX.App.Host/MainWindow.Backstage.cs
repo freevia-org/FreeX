@@ -788,9 +788,21 @@ public partial class MainWindow
         if (ext == ".xlsx" && !ConfirmUnsupportedXlsxFeatureSave())
             return false;
 
+        // Capture identity/generation before any await so we can detect edits or
+        // workbook replacement that occur while the serialization is running.
+        var generationAtSaveStart = _workbookDirtyGeneration;
+        var workbookAtSaveStart = _workbook;
+
         try
         {
             _isSavingFile = true;
+
+            // Block all user input for the duration of the save, mirroring the
+            // open path's OpenProgressOverlay pattern.  This is the primary defence
+            // against torn-snapshot and false-clean-save races; the generation check
+            // below is belt-and-suspenders.
+            RootGrid.IsEnabled = false;
+
             ShowSaveProgress(
                 UiText.Get("Progress_SavingWorkbook"),
                 UiText.Get("Progress_SavingFilePreparing"),
@@ -798,10 +810,22 @@ public partial class MainWindow
             var progress = new Progress<SaveProgressUpdate>(
                 update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
             await new SaveWorkbookWriter().SaveAsync(target.Path, target.Adapter, _workbook, progress);
-            _currentFilePath = target.Path;
-            _workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);
-            _recentFiles.AddOrUpdate(target.Path);
-            MarkWorkbookSaved();
+
+            var plan = SaveCompletionPlanner.Plan(
+                generationAtSaveStart,
+                _workbookDirtyGeneration,
+                sameWorkbook: ReferenceEquals(_workbook, workbookAtSaveStart));
+
+            if (plan.ApplyFileContext)
+            {
+                _currentFilePath = target.Path;
+                _workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);
+                _recentFiles.AddOrUpdate(target.Path);
+            }
+
+            if (plan.MarkSaved)
+                MarkWorkbookSaved();
+
             UpdateTitleBar();
             RecordDiagnosticEvent("workbook_saved", new Dictionary<string, string?>
             {
@@ -830,6 +854,7 @@ public partial class MainWindow
         finally
         {
             _isSavingFile = false;
+            RootGrid.IsEnabled = true;
             HideSaveProgress();
         }
     }

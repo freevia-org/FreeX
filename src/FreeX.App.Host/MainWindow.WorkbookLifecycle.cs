@@ -15,9 +15,14 @@ public partial class MainWindow
         DiscardWithoutSaving
     }
 
+    // Incremented each time the workbook becomes dirty.  The save path captures this
+    // before awaiting and compares afterwards to detect edits that arrived mid-save.
+    private int _workbookDirtyGeneration;
+
     private void MarkWorkbookDirty()
     {
         _workbookDirty = true;
+        _workbookDirtyGeneration++;
         UpdateTitleBar();
     }
 
@@ -77,6 +82,13 @@ public partial class MainWindow
         }
 
         if (confirmation == SaveChangesConfirmation.Cancel)
+            return;
+
+        // Belt-and-suspenders: if the workbook became dirty again while the async
+        // prompt/save ran (rare when input is blocked, but possible during the
+        // confirmation dialog itself), do not suppress the next close prompt —
+        // let Closing re-evaluate naturally on the next attempt.
+        if (_workbookDirty)
             return;
 
         _suppressClosePrompt = true;
