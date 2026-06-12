@@ -137,6 +137,14 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         changed |= NormalizeExtensionLists(autoFilter);
         changed |= NormalizeAttribute(autoFilter, "ref", NormalizeCellOrRangeReference);
 
+        // ClosedXML dereferences autoFilter@ref unconditionally during load, so an
+        // autoFilter that ends up without a usable ref must be dropped, not kept ref-less.
+        if (autoFilter.Attribute("ref") is null && autoFilter.Parent is not null)
+        {
+            autoFilter.Remove();
+            return true;
+        }
+
         foreach (var filterColumn in autoFilter.Elements(WorksheetNs + "filterColumn").ToList())
             changed |= NormalizeFilterColumnElement(filterColumn);
         foreach (var sortState in autoFilter.Elements(WorksheetNs + "sortState").ToList())
@@ -383,14 +391,21 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         if (string.IsNullOrWhiteSpace(trimmed))
             return null;
 
-        var parts = trimmed.Split(':');
+        // Some producers write absolute-style refs ("$A$3:$G$25"). The schema type carries
+        // no '$' markers and ClosedXML chokes on them, so normalize to the plain form
+        // instead of rejecting the reference (which would drop a filter the file relies on).
+        var canonical = trimmed.Contains('$') ? trimmed.Replace("$", string.Empty) : trimmed;
+        if (string.IsNullOrWhiteSpace(canonical))
+            return null;
+
+        var parts = canonical.Split(':');
         if (parts.Length == 1)
-            return CellAddress.TryParse(parts[0], SheetId.New(), out _) ? trimmed : null;
+            return CellAddress.TryParse(parts[0], SheetId.New(), out _) ? canonical : null;
 
         return parts.Length == 2 &&
                CellAddress.TryParse(parts[0], SheetId.New(), out _) &&
                CellAddress.TryParse(parts[1], SheetId.New(), out _)
-            ? trimmed
+            ? canonical
             : null;
     }
 
