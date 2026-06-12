@@ -8,7 +8,7 @@ internal static class XlsxWorksheetCommentReader
 {
     private const string CommentsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
 
-    public static IReadOnlyList<(uint Row, uint Col, string Text)> Read(ZipArchive archive, string worksheetPath)
+    public static IReadOnlyList<(uint Row, uint Col, string Text, string Author)> Read(ZipArchive archive, string worksheetPath)
     {
         var relationshipsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var relationshipsEntry = archive.GetEntry(relationshipsPath);
@@ -19,7 +19,7 @@ internal static class XlsxWorksheetCommentReader
         if (commentPartPaths.Count == 0)
             return [];
 
-        var comments = new List<(uint Row, uint Col, string Text)>();
+        var comments = new List<(uint Row, uint Col, string Text, string Author)>();
         foreach (var commentPartPath in commentPartPaths)
         {
             var commentEntry = archive.GetEntry(commentPartPath);
@@ -59,12 +59,20 @@ internal static class XlsxWorksheetCommentReader
         }
     }
 
-    private static void ReadComments(ZipArchiveEntry commentEntry, List<(uint Row, uint Col, string Text)> comments)
+    private static void ReadComments(ZipArchiveEntry commentEntry, List<(uint Row, uint Col, string Text, string Author)> comments)
     {
         try
         {
             var commentsXml = LoadXml(commentEntry);
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            // Build an index from authorId (0-based) to author name from the <authors> list.
+            var authors = commentsXml.Root?
+                .Element(worksheetNs + "authors")?
+                .Elements(worksheetNs + "author")
+                .Select(element => element.Value)
+                .ToList()
+                ?? [];
 
             foreach (var comment in commentsXml.Root?
                          .Element(worksheetNs + "commentList")?
@@ -84,7 +92,17 @@ internal static class XlsxWorksheetCommentReader
                 if (text.Length == 0)
                     continue;
 
-                comments.Add((address.Row, address.Col, text));
+                var authorId = comment.Attribute("authorId")?.Value;
+                var author = "";
+                if (authorId is not null &&
+                    int.TryParse(authorId, out var authorIndex) &&
+                    authorIndex >= 0 &&
+                    authorIndex < authors.Count)
+                {
+                    author = authors[authorIndex] ?? "";
+                }
+
+                comments.Add((address.Row, address.Col, text, author));
             }
         }
         catch

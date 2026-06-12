@@ -82,6 +82,7 @@ public sealed partial class NativeJsonAdapter
             TrimToNull(dto.MinDate),
             TrimToNull(dto.MaxDate),
             sharedItems,
+            null,
             TrimToNull(dto.Formula),
             dto.IsDatabaseField);
     }

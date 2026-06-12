@@ -18,6 +18,8 @@ internal static partial class XlsxChartXmlWriter
         var categoryRange = chart.FirstColIsCategories
             ? FormatSheetRange(sheet.Name, dataStartRow, chart.DataRange.Start.Col, chart.DataRange.End.Row, chart.DataRange.Start.Col)
             : null;
+        var categoryIsNumeric = chart.FirstColIsCategories &&
+            IsCategoryRangeNumeric(sheet, dataStartRow, chart.DataRange.Start.Col, chart.DataRange.End.Row);
 
         var seriesIndex = 0;
         for (var col = seriesStartCol; col <= chart.DataRange.End.Col; col++)
@@ -28,11 +30,28 @@ internal static partial class XlsxChartXmlWriter
                 continue;
             }
 
-            var valueRange = FormatSheetRange(sheet.Name, dataStartRow, col, chart.DataRange.End.Row, col);
+            var verbatim = GetVerbatimFormulas(chart, seriesIndex);
+            var valueRange = verbatim?.ValFormula
+                ?? FormatSheetRange(sheet.Name, dataStartRow, col, chart.DataRange.End.Row, col);
+            var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
+            var effectiveCategoryIsNumeric = verbatim?.CatFormula is null && categoryIsNumeric;
+
+            XElement? txElement = null;
+            if (verbatim?.TxFormula is { } txFormula)
+            {
+                txElement = new XElement(chartNs + "tx",
+                    new XElement(chartNs + "strRef",
+                        new XElement(chartNs + "f", txFormula)));
+            }
+            else
+            {
+                txElement = ToSeriesTitleXml(chart, sheet, col, chartNs);
+            }
+
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
                 new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
-                ToSeriesTitleXml(chart, sheet, col, chartNs),
+                txElement,
                 chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
                     ? ToSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs)
                     : ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
@@ -43,7 +62,7 @@ internal static partial class XlsxChartXmlWriter
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
-                ToCategoryRangeXml(categoryRange, chartNs),
+                ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", valueRange))),
@@ -54,12 +73,40 @@ internal static partial class XlsxChartXmlWriter
         }
     }
 
-    private static XElement? ToCategoryRangeXml(string? categoryRange, XNamespace chartNs) =>
-        string.IsNullOrWhiteSpace(categoryRange)
-            ? null
-            : new XElement(chartNs + "cat",
-                new XElement(chartNs + "strRef",
-                    new XElement(chartNs + "f", categoryRange)));
+    /// <summary>
+    /// Returns true when every non-blank cell in the category column within [dataStartRow, dataEndRow]
+    /// contains a numeric value. An all-blank column returns false (fall back to strRef).
+    /// </summary>
+    private static bool IsCategoryRangeNumeric(Sheet sheet, uint dataStartRow, uint col, uint dataEndRow)
+    {
+        var hasAnyValue = false;
+        for (var row = dataStartRow; row <= dataEndRow; row++)
+        {
+            var value = sheet.GetValue(row, col);
+            if (value is BlankValue)
+                continue;
+            if (value is not NumberValue)
+                return false;
+            hasAnyValue = true;
+        }
+
+        return hasAnyValue;
+    }
+
+    private static ChartSeriesVerbatimFormulas? GetVerbatimFormulas(ChartModel chart, int seriesIndex) =>
+        chart.VerbatimSeriesFormulas?.FirstOrDefault(f => f.SeriesIndex == seriesIndex);
+
+    private static XElement? ToCategoryRangeXml(string? categoryRange, bool numericCategory, XNamespace chartNs)
+    {
+        if (string.IsNullOrWhiteSpace(categoryRange))
+            return null;
+
+        var refElement = numericCategory
+            ? new XElement(chartNs + "numRef", new XElement(chartNs + "f", categoryRange))
+            : new XElement(chartNs + "strRef", new XElement(chartNs + "f", categoryRange));
+
+        return new XElement(chartNs + "cat", refElement);
+    }
 
     private static XElement? ToSeriesSmoothXml(ChartModel chart, int seriesIndex, XNamespace chartNs) =>
         GetSeriesFormat(chart, seriesIndex)?.Smooth is { } smooth
@@ -98,11 +145,19 @@ internal static partial class XlsxChartXmlWriter
                 continue;
             }
 
-            var yValueRange = FormatSheetRange(sheet.Name, dataStartRow, col, chart.DataRange.End.Row, col);
+            var verbatim = GetVerbatimFormulas(chart, seriesIndex);
+            var effectiveXValueRange = verbatim?.CatFormula ?? xValueRange;
+            var yValueRange = verbatim?.ValFormula
+                ?? FormatSheetRange(sheet.Name, dataStartRow, col, chart.DataRange.End.Row, col);
+
+            XElement? txElement = verbatim?.TxFormula is { } txFormula
+                ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
+                : ToSeriesTitleXml(chart, sheet, col, chartNs);
+
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
                 new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
-                ToSeriesTitleXml(chart, sheet, col, chartNs),
+                txElement,
                 ToScatterSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs),
                 ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
@@ -110,7 +165,7 @@ internal static partial class XlsxChartXmlWriter
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
                 new XElement(chartNs + "xVal",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", xValueRange))),
+                        new XElement(chartNs + "f", effectiveXValueRange))),
                 new XElement(chartNs + "yVal",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", yValueRange))),
@@ -186,20 +241,27 @@ internal static partial class XlsxChartXmlWriter
         for (var yValueCol = chart.DataRange.Start.Col + 1; yValueCol < chart.DataRange.End.Col; yValueCol += 2)
         {
             var sizeCol = yValueCol + 1;
-            var yValueRange = FormatSheetRange(sheet.Name, dataStartRow, yValueCol, chart.DataRange.End.Row, yValueCol);
+            var verbatim = GetVerbatimFormulas(chart, seriesIndex);
+            var effectiveXValueRange = verbatim?.CatFormula ?? xValueRange;
+            var yValueRange = verbatim?.ValFormula
+                ?? FormatSheetRange(sheet.Name, dataStartRow, yValueCol, chart.DataRange.End.Row, yValueCol);
             var sizeRange = FormatSheetRange(sheet.Name, dataStartRow, sizeCol, chart.DataRange.End.Row, sizeCol);
+
+            XElement? txElement = verbatim?.TxFormula is { } txFormula
+                ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
+                : ToSeriesTitleXml(chart, sheet, yValueCol, chartNs);
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
                 new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
-                ToSeriesTitleXml(chart, sheet, yValueCol, chartNs),
+                txElement,
                 ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
                 new XElement(chartNs + "xVal",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", xValueRange))),
+                        new XElement(chartNs + "f", effectiveXValueRange))),
                 new XElement(chartNs + "yVal",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", yValueRange))),
@@ -224,19 +286,30 @@ internal static partial class XlsxChartXmlWriter
         var categoryRange = chart.FirstColIsCategories
             ? FormatSheetRange(sheet.Name, dataStartRow, chart.DataRange.Start.Col, chart.DataRange.End.Row, chart.DataRange.Start.Col)
             : null;
+        var categoryIsNumeric = chart.FirstColIsCategories &&
+            IsCategoryRangeNumeric(sheet, dataStartRow, chart.DataRange.Start.Col, chart.DataRange.End.Row);
 
         var seriesIndex = 0;
         for (var valueCol = firstValueCol; valueCol <= chart.DataRange.End.Col; valueCol++)
         {
-            var valueRange = FormatSheetRange(sheet.Name, dataStartRow, valueCol, chart.DataRange.End.Row, valueCol);
+            var verbatim = GetVerbatimFormulas(chart, seriesIndex);
+            var valueRange = verbatim?.ValFormula
+                ?? FormatSheetRange(sheet.Name, dataStartRow, valueCol, chart.DataRange.End.Row, valueCol);
+            var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
+            var effectiveCategoryIsNumeric = verbatim?.CatFormula is null && categoryIsNumeric;
+
+            XElement? txElement = verbatim?.TxFormula is { } txFormula
+                ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
+                : ToSeriesTitleXml(chart, sheet, valueCol, chartNs);
+
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
                 new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
-                ToSeriesTitleXml(chart, sheet, valueCol, chartNs),
+                txElement,
                 ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
                 seriesIndex == 0 ? ToExplodedSliceXml(chart, chartNs) : null,
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
-                ToCategoryRangeXml(categoryRange, chartNs),
+                ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", valueRange))));

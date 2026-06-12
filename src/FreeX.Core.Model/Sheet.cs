@@ -396,6 +396,13 @@ public sealed partial class Sheet
     /// <summary>Cell comments keyed by address.</summary>
     public Dictionary<CellAddress, string> Comments { get; } = [];
 
+    /// <summary>
+    /// Legacy comment authors keyed by address. Populated during load when the comments XML has an
+    /// <c>authors</c> list; absent entries default to an empty-string author on write. This companion
+    /// dictionary avoids changing the Comments value type and its 60+ call sites.
+    /// </summary>
+    public Dictionary<CellAddress, string> CommentAuthors { get; } = [];
+
     /// <summary>Threaded cell comments keyed by address.</summary>
     public Dictionary<CellAddress, ThreadedComment> ThreadedComments { get; } = [];
 

@@ -31,8 +31,8 @@ internal static class XlsxChartAxisReader
             chart.HideYAxis = ReadBool(yAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
             chart.XAxisPosition = FromXlsxAxisPosition(xAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Bottom);
             chart.YAxisPosition = FromXlsxAxisPosition(yAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Left);
-            ApplyAxisTitleFormatting(xAxis, chart);
-            ApplyAxisTitleFormatting(yAxis, chart);
+            ApplyAxisTitleFormatting(xAxis, chart, isXAxis: true);
+            ApplyAxisTitleFormatting(yAxis, chart, isXAxis: false);
             ApplyValueAxisProperties(xAxis, chart, useXAxis: true);
             ApplyValueAxisProperties(yAxis, chart, useXAxis: false);
             ApplyAxisLabelFormatting(xAxis, chart, useXAxis: true);
@@ -46,7 +46,7 @@ internal static class XlsxChartAxisReader
         chart.XAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(categoryAxis));
         chart.HideXAxis = ReadBool(categoryAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
         chart.XAxisPosition = FromXlsxAxisPosition(categoryAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Bottom);
-        ApplyAxisTitleFormatting(categoryAxis, chart);
+        ApplyAxisTitleFormatting(categoryAxis, chart, isXAxis: true);
         ApplyCategoryAxisProperties(categoryAxis, chart);
         ApplyAxisLabelFormatting(categoryAxis, chart, useXAxis: true);
         var valueAxis = plotArea.Element(ChartNs + "valAx");
@@ -54,7 +54,7 @@ internal static class XlsxChartAxisReader
         chart.YAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(valueAxis));
         chart.HideYAxis = ReadBool(valueAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
         chart.YAxisPosition = FromXlsxAxisPosition(valueAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Left);
-        ApplyAxisTitleFormatting(valueAxis, chart);
+        ApplyAxisTitleFormatting(valueAxis, chart, isXAxis: false);
         ApplyValueAxisProperties(valueAxis, chart, useXAxis: false);
         ApplyAxisLabelFormatting(valueAxis, chart, useXAxis: false);
     }
@@ -111,9 +111,10 @@ internal static class XlsxChartAxisReader
         return null;
     }
 
-    private static void ApplyAxisTitleFormatting(XElement? axisElement, ChartModel chart)
+    private static void ApplyAxisTitleFormatting(XElement? axisElement, ChartModel chart, bool isXAxis)
     {
-        var runProperties = FirstRunProperties(AxisTitle(axisElement));
+        var titleElement = AxisTitle(axisElement);
+        var runProperties = FirstRunProperties(titleElement);
         if (runProperties is null)
             return;
 
@@ -131,6 +132,39 @@ internal static class XlsxChartAxisReader
             chart.AxisTitleTextColor = color;
             chart.AxisTitleTextThemeColor = null;
         }
+
+        // Capture verbatim title XML when formatting is richer than the model fields can represent.
+        // This preserves bold/italic/per-run colors/multiple-run titles on round-trip.
+        if (titleElement is not null && HasRichAxisTitleFormatting(titleElement))
+        {
+            var verbatim = titleElement.ToString(SaveOptions.DisableFormatting);
+            if (isXAxis)
+                chart.XAxisTitleVerbatimXml = verbatim;
+            else
+                chart.YAxisTitleVerbatimXml = verbatim;
+        }
+    }
+
+    /// <summary>
+    /// Returns true when a &lt;c:title&gt; element contains formatting that the model
+    /// fields (<see cref="ChartModel.AxisTitleFontSize"/> etc.) cannot losslessly represent:
+    /// multiple text runs, bold, italic, underline, strikethrough, or baseline shifting.
+    /// </summary>
+    private static bool HasRichAxisTitleFormatting(XElement titleElement)
+    {
+        var runs = titleElement.Descendants(DrawingNs + "r").ToList();
+        if (runs.Count > 1)
+            return true;
+
+        var rPr = runs.Count == 1 ? runs[0].Element(DrawingNs + "rPr") : null;
+        if (rPr is null)
+            return false;
+
+        return rPr.Attribute("b") is not null ||
+               rPr.Attribute("i") is not null ||
+               rPr.Attribute("u") is not null ||
+               rPr.Attribute("strike") is not null ||
+               rPr.Attribute("baseline") is not null;
     }
 
     private static void ApplyAxisLabelFormatting(XElement? axisElement, ChartModel chart, bool useXAxis)

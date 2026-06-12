@@ -172,18 +172,25 @@ internal static partial class XlsxChartXmlWriter
 
     private static IEnumerable<XElement> BuildChartExPlotAreaAxes(ChartModel chart, XNamespace chartExNs)
     {
-        if (chart.Type is not (ChartType.Pareto or ChartType.BoxAndWhisker or ChartType.Waterfall))
+        // Treemap and Sunburst use hierarchical layout with no explicit axes in the chartEx schema.
+        if (chart.Type is ChartType.Treemap or ChartType.Sunburst)
             yield break;
 
+        // Funnel has a category (id=0) and value (id=1) axis.
+        // Histogram, Pareto, BoxAndWhisker, Waterfall all share the same two-axis base structure.
         yield return new XElement(chartExNs + "axis",
             new XAttribute("id", "0"),
             new XElement(chartExNs + "catScaling", new XAttribute("gapWidth", "2.19000006")),
             new XElement(chartExNs + "tickLabels"));
+
+        // Build the value-axis scaling element respecting YAxisMinimum/Maximum/LogScale.
+        var valScaling = BuildChartExValScalingElement(chart, chartExNs);
         yield return new XElement(chartExNs + "axis",
             new XAttribute("id", "1"),
-            new XElement(chartExNs + "valScaling"),
+            valScaling,
             new XElement(chartExNs + "majorGridlines"),
             new XElement(chartExNs + "tickLabels"));
+
         if (chart.Type != ChartType.Pareto)
             yield break;
 
@@ -194,6 +201,18 @@ internal static partial class XlsxChartXmlWriter
                 new XAttribute("min", "0")),
             new XElement(chartExNs + "units", new XAttribute("unit", "percentage")),
             new XElement(chartExNs + "tickLabels"));
+    }
+
+    private static XElement BuildChartExValScalingElement(ChartModel chart, XNamespace chartExNs)
+    {
+        var scaling = new XElement(chartExNs + "valScaling");
+        if (chart.YAxisMaximum is { } max && double.IsFinite(max))
+            scaling.SetAttributeValue("max", max.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (chart.YAxisMinimum is { } min && double.IsFinite(min))
+            scaling.SetAttributeValue("min", min.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (chart.YAxisMajorUnit is { } majorUnit && double.IsFinite(majorUnit) && majorUnit > 0)
+            scaling.SetAttributeValue("majorUnit", majorUnit.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return scaling;
     }
 
     private static XElement? BuildChartExSubtotals(ChartModel chart, XNamespace chartExNs)

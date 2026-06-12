@@ -61,7 +61,7 @@ public sealed partial class XlsxFileAdapter
         HashSet<uint> GroupHiddenCols,
         Dictionary<uint, double> RowHeights,
         Dictionary<uint, double> ColumnWidths,
-        IReadOnlyList<(uint Row, uint Col, string Text)> Comments,
+        IReadOnlyList<(uint Row, uint Col, string Text, string Author)> Comments,
         IReadOnlyList<(uint Row, uint Col, ThreadedComment Comment)> ThreadedComments,
         IReadOnlyList<XlsxChartPackagePart> ChartParts,
         IReadOnlyList<XlsxPicturePackagePart> PictureParts,

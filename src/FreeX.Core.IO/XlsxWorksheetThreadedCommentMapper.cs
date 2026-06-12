@@ -75,6 +75,11 @@ internal static class XlsxWorksheetThreadedCommentMapper
         WritePersonsPart(archive, authorsByName);
         EnsureWorkbookPersonRelationship(archive);
 
+        // Allocate next-free threaded comment part indices, checking existing archive entries to
+        // avoid overwriting an unrelated part if indices drift after a sheet reorder.
+        var usedThreadedCommentIndices = GetUsedThreadedCommentIndices(archive);
+        var nextIndex = 1;
+
         for (var sheetIndex = 0; sheetIndex < workbook.Sheets.Count; sheetIndex++)
         {
             var sheet = workbook.Sheets[sheetIndex];
@@ -84,7 +89,14 @@ internal static class XlsxWorksheetThreadedCommentMapper
             if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
-            var threadedCommentPath = $"xl/threadedComments/threadedComment{sheetIndex + 1}.xml";
+            // Prefer a path derived from the worksheet index so stable saves look the same, but
+            // always pick the next-free slot to avoid collisions after sheet reorders.
+            while (usedThreadedCommentIndices.Contains(nextIndex))
+                nextIndex++;
+
+            var threadedCommentPath = $"xl/threadedComments/threadedComment{nextIndex}.xml";
+            usedThreadedCommentIndices.Add(nextIndex);
+            nextIndex++;
             WriteThreadedCommentsPart(archive, threadedCommentPath, sheet, authorsByName);
             EnsureWorksheetThreadedCommentRelationship(archive, worksheetPath, threadedCommentPath);
         }
@@ -101,6 +113,10 @@ internal static class XlsxWorksheetThreadedCommentMapper
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         EnsureWorkbookPersonRelationship(archive);
 
+        // NormalizePackageGraph only updates relationships — it does not write new threaded comment
+        // parts. Use simple sequential indexing (sheetIndex + 1) so the relationship target matches
+        // the part that was already written during the initial save.
+        var sheetThreadedCommentIndex = 1;
         for (var sheetIndex = 0; sheetIndex < workbook.Sheets.Count; sheetIndex++)
         {
             var sheet = workbook.Sheets[sheetIndex];
@@ -110,9 +126,28 @@ internal static class XlsxWorksheetThreadedCommentMapper
             if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
-            var threadedCommentPath = $"xl/threadedComments/threadedComment{sheetIndex + 1}.xml";
+            var threadedCommentPath = $"xl/threadedComments/threadedComment{sheetThreadedCommentIndex}.xml";
+            sheetThreadedCommentIndex++;
             EnsureWorksheetThreadedCommentRelationship(archive, worksheetPath, threadedCommentPath);
         }
+    }
+
+    private static HashSet<int> GetUsedThreadedCommentIndices(ZipArchive archive)
+    {
+        var used = new HashSet<int>();
+        foreach (var entry in archive.Entries)
+        {
+            var name = entry.FullName;
+            if (name.StartsWith("xl/threadedComments/threadedComment", StringComparison.OrdinalIgnoreCase) &&
+                name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            {
+                var stem = name["xl/threadedComments/threadedComment".Length..^".xml".Length];
+                if (int.TryParse(stem, out var index))
+                    used.Add(index);
+            }
+        }
+
+        return used;
     }
 
     private static IReadOnlyDictionary<string, string> CreateAuthorIds(Workbook workbook)

@@ -54,6 +54,20 @@ public sealed class ChartModel
     public ChartManualLayoutModel? XAxisTitleLayout { get; set; }
     public string? YAxisTitle { get; set; }
     public ChartManualLayoutModel? YAxisTitleLayout { get; set; }
+
+    /// <summary>
+    /// Verbatim inner XML of the &lt;c:title&gt; element for the X axis.
+    /// When set, written back exactly as-is to preserve axis title formatting
+    /// that the model cannot represent (bold, italic, per-run colors, etc.).
+    /// </summary>
+    public string? XAxisTitleVerbatimXml { get; set; }
+
+    /// <summary>
+    /// Verbatim inner XML of the &lt;c:title&gt; element for the Y axis.
+    /// When set, written back exactly as-is to preserve axis title formatting
+    /// that the model cannot represent.
+    /// </summary>
+    public string? YAxisTitleVerbatimXml { get; set; }
     public bool HideXAxis { get; set; }
     public bool HideYAxis { get; set; }
     public ChartAxisPosition XAxisPosition { get; set; } = ChartAxisPosition.Bottom;
@@ -271,6 +285,15 @@ public sealed class ChartModel
     public List<ChartSeriesFormat> SeriesFormats { get; set; } = [];
     public List<ChartSeriesDataLabelFormat> SeriesDataLabelFormats { get; set; } = [];
     public List<ChartPointDataLabelFormat> PointDataLabelFormats { get; set; } = [];
+
+    /// <summary>
+    /// Per-series verbatim formula strings preserved from the source XML.
+    /// Populated when any series formula cannot be parsed as a single rectangular range
+    /// (e.g. multi-area unions like "Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5").
+    /// When present the writer emits these formulas verbatim instead of computing
+    /// them positionally from <see cref="DataRange"/>.
+    /// </summary>
+    public List<ChartSeriesVerbatimFormulas>? VerbatimSeriesFormulas { get; set; }
     public bool UseComboLineForSecondarySeries { get; set; }
     public double Left   { get; set; } = 50;
     public double Top    { get; set; } = 50;

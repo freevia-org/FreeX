@@ -47,6 +47,17 @@ public enum ChartLineDashStyle { Solid, Dash, Dot }
 
 public sealed record ChartLegendEntryModel(int Index, bool? IsDeleted);
 
+/// <summary>
+/// Verbatim formula strings for a single chart series, preserved from the source XML.
+/// Used to round-trip multi-area series formulas that cannot be represented as a
+/// single rectangular <see cref="GridRange"/>.
+/// </summary>
+public sealed record ChartSeriesVerbatimFormulas(
+    int SeriesIndex,
+    string? ValFormula,
+    string? CatFormula,
+    string? TxFormula);
+
 public enum ChartBubbleSizeRepresents { Area, Width }
 
 public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
