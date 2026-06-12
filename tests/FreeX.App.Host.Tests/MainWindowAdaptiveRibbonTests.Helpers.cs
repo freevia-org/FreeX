@@ -167,6 +167,15 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .Where(title => !string.IsNullOrWhiteSpace(title))
                 .ToList();
 
+        public IReadOnlyList<string> CollapsedActiveRibbonGroupsWithoutIconSlots =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Button>()
+                .Where(IsVisibleCollapsedGroupButton)
+                .Where(button => !TryGetCommandIconSlot(button, out _))
+                .Select(button => RibbonTooltip.GetTitle(button) ?? "")
+                .Where(title => !string.IsNullOrWhiteSpace(title))
+                .ToList();
+
         public IReadOnlyList<string> HiddenCollapsedRibbonGroupsWithVisibleDropdownGlyph =>
             (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Button>()

@@ -27,6 +27,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             harness.VisibleRibbonCommandLabels.Should().NotContain("Label Border", harness.DebugActiveRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().NotContain("Y Bounds", harness.DebugActiveRibbonChildren);
             harness.CollapsedActiveRibbonGroupNames.Should().Contain("Charts", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveRibbonGroupsWithoutIconSlots.Should().NotContain("Charts", harness.DebugActiveRibbonChildren);
             harness.CollapsedActiveMenuHeaders("Charts").Should().Contain("Column Chart", harness.DebugActiveRibbonChildren);
             harness.CollapsedActiveMenuHeaders("Charts").Should().NotContain("Data Label Border", harness.DebugActiveRibbonChildren);
         });
@@ -184,6 +185,20 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
             harness.ActiveRibbonGroupCommandLabelsWithoutIconSlots("Data Tools").Should().BeEmpty(
                 "Excel presents Data Tools as compact icon-and-label commands, not plain text-only buttons");
+        });
+    }
+
+    [Fact]
+    public void InsertRibbon_ChartsCommandsUseIconLabelRows()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Insert", 1465);
+
+            harness.ActiveRibbonGroupCommandLabelsWithoutIconSlots("Charts").Should().BeEmpty(
+                "the Insert Charts group should show visible chart command icons instead of blank text-only rows");
         });
     }
 
