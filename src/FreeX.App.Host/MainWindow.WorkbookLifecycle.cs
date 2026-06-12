@@ -15,20 +15,18 @@ public partial class MainWindow
         DiscardWithoutSaving
     }
 
-    // Incremented each time the workbook becomes dirty.  The save path captures this
-    // before awaiting and compares afterwards to detect edits that arrived mid-save.
-    private int _workbookDirtyGeneration;
-
     private void MarkWorkbookDirty()
     {
-        _workbookDirty = true;
-        _workbookDirtyGeneration++;
+        // Delegates to the per-window WorkbookDocumentState service (injected via DI).
+        // MarkDirty() increments DirtyGeneration and sets IsDirty = true in one atomic step.
+        _documentState.MarkDirty();
         UpdateTitleBar();
     }
 
     private void MarkWorkbookSaved()
     {
-        _workbookDirty = false;
+        // Delegates to the per-window WorkbookDocumentState service.
+        _documentState.MarkSaved();
         UpdateTitleBar();
         NotifyAutosaveSaved();
     }
@@ -99,6 +97,13 @@ public partial class MainWindow
 
     private bool IsFinalWorkbookWindowClose() =>
         _windowRegistry is null || _windowRegistry.Count <= 1;
+
+    /// <summary>
+    /// Bypasses the save-changes prompt on the next Close() call.
+    /// Used by test infrastructure to cleanly tear down windows without triggering the dialog.
+    /// Prefer this method over reflection-based field access.
+    /// </summary>
+    internal void SuppressNextClosePrompt() => _suppressClosePrompt = true;
 
     private void PrepareActiveWorkbookForFinalClose()
     {

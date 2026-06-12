@@ -600,8 +600,10 @@ public sealed partial class MainWindowSourceHygieneTests
         // Multi-window slice 1 adds an Excel-style per-window number suffix to the shared formatter.
         editingSource.Should().Contain("WorkbookTitleFormatter.Format(");
         editingSource.Should().Contain("_workbook.Name, _workbookDirty, IsWorkbookGrouped(), _windowTitleSuffix)");
-        lifecycleSource.Should().Contain("_workbookDirty = true;");
-        lifecycleSource.Should().Contain("_workbookDirty = false;");
+        // Dirty-flag mutations now delegate to WorkbookDocumentState; the lifecycle
+        // methods call _documentState directly instead of assigning to _workbookDirty.
+        lifecycleSource.Should().Contain("_documentState.MarkDirty();");
+        lifecycleSource.Should().Contain("_documentState.MarkSaved();");
         lifecycleSource.Should().Contain("UpdateTitleBar();");
         backstageSource.Should().Contain("_workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);");
         backstageSource.Should().Contain("MarkWorkbookSaved();");

@@ -71,8 +71,26 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _isOpeningFile;
     private bool _isSavingFile;
     private bool _isExportingFile;
-    private bool _workbookDirty;
-    private bool _suppressClosePrompt;
+    // ── Dirty / save-state cluster: canonical state lives in _documentState ──
+    // These private properties delegate to the injected WorkbookDocumentState service.
+    // They preserve the same names used across the 50-file partial-class surface so
+    // all callers continue to compile without mass edits.
+    //
+    // Mutations go through the MarkWorkbookDirty / MarkWorkbookSaved methods in
+    // MainWindow.WorkbookLifecycle.cs, which call _documentState directly.  The
+    // read-only getters here allow all the partial files to read the same state.
+    private bool _workbookDirty => _documentState.IsDirty;
+    private bool _suppressClosePrompt
+    {
+        get => _documentState.SuppressClosePrompt;
+        set => _documentState.SuppressClosePrompt = value;
+    }
+    private string? _currentFilePath
+    {
+        get => _documentState.CurrentFilePath;
+        set => _documentState.SetCurrentFilePath(value);
+    }
+    private int _workbookDirtyGeneration => _documentState.DirtyGeneration;
     private bool _closeAfterSaveInProgress;
     private CellAddress? _selectionAnchor;
     private CellAddress? _selectionCursor;
@@ -94,7 +112,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private readonly IWorkbookShareService _shareService = new WindowsWorkbookShareService();
     private List<RecentFileViewModel> _allRecentItems = [];
     private FreeXOptions _options;
-    private string? _currentFilePath;
+    // _currentFilePath is declared as a delegating property in the dirty/save-state cluster above.
     private XlsxFeatureReport? _currentXlsxFeatureReport;
     private double _zoomLevel = 1.0;
     private bool _snapInProgress;
@@ -207,6 +225,9 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _adoptSharedWorkbookOnLoad;
     private bool _suppressScrollBroadcast;
 
+    // ── Per-window document save/dirty state service ──────────────────────────
+    private readonly WorkbookDocumentState _documentState;
+
     public MainWindow(
         ILogger<MainWindow> logger,
         IViewportService viewportService,
@@ -216,12 +237,15 @@ public partial class MainWindow : Window, IWorkbookWindow
         WorkbookRef workbookRef,
         Workbook workbook,
         IUserMessageService messageService,
+        WorkbookDocumentState? documentState = null,
         IAppDiagnostics? diagnostics = null,
         AppDiagnosticsMetadata? diagnosticsMetadata = null,
         AppDiagnosticsOptions? diagnosticsOptions = null,
         FreeXOptions? options = null,
         WorkbookWindowRegistry? windowRegistry = null)
     {
+        // DI supplies a Transient WorkbookDocumentState; tests that omit it get a fresh default.
+        _documentState = documentState ?? new WorkbookDocumentState();
         _logger = logger;
         _viewportService = viewportService;
         _commandBus = commandBus;

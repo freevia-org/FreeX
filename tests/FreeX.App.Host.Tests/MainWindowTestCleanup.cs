@@ -1,4 +1,3 @@
-using System.Reflection;
 using FreeX.App.UI;
 
 namespace FreeX.App.Host.Tests;
@@ -19,13 +18,14 @@ internal sealed class NullUserMessageService : IUserMessageService
 
 internal static class MainWindowTestCleanup
 {
-    private static readonly FieldInfo SuppressClosePromptField =
-        typeof(MainWindow).GetField("_suppressClosePrompt", BindingFlags.Instance | BindingFlags.NonPublic)
-        ?? throw new MissingFieldException(nameof(MainWindow), "_suppressClosePrompt");
-
+    /// <summary>
+    /// Suppresses the save-changes prompt and then closes the window.
+    /// Uses the internal <see cref="MainWindow.SuppressNextClosePrompt"/> method
+    /// instead of reflection so it remains type-safe across refactors.
+    /// </summary>
     public static void CloseWithoutSavePrompt(MainWindow window)
     {
-        SuppressClosePromptField.SetValue(window, true);
+        window.SuppressNextClosePrompt();
         window.Close();
     }
 }

@@ -159,6 +159,10 @@ public partial class App : Application
         // (Excel "New Window"). Singleton so all windows coordinate through one registry.
         services.AddSingleton<WorkbookWindowRegistry>();
 
+        // Per-window document state (dirty flag, generation, file path, close-prompt flag).
+        // Transient so each MainWindow gets its own independent instance.
+        services.AddTransient<WorkbookDocumentState>();
+
         // UI
         services.AddTransient<MainWindow>();
     }
