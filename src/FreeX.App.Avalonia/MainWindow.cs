@@ -13483,10 +13483,10 @@ public sealed class MainWindow : Window
 
     private async Task OpenWorkbookFromTargetAsync(WorkbookOpenTarget target)
     {
+        _isOpening = true;
+        UpdateSaveButton();
         try
         {
-            _isOpening = true;
-            UpdateSaveButton();
             _statusText.Text = "Opening...";
             _statusText.Foreground = Brush(67, 113, 83);
             var progress = new Progress<WorkbookOpenProgressUpdate>(
@@ -13825,10 +13825,10 @@ public sealed class MainWindow : Window
             }
 
             path = exportPathPlan.Path;
+            _isSaving = true;
+            UpdateSaveButton();
             try
             {
-                _isSaving = true;
-                UpdateSaveButton();
                 _statusText.Text = "Exporting PDF...";
                 _statusText.Foreground = Brush(67, 113, 83);
 
@@ -13987,10 +13987,12 @@ public sealed class MainWindow : Window
         FileSaveTarget target,
         WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
+        // Capture the dirty generation before the first await so mid-save edits are detectable.
+        var generationAtSaveStart = _session.DirtyGeneration;
+        _isSaving = true;
+        UpdateSaveButton();
         try
         {
-            _isSaving = true;
-            UpdateSaveButton();
             _statusText.Text = "Saving...";
             _statusText.Foreground = Brush(67, 113, 83);
             var progress = new Progress<WorkbookSaveProgressUpdate>(
@@ -14005,7 +14007,7 @@ public sealed class MainWindow : Window
                 existingIdentity: _session.CurrentFileAccessIdentity);
             using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(StorageProvider, fileAccessIdentity);
             await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
-            _session.MarkSaved(target.Path, fileAccessIdentity);
+            _session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, target.Path, fileAccessIdentity);
             RecordRecentWorkbook(target.Path, fileAccessIdentity);
             RefreshShell($"Saved {Path.GetFileName(target.Path)}");
         }

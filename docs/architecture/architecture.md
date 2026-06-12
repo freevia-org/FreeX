@@ -1,21 +1,25 @@
 # Architecture
 
-FreeX is a free, native Windows desktop spreadsheet application with a WPF shell, a command-driven workbook engine, and explicit `.xlsx` fidelity boundaries. Current outstanding work is tracked in [planning/outstanding-build.md](../planning/outstanding-build.md), with command-level scope in [parity/command-surface.md](../parity/command-surface.md) and file-format scope in [formats/fidelity-contract.md](../formats/fidelity-contract.md).
+FreeX is a free, native desktop spreadsheet application with a command-driven workbook engine and explicit `.xlsx` fidelity boundaries. The primary shell targets Windows via WPF (`FreeX.App.Host`). A cross-platform Avalonia shell (`FreeX.App.Avalonia`) targets macOS and other platforms via the shared `FreeX.App.Services` session layer. Current outstanding work is tracked in [planning/outstanding-build.md](../planning/outstanding-build.md), with command-level scope in [parity/command-surface.md](../parity/command-surface.md) and file-format scope in [formats/fidelity-contract.md](../formats/fidelity-contract.md).
 
 ## Layered Architecture
 
 ```
-App.Host (composition root, DI, startup)
+App.Host (WPF composition root — Windows only, net10.0-windows)
   └── App.UI (WPF controls — GridView, dialogs)
-       └── Core.Commands (command bus, undo/redo, find/replace service)
-       └── Core.Calc (dependency graph, recalc engine, viewport service)
-            └── Core.Formula (lexer, parser, AST, evaluator, built-in functions)
-                 └── Core.Model (pure data types — Workbook, Sheet, Cell, ScalarValue, CellStyle)
-       └── Core.IO (file adapters — XLSX via ClosedXML, CSV/text, XML Spreadsheet 2003, native JSON)
-            └── Core.Model
+       └── App.Services (WorkbookSession, WorkbookSessionFactory — shared session layer)
+            └── Core.Commands (command bus, undo/redo, find/replace service)
+            └── Core.Calc (dependency graph, recalc engine, viewport service)
+                 └── Core.Formula (lexer, parser, AST, evaluator, built-in functions)
+                      └── Core.Model (pure data types — Workbook, Sheet, Cell, ScalarValue, CellStyle)
+            └── Core.IO (file adapters — XLSX via ClosedXML, CSV/text, XML Spreadsheet 2003, native JSON)
+                 └── Core.Model
+
+App.Avalonia (Avalonia cross-platform shell — net10.0; macOS/Linux/Windows)
+  └── App.Services (shared session layer — same as App.Host path above)
 ```
 
-**Dependency rule**: No `Core.*` project may reference any `App.*` project. This is enforced by project references.
+**Dependency rule**: No `Core.*` project may reference any `App.*` project. This is enforced by project references. `App.Services` may not reference `App.Host` or `App.Avalonia`.
 
 ## Key Principles
 
@@ -32,8 +36,10 @@ App.Host (composition root, DI, startup)
 - **Core.Calc**: `DependencyGraph` (topological sort, Kahn's algorithm, cycle detection), `RecalcEngine` (volatile-cell support), `ViewportService`
 - **Core.Commands**: `ICommandBus` with undo/redo stack (count-bounded + 50 MB byte-budget via `IEstimatesMemory`), `EditCellsCommand`, `AddSheetCommand`, `RenameSheetCommand`, `FindReplaceService`
 - **Core.IO**: `NativeJsonAdapter` (.fxl — compact JSON, SHA-256 password hashing via `NativePasswordHelper`), `XlsxFileAdapter` (ClosedXML 0.105.0 — stream-load, structured load warnings via `XlsxLoadResult`), `CsvFileAdapter`, delimited-text adapters, `SpreadsheetXmlFileAdapter` for Excel XML Spreadsheet 2003 `.xml`, `XsltWorkbookTransform` for safe XSLT-to-SpreadsheetML imports, and `XmlNativeBagSerializer` for `NativeXmlPreserveBag` round-trip serialisation. ODS (`.ods`) remains explicitly unsupported until the parked research in `docs/formats/ods-open-support-research.md` is resumed.
+- **App.Services**: `WorkbookSession` — the shared session layer used by both `App.Host` (WPF) and `App.Avalonia`. Owns dirty state (`IsDirty`, `DirtyGeneration`, `TryMarkSavedIfNoEditsArrived`), viewport, undo/redo, selection, clipboard, sheet management, and file-context tracking. `WorkbookSessionFactory` constructs sessions from startup results or open results. `WorkbookDocumentState` (WPF-side dirty tracking with `SuppressClosePrompt` and generation counter — used by `App.Host`). `WorkbookFileAccessService` (macOS security-scoped bookmark support). `WorkbookStartupService`, `WorkbookSaveService`, and planner types (`ReviewWorkflowPlanner`, `ShareWorkbookPlanner`, `ExportReadinessPlanner`).
 - **App.UI**: `GridView` — virtualized DrawingContext rendering (per-frame brush/pen/typeface caches reused via class-level fields), selection, row/column headers; `IUserMessageService` interface for injectable message dialogs
-- **App.Host**: `MainWindow` — formula bar, scrollbars, open/save dialogs, keyboard navigation, Find & Replace; `WpfUserMessageService` (MessageBox-backed `IUserMessageService`); localization foundation (`UiText`, `LocExtension`, neutral `Strings.resx`, 43 satellite resource cultures, `AppLanguageCatalog`, and `AppLocalization`); `HyperlinkNavigationPlanner` with URI scheme whitelist (`http`, `https`, `mailto`, `ftp`)
+- **App.Host**: WPF composition root (Windows-only, `net10.0-windows10.0.19041.0`, `UseWPF=true`). `MainWindow` — formula bar, scrollbars, open/save dialogs, keyboard navigation, Find & Replace; `WpfUserMessageService` (MessageBox-backed `IUserMessageService`); localization foundation (`UiText`, `LocExtension`, neutral `Strings.resx`, 43 satellite resource cultures, `AppLanguageCatalog`, and `AppLocalization`); `HyperlinkNavigationPlanner` with URI scheme whitelist (`http`, `https`, `mailto`, `ftp`); `SaveCompletionPlanner` and `WindowCloseDecisionPlanner` (pure close/save decision planners with unit tests in `FreeX.App.Host.Logic.Tests`)
+- **App.Avalonia**: Cross-platform Avalonia shell (`net10.0`; `net10.0-macos` when `EnableMacOsTargetFramework=true`). `MainWindow` — full spreadsheet host with open/save/export dialogs, keyboard navigation, and formula bar. Uses `WorkbookSession` from `App.Services` for all workbook state. `AvaloniaSaveCompletionPlanner` and `AvaloniaCloseDecisionPlanner` (extracted pure planners mirroring the WPF host pattern — tested in `FreeX.App.Avalonia.Tests`). Re-entrancy guards (`_isOpening`, `_isSaving`) are set before awaits to prevent overlapping operations. Save path captures `DirtyGeneration` before the first await and uses `TryMarkSavedIfNoEditsArrived` to detect mid-save edits without data loss.
 
 New workbook creation is centralized in `NewWorkbookFactory`. Startup and File > New pass the full `FreeXOptions` object
 so normalized default sheet count, font name, font size, and user name metadata seed the initial `Sheet1..N` workbook,

@@ -75,7 +75,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("StorageProvider,");
         source.Should().Contain("target.FileAccessIdentity");
         source.Should().Contain("fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(");
-        source.Should().Contain("_session.MarkSaved(target.Path, fileAccessIdentity);");
+        source.Should().Contain("_session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, target.Path, fileAccessIdentity);");
         source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
 
         var recentBlock = ExtractSourceBlock(
