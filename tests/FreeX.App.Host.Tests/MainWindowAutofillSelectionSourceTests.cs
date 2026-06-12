@@ -17,11 +17,12 @@ public sealed class MainWindowAutofillSelectionSourceTests
         nextHandlerStart.Should().BeGreaterThan(helperStart);
 
         var handler = source[handlerStart..helperStart];
-        handler.Should().Contain("if (!TryExecuteCommand(cmd, \"Autofill\"))");
+        handler.Should().Contain("if (!TryExecuteCommand(cmd, \"Autofill\", out var outcome))");
         handler.Should().Contain("SelectCompletedAutofillRange(sourceRange, fillRange);");
         handler.IndexOf("SelectCompletedAutofillRange(sourceRange, fillRange);", StringComparison.Ordinal)
             .Should()
-            .BeGreaterThan(handler.IndexOf("if (!TryExecuteCommand(cmd, \"Autofill\"))", StringComparison.Ordinal));
+            .BeGreaterThan(handler.IndexOf("if (!TryExecuteCommand(cmd, \"Autofill\", out var outcome))", StringComparison.Ordinal));
+        handler.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
 
         var helper = source[helperStart..nextHandlerStart];
         helper.Should().Contain("GridAutofillPlanner.CalculateCompletedSelectionRange(sourceRange, fillRange)");

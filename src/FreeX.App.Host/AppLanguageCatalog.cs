@@ -9,6 +9,7 @@ internal static class AppLanguageCatalog
 {
     public const string SystemDefaultCultureName = "";
     public const string EnglishUnitedStatesCultureName = "en-US";
+    public const string PseudoLocalizationCultureName = "qps-ploc";
 
     private const string SatelliteAssemblyName = "FreeX.App.Host.resources.dll";
 
@@ -19,13 +20,15 @@ internal static class AppLanguageCatalog
     {
         var seenCultureNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            EnglishUnitedStatesCultureName
+            EnglishUnitedStatesCultureName,
+            PseudoLocalizationCultureName
         };
 
         var options = new List<AppLanguageOption>
         {
             new(SystemDefaultCultureName, UiText.Get("Options_AppLanguageSystemDefault")),
-            new(EnglishUnitedStatesCultureName, UiText.Get("Options_AppLanguageEnglishUnitedStates"))
+            new(EnglishUnitedStatesCultureName, UiText.Get("Options_AppLanguageEnglishUnitedStates")),
+            new(PseudoLocalizationCultureName, PseudoLocalization.Expand(UiText.GetNeutral("Options_AppLanguageEnglishUnitedStates")))
         };
 
         var satelliteOptions = satelliteCultureNames
@@ -48,6 +51,9 @@ internal static class AppLanguageCatalog
         try
         {
             var trimmedCultureName = cultureName.Trim();
+            if (string.Equals(trimmedCultureName, PseudoLocalizationCultureName, StringComparison.OrdinalIgnoreCase))
+                return PseudoLocalizationCultureName;
+
             var culture = CultureInfo.GetCultureInfo(trimmedCultureName);
             return string.Equals(trimmedCultureName, culture.Name, StringComparison.OrdinalIgnoreCase)
                 ? culture.Name
@@ -66,6 +72,9 @@ internal static class AppLanguageCatalog
             ? fallbackCulture
             : CultureInfo.GetCultureInfo(normalizedCultureName);
     }
+
+    internal static bool IsPseudoLocalizationCulture(string? cultureName) =>
+        string.Equals(NormalizeCultureName(cultureName), PseudoLocalizationCultureName, StringComparison.OrdinalIgnoreCase);
 
     private static string GetResourceProbeDirectory()
     {

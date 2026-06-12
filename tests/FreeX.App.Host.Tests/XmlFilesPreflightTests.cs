@@ -10,7 +10,7 @@ public sealed class XmlFilesPreflightTests
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-XmlFiles.ps1");
 
-        script.Should().Contain("[string[]]$XmlRoots = @(\"Directory.Build.props\", \"FreeX.slnx\", \"FreeX.DefaultTests.slnx\", \"FreeX.UiTests.slnx\", \"src\", \"tests\")");
+        script.Should().Contain("[string[]]$XmlRoots = @(\"Directory.Build.props\", \"Directory.Packages.props\", \"FreeX.slnx\", \"FreeX.DefaultTests.slnx\", \"FreeX.UiTests.slnx\", \"src\", \"tests\")");
         script.Should().Contain("\".slnx\"");
         script.Should().Contain("[System.Xml.XmlReader]::Create");
         script.Should().Contain("XML validation failed");

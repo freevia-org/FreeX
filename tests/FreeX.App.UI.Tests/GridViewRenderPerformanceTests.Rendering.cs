@@ -641,17 +641,25 @@ public sealed partial class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void RenderCells_ClearsCachesAtStartOfEachPass()
+    public void RenderCells_TrimsPersistentRenderCachesAtPaintBoundary()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("_brushCache.Clear();");
-        renderCells.Should().Contain("_borderPenCache.Clear();");
-        renderCells.Should().Contain("_typefaceCache.Clear();");
-        renderCells.Should().Contain("_underlinePenCache.Clear();");
+        renderCells.Should().Contain("if (Viewport?.SplitPanes is null)");
+        renderCells.Should().Contain("TrimRenderCachesIfOversized();");
+        source.Should().Contain("private void TrimRenderCachesIfOversized()");
+        source.Should().Contain("private const int RenderCacheSizeLimit = 512;");
+        source.Should().Contain("if (_brushCache.Count >= RenderCacheSizeLimit)");
+        source.Should().Contain("_brushCache.Clear();");
+        source.Should().Contain("if (_borderPenCache.Count >= RenderCacheSizeLimit)");
+        source.Should().Contain("_borderPenCache.Clear();");
+        source.Should().Contain("if (_typefaceCache.Count >= RenderCacheSizeLimit)");
+        source.Should().Contain("_typefaceCache.Clear();");
+        source.Should().Contain("if (_underlinePenCache.Count >= RenderCacheSizeLimit)");
+        source.Should().Contain("_underlinePenCache.Clear();");
         renderCells.Should().NotContain("new Dictionary<CellColor, SolidColorBrush>");
         renderCells.Should().NotContain("new Dictionary<CellBorder, Pen>");
         renderCells.Should().NotContain("new Dictionary<CellTypefaceKey, Typeface>");
@@ -823,20 +831,18 @@ public sealed partial class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void RenderCells_ReusesFillPatternPensWithinRenderPass()
+    public void RenderCells_ReusesFillPatternPensAcrossBoundedRenderCaches()
     {
         var gridViewSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.cs");
         var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var cellStyles = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.CellStyles.cs");
-        var renderCells = rendering[
-            rendering.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            rendering.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
         var drawFillPattern = cellStyles[
             cellStyles.IndexOf("private static void DrawFillPattern", StringComparison.Ordinal)..
             cellStyles.IndexOf("private static Pen FillPatternPenForCellColor", StringComparison.Ordinal)];
 
         gridViewSource.Should().Contain("private readonly Dictionary<CellColor, Pen> _fillPatternPenCache = new();");
-        renderCells.Should().Contain("_fillPatternPenCache.Clear();");
+        rendering.Should().Contain("if (_fillPatternPenCache.Count >= RenderCacheSizeLimit)");
+        rendering.Should().Contain("_fillPatternPenCache.Clear();");
         rendering.Should().Contain("DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache)");
         cellStyles.Should().Contain("FillPatternPenForCellColor(color, brushCache, fillPatternPenCache)");
         cellStyles.Should().Contain("pen.Freeze();");

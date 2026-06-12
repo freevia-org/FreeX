@@ -10,14 +10,16 @@ namespace FreeX.App.UI.Tests;
 public sealed partial class GridViewRenderPerformanceTests
 {
     [Fact]
-    public void RenderSplitPaneCells_ReusesDoubleUnderlinePensWithinRenderPass()
+    public void RenderSplitPaneCells_ReusesDoubleUnderlinePensAcrossBoundedRenderCaches()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderSplitPaneCells = source[
             source.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
 
-        renderSplitPaneCells.Should().Contain("_underlinePenCache.Clear();");
+        renderSplitPaneCells.Should().Contain("TrimRenderCachesIfOversized();");
+        source.Should().Contain("if (_underlinePenCache.Count >= RenderCacheSizeLimit)");
+        source.Should().Contain("_underlinePenCache.Clear();");
         renderSplitPaneCells.Should().Contain("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);");
         source.Should().Contain("if (style?.DoubleUnderline == true)");
         source.Should().Contain("UnderlinePenForTextBrush(textBrush, underlinePenCache)");

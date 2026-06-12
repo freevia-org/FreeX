@@ -78,6 +78,7 @@ public partial class MainWindow
         SetStatusStatisticTextIfChanged(StatusSumText, state.SumText, UiText.Get("StatusBar_Sum"));
         SetStatusStatisticTextIfChanged(StatusMinText, state.MinText, UiText.Get("StatusBar_Minimum"));
         SetStatusStatisticTextIfChanged(StatusMaxText, state.MaxText, UiText.Get("StatusBar_Maximum"));
+        UpdateStatusStatsPanelAutomation(state);
         ApplyStatusBarInteractiveDisplayState();
         _lastStatusBarDisplayState = state;
     }
@@ -237,6 +238,54 @@ public partial class MainWindow
 
         if (!string.Equals(AutomationProperties.GetHelpText(textBlock), automationName, StringComparison.Ordinal))
             AutomationProperties.SetHelpText(textBlock, automationName);
+    }
+
+    private void UpdateStatusStatsPanelAutomation(StatusBarDisplayState state)
+    {
+        var visibleStatTexts = new[]
+            {
+                _options.StatusBarShowAverage ? state.AverageText : string.Empty,
+                _options.StatusBarShowCount ? state.CountText : string.Empty,
+                _options.StatusBarShowNumericalCount ? state.NumericalCountText : string.Empty,
+                _options.StatusBarShowSum ? state.SumText : string.Empty,
+                _options.StatusBarShowMinimum ? state.MinText : string.Empty,
+                _options.StatusBarShowMaximum ? state.MaxText : string.Empty
+            }
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .ToArray();
+
+        var automationName = visibleStatTexts.Length == 0
+            ? UiText.Get("StatusBar_CustomizeStatusBar")
+            : string.Join("; ", visibleStatTexts);
+        var previousAutomationName = AutomationProperties.GetName(StatusStatsPanel);
+        if (!string.Equals(previousAutomationName, automationName, StringComparison.Ordinal))
+        {
+            AutomationProperties.SetName(StatusStatsPanel, automationName);
+            NotifyStatusStatsPanelAutomationChanged(previousAutomationName, automationName);
+        }
+
+        if (!string.Equals(AutomationProperties.GetHelpText(StatusStatsPanel), automationName, StringComparison.Ordinal))
+            AutomationProperties.SetHelpText(StatusStatsPanel, automationName);
+    }
+
+    private void NotifyStatusStatsPanelAutomationChanged(string previousAutomationName, string automationName)
+    {
+        if (!StatusStatsPanel.IsLoaded)
+            return;
+
+        try
+        {
+            var peer = UIElementAutomationPeer.FromElement(StatusStatsPanel) ??
+                       UIElementAutomationPeer.CreatePeerForElement(StatusStatsPanel);
+            peer?.RaisePropertyChangedEvent(
+                AutomationElementIdentifiers.NameProperty,
+                previousAutomationName,
+                automationName);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+        catch (InvalidOperationException)
+        {
+        }
     }
 
     private static void NotifyStatusStatisticAutomationChanged(
