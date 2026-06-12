@@ -148,6 +148,16 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         if (_snapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
 
+        // ORDER IS REQUIRED: restore formulas before restoring cell positions.
+        //
+        // The formula snapshot is keyed by POST-Apply (shifted) addresses.
+        // RestoreFormulas looks up cells at those shifted addresses and writes FormulaText back
+        // in place on the live Cell object.  If Snapshot.Restore ran first, cells would be moved
+        // back to original positions and the shifted-address lookup would find nothing — original
+        // formula text would be permanently lost.
+        //
+        // Do NOT reorder. The undo-redo-undo convergence test in InsertDeleteCellsCommandTests
+        // verifies that this sequence leaves the model identical to its initial state.
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
         _snapshot.Restore(ctx.GetSheet(_sheetId));

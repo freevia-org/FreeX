@@ -1108,4 +1108,158 @@ public sealed class InsertDeleteCellsCommandTests
         dvRule.AppliesTo.Start.Row.Should().Be(1, "rule above insert point is unchanged");
         dvRule.AppliesTo.End.Row.Should().Be(4);
     }
+
+    // ── Revert ordering / undo-redo-undo convergence ──────────────────────────
+
+    [Fact]
+    public void InsertCellsShiftDown_UndoRedoUndo_ModelConvergesWithFormulas()
+    {
+        // Regression guard for the RestoreFormulas-before-Snapshot.Restore ordering in Revert.
+        // The formula snapshot is keyed by shifted (post-Apply) addresses; if Snapshot.Restore ran
+        // first the shifted-address lookup would find nothing and formulas would be lost.
+        // This test verifies that Apply→Undo→Redo→Undo leaves the model identical to the start.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        // A1 = 10, A2 has =A1+1, B1 = 99
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        var a2 = new Cell { Value = new NumberValue(11) };
+        a2.FormulaText = "A1+1";
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), a2);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(99));
+
+        // Snapshot initial state
+        var initialA1 = sheet.GetValue(1, 1);
+        var initialA2Formula = sheet.GetCell(2, 1)!.FormulaText;
+        var initialA2Value = sheet.GetValue(2, 1);
+        var initialB1 = sheet.GetValue(1, 2);
+
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        var cmd = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Down);
+
+        // ── Apply ──
+        cmd.Apply(ctx).Success.Should().BeTrue();
+        // A2 moved to A3, formula A1+1 should rewrite to A2+1 (A1 stays, was above insert at row 1)
+        // Actually: insert at row 1 shifts everything at row>=1 down. A1→A2, A2→A3.
+        // Wait: the insert is AT row 1 in column A, shifting down. A1 moves to A2, A2 moves to A3.
+        // Formula in A2 (=A1+1) moves to A3. The reference A1 is at row 1 >= insertBeforeRow 1 in band col A,
+        // so it gets rewritten to A2+1.
+        sheet.GetCell(1, 1).Should().BeNull("row 1 is empty after insert");
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(10), "A1 value moved to A2");
+        sheet.GetCell(3, 1).Should().NotBeNull("formula cell moved to A3");
+        sheet.GetCell(3, 1)!.FormulaText.Should().Be("A2+1", "formula reference rewritten after insert");
+        sheet.GetValue(1, 2).Should().Be(new NumberValue(99), "B1 untouched (outside band)");
+
+        // ── Undo ──
+        cmd.Revert(ctx);
+        sheet.GetValue(1, 1).Should().Be(initialA1, "A1 restored after undo");
+        sheet.GetCell(2, 1).Should().NotBeNull("A2 formula cell restored after undo");
+        sheet.GetCell(2, 1)!.FormulaText.Should().Be(initialA2Formula, "formula text restored after undo");
+        sheet.GetCell(3, 1).Should().BeNull("A3 empty after undo");
+        sheet.GetValue(1, 2).Should().Be(initialB1, "B1 unchanged after undo");
+
+        // ── Redo ──
+        cmd.Apply(ctx).Success.Should().BeTrue("redo must succeed");
+        sheet.GetCell(1, 1).Should().BeNull("row 1 empty again after redo");
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(10), "A2 has original A1 value after redo");
+        sheet.GetCell(3, 1)!.FormulaText.Should().Be("A2+1", "formula rewritten again after redo");
+
+        // ── Undo again ──
+        cmd.Revert(ctx);
+        sheet.GetValue(1, 1).Should().Be(initialA1, "A1 restored after second undo");
+        sheet.GetCell(2, 1)!.FormulaText.Should().Be(initialA2Formula,
+            "formula text must be restored correctly after second undo — validates Revert ordering");
+        sheet.GetCell(3, 1).Should().BeNull("A3 empty after second undo");
+        sheet.GetValue(1, 2).Should().Be(initialB1, "B1 unchanged after second undo");
+    }
+
+    // ── AdditionalRanges delete gap regression tests ──────────────────────────
+
+    [Fact]
+    public void DeleteCellsShiftUp_DvAdditionalRangeInDeletedBand_RemovedEvenWhenPrimaryUnchanged()
+    {
+        // Regression: AdjustRulesDeleteShiftUp only called AdjustAdditionalRanges when the primary
+        // AppliesTo was translated.  If primary had partial overlap (→ unchanged), additional ranges
+        // fully inside the deleted band were silently left dangling.
+        //
+        // Setup: primary AppliesTo spans rows 2..8 in col A (partial overlap with delete band rows 4..5)
+        //        → primary left unchanged.  AdditionalRange covers rows 4..5 in col A (fully deleted).
+        //        Expected: additional range removed; primary unchanged.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 8, 1)),
+            Type = DvType.List,
+            Formula1 = "A,B"
+        };
+        dvRule.AdditionalRanges.Add(
+            new GridRange(new CellAddress(sheet.Id, 4, 1), new CellAddress(sheet.Id, 5, 1)));
+        sheet.DataValidations.Add(dvRule);
+
+        // Delete rows 4..5 in col A band.  Primary A2:A8 has partial overlap → unchanged.
+        var deleteRange = new GridRange(new CellAddress(sheet.Id, 4, 1), new CellAddress(sheet.Id, 5, 1));
+        var cmd = new DeleteCellsCommand(sheet.Id, deleteRange, DeleteCellsShiftDirection.Up);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // Primary was partially overlapping → left unchanged
+        dvRule.AppliesTo.Start.Row.Should().Be(2, "primary partial-overlap range unchanged");
+        dvRule.AppliesTo.End.Row.Should().Be(8);
+
+        // AdditionalRange fully inside deleted band → must be removed
+        dvRule.AdditionalRanges.Should().BeEmpty(
+            "additional range fully inside deleted band must be removed even when primary is unchanged");
+
+        // Undo restores both
+        cmd.Revert(ctx);
+        dvRule.AppliesTo.Start.Row.Should().Be(2, "primary restored after undo");
+        dvRule.AppliesTo.End.Row.Should().Be(8);
+        dvRule.AdditionalRanges.Should().ContainSingle("additional range restored after undo");
+        dvRule.AdditionalRanges[0].Start.Row.Should().Be(4, "additional range AppliesTo restored");
+        dvRule.AdditionalRanges[0].End.Row.Should().Be(5);
+    }
+
+    [Fact]
+    public void DeleteCellsShiftLeft_DvAdditionalRangeRightOfDeleted_TranslatedEvenWhenPrimaryUnchanged()
+    {
+        // Symmetric left-direction test: additional range fully to the right of deleted cols
+        // must translate left even when primary has partial col overlap (→ unchanged).
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 6)),
+            Type = DvType.List,
+            Formula1 = "X,Y"
+        };
+        // Additional range fully to the right of deleted cols 3..4
+        dvRule.AdditionalRanges.Add(
+            new GridRange(new CellAddress(sheet.Id, 2, 5), new CellAddress(sheet.Id, 2, 6)));
+        sheet.DataValidations.Add(dvRule);
+
+        // Delete cols 3..4 in row 2 band.  Primary B2:F2 partial overlap (cols 3..4 inside, col 1..2 and 5..6 outside).
+        var deleteRange = new GridRange(new CellAddress(sheet.Id, 2, 3), new CellAddress(sheet.Id, 2, 4));
+        var cmd = new DeleteCellsCommand(sheet.Id, deleteRange, DeleteCellsShiftDirection.Left);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // Primary partial overlap → unchanged
+        dvRule.AppliesTo.Start.Col.Should().Be(1, "primary partial-overlap range col start unchanged");
+        dvRule.AppliesTo.End.Col.Should().Be(6, "primary partial-overlap range col end unchanged");
+
+        // Additional range E2:F2 (cols 5..6) is fully to the right of deleted cols 3..4 → shifts left by 2
+        dvRule.AdditionalRanges.Should().ContainSingle("additional range should still exist (translated)");
+        dvRule.AdditionalRanges[0].Start.Col.Should().Be(3, "additional range col 5 → col 3 after left shift by 2");
+        dvRule.AdditionalRanges[0].End.Col.Should().Be(4, "additional range col 6 → col 4 after left shift by 2");
+
+        // Undo restores
+        cmd.Revert(ctx);
+        dvRule.AdditionalRanges.Should().ContainSingle("additional range restored after undo");
+        dvRule.AdditionalRanges[0].Start.Col.Should().Be(5, "additional range start col restored after undo");
+        dvRule.AdditionalRanges[0].End.Col.Should().Be(6, "additional range end col restored after undo");
+    }
 }

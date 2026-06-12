@@ -384,4 +384,66 @@ public sealed class RemoveDuplicateRowsCommandTests
             sheet.SetCell(new CellAddress(sheet.Id, (uint)index + 1, 1), new TextValue(values[index]));
     }
 
+    // ── Snapshot-before-detect guard (P3 regression) ─────────────────────────
+
+    [Fact]
+    public void RemoveDuplicateRowsCommand_NoDuplicates_ReturnsSuccessWithoutModifyingSheet()
+    {
+        // When no duplicates are found the command must return success as a no-op and must NOT
+        // have materialized a full-range snapshot (the fix: detect first, snapshot only when needed).
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Alpha"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Beta"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Gamma"));
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1));
+        var command = new RemoveDuplicateRowsCommand(sheet.Id, range);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue("no-op when no duplicates must still report success");
+        command.RemovedRowCount.Should().Be(0, "no rows removed when all unique");
+
+        // Sheet must be completely unmodified
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Alpha"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Beta"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Gamma"));
+
+        // Revert on a no-op must also be safe
+        command.Revert(ctx);
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Alpha"), "revert of no-op leaves sheet unchanged");
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Beta"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Gamma"));
+    }
+
+    [Fact]
+    public void RemoveDuplicateRowsCommand_NoDuplicates_AffectedCellsIsEmpty()
+    {
+        // AffectedCells must be null/empty for a no-op — callers that trigger recalc based on
+        // AffectedCells must not recalc the full range unnecessarily.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        for (uint r = 1; r <= 5; r++)
+            sheet.SetCell(new CellAddress(sheet.Id, r, 1), new TextValue($"Unique{r}"));
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 5, 1));
+        var command = new RemoveDuplicateRowsCommand(sheet.Id, range);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        // No affected cells on a no-op
+        (outcome.AffectedCells is null || outcome.AffectedCells.Count == 0).Should().BeTrue(
+            "no-op remove-duplicates must not report affected cells");
+    }
+
 }

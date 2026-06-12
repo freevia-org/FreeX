@@ -192,14 +192,27 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
             return new GridRange(range.Start, cappedEnd);
         }
 
-        // Unbounded selection: intersect with the used-range bounding box.
-        var startRow = Math.Max(range.Start.Row, usedRange.Value.Start.Row);
-        var endRow   = Math.Min(range.End.Row,   usedRange.Value.End.Row);
-        var startCol = Math.Max(range.Start.Col, usedRange.Value.Start.Col);
-        var endCol   = Math.Min(range.End.Col,   usedRange.Value.End.Col);
+        // Unbounded selection: clamp only the UNBOUNDED dimension(s).
+        // A whole-column selection (isUnboundedRows) keeps its selected columns and clamps rows to
+        // the used range.  A whole-row selection (isUnboundedCols) keeps its selected rows and
+        // clamps columns to the used range.  Clamping the BOUNDED dimension would silently
+        // produce an empty intersection when the selected column/row has no data of its own but the
+        // rest of the sheet does — e.g. formatting column A when data lives only in B:D.
+        var startRow = isUnboundedRows
+            ? usedRange.Value.Start.Row
+            : range.Start.Row;
+        var endRow = isUnboundedRows
+            ? usedRange.Value.End.Row
+            : range.End.Row;
+        var startCol = isUnboundedCols
+            ? usedRange.Value.Start.Col
+            : range.Start.Col;
+        var endCol = isUnboundedCols
+            ? usedRange.Value.End.Col
+            : range.End.Col;
 
         if (startRow > endRow || startCol > endCol)
-            return null; // selection does not overlap used range
+            return null; // used-range row/col dimension is empty (shouldn't happen with a valid used range)
 
         return new GridRange(
             new CellAddress(range.Start.Sheet, startRow, startCol),

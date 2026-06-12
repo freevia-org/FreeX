@@ -72,23 +72,125 @@ public sealed class ApplyStyleCommandPerformanceTests
     }
 
     [Fact]
-    public void StyleOnlyCreateZone_RangeFullyOutsideUsedRange_ReturnsNull()
+    public void StyleOnlyCreateZone_WholeColumnWhenDataInDifferentColumn_ReturnsCrossUsedRows()
     {
+        // Regression: formatting column A (col 1) when data lives only in col 5 previously
+        // intersected BOTH dimensions and returned null, causing Bold on column A to silently
+        // style nothing.  The fix: only clamp the unbounded (row) dimension; keep the selected
+        // (bounded) column as-is.
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        // Content only in column 5
+        // Content only in column 5, row 1
         sheet.SetCell(new CellAddress(sheet.Id, 1, 5), new NumberValue(42));
 
-        // Select column 1 — no overlap with used range (col 5)
+        // Select whole column 1 — data lives in a different column
         var col1 = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, CellAddress.MaxRow, 1));
 
         var zone = ApplyStyleCommand.StyleOnlyCreateZone(sheet, col1);
 
-        // Rows overlap (1..MaxRow ∩ 1..1) but cols don't (1 ∩ 5..5 = empty)
-        zone.Should().BeNull(
-            "when the selection does not overlap the used range, no style-only zone is needed");
+        // Rows clamp to used-range rows (row 1..1); columns stay as selected (col 1..1).
+        zone.Should().NotBeNull(
+            "whole-column selection must return a zone even when no data exists in that column");
+        zone!.Value.Start.Col.Should().Be(1, "the bounded column dimension must not be intersected away");
+        zone!.Value.End.Col.Should().Be(1, "the bounded column dimension must not be intersected away");
+        zone!.Value.Start.Row.Should().Be(1, "rows clamp to used-range start row");
+        zone!.Value.End.Row.Should().Be(1, "rows clamp to used-range end row");
+    }
+
+    [Fact]
+    public void StyleOnlyCreateZone_WholeRowWhenDataInDifferentRow_ReturnsCrossUsedCols()
+    {
+        // Symmetric to the whole-column case: formatting row 5 when data lives only in row 1.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(99));
+
+        var wholeRow5 = new GridRange(
+            new CellAddress(sheet.Id, 5, 1),
+            new CellAddress(sheet.Id, 5, CellAddress.MaxCol));
+
+        var zone = ApplyStyleCommand.StyleOnlyCreateZone(sheet, wholeRow5);
+
+        zone.Should().NotBeNull(
+            "whole-row selection must return a zone even when no data exists in that row");
+        zone!.Value.Start.Row.Should().Be(5, "the bounded row dimension must not be intersected away");
+        zone!.Value.End.Row.Should().Be(5, "the bounded row dimension must not be intersected away");
+        zone!.Value.Start.Col.Should().Be(3, "cols clamp to used-range start col");
+        zone!.Value.End.Col.Should().Be(3, "cols clamp to used-range end col");
+    }
+
+    // ── Empty-column / empty-row bold regression tests ───────────────────────
+
+    [Fact]
+    public void WholeColumnBold_EmptyColumnWithDataElsewhere_CreatesStyleOnlyEntriesInUsedRows()
+    {
+        // Regression: bold on column A (empty) when data lives in B:D should create style-only
+        // entries for the used-range rows in column A, not silently no-op.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+
+        // Data in columns B..D, rows 1..5 — column A is empty
+        for (uint r = 1; r <= 5; r++)
+            for (uint c = 2; c <= 4; c++)
+                sheet.SetCell(new CellAddress(sheet.Id, r, c), new NumberValue(r * 10 + c));
+
+        var ctx = new TestCommandContext(wb);
+        var wholeColA = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 1));
+
+        var cmd = new ApplyStyleCommand(sheet.Id, wholeColA, new StyleDiff(Bold: true));
+        var result = cmd.Apply(ctx);
+
+        result.Success.Should().BeTrue("bold on an empty column must succeed");
+
+        // Style-only entries must exist in column A for the used-range rows (rows 1..5)
+        sheet.StyleOnlyCellCount.Should().BeGreaterThan(0,
+            "bold on an empty column must create style-only entries so a cell typed later appears bold");
+
+        // Verify at least one of the expected rows has a style-only entry
+        var styleAtA1 = sheet.GetStyleOnly(1, 1);
+        styleAtA1.Should().NotBeNull("row 1 col A must have a style-only entry after whole-column bold");
+        wb.GetStyle(styleAtA1!.Value).Bold.Should().BeTrue("the style-only entry must be bold");
+
+        // Cells beyond the used row range must NOT get style-only entries
+        sheet.GetStyleOnly(100, 1).Should().BeNull(
+            "rows beyond the used range must not get style-only entries");
+
+        // Undo must remove the style-only entries
+        cmd.Revert(ctx);
+        sheet.GetStyleOnly(1, 1).Should().BeNull("undo must remove style-only entries from column A");
+        sheet.StyleOnlyCellCount.Should().Be(0, "undo must leave no style-only entries");
+    }
+
+    [Fact]
+    public void WholeColumnBold_EmptyColumnNoData_CapsAtRow1000AndTypedCellIsStyled()
+    {
+        // On a fully empty sheet, whole-column bold caps at 1,000 rows.
+        // A cell typed later at row 500 (within the cap) must be covered by the style-only entry.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var wholeColA = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 1));
+
+        var cmd = new ApplyStyleCommand(sheet.Id, wholeColA, new StyleDiff(Bold: true));
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // Style-only entries must exist (capped at 1,000 rows)
+        sheet.StyleOnlyCellCount.Should().BeGreaterThan(0,
+            "empty sheet whole-column bold must create style-only entries up to the row cap");
+        sheet.StyleOnlyCellCount.Should().BeLessThanOrEqualTo(1_000,
+            "empty sheet whole-column bold must not exceed the 1,000-row cap");
+
+        // A cell typed later in the covered range must get the style from the style-only entry
+        var styleAtRow500 = sheet.GetStyleOnly(500, 1);
+        styleAtRow500.Should().NotBeNull("row 500 must be within the style-only zone");
+        wb.GetStyle(styleAtRow500!.Value).Bold.Should().BeTrue();
     }
 
     // ── ApplyStyleCommand whole-column behaviour tests ───────────────────────

@@ -26,10 +26,26 @@ public sealed partial class ViewportService
         var context = ViewportConditionalFormatEvaluator.BuildContext(sheet, workbook);
         CfContextBuildCount++;
 
-        if (_cfContextCache.Count >= MaxCachedContexts && _cfContextCacheOrder.TryDequeue(out var oldest))
-            _cfContextCache.Remove(oldest);
+        // Evict the oldest entry when the cache is full.  When dequeuing, skip any key that is no
+        // longer in the cache dictionary: those are stale duplicate order slots from a key that was
+        // previously evicted and re-inserted (see enqueue note below).  Skipping them prevents
+        // accidentally evicting the live re-inserted entry.
+        while (_cfContextCache.Count >= MaxCachedContexts)
+        {
+            if (!_cfContextCacheOrder.TryDequeue(out var candidate))
+                break;
+            if (_cfContextCache.ContainsKey(candidate))
+            {
+                _cfContextCache.Remove(candidate);
+                break;
+            }
+            // Stale slot (key already evicted) — loop to find a live entry to evict.
+        }
 
         _cfContextCache[key] = context;
+        // Always enqueue on ADD (this is a cache miss so the key was not in the cache when we
+        // entered).  If the key had a prior order slot from before it was evicted, that slot is now
+        // stale and will be skipped by the eviction loop above, so double-enqueueing is safe.
         _cfContextCacheOrder.Enqueue(key);
         return context;
     }

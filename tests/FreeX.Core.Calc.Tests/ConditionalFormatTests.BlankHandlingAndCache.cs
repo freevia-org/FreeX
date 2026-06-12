@@ -289,4 +289,56 @@ public partial class ConditionalFormatTests
         countAfter.Should().BeGreaterThanOrEqualTo(countBefore,
             "removing a CF rule invalidates the cached context");
     }
+
+    [Fact]
+    public void CfContext_MoreThan8SheetsWithRevisits_NoRebuildOnRevisit()
+    {
+        // Regression: the eviction queue admitted duplicate keys.  When a sheet was re-visited
+        // after eviction it got re-inserted and re-enqueued; but the stale prior queue slot was
+        // still present and would later evict the live re-inserted entry, triggering a spurious
+        // rebuild on the NEXT visit.
+        //
+        // Setup: 10 sheets (> MaxCachedContexts = 8) each with a CF rule.
+        //        Navigate through all 10 once, then revisit sheet 1 and assert no rebuild.
+        const int sheetCount = 10;
+        var wb = new Workbook("test");
+        var svc = new ViewportService();
+        var request = new ViewportRequest(1, 1, 500, 500);
+
+        var style = new CellStyle { FillColor = new CellColor(200, 50, 50) };
+        var sheets = new Sheet[sheetCount];
+        for (var i = 0; i < sheetCount; i++)
+        {
+            var s = wb.AddSheet($"Sheet{i + 1}");
+            s.SetCell(new CellAddress(s.Id, 1, 1), Cell.FromValue(new NumberValue(i + 1)));
+            s.ConditionalFormats.Add(new ConditionalFormat
+            {
+                AppliesTo = new GridRange(
+                    new CellAddress(s.Id, 1, 1),
+                    new CellAddress(s.Id, 5, 1)),
+                Priority = 1,
+                RuleType = CfRuleType.AboveAverage,
+                FormatIfTrue = style
+            });
+            sheets[i] = s;
+        }
+
+        // First pass: visit all 10 sheets to fill + overflow the cache
+        foreach (var s in sheets)
+            svc.GetViewport(wb, s.Id, request);
+
+        var buildCountAfterFirstPass = svc.CfContextBuildCount;
+        buildCountAfterFirstPass.Should().Be(sheetCount, "each sheet must be built once on first visit");
+
+        // Revisit sheet[0] — its key was evicted when the cache overflowed.  It must be rebuilt once.
+        svc.GetViewport(wb, sheets[0].Id, request);
+        var buildCountAfterFirstRevisit = svc.CfContextBuildCount;
+        buildCountAfterFirstRevisit.Should().Be(sheetCount + 1, "first revisit after eviction requires one rebuild");
+
+        // Revisit sheet[0] again immediately — the context is now in cache, must NOT rebuild.
+        svc.GetViewport(wb, sheets[0].Id, request);
+        var buildCountAfterSecondRevisit = svc.CfContextBuildCount;
+        buildCountAfterSecondRevisit.Should().Be(sheetCount + 1,
+            "second immediate revisit must hit the cache — the stale queue slot must not have evicted the live entry");
+    }
 }

@@ -284,11 +284,18 @@ internal static partial class RowColumnShiftHelpers
                 sheet.DataValidations.RemoveAt(i);
                 dvChanged = true;
             }
-            else if (result.Translated.HasValue)
+            else
             {
-                rule.AppliesTo = result.Translated.Value;
-                AdjustAdditionalRangesDeleteUp(rule, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count);
-                dvChanged = true;
+                if (result.Translated.HasValue)
+                {
+                    rule.AppliesTo = result.Translated.Value;
+                    dvChanged = true;
+                }
+                // AdditionalRanges are adjusted independently of the primary outcome: even when the
+                // primary AppliesTo is unchanged (partial overlap), additional ranges that are fully
+                // inside the deleted band must still be removed or translated.
+                if (AdjustAdditionalRangesDeleteUp(rule, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count))
+                    dvChanged = true;
             }
         }
 
@@ -337,11 +344,16 @@ internal static partial class RowColumnShiftHelpers
                 sheet.DataValidations.RemoveAt(i);
                 dvChanged = true;
             }
-            else if (result.Translated.HasValue)
+            else
             {
-                rule.AppliesTo = result.Translated.Value;
-                AdjustAdditionalRangesDeleteLeft(rule, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count);
-                dvChanged = true;
+                if (result.Translated.HasValue)
+                {
+                    rule.AppliesTo = result.Translated.Value;
+                    dvChanged = true;
+                }
+                // AdditionalRanges are adjusted independently of the primary outcome.
+                if (AdjustAdditionalRangesDeleteLeft(rule, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count))
+                    dvChanged = true;
             }
         }
 
@@ -496,33 +508,51 @@ internal static partial class RowColumnShiftHelpers
         return RangeDeleteResult.Unchanged;
     }
 
-    private static void AdjustAdditionalRangesDeleteUp(
+    private static bool AdjustAdditionalRangesDeleteUp(
         DataValidation rule,
         uint bandStartCol, uint bandEndCol,
         uint deletedStartRow, uint deletedEndRow, uint count)
     {
+        var changed = false;
         for (var i = rule.AdditionalRanges.Count - 1; i >= 0; i--)
         {
             var result = TranslateRangeDeleteUp(rule.AdditionalRanges[i], bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count);
             if (result == RangeDeleteResult.Remove)
+            {
                 rule.AdditionalRanges.RemoveAt(i);
+                changed = true;
+            }
             else if (result.Translated.HasValue)
+            {
                 rule.AdditionalRanges[i] = result.Translated.Value;
+                changed = true;
+            }
         }
+
+        return changed;
     }
 
-    private static void AdjustAdditionalRangesDeleteLeft(
+    private static bool AdjustAdditionalRangesDeleteLeft(
         DataValidation rule,
         uint bandStartRow, uint bandEndRow,
         uint deletedStartCol, uint deletedEndCol, uint count)
     {
+        var changed = false;
         for (var i = rule.AdditionalRanges.Count - 1; i >= 0; i--)
         {
             var result = TranslateRangeDeleteLeft(rule.AdditionalRanges[i], bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count);
             if (result == RangeDeleteResult.Remove)
+            {
                 rule.AdditionalRanges.RemoveAt(i);
+                changed = true;
+            }
             else if (result.Translated.HasValue)
+            {
                 rule.AdditionalRanges[i] = result.Translated.Value;
+                changed = true;
+            }
         }
+
+        return changed;
     }
 }
