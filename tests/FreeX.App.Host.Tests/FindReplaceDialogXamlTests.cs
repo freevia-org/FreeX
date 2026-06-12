@@ -650,4 +650,5 @@ file sealed class RejectingCommandBus(string message) : ICommandBus
     public bool CanRedo(WorkbookId workbookId) => false;
     public CommandOutcome RepeatLast(WorkbookId workbookId) => new(false, message);
     public bool CanRepeat(WorkbookId workbookId) => false;
+    public int GetUndoStackDepth(WorkbookId workbookId) => 0;
 }

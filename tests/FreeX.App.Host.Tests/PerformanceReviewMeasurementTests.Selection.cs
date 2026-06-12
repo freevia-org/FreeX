@@ -636,6 +636,8 @@ public sealed partial class PerformanceReviewMeasurementTests
 
         public bool CanRepeat(WorkbookId workbookId) => inner.CanRepeat(workbookId);
 
+        public int GetUndoStackDepth(WorkbookId workbookId) => inner.GetUndoStackDepth(workbookId);
+
         public void ResetQuickAccessProbeCounts()
         {
             CanUndoProbeCount = 0;

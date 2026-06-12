@@ -118,6 +118,9 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
     public bool CanRedo(WorkbookId workbookId) =>
         _stacks.TryGetValue(workbookId, out var stack) && stack.CanRedo;
 
+    public int GetUndoStackDepth(WorkbookId workbookId) =>
+        _stacks.TryGetValue(workbookId, out var stack) ? stack.UndoDepth : 0;
+
     public IReadOnlyList<CommandHistoryEntry> GetUndoHistory(WorkbookId workbookId, int maxCount) =>
         maxCount <= 0 || !_stacks.TryGetValue(workbookId, out var stack)
             ? []
@@ -203,6 +206,9 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
 
         public bool CanUndo => _undoStack.Count > 0;
         public bool CanRedo => _redoStack.Count > 0;
+
+        /// <summary>Number of commands currently on the undo stack.</summary>
+        public int UndoDepth => _undoStack.Count;
 
         public void Push(
             IWorkbookCommand command,

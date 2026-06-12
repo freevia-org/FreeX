@@ -24,6 +24,13 @@ public interface IWorkbookWindow
     /// <summary>Refreshes the viewport/status from the shared workbook after a cross-window change.</summary>
     void RefreshFromSharedWorkbook();
 
+    /// <summary>
+    /// Refreshes this window's title bar to reflect the current shared document state
+    /// (dirty indicator, file name).  Called by the registry after a dirty/saved transition
+    /// so all windows' title bars stay in sync without a full viewport refresh.
+    /// </summary>
+    void RefreshTitleBar();
+
     /// <summary>Brings this window to the foreground (Switch Windows / New Window activation).</summary>
     void ActivateWindow();
 
@@ -171,6 +178,20 @@ public sealed class WorkbookWindowRegistry
 
         target.ActivateWindow();
         return true;
+    }
+
+    /// <summary>
+    /// Tells every registered window to refresh its title bar after a document-state change
+    /// (dirty/saved transition).  Because <see cref="WorkbookDocumentState"/> is a shared
+    /// singleton, the dirty flag is already consistent across all windows; this call ensures
+    /// every title bar reflects the new state without a full viewport refresh.
+    /// The <paramref name="origin"/> window has already updated its own title bar before
+    /// calling this, but including it in the refresh is safe and simplifies the loop.
+    /// </summary>
+    public void NotifyDocumentStateChanged()
+    {
+        foreach (var window in _windows)
+            window.RefreshTitleBar();
     }
 
     /// <summary>

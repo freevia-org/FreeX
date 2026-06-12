@@ -27,6 +27,18 @@ public sealed class WorkbookDocumentState
     /// </summary>
     public int DirtyGeneration { get; private set; }
 
+    /// <summary>
+    /// The undo-stack depth at the time the workbook was last saved (or opened/created clean).
+    /// Used by <c>ExecuteUndo</c> / <c>ExecuteRedo</c> to detect when the stack returns
+    /// to the save point and clear the dirty flag without requiring an explicit save.
+    /// <para>
+    /// A value of <c>-1</c> means "no save point recorded" — the workbook was never saved
+    /// or was saved while no undo history existed and the depth is unknown.  Callers that
+    /// compare depth against this value must treat <c>-1</c> as "never at save point".
+    /// </para>
+    /// </summary>
+    public int SavedUndoDepth { get; private set; } = -1;
+
     /// <summary>The full path of the file most recently saved to or opened from, or <c>null</c> for an unsaved workbook.</summary>
     public string? CurrentFilePath { get; private set; }
 
@@ -61,6 +73,23 @@ public sealed class WorkbookDocumentState
     public void MarkSaved()
     {
         IsDirty = false;
+        SavedUndoDepth = -1;
+    }
+
+    /// <summary>
+    /// Marks the workbook clean and records the undo-stack depth at the time of save.
+    /// After this call, <c>ExecuteUndo</c> / <c>ExecuteRedo</c> can call
+    /// <see cref="TryMarkCleanIfAtSavePoint"/> to restore the clean state when the stack
+    /// returns to this depth.
+    /// </summary>
+    /// <param name="undoDepthAtSave">
+    ///   The value of <c>_commandBus.GetUndoStackDepth(workbookId)</c> at the time the
+    ///   save completed.
+    /// </param>
+    public void MarkSavedAtUndoDepth(int undoDepthAtSave)
+    {
+        IsDirty = false;
+        SavedUndoDepth = undoDepthAtSave;
     }
 
     /// <summary>
@@ -74,6 +103,24 @@ public sealed class WorkbookDocumentState
 
         IsDirty = false;
         CurrentFilePath = path;
+        SavedUndoDepth = -1;
+    }
+
+    /// <summary>
+    /// If the current undo-stack depth matches the saved depth, clears the dirty flag
+    /// (the user has undone/redone back to the save point — no unsaved changes).
+    /// Returns <c>true</c> when the state transitioned from dirty to clean.
+    /// </summary>
+    /// <param name="currentUndoDepth">
+    ///   The value of <c>_commandBus.GetUndoStackDepth(workbookId)</c> right now.
+    /// </param>
+    public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth)
+    {
+        if (SavedUndoDepth < 0 || currentUndoDepth != SavedUndoDepth)
+            return false;
+
+        IsDirty = false;
+        return true;
     }
 
     /// <summary>

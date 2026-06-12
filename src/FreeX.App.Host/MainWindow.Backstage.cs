@@ -352,6 +352,8 @@ public partial class MainWindow
         RefreshSheetTabs();
         UpdateViewport();
         MarkWorkbookSaved();
+        // Notify siblings so they rebind to the new workbook.
+        NotifyOtherWindowsOfWorkbookChange();
         RecordDiagnosticEvent("workbook_new");
     }
 
@@ -399,6 +401,10 @@ public partial class MainWindow
             _currentFilePath = result.OpenedAsTemplate ? null : path;
             UpdateTitleBar();
             MarkWorkbookSaved();
+            // Notify sibling windows so they rebind their viewports to the new workbook.
+            // Without this, siblings keep a stale _workbook while the shared command bus
+            // resolves the new one — their mutations would target the wrong workbook.
+            NotifyOtherWindowsOfWorkbookChange();
 
             _recentFiles.AddOrUpdate(path);
             ShowOpenProgress(
@@ -827,6 +833,11 @@ public partial class MainWindow
                 MarkWorkbookSaved();
 
             UpdateTitleBar();
+            // Notify sibling windows so they pick up the new file path/name in their
+            // title bars.  MarkWorkbookSaved() already fans out the dirty-state change;
+            // this call ensures the full viewport/title refresh for the file-context.
+            if (plan.ApplyFileContext)
+                NotifyOtherWindowsOfWorkbookChange();
             ShowXlsxSaveWarningsIfNeeded(saveWarnings);
             RecordDiagnosticEvent("workbook_saved", new Dictionary<string, string?>
             {

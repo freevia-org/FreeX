@@ -8,26 +8,27 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private enum SaveChangesConfirmation
-    {
-        Cancel,
-        Continue,
-        DiscardWithoutSaving
-    }
-
     private void MarkWorkbookDirty()
     {
-        // Delegates to the per-window WorkbookDocumentState service (injected via DI).
+        // Delegates to the shared (singleton) WorkbookDocumentState.
         // MarkDirty() increments DirtyGeneration and sets IsDirty = true in one atomic step.
         _documentState.MarkDirty();
         UpdateTitleBar();
+        // Fan out the title-bar refresh to every other window so all windows reflect
+        // the dirty indicator without needing a full viewport refresh.
+        _windowRegistry?.NotifyDocumentStateChanged();
     }
 
     private void MarkWorkbookSaved()
     {
-        // Delegates to the per-window WorkbookDocumentState service.
-        _documentState.MarkSaved();
+        // Delegates to the shared (singleton) WorkbookDocumentState.
+        // Record the undo-stack depth at save time so ExecuteUndo/Redo can detect
+        // when the stack returns to the save point and clear the dirty flag cleanly.
+        var undoDepth = _commandBus.GetUndoStackDepth(_workbook.Id);
+        _documentState.MarkSavedAtUndoDepth(undoDepth);
         UpdateTitleBar();
+        // Fan out to sibling windows so they also reflect the saved (clean) state.
+        _windowRegistry?.NotifyDocumentStateChanged();
         NotifyAutosaveSaved();
     }
 
@@ -80,14 +81,12 @@ public partial class MainWindow
             _closeAfterSaveInProgress = false;
         }
 
-        if (confirmation == SaveChangesConfirmation.Cancel)
-            return;
-
-        // Belt-and-suspenders: if the workbook became dirty again while the async
-        // prompt/save ran (rare when input is blocked, but possible during the
-        // confirmation dialog itself), do not suppress the next close prompt —
-        // let Closing re-evaluate naturally on the next attempt.
-        if (_workbookDirty)
+        // Delegate the post-prompt decision to the pure planner so the logic is
+        // independently unit-testable.  The dirty re-check is only applied when
+        // confirmation == Continue (a save ran and edits may have arrived mid-save);
+        // DiscardWithoutSaving proceeds to close unconditionally regardless of the
+        // current dirty flag (the discard path never calls MarkWorkbookSaved).
+        if (WindowCloseDecisionPlanner.Decide(confirmation, _workbookDirty) == WindowCloseAction.StayOpen)
             return;
 
         _suppressClosePrompt = true;
@@ -95,8 +94,14 @@ public partial class MainWindow
         _ = Dispatcher.BeginInvoke(new Action(Close));
     }
 
+    /// <summary>
+    /// True when this is the last window to close.  Must be called AFTER
+    /// <c>_windowRegistry.Unregister(this)</c> has run (in
+    /// <see cref="PrepareActiveWorkbookForFinalClose"/>), so <c>Count</c> reflects
+    /// the remaining windows rather than including this one.
+    /// </summary>
     private bool IsFinalWorkbookWindowClose() =>
-        _windowRegistry is null || _windowRegistry.Count <= 1;
+        _windowRegistry is null || _windowRegistry.Count == 0;
 
     /// <summary>
     /// Bypasses the save-changes prompt on the next Close() call.
@@ -108,6 +113,14 @@ public partial class MainWindow
     private void PrepareActiveWorkbookForFinalClose()
     {
         ReleaseWorkbookUiStateForClose();
+
+        // Pre-unregister from the registry *before* the IsFinalWorkbookWindowClose()
+        // check so that Count has already been decremented when we decide whether this
+        // is the last window.  This closes the concurrent-close race: if two windows
+        // close simultaneously, each pre-unregisters first; the window that sees
+        // Count<=1 after its own pre-unregister is definitively the last one.
+        // Unregister is idempotent — the Closed handler calls it again safely.
+        _windowRegistry?.Unregister(this);
 
         if (!IsFinalWorkbookWindowClose())
             return;
@@ -127,6 +140,9 @@ public partial class MainWindow
         _workbook = replacement;
         _workbookRef.Current = replacement;
         _currentSheetId = replacement.Sheets[0].Id;
+        // If there are still sibling windows (unusual for a final-close path but
+        // possible if IsFinalWorkbookWindowClose() was incorrect), notify them.
+        NotifyOtherWindowsOfWorkbookChange();
     }
 
     private void ReleaseWorkbookUiStateForClose()

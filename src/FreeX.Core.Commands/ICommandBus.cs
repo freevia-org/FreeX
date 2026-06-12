@@ -31,6 +31,14 @@ public interface ICommandBus
 
     /// <summary>Check if a repeatable command is available.</summary>
     bool CanRepeat(WorkbookId workbookId);
+
+    /// <summary>
+    /// Returns the current depth of the undo stack (number of commands that can be undone).
+    /// Used by <c>WorkbookDocumentState</c> to track the save-point depth so that undo/redo
+    /// can restore the clean state when the stack returns to the saved depth.
+    /// Returns 0 when there is nothing to undo or the workbook has no stack yet.
+    /// </summary>
+    int GetUndoStackDepth(WorkbookId workbookId);
 }
 
 public interface ICommandStackChangeNotifier

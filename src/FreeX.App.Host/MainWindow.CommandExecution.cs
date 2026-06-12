@@ -334,7 +334,18 @@ public partial class MainWindow
         if (!outcome.Success)
             return false;
 
-        MarkWorkbookDirty();
+        // After undo, check whether the stack has returned to the save point.
+        // If so, restore the clean state; otherwise mark dirty.
+        var undoDepthNow = _commandBus.GetUndoStackDepth(_workbook.Id);
+        if (!_documentState.TryMarkCleanIfAtSavePoint(undoDepthNow))
+            MarkWorkbookDirty();
+        else
+        {
+            // Cleaned via save-point — still update title bar and fan out.
+            UpdateTitleBar();
+            _windowRegistry?.NotifyDocumentStateChanged();
+        }
+
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
@@ -350,7 +361,18 @@ public partial class MainWindow
         if (!outcome.Success)
             return false;
 
-        MarkWorkbookDirty();
+        // After redo, check whether the stack has returned to the save point.
+        // If so, restore the clean state; otherwise mark dirty.
+        var undoDepthNow = _commandBus.GetUndoStackDepth(_workbook.Id);
+        if (!_documentState.TryMarkCleanIfAtSavePoint(undoDepthNow))
+            MarkWorkbookDirty();
+        else
+        {
+            // Cleaned via save-point — still update title bar and fan out.
+            UpdateTitleBar();
+            _windowRegistry?.NotifyDocumentStateChanged();
+        }
+
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();

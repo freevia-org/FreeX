@@ -139,4 +139,5 @@ file sealed class CapturingCommandBus : ICommandBus
     public bool CanRedo(WorkbookId workbookId) => false;
     public CommandOutcome RepeatLast(WorkbookId workbookId) => new(false, "Repeat is not available.");
     public bool CanRepeat(WorkbookId workbookId) => false;
+    public int GetUndoStackDepth(WorkbookId workbookId) => 0;
 }

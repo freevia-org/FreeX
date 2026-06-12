@@ -8,6 +8,7 @@ internal sealed class TestWorkbookWindow : IWorkbookWindow
 {
     public string? Suffix { get; private set; }
     public int RefreshCount { get; private set; }
+    public int RefreshTitleBarCount { get; private set; }
     public int ActivateCount { get; private set; }
     public bool IsWindowVisible { get; private set; } = true;
     public int SetVisibleTrueCount { get; private set; }
@@ -20,6 +21,8 @@ internal sealed class TestWorkbookWindow : IWorkbookWindow
     public void ApplyWindowTitleSuffix(string suffix) => Suffix = suffix;
 
     public void RefreshFromSharedWorkbook() => RefreshCount++;
+
+    public void RefreshTitleBar() => RefreshTitleBarCount++;
 
     public void ActivateWindow() => ActivateCount++;
 

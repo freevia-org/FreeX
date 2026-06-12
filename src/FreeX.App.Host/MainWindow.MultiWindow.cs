@@ -32,6 +32,8 @@ public partial class MainWindow
 
     private void MainWindow_Closed_UnregisterFromRegistry(object? sender, EventArgs e)
     {
+        // Unregister is idempotent: if the window was already pre-unregistered inside
+        // MainWindow_Closing (see PrepareActiveWorkbookForFinalClose), this is a no-op.
         _windowRegistry?.Unregister(this);
     }
 
@@ -43,13 +45,41 @@ public partial class MainWindow
     {
         _workbook = _workbookRef.Current;
         InvalidateToolbarVisualState();
-        _currentSheetId = _workbook.Sheets[0].Id;
+        // Open on the same sheet as the originating window, if we can find it via
+        // the registry.  Fall back to Sheets[0].
+        _currentSheetId = ResolveAdoptedSheetId();
         InvalidateNavigationCaches();
         UpdateTitleBar();
         SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
         RefreshSheetTabs();
         UpdateViewport();
-        MarkWorkbookSaved();
+        // Do NOT call MarkWorkbookSaved here.  WorkbookDocumentState is now a shared
+        // singleton, so calling MarkSaved in the new window would clear a dirty flag
+        // set legitimately by the originating window.  The title bar already reflects
+        // the correct shared dirty state via UpdateTitleBar() above.
+    }
+
+    /// <summary>
+    /// Resolves the sheet id that a newly-adopted secondary window should open on.
+    /// Prefers the currently-visible sheet in any already-registered window (i.e. the
+    /// window that triggered "New Window"); falls back to <c>Sheets[0]</c>.
+    /// </summary>
+    private SheetId ResolveAdoptedSheetId()
+    {
+        if (_windowRegistry is not null)
+        {
+            foreach (var win in _windowRegistry.Windows)
+            {
+                if (win is MainWindow mw && !ReferenceEquals(mw, this))
+                {
+                    var candidateId = mw._currentSheetId;
+                    if (_workbook.GetSheet(candidateId) is not null)
+                        return candidateId;
+                }
+            }
+        }
+
+        return _workbook.Sheets.Count > 0 ? _workbook.Sheets[0].Id : _currentSheetId;
     }
 
     // ── IWorkbookWindow (driven by WorkbookWindowRegistry) ────────────────────
@@ -60,6 +90,13 @@ public partial class MainWindow
         _windowTitleSuffix = suffix ?? string.Empty;
         UpdateTitleBar();
     }
+
+    /// <summary>
+    /// Refreshes this window's title bar to reflect the current shared document state
+    /// (dirty indicator, file name).  Called by the registry after a dirty/saved transition
+    /// so all windows' title bars stay in sync without a full viewport refresh.
+    /// </summary>
+    public void RefreshTitleBar() => UpdateTitleBar();
 
     /// <summary>Re-reads the shared workbook into this window's viewport/status after an edit elsewhere.</summary>
     public void RefreshFromSharedWorkbook()

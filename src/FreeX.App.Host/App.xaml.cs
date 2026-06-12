@@ -159,9 +159,12 @@ public partial class App : Application
         // (Excel "New Window"). Singleton so all windows coordinate through one registry.
         services.AddSingleton<WorkbookWindowRegistry>();
 
-        // Per-window document state (dirty flag, generation, file path, close-prompt flag).
-        // Transient so each MainWindow gets its own independent instance.
-        services.AddTransient<WorkbookDocumentState>();
+        // Document state (dirty flag, generation, file path, close-prompt flag).
+        // Singleton — the workbook is shared across all windows in the multi-window
+        // ("New Window") model, so dirty/clean state is a document property, not a
+        // per-view property.  All windows share this one instance; title-bar refresh
+        // after a dirty/saved transition is broadcast via WorkbookWindowRegistry.
+        services.AddSingleton<WorkbookDocumentState>();
 
         // UI
         services.AddTransient<MainWindow>();
