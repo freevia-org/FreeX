@@ -184,7 +184,11 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
         return new string(buffer);
     }
 
-    private static void WriteColumnName(uint col, Span<char> destination)
+    /// <summary>
+    /// Writes a 1-based column number as its column-name letters into <paramref name="destination"/>.
+    /// The span must be exactly <see cref="GetColumnNameLength"/> characters wide.
+    /// </summary>
+    public static void WriteColumnName(uint col, Span<char> destination)
     {
         for (var index = destination.Length - 1; index >= 0; index--)
         {
@@ -194,7 +198,11 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
         }
     }
 
-    private static uint GetColumnNameLength(uint col)
+    /// <summary>
+    /// Returns the number of characters required to represent a 1-based column number as a column name (e.g. 1→1, 27→2).
+    /// Returns 0 for column 0.
+    /// </summary>
+    public static uint GetColumnNameLength(uint col)
     {
         if (col == 0)
             return 0;
@@ -207,7 +215,8 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
             col <= 321_272_406 ? 6u : 7u;
     }
 
-    private static uint GetRowDigitCount(uint row)
+    /// <summary>Returns the number of decimal digits required to represent a row number.</summary>
+    public static uint GetRowDigitCount(uint row)
     {
         return row < 10 ? 1u :
             row < 100 ? 2u :
