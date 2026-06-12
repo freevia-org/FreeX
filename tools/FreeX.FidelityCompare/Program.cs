@@ -33,11 +33,21 @@ internal static class Program
         Thread.CurrentThread.CurrentUICulture = enUs;
 
         var files = CorpusFiles.Resolve(options);
-        if (files.Count == 0)
+        // Also include the synthetic oracle workbooks that arbitrate uncertain/disputed formula semantics
+        // (YEARFRAC basis-0 Feb edge cases, DATEDIF MD boundary, TEXT sign-prefix format, VDB fractional
+        // periods).  These are generated fresh at the start of each run so they always reflect current
+        // FreeX formula output; Excel recalculates on open and provides the ground-truth comparison.
+        // Oracle files are included even when no corpus files are found (early-exit guard is skipped for them).
+        var oracleDir = Path.Combine(options.CorpusRoot, "oracle-generated");
+        var oracleFiles = FormulaOracleCases.GenerateOracleWorkbooks(oracleDir);
+        var allFiles = files.Concat(oracleFiles.Where(f => options.Filter is null ||
+            Path.GetFileName(f).Contains(options.Filter, StringComparison.OrdinalIgnoreCase))).ToList();
+        if (allFiles.Count == 0)
         {
-            Console.Error.WriteLine($"No corpus files found under '{options.FilesDirectory}'. Run tools/Fetch-FidelityCorpus.ps1 first.");
+            Console.Error.WriteLine($"No corpus files found under '{options.FilesDirectory}' and no oracle cases generated. Run tools/Fetch-FidelityCorpus.ps1 first.");
             return 2;
         }
+        files = allFiles;
 
         var runDir = options.OutputDirectory ?? Path.Combine(
             options.CorpusRoot, "runs", DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));

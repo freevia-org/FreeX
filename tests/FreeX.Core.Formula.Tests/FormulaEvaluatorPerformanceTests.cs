@@ -97,7 +97,7 @@ public sealed class FormulaEvaluatorPerformanceTests
             "per-cell sheet resolution reintroduces CPU overhead in VLOOKUP, MATCH, LOOKUP, XMATCH, and XLOOKUP fast paths");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void RepeatedFormulaTextEvaluation_ReusesParsedAst()
     {
         var evaluator = new FormulaEvaluator();
@@ -136,7 +136,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void RepeatedComparisonFormulaTextEvaluation_AvoidsDelegateChurn()
     {
         var evaluator = new FormulaEvaluator();
@@ -169,7 +169,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void RepeatedBooleanCoercionFormulaTextEvaluation_AvoidsCoercedNumberChurn()
     {
         var evaluator = new FormulaEvaluator();
@@ -203,7 +203,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void ParserRepeatedIdentifierFormula_AvoidsIdentifierAllocationChurn()
     {
         const string formula =

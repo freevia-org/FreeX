@@ -66,6 +66,14 @@ public static partial class BuiltInFunctions
         var ds = datesRaw!;
         if (cf.Count < 2) return ErrorValue.NA;
         if (cf.Count != ds.Count) return ErrorValue.Num;
+        // Excel requires at least one positive and one negative cash flow.
+        bool xirrHasPositive = false, xirrHasNegative = false;
+        for (int i = 0; i < cf.Count; i++)
+        {
+            if (cf[i] > 0) xirrHasPositive = true;
+            else if (cf[i] < 0) xirrHasNegative = true;
+        }
+        if (!xirrHasPositive || !xirrHasNegative) return ErrorValue.Num;
         NormalizeDateSerialsToYearFractions(ds);
         double r = guess;
         for (int iter = 0; iter < 200; iter++)
@@ -78,11 +86,43 @@ public static partial class BuiltInFunctions
                 f  += cf[i] / denom;
                 df -= t * cf[i] / (denom * (1 + r));
             }
-            if (Math.Abs(df) < 1e-14) break;
+            if (Math.Abs(df) < 1e-14) { r = double.NaN; break; }
             double delta = f / df;
             r -= delta;
+            if (r <= -1) { r = double.NaN; break; }
             if (Math.Abs(delta) < 1e-10) break;
         }
+
+        if (!double.IsFinite(r))
+        {
+            // Newton diverged — fall back to bisection over r ∈ (−0.99999, 10).
+            static double XirrNpv(IReadOnlyList<double> cashFlows, IReadOnlyList<double> dateFractions, double rate)
+            {
+                double result = 0;
+                for (int i = 0; i < cashFlows.Count; i++)
+                    result += cashFlows[i] / Math.Pow(1 + rate, dateFractions[i]);
+                return result;
+            }
+
+            const double lo = -0.99999, hi = 10.0;
+            double fLo = XirrNpv(cf, ds, lo);
+            double fHi = XirrNpv(cf, ds, hi);
+            if (!double.IsFinite(fLo) || !double.IsFinite(fHi) || fLo * fHi > 0)
+                return ErrorValue.Num;
+
+            double bLo = lo, bHi = hi;
+            for (int iter = 0; iter < 200; iter++)
+            {
+                double mid = (bLo + bHi) / 2;
+                double fMid = XirrNpv(cf, ds, mid);
+                if (!double.IsFinite(fMid)) return ErrorValue.Num;
+                if (Math.Abs(fMid) < 1e-10 || (bHi - bLo) < 1e-10) { r = mid; break; }
+                if (fLo * fMid < 0) { bHi = mid; fHi = fMid; }
+                else { bLo = mid; fLo = fMid; }
+                r = mid;
+            }
+        }
+
         if (!double.IsFinite(r)) return ErrorValue.Num;
         return NumberResult(r);
     }
@@ -225,11 +265,47 @@ public static partial class BuiltInFunctions
                 if (i > 0) df -= i * cashflows[i] / (denom * (1 + r));
             }
             if (Math.Abs(f) < 1e-10) break;
-            if (Math.Abs(df) < 1e-15) return ErrorValue.Num;
+            if (Math.Abs(df) < 1e-15) { r = double.NaN; break; }
             double delta = f / df;
             r -= delta;
+            if (r <= -1) { r = double.NaN; break; }
             if (Math.Abs(delta) < 1e-10) break;
         }
+
+        if (!double.IsFinite(r))
+        {
+            // Newton diverged — fall back to bisection over r ∈ (−0.99999, 10).
+            // Excel converges for ordinary investment patterns using this bracket.
+            static double IrrNpv(IReadOnlyList<double> cf, double rate)
+            {
+                double result = 0;
+                for (int i = 0; i < cf.Count; i++)
+                {
+                    double denom = Math.Pow(1 + rate, i);
+                    result += cf[i] / denom;
+                }
+                return result;
+            }
+
+            const double lo = -0.99999, hi = 10.0;
+            double fLo = IrrNpv(cashflows, lo);
+            double fHi = IrrNpv(cashflows, hi);
+            if (double.IsNaN(fLo) || double.IsNaN(fHi) || fLo * fHi > 0)
+                return ErrorValue.Num; // no sign change in bracket → #NUM!
+
+            double bLo = lo, bHi = hi;
+            for (int iter = 0; iter < 200; iter++)
+            {
+                double mid = (bLo + bHi) / 2;
+                double fMid = IrrNpv(cashflows, mid);
+                if (!double.IsFinite(fMid)) return ErrorValue.Num;
+                if (Math.Abs(fMid) < 1e-10 || (bHi - bLo) < 1e-10) { r = mid; break; }
+                if (fLo * fMid < 0) { bHi = mid; fHi = fMid; }
+                else { bLo = mid; fLo = fMid; }
+                r = mid;
+            }
+        }
+
         return double.IsNaN(r) || double.IsInfinity(r) ? ErrorValue.Num : new NumberValue(r);
     }
 }
