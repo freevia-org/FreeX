@@ -539,7 +539,11 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new ShapeGradientDialog(shape.GetEffectiveGradientFillDirection()) { Owner = this };
+        var startColor = shape.FillThemeColor?.Resolve(_workbook.Theme)
+            ?? shape.FillColor
+            ?? DrawingShapeModel.ResolveDefaultFillColor(_workbook.Theme);
+        var endColor = shape.GradientFillEndColor ?? ShapeGradientDialogPlanner.DefaultEndColor;
+        var dialog = new ShapeGradientDialog(startColor, endColor, shape.GetEffectiveGradientFillDirection()) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(

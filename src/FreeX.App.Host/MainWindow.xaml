@@ -5948,42 +5948,48 @@
 
                     <Grid Grid.Row="1" Margin="40,24,40,24">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="280"/>
+                            <ColumnDefinition Width="300"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <Button x:Name="SsPrintPreviewButton"
-                                    Content="{local:Loc Key=PageSetup_PrintPreviewAutomationName}"
-                                    Width="220" Height="34"
+                        <ScrollViewer Grid.Column="0"
+                                      Margin="0,0,24,0"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel>
+                                <Button x:Name="SsBackstagePrintNowButton"
+                                    Content="{local:Loc Key=PrintPreview_PrintButton}"
+                                    Width="220" MinHeight="34"
                                     HorizontalAlignment="Left"
-                                    Margin="0,0,0,10"
-                                    Click="PrintButton_Click"
-                                    AutomationProperties.AutomationId="BackstagePrintPreviewButton"
-                                    AutomationProperties.Name="{local:Loc Key=PageSetup_PrintPreviewAutomationName}"
-                                    AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenPrintPreviewWithWorksheetSettingsAndNativePrintAccess}"
+                                    Margin="0,0,0,16"
+                                    Click="BackstagePrintNowButton_Click"
+                                    AutomationProperties.AutomationId="BackstagePrintNowButton"
+                                    AutomationProperties.Name="{local:Loc Key=PrintPreview_PrintAutomationName}"
+                                    AutomationProperties.HelpText="{local:Loc Key=PrintPreview_PrintHelpText}"
                                     local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Print}"
                                     local:RibbonTooltip.KeyTip="V"
-                                    local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenThePrintPreviewAndNativePrintDialogForTheRenderedWorksheet}"
-                                    local:RibbonMetadata.CommandName="Print Preview"/>
-                            <TextBlock Text="{local:Loc Key=MainWindow_TooltipDescription_OpenThePrintPreviewAndNativePrintDialogForTheRenderedWorksheet}"
-                                       FontSize="12" Foreground="#555" TextWrapping="Wrap"
-                                       Width="240"/>
-                        </StackPanel>
+                                    local:RibbonTooltip.Description="{local:Loc Key=PrintPreview_PrintToolTip}"
+                                    local:RibbonMetadata.CommandName="Print"/>
+                                <TextBlock Text="{local:Loc Key=MainWindow_Text_Print}"
+                                           FontSize="13" FontWeight="SemiBold" Foreground="#555"
+                                           Margin="0,0,0,8"/>
+                                <TextBlock x:Name="SsPrintSettingsSummary"
+                                           FontSize="13" Foreground="#1F1F1F"
+                                           TextWrapping="Wrap" LineHeight="20"
+                                           Margin="0,0,0,12"
+                                           AutomationProperties.Name="{local:Loc Key=PrintPreview_SettingsSummaryAutomationName}"
+                                           AutomationProperties.HelpText="{local:Loc Key=PrintPreview_SettingsSummaryHelpText}"/>
+                                <ContentControl x:Name="SsPrintOptionsHost"
+                                                AutomationProperties.AutomationId="BackstagePrintOptionsHost"/>
+                            </StackPanel>
+                        </ScrollViewer>
 
                         <Border Grid.Column="1"
                                 BorderBrush="#E0E0E0" BorderThickness="1,0,0,0"
                                 Padding="24,0,0,0">
-                            <StackPanel>
-                                <TextBlock Text="{local:Loc Key=MainWindow_Text_Print}"
-                                           FontSize="13" FontWeight="SemiBold" Foreground="#555"
-                                           Margin="0,0,0,14"/>
-                                <TextBlock x:Name="SsPrintSettingsSummary"
-                                           FontSize="13" Foreground="#1F1F1F"
-                                           TextWrapping="Wrap" LineHeight="20"
-                                           AutomationProperties.Name="{local:Loc Key=PrintPreview_SettingsSummaryAutomationName}"
-                                           AutomationProperties.HelpText="{local:Loc Key=PrintPreview_SettingsSummaryHelpText}"/>
-                            </StackPanel>
+                            <DocumentViewer x:Name="SsPrintPreviewViewer"
+                                            AutomationProperties.AutomationId="BackstagePrintPreviewViewer"
+                                            AutomationProperties.Name="{local:Loc Key=PageSetup_PrintPreviewAutomationName}"/>
                         </Border>
                     </Grid>
                 </Grid><!-- end SsPrintView -->

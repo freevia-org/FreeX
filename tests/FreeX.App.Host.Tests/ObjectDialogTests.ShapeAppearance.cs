@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -101,6 +102,72 @@ public sealed partial class ObjectDialogTests
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void ShapeGradientDialog_InitializesFromSelectedShapeGradientColors()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ShapeGradientDialog(
+                new CellColor(112, 48, 160),
+                new CellColor(0, 176, 240),
+                DrawingShapeGradientDirection.DiagonalUp);
+            try
+            {
+                GetField<TextBox>(dialog, "_startColorBox").Text.Should().Be("112,48,160");
+                GetField<TextBox>(dialog, "_endColorBox").Text.Should().Be("0,176,240");
+                GetField<Button>(dialog, "_startColorButton").Background.Should()
+                    .BeOfType<SolidColorBrush>()
+                    .Which.Color.Should()
+                    .Be(Color.FromRgb(112, 48, 160));
+                GetField<Button>(dialog, "_endColorButton").Background.Should()
+                    .BeOfType<SolidColorBrush>()
+                    .Which.Color.Should()
+                    .Be(Color.FromRgb(0, 176, 240));
+
+                GetField<ComboBox>(dialog, "_directionBox").SelectedItem.Should()
+                    .BeOfType<ShapeGradientDirectionOption>()
+                    .Which.Direction.Should()
+                    .Be(DrawingShapeGradientDirection.DiagonalUp);
+                dialog.Result.Should().Be(new ShapeGradientDialogResult(
+                    new CellColor(112, 48, 160),
+                    new CellColor(0, 176, 240),
+                    DrawingShapeGradientDirection.DiagonalUp));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void ShapeGradientDialogPlanner_CreatePreviewGradientPoints_KeepsWideDiagonalPreviewVisiblyDiagonal()
+    {
+        var (diagonalStart, diagonalEnd) = ShapeGradientDialogPlanner.CreatePreviewGradientPoints(
+            DrawingShapeGradientDirection.DiagonalDown,
+            width: 400,
+            height: 80);
+        var (reverseStart, reverseEnd) = ShapeGradientDialogPlanner.CreatePreviewGradientPoints(
+            DrawingShapeGradientDirection.DiagonalUp,
+            width: 400,
+            height: 80);
+
+        diagonalStart.Should().Be(new Point(0.4, 0));
+        diagonalEnd.Should().Be(new Point(0.6, 1));
+        reverseStart.Should().Be(new Point(0.4, 1));
+        reverseEnd.Should().Be(new Point(0.6, 0));
+        ((diagonalEnd.X - diagonalStart.X) * 400).Should().BeApproximately(
+            (diagonalEnd.Y - diagonalStart.Y) * 80,
+            0.0001);
+
+        var (tallStart, tallEnd) = ShapeGradientDialogPlanner.CreatePreviewGradientPoints(
+            DrawingShapeGradientDirection.DiagonalDown,
+            width: 80,
+            height: 400);
+        tallStart.Should().Be(new Point(0, 0.4));
+        tallEnd.Should().Be(new Point(1, 0.6));
     }
 
     [Fact]
@@ -236,7 +303,8 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("_endColorBox.TextChanged += (_, _) => SyncGradientTextFromInputs()");
         source.Should().Contain("UpdateColorVisuals()");
         source.Should().Contain("ShapeGradientPreviewSwatch");
-        source.Should().Contain("CreateGradientBrush(_startColor, _endColor, SelectedDirection)");
+        source.Should().Contain("_gradientPreview.SizeChanged += (_, _) => UpdateGradientPreview()");
+        source.Should().Contain("CreateGradientBrush(");
         source.Should().Contain("SizeToContent = SizeToContent.Height");
         source.Should().Contain("DialogButtonRowFactory.Create(Accept, 76, rowMargin");
         source.Should().NotContain("Height = 280");

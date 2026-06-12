@@ -393,8 +393,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("FindDescendantByAutomationId<ComboBox>(dialog, \"PrintPreviewZoomBox\")");
         source.Should().Contain("ClosePrintPreviewTourDialogWithEscape");
         source.Should().Contain("PrintPreviewCloseButton");
-        source.Should().Contain("SsPrintPreviewButton.Focus();");
-        source.Should().Contain("Keyboard.Focus(SsPrintPreviewButton);");
+        source.Should().Contain("SsBackstagePrintNowButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(SsBackstagePrintNowButton);");
         source.Should().Contain("PrintPreviewTourManifest");
         source.Should().Contain("RenderTargetBitmap-print-preview-dialog-and-main-window");
         source.Should().Contain("The native Windows print dialog is not opened during this tour");
@@ -862,7 +862,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("sheet.Pictures.Add(picture);");
         source.Should().Contain("sheet.TextBoxes.Add(textBox);");
         source.Should().Contain("new ColorPickerDialog(context.Shape.FillColor, allowNoColor: false)");
-        source.Should().Contain("new ShapeGradientDialog(context.Shape.GetEffectiveGradientFillDirection())");
+        source.Should().Contain("new ShapeGradientDialog(");
+        source.Should().Contain("context.Shape.GradientFillEndColor ?? ShapeGradientDialogPlanner.DefaultEndColor");
+        source.Should().Contain("context.Shape.GetEffectiveGradientFillDirection()");
         source.Should().Contain("new ShapeEffectsDialog(context.Shape.GetEffectiveEffectPreset())");
         source.Should().Contain("new ObjectSizeDialog(context.Shape.Width, context.Shape.Height, UiText.Get(\"MainWindowMessage_ObjectSizeTitle\"))");
         source.Should().Contain("new FormatPictureDialog(picture)");
