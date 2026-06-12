@@ -32,7 +32,8 @@ public sealed partial class GridViewDrawingObjectThemeTests
         renderTextBoxes.Should().Contain("DrawTextBoxThemeEffect(dc, rect, themeEffect);");
         renderTextBoxes.Should().NotContain("DrawTextBoxThemeEffect(dc, rect, WorkbookTheme);");
         renderDrawingShapes.Should().Contain("var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);");
-        renderDrawingShapes.Should().Contain("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);");
+        renderDrawingShapes.Should().Contain("var shapeThemeEffect = ResolveDrawingShapeThemeEffect(shape, themeEffect);");
+        renderDrawingShapes.Should().Contain("DrawShapeThemeEffect(dc, shape.Kind, rect, shapeThemeEffect, colors);");
         renderDrawingShapes.Should().NotContain("DrawShapeThemeEffect(dc, shape.Kind, rect, WorkbookTheme);");
         drawTextBoxEffect.Should().Contain("WorkbookThemeEffectStyle effect");
         drawTextBoxEffect.Should().NotContain("WorkbookThemeEffectStyle.FromTheme");
@@ -436,6 +437,104 @@ public sealed partial class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void DrawingObjectRendering_SkipsWorkbookThemeEffectsForInsertedShapes()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var shape = new DrawingShapeModel
+            {
+                Anchor = new CellAddress(sheetId, 1, 1),
+                Kind = DrawingShapeKind.Rectangle,
+                Width = 60,
+                Height = 30,
+                FillColor = DrawingShapeModel.DefaultFillColor,
+                OutlineColor = DrawingShapeModel.DefaultOutlineColor
+            };
+            var grid = new GridView
+            {
+                Width = 90,
+                Height = 60,
+                ShowHeaders = false,
+                ShowGridLines = false,
+                WorkbookTheme = WorkbookTheme.Office.WithNativeFormatSchemeXml(ThemeWithTenPixelDropShadow),
+                Viewport = new ViewportModel(
+                    [],
+                    [new RowMetric(1, 60, 0)],
+                    [new ColMetric(1, 90, 0)]),
+                DrawingShapes = [shape]
+            };
+
+            grid.Measure(new Size(90, 60));
+            grid.Arrange(new Rect(0, 0, 90, 60));
+            grid.UpdateLayout();
+
+            var bitmap = new RenderTargetBitmap(
+                90,
+                60,
+                96,
+                96,
+                PixelFormats.Pbgra32);
+            bitmap.Render(grid);
+
+            CountNonWhitePixels(bitmap, new Int32Rect(8, 8, 44, 14))
+                .Should()
+                .BeGreaterThan(50, "the inserted shape fill and outline should still render");
+            CountNonWhitePixels(bitmap, new Int32Rect(8, 34, 44, 10))
+                .Should()
+                .Be(0, "plain inserted shapes should not inherit workbook theme shadow artifacts");
+        });
+    }
+
+    [Fact]
+    public void DrawingObjectRendering_UsesThemeEffectsOnlyForThemeStyledShapes()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var shape = new DrawingShapeModel
+            {
+                Anchor = new CellAddress(sheetId, 1, 1),
+                Kind = DrawingShapeKind.Rectangle,
+                Width = 60,
+                Height = 30,
+                FillColor = DrawingShapeModel.DefaultFillColor,
+                OutlineColor = DrawingShapeModel.DefaultOutlineColor,
+                UsesThemeEffects = true
+            };
+            var grid = new GridView
+            {
+                Width = 90,
+                Height = 60,
+                ShowHeaders = false,
+                ShowGridLines = false,
+                WorkbookTheme = WorkbookTheme.Office.WithNativeFormatSchemeXml(ThemeWithTenPixelDropShadow),
+                Viewport = new ViewportModel(
+                    [],
+                    [new RowMetric(1, 60, 0)],
+                    [new ColMetric(1, 90, 0)]),
+                DrawingShapes = [shape]
+            };
+
+            grid.Measure(new Size(90, 60));
+            grid.Arrange(new Rect(0, 0, 90, 60));
+            grid.UpdateLayout();
+
+            var bitmap = new RenderTargetBitmap(
+                90,
+                60,
+                96,
+                96,
+                PixelFormats.Pbgra32);
+            bitmap.Render(grid);
+
+            CountNonWhitePixels(bitmap, new Int32Rect(8, 34, 44, 10))
+                .Should()
+                .BeGreaterThan(20, "style-backed imported shapes can still opt into workbook theme effects");
+        });
+    }
+
+    [Fact]
     public void DrawingObjectRendering_UsesThemeGlowForTextBoxesAndShapesOnly()
     {
         var drawingObjects = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
@@ -501,12 +600,12 @@ public sealed partial class GridViewDrawingObjectThemeTests
             drawingObjects.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)..
             drawingObjects.IndexOf("private void DrawShapeThemeInnerShadow", StringComparison.Ordinal)];
 
-        renderDrawingShape.Should().Contain("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);");
-        renderDrawingShape.Should().Contain("DrawShapeThemeBevelEffect(dc, shape.Kind, rect, themeEffect);");
-        renderDrawingShape.IndexOf("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);", StringComparison.Ordinal)
+        renderDrawingShape.Should().Contain("DrawShapeThemeEffect(dc, shape.Kind, rect, shapeThemeEffect, colors);");
+        renderDrawingShape.Should().Contain("DrawShapeThemeBevelEffect(dc, shape.Kind, rect, shapeThemeEffect);");
+        renderDrawingShape.IndexOf("DrawShapeThemeEffect(dc, shape.Kind, rect, shapeThemeEffect, colors);", StringComparison.Ordinal)
             .Should().BeLessThan(renderDrawingShape.IndexOf("DrawShapeGeometry(dc, shape.Kind, rect", StringComparison.Ordinal));
         renderDrawingShape.IndexOf("DrawShapeGeometry(dc, shape.Kind, rect", StringComparison.Ordinal)
-            .Should().BeLessThan(renderDrawingShape.IndexOf("DrawShapeThemeBevelEffect(dc, shape.Kind, rect, themeEffect);", StringComparison.Ordinal));
+            .Should().BeLessThan(renderDrawingShape.IndexOf("DrawShapeThemeBevelEffect(dc, shape.Kind, rect, shapeThemeEffect);", StringComparison.Ordinal));
         shapeThemeEffect.Should().Contain("effect.HasThreeDRotation");
         shapeThemeEffect.Should().Contain("DrawShapeThreeDRotationEffect(dc, kind, rect, colors);");
         shapeThemeBevel.Should().Contain("effect.HasBevel");
@@ -538,7 +637,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
             drawingObjects.IndexOf("private static double GetSoftEdgeThickness", StringComparison.Ordinal)];
 
         renderTextBox.Should().Contain("DrawTextBoxThemeInnerShadow(dc, rect, themeEffect);");
-        renderDrawingShape.Should().Contain("DrawShapeThemeInnerShadow(dc, shape.Kind, rect, themeEffect);");
+        renderDrawingShape.Should().Contain("DrawShapeThemeInnerShadow(dc, shape.Kind, rect, shapeThemeEffect);");
         textBoxThemeInnerShadow.Should().Contain("effect.HasInnerShadow");
         textBoxThemeInnerShadow.Should().Contain("GetInnerShadowThickness(effect.InnerShadowBlurRadius)");
         textBoxThemeInnerShadow.Should().Contain("GetInnerShadowRect(rect, thickness, effect.InnerShadowOffsetX, effect.InnerShadowOffsetY)");
@@ -669,4 +768,18 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
         return count;
     }
+
+    private const string ThemeWithTenPixelDropShadow = """
+        <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Artifact Test Effects">
+          <a:effectStyleLst>
+            <a:effectStyle>
+              <a:effectLst>
+                <a:outerShdw blurRad="40000" dist="95250" dir="5400000" rotWithShape="0">
+                  <a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr>
+                </a:outerShdw>
+              </a:effectLst>
+            </a:effectStyle>
+          </a:effectStyleLst>
+        </a:fmtScheme>
+        """;
 }

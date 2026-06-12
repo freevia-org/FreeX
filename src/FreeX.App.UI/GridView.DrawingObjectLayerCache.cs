@@ -172,6 +172,7 @@ public partial class GridView
             hash.Add(shape.OutlineThemeColor);
             hash.Add(shape.HasShadowEffect);
             hash.Add(shape.EffectPreset);
+            hash.Add(shape.UsesThemeEffects);
         }
 
         return hash.ToHashCode();

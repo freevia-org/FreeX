@@ -116,6 +116,52 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
     }
 
     [Theory]
+    [InlineData("0", false)]
+    [InlineData("1", true)]
+    public void XlsxDrawingPartReader_ReadsShapeThemeEffectStyleOptIn(string effectRefIndex, bool expected)
+    {
+        var drawingXml = XDocument.Parse($$"""
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <xdr:oneCellAnchor>
+                <xdr:from>
+                  <xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff>
+                  <xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff>
+                </xdr:from>
+                <xdr:ext cx="914400" cy="457200"/>
+                <xdr:sp>
+                  <xdr:nvSpPr>
+                    <xdr:cNvPr id="2" name="Rectangle 1"/>
+                    <xdr:cNvSpPr/>
+                  </xdr:nvSpPr>
+                  <xdr:style>
+                    <a:lnRef idx="0"/>
+                    <a:fillRef idx="0"/>
+                    <a:effectRef idx="{{effectRefIndex}}"/>
+                    <a:fontRef idx="minor"/>
+                  </xdr:style>
+                  <xdr:spPr>
+                    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                    <a:solidFill><a:srgbClr val="5B9BD5"/></a:solidFill>
+                    <a:ln><a:solidFill><a:srgbClr val="2F5597"/></a:solidFill></a:ln>
+                  </xdr:spPr>
+                </xdr:sp>
+                <xdr:clientData/>
+              </xdr:oneCellAnchor>
+            </xdr:wsDr>
+            """);
+
+        var shape = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml)
+            .Shapes
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        shape.UsesThemeEffects.Should().Be(expected);
+        shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.None);
+    }
+
+    [Theory]
     [InlineData(DrawingShapeGradientDirection.Horizontal)]
     [InlineData(DrawingShapeGradientDirection.Vertical)]
     [InlineData(DrawingShapeGradientDirection.DiagonalUp)]

@@ -183,7 +183,8 @@ public sealed partial class XlsxFileAdapter
                 FillThemeColor = shapePart.FillThemeColor,
                 OutlineThemeColor = shapePart.OutlineThemeColor,
                 HasShadowEffect = shapePart.HasShadowEffect,
-                EffectPreset = shapePart.EffectPreset
+                EffectPreset = shapePart.EffectPreset,
+                UsesThemeEffects = shapePart.UsesThemeEffects
             };
             XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet);
             shape.IsSourceLoaded = true;

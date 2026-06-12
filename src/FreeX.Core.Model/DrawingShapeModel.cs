@@ -92,6 +92,7 @@ public sealed class DrawingShapeModel
     public WorkbookThemeColorReference? OutlineThemeColor { get; set; }
     public bool HasShadowEffect { get; set; }
     public DrawingShapeEffectPreset EffectPreset { get; set; }
+    public bool UsesThemeEffects { get; set; }
     public bool IsSourceLoaded { get; set; }
 
     public CellColor GetEffectiveFillColor(WorkbookTheme theme, CellColor fallback) =>

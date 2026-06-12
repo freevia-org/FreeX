@@ -57,6 +57,7 @@ internal sealed record XlsxShapePackagePart(
     WorkbookThemeColorReference? OutlineThemeColor,
     bool HasShadowEffect,
     DrawingShapeEffectPreset EffectPreset,
+    bool UsesThemeEffects,
     int DrawingOrderIndex);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
@@ -332,10 +333,26 @@ internal static partial class XlsxWorksheetDrawingPartReader
                     outlineThemeColor,
                     hasShadowEffect,
                     effectPreset,
+                    ReadUsesThemeEffectStyle(shapeElement, drawingNs, spreadsheetDrawingNs),
                     ReadNearestAnchorOrderIndex(shapeElement)));
         }
 
         return (textBoxes, shapes);
+    }
+
+    private static bool ReadUsesThemeEffectStyle(
+        XElement shapeElement,
+        XNamespace drawingNs,
+        XNamespace spreadsheetDrawingNs)
+    {
+        var effectStyleIndex = shapeElement
+            .Element(spreadsheetDrawingNs + "style")?
+            .Element(drawingNs + "effectRef")?
+            .Attribute("idx")?
+            .Value;
+
+        return int.TryParse(effectStyleIndex, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) &&
+               index > 0;
     }
 
     private static (string DrawingPath, XDocument DrawingXml)? ReadDrawingContext(

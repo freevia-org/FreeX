@@ -93,6 +93,7 @@ internal static class DuplicateSheetDrawingCloner
             OutlineThemeColor = shape.OutlineThemeColor,
             HasShadowEffect = shape.HasShadowEffect,
             EffectPreset = shape.EffectPreset,
+            UsesThemeEffects = shape.UsesThemeEffects,
             IsSourceLoaded = shape.IsSourceLoaded
         };
 

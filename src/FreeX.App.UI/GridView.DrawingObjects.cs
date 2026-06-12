@@ -371,15 +371,16 @@ public partial class GridView
 
         var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
         var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
+        var shapeThemeEffect = ResolveDrawingShapeThemeEffect(shape, themeEffect);
         var pen = GetDrawingObjectPen(255, colors.Outline, 1.5);
         var fill = shape.HasFill ? CreateDrawingShapeFill(shape, colors.Fill) : null;
-        DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);
+        DrawShapeThemeEffect(dc, shape.Kind, rect, shapeThemeEffect, colors);
         DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape, colors);
         DrawShapeGeometry(dc, shape.Kind, rect, DrawingShapeKindSupport.IsLineLike(shape.Kind) ? null : fill, pen);
         DrawShapeAuthoredBevelEffect(dc, shape.Kind, rect, shape);
-        DrawShapeThemeBevelEffect(dc, shape.Kind, rect, themeEffect);
+        DrawShapeThemeBevelEffect(dc, shape.Kind, rect, shapeThemeEffect);
         DrawShapeAuthoredInnerShadow(dc, shape.Kind, rect, shape);
-        DrawShapeThemeInnerShadow(dc, shape.Kind, rect, themeEffect);
+        DrawShapeThemeInnerShadow(dc, shape.Kind, rect, shapeThemeEffect);
         PopDrawingObjectTransform(dc, transformDepth);
     }
 
@@ -655,6 +656,11 @@ public partial class GridView
 
         return GetDrawingObjectBrush(255, startColor);
     }
+
+    private static WorkbookThemeEffectStyle ResolveDrawingShapeThemeEffect(
+        DrawingShapeModel shape,
+        WorkbookThemeEffectStyle themeEffect) =>
+        shape.UsesThemeEffects ? themeEffect : default;
 
     private static void DrawShapeGeometry(
         DrawingContext dc,
