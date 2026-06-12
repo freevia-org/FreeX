@@ -84,6 +84,9 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
         if (ValidateResizeRange(table, _newRange) is { } error)
             return new CommandOutcome(false, error);
 
+        if (sheet.StructuredTables.Any(t => t.Id != _tableId && t.Range.Overlaps(_newRange)))
+            return new CommandOutcome(false, "A table cannot overlap another table.");
+
         _previousTable = table;
         var columns = BuildColumns(sheet, table, _newRange).ToList();
         var filterColumns = table.FilterColumns
