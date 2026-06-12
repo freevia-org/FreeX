@@ -337,6 +337,7 @@ public partial class MainWindow
 
     private void CreateNewWorkbook()
     {
+        CloseFindReplaceDialogIfOpen();
         var wb = NewWorkbookFactory.Create(_options);
         _workbook = wb;
         _workbookRef.Current = wb;
@@ -398,6 +399,7 @@ public partial class MainWindow
             var loader = new OpenWorkbookLoader(workbook => _recalcEngine.RecalculateAllFormulas(workbook));
             var result = await loader.LoadAsync(path, adapter, ext, format!, progress);
 
+            CloseFindReplaceDialogIfOpen();
             _currentXlsxFeatureReport = result.FeatureReport;
             _workbook = result.Workbook;
             _workbookRef.Current = result.Workbook;

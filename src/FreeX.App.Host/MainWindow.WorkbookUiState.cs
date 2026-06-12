@@ -288,36 +288,48 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
-    private void FindButton_Click(object sender, RoutedEventArgs e)
+    private FindReplaceDialog? _findReplaceDialog;
+
+    private void FindButton_Click(object sender, RoutedEventArgs e) =>
+        OpenFindReplaceDialog(replaceMode: false);
+
+    private void ReplaceButton_Click(object sender, RoutedEventArgs e) =>
+        OpenFindReplaceDialog(replaceMode: true);
+
+    private void OpenFindReplaceDialog(bool replaceMode)
     {
+        if (_findReplaceDialog is not null)
+        {
+            // Reuse the already-open dialog: just switch tabs and bring it to the front.
+            _findReplaceDialog.SwitchMode(replaceMode);
+            _findReplaceDialog.Activate();
+            return;
+        }
+
         var dlg = new FindReplaceDialog(
             () => _workbook,
             _commandBus,
             NavigateToCell,
-            replaceMode: false,
+            replaceMode: replaceMode,
             () => _currentSheetId,
             () => SheetGrid.SelectedRange?.Start,
             RefreshAfterFindReplaceEdit)
         {
             Owner = this
         };
+        dlg.Closed += (_, _) => _findReplaceDialog = null;
+        _findReplaceDialog = dlg;
         dlg.Show();
     }
 
-    private void ReplaceButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Closes the Find/Replace dialog if it is open. Called whenever the active workbook is
+    /// replaced (New, Open, drag-drop) so the dialog cannot operate on a stale workbook reference.
+    /// </summary>
+    private void CloseFindReplaceDialogIfOpen()
     {
-        var dlg = new FindReplaceDialog(
-            () => _workbook,
-            _commandBus,
-            NavigateToCell,
-            replaceMode: true,
-            () => _currentSheetId,
-            () => SheetGrid.SelectedRange?.Start,
-            RefreshAfterFindReplaceEdit)
-        {
-            Owner = this
-        };
-        dlg.Show();
+        _findReplaceDialog?.Close();
+        // _findReplaceDialog is nulled by the Closed handler above.
     }
 
     private void NavigateToCell(CellAddress addr)

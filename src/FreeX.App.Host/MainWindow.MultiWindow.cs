@@ -103,7 +103,12 @@ public partial class MainWindow
     {
         var workbook = _workbookRef.Current;
         if (_workbook.Id != workbook.Id)
+        {
+            // The workbook was replaced in a sibling window (e.g. File > Open there).
+            // Close our Find/Replace dialog so it cannot operate on a stale workbook.
             InvalidateToolbarVisualState();
+            CloseFindReplaceDialogIfOpen();
+        }
         _workbook = workbook;
         if (_workbook.GetSheet(_currentSheetId) is null && _workbook.Sheets.Count > 0)
             _currentSheetId = _workbook.Sheets[0].Id;

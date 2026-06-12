@@ -76,13 +76,18 @@ public static class FindReplaceService
         bool matchEntireCell = false)
     {
         var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        // Pre-compute once: skip NumberValue cells when the search text cannot possibly match
+        // any invariant numeric rendering (no wildcards, no digit/sign/decimal/exponent chars).
+        var skipNumbers = options.LookIn != FindLookIn.Formulas
+            && !CanSearchTextMatchNumber(searchText);
         var results = new List<FindResult>();
 
         foreach (var sheet in FindReplaceSearchPlanner.SheetsForScope(workbook, options))
         {
             var sheetResults = new List<FindResult>();
 
-            foreach (var candidate in FindReplaceSearchPlanner.EnumerateSearchTexts(sheet, options.LookIn))
+            foreach (var candidate in FindReplaceSearchPlanner.EnumerateSearchTexts(sheet, options.LookIn,
+                skipNumberValues: skipNumbers))
             {
                 bool isMatch = matchEntireCell
                     ? candidate.Text.Equals(searchText, comparison)
@@ -326,6 +331,9 @@ public static class FindReplaceService
         {
             newCell = cell.Clone();
             newCell.FormulaText = newText;
+            // Clear the stale cached value so the cell shows blank rather than the old
+            // result until the host triggers recalculation after the replace command.
+            newCell.Value = BlankValue.Instance;
             return true;
         }
 
@@ -405,6 +413,43 @@ public static class FindReplaceService
             ? replaceText
             : currentText.Replace(searchText, replaceText, comparison);
         return true;
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when the search pattern is a plain (non-wildcard) substring whose
+    /// characters can potentially appear in an invariant numeric rendering, meaning a
+    /// <see cref="NumberValue"/> cell might match and must not be skipped.
+    /// Returns <c>false</c> only when the pattern is guaranteed never to match any number
+    /// (contains at least one character outside [0-9eE+-.NanInfty] and no wildcards).
+    /// </summary>
+    /// <remarks>
+    /// This is a conservative pre-filter: it returns <c>true</c> when in doubt so correctness
+    /// is never compromised.  Callers may skip <see cref="NumberValue"/> cells when this returns
+    /// <c>false</c>.
+    /// </remarks>
+    public static bool CanSearchTextMatchNumber(string searchText)
+    {
+        if (string.IsNullOrEmpty(searchText))
+            return true;
+
+        var hasNonNumericChar = false;
+        foreach (var ch in searchText)
+        {
+            // Wildcards can match anything — bail out immediately (return true = may match).
+            if (ch is '*' or '?')
+                return true;
+
+            // Characters that can appear in invariant number strings (digits, sign, decimal,
+            // exponent marker, and the letters that make up "NaN" / "Infinity").
+            if (ch is >= '0' and <= '9' or '.' or '-' or '+' or 'E' or 'e'
+                    or 'N' or 'a' or 'n' or 'I' or 'f' or 'i' or 'y')
+                continue;
+
+            hasNonNumericChar = true;
+        }
+
+        // If every character was in the numeric set, the pattern might match a number.
+        return !hasNonNumericChar;
     }
 
     private static string? GetDisplayText(ScalarValue value) => value switch

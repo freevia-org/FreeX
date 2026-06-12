@@ -45,6 +45,18 @@ public sealed partial class FindReplaceDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
+    /// <summary>
+    /// Switches the dialog to Find or Replace tab when the window is already open.
+    /// Called when the host wants to reuse the live dialog instead of opening a second one.
+    /// </summary>
+    public void SwitchMode(bool replaceMode)
+    {
+        var target = replaceMode ? ReplaceTab : FindTab;
+        if (!ReferenceEquals(FindReplaceTabs.SelectedItem, target))
+            FindReplaceTabs.SelectedItem = target;
+        FocusSearchBox();
+    }
+
     private void FocusInitialKeyboardTarget()
     {
         FocusSearchBox();
