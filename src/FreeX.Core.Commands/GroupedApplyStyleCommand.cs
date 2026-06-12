@@ -4,6 +4,8 @@ namespace FreeX.Core.Commands;
 
 /// <summary>
 /// Applies a style diff to the same row/column range across multiple grouped sheets.
+/// Uses the same used-range clamp as <see cref="ApplyStyleCommand"/> to avoid materialising
+/// millions of style-only entries when a whole column or row is selected.
 /// </summary>
 public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
 {
@@ -46,32 +48,75 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
         foreach (var sheetId in _sheetIds)
         {
             var sheet = ctx.GetSheet(sheetId);
-            foreach (var sourceAddress in _sourceRange.AllCells())
+
+            // Compute the zone in which new style-only entries are created for empty cells.
+            // Same clamp strategy as ApplyStyleCommand.
+            var styleOnlyCreateZone = ApplyStyleCommand.StyleOnlyCreateZone(sheet, _sourceRange);
+
+            // --- Pass 1: content cells anywhere in the selection ---
+            foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
             {
-                var address = new CellAddress(sheetId, sourceAddress.Row, sourceAddress.Col);
-                var cell = sheet.GetCell(address);
+                if (row < _sourceRange.Start.Row || row > _sourceRange.End.Row) continue;
+                if (col < _sourceRange.Start.Col || col > _sourceRange.End.Col) continue;
 
-                if (cell is null)
+                var address = new CellAddress(sheetId, row, col);
+                _snapshot.Add((sheetId, address, cell.Clone(), null));
+                cell.StyleId = StyleDiffStyleCache.GetOrRegister(
+                    ctx.Workbook, _diff, cell.StyleId, styleCache);
+            }
+
+            // --- Pass 2: empty cells within the style-only create zone ---
+            if (styleOnlyCreateZone.HasValue)
+            {
+                var zone = styleOnlyCreateZone.Value;
+                for (var r = zone.Start.Row; r <= zone.End.Row; r++)
                 {
-                    _snapshot.Add((sheetId, address, null, sheet.GetStyleOnly(address.Row, address.Col)));
+                    for (var c = zone.Start.Col; c <= zone.End.Col; c++)
+                    {
+                        if (sheet.GetCell(r, c) is not null)
+                            continue;
 
-                    var newStyleId = StyleDiffStyleCache.GetOrRegister(
-                        ctx.Workbook,
-                        _diff,
-                        StyleId.Default,
-                        styleCache);
-                    sheet.SetStyleOnly(address.Row, address.Col, newStyleId);
+                        var address = new CellAddress(sheetId, r, c);
+                        var oldStyleOnly = sheet.GetStyleOnly(r, c);
+                        _snapshot.Add((sheetId, address, null, oldStyleOnly));
+
+                        var newStyleId = StyleDiffStyleCache.GetOrRegister(
+                            ctx.Workbook,
+                            _diff,
+                            oldStyleOnly ?? StyleId.Default,
+                            styleCache);
+                        sheet.SetStyleOnly(r, c, newStyleId);
+                    }
                 }
-                else
+            }
+
+            // --- Pass 3: pre-existing style-only entries outside the create zone ---
+            // Materialise before the loop to avoid mutating _styleOnly while iterating it.
+            var preExistingStyleOnly = sheet.GetStyleOnlyEntries().ToList();
+            foreach (var ((row, col), existingStyleId) in preExistingStyleOnly)
+            {
+                if (row < _sourceRange.Start.Row || row > _sourceRange.End.Row) continue;
+                if (col < _sourceRange.Start.Col || col > _sourceRange.End.Col) continue;
+
+                if (styleOnlyCreateZone.HasValue)
                 {
-                    _snapshot.Add((sheetId, address, cell.Clone(), null));
-
-                    cell.StyleId = StyleDiffStyleCache.GetOrRegister(
-                        ctx.Workbook,
-                        _diff,
-                        cell.StyleId,
-                        styleCache);
+                    var z = styleOnlyCreateZone.Value;
+                    if (row >= z.Start.Row && row <= z.End.Row &&
+                        col >= z.Start.Col && col <= z.End.Col)
+                    {
+                        continue;
+                    }
                 }
+
+                if (sheet.GetCell(row, col) is not null)
+                    continue;
+
+                var addr = new CellAddress(sheetId, row, col);
+                _snapshot.Add((sheetId, addr, null, existingStyleId));
+
+                var updated = StyleDiffStyleCache.GetOrRegister(
+                    ctx.Workbook, _diff, existingStyleId, styleCache);
+                sheet.SetStyleOnly(row, col, updated);
             }
         }
 

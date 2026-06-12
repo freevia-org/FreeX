@@ -5,6 +5,15 @@ namespace FreeX.Core.Commands;
 /// <summary>
 /// Applies a partial style override to every cell in a range.
 /// Only non-null StyleDiff fields are changed; others are preserved.
+/// <para>
+/// Performance note: for unbounded selections (whole-column or whole-row, where the range extends
+/// to <see cref="CellAddress.MaxRow"/> or <see cref="CellAddress.MaxCol"/>) the dense loop over
+/// millions of empty cells is clamped to the sheet's used-range bounding box.  Content cells
+/// anywhere in the selection and pre-existing style-only entries anywhere in the selection are
+/// still fully honoured; only the creation of <em>new</em> style-only entries for empty,
+/// never-touched cells is clamped.  Bounded selections (e.g. a format-painter target block) are
+/// never clamped — every empty cell in the explicit selection gets a style-only entry.
+/// </para>
 /// </summary>
 public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
 {
@@ -38,28 +47,85 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
         _snapshot = [];
         var styleCache = new Dictionary<StyleId, StyleId>();
 
-        foreach (var addr in _range.AllCells())
+        // Compute the zone in which we will CREATE new style-only entries for empty cells.
+        // This is clamped to the sheet's used range to avoid materialising millions of style-only
+        // entries when a whole column or row is selected.  Content cells and pre-existing
+        // style-only entries outside the clamp zone are still processed below.
+        var styleOnlyCreateZone = StyleOnlyCreateZone(sheet, _range);
+
+        // --- Pass 1: content cells anywhere in the selection ---
+        // Iterate the occupied-cell dictionary (O(cellCount), not O(rangeSize)).
+        foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
         {
-            var cell = sheet.GetCell(addr);
+            if (row < _range.Start.Row || row > _range.End.Row) continue;
+            if (col < _range.Start.Col || col > _range.End.Col) continue;
 
-            if (cell is null)
+            var addr = new CellAddress(_sheetId, row, col);
+            _snapshot.Add((addr, cell.Clone(), null));
+            cell.StyleId = StyleDiffStyleCache.GetOrRegister(ctx.Workbook, _diff, cell.StyleId, styleCache);
+        }
+
+        // --- Pass 2: empty cells within the style-only create zone ---
+        // This is the dense loop, but clamped to at most usedRange rows × usedRange cols.
+        if (styleOnlyCreateZone.HasValue)
+        {
+            var zone = styleOnlyCreateZone.Value;
+            for (var r = zone.Start.Row; r <= zone.End.Row; r++)
             {
-                var oldStyleOnly = sheet.GetStyleOnly(addr.Row, addr.Col);
-                _snapshot.Add((addr, null, oldStyleOnly));
+                for (var c = zone.Start.Col; c <= zone.End.Col; c++)
+                {
+                    // Skip occupied cells — already handled in Pass 1.
+                    if (sheet.GetCell(r, c) is not null)
+                        continue;
 
-                var newStyleId = StyleDiffStyleCache.GetOrRegister(
-                    ctx.Workbook,
-                    _diff,
-                    oldStyleOnly ?? StyleId.Default,
-                    styleCache);
-                sheet.SetStyleOnly(addr.Row, addr.Col, newStyleId);
+                    var addr = new CellAddress(_sheetId, r, c);
+                    var oldStyleOnly = sheet.GetStyleOnly(r, c);
+                    _snapshot.Add((addr, null, oldStyleOnly));
+
+                    var newStyleId = StyleDiffStyleCache.GetOrRegister(
+                        ctx.Workbook,
+                        _diff,
+                        oldStyleOnly ?? StyleId.Default,
+                        styleCache);
+                    sheet.SetStyleOnly(r, c, newStyleId);
+                }
             }
-            else
+        }
+
+        // --- Pass 3: pre-existing style-only entries OUTSIDE the create zone ---
+        // These exist when a cell was previously styled by a prior command.  We must update them
+        // so that re-applying Bold on the same column after a prior Bold pass is consistent.
+        // Materialise the snapshot before the loop to avoid iterating while mutating _styleOnly.
+        var preExistingStyleOnly = sheet.GetStyleOnlyEntries().ToList();
+        foreach (var ((row, col), existingStyleId) in preExistingStyleOnly)
+        {
+            if (row < _range.Start.Row || row > _range.End.Row) continue;
+            if (col < _range.Start.Col || col > _range.End.Col) continue;
+
+            // Skip anything already covered by Pass 2 to avoid duplicate snapshot entries.
+            if (styleOnlyCreateZone.HasValue)
             {
-                _snapshot.Add((addr, cell.Clone(), null));
-
-                cell.StyleId = StyleDiffStyleCache.GetOrRegister(ctx.Workbook, _diff, cell.StyleId, styleCache);
+                var z = styleOnlyCreateZone.Value;
+                if (row >= z.Start.Row && row <= z.End.Row &&
+                    col >= z.Start.Col && col <= z.End.Col)
+                {
+                    continue;
+                }
             }
+
+            // Skip if the cell is now occupied (Pass 1 handles it).
+            if (sheet.GetCell(row, col) is not null)
+                continue;
+
+            var addr = new CellAddress(_sheetId, row, col);
+            _snapshot.Add((addr, null, existingStyleId));
+
+            var newStyleId = StyleDiffStyleCache.GetOrRegister(
+                ctx.Workbook,
+                _diff,
+                existingStyleId,
+                styleCache);
+            sheet.SetStyleOnly(row, col, newStyleId);
         }
 
         return new CommandOutcome(true);
@@ -83,6 +149,61 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
                 sheet.SetCell(addr, oldCell.Clone());
             }
         }
+    }
+
+    /// <summary>
+    /// Returns the zone within <paramref name="range"/> where new style-only entries may be
+    /// created for empty cells.  For bounded selections (user selected a specific cell block) the
+    /// full range is returned unchanged — every empty cell in the explicit selection gets a
+    /// style-only entry, which is the expected behaviour.
+    /// <para>
+    /// The clamp only activates for <em>unbounded</em> selections, i.e. whole-column
+    /// (<see cref="CellAddress.MaxRow"/>) or whole-row (<see cref="CellAddress.MaxCol"/>)
+    /// selections, where iterating the full range would materialise millions of style-only entries.
+    /// In that case the zone is intersected with the sheet's used-range bounding box.
+    /// </para>
+    /// Returns null when the intersection is empty (unbounded selection on an empty sheet, or
+    /// unbounded selection that does not overlap the used range).
+    /// </summary>
+    public static GridRange? StyleOnlyCreateZone(Sheet sheet, GridRange range)
+    {
+        var isUnboundedRows = range.End.Row >= CellAddress.MaxRow;
+        var isUnboundedCols = range.End.Col >= CellAddress.MaxCol;
+
+        // Bounded selection: the caller explicitly chose every cell in the range.
+        // Return the full range so all empty cells get a style-only entry.
+        if (!isUnboundedRows && !isUnboundedCols)
+            return range;
+
+        var usedRange = sheet.GetUsedRange();
+        if (usedRange is null)
+        {
+            // No content on sheet.  Allow style-only entries only within a bounded zone so that
+            // clicking a column header on an empty sheet does not materialise 1M entries.
+            // We allow up to the selection bounding box but cap at a sensible default viewport.
+            const uint EmptySheetMaxRow = 1_000;
+            const uint EmptySheetMaxCol = CellAddress.MaxCol;
+            var cappedEnd = new CellAddress(
+                range.Start.Sheet,
+                Math.Min(range.End.Row, EmptySheetMaxRow),
+                Math.Min(range.End.Col, EmptySheetMaxCol));
+            if (cappedEnd.Row < range.Start.Row || cappedEnd.Col < range.Start.Col)
+                return null;
+            return new GridRange(range.Start, cappedEnd);
+        }
+
+        // Unbounded selection: intersect with the used-range bounding box.
+        var startRow = Math.Max(range.Start.Row, usedRange.Value.Start.Row);
+        var endRow   = Math.Min(range.End.Row,   usedRange.Value.End.Row);
+        var startCol = Math.Max(range.Start.Col, usedRange.Value.Start.Col);
+        var endCol   = Math.Min(range.End.Col,   usedRange.Value.End.Col);
+
+        if (startRow > endRow || startCol > endCol)
+            return null; // selection does not overlap used range
+
+        return new GridRange(
+            new CellAddress(range.Start.Sheet, startRow, startCol),
+            new CellAddress(range.Start.Sheet, endRow, endCol));
     }
 }
 

@@ -629,6 +629,7 @@ public partial class MainWindow
                 commands.AddRange(CreateBorderCommands(
                     sheetId,
                     sheetRange,
+                    sheet,
                     (currentRange, address) => BorderShortcutService.GetOutlineBorderDiff(
                         currentRange,
                         address,
@@ -641,6 +642,7 @@ public partial class MainWindow
                 commands.AddRange(CreateBorderCommands(
                     sheetId,
                     sheetRange,
+                    sheet,
                     (currentRange, address) => BorderShortcutService.GetInsideBorderDiff(
                         currentRange,
                         address,
@@ -673,9 +675,18 @@ public partial class MainWindow
     private static IReadOnlyList<IWorkbookCommand> CreateBorderCommands(
         SheetId sheetId,
         GridRange range,
+        Sheet? sheet,
         Func<GridRange, CellAddress, StyleDiff> createDiff)
     {
-        return range
+        // Clamp the dense cell iteration to the used-range zone.  For a whole-column or
+        // whole-row border selection this prevents creating millions of single-cell commands.
+        // The createDiff function still receives the original (full) range so that edge/interior
+        // decisions (outline vs. inside borders) remain correct.
+        var iterRange = sheet is not null
+            ? ApplyStyleCommand.StyleOnlyCreateZone(sheet, range) ?? range
+            : range;
+
+        return iterRange
             .AllCells()
             .Select(address => (Address: address, Diff: createDiff(range, address)))
             .Where(plan => BorderShortcutService.HasBorderChanges(plan.Diff))

@@ -42,14 +42,15 @@ public static class SelectionStyleCommandPlanner
         IReadOnlyList<SheetId> targetSheetIds,
         IReadOnlyList<GridRange> ranges,
         Func<GridRange, CellAddress, StyleDiff> createDiff,
-        string title)
+        string title,
+        Workbook? workbook = null)
     {
         if (targetSheetIds.Count == 0 || ranges.Count == 0)
             return ToCommand(title, []);
 
         var commands = new List<IWorkbookCommand>();
         foreach (var range in ranges)
-            commands.AddRange(CreatePerCellStyleCommands(targetSheetIds, range, createDiff));
+            commands.AddRange(CreatePerCellStyleCommands(targetSheetIds, range, createDiff, workbook));
 
         return ToCommand(title, commands);
     }
@@ -76,9 +77,22 @@ public static class SelectionStyleCommandPlanner
     private static IReadOnlyList<IWorkbookCommand> CreatePerCellStyleCommands(
         IReadOnlyList<SheetId> targetSheetIds,
         GridRange range,
-        Func<GridRange, CellAddress, StyleDiff> createDiff)
+        Func<GridRange, CellAddress, StyleDiff> createDiff,
+        Workbook? workbook = null)
     {
-        return range
+        // Clamp the dense cell iteration to the used-range zone when a workbook is available.
+        // For whole-column or whole-row border selections this prevents building millions of
+        // single-cell commands.  The createDiff function still receives the full original range
+        // so that edge/interior border decisions remain correct.
+        var iterRange = range;
+        if (workbook is not null && targetSheetIds.Count > 0)
+        {
+            var primarySheet = workbook.GetSheet(targetSheetIds[0]);
+            if (primarySheet is not null)
+                iterRange = ApplyStyleCommand.StyleOnlyCreateZone(primarySheet, range) ?? range;
+        }
+
+        return iterRange
             .AllCells()
             .Select(address => (Address: address, Diff: createDiff(range, address)))
             .Where(plan => BorderShortcutService.HasBorderChanges(plan.Diff))
