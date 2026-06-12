@@ -25,6 +25,8 @@ https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos
 
 https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip
 
+GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build.
+
 Latest verified tester release:
 
 - Release: [FreeX (Test Release) v0.8.112](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-112-2026-06-11-19-59-06-run112-attempt1%2Bc1dbd516)
