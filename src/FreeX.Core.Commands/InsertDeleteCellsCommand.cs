@@ -27,6 +27,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<GridRange>? _mergeSnapshot;
+    private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
+    private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _cfRuleSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => "Insert Cells";
@@ -78,6 +80,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             _mergeSnapshot = sheet.MergedRegions.ToList();
             sheet.ReplaceMergedRegions(AdjustMergesShiftRight(sheet.MergedRegions, _range.Start.Row, _range.End.Row, _range.Start.Col, width));
 
+            // Snapshot and adjust CF/DV rule ranges that are fully inside the band
+            (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
+            RowColumnShiftHelpers.AdjustRulesInsertShiftRight(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
+
             InsertShiftRight(sheet, capture.Cells);
 
             _formulaSnapshot.Clear();
@@ -118,6 +124,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             _mergeSnapshot = sheet.MergedRegions.ToList();
             sheet.ReplaceMergedRegions(AdjustMergesShiftDown(sheet.MergedRegions, _range.Start.Col, _range.End.Col, _range.Start.Row, height));
 
+            // Snapshot and adjust CF/DV rule ranges that are fully inside the band
+            (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
+            RowColumnShiftHelpers.AdjustRulesInsertShiftDown(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
+
             InsertShiftDown(sheet, capture.Cells);
 
             _formulaSnapshot.Clear();
@@ -145,6 +155,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
 
         if (_mergeSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergeSnapshot);
+
+        RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dvRuleSnapshot, _cfRuleSnapshot);
 
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
@@ -457,6 +469,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<GridRange>? _mergeSnapshot;
+    private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
+    private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _cfRuleSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => "Delete Cells";
@@ -506,6 +520,10 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             _mergeSnapshot = sheet.MergedRegions.ToList();
             sheet.ReplaceMergedRegions(AdjustMergesDeleteLeft(sheet.MergedRegions, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width));
 
+            // Snapshot and adjust CF/DV rule ranges that are fully inside the band
+            (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
+            RowColumnShiftHelpers.AdjustRulesDeleteShiftLeft(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
+
             DeleteShiftLeft(sheet, capture.Cells);
 
             _formulaSnapshot.Clear();
@@ -544,6 +562,10 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             _mergeSnapshot = sheet.MergedRegions.ToList();
             sheet.ReplaceMergedRegions(AdjustMergesDeleteUp(sheet.MergedRegions, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height));
 
+            // Snapshot and adjust CF/DV rule ranges that are fully inside the band
+            (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
+            RowColumnShiftHelpers.AdjustRulesDeleteShiftUp(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
+
             DeleteShiftUp(sheet, capture.Cells);
 
             _formulaSnapshot.Clear();
@@ -571,6 +593,9 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
 
         if (_mergeSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergeSnapshot);
+
+        // Full rebuild because delete operations may have removed rules from the collection.
+        RowColumnShiftHelpers.RestoreRuleRanges(sheet, _dvRuleSnapshot, _cfRuleSnapshot);
 
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);

@@ -745,4 +745,367 @@ public sealed class InsertDeleteCellsCommandTests
         var result = FormulaRewriter.Rewrite("B1:C1", op, "Sheet1");
         result.Should().Be("#REF!");
     }
+
+    // ── CF / DV rule range adjustment on Insert/Delete Cells ─────────────────
+
+    [Fact]
+    public void InsertCellsShiftDown_DvRuleFullyInsideBand_MovesDown_AndUndoRestores()
+    {
+        // Band = column A (col 1). DV rule A5:A8, insert 1 row before A5.
+        // Rule should move to A6:A9; DV lookup at A6 should find the rule; A5 should find nothing.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 8, 1)),
+            Type = DvType.List,
+            Formula1 = "Yes,No"
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        // Insert 1 row at A5 (shift down) — band is column A only.
+        var insertRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 5, 1));
+        var cmd = new InsertCellsCommand(sheet.Id, insertRange, InsertCellsShiftDirection.Down);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        dvRule.AppliesTo.Start.Row.Should().Be(6, "rule should have moved down by 1");
+        dvRule.AppliesTo.End.Row.Should().Be(9);
+        dvRule.AppliesTo.Start.Col.Should().Be(1);
+        dvRule.AppliesTo.End.Col.Should().Be(1);
+
+        // DV lookup via the cached service path.
+        DataValidationService.GetApplicable(sheet, new CellAddress(sheet.Id, 6, 1))
+            .Should().ContainSingle("rule now covers A6");
+        DataValidationService.GetApplicable(sheet, new CellAddress(sheet.Id, 5, 1))
+            .Should().BeEmpty("row 5 is the newly inserted blank row — no rule");
+
+        cmd.Revert(ctx);
+
+        dvRule.AppliesTo.Start.Row.Should().Be(5, "rule should be restored to A5:A8 on undo");
+        dvRule.AppliesTo.End.Row.Should().Be(8);
+        DataValidationService.GetApplicable(sheet, new CellAddress(sheet.Id, 5, 1))
+            .Should().ContainSingle("rule restored to original range");
+    }
+
+    [Fact]
+    public void InsertCellsShiftDown_DvRuleOutsideBandColumn_Unchanged()
+    {
+        // Band = column A (col 1). DV rule covers column B (col 2). Should not move.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 5, 2), new CellAddress(sheet.Id, 8, 2)),
+            Type = DvType.List,
+            Formula1 = "A,B"
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        var insertRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 5, 1));
+        new InsertCellsCommand(sheet.Id, insertRange, InsertCellsShiftDirection.Down).Apply(ctx).Success.Should().BeTrue();
+
+        dvRule.AppliesTo.Start.Row.Should().Be(5, "rule in a different column is unchanged");
+        dvRule.AppliesTo.End.Row.Should().Be(8);
+    }
+
+    [Fact]
+    public void InsertCellsShiftDown_DvRulePartiallyOverlappingBand_Unchanged()
+    {
+        // Band = column A only. DV rule A5:B8 spans both A and B — partial col overlap with band.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 8, 2)),
+            Type = DvType.List,
+            Formula1 = "X,Y"
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        var insertRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 5, 1));
+        new InsertCellsCommand(sheet.Id, insertRange, InsertCellsShiftDirection.Down).Apply(ctx).Success.Should().BeTrue();
+
+        dvRule.AppliesTo.Start.Row.Should().Be(5, "partial-overlap rule is left unchanged");
+        dvRule.AppliesTo.End.Row.Should().Be(8);
+        dvRule.AppliesTo.Start.Col.Should().Be(1);
+        dvRule.AppliesTo.End.Col.Should().Be(2);
+    }
+
+    [Fact]
+    public void InsertCellsShiftDown_CfRuleFullyInsideBand_MovesDown()
+    {
+        // CF rule A3:A6 with insert before A3 in column A band. Rule should shift to A4:A7.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var cfRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 3, 1), new CellAddress(sheet.Id, 6, 1)),
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0"
+        };
+        sheet.ConditionalFormats.Add(cfRule);
+
+        var insertRange = new GridRange(new CellAddress(sheet.Id, 3, 1), new CellAddress(sheet.Id, 3, 1));
+        var cmd = new InsertCellsCommand(sheet.Id, insertRange, InsertCellsShiftDirection.Down);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        cfRule.AppliesTo.Start.Row.Should().Be(4, "CF rule should shift down by 1");
+        cfRule.AppliesTo.End.Row.Should().Be(7);
+
+        cmd.Revert(ctx);
+        cfRule.AppliesTo.Start.Row.Should().Be(3, "CF rule restored to original position on undo");
+        cfRule.AppliesTo.End.Row.Should().Be(6);
+    }
+
+    [Fact]
+    public void InsertCellsShiftRight_DvRuleFullyInsideBand_MovesRight_AndUndoRestores()
+    {
+        // Band = row 2 (rows 2..2). DV rule B2:D2. Insert 1 col before col 2.
+        // Rule should move to C2:E2.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 2, 4)),
+            Type = DvType.List,
+            Formula1 = "Red,Green,Blue"
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        var insertRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 2, 2));
+        var cmd = new InsertCellsCommand(sheet.Id, insertRange, InsertCellsShiftDirection.Right);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        dvRule.AppliesTo.Start.Col.Should().Be(3, "rule should have moved right by 1");
+        dvRule.AppliesTo.End.Col.Should().Be(5);
+        dvRule.AppliesTo.Start.Row.Should().Be(2);
+
+        DataValidationService.GetApplicable(sheet, new CellAddress(sheet.Id, 2, 3))
+            .Should().ContainSingle("rule now covers C2");
+        DataValidationService.GetApplicable(sheet, new CellAddress(sheet.Id, 2, 2))
+            .Should().BeEmpty("col 2 is the new blank col");
+
+        cmd.Revert(ctx);
+
+        dvRule.AppliesTo.Start.Col.Should().Be(2, "rule restored on undo");
+        dvRule.AppliesTo.End.Col.Should().Be(4);
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_DvRuleBelowDeletedRange_MovesUp_AndUndoRestores()
+    {
+        // Delete row 3 in column A. DV rule A5:A8 (fully below deleted row, in band col A).
+        // Rule should shift up to A4:A7.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 8, 1)),
+            Type = DvType.List,
+            Formula1 = "Yes,No"
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        var deleteRange = new GridRange(new CellAddress(sheet.Id, 3, 1), new CellAddress(sheet.Id, 3, 1));
+        var cmd = new DeleteCellsCommand(sheet.Id, deleteRange, DeleteCellsShiftDirection.Up);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        dvRule.AppliesTo.Start.Row.Should().Be(4, "rule should have moved up by 1");
+        dvRule.AppliesTo.End.Row.Should().Be(7);
+
+        DataValidationService.GetApplicable(sheet, new CellAddress(sheet.Id, 4, 1))
+            .Should().ContainSingle("rule now starts at A4");
+        DataValidationService.GetApplicable(sheet, new CellAddress(sheet.Id, 8, 1))
+            .Should().BeEmpty("A8 no longer in rule after shift");
+
+        cmd.Revert(ctx);
+
+        dvRule.AppliesTo.Start.Row.Should().Be(5, "rule restored to A5:A8 on undo");
+        dvRule.AppliesTo.End.Row.Should().Be(8);
+        DataValidationService.GetApplicable(sheet, new CellAddress(sheet.Id, 5, 1))
+            .Should().ContainSingle("rule restored");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_DvRuleEntirelyInDeletedRange_IsRemoved_AndUndoRestores()
+    {
+        // Delete rows 5..6 in column A. DV rule A5:A6 entirely within the deleted range.
+        // Rule should be removed; undo should restore it.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 6, 1)),
+            Type = DvType.List,
+            Formula1 = "X,Y"
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        var deleteRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 6, 1));
+        var cmd = new DeleteCellsCommand(sheet.Id, deleteRange, DeleteCellsShiftDirection.Up);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.DataValidations.Should().BeEmpty("rule was entirely within the deleted rows");
+
+        cmd.Revert(ctx);
+
+        sheet.DataValidations.Should().ContainSingle("rule restored on undo");
+        sheet.DataValidations[0].AppliesTo.Start.Row.Should().Be(5, "rule AppliesTo restored");
+        sheet.DataValidations[0].AppliesTo.End.Row.Should().Be(6);
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_DvRuleOutsideBandColumn_Unchanged()
+    {
+        // Delete row 3 in column A. DV rule in column B. Should not move.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 5, 2), new CellAddress(sheet.Id, 8, 2)),
+            Type = DvType.List,
+            Formula1 = "A,B"
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        var deleteRange = new GridRange(new CellAddress(sheet.Id, 3, 1), new CellAddress(sheet.Id, 3, 1));
+        new DeleteCellsCommand(sheet.Id, deleteRange, DeleteCellsShiftDirection.Up).Apply(ctx).Success.Should().BeTrue();
+
+        dvRule.AppliesTo.Start.Row.Should().Be(5, "rule outside the band column is not affected");
+        dvRule.AppliesTo.End.Row.Should().Be(8);
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_CfRuleBelowDeletedRange_MovesUp()
+    {
+        // Delete row 2 in column A. CF rule A4:A6 should shift to A3:A5.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var cfRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 4, 1), new CellAddress(sheet.Id, 6, 1)),
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0"
+        };
+        sheet.ConditionalFormats.Add(cfRule);
+
+        var deleteRange = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var cmd = new DeleteCellsCommand(sheet.Id, deleteRange, DeleteCellsShiftDirection.Up);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        cfRule.AppliesTo.Start.Row.Should().Be(3, "CF rule should shift up by 1");
+        cfRule.AppliesTo.End.Row.Should().Be(5);
+
+        cmd.Revert(ctx);
+        cfRule.AppliesTo.Start.Row.Should().Be(4, "CF rule restored on undo");
+        cfRule.AppliesTo.End.Row.Should().Be(6);
+    }
+
+    [Fact]
+    public void DeleteCellsShiftLeft_DvRuleRightOfDeletedRange_MovesLeft_AndUndoRestores()
+    {
+        // Delete col B (col 2) in row 3. DV rule D3:F3 (fully right, in band row 3).
+        // Rule should shift left to C3:E3.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 3, 4), new CellAddress(sheet.Id, 3, 6)),
+            Type = DvType.List,
+            Formula1 = "P,Q,R"
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        var deleteRange = new GridRange(new CellAddress(sheet.Id, 3, 2), new CellAddress(sheet.Id, 3, 2));
+        var cmd = new DeleteCellsCommand(sheet.Id, deleteRange, DeleteCellsShiftDirection.Left);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        dvRule.AppliesTo.Start.Col.Should().Be(3, "rule should move left by 1");
+        dvRule.AppliesTo.End.Col.Should().Be(5);
+        dvRule.AppliesTo.Start.Row.Should().Be(3);
+
+        DataValidationService.GetApplicable(sheet, new CellAddress(sheet.Id, 3, 3))
+            .Should().ContainSingle("rule now starts at C3");
+
+        cmd.Revert(ctx);
+
+        dvRule.AppliesTo.Start.Col.Should().Be(4, "rule restored on undo");
+        dvRule.AppliesTo.End.Col.Should().Be(6);
+        DataValidationService.GetApplicable(sheet, new CellAddress(sheet.Id, 3, 4))
+            .Should().ContainSingle("rule restored to D3:F3");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftLeft_DvRuleEntirelyInDeletedCols_IsRemoved_AndUndoRestores()
+    {
+        // Delete cols B..C in row 3. DV rule B3:C3 entirely within the deleted range.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 3, 2), new CellAddress(sheet.Id, 3, 3)),
+            Type = DvType.List,
+            Formula1 = "M,N"
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        var deleteRange = new GridRange(new CellAddress(sheet.Id, 3, 2), new CellAddress(sheet.Id, 3, 3));
+        var cmd = new DeleteCellsCommand(sheet.Id, deleteRange, DeleteCellsShiftDirection.Left);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.DataValidations.Should().BeEmpty("rule was entirely within the deleted cols");
+
+        cmd.Revert(ctx);
+
+        sheet.DataValidations.Should().ContainSingle("rule restored on undo");
+        sheet.DataValidations[0].AppliesTo.Start.Col.Should().Be(2, "AppliesTo restored");
+        sheet.DataValidations[0].AppliesTo.End.Col.Should().Be(3);
+    }
+
+    [Fact]
+    public void InsertCellsShiftDown_DvRuleAboveInsertPoint_Unchanged()
+    {
+        // Band = column A. DV rule A1:A4, insert before A5. Rule is above insert point → unchanged.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 1)),
+            Type = DvType.List,
+            Formula1 = "Yes,No"
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        var insertRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 5, 1));
+        new InsertCellsCommand(sheet.Id, insertRange, InsertCellsShiftDirection.Down).Apply(ctx).Success.Should().BeTrue();
+
+        dvRule.AppliesTo.Start.Row.Should().Be(1, "rule above insert point is unchanged");
+        dvRule.AppliesTo.End.Row.Should().Be(4);
+    }
 }
