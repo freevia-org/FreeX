@@ -206,12 +206,7 @@ public partial class GridView
         var bottomLeftClip = FrozenClipGeometry(clips.BottomLeft);
         var bottomRightClip = FrozenClipGeometry(clips.BottomRight);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-        _brushCache.Clear();
-        _borderPenCache.Clear();
-        _fillPatternPenCache.Clear();
-        _typefaceCache.Clear();
-        _underlinePenCache.Clear();
-        _defaultTextLayoutStyleCache.Clear();
+        TrimRenderCachesIfOversized();
         var gridPen = ShowGridLines ? GridPen : null;
         var consumer = new SplitPaneCellRenderConsumer(
             this,
@@ -441,12 +436,11 @@ public partial class GridView
         var visibleTop = columnHeaderHeight;
         var visibleRight = GetLogicalViewportWidth();
         var visibleBottom = GetLogicalViewportHeight();
-        _brushCache.Clear();
-        _borderPenCache.Clear();
-        _fillPatternPenCache.Clear();
-        _typefaceCache.Clear();
-        _underlinePenCache.Clear();
-        _defaultTextLayoutStyleCache.Clear();
+        // Caches are persisted across frames and between split-pane/main render passes.
+        // TrimRenderCachesIfOversized() is called once per paint cycle from RenderSplitPaneCells
+        // (or here if there are no split panes) to bound memory use.
+        if (Viewport?.SplitPanes is null)
+            TrimRenderCachesIfOversized();
         RenderCellBackgroundBase(dc, rowHeaderWidth, columnHeaderHeight);
 
         var hasCellSurfaces = styleLookup.Count > 0;
@@ -899,6 +893,55 @@ public partial class GridView
         _renderCellLookupCache = null;
         _renderMetricLookupCache = null;
         _occupiedCellLookupCache = null;
+    }
+
+    // Maximum number of entries allowed in each render cache before it is evicted.
+    // In practice a viewport has ~50–200 unique colours/typefaces; 512 gives generous
+    // headroom while bounding worst-case memory on highly-varied workbooks.
+    private const int RenderCacheSizeLimit = 512;
+
+    /// <summary>
+    /// Evicts render caches that have grown beyond <see cref="RenderCacheSizeLimit"/>.
+    /// Called once per paint cycle (at the start of the split-pane pass if present,
+    /// otherwise at the start of the main-grid pass). This preserves warm entries
+    /// across frames and between split-pane/main render passes within the same frame,
+    /// eliminating the per-frame allocation spike from unconditional Clear() calls.
+    /// </summary>
+    /// <remarks>
+    /// Invalidation analysis — none of these caches need theme or zoom invalidation:
+    /// <list type="bullet">
+    /// <item><description><c>_brushCache</c>: keyed by <c>CellColor</c> (ARGB value type). Color IS the key,
+    ///   so a different color yields a different entry. Theme changes alter which colors appear
+    ///   in the spreadsheet but do not make existing brush entries stale.</description></item>
+    /// <item><description><c>_borderPenCache</c>: keyed by <c>CellBorder</c> (style + color value type).
+    ///   Same argument — the key fully determines the pen.</description></item>
+    /// <item><description><c>_fillPatternPenCache</c>: keyed by <c>CellColor</c>. Same as brush cache.</description></item>
+    /// <item><description><c>_typefaceCache</c>: keyed by <c>CellTypefaceKey</c> (font name/weight/style).
+    ///   Zoom only affects <c>fontSize</c> which is passed to <c>FormattedText</c>, not to <c>Typeface</c>.
+    ///   Font resolution is therefore zoom-independent.</description></item>
+    /// <item><description><c>_underlinePenCache</c>: keyed by the frozen <c>Brush</c> reference.
+    ///   The brush objects themselves are stable frozen instances.</description></item>
+    /// <item><description><c>_defaultTextLayoutStyleCache</c>: keyed by <c>CellStyle</c> reference equality.
+    ///   Entries record whether a style can use the fast default text path. Style objects are
+    ///   immutable; a new style revision yields a new reference, so stale entries are never hit.</description></item>
+    /// </list>
+    /// All six caches are accessed only from the WPF UI thread (OnRender), so no
+    /// synchronisation is needed.
+    /// </remarks>
+    private void TrimRenderCachesIfOversized()
+    {
+        if (_brushCache.Count >= RenderCacheSizeLimit)
+            _brushCache.Clear();
+        if (_borderPenCache.Count >= RenderCacheSizeLimit)
+            _borderPenCache.Clear();
+        if (_fillPatternPenCache.Count >= RenderCacheSizeLimit)
+            _fillPatternPenCache.Clear();
+        if (_typefaceCache.Count >= RenderCacheSizeLimit)
+            _typefaceCache.Clear();
+        if (_underlinePenCache.Count >= RenderCacheSizeLimit)
+            _underlinePenCache.Clear();
+        if (_defaultTextLayoutStyleCache.Count >= RenderCacheSizeLimit)
+            _defaultTextLayoutStyleCache.Clear();
     }
 
     private const int CellClipGeometryCacheLimit = 16384;

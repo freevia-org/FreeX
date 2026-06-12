@@ -752,4 +752,86 @@ public class ViewportLayoutTests
             }
         }
     }
+
+    // ── ComputeRowMetricsSummary (viewport single-build fix) ─────────────────
+
+    [Fact]
+    public void ComputeRowMetricsSummary_ReturnsLastVisibleRowMatchingFullViewport()
+    {
+        // Verifies that the cheap summary call agrees with the full viewport build
+        // for the last-visible-row, which determines the row-header width digit tier.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var svc = new ViewportService();
+        var request = new ViewportRequest(TopRow: 1, LeftCol: 1, AvailableHeight: 400, AvailableWidth: 800);
+
+        var (lastVisibleRow, _) = svc.ComputeRowMetricsSummary(workbook, sheet.Id, request);
+        var fullViewport = svc.GetViewport(workbook, sheet.Id, request);
+
+        lastVisibleRow.Should().Be(fullViewport.RowMetrics[^1].Row,
+            "the cheap summary and the full viewport must agree on the last visible row");
+    }
+
+    [Fact]
+    public void ComputeRowMetricsSummary_AgreesAcrossDigitBoundary_999to1000()
+    {
+        // The row-header width changes at rows 999→1000. Without the pre-compute fix
+        // the viewport was built twice on every scroll across this boundary.
+        // This test verifies that ComputeRowMetricsSummary already returns the correct
+        // last row so the width is known before the full build.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        // Set a small row height so we can fit many rows in a small area.
+        sheet.DefaultRowHeight = 4;
+        var svc = new ViewportService();
+
+        foreach (var topRow in new uint[] { 990, 995, 999, 1000, 1001, 1005 })
+        {
+            var request = new ViewportRequest(TopRow: topRow, LeftCol: 1, AvailableHeight: 40, AvailableWidth: 200);
+            var (lastVisibleRow, outlineGroups) = svc.ComputeRowMetricsSummary(workbook, sheet.Id, request);
+            var fullViewport = svc.GetViewport(workbook, sheet.Id, request);
+
+            var expectedLastRow = fullViewport.RowMetrics.Count > 0
+                ? fullViewport.RowMetrics[^1].Row
+                : 0u;
+
+            lastVisibleRow.Should().Be(expectedLastRow,
+                $"summary and full viewport should agree on last row when topRow={topRow}");
+
+            // Confirm outline groups also match (both empty when no row outline levels set).
+            outlineGroups.Count.Should().Be(fullViewport.RowOutlineGroups.Count,
+                $"outline group count should match when topRow={topRow}");
+        }
+    }
+
+    [Fact]
+    public void ComputeRowMetricsSummary_ReturnsOutlineGroupsMatchingFullViewport()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.RowOutlineLevels[2] = 1;
+        sheet.RowOutlineLevels[3] = 1;
+        var svc = new ViewportService();
+        var request = new ViewportRequest(TopRow: 1, LeftCol: 1, AvailableHeight: 200, AvailableWidth: 400);
+
+        var (_, outlineGroups) = svc.ComputeRowMetricsSummary(workbook, sheet.Id, request);
+        var fullViewport = svc.GetViewport(workbook, sheet.Id, request);
+
+        outlineGroups.Should().BeEquivalentTo(fullViewport.RowOutlineGroups,
+            "ComputeRowMetricsSummary row outline groups must match the full viewport");
+    }
+
+    [Fact]
+    public void ComputeRowMetricsSummary_ReturnsZeroLastRowForMissingSheet()
+    {
+        var workbook = new Workbook("test");
+        var svc = new ViewportService();
+        var bogusId = new SheetId(Guid.NewGuid());
+        var request = new ViewportRequest(TopRow: 1, LeftCol: 1, AvailableHeight: 200, AvailableWidth: 400);
+
+        var (lastVisibleRow, outlineGroups) = svc.ComputeRowMetricsSummary(workbook, bogusId, request);
+
+        lastVisibleRow.Should().Be(0u);
+        outlineGroups.Should().BeEmpty();
+    }
 }

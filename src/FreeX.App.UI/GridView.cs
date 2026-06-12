@@ -463,6 +463,38 @@ public partial class GridView : FrameworkElement
         } + CalculateRowOutlineGutterWidth(viewport);
     }
 
+    /// <summary>
+    /// Computes the row header width from the last-visible-row number and outline groups
+    /// without requiring a fully-materialized viewport. Used to determine the correct width
+    /// before building the viewport so it is built only once.
+    /// </summary>
+    public static double CalculateRowHeaderWidth(
+        uint lastVisibleRow,
+        IReadOnlyList<OutlineGroupRange> rowOutlineGroups)
+    {
+        var baseWidth = lastVisibleRow switch
+        {
+            >= 1_000_000 => 54,
+            >= 100_000   => 48,
+            >= 10_000    => 42,
+            >= 1_000     => 36,
+            _            => RowHeaderWidth,
+        };
+
+        var maxLevel = 0;
+        foreach (var group in rowOutlineGroups)
+        {
+            if (group.Level > maxLevel)
+                maxLevel = group.Level;
+        }
+
+        var gutterWidth = maxLevel <= 0
+            ? 0
+            : OutlineGutterPadding * 2 + maxLevel * OutlineLevelPitch;
+
+        return baseWidth + gutterWidth;
+    }
+
     public static double CalculateColumnHeaderHeight(ViewportModel? viewport) =>
         ColHeaderHeight + CalculateColumnOutlineGutterHeight(viewport);
 

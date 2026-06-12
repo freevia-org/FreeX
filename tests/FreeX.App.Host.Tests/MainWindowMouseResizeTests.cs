@@ -481,6 +481,10 @@ public sealed class MainWindowMouseResizeTests
             return inner.GetViewport(workbook, sheetId, request);
         }
 
+        public (uint LastVisibleRow, IReadOnlyList<OutlineGroupRange> RowOutlineGroups)
+            ComputeRowMetricsSummary(Workbook workbook, SheetId sheetId, ViewportRequest request) =>
+            inner.ComputeRowMetricsSummary(workbook, sheetId, request);
+
         public CellAddress? HitTest(Workbook workbook, SheetId sheetId, double x, double y, double zoom) =>
             inner.HitTest(workbook, sheetId, x, y, zoom);
 

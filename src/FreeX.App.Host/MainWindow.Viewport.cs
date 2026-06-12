@@ -396,13 +396,10 @@ public partial class MainWindow
             sheet.ViewLeftCol = leftCol;
         }
 
-        var rowHeaderWidth = SheetGrid.ActualRowHeaderWidth;
+        // Compute the correct row-header width before building the viewport so it is
+        // built exactly once, even when crossing a row-digit boundary (e.g. 999→1000).
+        var rowHeaderWidth = ComputeCorrectRowHeaderWidth(sheet, topRow, leftCol);
         var viewport = CreateViewport(sheet, topRow, leftCol, rowHeaderWidth);
-        var actualRowHeaderWidth = SheetGrid.ShowHeaders
-            ? FreeX.App.UI.GridView.CalculateRowHeaderWidth(viewport)
-            : 0.0;
-        if (Math.Abs(actualRowHeaderWidth - rowHeaderWidth) > 0.1)
-            viewport = CreateViewport(sheet, topRow, leftCol, actualRowHeaderWidth);
 
         SheetGrid.Viewport = viewport;
         SheetGrid.HiddenRows = sheet?.HiddenRows;
@@ -634,6 +631,33 @@ public partial class MainWindow
             SlicerTimelinePane?.Visibility ?? Visibility.Collapsed,
             _workbook.Slicers.Count,
             _workbook.Timelines.Count);
+
+    /// <summary>
+    /// Returns the row-header width that will be needed for the given top row, by querying
+    /// only the cheap row-metric and outline-group data — no cell materialization occurs.
+    /// This prevents the viewport from being built twice when crossing a row-digit boundary
+    /// (e.g. row 999→1000).
+    /// </summary>
+    private double ComputeCorrectRowHeaderWidth(Sheet? sheet, uint topRow, uint leftCol)
+    {
+        if (!SheetGrid.ShowHeaders)
+            return 0.0;
+
+        // Use a placeholder width for the first pass — the available width passed here
+        // does not affect row metrics, so any reasonable value works.
+        var placeholderWidth = SheetGrid.ActualRowHeaderWidth;
+        var request = new ViewportRequest(
+            TopRow: topRow,
+            LeftCol: leftCol,
+            AvailableHeight: (SheetGrid.ActualHeight - SheetGrid.EffectiveColHeaderHeight) / _zoomLevel,
+            AvailableWidth: CalculateViewportAvailableWidth(SheetGrid.ActualWidth, placeholderWidth, _zoomLevel),
+            IncludeObjects: false,
+            SplitPaneOffsets: null);
+
+        var (lastVisibleRow, rowOutlineGroups) =
+            _viewportService.ComputeRowMetricsSummary(_workbook, _currentSheetId, request);
+        return FreeX.App.UI.GridView.CalculateRowHeaderWidth(lastVisibleRow, rowOutlineGroups);
+    }
 
     private ViewportModel CreateViewport(Sheet? sheet, uint topRow, uint leftCol, double rowHeaderWidth)
     {

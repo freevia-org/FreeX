@@ -42,7 +42,9 @@ public sealed class AutofillCommand : IWorkbookCommand
         var sourceCell = sheet.GetCell(sourceAddr);
         var scalarSeries = TryCreateScalarSeries(sheet, plan);
 
-        _snapshot = new List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>(GetFillCellCapacity());
+        var capacity = GetFillCellCapacity();
+        _snapshot = new List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>(capacity);
+        var writtenCells = new List<CellAddress>(capacity);
 
         for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)
         {
@@ -52,6 +54,7 @@ public sealed class AutofillCommand : IWorkbookCommand
                 var oldCell = sheet.GetCell(addr);
                 var oldStyleOnly = oldCell is null ? sheet.GetStyleOnly(row, col) : null;
                 _snapshot.Add((addr, oldCell?.Clone(), oldStyleOnly));
+                writtenCells.Add(addr);
 
                 if (sourceCell is null)
                 {
@@ -87,7 +90,7 @@ public sealed class AutofillCommand : IWorkbookCommand
             }
         }
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, AffectedCells: writtenCells);
     }
 
     public void Revert(ICommandContext ctx)

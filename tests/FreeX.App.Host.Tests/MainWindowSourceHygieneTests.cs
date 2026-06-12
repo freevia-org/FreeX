@@ -38,6 +38,20 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void UpdateViewport_BuildsViewportOnce_ViaPrecomputedRowHeaderWidth()
+    {
+        // Verifies the single-build fix: the row-header width must be derived from the cheap
+        // ComputeRowMetricsSummary call before CreateViewport, so CreateViewport is only
+        // called once per UpdateViewport invocation (no conditional rebuild for width mis-estimates).
+        var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
+
+        viewportSource.Should().Contain("ComputeCorrectRowHeaderWidth(");
+        viewportSource.Should().Contain("ComputeRowMetricsSummary(");
+        // The old conditional rebuild pattern must not be present.
+        viewportSource.Should().NotContain("if (Math.Abs(actualRowHeaderWidth - rowHeaderWidth) > 0.1)");
+    }
+
+    [Fact]
     public void UpdateViewport_SyncsWorkbookViewStateAndPagePreviewInputs()
     {
         var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");

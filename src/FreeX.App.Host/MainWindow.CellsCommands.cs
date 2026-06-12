@@ -700,11 +700,11 @@ public partial class MainWindow
     private void OnAutofillRequested(GridRange sourceRange, GridRange fillRange)
     {
         var cmd = new AutofillCommand(_currentSheetId, sourceRange, fillRange);
-        if (!TryExecuteCommand(cmd, "Autofill"))
+        if (!TryExecuteCommand(cmd, "Autofill", out var outcome))
             return;
 
         SelectCompletedAutofillRange(sourceRange, fillRange);
-        RecalculateIfAutomatic(fillRange.AllCells().ToList());
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         RefreshStatusBar();
     }
