@@ -842,6 +842,59 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             cell).Compile();
     }
 
+    // Compiled delegate that calls XLStylizedBase.SetStyle(XLStyleValue, propagate: false) on a
+    // cell without going through the property-setter machinery.  Used by the per-save ClosedXML
+    // style cache to replay a fully-built XLStyleValue in one call instead of ~15 individual
+    // setter calls per styled cell.
+    private static readonly Action<IXLCell, object>? XlCellSetStyleValueAction = CreateXlCellSetStyleValueAction();
+
+    private static Action<IXLCell, object>? CreateXlCellSetStyleValueAction()
+    {
+        // XLStylizedBase.SetStyle(XLStyleValue value, bool propagate) is the single-call path
+        // that applies a complete immutable style key to a cell.
+        var assembly = typeof(XLWorkbook).Assembly;
+        var xlCellType = assembly.GetType("ClosedXML.Excel.XLCell");
+        var xlStyleValueType = assembly.GetType("ClosedXML.Excel.XLStyleValue");
+        if (xlCellType is null || xlStyleValueType is null)
+            return null;
+
+        var setStyleMethod = xlCellType.GetMethod(
+            "SetStyle",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            types: [xlStyleValueType, typeof(bool)],
+            modifiers: null);
+        if (setStyleMethod is null)
+        {
+            // Also try base type XLStylizedBase
+            var baseType = xlCellType.BaseType;
+            while (baseType is not null && setStyleMethod is null)
+            {
+                setStyleMethod = baseType.GetMethod(
+                    "SetStyle",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    binder: null,
+                    types: [xlStyleValueType, typeof(bool)],
+                    modifiers: null);
+                baseType = baseType.BaseType;
+            }
+        }
+
+        if (setStyleMethod is null)
+            return null;
+
+        // Compile: (IXLCell cell, object boxedStyleValue) =>
+        //     ((XLCell)cell).SetStyle((XLStyleValue)boxedStyleValue, false)
+        var cellParam = Expression.Parameter(typeof(IXLCell), "cell");
+        var valueParam = Expression.Parameter(typeof(object), "boxedStyleValue");
+        var callExpr = Expression.Call(
+            Expression.Convert(cellParam, xlCellType),
+            setStyleMethod,
+            Expression.Convert(valueParam, xlStyleValueType),
+            Expression.Constant(false));
+        return Expression.Lambda<Action<IXLCell, object>>(callExpr, cellParam, valueParam).Compile();
+    }
+
     private readonly struct XlsxLoadPackageParts
     {
         private XlsxLoadPackageParts(

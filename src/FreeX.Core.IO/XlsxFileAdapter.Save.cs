@@ -82,6 +82,12 @@ public sealed partial class XlsxFileAdapter
             ? XLCalculateMode.Manual
             : XLCalculateMode.Auto;
         var styleCache = new Dictionary<StyleId, CellStyle>(workbook.StyleCount);
+        // Per-save cache: StyleId → boxed XLStyleValue captured after the first application.
+        // Subsequent cells with the same StyleId are styled in one SetStyle call instead of
+        // the ~15 individual ClosedXML setter calls that ApplyStyle performs.
+        var xlStyleValueCache = XlCellSetStyleValueAction is not null && XlCellStyleValueAccessor is not null
+            ? new Dictionary<StyleId, object>(workbook.StyleCount)
+            : null;
 
         foreach (var sheet in workbook.Sheets)
         {
@@ -130,11 +136,11 @@ public sealed partial class XlsxFileAdapter
                 {
                     var style = GetCachedStyle(workbook, styleCache, cell.StyleId);
                     if (!style.Equals(CellStyle.Default))
-                        XlsxClosedXmlCellMapper.ApplyStyle(xlCell, style);
+                        ApplyStyleFast(xlCell, style, cell.StyleId, xlStyleValueCache);
                 }
             }
 
-            ApplyStyleOnlySeedCells(workbook, styleCache, xlSheet, sheet);
+            ApplyStyleOnlySeedCells(workbook, styleCache, xlStyleValueCache, xlSheet, sheet);
 
             foreach (var (rowNum, height) in sheet.RowHeights)
             {
@@ -410,6 +416,7 @@ public sealed partial class XlsxFileAdapter
     private static void ApplyStyleOnlySeedCells(
         Workbook workbook,
         Dictionary<StyleId, CellStyle> styleCache,
+        Dictionary<StyleId, object>? xlStyleValueCache,
         IXLWorksheet xlSheet,
         Sheet sheet)
     {
@@ -423,7 +430,43 @@ public sealed partial class XlsxFileAdapter
                 continue;
 
             var xlCell = xlSheet.Cell((int)seed.Row, (int)seed.Col);
-            XlsxClosedXmlCellMapper.ApplyStyle(xlCell, style);
+            ApplyStyleFast(xlCell, style, seed.StyleId, xlStyleValueCache);
+        }
+    }
+
+    /// <summary>
+    /// Applies <paramref name="style"/> to <paramref name="xlCell"/> using a fast path when the
+    /// ClosedXML <c>XLStyleValue</c> for this <paramref name="styleId"/> has been cached from a
+    /// previous application: calls <c>SetStyle(XLStyleValue, propagate: false)</c> in one
+    /// operation instead of ~15 individual property setters.  Falls back to the full
+    /// <see cref="XlsxClosedXmlCellMapper.ApplyStyle"/> call on the first encounter and captures
+    /// the resulting <c>XLStyleValue</c> for subsequent cells.
+    /// </summary>
+    private static void ApplyStyleFast(
+        IXLCell xlCell,
+        CellStyle style,
+        StyleId styleId,
+        Dictionary<StyleId, object>? xlStyleValueCache)
+    {
+        if (xlStyleValueCache is not null)
+        {
+            if (xlStyleValueCache.TryGetValue(styleId, out var cachedXlStyleValue))
+            {
+                // Fast path: replay cached XLStyleValue in a single SetStyle call.
+                XlCellSetStyleValueAction!(xlCell, cachedXlStyleValue);
+                return;
+            }
+        }
+
+        // Slow path (first cell for this StyleId): apply via individual setters and, if the
+        // fast-path delegates are available, capture the resulting XLStyleValue for reuse.
+        XlsxClosedXmlCellMapper.ApplyStyle(xlCell, style);
+
+        if (xlStyleValueCache is not null)
+        {
+            var captured = XlCellStyleValueAccessor!(xlCell);
+            if (captured is not null)
+                xlStyleValueCache[styleId] = captured;
         }
     }
 }
