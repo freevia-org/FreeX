@@ -2,58 +2,15 @@ using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
 
+/// <summary>
+/// Normalizer for workbook.xml <c>fileSharing</c>. Behavior is declared in
+/// <see cref="XlsxWorkbookLeafElementSchemas"/>; this class is a thin dispatch shim.
+/// </summary>
 internal static class XlsxWorkbookFileSharingNormalizer
 {
-    private static readonly HashSet<string> FileSharingAttributes =
-    [
-        "readOnlyRecommended",
-        "userName",
-        "reservationPassword",
-        "algorithmName",
-        "hashValue",
-        "saltValue",
-        "spinCount"
-    ];
+    private static readonly XlsxWorkbookLeafElementSchema Schema =
+        XlsxWorkbookLeafElementSchemas.ByLocalName["fileSharing"];
 
-    public static bool NormalizeElement(XElement fileSharing)
-    {
-        var changed = false;
-        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(fileSharing, FileSharingAttributes);
-        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(fileSharing);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileSharing, "readOnlyRecommended", XlsxXmlNormalizationHelpers.NormalizeBoolean);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileSharing, "reservationPassword", NormalizeLegacyPasswordHashOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileSharing, "hashValue", NormalizeBase64BinaryOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileSharing, "saltValue", NormalizeBase64BinaryOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileSharing, "spinCount", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
-        return changed;
-    }
-
-    private static string? NormalizeBase64BinaryOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return null;
-
-        try
-        {
-            _ = Convert.FromBase64String(trimmed);
-            return trimmed;
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
-    }
-
-    private static string? NormalizeLegacyPasswordHashOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (trimmed is not { Length: 4 } ||
-            !trimmed.All(static c => char.IsAsciiHexDigit(c)))
-        {
-            return null;
-        }
-
-        return trimmed.ToUpperInvariant();
-    }
+    public static bool NormalizeElement(XElement fileSharing) =>
+        XlsxWorkbookLeafElementNormalizer.Normalize(fileSharing, Schema);
 }
