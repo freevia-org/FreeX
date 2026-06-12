@@ -48,11 +48,45 @@ public readonly record struct GridRange
         addr.Row >= Start.Row && addr.Row <= End.Row &&
         addr.Col >= Start.Col && addr.Col <= End.Col;
 
+    /// <summary>Check if this range entirely contains <paramref name="inner"/> (same sheet, all corners within).</summary>
+    public bool Contains(GridRange inner) =>
+        Start.Sheet == inner.Start.Sheet &&
+        Start.Row <= inner.Start.Row &&
+        End.Row >= inner.End.Row &&
+        Start.Col <= inner.Start.Col &&
+        End.Col >= inner.End.Col;
+
     /// <summary>Check if this range overlaps (shares at least one cell with) another range on the same sheet.</summary>
     public bool Overlaps(GridRange other) =>
         Start.Sheet == other.Start.Sheet &&
         Start.Row <= other.End.Row && End.Row >= other.Start.Row &&
         Start.Col <= other.End.Col && End.Col >= other.Start.Col;
+
+    /// <summary>
+    /// Computes the intersection of two ranges.
+    /// Returns true and sets <paramref name="intersection"/> when the ranges share at least one cell
+    /// on the same sheet; returns false (and sets <paramref name="intersection"/> to default) when
+    /// they are disjoint or on different sheets.
+    /// </summary>
+    public static bool TryIntersect(GridRange a, GridRange b, out GridRange intersection)
+    {
+        if (!a.Overlaps(b))
+        {
+            intersection = default;
+            return false;
+        }
+
+        intersection = new GridRange(
+            new CellAddress(
+                a.Start.Sheet,
+                Math.Max(a.Start.Row, b.Start.Row),
+                Math.Max(a.Start.Col, b.Start.Col)),
+            new CellAddress(
+                a.Start.Sheet,
+                Math.Min(a.End.Row, b.End.Row),
+                Math.Min(a.End.Col, b.End.Col)));
+        return true;
+    }
 
     /// <summary>Parse a range string like "A1:C10" into a GridRange.</summary>
     public static GridRange Parse(string rangeText, SheetId sheet)

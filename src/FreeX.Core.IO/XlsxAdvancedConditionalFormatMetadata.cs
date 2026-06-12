@@ -138,6 +138,17 @@ internal static class XlsxAdvancedConditionalFormatMetadata
             _ => "min"
         };
 
+    public static CfThresholdType FromCfvoType(string? type) =>
+        type?.ToLowerInvariant() switch
+        {
+            "max" => CfThresholdType.Max,
+            "num" => CfThresholdType.Number,
+            "percent" => CfThresholdType.Percent,
+            "percentile" => CfThresholdType.Percentile,
+            "formula" => CfThresholdType.Formula,
+            _ => CfThresholdType.Min
+        };
+
     public static string NormalizeDateOccurringPeriod(string? value)
     {
         var normalized = value?.Trim();

@@ -361,31 +361,10 @@ public static class GoToSpecialService
         (uint)(key & ((1u << ColumnKeyBits) - 1));
 
     private static bool ContainsRange(GridRange outer, GridRange inner) =>
-        outer.Start.Sheet == inner.Start.Sheet &&
-        outer.Start.Row <= inner.Start.Row &&
-        outer.End.Row >= inner.End.Row &&
-        outer.Start.Col <= inner.Start.Col &&
-        outer.End.Col >= inner.End.Col;
+        outer.Contains(inner);
 
-    private static bool TryIntersect(GridRange first, GridRange second, out GridRange intersection)
-    {
-        if (!first.Overlaps(second))
-        {
-            intersection = default;
-            return false;
-        }
-
-        intersection = new GridRange(
-            new CellAddress(
-                first.Start.Sheet,
-                Math.Max(first.Start.Row, second.Start.Row),
-                Math.Max(first.Start.Col, second.Start.Col)),
-            new CellAddress(
-                first.Start.Sheet,
-                Math.Min(first.End.Row, second.End.Row),
-                Math.Min(first.End.Col, second.End.Col)));
-        return true;
-    }
+    private static bool TryIntersect(GridRange first, GridRange second, out GridRange intersection) =>
+        GridRange.TryIntersect(first, second, out intersection);
 
     private static IReadOnlyList<CellAddress> FindObjects(Sheet sheet, GridRange range)
     {

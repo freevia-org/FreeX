@@ -157,18 +157,7 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
             value is > 0 ? value.Value.ToString(CultureInfo.InvariantCulture) : null);
 
     private static bool SetOptionalAttribute(XElement element, XName name, string? value) =>
-        value is not null
-            ? XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, name, value)
-            : RemoveAttributeIfPresent(element, name);
-
-    private static bool RemoveAttributeIfPresent(XElement element, XName name)
-    {
-        if (element.Attribute(name) is null)
-            return false;
-
-        element.SetAttributeValue(name, null);
-        return true;
-    }
+        XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(element, name, value);
 
     private static void InsertPageSetupInOrder(
         XElement worksheetRoot,

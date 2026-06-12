@@ -79,7 +79,7 @@ internal static class XlsxWorkbookCalculationPropertyNormalizer
             return null;
         }
 
-        return parsed.ToString("G17", CultureInfo.InvariantCulture);
+        return XlsxNumberFormatting.ToXmlString(parsed);
     }
 
 }

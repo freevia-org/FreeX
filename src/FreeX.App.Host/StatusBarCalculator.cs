@@ -80,20 +80,12 @@ public static class StatusBarCalculator
 
     private static GridRange Intersect(GridRange range, GridRange usedRange)
     {
-        return new GridRange(
-            new CellAddress(
-                range.Start.Sheet,
-                Math.Max(range.Start.Row, usedRange.Start.Row),
-                Math.Max(range.Start.Col, usedRange.Start.Col)),
-            new CellAddress(
-                range.Start.Sheet,
-                Math.Min(range.End.Row, usedRange.End.Row),
-                Math.Min(range.End.Col, usedRange.End.Col)));
+        GridRange.TryIntersect(range, usedRange, out var intersection);
+        return intersection;
     }
 
     private static bool Contains(GridRange range, uint row, uint col) =>
-        row >= range.Start.Row && row <= range.End.Row &&
-        col >= range.Start.Col && col <= range.End.Col;
+        range.Contains(new CellAddress(range.Start.Sheet, row, col));
 
     private static void Accumulate(
         ScalarValue value,

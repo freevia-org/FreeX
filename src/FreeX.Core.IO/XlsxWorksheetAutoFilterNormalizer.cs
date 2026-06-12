@@ -403,7 +403,7 @@ internal static class XlsxWorksheetAutoFilterNormalizer
             return null;
         }
 
-        return parsed.ToString("G17", CultureInfo.InvariantCulture);
+        return XlsxNumberFormatting.ToXmlString(parsed);
     }
 
     private static string? NormalizeUnsignedShortOrNull(string? value)

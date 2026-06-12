@@ -272,7 +272,7 @@ internal static class XlsxWorksheetSheetPropertiesNormalizer
         return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&
                double.IsFinite(parsed) &&
                parsed is >= -1 and <= 1
-            ? parsed.ToString("G17", CultureInfo.InvariantCulture)
+            ? XlsxNumberFormatting.ToXmlString(parsed)
             : null;
     }
 

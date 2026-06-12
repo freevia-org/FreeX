@@ -199,15 +199,7 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetAutoFilterMapper.Read(autoFilter);
 
     private static CfThresholdType FromCfvoType(string? type) =>
-        type?.ToLowerInvariant() switch
-        {
-            "max" => CfThresholdType.Max,
-            "num" => CfThresholdType.Number,
-            "percent" => CfThresholdType.Percent,
-            "percentile" => CfThresholdType.Percentile,
-            "formula" => CfThresholdType.Formula,
-            _ => CfThresholdType.Min
-        };
+        XlsxAdvancedConditionalFormatMetadata.FromCfvoType(type);
 
     private static void EnsureContentType(ZipArchive archive, string extension, string contentType)
         => XlsxPackageXmlEditor.EnsureDefaultContentType(archive, extension, contentType);

@@ -7276,7 +7276,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         private static string FormatNumber(double value) =>
-            value.ToString("G17", CultureInfo.InvariantCulture);
+            XlsxNumberFormatting.ToXmlString(value);
 
         private static XElement CreateInlineTextElement(XNamespace worksheetNs, string value)
         {

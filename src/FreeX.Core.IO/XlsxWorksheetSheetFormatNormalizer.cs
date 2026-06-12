@@ -109,7 +109,7 @@ internal static class XlsxWorksheetSheetFormatNormalizer
             return null;
         }
 
-        return parsed.ToString("G17", CultureInfo.InvariantCulture);
+        return XlsxNumberFormatting.ToXmlString(parsed);
     }
 
     private static string? NormalizeOutlineLevel(string? value)

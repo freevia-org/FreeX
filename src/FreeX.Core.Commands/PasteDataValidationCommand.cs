@@ -74,18 +74,8 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
             new CellAddress(destination.Sheet, destination.Row + rowCount - 1, destination.Col + colCount - 1));
     }
 
-    private static GridRange? Intersect(GridRange first, GridRange second)
-    {
-        if (!first.Overlaps(second))
-            return null;
-
-        var sheet = first.Start.Sheet;
-        var startRow = Math.Max(first.Start.Row, second.Start.Row);
-        var startCol = Math.Max(first.Start.Col, second.Start.Col);
-        var endRow = Math.Min(first.End.Row, second.End.Row);
-        var endCol = Math.Min(first.End.Col, second.End.Col);
-        return new GridRange(new CellAddress(sheet, startRow, startCol), new CellAddress(sheet, endRow, endCol));
-    }
+    private static GridRange? Intersect(GridRange first, GridRange second) =>
+        GridRange.TryIntersect(first, second, out var intersection) ? intersection : null;
 
     private static GridRange MapRange(GridRange range, GridRange sourceRange, CellAddress destination, bool transpose)
     {

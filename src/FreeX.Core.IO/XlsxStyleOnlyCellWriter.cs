@@ -165,7 +165,7 @@ internal static class XlsxStyleOnlyCellWriter
                     out var created);
                 if (created)
                 {
-                    SetAttributeIfDifferent(targetCell, "s", styleIndex);
+                    XlsxXmlNormalizationHelpers.SetAttributeIfChanged(targetCell, "s", styleIndex);
                     changed = true;
                     continue;
                 }
@@ -182,9 +182,9 @@ internal static class XlsxStyleOnlyCellWriter
     private static bool RewriteStyleOnlyCell(XElement cell, XNamespace worksheetNs, string reference, string styleIndex)
     {
         var changed = false;
-        changed |= SetAttributeIfDifferent(cell, "r", reference);
-        changed |= SetAttributeIfDifferent(cell, "s", styleIndex);
-        changed |= RemoveAttributeIfPresent(cell, "t");
+        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(cell, "r", reference);
+        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(cell, "s", styleIndex);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAttributeIfPresent(cell, "t");
         foreach (var child in cell.Elements().Where(IsCellPayloadElement).ToList())
         {
             child.Remove();
@@ -234,7 +234,7 @@ internal static class XlsxStyleOnlyCellWriter
             root.AddFirst(dimension);
         }
 
-        return SetAttributeIfDifferent(dimension, "ref", reference);
+        return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(dimension, "ref", reference);
 
         void IncludeCell(uint row, uint col)
         {
@@ -433,26 +433,6 @@ internal static class XlsxStyleOnlyCellWriter
         return !string.IsNullOrWhiteSpace(reference) &&
                CellAddress.TryParse(reference, default, out var address) &&
                (col = address.Col) > 0;
-    }
-
-    private static bool SetAttributeIfDifferent(XElement element, string name, string value)
-    {
-        var attribute = element.Attribute(name);
-        if (attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(name, value);
-        return true;
-    }
-
-    private static bool RemoveAttributeIfPresent(XElement element, string name)
-    {
-        var attribute = element.Attribute(name);
-        if (attribute is null)
-            return false;
-
-        attribute.Remove();
-        return true;
     }
 
     private static string ToReference(uint row, uint col)

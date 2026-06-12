@@ -180,8 +180,8 @@ internal static class XlsxWorksheetScenarioMapper
 
     private static string FormatValue(ScalarValue value) => value switch
     {
-        NumberValue number => number.Value.ToString("G17", CultureInfo.InvariantCulture),
-        DateTimeValue dateTime => dateTime.Value.ToString("G17", CultureInfo.InvariantCulture),
+        NumberValue number => XlsxNumberFormatting.ToXmlString(number.Value),
+        DateTimeValue dateTime => XlsxNumberFormatting.ToXmlString(dateTime.Value),
         TextValue text => text.Value,
         BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
         ErrorValue error => error.Code,

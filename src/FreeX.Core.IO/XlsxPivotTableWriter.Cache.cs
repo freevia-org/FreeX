@@ -232,7 +232,7 @@ internal static partial class XlsxPivotTableWriter
         value switch
         {
             TextValue text => new XElement(workbookNs + "s", new XAttribute("v", text.Value)),
-            NumberValue number => new XElement(workbookNs + "n", new XAttribute("v", number.Value.ToString("G17", CultureInfo.InvariantCulture))),
+            NumberValue number => new XElement(workbookNs + "n", new XAttribute("v", XlsxNumberFormatting.ToXmlString(number.Value))),
             DateTimeValue date => new XElement(workbookNs + "d", new XAttribute("v", date.ToDateTime().ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture))),
             BoolValue boolean => new XElement(workbookNs + "b", new XAttribute("v", boolean.Value ? "1" : "0")),
             ErrorValue error => new XElement(workbookNs + "e", new XAttribute("v", error.Code)),

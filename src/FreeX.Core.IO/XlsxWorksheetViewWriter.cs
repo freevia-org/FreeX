@@ -105,14 +105,14 @@ internal static class XlsxWorksheetViewWriter
             changed = true;
         }
 
-        changed |= SetAttributeIfDifferent(sheetView, "view", ToXlsxWorksheetViewMode(
+        changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "view", ToXlsxWorksheetViewMode(
             XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal)));
-        changed |= SetAttributeIfDifferent(sheetView, "showGridLines", sheet.ShowGridlines ? null : "0");
-        changed |= SetAttributeIfDifferent(sheetView, "showRowColHeaders", sheet.ShowHeadings ? null : "0");
-        changed |= SetAttributeIfDifferent(sheetView, "showRuler", sheet.ShowRulers ? null : "0");
-        changed |= SetAttributeIfDifferent(sheetView, "zoomScale", sheet.ZoomPercent == 100 ? null : sheet.ZoomPercent.ToString(CultureInfo.InvariantCulture));
-        changed |= SetAttributeIfDifferent(sheetView, "showFormulas", sheet.ShowFormulas ? "1" : null);
-        changed |= SetAttributeIfDifferent(sheetView, "topLeftCell", ToOptionalA1(sheet.ViewTopRow, sheet.ViewLeftCol));
+        changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "showGridLines", sheet.ShowGridlines ? null : "0");
+        changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "showRowColHeaders", sheet.ShowHeadings ? null : "0");
+        changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "showRuler", sheet.ShowRulers ? null : "0");
+        changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "zoomScale", sheet.ZoomPercent == 100 ? null : sheet.ZoomPercent.ToString(CultureInfo.InvariantCulture));
+        changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "showFormulas", sheet.ShowFormulas ? "1" : null);
+        changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "topLeftCell", ToOptionalA1(sheet.ViewTopRow, sheet.ViewLeftCol));
         if (ToOptionalA1(sheet.ActiveRow, sheet.ActiveCol) is { } activeCell)
         {
             var selections = sheetView.Elements(worksheetNs + "selection").ToList();
@@ -161,24 +161,6 @@ internal static class XlsxWorksheetViewWriter
     private static XDocument LoadXml(ZipArchiveEntry entry)
     {
         return XlsxPackageXmlEditor.LoadXml(entry);
-    }
-
-    private static bool SetAttributeIfDifferent(XElement element, XName name, string? value)
-    {
-        if (value is null)
-        {
-            if (element.Attribute(name) is null)
-                return false;
-
-            element.SetAttributeValue(name, null);
-            return true;
-        }
-
-        if (string.Equals(element.Attribute(name)?.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(name, value);
-        return true;
     }
 
     private static bool IsPrimarySheetView(XElement element) =>

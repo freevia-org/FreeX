@@ -163,6 +163,36 @@ internal static class XlsxXmlNormalizationHelpers
         return true;
     }
 
+    /// <summary>
+    /// Sets the attribute to <paramref name="value"/> if different, or removes it when <paramref name="value"/> is null.
+    /// Returns true if the element was modified.
+    /// </summary>
+    public static bool SetOrRemoveAttributeIfChanged(XElement element, XName attributeName, string? value)
+    {
+        if (value is null)
+            return RemoveAttributeIfPresent(element, attributeName);
+
+        return SetAttributeIfChanged(element, attributeName, value);
+    }
+
+    /// <summary>
+    /// Removes the attribute if present. Returns true if the element was modified.
+    /// </summary>
+    public static bool RemoveAttributeIfPresent(XElement element, XName attributeName)
+    {
+        if (element.Attribute(attributeName) is null)
+            return false;
+
+        element.SetAttributeValue(attributeName, null);
+        return true;
+    }
+
+    /// <summary>
+    /// Removes the attribute (no-namespace) if present. Returns true if the element was modified.
+    /// </summary>
+    public static bool RemoveAttributeIfPresent(XElement element, string attributeName) =>
+        RemoveAttributeIfPresent(element, XName.Get(attributeName));
+
     public static string? NormalizeBoolean(string? value)
     {
         var trimmed = value?.Trim();

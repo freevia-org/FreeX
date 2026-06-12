@@ -180,7 +180,7 @@ internal static class XlsxWorksheetSheetViewNormalizer
             return null;
         }
 
-        return parsed.ToString("G17", CultureInfo.InvariantCulture);
+        return XlsxNumberFormatting.ToXmlString(parsed);
     }
 
     private static string? NormalizeSqref(string? value)
