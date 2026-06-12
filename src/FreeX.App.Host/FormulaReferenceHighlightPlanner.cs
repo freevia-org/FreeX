@@ -253,31 +253,37 @@ public static class FormulaReferenceHighlightPlanner
     {
         sheetName = "";
         afterQualifier = start;
-        var chars = new List<char>();
-        var index = start + 1;
 
+        // Walk forward from the opening quote, scanning for the closing '! sequence.
+        // A doubled '' inside the name is an escaped single quote — it does NOT end the name.
+        var index = start + 1;
         while (index < text.Length)
         {
             if (text[index] == '\'')
             {
                 if (index + 1 < text.Length && text[index + 1] == '\'')
                 {
-                    chars.Add('\'');
+                    // Escaped quote — skip both characters and continue.
                     index += 2;
                     continue;
                 }
 
                 if (index + 1 < text.Length && text[index + 1] == '!')
                 {
-                    sheetName = new string(chars.ToArray());
+                    // Found closing '! — the raw slice is text[(start+1)..index].
+                    // Replace escaped '' with ' to get the actual sheet name.
+                    var rawSlice = text[(start + 1)..index];
+                    sheetName = rawSlice.Contains("''", StringComparison.Ordinal)
+                        ? rawSlice.Replace("''", "'")
+                        : rawSlice;
                     afterQualifier = index + 2;
                     return sheetName.Length > 0;
                 }
 
+                // Bare quote not followed by ' or ! — invalid token.
                 return false;
             }
 
-            chars.Add(text[index]);
             index++;
         }
 

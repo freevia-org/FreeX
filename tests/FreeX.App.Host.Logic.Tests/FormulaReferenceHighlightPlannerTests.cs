@@ -173,6 +173,52 @@ public sealed class FormulaReferenceHighlightPlannerTests
         }
     }
 
+    [Fact]
+    public void GetHighlights_DecodesEscapedQuoteInQuotedSheetName()
+    {
+        // 'O''Brien'!A1 — double-quote inside a quoted sheet name represents a single quote.
+        var highlights = FormulaReferenceHighlightPlanner.GetHighlights(
+            "='O''Brien'!A1",
+            CurrentSheet,
+            sheetName => sheetName == "O'Brien" ? OtherSheet : null);
+
+        highlights.Should().HaveCount(1);
+        highlights[0].Text.Should().Be("'O''Brien'!A1");
+        highlights[0].SheetName.Should().Be("O'Brien");
+        highlights[0].Range.Should().Be(new GridRange(
+            new CellAddress(OtherSheet, 1, 1),
+            new CellAddress(OtherSheet, 1, 1)));
+    }
+
+    [Fact]
+    public void GetHighlights_DecodesMultipleEscapedQuotesInQuotedSheetName()
+    {
+        // Sheet name with two embedded quotes: "It''s Done" → "It's Done"
+        var highlights = FormulaReferenceHighlightPlanner.GetHighlights(
+            "='It''s Done'!B2",
+            CurrentSheet,
+            sheetName => sheetName == "It's Done" ? OtherSheet : null);
+
+        highlights.Should().HaveCount(1);
+        highlights[0].SheetName.Should().Be("It's Done");
+        highlights[0].Range.Should().Be(new GridRange(
+            new CellAddress(OtherSheet, 2, 2),
+            new CellAddress(OtherSheet, 2, 2)));
+    }
+
+    [Fact]
+    public void GetHighlights_IgnoresInvalidQuotedSheetName_BareQuoteNotAtEnd()
+    {
+        // A bare quote not followed by ' or ! inside a quoted name is invalid and should not match.
+        var highlights = FormulaReferenceHighlightPlanner.GetHighlights(
+            "='Sheet'2'!A1+B1",
+            CurrentSheet,
+            ResolveSheet);
+
+        // B1 on the current sheet should still be highlighted (invalid qualifier skipped).
+        highlights.Select(h => h.Text).Should().Contain("B1");
+    }
+
     private static SheetId? ResolveSheet(string sheetName) =>
         sheetName is "Sheet2" or "Sheet 2" ? OtherSheet : null;
 
