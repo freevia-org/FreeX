@@ -89,14 +89,44 @@ public partial class App : Application
 
         // Startup recovery: offer to restore any snapshots from previous crashed sessions.
         // This runs after Show() so the window is visible as the host for any dialogs.
-        OfferStartupRecovery(mainWindow, snapshotStore);
+        // Returns true if the user accepted at least one recovery, in which case the main
+        // window is already hosting the recovered workbook (and is dirty).
+        var recoveryAccepted = OfferStartupRecovery(mainWindow, snapshotStore);
 
         foreach (var startupWorkbookPath in e.Args)
         {
             if (!File.Exists(startupWorkbookPath))
                 continue;
 
-            _ = mainWindow.Dispatcher.BeginInvoke(async () => await mainWindow.OpenStartupFileAsync(startupWorkbookPath));
+            if (recoveryAccepted)
+            {
+                // The main window already holds a recovered workbook. Opening the command-line
+                // argument in the same window would prompt "Save changes?" on the just-recovered
+                // workbook, and a "No" answer would silently discard it.  Open the file-arg in
+                // a new window to keep both workbooks alive and safe.
+                _ = mainWindow.Dispatcher.BeginInvoke(() =>
+                {
+                    try
+                    {
+                        var newWindow = App.Services.GetRequiredService<MainWindow>();
+                        newWindow.Show();
+                        newWindow.Activate();
+                        _ = newWindow.Dispatcher.BeginInvoke(async () =>
+                            await newWindow.OpenStartupFileAsync(startupWorkbookPath));
+                    }
+                    catch
+                    {
+                        // Best-effort: if we can't open the file-arg in a new window, skip it.
+                        // The user can open it manually; we must not discard the recovered workbook.
+                    }
+                });
+            }
+            else
+            {
+                _ = mainWindow.Dispatcher.BeginInvoke(async () =>
+                    await mainWindow.OpenStartupFileAsync(startupWorkbookPath));
+            }
+
             break;
         }
 
@@ -191,8 +221,46 @@ public partial class App : Application
     /// <summary>
     /// Best-effort emergency snapshot of all open dirty windows. Called from crash handlers.
     /// Must never throw.
+    ///
+    /// <para>
+    /// AppDomain.UnhandledException fires on the faulting thread, which may not be the dispatcher
+    /// thread. <c>Current.Windows</c> and the autosave service are UI-thread-affine and will throw
+    /// from any other thread. We therefore marshal the work via <c>Dispatcher.Invoke</c> with a
+    /// short bounded timeout. If the UI thread is itself wedged the marshal times out and the save
+    /// silently does not happen — that is the correct best-effort outcome rather than crashing the
+    /// crash handler.
+    /// </para>
     /// </summary>
     private static void TryEmergencySaveAllWindows(AutosaveSnapshotStore snapshotStore)
+    {
+        try
+        {
+            var dispatcher = Current?.Dispatcher;
+            if (dispatcher is null)
+                return;
+
+            // If we are already on the dispatcher thread, execute inline; otherwise marshal with a
+            // bounded timeout so a wedged UI thread does not block the faulting thread forever.
+            if (dispatcher.CheckAccess())
+            {
+                TryEmergencySaveAllWindowsOnDispatcher(snapshotStore);
+            }
+            else
+            {
+                dispatcher.Invoke(
+                    () => TryEmergencySaveAllWindowsOnDispatcher(snapshotStore),
+                    System.Windows.Threading.DispatcherPriority.Send,
+                    System.Threading.CancellationToken.None,
+                    TimeSpan.FromSeconds(8));
+            }
+        }
+        catch
+        {
+            // Outer guard — crash handlers must never throw.
+        }
+    }
+
+    private static void TryEmergencySaveAllWindowsOnDispatcher(AutosaveSnapshotStore snapshotStore)
     {
         try
         {
@@ -225,67 +293,127 @@ public partial class App : Application
     /// Checks for recovery snapshots from previous crashed sessions and offers restore/discard.
     /// Must be called after the main window is shown (it owns any dialogs).
     /// Stale or corrupt snapshots are silently deleted.
+    ///
+    /// <para>
+    /// Multi-candidate behavior: each candidate is offered individually. The first accepted
+    /// candidate is restored into <paramref name="mainWindow"/>. Subsequent accepted candidates
+    /// are restored into new windows (one per candidate). Candidates that the user declines are
+    /// deleted. The method never re-offers a declined candidate: once dismissed it is gone.
+    /// This guarantees the loop always terminates and no snapshot is silently lost.
+    /// </para>
     /// </summary>
-    private static void OfferStartupRecovery(MainWindow mainWindow, AutosaveSnapshotStore snapshotStore)
+    /// <returns>
+    /// <c>true</c> if the user accepted at least one recovery; <c>false</c> otherwise.
+    /// The caller uses this to decide whether a command-line file argument should be
+    /// opened in a new window (to avoid overwriting the recovered workbook).
+    /// </returns>
+    private static bool OfferStartupRecovery(MainWindow mainWindow, AutosaveSnapshotStore snapshotStore)
     {
         try
         {
             var candidates = snapshotStore.EnumerateCandidates();
             if (candidates.Count == 0)
-                return;
+                return false;
 
-            // For this first implementation we handle the first candidate (single-workbook app).
-            var candidate = candidates[0];
+            var anyAccepted = false;
 
-            var displayName = candidate.Sidecar.DisplayName;
-            var prompt = string.IsNullOrWhiteSpace(displayName)
-                ? UiText.Get("Startup_RecoveryPrompt")
-                : UiText.Format("Startup_RecoveryPromptNamed", displayName);
-
-            var result = MessageBox.Show(
-                prompt,
-                UiText.Get("Startup_RecoveryTitle"),
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Yes)
+            for (var i = 0; i < candidates.Count; i++)
             {
-                try
+                var candidate = candidates[i];
+                var displayName = candidate.Sidecar.DisplayName;
+
+                // Build the prompt. When multiple candidates remain we mention how many are
+                // outstanding so the user is not surprised by repeated dialogs.
+                string prompt;
+                var remaining = candidates.Count - i;
+                if (remaining > 1)
                 {
-                    _ = mainWindow.Dispatcher.BeginInvoke(async () =>
+                    prompt = string.IsNullOrWhiteSpace(displayName)
+                        ? UiText.Format("Startup_RecoveryPromptMultiple", remaining)
+                        : UiText.Format("Startup_RecoveryPromptNamedMultiple", displayName, remaining);
+                }
+                else
+                {
+                    prompt = string.IsNullOrWhiteSpace(displayName)
+                        ? UiText.Get("Startup_RecoveryPrompt")
+                        : UiText.Format("Startup_RecoveryPromptNamed", displayName);
+                }
+
+                var result = MessageBox.Show(
+                    prompt,
+                    UiText.Get("Startup_RecoveryTitle"),
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    var capturedCandidate = candidate;
+                    var restoreIntoMainWindow = !anyAccepted;
+                    anyAccepted = true;
+
+                    if (restoreIntoMainWindow)
                     {
-                        try
+                        // First accepted candidate: restore into the existing main window.
+                        _ = mainWindow.Dispatcher.BeginInvoke(async () =>
                         {
-                            await mainWindow.OpenStartupFileAsync(candidate.SnapshotPath);
-                            mainWindow.SetCurrentFilePathForRecovery(candidate.Sidecar.OriginalFilePath);
-                            // Mark dirty so the user knows this came from a recovery.
-                            mainWindow.MarkWorkbookDirtyForRecovery();
-                            AutosaveSnapshotStore.DeleteCandidate(candidate);
-                        }
-                        catch
+                            try
+                            {
+                                await mainWindow.OpenRecoverySnapshotAsync(capturedCandidate.SnapshotPath);
+                                mainWindow.SetCurrentFilePathForRecovery(capturedCandidate.Sidecar.OriginalFilePath);
+                                mainWindow.MarkWorkbookDirtyForRecovery();
+                                AutosaveSnapshotStore.DeleteCandidate(capturedCandidate);
+                            }
+                            catch
+                            {
+                                // If recovery load fails, clean up the bad snapshot.
+                                AutosaveSnapshotStore.DeleteCandidate(capturedCandidate);
+                            }
+                        });
+                    }
+                    else
+                    {
+                        // Subsequent accepted candidates: open in new windows so we never
+                        // overwrite an already-recovered workbook.
+                        _ = mainWindow.Dispatcher.BeginInvoke(async () =>
                         {
-                            // If recovery load fails, clean up the bad snapshot.
-                            AutosaveSnapshotStore.DeleteCandidate(candidate);
-                        }
-                    });
+                            try
+                            {
+                                var newWindow = App.Services.GetRequiredService<MainWindow>();
+                                var autosaveStore = AutosaveSnapshotStore.CreateDefault(
+                                    App.Services.GetRequiredService<IApplicationDataPathProvider>());
+                                var autosaveSvc = new AutosaveService(autosaveStore);
+                                newWindow.AttachAutosaveService(autosaveSvc, autosaveStore);
+                                newWindow.Show();
+                                newWindow.Activate();
+
+                                await newWindow.OpenRecoverySnapshotAsync(capturedCandidate.SnapshotPath);
+                                newWindow.SetCurrentFilePathForRecovery(capturedCandidate.Sidecar.OriginalFilePath);
+                                newWindow.MarkWorkbookDirtyForRecovery();
+                                AutosaveSnapshotStore.DeleteCandidate(capturedCandidate);
+                            }
+                            catch
+                            {
+                                AutosaveSnapshotStore.DeleteCandidate(capturedCandidate);
+                            }
+                        });
+                    }
                 }
-                catch
+                else
                 {
-                    AutosaveSnapshotStore.DeleteCandidate(candidate);
+                    // User declined this candidate — delete it so it is not re-offered on next launch.
+                    try { AutosaveSnapshotStore.DeleteCandidate(candidate); } catch { /* best-effort */ }
+
+                    // If there are more candidates ahead and this was not the last one, we will
+                    // loop around and ask again. Each declined candidate is deleted immediately.
                 }
             }
-            else
-            {
-                // User chose to discard — delete all candidates.
-                foreach (var c in candidates)
-                {
-                    try { AutosaveSnapshotStore.DeleteCandidate(c); } catch { /* best-effort */ }
-                }
-            }
+
+            return anyAccepted;
         }
         catch
         {
             // Startup recovery must never affect normal startup.
+            return false;
         }
     }
 

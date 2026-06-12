@@ -366,7 +366,15 @@ public partial class MainWindow
 
     internal Task OpenStartupFileAsync(string path) => OpenFileAsync(path);
 
-    private async Task OpenFileAsync(string path)
+    /// <summary>
+    /// Opens a recovery snapshot into this window without recording the snapshot path in recent
+    /// files. Called from App.xaml.cs during startup recovery; the snapshot path is a temporary
+    /// .fxl file that must never appear in the MRU list.
+    /// </summary>
+    internal Task OpenRecoverySnapshotAsync(string snapshotPath) =>
+        OpenFileAsync(snapshotPath, suppressRecentFiles: true);
+
+    private async Task OpenFileAsync(string path, bool suppressRecentFiles = false)
     {
         var ext = System.IO.Path.GetExtension(path).ToLower();
         var adapter = FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext, out var format);
@@ -400,7 +408,8 @@ public partial class MainWindow
             UpdateTitleBar();
             MarkWorkbookSaved();
 
-            _recentFiles.AddOrUpdate(path);
+            if (!suppressRecentFiles)
+                _recentFiles.AddOrUpdate(path);
             ShowOpenProgress(
                 OpenWorkbookProgressPlanner.ProgressTitle(),
                 OpenWorkbookProgressPlanner.FormatLoadingFileDetail("preparing view", TimeSpan.Zero),

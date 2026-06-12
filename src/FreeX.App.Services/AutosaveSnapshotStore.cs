@@ -48,6 +48,13 @@ public sealed class AutosaveSnapshotStore
     private const string SnapshotExtension = ".fxl";
     private const string SidecarExtension = ".sidecar.json";
 
+    /// <summary>
+    /// Unique identifier for this process launch. Embedded in every snapshot ID so that a
+    /// recycled OS process-ID (PID) can never clobber a snapshot from a prior crashed session
+    /// that the user has not yet recovered.
+    /// </summary>
+    public static readonly Guid LaunchId = Guid.NewGuid();
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
