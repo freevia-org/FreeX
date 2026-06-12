@@ -6634,7 +6634,15 @@ public partial class MainWindow
 
             captures.Add(await CaptureDrawObjectFormattingDialogAsync(
                 outputDir,
-                new ShapeGradientDialog(context.Shape.GetEffectiveGradientFillDirection()) { Owner = this },
+                new ShapeGradientDialog(
+                    context.Shape.FillThemeColor?.Resolve(_workbook.Theme)
+                        ?? context.Shape.FillColor
+                        ?? DrawingShapeModel.ResolveDefaultFillColor(_workbook.Theme),
+                    context.Shape.GradientFillEndColor ?? ShapeGradientDialogPlanner.DefaultEndColor,
+                    context.Shape.GetEffectiveGradientFillDirection())
+                {
+                    Owner = this
+                },
                 "shape-gradient-dialog",
                 "freex_draw_object_formatting_shape_gradient_dialog",
                 "Shape Gradient dialog shows start/end RGB stop inputs, color buttons, direction choices, and OK/Cancel.",
