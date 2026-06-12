@@ -2,15 +2,20 @@ using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
 
+/// <summary>
+/// Normalizer for workbook.xml smart-tag elements.
+/// <c>smartTagPr</c> behavior is declared in <see cref="XlsxWorkbookLeafElementSchemas"/>
+/// and driven by the generic normalizer.
+/// <c>smartTagTypes</c> retains its dedicated implementation because it has child elements
+/// (<c>smartTagType</c>) requiring per-child attribute normalization and pruning of entries
+/// missing required <c>namespaceUri</c> and <c>name</c> attributes.
+/// </summary>
 internal static class XlsxWorkbookSmartTagNormalizer
 {
-    private static readonly HashSet<string> EmptyAttributes = [];
+    private static readonly XlsxWorkbookLeafElementSchema SmartTagPrSchema =
+        XlsxWorkbookLeafElementSchemas.ByLocalName["smartTagPr"];
 
-    private static readonly HashSet<string> SmartTagPropertyAttributes =
-    [
-        "embed",
-        "show"
-    ];
+    private static readonly HashSet<string> EmptyAttributes = [];
 
     private static readonly HashSet<string> SmartTagTypeAttributes =
     [
@@ -19,22 +24,8 @@ internal static class XlsxWorkbookSmartTagNormalizer
         "url"
     ];
 
-    private static readonly HashSet<string> SmartTagShowValues =
-    [
-        "all",
-        "noIndicator",
-        "none"
-    ];
-
-    public static bool NormalizeSmartTagPropertiesElement(XElement smartTagPr)
-    {
-        var changed = false;
-        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(smartTagPr, SmartTagPropertyAttributes);
-        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(smartTagPr);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagPr, "embed", XlsxXmlNormalizationHelpers.NormalizeBoolean);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagPr, "show", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, SmartTagShowValues));
-        return changed;
-    }
+    public static bool NormalizeSmartTagPropertiesElement(XElement smartTagPr) =>
+        XlsxWorkbookLeafElementNormalizer.Normalize(smartTagPr, SmartTagPrSchema);
 
     public static bool NormalizeSmartTagTypesElement(XElement smartTagTypes)
     {
