@@ -208,6 +208,8 @@ public partial class MainWindow
     // Activated by FREEX_SS_TOUR=1 env var.  Output lands in <repo-root>/screenshots/.
     private async void TryStartScreenshotTour()
     {
+        try
+        {
         var ribbonBurstTour = Environment.GetEnvironmentVariable("FREEX_SS_TOUR_BURST") == "1";
         var ribbonTour = ribbonBurstTour || Environment.GetEnvironmentVariable("FREEX_SS_TOUR") == "1";
         var backstageTour = Environment.GetEnvironmentVariable("FREEX_BACKSTAGE_TOUR") == "1";
@@ -282,6 +284,15 @@ public partial class MainWindow
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
         await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeAlignmentNumberTour, homeBordersDropdownTour, homeFontColorsTour, homeStylesConditionalFormattingTour, homeClipboardCellsEditingTour, homeSubmittedWorkflowsTour, homeStylePersistenceTour, ribbonOverflowKeytipTour, worksheetContextMenuTour, worksheetContextTargetsTour, worksheetContextSubmittedTour, keyTipOverlayTour, printPreviewTour, backstageRecentExportShareTour, optionsAccountTour, helpAboutLegalTour, qatUndoRedoTour, titlebarWindowChromeTour, statusFooterTour, statusFooterInteractionsTour, formulaBarNameBoxTour, gridSelectionEditingTour, insertObjectsLinksTour, insertObjectPersistenceTour, dataToolsDialogsTour, dataSortFilterOutlineTour, dataSubmittedWorkflowsTour, dataWhatIfWorkflowsTour, fileIoImportSmokeTour, fileBackstageWorkflowsTour, insertTablesChartsTour, tableWorkflowsTour, chartDataLayoutTour, chartPersistenceRenderTour, chartObjectSelectionTour, pivotFieldListContextTour, pivotOptionsSlicerTour, pivotAdvancedWorkflowsTour, viewPanesZoomTour, viewWorkflowsTour, pageLayoutSetupTour, pageLayoutOutputTour, drawObjectFormattingTour, drawObjectPersistenceTour, formulaDiagnosticsTour, formulaAuthoringNamesTour, formulaSubmittedPersistenceTour, reviewCommentsProtectionTour, reviewProtectionMatrixTour, reviewStatsShareTour);
+        }
+        catch (Exception ex)
+        {
+            RecordDiagnosticEvent("screenshot_tour_failed", new Dictionary<string, string?>
+            {
+                ["reason"] = ex.GetType().Name,
+                ["message"] = ex.Message
+            });
+        }
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -13046,25 +13057,37 @@ public partial class MainWindow
 
     private async Task RunAccentBarVisualTourAsync(string outputDir)
     {
-        foreach (var file in Directory.EnumerateFiles(outputDir, "*.png"))
-            File.Delete(file);
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(outputDir, "*.png"))
+                File.Delete(file);
 
-        WindowState = WindowState.Normal;
-        Width = 1280;
-        Height = 760;
-        await Task.Delay(900);
+            WindowState = WindowState.Normal;
+            Width = 1280;
+            Height = 760;
+            await Task.Delay(900);
 
-        await CaptureElementAsync(TitleBarRoot, outputDir, "title-normal");
-        await CaptureElementAsync(StatusBarRoot, outputDir, "status-normal");
+            await CaptureElementAsync(TitleBarRoot, outputDir, "title-normal");
+            await CaptureElementAsync(StatusBarRoot, outputDir, "status-normal");
 
-        if (GetQuickAccessToolbarButton(QuickAccessToolbarCommandIds.Save) is { } saveQatButton)
-            await HoverAndCaptureElementAsync(saveQatButton, TitleBarRoot, outputDir, "title-save-hover");
-        await HoverAndCaptureElementAsync(MaxRestoreBtn, TitleBarRoot, outputDir, "title-system-hover");
-        await HoverAndCaptureElementAsync(StatusZoomOutButton, StatusBarRoot, outputDir, "status-minus-hover");
-        await HoverAndCaptureElementAsync(StatusZoomInButton, StatusBarRoot, outputDir, "status-plus-hover");
-        await HoverAndCaptureElementAsync(CloseSysBtn, TitleBarRoot, outputDir, "title-close-hover");
+            if (GetQuickAccessToolbarButton(QuickAccessToolbarCommandIds.Save) is { } saveQatButton)
+                await HoverAndCaptureElementAsync(saveQatButton, TitleBarRoot, outputDir, "title-save-hover");
+            await HoverAndCaptureElementAsync(MaxRestoreBtn, TitleBarRoot, outputDir, "title-system-hover");
+            await HoverAndCaptureElementAsync(StatusZoomOutButton, StatusBarRoot, outputDir, "status-minus-hover");
+            await HoverAndCaptureElementAsync(StatusZoomInButton, StatusBarRoot, outputDir, "status-plus-hover");
+            await HoverAndCaptureElementAsync(CloseSysBtn, TitleBarRoot, outputDir, "title-close-hover");
 
-        Application.Current.Shutdown();
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            RecordDiagnosticEvent("accent_bar_tour_failed", new Dictionary<string, string?>
+            {
+                ["reason"] = ex.GetType().Name,
+                ["message"] = ex.Message
+            });
+            Application.Current.Shutdown();
+        }
     }
 
     private async Task HoverAndCaptureElementAsync(
@@ -13120,99 +13143,112 @@ public partial class MainWindow
 
     private async Task RunSheetTabVisualTourAsync(string outputDir)
     {
-        DeleteSheetTabTourEvidence(outputDir);
-        Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        try
+        {
+            DeleteSheetTabTourEvidence(outputDir);
+            Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-        WindowState = WindowState.Normal;
-        Width = 1180;
-        Height = 760;
-        await Task.Delay(700);
+            WindowState = WindowState.Normal;
+            Width = 1180;
+            Height = 760;
+            await Task.Delay(700);
 
-        var captures = new List<SheetTabTourManifestCapture>();
-        await CaptureSheetTabsForTourAsync(
-            outputDir,
-            captures,
-            "freex_sheet_tabs_single_sheet",
-            "single-sheet",
-            "Fresh workbook tab strip shows the selected Sheet1 tab and the plus add-sheet affordance.");
+            var captures = new List<SheetTabTourManifestCapture>();
+            await CaptureSheetTabsForTourAsync(
+                outputDir,
+                captures,
+                "freex_sheet_tabs_single_sheet",
+                "single-sheet",
+                "Fresh workbook tab strip shows the selected Sheet1 tab and the plus add-sheet affordance.");
 
-        InsertNewSheet();
-        await Task.Delay(300);
-        await CaptureSheetTabsForTourAsync(
-            outputDir,
-            captures,
-            "freex_sheet_tabs_after_add_sheet",
-            "after-add-sheet",
-            "Production Insert Sheet route added Sheet2, selected it, and left the plus affordance visible.");
+            InsertNewSheet();
+            await Task.Delay(300);
+            await CaptureSheetTabsForTourAsync(
+                outputDir,
+                captures,
+                "freex_sheet_tabs_after_add_sheet",
+                "after-add-sheet",
+                "Production Insert Sheet route added Sheet2, selected it, and left the plus affordance visible.");
 
-        PrepareSheetTabVisualTourWorkbook();
-        await Task.Delay(400);
-        var visibleSheets = _workbook.Sheets.Where(sheet => !sheet.IsHidden).Take(20).ToList();
+            PrepareSheetTabVisualTourWorkbook();
+            await Task.Delay(400);
+            var visibleSheets = _workbook.Sheets.Where(sheet => !sheet.IsHidden).Take(20).ToList();
 
-        _currentSheetId = visibleSheets[3].Id;
-        _groupedSheetIds.Clear();
-        foreach (var sheet in visibleSheets.Skip(1).Take(5))
-            _groupedSheetIds.Add(sheet.Id);
-        _sheetGroupAnchor = visibleSheets[1].Id;
-        RefreshSheetTabs();
-        await Task.Delay(300);
-        await CaptureSheetTabsForTourAsync(
-            outputDir,
-            captures,
-            "freex_sheet_tabs_grouped_colored",
-            "grouped-colored-tabs",
-            "Grouped tabs 2-6 show active/grouped styling while tab colors render on colored sheets.");
+            _currentSheetId = visibleSheets[3].Id;
+            _groupedSheetIds.Clear();
+            foreach (var sheet in visibleSheets.Skip(1).Take(5))
+                _groupedSheetIds.Add(sheet.Id);
+            _sheetGroupAnchor = visibleSheets[1].Id;
+            RefreshSheetTabs();
+            await Task.Delay(300);
+            await CaptureSheetTabsForTourAsync(
+                outputDir,
+                captures,
+                "freex_sheet_tabs_grouped_colored",
+                "grouped-colored-tabs",
+                "Grouped tabs 2-6 show active/grouped styling while tab colors render on colored sheets.");
 
-        await CaptureSheetTabContextMenuForTourAsync(outputDir, captures, visibleSheets[3]);
-        await CaptureSheetNameDialogForTourAsync(outputDir, captures, visibleSheets[3].Name);
+            await CaptureSheetTabContextMenuForTourAsync(outputDir, captures, visibleSheets[3]);
+            await CaptureSheetNameDialogForTourAsync(outputDir, captures, visibleSheets[3].Name);
 
-        var hiddenSheet = visibleSheets[6];
-        hiddenSheet.IsHidden = true;
-        _currentSheetId = visibleSheets[3].Id;
-        RefreshSheetTabs();
-        await Task.Delay(300);
-        await CaptureSheetTabsForTourAsync(
-            outputDir,
-            captures,
-            "freex_sheet_tabs_hidden_sheet_excluded",
-            "hidden-sheet-excluded",
-            "Hidden sheet is absent from the visible tab strip while adjacent visible tabs remain selectable.");
-        await CaptureUnhideSheetDialogForTourAsync(outputDir, captures, hiddenSheet.Name);
-        hiddenSheet.IsHidden = false;
-        RefreshSheetTabs();
+            var hiddenSheet = visibleSheets[6];
+            hiddenSheet.IsHidden = true;
+            _currentSheetId = visibleSheets[3].Id;
+            RefreshSheetTabs();
+            await Task.Delay(300);
+            await CaptureSheetTabsForTourAsync(
+                outputDir,
+                captures,
+                "freex_sheet_tabs_hidden_sheet_excluded",
+                "hidden-sheet-excluded",
+                "Hidden sheet is absent from the visible tab strip while adjacent visible tabs remain selectable.");
+            await CaptureUnhideSheetDialogForTourAsync(outputDir, captures, hiddenSheet.Name);
+            hiddenSheet.IsHidden = false;
+            RefreshSheetTabs();
 
-        Width = 760;
-        await Task.Delay(450);
-        await CaptureSheetTabStateForTourAsync(
-            outputDir,
-            captures,
-            visibleSheets,
-            0,
-            "freex_sheet_tabs_overflow_start",
-            "overflow-start",
-            "Narrow tab strip at the first visible sheet shows overflow navigation affordances.");
-        await CaptureSheetTabStateForTourAsync(
-            outputDir,
-            captures,
-            visibleSheets,
-            10,
-            "freex_sheet_tabs_overflow_middle",
-            "overflow-middle",
-            "Narrow tab strip scrolls the active middle sheet into view with left/right navigation affordances.");
-        await CaptureSheetTabStateForTourAsync(
-            outputDir,
-            captures,
-            visibleSheets,
-            19,
-            "freex_sheet_tabs_overflow_end",
-            "overflow-end",
-            "Narrow tab strip scrolls to the final sheet and shows the right edge overflow state.");
+            Width = 760;
+            await Task.Delay(450);
+            await CaptureSheetTabStateForTourAsync(
+                outputDir,
+                captures,
+                visibleSheets,
+                0,
+                "freex_sheet_tabs_overflow_start",
+                "overflow-start",
+                "Narrow tab strip at the first visible sheet shows overflow navigation affordances.");
+            await CaptureSheetTabStateForTourAsync(
+                outputDir,
+                captures,
+                visibleSheets,
+                10,
+                "freex_sheet_tabs_overflow_middle",
+                "overflow-middle",
+                "Narrow tab strip scrolls the active middle sheet into view with left/right navigation affordances.");
+            await CaptureSheetTabStateForTourAsync(
+                outputDir,
+                captures,
+                visibleSheets,
+                19,
+                "freex_sheet_tabs_overflow_end",
+                "overflow-end",
+                "Narrow tab strip scrolls to the final sheet and shows the right edge overflow state.");
 
-        ValidateSheetTabTourEvidence(outputDir, captures);
-        await WriteSheetTabTourManifestAsync(outputDir, captures);
+            ValidateSheetTabTourEvidence(outputDir, captures);
+            await WriteSheetTabTourManifestAsync(outputDir, captures);
 
-        _suppressClosePrompt = true;
-        Application.Current.Shutdown();
+            _suppressClosePrompt = true;
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            RecordDiagnosticEvent("sheet_tab_tour_failed", new Dictionary<string, string?>
+            {
+                ["reason"] = ex.GetType().Name,
+                ["message"] = ex.Message
+            });
+            _suppressClosePrompt = true;
+            Application.Current.Shutdown();
+        }
     }
 
     private async Task CaptureSheetTabStateForTourAsync(

@@ -114,7 +114,7 @@ public partial class MainWindow
         BackgroundChooseMenuItem_Click(sender, e);
     }
 
-    private void BackgroundChooseMenuItem_Click(object sender, RoutedEventArgs e)
+    private async void BackgroundChooseMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
@@ -140,7 +140,7 @@ public partial class MainWindow
         byte[] bytes;
         try
         {
-            bytes = File.ReadAllBytes(dialog.FileName);
+            bytes = await File.ReadAllBytesAsync(dialog.FileName);
         }
         catch (IOException ex)
         {

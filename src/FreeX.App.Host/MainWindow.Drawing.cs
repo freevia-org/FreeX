@@ -15,7 +15,7 @@ public partial class MainWindow
     {
         InsertTextBox();
     }
-    private void InsertPictureBtn_Click(object sender, RoutedEventArgs e)
+    private async void InsertPictureBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 
@@ -31,7 +31,7 @@ public partial class MainWindow
         byte[] bytes;
         try
         {
-            bytes = System.IO.File.ReadAllBytes(dialog.FileName);
+            bytes = await System.IO.File.ReadAllBytesAsync(dialog.FileName);
         }
         catch (Exception ex)
         {

@@ -38,7 +38,7 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void ResizeSelectedDrawingObject()");
         mainSource.Should().NotContain("private DrawingObjectTarget? GetTargetDrawingObject(");
 
-        drawingSource.Should().Contain("private void InsertPictureBtn_Click(");
+        drawingSource.Should().Contain("private async void InsertPictureBtn_Click(");
         drawingSource.Should().Contain("private void PictureCropBtn_Click(");
         drawingSource.Should().Contain("private void InsertTextBox()");
         drawingSource.Should().Contain("private void InsertDrawingShape(");
@@ -56,7 +56,7 @@ public sealed partial class MainWindowSourceHygieneTests
         drawingSource.Should().Contain("CheckFileExists = true");
         drawingSource.Should().Contain("Multiselect = false");
         drawingSource.Should().Contain("if (dialog.ShowDialog(this) != true) return;");
-        drawingSource.Should().Contain("System.IO.File.ReadAllBytes(dialog.FileName)");
+        drawingSource.Should().Contain("System.IO.File.ReadAllBytesAsync(dialog.FileName)");
         drawingSource.Should().Contain("DrawingInputParser.GetImageContentType(dialog.FileName)");
         drawingSource.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
         drawingSource.Should().Contain("UiText.Format(\"MainWindowMessage_InsertPictureReadFailed\", ex.Message)");
@@ -124,7 +124,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var pageLayoutSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
 
-        pageLayoutSource.Should().Contain("private void BackgroundChooseMenuItem_Click(");
+        pageLayoutSource.Should().Contain("private async void BackgroundChooseMenuItem_Click(");
         pageLayoutSource.Should().Contain("Title = UiText.Get(\"MainWindowDialog_SheetBackgroundTitle\")");
         pageLayoutSource.Should().Contain("Filter = UiText.Get(\"MainWindowDialog_ImageFilesFilter\")");
         pageLayoutSource.Should().Contain("CheckFileExists = true");
@@ -132,7 +132,7 @@ public sealed partial class MainWindowSourceHygieneTests
         pageLayoutSource.Should().Contain("if (dialog.ShowDialog(this) != true)");
         pageLayoutSource.Should().Contain("IsSupportedSheetBackgroundFile(dialog.FileName)");
         pageLayoutSource.Should().Contain("UiText.Get(\"MainWindowMessage_SheetBackgroundUnsupportedImageType\")");
-        pageLayoutSource.Should().Contain("File.ReadAllBytes(dialog.FileName)");
+        pageLayoutSource.Should().Contain("File.ReadAllBytesAsync(dialog.FileName)");
         pageLayoutSource.Should().Contain("UiText.Format(\"MainWindowMessage_SheetBackgroundReadFailed\", ex.Message)");
         pageLayoutSource.Should().Contain("UiText.Get(\"MainWindowMessage_SheetBackgroundTitle\")");
         pageLayoutSource.Should().Contain("new WorksheetBackgroundImage(");

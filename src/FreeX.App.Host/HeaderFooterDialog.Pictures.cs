@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -12,7 +13,7 @@ public partial class HeaderFooterDialog
 {
     private const string PictureToken = "&[Picture]";
 
-    private void PictureButton_Click(object sender, RoutedEventArgs e)
+    private async void PictureButton_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
         {
@@ -22,7 +23,7 @@ public partial class HeaderFooterDialog
         if (dialog.ShowDialog(this) != true)
             return;
 
-        var bytes = File.ReadAllBytes(dialog.FileName);
+        var bytes = await Task.Run(() => File.ReadAllBytes(dialog.FileName));
         var (width, height) = GetImageSize(bytes);
         var picture = new WorksheetHeaderFooterPicture(
             bytes,

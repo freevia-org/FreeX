@@ -372,12 +372,12 @@ public partial class MainWindow
         var adapter = FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext, out var format);
         if (adapter == null) return;
         if (_isOpeningFile) return;
-        if (await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")) == SaveChangesConfirmation.Cancel)
-            return;
-
+        _isOpeningFile = true;
         try
         {
-            _isOpeningFile = true;
+            if (await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")) == SaveChangesConfirmation.Cancel)
+                return;
+
             ShowOpenProgress(
                 OpenWorkbookProgressPlanner.ProgressTitle(),
                 OpenWorkbookProgressPlanner.FormatLoadingFileDetail("preparing", TimeSpan.Zero),

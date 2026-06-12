@@ -377,6 +377,9 @@ public partial class MainWindow
 
     private bool TryPasteClipboardImage(CellAddress anchor)
     {
+        byte[] imageBytes;
+        int pixelWidth;
+        int pixelHeight;
         try
         {
             if (!System.Windows.Clipboard.ContainsImage())
@@ -390,33 +393,37 @@ public partial class MainWindow
             encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
             using var stream = new System.IO.MemoryStream();
             encoder.Save(stream);
-            var imageBytes = stream.ToArray();
-            var pixelWidth = image.PixelWidth;
-            var pixelHeight = image.PixelHeight;
-
-            if (!TryExecuteRepeatableGroupedSheetCommand(
-                    "Paste Picture",
-                    sheetId =>
-                    {
-                        var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
-                        return ClipboardPictureService.CreateInsertCommand(
-                            sheetId,
-                            new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col),
-                            imageBytes,
-                            pixelWidth,
-                            pixelHeight);
-                    }))
-                return true;
-
-            ClearClipboardVisualState();
-            UpdateViewport();
-            RefreshToolbar();
-            return true;
+            imageBytes = stream.ToArray();
+            pixelWidth = image.PixelWidth;
+            pixelHeight = image.PixelHeight;
         }
-        catch
+        catch (Exception ex)
         {
+            RecordDiagnosticEvent("clipboard_image_decode_failed", new Dictionary<string, string?>
+            {
+                ["reason"] = ex.GetType().Name
+            });
             return false;
         }
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Paste Picture",
+                sheetId =>
+                {
+                    var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
+                    return ClipboardPictureService.CreateInsertCommand(
+                        sheetId,
+                        new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col),
+                        imageBytes,
+                        pixelWidth,
+                        pixelHeight);
+                }))
+            return true;
+
+        ClearClipboardVisualState();
+        UpdateViewport();
+        RefreshToolbar();
+        return true;
     }
 
     private void ExecuteClearSelection()
