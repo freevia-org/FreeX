@@ -10,7 +10,7 @@ public sealed class SentryCrashAnalyticsSourceTests
     {
         var project = DialogSourceTestSupport.ReadHostSources("FreeX.App.Host.csproj");
 
-        project.Should().Contain("<PackageReference Include=\"Sentry\" Version=\"6.5.0\"");
+        project.Should().Contain("<PackageReference Include=\"Sentry\"");
     }
 
     [Fact]
