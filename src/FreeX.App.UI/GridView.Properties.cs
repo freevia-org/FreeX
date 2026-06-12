@@ -25,6 +25,15 @@ public partial class GridView
         set => SetValue(SelectedObjectKindProperty, value);
     }
 
+    public static readonly DependencyProperty IsPictureCropModeProperty =
+        DependencyProperty.Register(nameof(IsPictureCropMode), typeof(bool), typeof(GridView),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+    public bool IsPictureCropMode
+    {
+        get => (bool)GetValue(IsPictureCropModeProperty);
+        set => SetValue(IsPictureCropModeProperty, value);
+    }
+
     public static readonly DependencyProperty ViewportProperty =
         DependencyProperty.Register(nameof(Viewport), typeof(ViewportModel), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnViewportChanged));

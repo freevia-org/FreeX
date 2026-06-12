@@ -95,10 +95,17 @@ public partial class GridView
             if (!selectedRect.IsEmpty)
             {
                 var rotationDegrees = GetSelectedObjectRotationDegrees();
-                DrawObjectSelectionHandles(
-                    dc,
-                    GetSelectedObjectLiveRect(selectedRect),
-                    GetSelectedObjectLiveRotationDegrees(rotationDegrees));
+                var liveRect = GetSelectedObjectLiveRect(selectedRect);
+                var liveRotationDegrees = GetSelectedObjectLiveRotationDegrees(rotationDegrees);
+                if (IsSelectedPictureCropModeActive())
+                {
+                    var crop = TryResolveLivePictureCrop(SelectedObjectId, out var liveCrop)
+                        ? liveCrop
+                        : GetSelectedPictureCropRatios();
+                    DrawPictureCropHandles(dc, liveRect, crop, liveRotationDegrees);
+                }
+                else
+                    DrawObjectSelectionHandles(dc, liveRect, liveRotationDegrees);
             }
         }
 

@@ -58,6 +58,12 @@ public partial class GridView
     private CellAddress _textBoxPlacementStartAnchor;
     private Point _textBoxPlacementStartPos;
     private Rect _textBoxPlacementPreviewRect;
+    private PictureCropHandle _pictureCropDragHandle = PictureCropHandle.None;
+    private Guid _pictureCropDragId;
+    private Point _pictureCropDragStartPos;
+    private Rect _pictureCropDragStartRect;
+    private PictureCropRatios _pictureCropDragStartRatios;
+    private PictureCropRatios _pictureCropDragCurrentRatios;
 
     private void RebuildMergeLookup()
     {
