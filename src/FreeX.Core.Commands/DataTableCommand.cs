@@ -44,6 +44,14 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
         if (validation is not null)
             return validation;
 
+        if (sheet!.IsProtected)
+        {
+            var protectionCheck = DataTableCommandGuards.RejectIfAnyOutputCellUneditable(
+                ctx.Workbook, sheet, _tableRange, _orientation);
+            if (protectionCheck is not null)
+                return protectionCheck;
+        }
+
         _snapshot = [];
         var affected = new List<CellAddress>();
         if (_orientation == DataTableInputOrientation.Row)
@@ -54,7 +62,7 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
                 for (uint row = _tableRange.Start.Row + 1; row <= _tableRange.End.Row; row++)
                 {
                     var outputAddress = new CellAddress(_tableRange.Start.Sheet, row, col);
-                    _snapshot.Add((outputAddress, sheet!.GetCell(outputAddress)?.Clone()));
+                    _snapshot.Add((outputAddress, sheet.GetCell(outputAddress)?.Clone()));
                     sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(formula!, _inputCell, trialInputAddress)));
                     affected.Add(outputAddress);
                 }
@@ -68,7 +76,7 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
                 for (uint col = _tableRange.Start.Col + 1; col <= _tableRange.End.Col; col++)
                 {
                     var outputAddress = new CellAddress(_tableRange.Start.Sheet, row, col);
-                    _snapshot.Add((outputAddress, sheet!.GetCell(outputAddress)?.Clone()));
+                    _snapshot.Add((outputAddress, sheet.GetCell(outputAddress)?.Clone()));
                     sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(formula!, _inputCell, trialInputAddress)));
                     affected.Add(outputAddress);
                 }
@@ -133,6 +141,14 @@ public sealed class TwoVariableDataTableCommand : IWorkbookCommand
         if (validation is not null)
             return validation;
 
+        if (sheet!.IsProtected)
+        {
+            var protectionCheck = DataTableCommandGuards.RejectIfAnyOutputCellUneditable(
+                ctx.Workbook, sheet, _tableRange, DataTableInputOrientation.Column);
+            if (protectionCheck is not null)
+                return protectionCheck;
+        }
+
         _snapshot = [];
         var affected = new List<CellAddress>();
         for (uint row = _tableRange.Start.Row + 1; row <= _tableRange.End.Row; row++)
@@ -144,7 +160,7 @@ public sealed class TwoVariableDataTableCommand : IWorkbookCommand
                 var outputAddress = new CellAddress(_tableRange.Start.Sheet, row, col);
                 var rewritten = DataTableFormulaRewriter.ReplaceCellReference(formula!, _columnInputCell, columnTrialInputAddress);
                 rewritten = DataTableFormulaRewriter.ReplaceCellReference(rewritten, _rowInputCell, rowTrialInputAddress);
-                _snapshot.Add((outputAddress, sheet!.GetCell(outputAddress)?.Clone()));
+                _snapshot.Add((outputAddress, sheet.GetCell(outputAddress)?.Clone()));
                 sheet.SetCell(outputAddress, Cell.FromFormula(rewritten));
                 affected.Add(outputAddress);
             }
@@ -200,6 +216,29 @@ internal static class DataTableCommandGuards
         if (string.IsNullOrWhiteSpace(formula))
             return new CommandOutcome(false, "Data Table formula cell must contain a formula.");
 
+        return null;
+    }
+
+    /// <summary>
+    /// Atomically checks every output cell in the data table body before any mutation.
+    /// Rejects the whole command if any target cell is locked on a protected sheet.
+    /// </summary>
+    public static CommandOutcome? RejectIfAnyOutputCellUneditable(
+        Workbook workbook,
+        Sheet sheet,
+        GridRange tableRange,
+        DataTableInputOrientation orientation)
+    {
+        // The body occupies rows [start+1..end] × cols [start+1..end] — same for both orientations.
+        for (uint row = tableRange.Start.Row + 1; row <= tableRange.End.Row; row++)
+        {
+            for (uint col = tableRange.Start.Col + 1; col <= tableRange.End.Col; col++)
+            {
+                var outputAddress = new CellAddress(tableRange.Start.Sheet, row, col);
+                if (!CommandGuards.CanEditCell(workbook, sheet, outputAddress))
+                    return CommandGuards.RejectSheetProtected();
+            }
+        }
         return null;
     }
 

@@ -29,6 +29,9 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } protectedOutcome)
+            return protectedOutcome;
+
         var validationError = ctx.Workbook.ValidateNamedRangeName(_name);
         if (validationError is not null)
             return new CommandOutcome(false, validationError);
@@ -69,6 +72,9 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } protectedOutcome)
+            return protectedOutcome;
+
         _existed = ctx.Workbook.TryGetNamedRange(_name, out _previousRange);
         if (!_existed)
             return new CommandOutcome(false, $"Named range '{_name}' does not exist.");
@@ -113,6 +119,9 @@ public sealed class CreateNamedRangesFromSelectionCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } protectedOutcome)
+            return protectedOutcome;
+
         if (!_useTopRow && !_useLeftColumn && !_useBottomRow && !_useRightColumn)
             return new CommandOutcome(false, "Select at least one label position.");
         if (_selection.Start.Sheet != _selection.End.Sheet)
