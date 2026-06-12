@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/tests/">
+    <Project Path="tests/FreeX.App.Host.Logic.Tests/FreeX.App.Host.Logic.Tests.csproj" />
     <Project Path="tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj" />
     <Project Path="tests/FreeX.Core.Calc.Tests/FreeX.Core.Calc.Tests.csproj" />
     <Project Path="tests/FreeX.Core.Formula.Tests/FreeX.Core.Formula.Tests.csproj" />

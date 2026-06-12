@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\CommandTestInfrastructure\TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <Compile Include="..\FreeX.App.Host.Tests\DialogSourceTestSupport.cs" Link="DialogSourceTestSupport.cs" />
+    <Compile Include="..\FreeX.App.Host.Tests\LocalizationResourceTestSupport.cs" Link="LocalizationResourceTestSupport.cs" />
+    <Compile Include="..\FreeX.App.Host.Tests\LocalizedXamlTestSupport.cs" Link="LocalizedXamlTestSupport.cs" />
+    <Compile Include="..\FreeX.App.Host.Tests\SourceMethodExtractor.cs" Link="SourceMethodExtractor.cs" />
+    <Compile Include="..\FreeX.App.Host.Tests\RibbonXamlCatalogSnapshotReader.cs" Link="RibbonXamlCatalogSnapshotReader.cs" />
+    <Compile Include="..\FreeX.App.Host.Tests\StaTestRunner.cs" Link="StaTestRunner.cs" />
+    <Compile Include="..\FreeX.App.Host.Tests\WpfTestTree.cs" Link="WpfTestTree.cs" />
+    <Compile Include="..\FreeX.App.Host.Tests\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
+    <Compile Include="..\FreeX.App.Host.Tests\WorkspaceFileLocator.cs" Link="WorkspaceFileLocator.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" />
+  </ItemGroup>
+
+</Project>
