@@ -135,9 +135,9 @@ public partial class MainWindow
                 outputDir,
                 "print-entry-settings",
                 "File > Print",
-                "Backstage Print settings",
+                "Backstage Print preview",
                 "freex_file_backstage_print_entry_settings",
-                "Backstage Print shows the deterministic print settings summary before opening Print Preview; the native Windows Print dialog is not launched."));
+                "Backstage Print shows the print preview directly with page and print options on the left; the native Windows Print dialog is not launched."));
 
             var sheet = GetCurrentOrFirstScreenshotTourSheet()
                 ?? throw new InvalidOperationException("File/backstage workflows tour requires an active worksheet for Print Preview.");

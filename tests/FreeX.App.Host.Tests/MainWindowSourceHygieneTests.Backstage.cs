@@ -461,23 +461,28 @@ public sealed partial class MainWindowSourceHygieneTests
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         backstageSource.Should().Contain("private void OpenPrintBackstage()");
-        backstageSource.Should().Contain("SsPrintNavBtn.Focus();");
+        backstageSource.Should().Contain("SsBackstagePrintNowButton.Focus();");
+        backstageSource.Should().Contain("RefreshBackstagePrintPreview();");
         backstageSource.Should().Contain("ShowPrintView();");
         backstageSource.Should().NotContain("PrintButton_Click(SsPrintNavBtn, new RoutedEventArgs())");
         keyboardSource.Should().Contain("KeyboardCommandShortcut.OpenPrintPreview, (_, _) => OpenPrintBackstage()");
         keyboardSource.Should().NotContain("KeyboardCommandShortcut.OpenPrintPreview, PrintButton_Click");
         xaml.Should().Contain("x:Name=\"SsPrintNavBtn\"");
         xaml.Should().Contain("Click=\"SsPrintNavBtn_Click\"");
-        xaml.Should().Contain("x:Name=\"SsPrintPreviewButton\"");
-        xaml.ShouldContainLocalizedAttribute("Content", "Print Preview");
-        xaml.ShouldContainLocalizedAttribute("AutomationProperties.Name", "Print Preview");
-        xaml.Should().Contain("Click=\"PrintButton_Click\"");
-        xaml.ShouldContainLocalizedAttribute("local:RibbonTooltip.Description", "Open the print preview and native print dialog for the rendered worksheet.");
+        xaml.Should().Contain("x:Name=\"SsBackstagePrintNowButton\"");
+        xaml.Should().Contain("x:Name=\"SsPrintOptionsHost\"");
+        xaml.Should().Contain("x:Name=\"SsPrintPreviewViewer\"");
+        xaml.ShouldContainLocalizedAttribute("Content", "Print");
+        xaml.ShouldContainLocalizedAttribute("AutomationProperties.Name", "Print");
+        xaml.Should().Contain("Click=\"BackstagePrintNowButton_Click\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"BackstagePrintPreviewViewer\"");
+        xaml.Should().NotContain("x:Name=\"SsPrintPreviewButton\"");
     }
 
     [Fact]
     public void BackstagePrint_OpensPreviewWithSettingsAndNativePrintPath()
     {
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var printSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
         var previewSource = DialogSourceTestSupport.ReadHostSourcesWithSeparator(
             string.Empty,
@@ -486,6 +491,9 @@ public sealed partial class MainWindowSourceHygieneTests
             "PrintPreviewDialog.Layout.cs",
             "NativePrintDialogService.cs");
 
+        backstageSource.Should().Contain("SsPrintPreviewViewer.Document = refreshed.Document;");
+        backstageSource.Should().Contain("SsPrintOptionsHost.Content = PrintPreviewSettingsPanelFactory.Build(");
+        backstageSource.Should().Contain("NativePrintDialogService.ShowPrintDialogAndPrint(");
         printSource.Should().Contain("var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);");
         printSource.Should().Contain("PrintSettingsPlanner.Build(sheet)");
         printSource.Should().Contain("new PrintPreviewDialog(");

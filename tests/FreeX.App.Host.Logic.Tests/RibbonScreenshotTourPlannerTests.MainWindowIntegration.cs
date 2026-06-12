@@ -393,8 +393,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("FindDescendantByAutomationId<ComboBox>(dialog, \"PrintPreviewZoomBox\")");
         source.Should().Contain("ClosePrintPreviewTourDialogWithEscape");
         source.Should().Contain("PrintPreviewCloseButton");
-        source.Should().Contain("SsPrintPreviewButton.Focus();");
-        source.Should().Contain("Keyboard.Focus(SsPrintPreviewButton);");
+        source.Should().Contain("SsBackstagePrintNowButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(SsBackstagePrintNowButton);");
         source.Should().Contain("PrintPreviewTourManifest");
         source.Should().Contain("RenderTargetBitmap-print-preview-dialog-and-main-window");
         source.Should().Contain("The native Windows print dialog is not opened during this tour");
