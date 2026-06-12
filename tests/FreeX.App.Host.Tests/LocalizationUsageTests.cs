@@ -151,6 +151,23 @@ public sealed class LocalizationUsageTests
         offenders.Should().BeEmpty("Home ribbon message-service prompts are user-facing and should flow through UiText resources");
     }
 
+    [Fact]
+    public void AllMainWindowMessageServiceCalls_UseLocalizationResources()
+    {
+        var sourceRoot = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
+        var checkedFiles = Directory
+            .EnumerateFiles(sourceRoot, "MainWindow.*.cs", SearchOption.TopDirectoryOnly)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        var offenders = checkedFiles
+            .SelectMany(FindRawMessageServiceText)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        offenders.Should().BeEmpty("all MainWindow _messageService calls are user-facing and should flow through UiText resources");
+    }
+
     private static IEnumerable<string> FindLocalizationKeys(string path)
     {
         var source = File.ReadAllText(path);

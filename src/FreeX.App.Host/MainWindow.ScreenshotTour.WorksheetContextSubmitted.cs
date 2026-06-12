@@ -692,7 +692,7 @@ public partial class MainWindow
             ThreadedCommentCell: context.ThreadedCommentCell.ToA1(),
             ProtectedCell: context.ProtectedCell.ToA1(),
             InsertRowCell: context.InsertRowCell.ToA1(),
-            DeleteColumn: ColumnName(context.DeleteColumnIndex),
+            DeleteColumn: CellAddress.NumberToColumnName(context.DeleteColumnIndex),
             SavedWorkbookPath: savedWorkbookPath,
             SavedWorkbookExists: File.Exists(savedWorkbookPath),
             CaptureStatus: "complete-with-foreground-input-limitations",

@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.Core.IO;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -59,21 +60,14 @@ public static class ColorInputParser
 
     public static bool TryParseHexColor(string text, out CellColor? color)
     {
-        color = null;
-        var normalized = text.Trim();
-        if (normalized.StartsWith('#'))
-            normalized = normalized[1..];
-
-        if (normalized.Length != 6 ||
-            !byte.TryParse(normalized[..2], NumberStyles.HexNumber, null, out var r) ||
-            !byte.TryParse(normalized[2..4], NumberStyles.HexNumber, null, out var g) ||
-            !byte.TryParse(normalized[4..6], NumberStyles.HexNumber, null, out var b))
+        if (XlsxColorReader.TryParseHexColor(text, out var parsed))
         {
-            return false;
+            color = parsed;
+            return true;
         }
 
-        color = new CellColor(r, g, b);
-        return true;
+        color = null;
+        return false;
     }
 
     public static string FormatHexColor(CellColor color) =>

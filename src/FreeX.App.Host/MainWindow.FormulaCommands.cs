@@ -141,7 +141,7 @@ public partial class MainWindow
         if (sender is not System.Windows.Controls.Button btn) return;
         if (_workbook.NamedRanges.Count == 0)
         {
-            _messageService.ShowInfo("No names are defined in this workbook.", "Use in Formula");
+            _messageService.ShowInfo(UiText.Get("MainWindowMessage_UseInFormulaNoNames"), UiText.Get("MainWindowMessage_UseInFormulaTitle"));
             return;
         }
 
@@ -251,7 +251,7 @@ public partial class MainWindow
     {
         if (_formulaTraceArrows.Count == 0)
         {
-            _messageService.ShowInfo("No auditing arrows to remove.", title);
+            _messageService.ShowInfo(UiText.Get("MainWindowMessage_TraceArrowsNoneToRemove"), title);
             return;
         }
 
@@ -264,7 +264,7 @@ public partial class MainWindow
 
         if (removed == 0)
         {
-            _messageService.ShowInfo("No matching auditing arrows to remove.", title);
+            _messageService.ShowInfo(UiText.Get("MainWindowMessage_TraceArrowsNoMatchingToRemove"), title);
             return;
         }
 
@@ -292,7 +292,7 @@ public partial class MainWindow
         var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId);
         if (issues.Count == 0)
         {
-            _messageService.ShowInfo("No issues found.", "Error Checking");
+            _messageService.ShowInfo(UiText.Get("MainWindowMessage_ErrorCheckingNoIssues"), UiText.Get("MainWindowMessage_ErrorCheckingTitle"));
             return;
         }
 
@@ -334,7 +334,7 @@ public partial class MainWindow
                 var summary = FormulaEvaluationSummaryService.GetSummary(_workbook, issue.Address);
                 if (summary is null)
                 {
-                    _messageService.ShowInfo("Select a cell that contains a formula.", "Evaluate Formula");
+                    _messageService.ShowInfo(UiText.Get("MainWindowMessage_EvaluateFormulaSelectCell"), UiText.Get("MainWindowMessage_EvaluateFormulaTitle"));
                     return;
                 }
 
@@ -360,7 +360,7 @@ public partial class MainWindow
         var summary = FormulaEvaluationSummaryService.GetSummary(_workbook, range.Start);
         if (summary is null)
         {
-            _messageService.ShowInfo("Select a cell that contains a formula.", "Evaluate Formula");
+            _messageService.ShowInfo(UiText.Get("MainWindowMessage_EvaluateFormulaSelectCell"), UiText.Get("MainWindowMessage_EvaluateFormulaTitle"));
             return;
         }
 

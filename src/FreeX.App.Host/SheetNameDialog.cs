@@ -36,6 +36,10 @@ public sealed class SheetNameDialog : Window
     public static bool TryCreateResult(string? sheetName, out SheetNameDialogResult result, out string? error)
     {
         result = CreateResult(sheetName ?? "");
+
+        // Each structural rule is validated by the canonical Workbook.ValidateSheetNameStructure;
+        // per-rule localized messages are mapped here.  Duplicate-name checking is intentionally
+        // omitted because the dialog has no access to the workbook's sheet list.
         if (string.IsNullOrWhiteSpace(result.SheetName))
         {
             error = UiText.Get("SheetName_InvalidBlank");
@@ -54,7 +58,9 @@ public sealed class SheetNameDialog : Window
             return false;
         }
 
-        if (result.SheetName.StartsWith('\'') || result.SheetName.EndsWith('\''))
+        // Delegate remaining structural rules (apostrophe rule + any future additions) to the
+        // canonical model check rather than duplicating them here.
+        if (Workbook.ValidateSheetNameStructure(result.SheetName) is not null)
         {
             error = UiText.Get("SheetName_InvalidApostrophe");
             return false;

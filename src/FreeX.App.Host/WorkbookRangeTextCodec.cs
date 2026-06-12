@@ -129,6 +129,6 @@ public static class WorkbookRangeTextCodec
         var sheetName = resolveSheetName(range.Start.Sheet);
         return sheetName is null || range.Start.Sheet.Equals(currentSheetId)
             ? reference
-            : $"{PivotUiPlanner.QuoteSheetNameForReference(sheetName)}!{reference}";
+            : $"{SheetNameFormatter.QuoteIfNeeded(sheetName)}!{reference}";
     }
 }

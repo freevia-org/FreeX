@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
@@ -18,8 +19,8 @@ public sealed partial class PivotUiPlannerTests
     [InlineData("Sales_Q1", "Sales_Q1")]
     [InlineData("Sales Q1", "'Sales Q1'")]
     [InlineData("Bob's Sheet", "'Bob''s Sheet'")]
-    public void QuoteSheetNameForReference_QuotesOnlyWhenNeeded(string input, string expected)
+    public void SheetNameFormatter_QuoteIfNeeded_QuotesOnlyWhenNeeded(string input, string expected)
     {
-        PivotUiPlanner.QuoteSheetNameForReference(input).Should().Be(expected);
+        SheetNameFormatter.QuoteIfNeeded(input).Should().Be(expected);
     }
 }

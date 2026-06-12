@@ -155,7 +155,7 @@ public sealed class PivotTableDialog : Window
         var address = $"{range.Start.ToA1()}:{range.End.ToA1()}";
         return string.IsNullOrWhiteSpace(sheetName)
             ? address
-            : $"{PivotUiPlanner.QuoteSheetNameForReference(sheetName)}!{address}";
+            : $"{SheetNameFormatter.QuoteIfNeeded(sheetName)}!{address}";
     }
 
     private static string FormatDestination(Workbook workbook, SheetId sheetId, GridRange sourceRange)
@@ -165,7 +165,7 @@ public sealed class PivotTableDialog : Window
         var address = new CellAddress(sheetId, sourceRange.Start.Row, col).ToA1();
         return string.IsNullOrWhiteSpace(sheetName)
             ? address
-            : $"{PivotUiPlanner.QuoteSheetNameForReference(sheetName)}!{address}";
+            : $"{SheetNameFormatter.QuoteIfNeeded(sheetName)}!{address}";
     }
 
     private static string RequireRangeText(string? value, string parameterName)

@@ -95,7 +95,7 @@ public static class WorkbookReferenceNavigator
         var sheetName = resolveSheetName(range.Start.Sheet);
         return sheetName is null || range.Start.Sheet.Equals(currentSheetId)
             ? reference
-            : $"{QuoteSheetNameForReference(sheetName)}!{reference}";
+            : $"{SheetNameFormatter.QuoteIfNeeded(sheetName)}!{reference}";
     }
 
     private static bool TryParseRange(
@@ -250,6 +250,4 @@ public static class WorkbookReferenceNavigator
         return sheetName;
     }
 
-    private static string QuoteSheetNameForReference(string sheetName) =>
-        SheetNameFormatter.QuoteIfNeeded(sheetName);
 }

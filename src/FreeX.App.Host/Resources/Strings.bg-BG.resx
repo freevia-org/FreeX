@@ -15048,4 +15048,97 @@ and {0} more.</value>
   <data name="MainWindowMessage_FileSavedWithWarningsTitle" xml:space="preserve">
     <value>File Saved with Warnings</value>
   </data>
+  <data name="MainWindowMessage_HideWindowMustStayVisible" xml:space="preserve">
+    <value>At least one workbook window must stay visible.</value>
+  </data>
+  <data name="MainWindowMessage_HideWindowTitle" xml:space="preserve">
+    <value>Hide Window</value>
+  </data>
+  <data name="MainWindowMessage_UnhideNoHiddenWindows" xml:space="preserve">
+    <value>There are no hidden workbook windows to unhide.</value>
+  </data>
+  <data name="MainWindowMessage_UnhideWindowTitle" xml:space="preserve">
+    <value>Unhide Window</value>
+  </data>
+  <data name="MainWindowMessage_UnhideWindowNotHidden" xml:space="preserve">
+    <value>The selected workbook window is no longer hidden.</value>
+  </data>
+  <data name="MainWindowMessage_SideBySideNeedsSecondWindow" xml:space="preserve">
+    <value>View Side by Side needs a second visible workbook window.</value>
+  </data>
+  <data name="MainWindowMessage_SideBySideTitle" xml:space="preserve">
+    <value>View Side by Side</value>
+  </data>
+  <data name="MainWindowMessage_CircleInvalidDataNoInvalidData" xml:space="preserve">
+    <value>No invalid data found.</value>
+  </data>
+  <data name="MainWindowMessage_CircleInvalidDataTitle" xml:space="preserve">
+    <value>Circle Invalid Data</value>
+  </data>
+  <data name="MainWindowMessage_UseInFormulaNoNames" xml:space="preserve">
+    <value>No names are defined in this workbook.</value>
+  </data>
+  <data name="MainWindowMessage_UseInFormulaTitle" xml:space="preserve">
+    <value>Use in Formula</value>
+  </data>
+  <data name="MainWindowMessage_TraceArrowsNoneToRemove" xml:space="preserve">
+    <value>No auditing arrows to remove.</value>
+  </data>
+  <data name="MainWindowMessage_TraceArrowsNoMatchingToRemove" xml:space="preserve">
+    <value>No matching auditing arrows to remove.</value>
+  </data>
+  <data name="MainWindowMessage_ErrorCheckingNoIssues" xml:space="preserve">
+    <value>No issues found.</value>
+  </data>
+  <data name="MainWindowMessage_ErrorCheckingTitle" xml:space="preserve">
+    <value>Error Checking</value>
+  </data>
+  <data name="MainWindowMessage_EvaluateFormulaSelectCell" xml:space="preserve">
+    <value>Select a cell that contains a formula.</value>
+  </data>
+  <data name="MainWindowMessage_EvaluateFormulaTitle" xml:space="preserve">
+    <value>Evaluate Formula</value>
+  </data>
+  <data name="MainWindowMessage_PivotChartInsertSelectPivot" xml:space="preserve">
+    <value>Select a cell inside an existing PivotTable, or open a workbook with a PivotTable on the active sheet.</value>
+  </data>
+  <data name="MainWindowMessage_PivotChartInsertTitle" xml:space="preserve">
+    <value>Insert PivotChart</value>
+  </data>
+  <data name="MainWindowMessage_PivotChartChangeTypeSelectPivot" xml:space="preserve">
+    <value>Select a cell inside an existing PivotTable before changing a PivotChart type.</value>
+  </data>
+  <data name="MainWindowMessage_PivotChartChangeTypeInsertFirst" xml:space="preserve">
+    <value>Insert or select a PivotChart connected to this PivotTable before changing its type.</value>
+  </data>
+  <data name="MainWindowMessage_PivotChartChangeTypeTitle" xml:space="preserve">
+    <value>Change PivotChart Type</value>
+  </data>
+  <data name="MainWindowMessage_PivotChartOptionsSelectPivot" xml:space="preserve">
+    <value>Select a cell inside an existing PivotTable before changing PivotChart options.</value>
+  </data>
+  <data name="MainWindowMessage_PivotChartOptionsInsertFirst" xml:space="preserve">
+    <value>Insert or select a PivotChart connected to this PivotTable before changing its options.</value>
+  </data>
+  <data name="MainWindowMessage_PivotChartOptionsTitle" xml:space="preserve">
+    <value>PivotChart Options</value>
+  </data>
+  <data name="MainWindowMessage_PivotValueFieldSettingsSelectField" xml:space="preserve">
+    <value>Value Field Settings is available when a value field is selected, or when this PivotTable has exactly one value field.</value>
+  </data>
+  <data name="MainWindowMessage_PivotMoreSortOptionsSelectField" xml:space="preserve">
+    <value>More Sort Options is available for PivotTable row, column, and filter fields.</value>
+  </data>
+  <data name="MainWindowMessage_ReviewPasswordIncorrect" xml:space="preserve">
+    <value>The password you supplied is not correct.</value>
+  </data>
+  <data name="MainWindowMessage_ScenarioSelectChangingCells" xml:space="preserve">
+    <value>Select the changing cells for the scenario.</value>
+  </data>
+  <data name="MainWindowMessage_ScenarioManagerTitle" xml:space="preserve">
+    <value>Scenario Manager</value>
+  </data>
+  <data name="MainWindowMessage_ScenarioNoScenarios" xml:space="preserve">
+    <value>No scenarios are saved in this workbook.</value>
+  </data>
 </root>

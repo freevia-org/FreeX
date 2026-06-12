@@ -246,19 +246,6 @@ public static class FormulaSerializer
         sb.Append(cr.Row);
     }
 
-    private static void WriteSheetName(string sheetName, StringBuilder sb)
-    {
-        if (RequiresQuoting(sheetName))
-        {
-            sb.Append('\'');
-            sb.Append(sheetName.Replace("'", "''"));
-            sb.Append('\'');
-            return;
-        }
-
-        sb.Append(sheetName);
-    }
-
-    private static bool RequiresQuoting(string sheetName) =>
-        SheetNameFormatter.NeedsQuoting(sheetName);
+    private static void WriteSheetName(string sheetName, StringBuilder sb) =>
+        sb.Append(SheetNameFormatter.QuoteIfNeeded(sheetName));
 }

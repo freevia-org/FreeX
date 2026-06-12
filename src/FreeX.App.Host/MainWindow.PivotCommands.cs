@@ -864,7 +864,7 @@ public partial class MainWindow
         if (dataFieldIndex is null)
         {
             _messageService.ShowInfo(
-                "Value Field Settings is available when a value field is selected, or when this PivotTable has exactly one value field.",
+                UiText.Get("MainWindowMessage_PivotValueFieldSettingsSelectField"),
                 UiText.Get("MainWindowMessage_PivotTableFieldsTitle"));
             return;
         }
@@ -1192,7 +1192,7 @@ public partial class MainWindow
         if (TryResolvePivotFieldMenuContext() is not { SourceFieldIndex: { } sourceIndex } context)
         {
             _messageService.ShowInfo(
-                "More Sort Options is available for PivotTable row, column, and filter fields.",
+                UiText.Get("MainWindowMessage_PivotMoreSortOptionsSelectField"),
                 UiText.Get("MainWindowMessage_PivotTableFieldsTitle"));
             return;
         }

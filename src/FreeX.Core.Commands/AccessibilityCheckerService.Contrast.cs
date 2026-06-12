@@ -11008,10 +11008,8 @@ public static partial class AccessibilityCheckerService
             Match match;
             try
             {
-                match = new Regex(
-                    FormulaWildcardToRegexPattern(findText, anchored: false),
-                    RegexOptions.IgnoreCase,
-                    FormulaTextSearchRegexTimeout).Match(withinText, startIndex);
+                match = FormulaWildcardHelper.GetOrCreateRegex(findText, ignoreCase: true, anchored: false)
+                    .Match(withinText, startIndex);
             }
             catch (RegexMatchTimeoutException)
             {
@@ -11208,39 +11206,6 @@ public static partial class AccessibilityCheckerService
             return text[start..end];
         }
 
-        private const string FormulaRegexTextElement = @"(?:[\uD800-\uDBFF][\uDC00-\uDFFF]|[^\uD800-\uDFFF])";
-
-        private static string FormulaWildcardToRegexPattern(string pattern, bool anchored)
-        {
-            var builder = new System.Text.StringBuilder(anchored ? "^" : "");
-            for (var i = 0; i < pattern.Length; i++)
-            {
-                var ch = pattern[i];
-                if (ch == '~' && i + 1 < pattern.Length && pattern[i + 1] is '*' or '?' or '~')
-                {
-                    builder.Append(Regex.Escape(pattern[++i].ToString()));
-                    continue;
-                }
-
-                switch (ch)
-                {
-                    case '*':
-                        builder.Append(FormulaRegexTextElement).Append('*');
-                        break;
-                    case '?':
-                        builder.Append(FormulaRegexTextElement);
-                        break;
-                    default:
-                        builder.Append(Regex.Escape(ch.ToString()));
-                        break;
-                }
-            }
-
-            if (anchored)
-                builder.Append('$');
-
-            return builder.ToString();
-        }
 
         private static bool TryGetFormulaTextScalarNumber(ScalarValue value, out double number)
         {
@@ -26471,13 +26436,10 @@ public static partial class AccessibilityCheckerService
 
         private static bool FormulaConditionalCriteriaWildcardMatch(string text, string pattern)
         {
+            var regex = FormulaWildcardHelper.GetOrCreateRegex(pattern, ignoreCase: true, anchored: true);
             try
             {
-                return Regex.IsMatch(
-                    text,
-                    FormulaWildcardToRegexPattern(pattern, anchored: true),
-                    RegexOptions.IgnoreCase,
-                    FormulaTextSearchRegexTimeout);
+                return regex.IsMatch(text);
             }
             catch (RegexMatchTimeoutException)
             {

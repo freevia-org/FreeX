@@ -474,7 +474,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static string FormatSheetRange(string sheetName, uint startRow, uint startCol, uint endRow, uint endCol)
     {
-        var quotedSheet = $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'";
+        var quotedSheet = SheetNameFormatter.QuoteIfNeeded(sheetName);
         var start = $"${CellAddress.NumberToColumnName(startCol)}${startRow}";
         var end = $"${CellAddress.NumberToColumnName(endCol)}${endRow}";
         return start == end

@@ -416,7 +416,7 @@ public partial class MainWindow
             .Select(target => new WorksheetContextTargetsTourPlannedTarget(
                 State: target.State,
                 Surface: target.Surface,
-                TargetAddress: $"{ColumnName(target.Col)}{target.Row}",
+                TargetAddress: $"{CellAddress.NumberToColumnName(target.Col)}{target.Row}",
                 ExpectedOutputFileName: $"{target.FileName}.png",
                 ActualStatus: captures.Any(capture => capture.State == target.State)
                     ? target.State == "protected-locked-cell" ? "captured-with-limitation" : "captured"
@@ -473,19 +473,6 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.WorksheetContextTargetsTourManifest);
     }
 
-    private static string ColumnName(uint col)
-    {
-        var name = "";
-        var value = col;
-        while (value > 0)
-        {
-            value--;
-            name = (char)('A' + value % 26) + name;
-            value /= 26;
-        }
-
-        return name;
-    }
 
     private sealed record WorksheetContextTargetsTourTarget(
         string State,

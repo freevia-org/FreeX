@@ -17,8 +17,8 @@ public partial class MainWindow
         if (pivotTable is null)
         {
             _messageService.ShowInfo(
-                "Select a cell inside an existing PivotTable, or open a workbook with a PivotTable on the active sheet.",
-                "Insert PivotChart");
+                UiText.Get("MainWindowMessage_PivotChartInsertSelectPivot"),
+                UiText.Get("MainWindowMessage_PivotChartInsertTitle"));
             return;
         }
 
@@ -39,8 +39,8 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
         {
             _messageService.ShowInfo(
-                "Select a cell inside an existing PivotTable before changing a PivotChart type.",
-                "Change PivotChart Type");
+                UiText.Get("MainWindowMessage_PivotChartChangeTypeSelectPivot"),
+                UiText.Get("MainWindowMessage_PivotChartChangeTypeTitle"));
             return;
         }
 
@@ -48,8 +48,8 @@ public partial class MainWindow
         if (chart is null)
         {
             _messageService.ShowInfo(
-                "Insert or select a PivotChart connected to this PivotTable before changing its type.",
-                "Change PivotChart Type");
+                UiText.Get("MainWindowMessage_PivotChartChangeTypeInsertFirst"),
+                UiText.Get("MainWindowMessage_PivotChartChangeTypeTitle"));
             return;
         }
 
@@ -68,8 +68,8 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
         {
             _messageService.ShowInfo(
-                "Select a cell inside an existing PivotTable before changing PivotChart options.",
-                "PivotChart Options");
+                UiText.Get("MainWindowMessage_PivotChartOptionsSelectPivot"),
+                UiText.Get("MainWindowMessage_PivotChartOptionsTitle"));
             return;
         }
 
@@ -77,8 +77,8 @@ public partial class MainWindow
         if (chart is null)
         {
             _messageService.ShowInfo(
-                "Insert or select a PivotChart connected to this PivotTable before changing its options.",
-                "PivotChart Options");
+                UiText.Get("MainWindowMessage_PivotChartOptionsInsertFirst"),
+                UiText.Get("MainWindowMessage_PivotChartOptionsTitle"));
             return;
         }
 

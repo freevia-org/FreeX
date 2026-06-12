@@ -185,21 +185,7 @@ public static class PortablePdfTextCapabilityPlanner
     private static string FormatCellReference(uint? row, uint? column) =>
         row is null || column is null
             ? "unknown"
-            : $"{FormatColumnName(column.Value)}{row.Value}";
-
-    private static string FormatColumnName(uint column)
-    {
-        var name = "";
-        var value = column;
-        while (value > 0)
-        {
-            value--;
-            name = (char)('A' + (int)(value % 26)) + name;
-            value /= 26;
-        }
-
-        return string.IsNullOrEmpty(name) ? "?" : name;
-    }
+            : $"{CellAddress.NumberToColumnName(column.Value)}{row.Value}";
 
     private static string Pluralize(int count, string singular) =>
         count == 1 ? singular : $"{singular}s";
