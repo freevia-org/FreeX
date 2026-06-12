@@ -56,7 +56,7 @@ public sealed class XlsxLoadWarningsTests
     public void LoadWithWarnings_CleanFile_ReturnsNoWarnings()
     {
         var adapter = new XlsxFileAdapter();
-        var bytes = SaveWorkbookToBytes(adapter, CreateSimpleWorkbook());
+        var bytes = XlsxPackageTestHelper.SaveToBytes(adapter, CreateSimpleWorkbook());
 
         var result = adapter.LoadWithWarnings(new MemoryStream(bytes, writable: false));
 
@@ -68,7 +68,7 @@ public sealed class XlsxLoadWarningsTests
     public void LoadWithWarnings_CleanFile_WorkbookMatchesLoad()
     {
         var adapter = new XlsxFileAdapter();
-        var bytes = SaveWorkbookToBytes(adapter, CreateSimpleWorkbook());
+        var bytes = XlsxPackageTestHelper.SaveToBytes(adapter, CreateSimpleWorkbook());
 
         var resultViaLoadWithWarnings = adapter.LoadWithWarnings(new MemoryStream(bytes, writable: false));
         var resultViaLoad = adapter.Load(new MemoryStream(bytes, writable: false));
@@ -84,7 +84,7 @@ public sealed class XlsxLoadWarningsTests
     public void Load_IsConsistentWithLoadWithWarnings_Workbook()
     {
         var adapter = new XlsxFileAdapter();
-        var bytes = SaveWorkbookToBytes(adapter, CreateSimpleWorkbook());
+        var bytes = XlsxPackageTestHelper.SaveToBytes(adapter, CreateSimpleWorkbook());
 
         // Load() must still work and return the same logical content.
         var workbook = adapter.Load(new MemoryStream(bytes, writable: false));
@@ -116,13 +116,6 @@ public sealed class XlsxLoadWarningsTests
 
         foreach (var prefix in ExpectedLoadWarningPrefixes)
             adapterSource.Should().Contain($"\"{prefix}");
-    }
-
-    private static byte[] SaveWorkbookToBytes(IFileAdapter adapter, Workbook workbook)
-    {
-        using var stream = new MemoryStream();
-        adapter.Save(workbook, stream);
-        return stream.ToArray();
     }
 
     private static Workbook CreateSimpleWorkbook()
