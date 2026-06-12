@@ -1052,6 +1052,21 @@ public partial class MainWindow
             HorizontalAlignment = System.Windows.HorizontalAlignment.Center
         };
         RibbonMetadata.SetRole(label, RibbonMetadataRole.CommandLabel);
+        var iconSlot = new Border
+        {
+            Width = 34,
+            Height = 34,
+            CornerRadius = new CornerRadius(3),
+            Background = slotBackground,
+            BorderBrush = slotBorder,
+            BorderThickness = slotBorder is null ? new Thickness(0) : new Thickness(1),
+            Child = RibbonIconFactory.CreateCommandIcon(iconKey, icon, 28, glyphBrush),
+            SnapsToDevicePixels = true,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 2)
+        };
+        RibbonMetadata.SetRole(iconSlot, RibbonMetadataRole.CommandIcon);
 
         var button = new Button
         {
@@ -1068,20 +1083,7 @@ public partial class MainWindow
                 VerticalAlignment = System.Windows.VerticalAlignment.Center,
                 Children =
                 {
-                    new Border
-                    {
-                        Width = 34,
-                        Height = 34,
-                        CornerRadius = new CornerRadius(3),
-                        Background = slotBackground,
-                        BorderBrush = slotBorder,
-                        BorderThickness = slotBorder is null ? new Thickness(0) : new Thickness(1),
-                        Child = RibbonIconFactory.CreateCommandIcon(iconKey, icon, 28, glyphBrush),
-                        SnapsToDevicePixels = true,
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                        VerticalAlignment = System.Windows.VerticalAlignment.Center,
-                        Margin = new Thickness(0, 0, 0, 2)
-                    },
+                    iconSlot,
                     label
                 }
             }
