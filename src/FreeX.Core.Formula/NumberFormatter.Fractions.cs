@@ -44,7 +44,8 @@ public static partial class NumberFormatter
         var (numeratorWidth, denominatorWidth) = GetFractionPlaceholderWidths(stripped, fixedDenominator);
 
         double absValue = Math.Abs(value);
-        int whole = stripped.Contains('#') || stripped.Contains('0') ? (int)Math.Floor(absValue) : 0;
+        bool hasWholeSection = stripped.Contains('#') || stripped.Contains('0');
+        int whole = hasWholeSection ? (int)Math.Floor(absValue) : 0;
         double fractional = absValue - whole;
 
         var (numerator, denominator) = fixedDenominator is { } denominatorValue
@@ -58,7 +59,19 @@ public static partial class NumberFormatter
 
         var sign = value < 0 ? "-" : "";
         if (numerator == 0)
-            return prefix + sign + (whole == 0 ? "0" : whole.ToString(CultureInfo.InvariantCulture)) + suffix;
+        {
+            string wholeText = whole == 0 ? "0" : whole.ToString(CultureInfo.InvariantCulture);
+            // Excel pads the fraction field with spaces to preserve column alignment.
+            // Only applies when the format has an explicit whole-number section (# or 0 before the fraction).
+            // Padding: one separator space + spaces(numeratorWidth) + "/" + spaces(denominatorWidth).
+            // E.g. "# ?/?" with value 2 → "2    " (2 + space + 1 space + "/" + 1 space).
+            if (hasWholeSection && numeratorWidth > 0 && denominatorWidth > 0)
+            {
+                string padding = " " + new string(' ', numeratorWidth) + "/" + new string(' ', denominatorWidth);
+                return prefix + sign + wholeText + padding + suffix;
+            }
+            return prefix + sign + wholeText + suffix;
+        }
 
         string fraction = FormatFractionPart(numerator, numeratorWidth, padLeft: true) + "/" +
                           FormatFractionPart(denominator, denominatorWidth, padLeft: false);

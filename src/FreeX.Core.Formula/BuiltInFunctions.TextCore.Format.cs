@@ -74,6 +74,9 @@ public static partial class BuiltInFunctions
         }
         else
         {
+            // BlankValue decimals arg: Excel treats a blank cell reference as 0 for numeric coercion.
+            // This matches =FIXED(n,) and =FIXED(n, blank_cell) → 0 decimal places.
+            // The omitted-arg case is handled upstream via new NumberValue(2) default in Fixed().
             dec = 0;
         }
         return FixedScalar(value, dec, noCommas);

@@ -873,6 +873,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     // setter calls per styled cell.
     private static readonly Action<IXLCell, object>? XlCellSetStyleValueAction = CreateXlCellSetStyleValueAction();
 
+    // Internal probe for CI: if a ClosedXML package bump renames/removes the SetStyle method, this
+    // returns false and the test XlsxFileAdapterClosedXmlReflectionTests.ClosedXmlSetStyleDelegate_ResolvesSuccessfully
+    // fails loudly instead of silently degrading to the slow per-property path.
+    internal static bool ClosedXmlSetStyleDelegateResolved => XlCellSetStyleValueAction is not null;
+
     private static Action<IXLCell, object>? CreateXlCellSetStyleValueAction()
     {
         // XLStylizedBase.SetStyle(XLStyleValue value, bool propagate) is the single-call path
