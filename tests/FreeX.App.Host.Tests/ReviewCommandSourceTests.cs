@@ -108,7 +108,8 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("_workbook.IsStructureProtected");
         source.Should().Contain("TryConfirmWorkbookUnprotectPassword(out pwd)");
         source.Should().Contain("ProtectionPasswordHelper.VerifyStoredPassword(storedPassword, password)");
-        source.Should().Contain("The password you supplied is not correct.");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_ReviewPasswordIncorrect\")");
+        UiText.Get("MainWindowMessage_ReviewPasswordIncorrect").Should().Be("The password you supplied is not correct.");
         source.Should().Contain("SheetProtectionWorkflow.CreateCommand(sheet, result)");
         source.Should().Contain("WorkbookProtectionWorkflow.CreateCommand(_workbook, pwd)");
         source.Should().Contain("new AllowEditRangeDialog(");

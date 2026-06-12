@@ -25,7 +25,8 @@ public sealed class ErrorCheckingDialogSourceTests
     {
         var source = ReadMainWindowFormulaCommandsSource();
 
-        source.Should().Contain("No issues found.");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_ErrorCheckingNoIssues\")");
+        UiText.Get("MainWindowMessage_ErrorCheckingNoIssues").Should().Be("No issues found.");
         source.Should().NotContain("No errors found.");
     }
 
