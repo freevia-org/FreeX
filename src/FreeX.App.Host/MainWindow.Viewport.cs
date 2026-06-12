@@ -530,7 +530,7 @@ public partial class MainWindow
     private void RefreshViewportFormulaReferenceHighlights()
     {
         if (GetFormulaReferenceHighlightEditor() is not null ||
-            _formulaReferenceGridOverlays.Count != 0)
+            _formulaReferenceGridOverlayActiveCount != 0)
         {
             RefreshFormulaReferenceHighlights();
         }

@@ -239,10 +239,39 @@ public partial class MainWindow
 
     private void RefreshFormulaReferenceGridOverlays(IReadOnlyList<FormulaReferenceHighlight> highlights)
     {
-        ClearFormulaReferenceGridOverlays();
+        // Hide all currently active pool entries before re-showing the ones that are still needed.
+        HideFormulaReferenceGridOverlayPool();
         if (SheetGrid.Viewport is null)
             return;
 
+        // First pass: count how many visible overlays we need so we can grow the pool all at once.
+        // New pool entries are prepended (Insert(0)) to stay behind all other EditOverlay children,
+        // matching the original Insert(0, border) z-ordering. Growing in batch avoids index-shift issues.
+        var neededCount = 0;
+        foreach (var highlight in highlights)
+        {
+            if (highlight.Range is not { } range || range.Start.Sheet != _currentSheetId)
+                continue;
+            if (FreeX.App.UI.GridView.CalculateVisibleSelectionRect(
+                    SheetGrid.Viewport, range,
+                    SheetGrid.ActualRowHeaderWidth, FreeX.App.UI.GridView.ColHeaderHeight) is not null)
+                neededCount++;
+        }
+
+        while (_formulaReferenceGridOverlayPool.Count < neededCount)
+        {
+            var newBorder = new Border
+            {
+                BorderThickness = new Thickness(2),
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed
+            };
+            EditOverlay.Children.Insert(0, newBorder);
+            _formulaReferenceGridOverlayPool.Insert(0, newBorder);
+        }
+
+        // Second pass: assign geometry and show the required pool slots.
+        var poolIndex = 0;
         foreach (var highlight in highlights)
         {
             if (highlight.Range is not { } range || range.Start.Sheet != _currentSheetId)
@@ -257,28 +286,31 @@ public partial class MainWindow
                 continue;
 
             var brush = _formulaReferenceBrushes[highlight.PaletteIndex % _formulaReferenceBrushes.Count];
-            var border = new Border
-            {
-                Width = rect.Value.Width,
-                Height = rect.Value.Height,
-                BorderThickness = new Thickness(2),
-                BorderBrush = brush,
-                Background = CreateFormulaReferenceFill(brush),
-                IsHitTestVisible = false
-            };
+            var border = _formulaReferenceGridOverlayPool[poolIndex];
+            border.Width = rect.Value.Width;
+            border.Height = rect.Value.Height;
+            border.BorderBrush = brush;
+            border.Background = CreateFormulaReferenceFill(brush);
             System.Windows.Controls.Canvas.SetLeft(border, rect.Value.Left);
             System.Windows.Controls.Canvas.SetTop(border, rect.Value.Top);
-            EditOverlay.Children.Insert(0, border);
-            _formulaReferenceGridOverlays.Add(border);
+            border.Visibility = Visibility.Visible;
+            poolIndex++;
         }
+
+        _formulaReferenceGridOverlayActiveCount = poolIndex;
     }
 
     private void ClearFormulaReferenceGridOverlays()
     {
-        foreach (var element in _formulaReferenceGridOverlays)
-            EditOverlay.Children.Remove(element);
+        HideFormulaReferenceGridOverlayPool();
+    }
 
-        _formulaReferenceGridOverlays.Clear();
+    private void HideFormulaReferenceGridOverlayPool()
+    {
+        for (var i = 0; i < _formulaReferenceGridOverlayActiveCount; i++)
+            _formulaReferenceGridOverlayPool[i].Visibility = Visibility.Collapsed;
+
+        _formulaReferenceGridOverlayActiveCount = 0;
     }
 
     private static Brush CreateFormulaReferenceFill(Brush brush)

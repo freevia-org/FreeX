@@ -207,6 +207,7 @@ public partial class MainWindow
         }
 
         _lastStatusBarDisplayState = null;
+        _lastStatusBarAutomationState = null;
         RefreshStatusBar();
     }
 
@@ -242,6 +243,23 @@ public partial class MainWindow
 
     private void UpdateStatusStatsPanelAutomation(StatusBarDisplayState state)
     {
+        // Skip the string[]/LINQ allocation when the stat texts and option flags are unchanged.
+        // _lastStatusBarAutomationState uses record value-equality, so a genuinely new state
+        // (different texts) will always miss the cache.
+        if (_lastStatusBarAutomationName is { } cachedName && _lastStatusBarAutomationState == state)
+        {
+            var currentName = AutomationProperties.GetName(StatusStatsPanel);
+            if (!string.Equals(currentName, cachedName, StringComparison.Ordinal))
+            {
+                AutomationProperties.SetName(StatusStatsPanel, cachedName);
+                NotifyStatusStatsPanelAutomationChanged(currentName, cachedName);
+            }
+
+            if (!string.Equals(AutomationProperties.GetHelpText(StatusStatsPanel), cachedName, StringComparison.Ordinal))
+                AutomationProperties.SetHelpText(StatusStatsPanel, cachedName);
+            return;
+        }
+
         var visibleStatTexts = new[]
             {
                 _options.StatusBarShowAverage ? state.AverageText : string.Empty,
@@ -266,6 +284,9 @@ public partial class MainWindow
 
         if (!string.Equals(AutomationProperties.GetHelpText(StatusStatsPanel), automationName, StringComparison.Ordinal))
             AutomationProperties.SetHelpText(StatusStatsPanel, automationName);
+
+        _lastStatusBarAutomationState = state;
+        _lastStatusBarAutomationName = automationName;
     }
 
     private void NotifyStatusStatsPanelAutomationChanged(string previousAutomationName, string automationName)

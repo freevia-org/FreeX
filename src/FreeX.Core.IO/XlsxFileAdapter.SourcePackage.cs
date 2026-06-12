@@ -200,12 +200,29 @@ public sealed partial class XlsxFileAdapter
         if (removedWorksheetPaths.Count == 0)
             return excludedPaths;
 
-        var retainedWorksheetPaths = sourceWorksheetPaths
+        // Compute relationship-dependency paths per retained sheet once (O(N) archive reads total).
+        // The original code called GetRelationshipDependencyPaths for every (sheet, candidate) pair in the
+        // second loop — O(N²) archive reads for N retained sheets. We instead memoize each retained sheet's
+        // dep set here and derive the "outside this sheet" predicate from reference-count data.
+        var retainedDepsBySheetPath = sourceWorksheetPaths
             .Where(pair => context.TargetSheets.ContainsKey(pair.Key))
-            .Select(pair => pair.SourcePath);
-        var retainedTargets = retainedWorksheetPaths
-            .SelectMany(path => GetRelationshipDependencyPaths(sourceArchive, path, context.PackageRelNs))
+            .ToDictionary(
+                pair => pair.SourcePath,
+                pair => (IReadOnlySet<string>)GetRelationshipDependencyPaths(sourceArchive, pair.SourcePath, context.PackageRelNs)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase);
+
+        // retainedTargets: union of all retained sheets' deps (used for removed-sheet exclusion).
+        var retainedTargets = retainedDepsBySheetPath.Values
+            .SelectMany(deps => deps)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // retainedRefCount: how many retained sheets reference each path.
+        // A path is "referenced by at least one OTHER retained sheet" iff refCount > 1 or this sheet doesn't own it.
+        var retainedRefCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var deps in retainedDepsBySheetPath.Values)
+            foreach (var path in deps)
+                retainedRefCount[path] = retainedRefCount.TryGetValue(path, out var c) ? c + 1 : 1;
 
         foreach (var worksheetPath in removedWorksheetPaths)
         {
@@ -225,12 +242,7 @@ public sealed partial class XlsxFileAdapter
             if (sheet is null || XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet))
                 continue;
 
-            var retainedTargetsOutsideSheet = sourceWorksheetPaths
-                .Where(candidate =>
-                    context.TargetSheets.ContainsKey(candidate.Key) &&
-                    !string.Equals(candidate.SourcePath, sourceSheet.SourcePath, StringComparison.OrdinalIgnoreCase))
-                .SelectMany(path => GetRelationshipDependencyPaths(sourceArchive, path.SourcePath, context.PackageRelNs))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var ownDeps = retainedDepsBySheetPath.TryGetValue(sourceSheet.SourcePath, out var d) ? d : null;
 
             foreach (var targetPath in GetLegacyDrawingHfDependencyPaths(
                          sourceArchive,
@@ -239,7 +251,13 @@ public sealed partial class XlsxFileAdapter
                          context.RelNs,
                          context.PackageRelNs))
             {
-                if (!retainedTargetsOutsideSheet.Contains(targetPath))
+                // Equivalent to: !retainedTargetsOutsideSheet.Contains(targetPath), where
+                // retainedTargetsOutsideSheet = union of deps of all retained sheets OTHER than sourceSheet.
+                // A path is in that set iff: some retained sheet other than this one references it, i.e.
+                // refCount > 1, or ownDeps does not contain it (it's retained by another sheet entirely).
+                var inOutsideSet = retainedRefCount.TryGetValue(targetPath, out var refCount) &&
+                                   (refCount > 1 || ownDeps is null || !ownDeps.Contains(targetPath));
+                if (!inOutsideSet)
                     excludedPaths.Add(targetPath);
             }
         }

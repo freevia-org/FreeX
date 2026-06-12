@@ -64,6 +64,9 @@ public partial class MainWindow : Window, IWorkbookWindow
     private readonly StatusBarStatsCache _statusBarStatsCache = new();
     private readonly StatusBarDisplayStateCache _statusBarDisplayStateCache = new();
     private StatusBarDisplayState? _lastStatusBarDisplayState;
+    // Cache for UpdateStatusStatsPanelAutomation: avoid the string[]/LINQ allocation when the inputs are unchanged.
+    private StatusBarDisplayState? _lastStatusBarAutomationState;
+    private string? _lastStatusBarAutomationName;
     private readonly SparklineValueCache _sparklineValueCache = new();
     private ulong _navigationCacheRevision;
     private bool _suppressViewOptionSync;
@@ -207,7 +210,11 @@ public partial class MainWindow : Window, IWorkbookWindow
     private int? _formulaReferenceStart;
     private int? _formulaReferenceLength;
     private bool _formulaRangeEntryMode;
-    private readonly List<UIElement> _formulaReferenceGridOverlays = [];
+    // Border pool: Borders are allocated once and reused across keystrokes (show/hide + reposition)
+    // instead of being created and removed on every refresh. _formulaReferenceGridOverlayActiveCount
+    // tracks how many pool entries are currently visible.
+    private readonly List<System.Windows.Controls.Border> _formulaReferenceGridOverlayPool = [];
+    private int _formulaReferenceGridOverlayActiveCount;
     private WatchWindowDialog? _watchWindowDialog;
     private bool _suppressValidationDropdownCommit;
     private ColumnResizeSnapshot? _columnResizeSnapshot;
