@@ -24,11 +24,15 @@ public static partial class RibbonCommandPresentationPlanner
             ["conditional formatting"] = Icon(RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color),
             ["copy"] = Icon(RibbonCommandIconKind.Copy),
             ["cut"] = Icon(RibbonCommandIconKind.Cut),
+            ["curved connector"] = Icon(RibbonCommandIconKind.Connector),
             ["custom views"] = Icon(RibbonCommandIconKind.View),
             ["decrease decimal places"] = Icon(RibbonCommandIconKind.Decimal),
             ["decrease font size"] = Icon(RibbonCommandIconKind.Font),
             ["decrease indent"] = Icon(RibbonCommandIconKind.Align),
             ["delete"] = Icon(RibbonCommandIconKind.Delete),
+            ["decision"] = Icon(RibbonCommandIconKind.FlowchartDecision),
+            ["diamond"] = Icon(RibbonCommandIconKind.Diamond),
+            ["divide"] = Icon(RibbonCommandIconKind.DivideSign),
             ["fill"] = Icon(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill),
             ["fill color"] = Icon(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill),
             ["find & select"] = Icon(RibbonCommandIconKind.Search),
@@ -58,11 +62,14 @@ public static partial class RibbonCommandPresentationPlanner
             ["merge & center"] = Icon(RibbonCommandIconKind.Merge),
             ["middle align"] = Icon(RibbonCommandIconKind.Align),
             ["my add-ins"] = Icon(RibbonCommandIconKind.Insert, RibbonCommandIconAccent.Data),
+            ["not equal"] = Icon(RibbonCommandIconKind.NotEqualSign),
             ["new window"] = Icon(RibbonCommandIconKind.Window),
             ["normal"] = Icon(RibbonCommandIconKind.Grid),
             ["number format"] = Icon(RibbonCommandIconKind.Number),
             ["open"] = Icon(RibbonCommandIconKind.GetData),
             ["orientation"] = Icon(RibbonCommandIconKind.Orientation),
+            ["oval"] = Icon(RibbonCommandIconKind.Ellipse),
+            ["oval callout"] = Icon(RibbonCommandIconKind.Callout),
             ["page break preview"] = Icon(RibbonCommandIconKind.PageBreak),
             ["page layout"] = Icon(RibbonCommandIconKind.Page),
             ["paste"] = Icon(RibbonCommandIconKind.Paste),
@@ -78,6 +85,8 @@ public static partial class RibbonCommandPresentationPlanner
             ["remove duplicates"] = Icon(RibbonCommandIconKind.Delete),
             ["reset window position"] = Icon(RibbonCommandIconKind.History),
             ["ruler"] = Icon(RibbonCommandIconKind.Ruler),
+            ["rounded rectangle"] = Icon(RibbonCommandIconKind.Rectangle),
+            ["rounded rectangular callout"] = Icon(RibbonCommandIconKind.Callout),
             ["shapes"] = Icon(RibbonCommandIconKind.Rectangle),
             ["sort & filter"] = Icon(RibbonCommandIconKind.Sort),
             ["sort a to z"] = Icon(RibbonCommandIconKind.Sort),
@@ -96,7 +105,41 @@ public static partial class RibbonCommandPresentationPlanner
             ["view side by side"] = Icon(RibbonCommandIconKind.History),
             ["wrap text"] = Icon(RibbonCommandIconKind.Wrap),
             ["zoom"] = Icon(RibbonCommandIconKind.Zoom),
-            ["zoom to selection"] = Icon(RibbonCommandIconKind.Zoom)
+            ["zoom to selection"] = Icon(RibbonCommandIconKind.Zoom),
+
+            ["line"] = Icon(RibbonCommandIconKind.Line),
+            ["elbow connector"] = Icon(RibbonCommandIconKind.Connector),
+            ["rectangle"] = Icon(RibbonCommandIconKind.Rectangle),
+            ["triangle"] = Icon(RibbonCommandIconKind.Triangle),
+            ["right triangle"] = Icon(RibbonCommandIconKind.Triangle),
+            ["parallelogram"] = Icon(RibbonCommandIconKind.Parallelogram),
+            ["trapezoid"] = Icon(RibbonCommandIconKind.Trapezoid),
+            ["pentagon"] = Icon(RibbonCommandIconKind.Pentagon),
+            ["hexagon"] = Icon(RibbonCommandIconKind.Hexagon),
+            ["octagon"] = Icon(RibbonCommandIconKind.Octagon),
+            ["cross"] = Icon(RibbonCommandIconKind.Cross),
+            ["right arrow"] = Icon(RibbonCommandIconKind.ArrowRight),
+            ["left arrow"] = Icon(RibbonCommandIconKind.ArrowLeft),
+            ["up arrow"] = Icon(RibbonCommandIconKind.ArrowUp),
+            ["down arrow"] = Icon(RibbonCommandIconKind.ArrowDown),
+            ["left-right arrow"] = Icon(RibbonCommandIconKind.ArrowLeftRight),
+            ["up-down arrow"] = Icon(RibbonCommandIconKind.ArrowUpDown),
+            ["plus"] = Icon(RibbonCommandIconKind.PlusSign),
+            ["minus"] = Icon(RibbonCommandIconKind.MinusSign),
+            ["multiply"] = Icon(RibbonCommandIconKind.MultiplySign),
+            ["equal"] = Icon(RibbonCommandIconKind.EqualSign),
+            ["process"] = Icon(RibbonCommandIconKind.FlowchartProcess),
+            ["data"] = Icon(RibbonCommandIconKind.FlowchartData),
+            ["predefined process"] = Icon(RibbonCommandIconKind.FlowchartProcess),
+            ["document"] = Icon(RibbonCommandIconKind.FlowchartDocument),
+            ["terminator"] = Icon(RibbonCommandIconKind.FlowchartTerminator),
+            ["5-point star"] = Icon(RibbonCommandIconKind.Star),
+            ["8-point star"] = Icon(RibbonCommandIconKind.Star),
+            ["explosion"] = Icon(RibbonCommandIconKind.Explosion),
+            ["ribbon"] = Icon(RibbonCommandIconKind.RibbonShape),
+            ["wave"] = Icon(RibbonCommandIconKind.Wave),
+            ["rectangular callout"] = Icon(RibbonCommandIconKind.Callout),
+            ["line callout"] = Icon(RibbonCommandIconKind.LineCallout)
         };
 
     private static readonly IReadOnlyDictionary<string, RibbonCommandIcon> ExactGroupIcons =
@@ -249,12 +292,40 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("object size")) return new(RibbonCommandIconKind.Size);
         if (name.Contains("object rotate")) return new(RibbonCommandIconKind.Rotate);
         if (name.Contains("object outline")) return new(RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border);
-        if (name.Contains("shape")) return new(RibbonCommandIconKind.Rectangle);
-        if (name.Contains("object")) return new(RibbonCommandIconKind.Rectangle);
+        if (name.Contains("left-right arrow")) return new(RibbonCommandIconKind.ArrowLeftRight);
+        if (name.Contains("up-down arrow")) return new(RibbonCommandIconKind.ArrowUpDown);
+        if (name.Contains("right arrow")) return new(RibbonCommandIconKind.ArrowRight);
+        if (name.Contains("left arrow")) return new(RibbonCommandIconKind.ArrowLeft);
+        if (name.Contains("up arrow")) return new(RibbonCommandIconKind.ArrowUp);
+        if (name.Contains("down arrow")) return new(RibbonCommandIconKind.ArrowDown);
+        if (name.Contains("connector")) return new(RibbonCommandIconKind.Connector);
+        if (name.Contains("triangle")) return new(RibbonCommandIconKind.Triangle);
+        if (name.Contains("diamond")) return new(RibbonCommandIconKind.Diamond);
+        if (name.Contains("parallelogram")) return new(RibbonCommandIconKind.Parallelogram);
+        if (name.Contains("trapezoid")) return new(RibbonCommandIconKind.Trapezoid);
+        if (name.Contains("pentagon")) return new(RibbonCommandIconKind.Pentagon);
+        if (name.Contains("hexagon")) return new(RibbonCommandIconKind.Hexagon);
+        if (name.Contains("octagon")) return new(RibbonCommandIconKind.Octagon);
+        if (name.Contains("flowchart") || name.Contains("process")) return new(RibbonCommandIconKind.FlowchartProcess);
+        if (name.Contains("decision")) return new(RibbonCommandIconKind.FlowchartDecision);
+        if (name.Contains("terminator")) return new(RibbonCommandIconKind.FlowchartTerminator);
+        if (name.Contains("star")) return new(RibbonCommandIconKind.Star);
+        if (name.Contains("explosion")) return new(RibbonCommandIconKind.Explosion);
+        if (name.Contains("ribbon")) return new(RibbonCommandIconKind.RibbonShape);
+        if (name.Contains("wave")) return new(RibbonCommandIconKind.Wave);
+        if (name.Contains("plus")) return new(RibbonCommandIconKind.PlusSign);
+        if (name.Contains("minus")) return new(RibbonCommandIconKind.MinusSign);
+        if (name.Contains("multiply")) return new(RibbonCommandIconKind.MultiplySign);
+        if (name.Contains("divide")) return new(RibbonCommandIconKind.DivideSign);
+        if (name.Contains("not equal")) return new(RibbonCommandIconKind.NotEqualSign);
+        if (name.Contains("equal")) return new(RibbonCommandIconKind.EqualSign);
         if (name.Contains("rectangle")) return new(RibbonCommandIconKind.Rectangle);
         if (name.Contains("ellipse")) return new(RibbonCommandIconKind.Ellipse);
+        if (name.Contains("oval")) return new(RibbonCommandIconKind.Ellipse);
         if (name == "line") return new(RibbonCommandIconKind.Line);
         if (name.Contains("text box")) return new(RibbonCommandIconKind.TextBox);
+        if (name.Contains("shape")) return new(RibbonCommandIconKind.Rectangle);
+        if (name.Contains("object")) return new(RibbonCommandIconKind.Rectangle);
         if (name.Contains("equation")) return new(RibbonCommandIconKind.Math);
         if (name == "text") return new(RibbonCommandIconKind.TextBox);
         if (name.Contains("bring forward")) return new(RibbonCommandIconKind.BringForward);

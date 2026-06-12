@@ -1787,15 +1787,7 @@
                                 <Button Content="{local:Loc Key=MainWindow_Content_Pictures}" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PicturesBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Pictures}"
                                         local:RibbonTooltip.KeyTip="IP"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertAPictureFromALocalImageFile}" local:RibbonMetadata.CommandName="Pictures">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_PicturePlaceOverCells}" local:RibbonTooltip.KeyTip="V" local:RibbonMetadata.CommandName="Place over Cells">
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureThisDevice}" local:RibbonTooltip.KeyTip="D" Click="InsertPictureBtn_Click" local:RibbonMetadata.CommandName="This Device Picture over Cells"/>
-                                            </MenuItem>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertAPictureFromALocalImageFile}" local:RibbonMetadata.CommandName="Pictures"/>
                                 <Button x:Name="ShapesBtn" Content="{local:Loc Key=MainWindow_Content_Shapes}" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShapesBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Shapes}"
                                         local:RibbonTooltip.KeyTip="SH"

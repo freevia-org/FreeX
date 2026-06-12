@@ -116,6 +116,73 @@ public sealed class RibbonCommandPresentationPlannerTests
     }
 
     [Theory]
+    [InlineData("Line", RibbonCommandIconKind.Line)]
+    [InlineData("Elbow Connector", RibbonCommandIconKind.Connector)]
+    [InlineData("Curved Connector", RibbonCommandIconKind.Connector)]
+    [InlineData("Oval", RibbonCommandIconKind.Ellipse)]
+    [InlineData("Triangle", RibbonCommandIconKind.Triangle)]
+    [InlineData("Diamond", RibbonCommandIconKind.Diamond)]
+    [InlineData("Parallelogram", RibbonCommandIconKind.Parallelogram)]
+    [InlineData("Trapezoid", RibbonCommandIconKind.Trapezoid)]
+    [InlineData("Pentagon", RibbonCommandIconKind.Pentagon)]
+    [InlineData("Hexagon", RibbonCommandIconKind.Hexagon)]
+    [InlineData("Octagon", RibbonCommandIconKind.Octagon)]
+    [InlineData("Cross", RibbonCommandIconKind.Cross)]
+    [InlineData("Right Arrow", RibbonCommandIconKind.ArrowRight)]
+    [InlineData("Left-Right Arrow", RibbonCommandIconKind.ArrowLeftRight)]
+    [InlineData("Plus", RibbonCommandIconKind.PlusSign)]
+    [InlineData("Not Equal", RibbonCommandIconKind.NotEqualSign)]
+    [InlineData("Process", RibbonCommandIconKind.FlowchartProcess)]
+    [InlineData("Decision", RibbonCommandIconKind.FlowchartDecision)]
+    [InlineData("Data", RibbonCommandIconKind.FlowchartData)]
+    [InlineData("Document", RibbonCommandIconKind.FlowchartDocument)]
+    [InlineData("Terminator", RibbonCommandIconKind.FlowchartTerminator)]
+    [InlineData("5-Point Star", RibbonCommandIconKind.Star)]
+    [InlineData("Explosion", RibbonCommandIconKind.Explosion)]
+    [InlineData("Ribbon", RibbonCommandIconKind.RibbonShape)]
+    [InlineData("Wave", RibbonCommandIconKind.Wave)]
+    [InlineData("Rectangular Callout", RibbonCommandIconKind.Callout)]
+    [InlineData("Line Callout", RibbonCommandIconKind.LineCallout)]
+    public void GetIcon_MapsShapeGalleryEntriesToMeaningfulShapeIcons(
+        string commandName,
+        RibbonCommandIconKind expectedKind)
+    {
+        RibbonCommandPresentationPlanner.GetIcon(commandName).Kind.Should().Be(expectedKind);
+    }
+
+    [Fact]
+    public void InsertShapeGalleryCatalogItems_MapToNonGenericIcons()
+    {
+        var genericShapeItems = InsertShapeGalleryCatalog.Items
+            .Where(item => RibbonCommandPresentationPlanner.GetIcon(item.Label).Kind == RibbonCommandIconKind.Generic)
+            .Select(item => item.Label)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        genericShapeItems.Should().BeEmpty("every visible shape gallery entry should have a recognizable icon");
+    }
+
+    [Fact]
+    public void DrawPicturesRibbonCommand_IsPlainButtonWithoutOneOptionContextMenu()
+    {
+        var xaml = ReadMainRibbonXaml();
+        var groupStart = xaml.IndexOf("local:RibbonMetadata.CatalogId=\"DrawIllustrationsGroup\"", StringComparison.Ordinal);
+        groupStart.Should().BeGreaterThanOrEqualTo(0);
+        var picturesStart = xaml.IndexOf("local:RibbonMetadata.CommandName=\"Pictures\"", groupStart, StringComparison.Ordinal);
+        picturesStart.Should().BeGreaterThan(groupStart);
+        var picturesButtonStart = xaml.LastIndexOf("<Button", picturesStart, StringComparison.Ordinal);
+        picturesButtonStart.Should().BeGreaterThan(groupStart);
+        var shapesStart = xaml.IndexOf("x:Name=\"ShapesBtn\"", picturesStart, StringComparison.Ordinal);
+        shapesStart.Should().BeGreaterThan(picturesStart);
+
+        var picturesButton = xaml[picturesButtonStart..shapesStart];
+
+        picturesButton.Should().NotContain("<Button.ContextMenu>");
+        picturesButton.Should().NotContain("MainWindow_Header_PictureThisDevice");
+        picturesButton.Should().Contain("Click=\"PicturesBtn_Click\"");
+    }
+
+    [Theory]
     [InlineData(" PivotTable ", RibbonCommandIconKind.PivotTable)]
     [InlineData(" Table ", RibbonCommandIconKind.Table)]
     [InlineData(" Center ", RibbonCommandIconKind.Align)]
