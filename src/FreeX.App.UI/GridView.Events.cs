@@ -96,6 +96,9 @@ public partial class GridView
     /// <summary>Fired when the user finishes rotating a drawing object via the rotation grip.</summary>
     public event Action<Guid, ObjectKind, double>? ObjectRotated;
 
+    /// <summary>Fired when the user finishes dragging a selected picture crop handle.</summary>
+    public event Action<Guid, PictureCropRatios>? PictureCropped;
+
     /// <summary>Fired when the user finishes placing a new drawing shape on the grid.</summary>
     public event Action<ShapePlacementRequest>? ShapePlacementRequested;
 

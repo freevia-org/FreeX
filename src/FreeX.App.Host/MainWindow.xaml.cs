@@ -322,6 +322,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.ObjectResized += OnObjectResized;
         SheetGrid.ObjectResizedWithAnchor += OnObjectResizedWithAnchor;
         SheetGrid.ObjectRotated += OnObjectRotated;
+        SheetGrid.PictureCropped += OnPictureCropped;
         DependencyPropertyDescriptor.FromProperty(
             FreeX.App.UI.GridView.SelectedObjectIdProperty,
             typeof(FreeX.App.UI.GridView))?.AddValueChanged(SheetGrid, OnSelectedObjectContextChanged);

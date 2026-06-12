@@ -48,8 +48,9 @@ public sealed class GridViewPointerCursorTests
 
         hoverCursorBlock.Should().Contain("selectedObjectDragKind = HitTestObjectHandle(pos, selectedObjectRect);");
         hoverCursorBlock.Should().Contain("Cursor = ObjectDragCursor(selectedObjectDragKind);");
-        hoverCursorBlock.Should().NotContain("HitTestPictureCropHandle(pos)");
-        hoverCursorBlock.Should().NotContain("PictureCropCursor(selectedPictureCropHandle)");
+        hoverCursorBlock.Should().Contain("IsSelectedPictureCropModeActive()");
+        hoverCursorBlock.Should().Contain("HitTestPictureCropHandle(pos, selectedObjectRect)");
+        hoverCursorBlock.Should().Contain("PictureCropCursor(selectedPictureCropHandle)");
     }
 
     [Fact]
@@ -118,12 +119,16 @@ public sealed class GridViewPointerCursorTests
     public void SelectedPictureMouseDownUsesObjectDragHandlesForDefaultSurface()
     {
         var inputSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
+        var objectDragSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.ObjectDrag.cs");
         var mouseDownBlock = inputSource[
             inputSource.IndexOf("// Check if clicking on an already-selected object's handles", StringComparison.Ordinal)..
             inputSource.IndexOf("// Check if clicking on a new drawing object", StringComparison.Ordinal)];
 
-        inputSource.Should().NotContain("GridPictureCropPlanner.HitTestHandle(pos, selectedPictureRect)");
-        mouseDownBlock.Should().Contain("var dragKind = HitTestObjectHandle(pos, selRect);");
+        objectDragSource.Should().Contain("GridPictureCropPlanner.HitTestHandle(localPos, objRect)");
+        mouseDownBlock.Should().Contain("IsSelectedPictureCropModeActive()");
+        mouseDownBlock.Should().Contain("var cropHandle = HitTestPictureCropHandle(pos, selRect);");
+        mouseDownBlock.Should().Contain("_pictureCropDragHandle = cropHandle;");
+        mouseDownBlock.Should().Contain("dragKind = HitTestObjectHandle(pos, selRect);");
         mouseDownBlock.Should().Contain("_objectDragKind = dragKind;");
         mouseDownBlock.Should().Contain("CaptureMouse();");
     }
@@ -154,7 +159,7 @@ public sealed class GridViewPointerCursorTests
             source.IndexOf("private bool HasActiveCapturedGridDrag", StringComparison.Ordinal)..
             source.IndexOf("protected override void OnMouseLeftButtonDown", StringComparison.Ordinal)];
 
-        helperBlock.Should().NotContain("_pictureCropDragHandle != PictureCropHandle.None");
+        helperBlock.Should().Contain("_pictureCropDragHandle != PictureCropHandle.None");
         helperBlock.Should().Contain("_objectDragKind != ObjectDragKind.None");
         helperBlock.Should().Contain("_marginDragEdge.HasValue");
         helperBlock.Should().Contain("_splitDividerDragHandle != SplitDividerHandle.None");
@@ -580,8 +585,9 @@ public sealed class GridViewPointerCursorTests
             source.IndexOf("private void CancelActiveCapturedGridDrag", StringComparison.Ordinal)..
             source.IndexOf("protected override void OnMouseLeftButtonDown", StringComparison.Ordinal)];
 
-        cancellationHelper.Should().NotContain("_pictureCropDragHandle");
-        cancellationHelper.Should().NotContain("_pictureCropDragId");
+        cancellationHelper.Should().Contain("if (_pictureCropDragHandle != PictureCropHandle.None)");
+        cancellationHelper.Should().Contain("_pictureCropDragHandle = PictureCropHandle.None;");
+        cancellationHelper.Should().Contain("_pictureCropDragId = Guid.Empty;");
         cancellationHelper.Should().Contain("if (_objectDragKind != ObjectDragKind.None)");
         cancellationHelper.Should().Contain("_objectDragKind = ObjectDragKind.None;");
         cancellationHelper.Should().Contain("_objectDragCurrentRect = Rect.Empty;");

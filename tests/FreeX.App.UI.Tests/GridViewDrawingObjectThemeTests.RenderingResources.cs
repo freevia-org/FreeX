@@ -44,7 +44,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
         source.Should().Contain("private static readonly Pen PictureBorderPen = CreateFrozenPen");
         source.Should().Contain("private static readonly Pen PictureGridPen = CreateFrozenPen");
         renderPictures.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
-        renderPictures.Should().Contain("var brush = GetCroppedPictureBrush(picture, image);");
+        renderPictures.Should().Contain("var brush = GetCroppedPictureBrush(crop, image);");
         renderPictures.Should().Contain("pixelsPerDip,");
         renderPictures.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip)");
         renderPictures.Should().NotContain("new ImageBrush");

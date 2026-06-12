@@ -12,6 +12,8 @@ public partial class MainWindow
         RefreshChartContextualTabs();
         RefreshTableContextualTab();
         RefreshPivotFieldListPaneAfterSelectionChange();
+        if (SheetGrid.IsPictureCropMode && GetSelectedPictureOnSheet(_workbook.GetSheet(_currentSheetId))?.Kind != PictureKind.Image)
+            SheetGrid.IsPictureCropMode = false;
     }
 
     private void RefreshDrawingObjectContextualTabs()

@@ -27,6 +27,9 @@ public partial class GridView
     private static readonly Brush RotationGripFill = new SolidColorBrush(Colors.White);
     private static readonly Pen RotationGripPen = new(new SolidColorBrush(Color.FromRgb(0x20, 0x7A, 0xC5)), 1.0);
     private static readonly Pen RotationGlyphPen = new(new SolidColorBrush(Color.FromRgb(0x20, 0x7A, 0xC5)), 1.5);
+    private static readonly Pen PictureCropFramePen = new(new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)), 1.5);
+    private static readonly Pen PictureCropHandlePen = new(new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)), 3.0);
+    private static readonly Brush PictureCropDimBrush = new SolidColorBrush(Color.FromArgb(44, 0, 0, 0));
 
     static GridView()
     {
@@ -40,6 +43,11 @@ public partial class GridView
         RotationGripPen.Freeze();
         ((SolidColorBrush)((Pen)RotationGlyphPen).Brush).Freeze();
         RotationGlyphPen.Freeze();
+        ((SolidColorBrush)((Pen)PictureCropFramePen).Brush).Freeze();
+        PictureCropFramePen.Freeze();
+        ((SolidColorBrush)((Pen)PictureCropHandlePen).Brush).Freeze();
+        PictureCropHandlePen.Freeze();
+        PictureCropDimBrush.Freeze();
 
         var dragFillBrush = new SolidColorBrush(Color.FromArgb(40, 0x20, 0x7A, 0xC5));
         dragFillBrush.Freeze();
@@ -331,6 +339,94 @@ public partial class GridView
             HandleHitPad,
             GetSelectedObjectRotationDegrees());
 
+    private PictureCropHandle HitTestPictureCropHandle(Point pos, Rect objRect)
+    {
+        var localPos = TransformPointToUnrotatedObjectSpace(
+            objRect,
+            pos,
+            GetSelectedObjectRotationDegrees());
+        return GridPictureCropPlanner.HitTestHandle(localPos, objRect);
+    }
+
+    private static Point TransformPointToUnrotatedObjectSpace(Rect rect, Point pos, double rotationDegrees)
+    {
+        if (rect.IsEmpty || Math.Abs(rotationDegrees) <= 0.0001)
+            return pos;
+
+        var radians = -rotationDegrees * Math.PI / 180.0;
+        var centerX = rect.Left + rect.Width / 2.0;
+        var centerY = rect.Top + rect.Height / 2.0;
+        var dx = pos.X - centerX;
+        var dy = pos.Y - centerY;
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        return new Point(
+            centerX + dx * cos - dy * sin,
+            centerY + dx * sin + dy * cos);
+    }
+
+    internal void DrawPictureCropHandles(DrawingContext dc, Rect r, PictureCropRatios crop, double rotationDegrees)
+    {
+        var rotated = Math.Abs(rotationDegrees) > 0.0001;
+        if (rotated)
+        {
+            dc.PushTransform(new RotateTransform(
+                rotationDegrees,
+                r.Left + r.Width / 2,
+                r.Top + r.Height / 2));
+        }
+
+        var visibleRect = GridPictureCropPlanner.CalculateVisibleCropRect(r, crop);
+        DrawPictureCropDimmedEdges(dc, r, visibleRect);
+        dc.DrawRectangle(null, PictureCropFramePen, r);
+
+        foreach (var (handle, center) in GridPictureCropPlanner.GetHandleCenters(r))
+            DrawPictureCropHandle(dc, handle, center);
+
+        if (rotated)
+            dc.Pop();
+    }
+
+    private static void DrawPictureCropDimmedEdges(DrawingContext dc, Rect frame, Rect visible)
+    {
+        if (visible.IsEmpty || visible.Width <= 0 || visible.Height <= 0)
+            return;
+
+        if (visible.Top > frame.Top)
+            dc.DrawRectangle(PictureCropDimBrush, null, new Rect(frame.Left, frame.Top, frame.Width, visible.Top - frame.Top));
+        if (visible.Bottom < frame.Bottom)
+            dc.DrawRectangle(PictureCropDimBrush, null, new Rect(frame.Left, visible.Bottom, frame.Width, frame.Bottom - visible.Bottom));
+        if (visible.Left > frame.Left)
+            dc.DrawRectangle(PictureCropDimBrush, null, new Rect(frame.Left, visible.Top, visible.Left - frame.Left, visible.Height));
+        if (visible.Right < frame.Right)
+            dc.DrawRectangle(PictureCropDimBrush, null, new Rect(visible.Right, visible.Top, frame.Right - visible.Right, visible.Height));
+    }
+
+    private static void DrawPictureCropHandle(DrawingContext dc, PictureCropHandle handle, Point center)
+    {
+        const double length = 13.0;
+        const double half = length / 2.0;
+
+        switch (handle)
+        {
+            case PictureCropHandle.CropNW:
+            case PictureCropHandle.CropNE:
+            case PictureCropHandle.CropSE:
+            case PictureCropHandle.CropSW:
+                dc.DrawLine(PictureCropHandlePen, new Point(center.X - half, center.Y), new Point(center.X + half, center.Y));
+                dc.DrawLine(PictureCropHandlePen, new Point(center.X, center.Y - half), new Point(center.X, center.Y + half));
+                break;
+            case PictureCropHandle.CropN:
+            case PictureCropHandle.CropS:
+                dc.DrawLine(PictureCropHandlePen, new Point(center.X - half, center.Y), new Point(center.X + half, center.Y));
+                break;
+            case PictureCropHandle.CropE:
+            case PictureCropHandle.CropW:
+                dc.DrawLine(PictureCropHandlePen, new Point(center.X, center.Y - half), new Point(center.X, center.Y + half));
+                break;
+        }
+    }
+
     // Returns the cell address closest to the given screen coordinates (for anchor snapping)
     private CellAddress? HitTestAnchorCell(Point pos) =>
         GridObjectDragPlanner.HitTestAnchorCell(
@@ -373,6 +469,53 @@ public partial class GridView
         _objectDragKind != ObjectDragKind.None &&
         _selectedObjectId != Guid.Empty &&
         _selectedObjectKind is not ObjectKind.None and not ObjectKind.Chart;
+
+    private bool IsSelectedPictureCropModeActive() =>
+        IsPictureCropMode &&
+        SelectedObjectKind == ObjectKind.Picture &&
+        SelectedObjectId != Guid.Empty &&
+        TryGetSelectedImagePicture() is not null;
+
+    private PictureModel? TryGetSelectedImagePicture()
+    {
+        if (ObjectDisplayMode == GridObjectDisplayMode.Nothing ||
+            SelectedObjectId == Guid.Empty ||
+            SelectedObjectKind != ObjectKind.Picture ||
+            Pictures is null)
+        {
+            return null;
+        }
+
+        foreach (var picture in Pictures)
+        {
+            if (picture.Id == SelectedObjectId &&
+                picture.IsVisible &&
+                picture.Kind == PictureKind.Image)
+            {
+                return picture;
+            }
+        }
+
+        return null;
+    }
+
+    private PictureCropRatios GetSelectedPictureCropRatios() =>
+        TryGetSelectedImagePicture() is { } picture
+            ? new PictureCropRatios(picture.CropLeft, picture.CropTop, picture.CropRight, picture.CropBottom)
+            : default;
+
+    private bool TryResolveLivePictureCrop(Guid id, out PictureCropRatios crop)
+    {
+        if (_pictureCropDragHandle != PictureCropHandle.None &&
+            _pictureCropDragId == id)
+        {
+            crop = _pictureCropDragCurrentRatios;
+            return true;
+        }
+
+        crop = default;
+        return false;
+    }
 
     private Rect GetSelectedObjectLiveRect(Rect committedRect)
     {
@@ -443,6 +586,19 @@ public partial class GridView
         ObjectDragKind.ResizeE   => Cursors.SizeWE,
         ObjectDragKind.ResizeW   => Cursors.SizeWE,
         ObjectDragKind.Rotate    => Cursors.Cross,
+        _ => Cursors.Arrow
+    };
+
+    private static Cursor PictureCropCursor(PictureCropHandle handle) => handle switch
+    {
+        PictureCropHandle.CropNW => Cursors.SizeNWSE,
+        PictureCropHandle.CropSE => Cursors.SizeNWSE,
+        PictureCropHandle.CropNE => Cursors.SizeNESW,
+        PictureCropHandle.CropSW => Cursors.SizeNESW,
+        PictureCropHandle.CropN => Cursors.SizeNS,
+        PictureCropHandle.CropS => Cursors.SizeNS,
+        PictureCropHandle.CropE => Cursors.SizeWE,
+        PictureCropHandle.CropW => Cursors.SizeWE,
         _ => Cursors.Arrow
     };
 
