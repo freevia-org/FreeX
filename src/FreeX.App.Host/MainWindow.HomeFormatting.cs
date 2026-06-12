@@ -629,7 +629,8 @@ public partial class MainWindow
             targetSheetIds,
             ranges,
             createDiff,
-            title);
+            title,
+            _workbook);
 
         if (!TryExecuteCommand(command, title))
             return;
