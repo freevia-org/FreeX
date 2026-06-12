@@ -293,6 +293,126 @@ public class FindReplaceTests
         sheet.Comments[a1].Should().Be("foo note");
     }
 
+    // ── Fix 2: formula replace clears stale cached Value ──────────────────────
+
+    [Fact]
+    public void ReplaceAll_WithFormulaLookIn_ClearsStaleValueAfterReplace()
+    {
+        var (wb, sheet, commandBus) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        // Simulate a cell that has been evaluated: formula "SUM(1,2)" with cached Value 3.
+        var cell = Cell.FromFormula("SUM(1,2)");
+        cell.Value = new NumberValue(3);
+        sheet.SetCell(a1, cell);
+
+        FindReplaceService.ReplaceAll(
+            wb,
+            commandBus,
+            "SUM",
+            "MAX",
+            new FindOptions(LookIn: FindLookIn.Formulas));
+
+        // After replace the formula text should be updated.
+        sheet.GetCell(a1)!.FormulaText.Should().Be("MAX(1,2)");
+        // The cached Value must be cleared (BlankValue) — not the stale result — so that
+        // any display before recalculation does not show a wrong number.
+        sheet.GetCell(a1)!.Value.Should().Be(BlankValue.Instance);
+    }
+
+    // ── Fix 3: number-skip perf optimization ──────────────────────────────────
+
+    [Fact]
+    public void Find_NumericSearch_StillFindsNumberCells()
+    {
+        var (wb, sheet, _) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new NumberValue(42));
+
+        // A plain digit-only search must still match number cells.
+        var results = FindReplaceService.Find(wb, "42");
+
+        results.Should().HaveCount(1);
+        results[0].Address.Should().Be(a1);
+    }
+
+    [Fact]
+    public void Find_PatternWithWildcard_NumberCellsNotSkipped()
+    {
+        var (wb, sheet, _) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        // Use a value whose invariant rendering contains '*' so a literal substring match works.
+        // The point of this test is not that '*' acts as a glob, but that CanSearchTextMatchNumber
+        // returns true for patterns that contain '*', so number cells are NOT pre-filtered out.
+        // Verify via the helper directly.
+        sheet.SetCell(a1, new NumberValue(42));
+
+        // A pattern with a wildcard character ('*' or '?') must not trigger the number-skip
+        // optimization — CanSearchTextMatchNumber must return true for such patterns.
+        FindReplaceService.CanSearchTextMatchNumber("4*").Should().BeTrue(
+            "wildcard patterns must not skip number cells");
+        FindReplaceService.CanSearchTextMatchNumber("?2").Should().BeTrue(
+            "wildcard patterns must not skip number cells");
+
+        // Confirm a numeric substring (no wildcards) still finds the cell.
+        var results = FindReplaceService.Find(wb, "42");
+        results.Should().HaveCount(1);
+        results[0].Address.Should().Be(a1);
+    }
+
+    [Fact]
+    public void Find_PlainTextSearch_SkipsNumberCells()
+    {
+        var (wb, sheet, _) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(a1, new NumberValue(42));
+        sheet.SetCell(a2, new TextValue("foo42"));
+
+        // A plain text search with a non-numeric character ('f') cannot match any number
+        // cell; the result must still include the text cell but must not return the number cell.
+        var results = FindReplaceService.Find(wb, "foo");
+
+        results.Should().HaveCount(1);
+        results[0].Address.Should().Be(a2);
+    }
+
+    [Fact]
+    public void Find_PlainTextSearch_SkipNumberCells_SameResultsAsFullScan()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        // Mix of number and text cells, none of which match "hello".
+        var addresses = new[]
+        {
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 2),
+            new CellAddress(sheet.Id, 2, 1),
+        };
+        sheet.SetCell(addresses[0], new NumberValue(100));
+        sheet.SetCell(addresses[1], new TextValue("world"));
+        sheet.SetCell(addresses[2], new NumberValue(3.14));
+
+        var results = FindReplaceService.Find(workbook, "hello");
+
+        results.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CanSearchTextMatchNumber_ReturnsCorrectly()
+    {
+        // Patterns that can match numbers (digits, sign, decimal, exponent, wildcards).
+        FindReplaceService.CanSearchTextMatchNumber("42").Should().BeTrue();
+        FindReplaceService.CanSearchTextMatchNumber("3.14").Should().BeTrue();
+        FindReplaceService.CanSearchTextMatchNumber("-1").Should().BeTrue();
+        FindReplaceService.CanSearchTextMatchNumber("1E+10").Should().BeTrue();
+        // Wildcards are handled separately in Find_PatternWithWildcard_NumberCellsNotSkipped.
+
+        // Plain text patterns that can never appear in a number.
+        FindReplaceService.CanSearchTextMatchNumber("foo").Should().BeFalse();
+        FindReplaceService.CanSearchTextMatchNumber("hello world").Should().BeFalse();
+        FindReplaceService.CanSearchTextMatchNumber("SUM").Should().BeFalse();
+    }
+
     [Fact]
     public void TryReplaceAll_ReturnsCommandFailureInsteadOfCountingRejectedEdits()
     {

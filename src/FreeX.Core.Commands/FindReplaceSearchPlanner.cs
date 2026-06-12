@@ -25,7 +25,8 @@ internal static class FindReplaceSearchPlanner
             yield return sheet;
     }
 
-    public static IEnumerable<SearchText> EnumerateSearchTexts(Sheet sheet, FindLookIn lookIn)
+    public static IEnumerable<SearchText> EnumerateSearchTexts(Sheet sheet, FindLookIn lookIn,
+        bool skipNumberValues = false)
     {
         if (lookIn == FindLookIn.Notes)
         {
@@ -52,6 +53,11 @@ internal static class FindReplaceSearchPlanner
 
         foreach (var (addr, cell) in sheet.EnumerateCells())
         {
+            // Performance: skip number cells when the search pattern can never match any
+            // invariant numeric rendering (no digits/sign/decimal/exponent or wildcards).
+            if (skipNumberValues && cell.Value is NumberValue)
+                continue;
+
             string? text = lookIn == FindLookIn.Formulas && cell.HasFormula
                 ? cell.FormulaText
                 : GetDisplayText(cell.Value);
@@ -153,4 +159,5 @@ internal static class FindReplaceSearchPlanner
         ErrorValue err => err.Code,
         _ => null
     };
+
 }
