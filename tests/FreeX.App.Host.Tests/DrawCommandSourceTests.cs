@@ -197,7 +197,7 @@ public sealed class DrawCommandSourceTests
         source.Should().NotContain("new ShapeEffectsDialog(shape.GetEffectiveEffectPreset())");
         source.Should().NotContain("dialog.Result.Preset");
         source.Should().NotContain("shape.GetEffectiveEffectPreset() == DrawingShapeEffectPreset.None");
-        source.Should().Contain("new PictureCropDialog(picture)");
+        source.Should().Contain("EnterPictureCropMode(picture);");
         source.Should().Contain("private void PictureCropDialogMenuItem_Click(object sender, RoutedEventArgs e) =>");
         source.Should().Contain("new SetPictureCropCommand(");
         source.Should().Contain("DrawingTargetResolver.GetTargetDrawingObject(");
@@ -221,14 +221,15 @@ public sealed class DrawCommandSourceTests
     }
 
     [Fact]
-    public void PictureCropDialog_RoutesThroughUndoableCropCommandWithoutGridCropHandles()
+    public void PictureCropMode_RoutesThroughUndoableCropCommandWithGridCropHandles()
     {
         var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
-        windowSource.Should().NotContain("SheetGrid.PictureCropped += OnPictureCropped;");
-        drawingSource.Should().NotContain("private void OnPictureCropped");
-        drawingSource.Should().Contain("new PictureCropDialog(picture)");
+        windowSource.Should().Contain("SheetGrid.PictureCropped += OnPictureCropped;");
+        drawingSource.Should().Contain("private void OnPictureCropped");
+        drawingSource.Should().Contain("EnterPictureCropMode(picture);");
+        drawingSource.Should().NotContain("new PictureCropDialog(picture)");
         drawingSource.Should().Contain("new SetPictureCropCommand(");
         drawingSource.Should().Contain("TryExecuteCommand(");
     }

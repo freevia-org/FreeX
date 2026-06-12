@@ -172,21 +172,7 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new PictureCropDialog(picture) { Owner = this };
-        if (dialog.ShowDialog() != true) return;
-
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Crop Picture",
-                sheetId => new SetPictureCropCommand(
-                    sheetId,
-                    GetTargetPicture(sheetId)?.Id ?? Guid.Empty,
-                    dialog.Result.Left,
-                    dialog.Result.Top,
-                    dialog.Result.Right,
-                    dialog.Result.Bottom)))
-            return;
-
-        UpdateViewport();
+        EnterPictureCropMode(picture);
     }
 
     private void PictureCropDialogMenuItem_Click(object sender, RoutedEventArgs e) =>
@@ -224,6 +210,18 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+        EnterPictureCropMode(picture);
+    }
+
+    private void EnterPictureCropMode(PictureModel picture)
+    {
+        SetActiveCell(picture.Anchor);
+        EnsureCellVisible(picture.Anchor);
+        SheetGrid.SelectedObjectId = picture.Id;
+        SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.Picture;
+        SheetGrid.IsPictureCropMode = true;
+        SheetGrid.Focus();
+        SheetGrid.InvalidateVisual();
     }
 
     private PictureModel? GetTargetPicture(SheetId sheetId)
@@ -792,6 +790,27 @@ public partial class MainWindow
         TryExecuteCommand(
             new SetDrawingObjectRotationCommand(_currentSheetId, resolvedKind, id, degrees),
             "Rotate Object");
+        UpdateViewport();
+    }
+
+    private void OnPictureCropped(Guid id, FreeX.App.UI.PictureCropRatios crop)
+    {
+        if (!TryExecuteCommand(
+                new SetPictureCropCommand(
+                    _currentSheetId,
+                    id,
+                    crop.Left,
+                    crop.Top,
+                    crop.Right,
+                    crop.Bottom),
+                "Crop Picture"))
+        {
+            return;
+        }
+
+        SheetGrid.SelectedObjectId = id;
+        SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.Picture;
+        SheetGrid.IsPictureCropMode = true;
         UpdateViewport();
     }
 

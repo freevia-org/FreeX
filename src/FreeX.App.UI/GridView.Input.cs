@@ -35,6 +35,24 @@ public partial class GridView
             return;
         }
 
+        if (_pictureCropDragHandle != PictureCropHandle.None)
+        {
+            var localPos = TransformPointToUnrotatedObjectSpace(
+                _pictureCropDragStartRect,
+                pos,
+                GetSelectedObjectRotationDegrees());
+            _pictureCropDragCurrentRatios = GridPictureCropPlanner.CalculateCrop(
+                _pictureCropDragHandle,
+                _pictureCropDragStartRatios,
+                _pictureCropDragStartRect,
+                _pictureCropDragStartPos,
+                localPos);
+            Cursor = PictureCropCursor(_pictureCropDragHandle);
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
         if (_objectDragKind == ObjectDragKind.Rotate)
         {
             var center = new Point(
@@ -221,7 +239,19 @@ public partial class GridView
                 SelectedObjectKind != ObjectKind.None)
             {
                 var selectedObjectRect = GetSelectedObjectRect();
-                selectedObjectDragKind = HitTestObjectHandle(pos, selectedObjectRect);
+                if (IsSelectedPictureCropModeActive())
+                {
+                    var selectedPictureCropHandle = HitTestPictureCropHandle(pos, selectedObjectRect);
+                    if (selectedPictureCropHandle != PictureCropHandle.None)
+                    {
+                        Cursor = PictureCropCursor(selectedPictureCropHandle);
+                        return;
+                    }
+                }
+                else
+                {
+                    selectedObjectDragKind = HitTestObjectHandle(pos, selectedObjectRect);
+                }
             }
             if (selectedObjectDragKind != ObjectDragKind.None)
             {
@@ -311,6 +341,7 @@ public partial class GridView
 
     private bool HasActiveCapturedGridDrag() =>
         _objectDragKind != ObjectDragKind.None ||
+        _pictureCropDragHandle != PictureCropHandle.None ||
         _marginDragEdge.HasValue ||
         _splitDividerDragHandle != SplitDividerHandle.None ||
         _splitPaneScrollbarDragging ||
@@ -331,6 +362,17 @@ public partial class GridView
             _objectDragStartFlipVertical = false;
             _objectDragCurrentFlipHorizontal = false;
             _objectDragCurrentFlipVertical = false;
+            Cursor = null;
+            InvalidateVisual();
+        }
+
+        if (_pictureCropDragHandle != PictureCropHandle.None)
+        {
+            _pictureCropDragHandle = PictureCropHandle.None;
+            _pictureCropDragId = Guid.Empty;
+            _pictureCropDragStartRect = Rect.Empty;
+            _pictureCropDragStartRatios = default;
+            _pictureCropDragCurrentRatios = default;
             Cursor = null;
             InvalidateVisual();
         }
@@ -443,7 +485,33 @@ public partial class GridView
             SelectedObjectKind != ObjectKind.None)
         {
             var selRect = GetSelectedObjectRect();
-            var dragKind = HitTestObjectHandle(pos, selRect);
+            if (IsSelectedPictureCropModeActive())
+            {
+                var cropHandle = HitTestPictureCropHandle(pos, selRect);
+                if (cropHandle != PictureCropHandle.None)
+                {
+                    _selectedObjectId = SelectedObjectId;
+                    _selectedObjectKind = SelectedObjectKind;
+                    _pictureCropDragHandle = cropHandle;
+                    _pictureCropDragId = SelectedObjectId;
+                    _pictureCropDragStartRect = selRect;
+                    _pictureCropDragStartPos = TransformPointToUnrotatedObjectSpace(
+                        selRect,
+                        pos,
+                        GetSelectedObjectRotationDegrees());
+                    _pictureCropDragStartRatios = GetSelectedPictureCropRatios();
+                    _pictureCropDragCurrentRatios = _pictureCropDragStartRatios;
+                    Cursor = PictureCropCursor(cropHandle);
+                    InvalidateVisual();
+                    CaptureMouse();
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            var dragKind = ObjectDragKind.None;
+            if (!IsSelectedPictureCropModeActive())
+                dragKind = HitTestObjectHandle(pos, selRect);
             if (dragKind != ObjectDragKind.None)
             {
                 _selectedObjectId = SelectedObjectId;
@@ -471,6 +539,7 @@ public partial class GridView
         var hit = HitTestDrawingObject(pos);
         if (hit.Id != Guid.Empty)
         {
+            IsPictureCropMode = false;
             SelectedObjectId = hit.Id;
             SelectedObjectKind = hit.Kind;
             _selectedObjectId = hit.Id;
@@ -496,6 +565,7 @@ public partial class GridView
         // Clicking empty space deselects
         if (SelectedObjectId != Guid.Empty)
         {
+            IsPictureCropMode = false;
             SelectedObjectId = Guid.Empty;
             SelectedObjectKind = ObjectKind.None;
             _selectedObjectId = Guid.Empty;
@@ -703,6 +773,33 @@ public partial class GridView
         if (_textBoxPlacementDragging)
         {
             CommitTextBoxPlacement(e.GetPosition(this));
+            e.Handled = true;
+            return;
+        }
+
+        if (_pictureCropDragHandle != PictureCropHandle.None)
+        {
+            var handle = _pictureCropDragHandle;
+            var id = _pictureCropDragId;
+            var crop = _pictureCropDragCurrentRatios;
+            var changed =
+                Math.Abs(crop.Left - _pictureCropDragStartRatios.Left) > 0.0001 ||
+                Math.Abs(crop.Top - _pictureCropDragStartRatios.Top) > 0.0001 ||
+                Math.Abs(crop.Right - _pictureCropDragStartRatios.Right) > 0.0001 ||
+                Math.Abs(crop.Bottom - _pictureCropDragStartRatios.Bottom) > 0.0001;
+
+            _pictureCropDragHandle = PictureCropHandle.None;
+            _pictureCropDragId = Guid.Empty;
+            _pictureCropDragStartRect = Rect.Empty;
+            _pictureCropDragStartRatios = default;
+            _pictureCropDragCurrentRatios = default;
+            Cursor = null;
+            ReleaseMouseCapture();
+
+            if (handle != PictureCropHandle.None && id != Guid.Empty && changed)
+                PictureCropped?.Invoke(id, crop);
+
+            InvalidateVisual();
             e.Handled = true;
             return;
         }

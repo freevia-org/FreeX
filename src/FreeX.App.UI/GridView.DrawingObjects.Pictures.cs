@@ -85,9 +85,12 @@ public partial class GridView
             TryLoadPictureImage(picture, out var image) &&
             image is not null)
         {
-            if (HasPictureCrop(picture))
+            var crop = TryResolveLivePictureCrop(picture.Id, out var liveCrop)
+                ? liveCrop
+                : new PictureCropRatios(picture.CropLeft, picture.CropTop, picture.CropRight, picture.CropBottom);
+            if (HasPictureCrop(crop))
             {
-                var brush = GetCroppedPictureBrush(picture, image);
+                var brush = GetCroppedPictureBrush(crop, image);
                 dc.DrawRectangle(brush, null, rect);
             }
             else
@@ -252,20 +255,20 @@ public partial class GridView
         DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
     }
 
-    private static bool HasPictureCrop(PictureModel picture) =>
-        picture.CropLeft > 0 ||
-        picture.CropTop > 0 ||
-        picture.CropRight > 0 ||
-        picture.CropBottom > 0;
+    private static bool HasPictureCrop(PictureCropRatios crop) =>
+        crop.Left > 0 ||
+        crop.Top > 0 ||
+        crop.Right > 0 ||
+        crop.Bottom > 0;
 
-    private ImageBrush GetCroppedPictureBrush(PictureModel picture, ImageSource image)
+    private ImageBrush GetCroppedPictureBrush(PictureCropRatios crop, ImageSource image)
     {
         var key = new CroppedPictureBrushCacheKey(
             image,
-            picture.CropLeft,
-            picture.CropTop,
-            picture.CropRight,
-            picture.CropBottom);
+            crop.Left,
+            crop.Top,
+            crop.Right,
+            crop.Bottom);
         if (_croppedPictureBrushCache.TryGetValue(key, out var cached))
             return cached;
 
@@ -277,10 +280,10 @@ public partial class GridView
             Stretch = Stretch.Fill,
             ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
             Viewbox = new Rect(
-                picture.CropLeft,
-                picture.CropTop,
-                Math.Max(0.01, 1 - picture.CropLeft - picture.CropRight),
-                Math.Max(0.01, 1 - picture.CropTop - picture.CropBottom))
+                crop.Left,
+                crop.Top,
+                Math.Max(0.01, 1 - crop.Left - crop.Right),
+                Math.Max(0.01, 1 - crop.Top - crop.Bottom))
         };
         if (brush.CanFreeze)
             brush.Freeze();
