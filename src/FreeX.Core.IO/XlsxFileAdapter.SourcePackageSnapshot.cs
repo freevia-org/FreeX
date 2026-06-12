@@ -3339,6 +3339,7 @@ public sealed partial class XlsxFileAdapter
                     !StringEquals(source.AltText, current.AltText) ||
                     !DrawingAnchorMatchesCell(source.Anchor, current.Anchor) ||
                     !ApproximatelyEquals(source.RotationDegrees, current.RotationDegrees) ||
+                    source.HasFill != current.HasFill ||
                     source.FillColor != current.FillColor ||
                     source.OutlineColor != current.OutlineColor ||
                     source.FillThemeColor != current.FillThemeColor ||
@@ -3369,6 +3370,7 @@ public sealed partial class XlsxFileAdapter
                     !StringEquals(source.AltText, current.AltText) ||
                     !DrawingAnchorMatchesCell(source.Anchor, current.Anchor) ||
                     !ApproximatelyEquals(source.RotationDegrees, current.RotationDegrees) ||
+                    source.HasFill != current.HasFill ||
                     source.FillColor != current.FillColor ||
                     source.OutlineColor != current.OutlineColor ||
                     source.GradientFillEndColor != current.GradientFillEndColor ||

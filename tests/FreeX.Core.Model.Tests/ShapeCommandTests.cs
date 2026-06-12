@@ -28,6 +28,7 @@ public sealed class ShapeCommandTests
         sheet.DrawingShapes[0].Height.Should().Be(70);
         sheet.DrawingShapes[0].FillColor.Should().Be(
             DrawingShapeKindSupport.IsLineLike(kind) ? null : DrawingShapeModel.DefaultFillColor);
+        sheet.DrawingShapes[0].HasFill.Should().Be(!DrawingShapeKindSupport.IsLineLike(kind));
         sheet.DrawingShapes[0].OutlineColor.Should().Be(DrawingShapeModel.DefaultOutlineColor);
 
         command.Revert(ctx);
@@ -56,7 +57,29 @@ public sealed class ShapeCommandTests
 
         var shape = sheet.DrawingShapes.Should().ContainSingle().Subject;
         shape.FillColor.Should().Be(fill);
+        shape.HasFill.Should().BeTrue();
         shape.OutlineColor.Should().Be(outline);
+    }
+
+    [Fact]
+    public void AddDrawingShapeCommand_CanInsertShapeWithNoFill()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var anchor = new CellAddress(sheet.Id, 4, 2);
+
+        var command = new AddDrawingShapeCommand(
+            sheet.Id,
+            anchor,
+            DrawingShapeKind.Rectangle,
+            hasFill: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var shape = sheet.DrawingShapes.Should().ContainSingle().Subject;
+        shape.HasFill.Should().BeFalse();
+        shape.FillColor.Should().BeNull();
     }
 
     [Fact]
@@ -414,6 +437,54 @@ public sealed class ShapeCommandTests
         shape.FillColor.Should().Be(new CellColor(10, 20, 30));
         shape.GradientFillEndColor.Should().Be(new CellColor(200, 210, 220));
         shape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.Vertical);
+    }
+
+    [Fact]
+    public void SetDrawingShapeColorsCommand_CanRemoveFillAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            HasFill = true,
+            FillColor = new CellColor(10, 20, 30),
+            OutlineColor = new CellColor(40, 50, 60),
+            GradientFillEndColor = new CellColor(200, 210, 220),
+            GradientFillDirection = DrawingShapeGradientDirection.Vertical,
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25)
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var command = new SetDrawingShapeColorsCommand(
+            sheet.Id,
+            shape.Id,
+            null,
+            null,
+            updateFill: true,
+            updateOutline: false,
+            hasFill: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        shape.HasFill.Should().BeFalse();
+        shape.FillColor.Should().BeNull();
+        shape.FillThemeColor.Should().BeNull();
+        shape.GradientFillEndColor.Should().BeNull();
+        shape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.DiagonalDown);
+        shape.OutlineColor.Should().Be(new CellColor(40, 50, 60));
+        shape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
+
+        command.Revert(ctx);
+
+        shape.HasFill.Should().BeTrue();
+        shape.FillColor.Should().Be(new CellColor(10, 20, 30));
+        shape.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
+        shape.GradientFillEndColor.Should().Be(new CellColor(200, 210, 220));
+        shape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.Vertical);
+        shape.OutlineColor.Should().Be(new CellColor(40, 50, 60));
+        shape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
     }
 
     [Fact]

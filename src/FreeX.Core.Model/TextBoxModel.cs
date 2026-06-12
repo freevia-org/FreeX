@@ -14,6 +14,7 @@ public sealed class TextBoxModel
     public bool FlipHorizontal { get; set; }
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
+    public bool HasFill { get; set; } = true;
     public CellColor? FillColor { get; set; }
     public CellColor? OutlineColor { get; set; }
     public WorkbookThemeColorReference? FillThemeColor { get; set; }
@@ -22,6 +23,9 @@ public sealed class TextBoxModel
 
     public CellColor GetEffectiveFillColor(WorkbookTheme theme, CellColor fallback) =>
         FillThemeColor?.Resolve(theme) ?? FillColor ?? fallback;
+
+    public CellColor? ResolveFillColor(WorkbookTheme theme, CellColor fallback) =>
+        HasFill ? GetEffectiveFillColor(theme, fallback) : null;
 
     public CellColor GetEffectiveOutlineColor(WorkbookTheme theme, CellColor fallback) =>
         OutlineThemeColor?.Resolve(theme) ?? OutlineColor ?? fallback;

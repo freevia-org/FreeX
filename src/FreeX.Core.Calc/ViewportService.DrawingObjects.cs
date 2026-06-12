@@ -287,13 +287,13 @@ public sealed partial class ViewportService
         double.IsFinite(extent) && extent > 0 ? extent : 1;
 
     private static CellColor? ResolveShapeFillColor(DrawingShapeModel shape, WorkbookTheme theme) =>
-        shape.GetEffectiveFillColor(theme, DrawingShapeModel.ResolveDefaultFillColor(theme));
+        shape.ResolveFillColor(theme, DrawingShapeModel.ResolveDefaultFillColor(theme));
 
     private static CellColor? ResolveShapeOutlineColor(DrawingShapeModel shape, WorkbookTheme theme) =>
         shape.GetEffectiveOutlineColor(theme, DrawingShapeModel.ResolveDefaultOutlineColor(theme));
 
     private static CellColor? ResolveTextBoxFillColor(TextBoxModel textBox, WorkbookTheme theme) =>
-        textBox.FillThemeColor?.Resolve(theme) ?? textBox.FillColor;
+        textBox.ResolveFillColor(theme, CellColor.White);
 
     private static CellColor? ResolveTextBoxOutlineColor(TextBoxModel textBox, WorkbookTheme theme) =>
         textBox.OutlineThemeColor?.Resolve(theme) ?? textBox.OutlineColor;

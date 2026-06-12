@@ -510,9 +510,14 @@ public partial class MainWindow
         return brush;
     }
 
-    private bool TryShowColorPicker(string title, CellColor? initialColor, bool allowNoColor, out CellColor? color)
+    private bool TryShowColorPicker(
+        string title,
+        CellColor? initialColor,
+        bool allowNoColor,
+        out CellColor? color,
+        string? noColorButtonText = null)
     {
-        var dialog = new ColorPickerDialog(initialColor, allowNoColor)
+        var dialog = new ColorPickerDialog(initialColor, allowNoColor, noColorButtonText)
         {
             Owner = this,
             Title = title

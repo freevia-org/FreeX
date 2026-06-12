@@ -244,7 +244,7 @@ public partial class MainWindow
     private void SelectionPaneBtn_Click(object sender, RoutedEventArgs e) => ShowSelectionPaneDialog();
     private void ObjectSizeBtn_Click(object sender, RoutedEventArgs e) => ResizeSelectedDrawingObject();
     private void ObjectRotateBtn_Click(object sender, RoutedEventArgs e) => RotateSelectedDrawingObject();
-    private void ObjectFillBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: true);
+    private void ObjectFillBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectFill();
     private void ObjectOutlineBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: false);
     private void ObjectGradientBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingShapeGradient();
     private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e)
@@ -301,7 +301,8 @@ public partial class MainWindow
                         new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col),
                         kind,
                         fillColor: ResolveCurrentShapeFillColor(),
-                        outlineColor: ResolveCurrentShapeOutlineColor());
+                        outlineColor: ResolveCurrentShapeOutlineColor(),
+                        hasFill: ResolveCurrentShapeHasFill());
                     if (sheetId == _currentSheetId)
                         currentSheetCommand = command;
                     return command;
@@ -429,6 +430,60 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void SetSelectedDrawingObjectFill()
+    {
+        var target = GetTargetDrawingObject(_currentSheetId);
+        if (target is null)
+        {
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoDrawingObjectOnSheet"),
+                UiText.Get("MainWindowMessage_ObjectFillTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var title = UiText.Get("MainWindowMessage_ObjectFillTitle");
+        var initial = ResolveDrawingObjectFillColor(target);
+        if (!TryShowColorPicker(title, initial, allowNoColor: true, out var selectedColor, UiText.Get("FormatCells_NoFill")))
+            return;
+
+        RememberCurrentShapeFill(target.Kind, selectedColor);
+        var hasFill = selectedColor is not null;
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                hasFill ? "Object Fill" : "Object No Fill",
+                sheetId =>
+                {
+                    var groupedTarget = GetTargetDrawingObject(sheetId, target.Kind);
+                    if (target.Kind == DrawingObjectTargetKind.Shape)
+                    {
+                        return new SetDrawingShapeColorsCommand(
+                            sheetId,
+                            groupedTarget?.Id ?? Guid.Empty,
+                            selectedColor,
+                            null,
+                            updateFill: true,
+                            updateOutline: false,
+                            hasFill: hasFill);
+                    }
+
+                    return new SetTextBoxColorsCommand(
+                        sheetId,
+                        groupedTarget?.Id ?? Guid.Empty,
+                        selectedColor,
+                        null,
+                        updateFill: true,
+                        updateOutline: false,
+                        hasFill: hasFill);
+                }))
+            return;
+
+        SetActiveCell(target.Anchor);
+        EnsureCellVisible(target.Anchor);
+        UpdateViewport();
+    }
+
     private void SetSelectedDrawingObjectColor(bool isFill)
     {
         var target = GetTargetDrawingObject(_currentSheetId);
@@ -472,7 +527,9 @@ public partial class MainWindow
                         sheetId,
                         groupedTarget?.Id ?? Guid.Empty,
                         isFill ? color : groupedTarget?.FillColor,
-                        isFill ? groupedTarget?.OutlineColor : color);
+                        isFill ? groupedTarget?.OutlineColor : color,
+                        updateFill: isFill,
+                        updateOutline: !isFill);
                 }))
             return;
 
@@ -481,8 +538,12 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private CellColor ResolveCurrentShapeFillColor() =>
-        _currentShapeFillColor ?? DrawingShapeModel.ResolveDefaultFillColor(_workbook.Theme);
+    private CellColor? ResolveCurrentShapeFillColor() =>
+        _currentShapeHasFill
+            ? _currentShapeFillColor ?? DrawingShapeModel.ResolveDefaultFillColor(_workbook.Theme)
+            : null;
+
+    private bool ResolveCurrentShapeHasFill() => _currentShapeHasFill;
 
     private CellColor ResolveCurrentShapeOutlineColor() =>
         _currentShapeOutlineColor ?? DrawingShapeModel.ResolveDefaultOutlineColor(_workbook.Theme);
@@ -493,24 +554,35 @@ public partial class MainWindow
             return;
 
         if (isFill)
-            _currentShapeFillColor = color;
+            RememberCurrentShapeFill(kind, color);
         else
             _currentShapeOutlineColor = color;
     }
 
-    private CellColor ResolveDrawingObjectFillColor(DrawingObjectTarget target) =>
-        target.Kind switch
-        {
-            DrawingObjectTargetKind.Shape =>
-                target.FillThemeColor?.Resolve(_workbook.Theme) ??
-                target.FillColor ??
-                DrawingShapeModel.ResolveDefaultFillColor(_workbook.Theme),
-            DrawingObjectTargetKind.TextBox =>
-                target.FillThemeColor?.Resolve(_workbook.Theme) ??
-                target.FillColor ??
-                CellColor.White,
-            _ => CellColor.White
-        };
+    private void RememberCurrentShapeFill(DrawingObjectTargetKind kind, CellColor? color)
+    {
+        if (kind != DrawingObjectTargetKind.Shape)
+            return;
+
+        _currentShapeHasFill = color is not null;
+        _currentShapeFillColor = color;
+    }
+
+    private CellColor? ResolveDrawingObjectFillColor(DrawingObjectTarget target) =>
+        !target.HasFill
+            ? null
+            : target.Kind switch
+            {
+                DrawingObjectTargetKind.Shape =>
+                    target.FillThemeColor?.Resolve(_workbook.Theme) ??
+                    target.FillColor ??
+                    DrawingShapeModel.ResolveDefaultFillColor(_workbook.Theme),
+                DrawingObjectTargetKind.TextBox =>
+                    target.FillThemeColor?.Resolve(_workbook.Theme) ??
+                    target.FillColor ??
+                    CellColor.White,
+                _ => CellColor.White
+            };
 
     private CellColor ResolveDrawingObjectOutlineColor(DrawingObjectTarget target) =>
         target.Kind switch

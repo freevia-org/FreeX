@@ -178,10 +178,14 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
     private readonly Guid _textBoxId;
     private readonly CellColor? _fillColor;
     private readonly CellColor? _outlineColor;
+    private readonly bool _updateFill;
+    private readonly bool _updateOutline;
+    private readonly bool? _hasFill;
     private CellColor? _previousFillColor;
     private CellColor? _previousOutlineColor;
     private WorkbookThemeColorReference? _previousFillThemeColor;
     private WorkbookThemeColorReference? _previousOutlineThemeColor;
+    private bool _previousHasFill;
     private bool _applied;
 
     public string Label => "Text Box Colors";
@@ -190,12 +194,18 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
         SheetId sheetId,
         Guid textBoxId,
         CellColor? fillColor,
-        CellColor? outlineColor)
+        CellColor? outlineColor,
+        bool updateFill = true,
+        bool updateOutline = true,
+        bool? hasFill = null)
     {
         _sheetId = sheetId;
         _textBoxId = textBoxId;
         _fillColor = fillColor;
         _outlineColor = outlineColor;
+        _updateFill = updateFill;
+        _updateOutline = updateOutline;
+        _hasFill = hasFill;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -211,10 +221,20 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
         _previousOutlineColor = textBox.OutlineColor;
         _previousFillThemeColor = textBox.FillThemeColor;
         _previousOutlineThemeColor = textBox.OutlineThemeColor;
-        textBox.FillColor = _fillColor;
-        textBox.OutlineColor = _outlineColor;
-        textBox.FillThemeColor = null;
-        textBox.OutlineThemeColor = null;
+        _previousHasFill = textBox.HasFill;
+        if (_updateFill)
+        {
+            textBox.HasFill = _hasFill ?? (_fillColor is not null);
+            textBox.FillColor = _fillColor;
+            textBox.FillThemeColor = null;
+        }
+
+        if (_updateOutline)
+        {
+            textBox.OutlineColor = _outlineColor;
+            textBox.OutlineThemeColor = null;
+        }
+
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [textBox.Anchor]);
     }
@@ -228,6 +248,7 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
         textBox.OutlineColor = _previousOutlineColor;
         textBox.FillThemeColor = _previousFillThemeColor;
         textBox.OutlineThemeColor = _previousOutlineThemeColor;
+        textBox.HasFill = _previousHasFill;
         _applied = false;
     }
 }

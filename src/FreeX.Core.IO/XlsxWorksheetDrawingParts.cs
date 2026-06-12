@@ -32,6 +32,7 @@ internal sealed record XlsxTextBoxPackagePart(
     double RotationDegrees,
     bool FlipHorizontal,
     bool FlipVertical,
+    bool HasFill,
     CellColor? FillColor,
     CellColor? OutlineColor,
     WorkbookThemeColorReference? FillThemeColor,
@@ -47,6 +48,7 @@ internal sealed record XlsxShapePackagePart(
     double RotationDegrees,
     bool FlipHorizontal,
     bool FlipVertical,
+    bool HasFill,
     CellColor? FillColor,
     CellColor? OutlineColor,
     CellColor? GradientFillEndColor,
@@ -268,6 +270,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             var flipVertical = ReadDrawingFlipVertical(transform);
             var gradientFill = ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
             var solidFill = spPr?.Element(drawingNs + "solidFill");
+            var hasFill = spPr?.Element(drawingNs + "noFill") is null;
             var outlineFill = spPr?.Element(drawingNs + "ln")?.Element(drawingNs + "solidFill");
             var fillColor = gradientFill.StartColor ?? ReadDrawingSolidFillColor(solidFill, drawingNs);
             var outlineColor = ReadDrawingSolidFillColor(outlineFill, drawingNs);
@@ -297,6 +300,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                     rotation,
                     flipHorizontal,
                     flipVertical,
+                    hasFill,
                     fillThemeColor is null ? fillColor : null,
                     outlineThemeColor is null ? outlineColor : null,
                     fillThemeColor,
@@ -319,6 +323,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                     rotation,
                     flipHorizontal,
                     flipVertical,
+                    hasFill,
                     fillThemeColor is null ? fillColor : null,
                     outlineThemeColor is null ? outlineColor : null,
                     gradientFill.EndColor,

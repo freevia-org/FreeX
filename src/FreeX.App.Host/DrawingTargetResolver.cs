@@ -261,6 +261,7 @@ public sealed record DrawingObjectTarget(
     double Width,
     double Height,
     double RotationDegrees,
+    bool HasFill,
     CellColor? FillColor,
     CellColor? OutlineColor)
 {
@@ -272,6 +273,7 @@ public sealed record DrawingObjectTarget(
             picture.Width,
             picture.Height,
             picture.RotationDegrees,
+            false,
             null,
             null);
 
@@ -283,6 +285,7 @@ public sealed record DrawingObjectTarget(
             shape.Width,
             shape.Height,
             shape.RotationDegrees,
+            shape.HasFill,
             shape.FillColor,
             shape.OutlineColor)
         {
@@ -298,6 +301,7 @@ public sealed record DrawingObjectTarget(
             textBox.Width,
             textBox.Height,
             textBox.RotationDegrees,
+            textBox.HasFill,
             textBox.FillColor,
             textBox.OutlineColor)
         {

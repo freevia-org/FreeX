@@ -281,7 +281,7 @@ public static partial class PrintRenderer
                 Math.Max(18, textBox.Height));
             var fill = textBox.GetEffectiveFillColor(workbookTheme, CellColor.White);
             var outline = textBox.GetEffectiveOutlineColor(workbookTheme, new CellColor(89, 89, 89));
-            var fillBrush = CreateFrozenBrush(fill, 242);
+            var fillBrush = textBox.HasFill ? CreateFrozenBrush(fill, 242) : null;
             var outlinePen = new Pen(CreateFrozenBrush(outline), 1);
             outlinePen.Freeze();
             dc.DrawRectangle(fillBrush, outlinePen, rect);

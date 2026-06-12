@@ -19,7 +19,7 @@ public partial class ColorPickerDialog : Window
     private Button? _initialFocusButton;
     private Button? _selectedSwatchButton;
 
-    public ColorPickerDialog(CellColor? initialColor = null, bool allowNoColor = false)
+    public ColorPickerDialog(CellColor? initialColor = null, bool allowNoColor = false, string? noColorButtonText = null)
     {
         InitializeComponent();
 
@@ -27,6 +27,8 @@ public partial class ColorPickerDialog : Window
         _currentColor = initialColor;
         SelectedColor = initialColor;
         NoColorButton.Visibility = allowNoColor ? Visibility.Visible : Visibility.Collapsed;
+        if (!string.IsNullOrWhiteSpace(noColorButtonText))
+            NoColorButton.Content = noColorButtonText;
         BuildPaletteButtons();
 
         SetPreview(CurrentForegroundPreview, CurrentBackgroundPreview, CurrentBackgroundText, _currentColor);

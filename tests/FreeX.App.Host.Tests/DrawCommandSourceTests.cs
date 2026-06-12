@@ -171,7 +171,7 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("private void SelectionPaneBtn_Click(object sender, RoutedEventArgs e) => ShowSelectionPaneDialog();");
         source.Should().Contain("private void ObjectRotateBtn_Click(object sender, RoutedEventArgs e) => RotateSelectedDrawingObject();");
         source.Should().Contain("private void ObjectSizeBtn_Click(object sender, RoutedEventArgs e) => ResizeSelectedDrawingObject();");
-        source.Should().Contain("private void ObjectFillBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: true);");
+        source.Should().Contain("private void ObjectFillBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectFill();");
         source.Should().Contain("private void ObjectOutlineBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: false);");
         source.Should().Contain("private void ObjectGradientBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingShapeGradient();");
         source.Should().Contain("private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e)");
@@ -210,12 +210,18 @@ public sealed class DrawCommandSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs", "MainWindow.Drawing.cs");
 
         source.Should().Contain("private CellColor? _currentShapeFillColor;");
+        source.Should().Contain("private bool _currentShapeHasFill = true;");
         source.Should().Contain("private CellColor? _currentShapeOutlineColor;");
         source.Should().Contain("fillColor: ResolveCurrentShapeFillColor()");
+        source.Should().Contain("hasFill: ResolveCurrentShapeHasFill()");
         source.Should().Contain("outlineColor: ResolveCurrentShapeOutlineColor()");
+        source.Should().Contain("TryShowColorPicker(title, initial, allowNoColor: true, out var selectedColor, UiText.Get(\"FormatCells_NoFill\"))");
+        source.Should().Contain("hasFill ? \"Object Fill\" : \"Object No Fill\"");
+        source.Should().Contain("RememberCurrentShapeFill(target.Kind, selectedColor);");
         source.Should().Contain("RememberCurrentShapeColor(target.Kind, isFill, color);");
         source.Should().Contain("target.FillThemeColor?.Resolve(_workbook.Theme)");
         source.Should().Contain("target.OutlineThemeColor?.Resolve(_workbook.Theme)");
+        source.Should().Contain("hasFill: hasFill");
         source.Should().Contain("updateFill: isFill");
         source.Should().Contain("updateOutline: !isFill");
     }

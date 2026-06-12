@@ -81,6 +81,7 @@ public sealed class DrawingShapeModel
     public bool FlipHorizontal { get; set; }
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
+    public bool HasFill { get; set; } = true;
     public string? Title { get; set; }
     public string? AltText { get; set; }
     public CellColor? FillColor { get; set; }
@@ -95,6 +96,9 @@ public sealed class DrawingShapeModel
 
     public CellColor GetEffectiveFillColor(WorkbookTheme theme, CellColor fallback) =>
         FillThemeColor?.Resolve(theme) ?? FillColor ?? fallback;
+
+    public CellColor? ResolveFillColor(WorkbookTheme theme, CellColor fallback) =>
+        HasFill ? GetEffectiveFillColor(theme, fallback) : null;
 
     public CellColor GetEffectiveOutlineColor(WorkbookTheme theme, CellColor fallback) =>
         OutlineThemeColor?.Resolve(theme) ?? OutlineColor ?? fallback;

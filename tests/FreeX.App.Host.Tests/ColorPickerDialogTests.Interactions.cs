@@ -26,6 +26,25 @@ public sealed partial class ColorPickerDialogTests
     }
 
     [Fact]
+    public void Constructor_CanLabelClearChoiceForFillWorkflows()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ColorPickerDialog(initialColor: null, allowNoColor: true, noColorButtonText: "No Fill");
+            try
+            {
+                var noColorButton = (Button)dialog.FindName("NoColorButton");
+
+                noColorButton.Content.Should().Be("No Fill");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void SelectingSwatch_UpdatesNewPreviewButKeepsCurrentPreview()
     {
         StaTestRunner.Run(() =>

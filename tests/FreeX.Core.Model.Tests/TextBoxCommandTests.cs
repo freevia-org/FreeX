@@ -231,6 +231,7 @@ public sealed class TextBoxCommandTests
             new CellColor(70, 80, 90));
 
         command.Apply(ctx).Success.Should().BeTrue();
+        textBox.HasFill.Should().BeTrue();
         textBox.FillColor.Should().Be(new CellColor(240, 250, 255));
         textBox.OutlineColor.Should().Be(new CellColor(70, 80, 90));
         textBox.FillThemeColor.Should().BeNull();
@@ -238,9 +239,53 @@ public sealed class TextBoxCommandTests
 
         command.Revert(ctx);
 
+        textBox.HasFill.Should().BeTrue();
         textBox.FillColor.Should().Be(new CellColor(10, 20, 30));
         textBox.OutlineColor.Should().Be(new CellColor(40, 50, 60));
         textBox.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
+        textBox.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
+    }
+
+    [Fact]
+    public void SetTextBoxColorsCommand_CanRemoveFillAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Text = "Note",
+            HasFill = true,
+            FillColor = new CellColor(10, 20, 30),
+            OutlineColor = new CellColor(40, 50, 60),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25)
+        };
+        sheet.TextBoxes.Add(textBox);
+
+        var command = new SetTextBoxColorsCommand(
+            sheet.Id,
+            textBox.Id,
+            null,
+            null,
+            updateFill: true,
+            updateOutline: false,
+            hasFill: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        textBox.HasFill.Should().BeFalse();
+        textBox.FillColor.Should().BeNull();
+        textBox.FillThemeColor.Should().BeNull();
+        textBox.OutlineColor.Should().Be(new CellColor(40, 50, 60));
+        textBox.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
+
+        command.Revert(ctx);
+
+        textBox.HasFill.Should().BeTrue();
+        textBox.FillColor.Should().Be(new CellColor(10, 20, 30));
+        textBox.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
+        textBox.OutlineColor.Should().Be(new CellColor(40, 50, 60));
         textBox.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
     }
 

@@ -159,6 +159,50 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
         loadedShape.GetEffectiveGradientFillDirection().Should().Be(DrawingShapeGradientDirection.Vertical);
     }
 
+    [Fact]
+    public void NativeJsonAdapter_RoundTripsDrawingObjectNoFillState()
+    {
+        var workbook = CreateWorkbookWithNoFillObjects();
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loadedSheet = adapter.Load(stream).GetSheetAt(0);
+        var loadedShape = loadedSheet.DrawingShapes.Should().ContainSingle().Subject;
+        loadedShape.HasFill.Should().BeFalse();
+        loadedShape.FillColor.Should().BeNull();
+        loadedShape.GradientFillEndColor.Should().BeNull();
+
+        var loadedTextBox = loadedSheet.TextBoxes.Should().ContainSingle().Subject;
+        loadedTextBox.HasFill.Should().BeFalse();
+        loadedTextBox.FillColor.Should().BeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTripsDrawingObjectNoFillState()
+    {
+        var workbook = CreateWorkbookWithNoFillObjects();
+        using var stream = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var drawingXml = LoadDrawingXml(archive);
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            drawingXml.Descendants(a + "noFill").Should().HaveCount(2);
+        }
+
+        stream.Position = 0;
+        var loadedSheet = adapter.Load(stream).GetSheetAt(0);
+        loadedSheet.DrawingShapes.Should().ContainSingle().Which.HasFill.Should().BeFalse();
+        loadedSheet.TextBoxes.Should().ContainSingle().Which.HasFill.Should().BeFalse();
+    }
+
     private static Workbook CreateWorkbookWithShape(DrawingShapeEffectPreset effectPreset)
     {
         var workbook = new Workbook("Effects");
@@ -174,6 +218,35 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
             OutlineColor = new CellColor(30, 40, 50),
             EffectPreset = effectPreset,
             HasShadowEffect = effectPreset == DrawingShapeEffectPreset.Shadow
+        });
+
+        return workbook;
+    }
+
+    private static Workbook CreateWorkbookWithNoFillObjects()
+    {
+        var workbook = new Workbook("No Fill");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Kind = DrawingShapeKind.Rectangle,
+            Width = 120,
+            Height = 70,
+            HasFill = false,
+            FillColor = null,
+            OutlineColor = new CellColor(30, 40, 50)
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 5, 2),
+            Text = "Note",
+            Width = 160,
+            Height = 60,
+            HasFill = false,
+            FillColor = null,
+            OutlineColor = new CellColor(70, 80, 90)
         });
 
         return workbook;

@@ -10,12 +10,14 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
     private readonly CellColor? _outlineColor;
     private readonly bool _updateFill;
     private readonly bool _updateOutline;
+    private readonly bool? _hasFill;
     private CellColor? _previousFillColor;
     private CellColor? _previousOutlineColor;
     private CellColor? _previousGradientFillEndColor;
     private DrawingShapeGradientDirection _previousGradientFillDirection;
     private WorkbookThemeColorReference? _previousFillThemeColor;
     private WorkbookThemeColorReference? _previousOutlineThemeColor;
+    private bool _previousHasFill;
     private bool _applied;
 
     public string Label => "Shape Colors";
@@ -26,7 +28,8 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         CellColor? fillColor,
         CellColor? outlineColor,
         bool updateFill = true,
-        bool updateOutline = true)
+        bool updateOutline = true,
+        bool? hasFill = null)
     {
         _sheetId = sheetId;
         _shapeId = shapeId;
@@ -34,6 +37,7 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         _outlineColor = outlineColor;
         _updateFill = updateFill;
         _updateOutline = updateOutline;
+        _hasFill = hasFill;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -51,8 +55,10 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         _previousGradientFillDirection = shape.GradientFillDirection;
         _previousFillThemeColor = shape.FillThemeColor;
         _previousOutlineThemeColor = shape.OutlineThemeColor;
+        _previousHasFill = shape.HasFill;
         if (_updateFill)
         {
+            shape.HasFill = _hasFill ?? (_fillColor is not null);
             shape.FillColor = _fillColor;
             shape.GradientFillEndColor = null;
             shape.GradientFillDirection = DrawingShapeGradientDirection.DiagonalDown;
@@ -79,6 +85,7 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         shape.GradientFillDirection = _previousGradientFillDirection;
         shape.FillThemeColor = _previousFillThemeColor;
         shape.OutlineThemeColor = _previousOutlineThemeColor;
+        shape.HasFill = _previousHasFill;
         _applied = false;
     }
 }
@@ -90,7 +97,7 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
     private readonly CellColor _startColor;
     private readonly CellColor _endColor;
     private readonly DrawingShapeGradientDirection _direction;
-    private (CellColor? FillColor, CellColor? GradientEndColor, DrawingShapeGradientDirection Direction, WorkbookThemeColorReference? FillThemeColor) _previous;
+    private (CellColor? FillColor, CellColor? GradientEndColor, DrawingShapeGradientDirection Direction, WorkbookThemeColorReference? FillThemeColor, bool HasFill) _previous;
     private bool _applied;
 
     public string Label => "Shape Gradient";
@@ -128,7 +135,8 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
         if (shape.Kind == DrawingShapeKind.Line)
             return new CommandOutcome(false, "Line shapes do not support gradient fills.");
 
-        _previous = (shape.FillColor, shape.GradientFillEndColor, shape.GradientFillDirection, shape.FillThemeColor);
+        _previous = (shape.FillColor, shape.GradientFillEndColor, shape.GradientFillDirection, shape.FillThemeColor, shape.HasFill);
+        shape.HasFill = true;
         shape.FillColor = _startColor;
         shape.GradientFillEndColor = _endColor;
         shape.GradientFillDirection = _direction;
@@ -145,6 +153,7 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
         shape.GradientFillEndColor = _previous.GradientEndColor;
         shape.GradientFillDirection = _previous.Direction;
         shape.FillThemeColor = _previous.FillThemeColor;
+        shape.HasFill = _previous.HasFill;
         _applied = false;
     }
 }

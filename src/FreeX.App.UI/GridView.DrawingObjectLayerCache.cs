@@ -163,6 +163,7 @@ public partial class GridView
             hash.Add(shape.FlipHorizontal);
             hash.Add(shape.FlipVertical);
             hash.Add(shape.IsVisible);
+            hash.Add(shape.HasFill);
             hash.Add(shape.FillColor);
             hash.Add(shape.OutlineColor);
             hash.Add(shape.GradientFillEndColor);
@@ -224,6 +225,7 @@ public partial class GridView
             hash.Add(textBox.FlipHorizontal);
             hash.Add(textBox.FlipVertical);
             hash.Add(textBox.IsVisible);
+            hash.Add(textBox.HasFill);
             hash.Add(textBox.FillColor);
             hash.Add(textBox.OutlineColor);
             hash.Add(textBox.FillThemeColor);

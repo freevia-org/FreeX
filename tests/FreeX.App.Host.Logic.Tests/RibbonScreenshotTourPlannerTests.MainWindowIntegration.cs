@@ -861,7 +861,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("sheet.DrawingShapes.Add(shape);");
         source.Should().Contain("sheet.Pictures.Add(picture);");
         source.Should().Contain("sheet.TextBoxes.Add(textBox);");
-        source.Should().Contain("new ColorPickerDialog(context.Shape.FillColor, allowNoColor: false)");
+        source.Should().Contain("new ColorPickerDialog(context.Shape.FillColor, allowNoColor: true, UiText.Get(\"FormatCells_NoFill\"))");
         source.Should().Contain("new ShapeGradientDialog(");
         source.Should().Contain("context.Shape.GradientFillEndColor ?? ShapeGradientDialogPlanner.DefaultEndColor");
         source.Should().Contain("context.Shape.GetEffectiveGradientFillDirection()");

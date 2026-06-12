@@ -6606,14 +6606,14 @@ public partial class MainWindow
 
             captures.Add(await CaptureDrawObjectFormattingDialogAsync(
                 outputDir,
-                new ColorPickerDialog(context.Shape.FillColor, allowNoColor: false)
+                new ColorPickerDialog(context.Shape.FillColor, allowNoColor: true, UiText.Get("FormatCells_NoFill"))
                 {
                     Owner = this,
                     Title = UiText.Get("MainWindowMessage_ObjectFillTitle")
                 },
                 "shape-fill-color-picker",
                 "freex_draw_object_formatting_shape_fill_color_picker",
-                "Shape Fill color picker opens on the standard/theme/custom palette surface using the selected shape fill color.",
+                "Shape Fill color picker opens on the standard/theme/custom palette surface and offers No Fill for the selected shape.",
                 "Shape Fill",
                 "RenderTargetBitmap-color-picker-dialog-window",
                 ["UI-CMD-DRAW-003"]));

@@ -292,7 +292,7 @@ public partial class GridView
         var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
         var colors = ResolveTextBoxColors(textBox, WorkbookTheme);
         DrawTextBoxThemeEffect(dc, rect, themeEffect);
-        var fillBrush = GetDrawingObjectBrush(242, colors.Fill);
+        var fillBrush = textBox.HasFill ? GetDrawingObjectBrush(242, colors.Fill) : null;
         var borderPen = GetDrawingObjectPen(255, colors.Outline, 1);
         dc.DrawRectangle(fillBrush, borderPen, rect);
         DrawTextBoxThemeInnerShadow(dc, rect, themeEffect);
@@ -372,7 +372,7 @@ public partial class GridView
         var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
         var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
         var pen = GetDrawingObjectPen(255, colors.Outline, 1.5);
-        var fill = CreateDrawingShapeFill(shape, colors.Fill);
+        var fill = shape.HasFill ? CreateDrawingShapeFill(shape, colors.Fill) : null;
         DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);
         DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape, colors);
         DrawShapeGeometry(dc, shape.Kind, rect, DrawingShapeKindSupport.IsLineLike(shape.Kind) ? null : fill, pen);

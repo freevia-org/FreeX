@@ -313,6 +313,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     textBox.RotationDegrees,
                     textBox.FlipHorizontal,
                     textBox.FlipVertical,
+                    textBox.HasFill,
                     textBox.FillThemeColor,
                     textBox.FillColor,
                     textBox.OutlineThemeColor,
@@ -350,6 +351,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     shape.RotationDegrees,
                     shape.FlipHorizontal,
                     shape.FlipVertical,
+                    shape.HasFill,
                     shape.FillThemeColor,
                     shape.FillColor,
                     shape.OutlineThemeColor,
@@ -373,6 +375,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
         double rotationDegrees,
         bool flipHorizontal,
         bool flipVertical,
+        bool hasFill,
         WorkbookThemeColorReference? fillThemeColor,
         CellColor? fillColor,
         WorkbookThemeColorReference? outlineThemeColor,
@@ -388,7 +391,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
             new XElement(drawingNs + "prstGeom",
                 new XAttribute("prst", preset),
                 new XElement(drawingNs + "avLst")),
-            gradientFillEndColor is { } gradientEndColor && fillColor is { } gradientStartColor
+            !hasFill
+                ? new XElement(drawingNs + "noFill")
+                : gradientFillEndColor is { } gradientEndColor && fillColor is { } gradientStartColor
                 ? ToGradientFill(gradientStartColor, gradientEndColor, gradientFillDirection, drawingNs)
                 : ToSolidFill(fillThemeColor, fillColor, drawingNs),
             ToLineProperties(outlineThemeColor, outlineColor, drawingNs),

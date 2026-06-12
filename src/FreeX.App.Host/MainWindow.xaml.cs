@@ -188,6 +188,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private static readonly CellColor RibbonDefaultFontColor = new(255, 0, 0);
     private CellColor? _selectedFillColor = RibbonDefaultFillColor;
     private CellColor _selectedFontColor = RibbonDefaultFontColor;
+    private bool _currentShapeHasFill = true;
     private CellColor? _currentShapeFillColor;
     private CellColor? _currentShapeOutlineColor;
     private readonly IReadOnlyList<System.Windows.Media.Brush> _formulaReferenceBrushes =

@@ -111,6 +111,7 @@ internal static class NativeJsonVisualDtoMapper
         FlipHorizontal = textBox.FlipHorizontal,
         FlipVertical = textBox.FlipVertical,
         IsVisible = textBox.IsVisible,
+        HasFill = textBox.HasFill,
         FillColor = textBox.FillColor is { } fill ? FormatColor(fill) : null,
         OutlineColor = textBox.OutlineColor is { } outline ? FormatColor(outline) : null,
         FillThemeColor = FromThemeColorReference(textBox.FillThemeColor),
@@ -141,6 +142,7 @@ internal static class NativeJsonVisualDtoMapper
                 FlipHorizontal = textBoxDto.FlipHorizontal,
                 FlipVertical = textBoxDto.FlipVertical,
                 IsVisible = textBoxDto.IsVisible,
+                HasFill = textBoxDto.HasFill,
                 FillColor = textBoxDto.FillColor is { } fill ? ParseColor(fill) : null,
                 OutlineColor = textBoxDto.OutlineColor is { } outline ? ParseColor(outline) : null,
                 FillThemeColor = ToThemeColorReference(textBoxDto.FillThemeColor),
@@ -167,6 +169,7 @@ internal static class NativeJsonVisualDtoMapper
         FlipHorizontal = shape.FlipHorizontal,
         FlipVertical = shape.FlipVertical,
         IsVisible = shape.IsVisible,
+        HasFill = shape.HasFill,
         FillColor = shape.FillColor is { } fill ? FormatColor(fill) : null,
         OutlineColor = shape.OutlineColor is { } outline ? FormatColor(outline) : null,
         GradientFillEndColor = shape.GradientFillEndColor is { } gradientEnd ? FormatColor(gradientEnd) : null,
@@ -207,6 +210,7 @@ internal static class NativeJsonVisualDtoMapper
                 FlipHorizontal = shapeDto.FlipHorizontal,
                 FlipVertical = shapeDto.FlipVertical,
                 IsVisible = shapeDto.IsVisible,
+                HasFill = shapeDto.HasFill,
                 FillColor = shapeDto.FillColor is { } fill ? ParseColor(fill) : null,
                 OutlineColor = shapeDto.OutlineColor is { } outline ? ParseColor(outline) : null,
                 GradientFillEndColor = shapeDto.GradientFillEndColor is { } gradientEnd ? ParseColor(gradientEnd) : null,
@@ -320,6 +324,7 @@ internal class TextBoxDto
     public bool FlipHorizontal { get; set; }
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
+    public bool HasFill { get; set; } = true;
     public string? FillColor { get; set; }
     public string? OutlineColor { get; set; }
     public ThemeColorReferenceDto? FillThemeColor { get; set; }
@@ -340,6 +345,7 @@ internal class DrawingShapeDto
     public bool FlipHorizontal { get; set; }
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
+    public bool HasFill { get; set; } = true;
     public string? FillColor { get; set; }
     public string? OutlineColor { get; set; }
     public string? GradientFillEndColor { get; set; }

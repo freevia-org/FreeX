@@ -18,16 +18,19 @@ public sealed class AddDrawingShapeCommand : IWorkbookCommand
         double width = 120,
         double height = 70,
         CellColor? fillColor = null,
-        CellColor? outlineColor = null)
+        CellColor? outlineColor = null,
+        bool hasFill = true)
     {
         _sheetId = sheetId;
+        var lineLike = DrawingShapeKindSupport.IsLineLike(kind);
         _shape = new DrawingShapeModel
         {
             Anchor = anchor,
             Kind = kind,
             Width = width,
             Height = height,
-            FillColor = DrawingShapeKindSupport.IsLineLike(kind)
+            HasFill = !lineLike && hasFill,
+            FillColor = lineLike || !hasFill
                 ? null
                 : fillColor ?? DrawingShapeModel.DefaultFillColor,
             OutlineColor = outlineColor ?? DrawingShapeModel.DefaultOutlineColor
