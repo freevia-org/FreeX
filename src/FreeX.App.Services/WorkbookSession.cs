@@ -249,6 +249,13 @@ public sealed class WorkbookSession
 
     public bool IsDirty { get; private set; }
 
+    /// <summary>
+    /// Monotonically-increasing counter, incremented with every transition to dirty.
+    /// The async save path captures this before awaiting and compares afterwards to detect
+    /// edits that arrived mid-save — the same pattern used by <see cref="WorkbookDocumentState"/>.
+    /// </summary>
+    public int DirtyGeneration { get; private set; }
+
     public bool IsFallback => _source.IsFallback;
 
     public string DisplayName =>
@@ -2415,6 +2422,38 @@ public sealed class WorkbookSession
         Workbook.Name = Path.GetFileName(path);
     }
 
+    /// <summary>
+    /// Marks the workbook saved only when no edits arrived during an async save.
+    /// Applies file-context (path, name) unconditionally when the workbook reference is unchanged.
+    /// </summary>
+    /// <param name="generationAtSaveStart">
+    ///   The <see cref="DirtyGeneration"/> value captured just before the save awaited.
+    /// </param>
+    /// <param name="path">The file path the workbook was written to.</param>
+    /// <param name="fileAccessIdentity">Optional file-access identity for the saved file.</param>
+    /// <returns>
+    ///   <c>true</c> when the workbook was marked saved (no mid-save edits);
+    ///   <c>false</c> when the dirty flag was preserved due to edits arriving during save.
+    /// </returns>
+    public bool TryMarkSavedIfNoEditsArrived(
+        int generationAtSaveStart,
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var resolvedIdentity = ResolveSavedFileAccessIdentity(path, fileAccessIdentity);
+        var noEditsArrived = DirtyGeneration == generationAtSaveStart;
+        if (noEditsArrived)
+            IsDirty = false;
+
+        CurrentFilePath = path;
+        CurrentFileAccessIdentity = resolvedIdentity;
+        CurrentXlsxFeatureReport = null;
+        Workbook.Name = Path.GetFileName(path);
+        return noEditsArrived;
+    }
+
     public string BuildSuggestedSaveAsFileName(string defaultExtension)
     {
         var normalizedExtension = FileFormatResolver.NormalizeExtension(defaultExtension);
@@ -3263,7 +3302,7 @@ public sealed class WorkbookSession
         }
 
         FormulaEditAddress = null;
-        IsDirty = true;
+        MarkDirty();
         _selectionStatsRevision++;
         RefreshViewport();
         EnsureActiveCellVisible();
@@ -3281,7 +3320,7 @@ public sealed class WorkbookSession
         ActiveSheet.ActiveCol = ActiveCell.Col;
         SetSingleSelectedRange(selectedRange);
         FormulaEditAddress = null;
-        IsDirty = true;
+        MarkDirty();
         _selectionStatsRevision++;
         RefreshViewport();
         EnsureActiveCellVisible();
@@ -3295,10 +3334,16 @@ public sealed class WorkbookSession
         ActiveSheet.ActiveRow = ActiveCell.Row;
         ActiveSheet.ActiveCol = ActiveCell.Col;
         FormulaEditAddress = null;
-        IsDirty = true;
+        MarkDirty();
         _selectionStatsRevision++;
         RefreshViewport();
         EnsureActiveCellVisible();
+    }
+
+    private void MarkDirty()
+    {
+        IsDirty = true;
+        DirtyGeneration++;
     }
 
     private static CellAddress FirstAffectedCellOrDefault(
@@ -3322,7 +3367,7 @@ public sealed class WorkbookSession
         ActiveSheet.ActiveCol = address.Col;
         SetSingleSelectedRange(new GridRange(address, address));
         FormulaEditAddress = null;
-        IsDirty = true;
+        MarkDirty();
         _selectionStatsRevision++;
         RefreshViewport();
         EnsureActiveCellVisible();
@@ -3335,7 +3380,7 @@ public sealed class WorkbookSession
         ActiveSheet.ActiveCol = ActiveCell.Col;
         SetSingleSelectedRange(selectedRange);
         FormulaEditAddress = null;
-        IsDirty = true;
+        MarkDirty();
         _selectionStatsRevision++;
         RefreshViewport();
         EnsureActiveCellVisible();

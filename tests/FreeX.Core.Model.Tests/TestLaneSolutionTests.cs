@@ -15,6 +15,7 @@ public sealed class TestLaneSolutionTests
 
         defaultLaneProjects.Should().BeEquivalentTo(new[]
         {
+            "tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj",
             "tests/FreeX.App.Host.Logic.Tests/FreeX.App.Host.Logic.Tests.csproj",
             "tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj",
             "tests/FreeX.Core.Calc.Tests/FreeX.Core.Calc.Tests.csproj",

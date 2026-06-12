@@ -67,6 +67,10 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Build Avalonia project
+        shell: pwsh
+        run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
+
       - name: Build portable tests
         shell: pwsh
         run: dotnet build FreeX.DefaultTests.slnx --configuration Release
