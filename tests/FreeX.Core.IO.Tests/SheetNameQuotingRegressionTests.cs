@@ -37,7 +37,7 @@ public sealed class SheetNameQuotingRegressionTests
             Kind = SparklineKind.Line
         });
 
-        using var stream = SaveWorkbook(workbook);
+        using var stream = XlsxPackageTestHelper.SaveWorkbook(workbook);
         var formulaText = ReadSparklineFormulaText(stream);
 
         // Must start with the quoted sheet name to be a valid Excel external reference.
@@ -61,7 +61,7 @@ public sealed class SheetNameQuotingRegressionTests
             Kind = SparklineKind.Line
         });
 
-        using var stream = SaveWorkbook(workbook);
+        using var stream = XlsxPackageTestHelper.SaveWorkbook(workbook);
         var formulaText = ReadSparklineFormulaText(stream);
 
         // Simple name — no quotes needed.
@@ -90,7 +90,7 @@ public sealed class SheetNameQuotingRegressionTests
         };
         sheet.Charts.Add(chart);
 
-        using var stream = SaveWorkbook(workbook);
+        using var stream = XlsxPackageTestHelper.SaveWorkbook(workbook);
         var pivotSourceName = ReadPivotSourceName(stream);
 
         pivotSourceName.Should().StartWith("'Q1-Q2'!");
@@ -99,15 +99,6 @@ public sealed class SheetNameQuotingRegressionTests
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
-
-    private static MemoryStream SaveWorkbook(Workbook workbook)
-    {
-        var stream = new MemoryStream();
-        var adapter = new XlsxFileAdapter();
-        adapter.Save(workbook, stream);
-        stream.Position = 0;
-        return stream;
-    }
 
     private static string ReadSparklineFormulaText(MemoryStream stream)
     {

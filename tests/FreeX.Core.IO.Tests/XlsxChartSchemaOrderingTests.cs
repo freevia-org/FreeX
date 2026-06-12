@@ -19,7 +19,7 @@ public sealed class XlsxChartSchemaOrderingTests
     [Fact]
     public void LineChart_WithFormattedLabelsAxesAndSmoothSeries_ProducesSchemaValidOrder()
     {
-        var saved = SaveBytes(CreateLineChartWorkbook());
+        var saved = XlsxPackageTestHelper.SaveToBytes(CreateLineChartWorkbook());
 
         SchemaErrors(saved).Should().BeEmpty();
         var reloadedChart = AssertReloadedSingleChart(saved, ChartType.Line, "Revenue trend", "A1", "C6");
@@ -48,7 +48,7 @@ public sealed class XlsxChartSchemaOrderingTests
     [Fact]
     public void PieChart_WithLabelsAndFirstSliceAngle_ProducesSchemaValidOrder()
     {
-        var saved = SaveBytes(CreatePieChartWorkbook());
+        var saved = XlsxPackageTestHelper.SaveToBytes(CreatePieChartWorkbook());
 
         SchemaErrors(saved).Should().BeEmpty();
         var reloadedChart = AssertReloadedSingleChart(saved, ChartType.Pie, "Share", "A1", "B4");
@@ -66,7 +66,7 @@ public sealed class XlsxChartSchemaOrderingTests
     [Fact]
     public void LineChart_WithGuideLinesAndUpDownBars_ProducesSchemaValidOrder()
     {
-        var saved = SaveBytes(CreateLineGuideChartWorkbook());
+        var saved = XlsxPackageTestHelper.SaveToBytes(CreateLineGuideChartWorkbook());
 
         SchemaErrors(saved).Should().BeEmpty();
         var reloadedChart = AssertReloadedSingleChart(saved, ChartType.Line, null, "A1", "C4");
@@ -95,7 +95,7 @@ public sealed class XlsxChartSchemaOrderingTests
     [Fact]
     public void ColumnChart_WithErrorBarsAndComboSecondaryLines_ProducesSchemaValidOrder()
     {
-        var saved = SaveBytes(CreateColumnComboChartWorkbook());
+        var saved = XlsxPackageTestHelper.SaveToBytes(CreateColumnComboChartWorkbook());
 
         SchemaErrors(saved).Should().BeEmpty();
         var reloadedChart = AssertReloadedSingleChart(saved, ChartType.Column, "Sales, units, and margin", "A1", "D5");
@@ -137,7 +137,7 @@ public sealed class XlsxChartSchemaOrderingTests
     [Fact]
     public void ThreeDColumnChart_WithMetadataAndPrintSettings_ProducesSchemaValidOrder()
     {
-        var saved = SaveBytes(CreateRichMetadataChartWorkbook());
+        var saved = XlsxPackageTestHelper.SaveToBytes(CreateRichMetadataChartWorkbook());
 
         SchemaErrors(saved).Should().BeEmpty();
         var reloadedChart = AssertReloadedSingleChart(saved, ChartType.ThreeDColumn, "Sales", "A1", "B4");
@@ -520,13 +520,6 @@ public sealed class XlsxChartSchemaOrderingTests
         });
 
         return workbook;
-    }
-
-    private static byte[] SaveBytes(Workbook workbook)
-    {
-        using var stream = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, stream);
-        return stream.ToArray();
     }
 
     private static List<string> SchemaErrors(byte[] package)

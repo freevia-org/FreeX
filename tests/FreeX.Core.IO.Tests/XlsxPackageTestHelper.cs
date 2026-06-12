@@ -26,6 +26,30 @@ internal static class XlsxPackageTestHelper
         return package;
     }
 
+    /// <summary>
+    /// Saves <paramref name="workbook"/> via a fresh <see cref="XlsxFileAdapter"/> and
+    /// returns the resulting bytes.  Use this overload when the test does not need
+    /// a specific adapter instance.
+    /// </summary>
+    public static byte[] SaveToBytes(Workbook workbook)
+    {
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Saves <paramref name="workbook"/> via the supplied <paramref name="adapter"/> and
+    /// returns the resulting bytes.  Use this overload when the test controls the adapter
+    /// (e.g. to test non-XLSX adapters or adapter-specific settings).
+    /// </summary>
+    public static byte[] SaveToBytes(IFileAdapter adapter, Workbook workbook)
+    {
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        return stream.ToArray();
+    }
+
     public static MemoryStream CreatePackageWithPatchedWorksheet(Action<XElement> patchRoot)
     {
         var package = CreateSingleCellWorkbookPackage();

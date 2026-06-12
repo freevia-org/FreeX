@@ -60,7 +60,7 @@ public sealed class XlsxSaveWarningsTests
 
         // Both paths should produce bytes that can be loaded back.
         var bytesViaWithWarnings = SaveWithWarningsToBytes(adapter, workbook);
-        var bytesViaSave = SaveToBytes(adapter, workbook);
+        var bytesViaSave = XlsxPackageTestHelper.SaveToBytes(adapter, workbook);
 
         var reloadedA = adapter.Load(new MemoryStream(bytesViaWithWarnings, writable: false));
         var reloadedB = adapter.Load(new MemoryStream(bytesViaSave, writable: false));
@@ -179,13 +179,6 @@ public sealed class XlsxSaveWarningsTests
     {
         using var ms = new MemoryStream();
         adapter.SaveWithWarnings(workbook, ms);
-        return ms.ToArray();
-    }
-
-    private static byte[] SaveToBytes(IFileAdapter adapter, Workbook workbook)
-    {
-        using var ms = new MemoryStream();
-        adapter.Save(workbook, ms);
         return ms.ToArray();
     }
 

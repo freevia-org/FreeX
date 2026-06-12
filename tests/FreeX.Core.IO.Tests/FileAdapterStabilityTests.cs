@@ -28,10 +28,10 @@ public sealed class FileAdapterStabilityTests
     [MemberData(nameof(SaveCapableAdapters))]
     public void LoadThenSave_WithoutEdits_PreservesSupportedSaveFormatBytes(string extension, IFileAdapter adapter)
     {
-        var originalBytes = SaveToBytes(adapter, CreateStableWorkbook(extension));
+        var originalBytes = XlsxPackageTestHelper.SaveToBytes(adapter, CreateStableWorkbook(extension));
 
         var loaded = adapter.Load(new MemoryStream(originalBytes, writable: false));
-        var resavedBytes = SaveToBytes(adapter, loaded);
+        var resavedBytes = XlsxPackageTestHelper.SaveToBytes(adapter, loaded);
 
         resavedBytes.Should().Equal(originalBytes, $"opening and saving {extension} without edits must be file-stable");
     }
@@ -73,12 +73,12 @@ public sealed class FileAdapterStabilityTests
     public void XlsxStabilityReplay_DoesNotHideWorkbookEdits()
     {
         var adapter = new XlsxFileAdapter();
-        var originalBytes = SaveToBytes(adapter, CreateStableWorkbook(".xlsx"));
+        var originalBytes = XlsxPackageTestHelper.SaveToBytes(adapter, CreateStableWorkbook(".xlsx"));
 
         var loaded = adapter.Load(new MemoryStream(originalBytes, writable: false));
         var sheet = loaded.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Changed"));
-        var editedBytes = SaveToBytes(adapter, loaded);
+        var editedBytes = XlsxPackageTestHelper.SaveToBytes(adapter, loaded);
 
         editedBytes.Should().NotEqual(originalBytes);
         var reloaded = adapter.Load(new MemoryStream(editedBytes, writable: false));
@@ -89,7 +89,7 @@ public sealed class FileAdapterStabilityTests
     public void XlsxStabilityReplay_DoesNotDependOnCallerOwnedMemoryStreamBufferAfterLoad()
     {
         var adapter = new XlsxFileAdapter();
-        var originalBytes = SaveToBytes(adapter, CreateStableWorkbook(".xlsx"));
+        var originalBytes = XlsxPackageTestHelper.SaveToBytes(adapter, CreateStableWorkbook(".xlsx"));
         var callerOwnedBytes = originalBytes.ToArray();
 
         var loaded = adapter.Load(new MemoryStream(
@@ -100,7 +100,7 @@ public sealed class FileAdapterStabilityTests
             publiclyVisible: true));
 
         Array.Fill<byte>(callerOwnedBytes, 0);
-        var resavedBytes = SaveToBytes(adapter, loaded);
+        var resavedBytes = XlsxPackageTestHelper.SaveToBytes(adapter, loaded);
 
         resavedBytes.Should().Equal(originalBytes);
     }
@@ -109,7 +109,7 @@ public sealed class FileAdapterStabilityTests
     public void XlsxStabilityReplay_CapturesOnlyAccessibleMemoryStreamSlice()
     {
         var adapter = new XlsxFileAdapter();
-        var originalBytes = SaveToBytes(adapter, CreateStableWorkbook(".xlsx"));
+        var originalBytes = XlsxPackageTestHelper.SaveToBytes(adapter, CreateStableWorkbook(".xlsx"));
         var prefix = Encoding.ASCII.GetBytes("prefix");
         var suffix = Encoding.ASCII.GetBytes("suffix");
         var callerOwnedBytes = prefix
@@ -125,7 +125,7 @@ public sealed class FileAdapterStabilityTests
             publiclyVisible: true));
 
         Array.Fill<byte>(callerOwnedBytes, 0);
-        var resavedBytes = SaveToBytes(adapter, loaded);
+        var resavedBytes = XlsxPackageTestHelper.SaveToBytes(adapter, loaded);
 
         resavedBytes.Should().Equal(originalBytes);
     }
@@ -141,13 +141,6 @@ public sealed class FileAdapterStabilityTests
         new SpreadsheetXmlFileAdapter(),
         new NativeJsonAdapter()
     ];
-
-    private static byte[] SaveToBytes(IFileAdapter adapter, Workbook workbook)
-    {
-        using var stream = new MemoryStream();
-        adapter.Save(workbook, stream);
-        return stream.ToArray();
-    }
 
     private static Workbook CreateStableWorkbook(string extension)
     {
