@@ -34,6 +34,9 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
         if (_range.End.Col < _range.Start.Col)
             return new CommandOutcome(false, "Table range is invalid.");
 
+        if (sheet.StructuredTables.Any(t => t.Range.Overlaps(_range)))
+            return new CommandOutcome(false, "A table cannot overlap another table.");
+
         var id = NextTableId(sheet);
         var name = NextTableName(sheet);
         var table = new StructuredTableModel

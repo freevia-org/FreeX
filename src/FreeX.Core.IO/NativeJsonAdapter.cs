@@ -74,6 +74,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             if (!string.IsNullOrWhiteSpace(sDto.Name))
                 loadedSheetsBySourceName.TryAdd(sDto.Name, sheet);
             sheet.IsHidden = sDto.IsHidden;
+            sheet.IsVeryHidden = sDto.IsVeryHidden;
             sheet.TabColor = sDto.TabColor is { } tabColor ? ParseColor(tabColor) : null;
             sheet.IsProtected = sDto.IsProtected;
             sheet.ProtectionPassword = sDto.IsProtected ? sDto.ProtectionPassword : null;

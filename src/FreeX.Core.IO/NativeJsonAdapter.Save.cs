@@ -111,6 +111,7 @@ public sealed partial class NativeJsonAdapter
             {
                 Name = s.Name,
                 IsHidden = s.IsHidden,
+                IsVeryHidden = s.IsVeryHidden,
                 TabColor = s.TabColor is { } color ? FormatColor(color) : null,
                 IsProtected = s.IsProtected,
                 ProtectionPassword = s.IsProtected && s.ProtectionPassword is { } shp

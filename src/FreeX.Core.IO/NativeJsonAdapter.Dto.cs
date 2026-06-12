@@ -436,6 +436,7 @@ public sealed partial class NativeJsonAdapter
     {
         public string Name { get; set; } = "";
         public bool IsHidden { get; set; }
+        public bool IsVeryHidden { get; set; }
         public string? TabColor { get; set; }
         public bool IsProtected { get; set; }
         public string? ProtectionPassword { get; set; }
