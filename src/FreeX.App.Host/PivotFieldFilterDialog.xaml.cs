@@ -135,9 +135,9 @@ public partial class PivotFieldFilterDialog : Window
     private void ApplyFilterState()
     {
         var state = _filterState;
-        ItemFilterSummaryText.Text = state?.ItemSummary ?? "No item filter";
-        LabelFilterSummaryText.Text = state?.LabelSummary ?? "No label filter";
-        ValueFilterSummaryText.Text = state?.ValueSummary ?? "No value filter";
+        ItemFilterSummaryText.Text = state?.ItemSummary ?? UiText.Get("PivotFieldFilter_NoItemFilter");
+        LabelFilterSummaryText.Text = state?.LabelSummary ?? UiText.Get("PivotFieldFilter_NoLabelFilter");
+        ValueFilterSummaryText.Text = state?.ValueSummary ?? UiText.Get("PivotFieldFilter_NoValueFilter");
 
         ClearItemFilterButton.IsEnabled = state?.HasItemFilter == true;
         ClearFieldFiltersButton.IsEnabled = state?.HasAnyFilter == true;

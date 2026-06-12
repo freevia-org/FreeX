@@ -445,8 +445,8 @@ public sealed class MainWindowSheetTabKeyboardTests
 
         mouseMove.Should().Contain("if (_dragSheetTabId is not { } draggedId)");
         mouseMove.Should().Contain("if (e.LeftButton != MouseButtonState.Pressed)");
-        mouseMove.Should().Contain("_dragSheetTabId = null;");
-        mouseMove.IndexOf("_dragSheetTabId = null;", StringComparison.Ordinal)
+        mouseMove.Should().Contain("ClearSheetTabDragState();");
+        mouseMove.IndexOf("ClearSheetTabDragState();", StringComparison.Ordinal)
             .Should()
             .BeLessThan(mouseMove.IndexOf("var current = e.GetPosition(SheetTabsControl);", StringComparison.Ordinal));
     }

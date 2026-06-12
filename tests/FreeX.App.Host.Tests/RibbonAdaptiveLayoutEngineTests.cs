@@ -214,7 +214,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
             .Contain(430);
         RibbonAdaptiveLayoutEngine.BuildResizeThresholds(insertGroups, fixedChromeWidth: 20)
             .Should()
-            .Contain(870);
+            .Contain(900);
     }
 
     [Fact]

@@ -262,6 +262,8 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
 
             _contextMenuPlacementTargetName = "SheetGrid";
             _openMenuHeaders = BuildOpenMenuHeaders(options);
+            ActiveContextMenu!.IsOpen = false;
+            PumpDispatcher();
             PreviewOption(options[0]);
         }
 

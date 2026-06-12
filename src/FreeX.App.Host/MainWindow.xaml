@@ -4719,7 +4719,7 @@
                                                                  Margin="0,1,5,0"
                                                                  VerticalAlignment="Center"
                                                                  IsHitTestVisible="False"
-                                                                 AutomationProperties.Name="Protected sheet">
+                                                                 AutomationProperties.Name="{local:Loc Key=SheetTab_ProtectedSheetIconAutomationName}">
                                                             <Viewbox.Style>
                                                                 <Style TargetType="Viewbox">
                                                                     <Setter Property="Visibility" Value="Collapsed"/>

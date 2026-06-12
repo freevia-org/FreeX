@@ -24,8 +24,7 @@ public sealed partial class UiTestCatalogInventoryTests
         var keyboardShortcutUsages = ReadKeyboardShortcutUsageCounts();
         var screenshotToolScripts = ReadDocumentedScreenshotToolScripts();
         var uiEvidenceScreenshotCount = ReadUiEvidenceScreenshotCount();
-        var worksheetContextMenuCommandCount = WorksheetContextMenuPlanner.BuildCommands()
-            .Count(command => !command.IsSeparator);
+        var worksheetContextMenuCommandCount = CountWorksheetContextMenuActionCommands(WorksheetContextMenuPlanner.BuildCommands());
 
         AssertSnapshotRow(
             snapshot,
@@ -1012,6 +1011,20 @@ public sealed partial class UiTestCatalogInventoryTests
         return Directory
             .EnumerateFiles(artifactDirectory, "*.png", SearchOption.TopDirectoryOnly)
             .Count();
+    }
+
+    private static int CountWorksheetContextMenuActionCommands(IEnumerable<WorksheetContextMenuCommand> commands)
+    {
+        var count = 0;
+        foreach (var command in commands)
+        {
+            if (!command.IsSeparator && command.Action != WorksheetContextMenuAction.None)
+                count++;
+
+            count += CountWorksheetContextMenuActionCommands(command.Children);
+        }
+
+        return count;
     }
 
     private static int ReadShortcutSummaryCount(IReadOnlyList<string> lines, string label)

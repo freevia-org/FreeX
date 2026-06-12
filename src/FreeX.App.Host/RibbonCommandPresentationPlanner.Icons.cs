@@ -238,8 +238,14 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("line style")) return new(RibbonCommandIconKind.Line);
         if (name.Contains("shape gradient")) return new(RibbonCommandIconKind.Effects, RibbonCommandIconAccent.Theme);
         if (name.Contains("shape effect")) return new(RibbonCommandIconKind.Effects);
+        if (name.Contains("shadow")) return new(RibbonCommandIconKind.Effects);
+        if (name.Contains("reflection")) return new(RibbonCommandIconKind.Effects);
+        if (name.Contains("glow")) return new(RibbonCommandIconKind.Effects);
+        if (name.Contains("soft edge")) return new(RibbonCommandIconKind.Effects);
+        if (name.Contains("bevel")) return new(RibbonCommandIconKind.Effects);
         if (name.Contains("shape fill")) return new(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill);
         if (name.Contains("shape outline")) return new(RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border);
+        if (name.Contains("3-d rotation") || name.Contains("3d rotation")) return new(RibbonCommandIconKind.Rotate);
         if (name.Contains("object size")) return new(RibbonCommandIconKind.Size);
         if (name.Contains("object rotate")) return new(RibbonCommandIconKind.Rotate);
         if (name.Contains("object outline")) return new(RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border);

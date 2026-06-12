@@ -16,11 +16,11 @@
             </Grid.ColumnDefinitions>
             <Button x:Name="ClearFieldFiltersButton"
                     Grid.Column="0"
-                    Content="Clear Filters from This Field"
+                    Content="{local:Loc Key=PivotFieldFilter_ClearFiltersFromThisField}"
                     MinWidth="160"
                     HorizontalAlignment="Left"
                     Click="ClearFieldFiltersButton_Click"
-                    AutomationProperties.Name="Clear filters from this PivotTable field"/>
+                    AutomationProperties.Name="{local:Loc Key=PivotFieldFilter_ClearFiltersFromThisFieldAutomationName}"/>
             <StackPanel Grid.Column="1"
                         Orientation="Horizontal"
                         HorizontalAlignment="Right">
@@ -54,7 +54,7 @@
                                Margin="0,0,0,8"/>
                     <TextBlock x:Name="ItemFilterSummaryText"
                                Grid.Row="1"
-                               Text="No item filter"
+                               Text="{local:Loc Key=PivotFieldFilter_NoItemFilter}"
                                TextWrapping="Wrap"
                                FontWeight="SemiBold"
                                Margin="0,0,0,8"/>
@@ -77,12 +77,12 @@
                               Click="SelectAllCheckBox_Click"/>
                     <Button x:Name="ClearItemFilterButton"
                             Grid.Row="5"
-                            Content="Clear Item Filter"
+                            Content="{local:Loc Key=PivotFieldFilter_ClearItemFilter}"
                             Width="120"
                             HorizontalAlignment="Left"
                             Margin="0,0,0,8"
                             Click="ClearItemFilterButton_Click"
-                            AutomationProperties.Name="Clear the item checklist filter for this PivotTable field"/>
+                            AutomationProperties.Name="{local:Loc Key=PivotFieldFilter_ClearItemFilterAutomationName}"/>
 
                     <ListBox x:Name="FilterItemsList"
                              Grid.Row="6"
@@ -102,11 +102,11 @@
                      Header="{local:Loc Key=PivotFieldFilter_LabelFilters}">
                 <StackPanel Margin="10">
                     <TextBlock x:Name="LabelFilterSummaryText"
-                               Text="No label filter"
+                               Text="{local:Loc Key=PivotFieldFilter_NoLabelFilter}"
                                TextWrapping="Wrap"
                                FontWeight="SemiBold"
                                Margin="0,0,0,8"/>
-                    <TextBlock Text="Manage label filters for this PivotTable field."
+                    <TextBlock Text="{local:Loc Key=PivotFieldFilter_ManageLabelFiltersDescription}"
                                TextWrapping="Wrap"
                                Margin="0,0,0,12"/>
                     <StackPanel Orientation="Horizontal">
@@ -117,12 +117,12 @@
                                 Click="LabelFilterButton_Click"
                                 AutomationProperties.Name="{local:Loc Key=PivotFieldFilter_OpenPivotTableLabelFilterDialog}"/>
                         <Button x:Name="RemoveLabelFilterButton"
-                                Content="Remove Label Filter"
+                                Content="{local:Loc Key=PivotFieldFilter_RemoveLabelFilter}"
                                 Width="140"
                                 Margin="8,0,0,0"
                                 HorizontalAlignment="Left"
                                 Click="RemoveLabelFilterButton_Click"
-                                AutomationProperties.Name="Remove the active label filter for this PivotTable field"/>
+                                AutomationProperties.Name="{local:Loc Key=PivotFieldFilter_RemoveLabelFilterAutomationName}"/>
                     </StackPanel>
                 </StackPanel>
             </TabItem>
@@ -130,11 +130,11 @@
                      Header="{local:Loc Key=PivotFieldFilter_ValueFilters}">
                 <StackPanel Margin="10">
                     <TextBlock x:Name="ValueFilterSummaryText"
-                               Text="No value filter"
+                               Text="{local:Loc Key=PivotFieldFilter_NoValueFilter}"
                                TextWrapping="Wrap"
                                FontWeight="SemiBold"
                                Margin="0,0,0,8"/>
-                    <TextBlock Text="Manage value filters for this PivotTable field."
+                    <TextBlock Text="{local:Loc Key=PivotFieldFilter_ManageValueFiltersDescription}"
                                TextWrapping="Wrap"
                                Margin="0,0,0,12"/>
                     <TextBlock x:Name="ValueFilterUnavailableText"
@@ -150,12 +150,12 @@
                                 Click="ValueFilterButton_Click"
                                 AutomationProperties.Name="{local:Loc Key=PivotFieldFilter_OpenPivotTableValueFilterDialog}"/>
                         <Button x:Name="RemoveValueFilterButton"
-                                Content="Remove Value Filter"
+                                Content="{local:Loc Key=PivotFieldFilter_RemoveValueFilter}"
                                 Width="140"
                                 Margin="8,0,0,0"
                                 HorizontalAlignment="Left"
                                 Click="RemoveValueFilterButton_Click"
-                                AutomationProperties.Name="Remove the active value filter for this PivotTable field"/>
+                                AutomationProperties.Name="{local:Loc Key=PivotFieldFilter_RemoveValueFilterAutomationName}"/>
                     </StackPanel>
                 </StackPanel>
             </TabItem>
