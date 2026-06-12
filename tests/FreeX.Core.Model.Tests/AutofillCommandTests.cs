@@ -345,9 +345,36 @@ public class AutofillCommandTests
             source.IndexOf("public void Revert", StringComparison.Ordinal)];
 
         apply.Should().NotContain("_fillRange.AllCells().ToList()");
-        apply.Should().Contain("new List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>(GetFillCellCapacity())");
+        // Both the snapshot and the writtenCells list are capacity-hinted from GetFillCellCapacity():
+        apply.Should().Contain("var capacity = GetFillCellCapacity()");
+        apply.Should().Contain("new List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>(capacity)");
+        apply.Should().Contain("new List<CellAddress>(capacity)");
         apply.Should().Contain("for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)");
         apply.Should().Contain("for (var col = _fillRange.Start.Col; col <= _fillRange.End.Col; col++)");
+    }
+
+    [Fact]
+    public void Apply_ReturnsAffectedCellsMatchingFillRange()
+    {
+        var (_, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(source, new NumberValue(10));
+
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 2, 1),
+            new CellAddress(sheet.Id, 4, 1));
+
+        var outcome = new AutofillCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            fillRange).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.AffectedCells.Should().NotBeNull();
+        outcome.AffectedCells!.Count.Should().Be(3);
+        outcome.AffectedCells.Should().Contain(new CellAddress(sheet.Id, 2, 1));
+        outcome.AffectedCells.Should().Contain(new CellAddress(sheet.Id, 3, 1));
+        outcome.AffectedCells.Should().Contain(new CellAddress(sheet.Id, 4, 1));
     }
 
 }

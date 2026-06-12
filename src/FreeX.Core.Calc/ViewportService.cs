@@ -14,6 +14,21 @@ public sealed partial class ViewportService : IViewportService
     private const int MaxViewportListCapacityHint = 65_536;
     private const int MaxChartDataCellsPerViewport = 10_000;
 
+    public (uint LastVisibleRow, IReadOnlyList<OutlineGroupRange> RowOutlineGroups)
+        ComputeRowMetricsSummary(Workbook workbook, SheetId sheetId, ViewportRequest request)
+    {
+        var sheet = workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return (0u, []);
+
+        var rowMetrics = BuildFrozenAwareRowMetrics(sheet, request.TopRow, request.AvailableHeight);
+        var lastVisibleRow = rowMetrics.Count > 0 ? rowMetrics[^1].Row : 0u;
+        var rowOutlineGroups = sheet.ShowOutlineSymbols == false
+            ? (IReadOnlyList<OutlineGroupRange>)[]
+            : BuildRowOutlineGroups(sheet);
+        return (lastVisibleRow, rowOutlineGroups);
+    }
+
     public ViewportModel GetViewport(Workbook workbook, SheetId sheetId, ViewportRequest request)
     {
         var sheet = workbook.GetSheet(sheetId);
