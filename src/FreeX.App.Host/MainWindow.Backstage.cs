@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Threading;
 using FreeX.App.Services;
@@ -11,6 +12,9 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private PrintPreviewSettings _backstagePrintPreviewSettings = new();
+    private FixedDocument? _backstagePrintPreviewDocument;
+
     private void ShowStartScreen()
     {
         UpdateSsGreeting();
@@ -209,11 +213,49 @@ public partial class MainWindow
         SsInfoNavBtn.Style = (Style)FindResource("SsNavBtn");
         SsPrintNavBtn.Style = (Style)FindResource("SsNavBtnActive");
         var activeSheet = _workbook.GetSheet(_currentSheetId);
-        SsPrintSettingsSummary.Text = activeSheet is null
-            ? string.Empty
-            : PrintSettingsPlanner.Build(activeSheet).Summary;
-        SsPrintNavBtn.Focus();
-        Keyboard.Focus(SsPrintNavBtn);
+        _backstagePrintPreviewSettings = new PrintPreviewSettings();
+        ConfigureBackstagePrintOptions(activeSheet);
+        RefreshBackstagePrintPreview();
+        SsBackstagePrintNowButton.Focus();
+        Keyboard.Focus(SsBackstagePrintNowButton);
+    }
+
+    private void ConfigureBackstagePrintOptions(Sheet? activeSheet)
+    {
+        SsPrintOptionsHost.Content = PrintPreviewSettingsPanelFactory.Build(
+            _currentSheetId,
+            activeSheet,
+            cmd => TryExecuteCommand(cmd, "Print Settings"),
+            RefreshBackstagePrintPreview,
+            settings => _backstagePrintPreviewSettings = settings);
+    }
+
+    private void RefreshBackstagePrintPreview()
+    {
+        var refreshed = BuildActiveSheetPrintPreview(_backstagePrintPreviewSettings);
+        _backstagePrintPreviewDocument = refreshed.Document;
+        SsPrintPreviewViewer.Document = refreshed.Document;
+        SsPrintSettingsSummary.Text = refreshed.Settings.Summary;
+        Dispatcher.BeginInvoke(
+            () => SsPrintPreviewViewer.FitToWidth(),
+            DispatcherPriority.Loaded);
+    }
+
+    private void BackstagePrintNowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_backstagePrintPreviewDocument is null)
+            RefreshBackstagePrintPreview();
+
+        if (_backstagePrintPreviewDocument is null)
+            return;
+
+        NativePrintDialogService.ShowPrintDialogAndPrint(
+            _backstagePrintPreviewDocument.DocumentPaginator,
+            printQueue: null,
+            copies: 1,
+            collated: true,
+            PrintPreviewSidesMode.OneSided,
+            this);
     }
 
     private void UpdateInfoView()

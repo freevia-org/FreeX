@@ -2549,9 +2549,9 @@ public partial class MainWindow
             closedViaEscape = ClosePrintPreviewTourDialogWithEscape(dialog);
             await Task.Delay(350);
             Activate();
-            SsPrintPreviewButton.Focus();
-            Keyboard.Focus(SsPrintPreviewButton);
-            focusReturned = IsActive && Keyboard.FocusedElement == SsPrintPreviewButton;
+            SsBackstagePrintNowButton.Focus();
+            Keyboard.Focus(SsBackstagePrintNowButton);
+            focusReturned = IsActive && Keyboard.FocusedElement == SsBackstagePrintNowButton;
             await CaptureCurrentWindowAsync(outputDir, "freex_print_preview_closed_focus_return", 760);
         }
         finally
@@ -6634,7 +6634,15 @@ public partial class MainWindow
 
             captures.Add(await CaptureDrawObjectFormattingDialogAsync(
                 outputDir,
-                new ShapeGradientDialog(context.Shape.GetEffectiveGradientFillDirection()) { Owner = this },
+                new ShapeGradientDialog(
+                    context.Shape.FillThemeColor?.Resolve(_workbook.Theme)
+                        ?? context.Shape.FillColor
+                        ?? DrawingShapeModel.ResolveDefaultFillColor(_workbook.Theme),
+                    context.Shape.GradientFillEndColor ?? ShapeGradientDialogPlanner.DefaultEndColor,
+                    context.Shape.GetEffectiveGradientFillDirection())
+                {
+                    Owner = this
+                },
                 "shape-gradient-dialog",
                 "freex_draw_object_formatting_shape_gradient_dialog",
                 "Shape Gradient dialog shows start/end RGB stop inputs, color buttons, direction choices, and OK/Cancel.",
@@ -10976,7 +10984,7 @@ public partial class MainWindow
                 EntryPath: "File > Print",
                 FileName: "freex_print_backstage_file_print_entry",
                 OutputFileName: "freex_print_backstage_file_print_entry.png",
-                EvidenceSummary: "Backstage Print view shows the Print Preview command and active sheet settings summary."),
+                EvidenceSummary: "Backstage Print view shows the print preview directly with page and print options on the left."),
             new(
                 CaptureKey: "print-preview:ctrl-p-entry:opened",
                 PairKey: "interactive:print-preview:ctrl-p-entry:opened",
@@ -11029,7 +11037,7 @@ public partial class MainWindow
                 EntryPath: "Print Preview close via IsCancel Close button route",
                 FileName: "freex_print_preview_closed_focus_return",
                 OutputFileName: "freex_print_preview_closed_focus_return.png",
-                EvidenceSummary: "Preview is closed and the workbook window is visible again with focus explicitly returned to the backstage Print Preview command.")
+                EvidenceSummary: "Preview is closed and the workbook window is visible again with focus explicitly returned to the backstage Print command.")
         ]);
 
         var manifest = new PrintPreviewTourManifest(
@@ -11059,7 +11067,7 @@ public partial class MainWindow
             [
                 "This in-app tour renders real FreeX WPF windows using RenderTargetBitmap rather than OS CopyFromScreen.",
                 "The Ctrl+P route is represented by FreeX's existing source-proven Ctrl+P-to-File-Print path plus a live Print Preview dialog opened from that backstage entry point; no global Ctrl+P keystroke is synthesized.",
-                "The close capture uses the PrintPreviewCloseButton IsCancel route as the Escape-equivalent path, then explicitly returns focus to the backstage Print Preview command before the final screenshot.",
+                "The close capture uses the PrintPreviewCloseButton IsCancel route as the Escape-equivalent path, then explicitly returns focus to the backstage Print command before the final screenshot.",
                 "The native Windows print dialog is not opened during this tour to avoid sending output to a real printer or blocking on system print UI."
             ]);
 

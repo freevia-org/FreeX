@@ -11,6 +11,9 @@ internal sealed record ShapeGradientDirectionOption(DrawingShapeGradientDirectio
 
 internal static class ShapeGradientDialogPlanner
 {
+    public static CellColor DefaultStartColor { get; } = new(31, 119, 180);
+    public static CellColor DefaultEndColor { get; } = new(180, 210, 240);
+
     public static IReadOnlyList<ShapeGradientDirectionOption> CreateDirectionOptions() =>
     [
         new(DrawingShapeGradientDirection.DiagonalDown, UiText.Get("FormatCells_FillPatternDarkUp")),
@@ -23,6 +26,40 @@ internal static class ShapeGradientDialogPlanner
         Enum.IsDefined(direction)
             ? direction
             : DrawingShapeGradientDirection.DiagonalDown;
+
+    public static (Point Start, Point End) CreatePreviewGradientPoints(
+        DrawingShapeGradientDirection direction,
+        double width,
+        double height)
+    {
+        direction = NormalizeDirection(direction);
+        if (direction == DrawingShapeGradientDirection.Horizontal)
+            return (new Point(0, 0.5), new Point(1, 0.5));
+        if (direction == DrawingShapeGradientDirection.Vertical)
+            return (new Point(0.5, 0), new Point(0.5, 1));
+
+        if (width <= 0 || height <= 0)
+        {
+            return direction == DrawingShapeGradientDirection.DiagonalUp
+                ? (new Point(0, 1), new Point(1, 0))
+                : (new Point(0, 0), new Point(1, 1));
+        }
+
+        var xSpan = 1.0;
+        var ySpan = 1.0;
+        if (width > height)
+            xSpan = height / width;
+        else if (height > width)
+            ySpan = width / height;
+
+        var startX = 0.5 - xSpan / 2;
+        var endX = 0.5 + xSpan / 2;
+        var startY = 0.5 - ySpan / 2;
+        var endY = 0.5 + ySpan / 2;
+        return direction == DrawingShapeGradientDirection.DiagonalUp
+            ? (new Point(startX, endY), new Point(endX, startY))
+            : (new Point(startX, startY), new Point(endX, endY));
+    }
 }
 
 public sealed record ShapeGradientDialogResult(
@@ -41,14 +78,24 @@ public sealed class ShapeGradientDialog : Window
     private readonly TextBlock _startColorText = new();
     private readonly TextBlock _endColorText = new();
     private readonly IReadOnlyList<ShapeGradientDirectionOption> _directionOptions;
-    private CellColor _startColor = new(31, 119, 180);
-    private CellColor _endColor = new(180, 210, 240);
+    private CellColor _startColor;
+    private CellColor _endColor;
 
     public ShapeGradientDialogResult Result { get; private set; }
 
     public ShapeGradientDialog(
         DrawingShapeGradientDirection direction = DrawingShapeGradientDirection.DiagonalDown)
+        : this(ShapeGradientDialogPlanner.DefaultStartColor, ShapeGradientDialogPlanner.DefaultEndColor, direction)
     {
+    }
+
+    public ShapeGradientDialog(
+        CellColor startColor,
+        CellColor endColor,
+        DrawingShapeGradientDirection direction = DrawingShapeGradientDirection.DiagonalDown)
+    {
+        _startColor = startColor;
+        _endColor = endColor;
         _directionOptions = ShapeGradientDialogPlanner.CreateDirectionOptions();
         var normalizedDirection = ShapeGradientDialogPlanner.NormalizeDirection(direction);
         Result = new ShapeGradientDialogResult(_startColor, _endColor, normalizedDirection);
@@ -64,6 +111,7 @@ public sealed class ShapeGradientDialog : Window
         _directionBox.DisplayMemberPath = nameof(ShapeGradientDirectionOption.Label);
         _directionBox.SelectedItem = FindDirectionOption(normalizedDirection);
         _directionBox.SelectionChanged += (_, _) => UpdateGradientPreview();
+        _gradientPreview.SizeChanged += (_, _) => UpdateGradientPreview();
         AutomationProperties.SetName(_startColorBox, UiText.Get("ShapeGradient_StartColorAutomationName"));
         AutomationProperties.SetAutomationId(_startColorBox, "ShapeGradientStartColorBox");
         AutomationProperties.SetHelpText(_startColorBox, UiText.Get("ShapeGradient_StartColorHelpText"));
@@ -250,7 +298,12 @@ public sealed class ShapeGradientDialog : Window
 
     private void UpdateGradientPreview()
     {
-        _gradientPreview.Background = CreateGradientBrush(_startColor, _endColor, SelectedDirection);
+        _gradientPreview.Background = CreateGradientBrush(
+            _startColor,
+            _endColor,
+            SelectedDirection,
+            _gradientPreview.ActualWidth,
+            _gradientPreview.ActualHeight);
     }
 
     private static string FormatColor(CellColor color) =>
@@ -340,18 +393,14 @@ public sealed class ShapeGradientDialog : Window
         button.Background = ToBrush(color);
     }
 
-    private static LinearGradientBrush CreateGradientBrush(
+    internal static LinearGradientBrush CreateGradientBrush(
         CellColor startColor,
         CellColor endColor,
-        DrawingShapeGradientDirection direction)
+        DrawingShapeGradientDirection direction,
+        double width,
+        double height)
     {
-        var (startPoint, endPoint) = direction switch
-        {
-            DrawingShapeGradientDirection.Horizontal => (new Point(0, 0.5), new Point(1, 0.5)),
-            DrawingShapeGradientDirection.Vertical => (new Point(0.5, 0), new Point(0.5, 1)),
-            DrawingShapeGradientDirection.DiagonalUp => (new Point(0, 1), new Point(1, 0)),
-            _ => (new Point(0, 0), new Point(1, 1))
-        };
+        var (startPoint, endPoint) = ShapeGradientDialogPlanner.CreatePreviewGradientPoints(direction, width, height);
 
         return new LinearGradientBrush(ToMediaColor(startColor), ToMediaColor(endColor), startPoint, endPoint);
     }
