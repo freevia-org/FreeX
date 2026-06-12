@@ -29,13 +29,13 @@ GitHub's `releases/latest` redirect remains on the latest non-prerelease tester 
 
 Latest verified tester release:
 
-- Release: [FreeX (Test Release) v0.8.112](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-112-2026-06-11-19-59-06-run112-attempt1%2Bc1dbd516)
-- Tag: `v0-8-112-2026-06-11-19-59-06-run112-attempt1+c1dbd516`
-- GitHub Actions run: [27373061787](https://github.com/tony-xmelon/FreeX/actions/runs/27373061787), run number 112 attempt 1, completed successfully
-- Target commit: `c1dbd51651c2c68ff1e0757b52681d3e4f0cf944`
+- Release: [FreeX (Test Release) v0.8.114](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-114-2026-06-12-13-39-39-run114-attempt1%2Bd3efaa6c)
+- Tag: `v0-8-114-2026-06-12-13-39-39-run114-attempt1+d3efaa6c`
+- GitHub Actions run: [27418663315](https://github.com/tony-xmelon/FreeX/actions/runs/27418663315), run number 114 attempt 1, completed successfully
+- Target commit: `d3efaa6c569dae56f664157d0afaa22956be47ed`
 - Release posture: stable latest internal tester release; not a public-preview candidate because live keyboard-only, screen-reader, UIA catalog, and known-issues accessibility gate evidence was not recorded
-- Asset check: versioned Windows `.exe`, stable-name Windows `.exe`, versioned MSIX, stable-name MSIX, and matching checksum assets were published by the workflow after successful hosted release-gate verification. This dispatch used `include_macos_preview=false`, so macOS assets were not attached to v0.8.112. Stable latest `.exe`, `.exe.sha256`, `.msix`, and `.msix.sha256` download links returned HTTP 200.
-- Prior blocked attempt: [27370156270](https://github.com/tony-xmelon/FreeX/actions/runs/27370156270), run number 111 attempt 1, failed in the hosted UI lane before release metadata and publication; no `v0.8.111` tag was created.
+- Asset check: versioned Windows `.exe`, stable-name Windows `.exe`, versioned MSIX, stable-name MSIX, and matching checksum assets were published by the workflow after successful hosted release-gate verification. This dispatch used `include_macos_preview=false`, so macOS assets were not attached to v0.8.114. GitHub marked this non-prerelease as latest, so the stable latest `.exe`, `.exe.sha256`, `.msix`, and `.msix.sha256` links resolve through this release.
+- Prior blocked attempt: [27416766985](https://github.com/tony-xmelon/FreeX/actions/runs/27416766985), run number 113 attempt 1, failed in the hosted UI lane before release metadata and publication because stale source-hygiene tests still expected literal English strings and an older document-state save API; no `v0.8.113` tag was created. The follow-up fix commit `d3efaa6c569dae56f664157d0afaa22956be47ed` updated the tests to the current localized/source contract before run 114 was dispatched.
 
 The `Tester Release` GitHub Actions workflow runs repository preflight, restore, build, the default test lane, and the UI test lane before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. When `include_macos_preview=true`, it also finds or uses the requested successful `macOS App Preview` run for the same commit, downloads both runtime app artifacts, and attaches stable macOS internal-preview assets to the same GitHub Release. It uses normal .NET restore/build caching and parallelism for speed, preserves `default-tests.trx` and `ui-tests.trx` results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
 
