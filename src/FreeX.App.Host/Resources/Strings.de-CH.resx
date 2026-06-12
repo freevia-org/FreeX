@@ -15855,4 +15855,26 @@
   <data name="PivotFieldFilter_RemoveValueFilterAutomationName" xml:space="preserve">
     <value>Remove the active value filter for this PivotTable field</value>
   </data>
+  <data name="Startup_RecoveryTitle" xml:space="preserve">
+    <value>Recover Unsaved Work</value>
+  </data>
+  <data name="Startup_RecoveryPrompt" xml:space="preserve">
+    <value>FreeX found autosaved recovery files from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook?</value>
+  </data>
+  <data name="Startup_RecoveryPromptNamed" xml:space="preserve">
+    <value>FreeX found an autosaved recovery file for "{0}" from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook?</value>
+  </data>
+  <data name="MainWindowMessage_XlsxSaveWarningsBodyFormat" xml:space="preserve">
+    <value>Some features could not be saved to the file and may be missing:
+
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_XlsxSaveWarningsMoreFormat" xml:space="preserve">
+    <value>
+
+and {0} more.</value>
+  </data>
+  <data name="MainWindowMessage_FileSavedWithWarningsTitle" xml:space="preserve">
+    <value>File Saved with Warnings</value>
+  </data>
 </root>
