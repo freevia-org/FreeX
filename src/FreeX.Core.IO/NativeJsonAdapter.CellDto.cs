@@ -611,10 +611,10 @@ public sealed partial class NativeJsonAdapter
 
         public static int FormatAddress(Span<char> destination, uint row, uint col)
         {
-            var columnLength = GetColumnNameLength(col);
-            WriteColumnName(col, destination[..columnLength]);
+            var columnLength = (int)CellAddress.GetColumnNameLength(col);
+            CellAddress.WriteColumnName(col, destination[..columnLength]);
 
-            var rowLength = GetRowDigitCount(row);
+            var rowLength = (int)CellAddress.GetRowDigitCount(row);
             var rowIndex = columnLength + rowLength;
             do
             {
@@ -625,28 +625,6 @@ public sealed partial class NativeJsonAdapter
 
             return columnLength + rowLength;
         }
-
-        private static int GetColumnNameLength(uint col) =>
-            col <= 26 ? 1 :
-            col <= 702 ? 2 : 3;
-
-        private static void WriteColumnName(uint col, Span<char> destination)
-        {
-            for (var index = destination.Length - 1; index >= 0; index--)
-            {
-                col--;
-                destination[index] = (char)('A' + col % 26);
-                col /= 26;
-            }
-        }
-
-        private static int GetRowDigitCount(uint row) =>
-            row < 10 ? 1 :
-            row < 100 ? 2 :
-            row < 1_000 ? 3 :
-            row < 10_000 ? 4 :
-            row < 100_000 ? 5 :
-            row < 1_000_000 ? 6 : 7;
     }
 
     private sealed class StyleOnlyCellDtoJsonConverter : JsonConverter<StyleOnlyCellDto>

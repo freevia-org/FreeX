@@ -327,50 +327,14 @@ public partial class DataValidationDialog
     {
         row = 0;
         col = 0;
-
-        var value = text.Trim();
-        var index = 0;
-        if (index < value.Length && value[index] == '$')
-            index++;
-
-        var columnStart = index;
-        while (index < value.Length)
-        {
-            var ch = value[index];
-            if (ch is >= 'a' and <= 'z')
-                ch = (char)(ch - ('a' - 'A'));
-            if (ch is < 'A' or > 'Z')
-                break;
-
-            col = col * 26 + (uint)(ch - 'A' + 1);
-            if (col > CellAddress.MaxCol)
-                return false;
-
-            index++;
-        }
-
-        if (index == columnStart)
+        // Strip optional $ absolute markers and delegate to the canonical parser.
+        var normalized = text.Trim().ToString().Replace("$", "", StringComparison.Ordinal);
+        if (!CellAddress.TryParse(normalized, default, out var address))
             return false;
 
-        if (index < value.Length && value[index] == '$')
-            index++;
-
-        var rowStart = index;
-        while (index < value.Length)
-        {
-            var ch = value[index];
-            if (ch is < '0' or > '9')
-                return false;
-
-            var digit = (uint)(ch - '0');
-            if (row > CellAddress.MaxRow / 10 || row == CellAddress.MaxRow / 10 && digit > CellAddress.MaxRow % 10)
-                return false;
-
-            row = row * 10 + digit;
-            index++;
-        }
-
-        return index > rowStart && row > 0 && index == value.Length;
+        row = address.Row;
+        col = address.Col;
+        return true;
     }
 
     private static bool TryParseNumber(string text, out double value) =>

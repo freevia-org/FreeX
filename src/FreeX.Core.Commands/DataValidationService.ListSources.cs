@@ -279,72 +279,10 @@ public static partial class DataValidationService
 
     private static bool TryParseA1Cell(ReadOnlySpan<char> text, SheetId sheetId, out CellAddress address)
     {
-        var value = text.Trim();
-        var index = 0;
-        if (index < value.Length && value[index] == '$')
-            index++;
-
-        var column = 0u;
-        var columnStart = index;
-        while (index < value.Length)
-        {
-            var ch = NormalizeColumnLetter(value[index]);
-            if (ch is < 'A' or > 'Z')
-                break;
-
-            column = column * 26 + (uint)(ch - 'A' + 1);
-            if (column > CellAddress.MaxCol)
-            {
-                address = default;
-                return false;
-            }
-
-            index++;
-        }
-
-        if (index == columnStart)
-        {
-            address = default;
-            return false;
-        }
-
-        if (index < value.Length && value[index] == '$')
-            index++;
-
-        var row = 0u;
-        var rowStart = index;
-        while (index < value.Length)
-        {
-            var ch = value[index];
-            if (ch is < '0' or > '9')
-            {
-                address = default;
-                return false;
-            }
-
-            var digit = (uint)(ch - '0');
-            if (row > CellAddress.MaxRow / 10 || row == CellAddress.MaxRow / 10 && digit > CellAddress.MaxRow % 10)
-            {
-                address = default;
-                return false;
-            }
-
-            row = row * 10 + digit;
-            index++;
-        }
-
-        if (index == rowStart || row == 0)
-        {
-            address = default;
-            return false;
-        }
-
-        address = new CellAddress(sheetId, row, column);
-        return true;
+        // Strip optional $ absolute markers and delegate to the canonical parser.
+        var normalized = text.Trim().ToString().Replace("$", "", StringComparison.Ordinal);
+        return CellAddress.TryParse(normalized, sheetId, out address);
     }
-
-    private static char NormalizeColumnLetter(char ch) =>
-        ch is >= 'a' and <= 'z' ? (char)(ch - ('a' - 'A')) : ch;
 
     private static bool RangeContainsValue(
         Sheet sheet,

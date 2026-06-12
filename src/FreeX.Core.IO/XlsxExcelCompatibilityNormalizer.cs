@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
 
@@ -509,15 +510,14 @@ internal static partial class XlsxExcelCompatibilityNormalizer
 
     private static bool TryGetColumnIndex(string cellReference, out int columnIndex)
     {
-        columnIndex = 0;
-        foreach (var ch in cellReference)
-        {
-            if (!char.IsAsciiLetter(ch))
-                break;
+        // Extract the leading column letters from a cell reference like "A1" or bare column name "A".
+        var letterEnd = 0;
+        while (letterEnd < cellReference.Length && char.IsAsciiLetter(cellReference[letterEnd]))
+            letterEnd++;
 
-            columnIndex = (columnIndex * 26) + char.ToUpperInvariant(ch) - 'A' + 1;
-        }
-
+        var colName = cellReference[..letterEnd];
+        var col = CellAddress.ColumnNameToNumber(colName);
+        columnIndex = (int)col;
         return columnIndex > 0;
     }
 

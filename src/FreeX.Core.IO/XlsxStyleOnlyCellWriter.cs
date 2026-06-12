@@ -457,39 +457,17 @@ internal static class XlsxStyleOnlyCellWriter
 
     private static string ToReference(uint row, uint col)
     {
-        var columnLength = GetColumnNameLength(col);
-        var rowLength = GetRowDigitCount(row);
+        var columnLength = (int)CellAddress.GetColumnNameLength(col);
+        var rowLength = (int)CellAddress.GetRowDigitCount(row);
         return string.Create(
             columnLength + rowLength,
             (Row: row, Col: col, ColumnLength: columnLength),
             static (destination, state) =>
             {
-                WriteColumnName(state.Col, destination[..state.ColumnLength]);
+                CellAddress.WriteColumnName(state.Col, destination[..state.ColumnLength]);
                 WriteRowNumber(state.Row, destination[state.ColumnLength..]);
             });
     }
-
-    private static int GetColumnNameLength(uint col) =>
-        col <= 26 ? 1 :
-        col <= 702 ? 2 : 3;
-
-    private static void WriteColumnName(uint col, Span<char> destination)
-    {
-        for (var index = destination.Length - 1; index >= 0; index--)
-        {
-            col--;
-            destination[index] = (char)('A' + col % 26);
-            col /= 26;
-        }
-    }
-
-    private static int GetRowDigitCount(uint row) =>
-        row < 10 ? 1 :
-        row < 100 ? 2 :
-        row < 1_000 ? 3 :
-        row < 10_000 ? 4 :
-        row < 100_000 ? 5 :
-        row < 1_000_000 ? 6 : 7;
 
     private static void WriteRowNumber(uint row, Span<char> destination)
     {

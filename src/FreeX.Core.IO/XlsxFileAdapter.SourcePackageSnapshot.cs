@@ -3718,18 +3718,12 @@ public sealed partial class XlsxFileAdapter
                 return false;
             }
 
-            var index = 0;
-            while (index < reference.Length && char.IsAsciiLetter(reference[index]))
-            {
-                col = checked((col * 26) + (uint)(char.ToUpperInvariant(reference[index]) - 'A' + 1));
-                index++;
-            }
-
-            if (col == 0 || index == reference.Length)
+            if (!CellAddress.TryParse(reference, default, out var address))
                 return false;
 
-            var rowSpan = reference.AsSpan(index);
-            return uint.TryParse(rowSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out row) && row > 0;
+            row = address.Row;
+            col = address.Col;
+            return true;
         }
 
         private static bool IsPatchSafeLegacyNoteVmlDrawing(
@@ -7245,18 +7239,12 @@ public sealed partial class XlsxFileAdapter
             if (string.IsNullOrWhiteSpace(reference))
                 return false;
 
-            var index = 0;
-            while (index < reference.Length && char.IsAsciiLetter(reference[index]))
-            {
-                col = checked((col * 26) + (uint)(char.ToUpperInvariant(reference[index]) - 'A' + 1));
-                index++;
-            }
-
-            if (col == 0 || index == reference.Length)
+            if (!CellAddress.TryParse(reference, default, out var address))
                 return false;
 
-            var rowSpan = reference.AsSpan(index);
-            return uint.TryParse(rowSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out row) && row > 0;
+            row = address.Row;
+            col = address.Col;
+            return true;
         }
 
         private static bool TryParseSingleCellReference(
