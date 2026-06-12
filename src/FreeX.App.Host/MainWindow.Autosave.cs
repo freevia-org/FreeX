@@ -30,8 +30,11 @@ public partial class MainWindow : IAutosaveWorkbookSource
     internal void AttachAutosaveService(AutosaveService service, AutosaveSnapshotStore store)
     {
         var windowIndex = _windowRegistry?.IndexOf(this) ?? 0;
+        // Include the per-launch GUID so a recycled OS PID never clobbers a prior session's
+        // unrecovered snapshot. The GUID is stable for the lifetime of this process.
+        var launchTag = AutosaveSnapshotStore.LaunchId.ToString("N")[..8];
         _autosaveSnapshotId = FormattableString.Invariant(
-            $"recovery-{Environment.ProcessId}-w{Math.Max(0, windowIndex)}");
+            $"recovery-{Environment.ProcessId}-{launchTag}-w{Math.Max(0, windowIndex)}");
 
         _autosaveService = service;
         _autosaveService.Attach(this, _autosaveSnapshotId);
