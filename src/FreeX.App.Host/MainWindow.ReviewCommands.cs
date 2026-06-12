@@ -550,7 +550,7 @@ public partial class MainWindow
         if (ProtectionPasswordHelper.VerifyStoredPassword(storedPassword, password))
             return true;
 
-        _messageService.ShowWarning("The password you supplied is not correct.", title);
+        _messageService.ShowWarning(UiText.Get("MainWindowMessage_ReviewPasswordIncorrect"), title);
         return false;
     }
 

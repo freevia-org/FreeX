@@ -283,8 +283,8 @@ public partial class MainWindow
 
         if (!_windowRegistry.Hide(this))
             _messageService.ShowWarning(
-                "At least one workbook window must stay visible.",
-                "Hide Window");
+                UiText.Get("MainWindowMessage_HideWindowMustStayVisible"),
+                UiText.Get("MainWindowMessage_HideWindowTitle"));
 
         RefreshViewWindowCommandState();
     }
@@ -302,8 +302,8 @@ public partial class MainWindow
         if (hidden.Count == 0)
         {
             _messageService.ShowInfo(
-                "There are no hidden workbook windows to unhide.",
-                "Unhide Window");
+                UiText.Get("MainWindowMessage_UnhideNoHiddenWindows"),
+                UiText.Get("MainWindowMessage_UnhideWindowTitle"));
             RefreshViewWindowCommandState();
             return;
         }
@@ -320,8 +320,8 @@ public partial class MainWindow
             !_windowRegistry.Unhide(window))
         {
             _messageService.ShowWarning(
-                "The selected workbook window is no longer hidden.",
-                "Unhide Window");
+                UiText.Get("MainWindowMessage_UnhideWindowNotHidden"),
+                UiText.Get("MainWindowMessage_UnhideWindowTitle"));
         }
 
         RefreshViewWindowCommandState();
@@ -363,8 +363,8 @@ public partial class MainWindow
             var workArea = SystemParameters.WorkArea;
             if (!_windowRegistry.EnableSideBySide(this, workArea.Width, workArea.Height))
                 _messageService.ShowWarning(
-                    "View Side by Side needs a second visible workbook window.",
-                    "View Side by Side");
+                    UiText.Get("MainWindowMessage_SideBySideNeedsSecondWindow"),
+                    UiText.Get("MainWindowMessage_SideBySideTitle"));
         }
 
         RefreshViewWindowCommandState();

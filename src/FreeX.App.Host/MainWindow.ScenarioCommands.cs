@@ -61,7 +61,7 @@ public partial class MainWindow
         }
         else
         {
-            _messageService.ShowInfo("Select the changing cells for the scenario.", "Scenario Manager");
+            _messageService.ShowInfo(UiText.Get("MainWindowMessage_ScenarioSelectChangingCells"), UiText.Get("MainWindowMessage_ScenarioManagerTitle"));
             return;
         }
 
@@ -98,7 +98,7 @@ public partial class MainWindow
     {
         if (_workbook.Scenarios.Count == 0)
         {
-            _messageService.ShowInfo("No scenarios are saved in this workbook.", "Scenario Manager");
+            _messageService.ShowInfo(UiText.Get("MainWindowMessage_ScenarioNoScenarios"), UiText.Get("MainWindowMessage_ScenarioManagerTitle"));
             return;
         }
 
@@ -157,7 +157,7 @@ public partial class MainWindow
     {
         if (_workbook.Scenarios.Count == 0)
         {
-            _messageService.ShowInfo("No scenarios are saved in this workbook.", "Scenario Manager");
+            _messageService.ShowInfo(UiText.Get("MainWindowMessage_ScenarioNoScenarios"), UiText.Get("MainWindowMessage_ScenarioManagerTitle"));
             return;
         }
 

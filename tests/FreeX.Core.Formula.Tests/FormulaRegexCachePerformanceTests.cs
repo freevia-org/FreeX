@@ -29,13 +29,17 @@ public sealed class FormulaRegexCachePerformanceTests
     [Fact]
     public void WildcardAndSearchRegexCaches_AreBoundedAndTimed()
     {
+        // After consolidation the cache + timeout constraints live in the shared
+        // FormulaWildcardHelper; both BuiltInFunctions.Criteria and TextCore delegate to it.
+        var helperSource = FormulaSourceTestSupport.ReadFormulaSource("FormulaWildcardHelper.cs");
         var criteriaSource = FormulaSourceTestSupport.ReadFormulaSource("BuiltInFunctions.Criteria.cs");
         var textSource = FormulaSourceTestSupport.ReadFormulaSource("BuiltInFunctions.TextCore.cs");
 
-        criteriaSource.Should().Contain("FormulaSafetyLimits.MaxRegexCacheEntries");
-        criteriaSource.Should().Contain("FormulaSafetyLimits.RegexTimeout");
-        textSource.Should().Contain("FormulaSafetyLimits.MaxRegexCacheEntries");
-        textSource.Should().Contain("FormulaSafetyLimits.RegexTimeout");
+        helperSource.Should().Contain("FormulaSafetyLimits.MaxRegexCacheEntries");
+        helperSource.Should().Contain("FormulaSafetyLimits.RegexTimeout");
+
+        criteriaSource.Should().Contain("FormulaWildcardHelper");
+        textSource.Should().Contain("FormulaWildcardHelper");
     }
 
     private const string StaticRegexCallPattern = @"\bRegex\.(?:Match|IsMatch)\s*\(";

@@ -197,7 +197,7 @@ public static class GetPivotDataFormulaPlanner
         var reference = SpreadsheetDisplayFormatter.FormatCellReference(pivotReference, useR1C1ReferenceStyle: false);
         return formulaSheet.Id == pivotSheet.Id
             ? reference
-            : $"{PivotUiPlanner.QuoteSheetNameForReference(pivotSheet.Name)}!{reference}";
+            : $"{SheetNameFormatter.QuoteIfNeeded(pivotSheet.Name)}!{reference}";
     }
 
     private static string QuoteFormulaText(string value) =>

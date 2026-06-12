@@ -351,8 +351,8 @@ public partial class MainWindow
         if (matches.Count == 0)
         {
             _messageService.ShowInfo(
-                "No invalid data found.",
-                "Circle Invalid Data");
+                UiText.Get("MainWindowMessage_CircleInvalidDataNoInvalidData"),
+                UiText.Get("MainWindowMessage_CircleInvalidDataTitle"));
             return;
         }
 
@@ -497,7 +497,7 @@ public partial class MainWindow
         var sheetName = _workbook.GetSheet(address.Sheet)?.Name;
         return sheetName is null || address.Sheet.Equals(defaultSheetId)
             ? reference
-            : $"{PivotUiPlanner.QuoteSheetNameForReference(sheetName)}!{reference}";
+            : $"{SheetNameFormatter.QuoteIfNeeded(sheetName)}!{reference}";
     }
 
     private bool TryExecuteRepeatableConsolidateCommand(

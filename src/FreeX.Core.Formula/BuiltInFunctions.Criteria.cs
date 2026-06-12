@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using FreeX.Core.Model;
 
@@ -251,47 +250,10 @@ public static partial class BuiltInFunctions
         return false;
     }
 
-    private static readonly ConcurrentDictionary<(string Pattern, bool IgnoreCase), Regex> WildcardCache = new();
-    private const string RegexTextElement = @"(?:[\uD800-\uDBFF][\uDC00-\uDFFF]|[^\uD800-\uDFFF])";
-
-    private static string WildcardToRegexPattern(string pattern, bool anchored = true)
-    {
-        var sb = new System.Text.StringBuilder(anchored ? "^" : "");
-        for (int i = 0; i < pattern.Length; i++)
-        {
-            char ch = pattern[i];
-            if (ch == '~' && i + 1 < pattern.Length && pattern[i + 1] is '*' or '?' or '~')
-            {
-                sb.Append(Regex.Escape(pattern[++i].ToString()));
-                continue;
-            }
-
-            switch (ch)
-            {
-                case '*': sb.Append(RegexTextElement).Append('*'); break;
-                case '?': sb.Append(RegexTextElement); break;
-                default:  sb.Append(Regex.Escape(ch.ToString())); break;
-            }
-        }
-        if (anchored) sb.Append('$');
-        return sb.ToString();
-    }
-
     /// <summary>Simple Excel-style wildcard match (* = any chars, ? = any single char).</summary>
     internal static bool WildcardMatch(string text, string pattern, bool ignoreCase)
     {
-        var key = (pattern, ignoreCase);
-        if (!WildcardCache.ContainsKey(key) &&
-            WildcardCache.Count >= FormulaSafetyLimits.MaxRegexCacheEntries)
-        {
-            WildcardCache.Clear();
-        }
-
-        var regex = WildcardCache.GetOrAdd((pattern, ignoreCase), key =>
-        {
-            var opts = key.IgnoreCase ? RegexOptions.IgnoreCase | RegexOptions.Compiled : RegexOptions.Compiled;
-            return new Regex(WildcardToRegexPattern(key.Pattern), opts, FormulaSafetyLimits.RegexTimeout);
-        });
+        var regex = FormulaWildcardHelper.GetOrCreateRegex(pattern, ignoreCase);
         try
         {
             return regex.IsMatch(text);

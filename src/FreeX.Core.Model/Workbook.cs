@@ -286,8 +286,12 @@ public sealed class Workbook
         _sheetById[sheet.Id] = sheet;
     }
 
-    /// <summary>Return an XLSX-compatible validation error for a sheet name, or null when valid.</summary>
-    public string? ValidateSheetName(string name, SheetId? exceptSheetId = null)
+    /// <summary>
+    /// Return an XLSX-compatible structural validation error for a sheet name, or
+    /// <see langword="null"/> when the name satisfies all structural constraints.
+    /// This check does NOT test for duplicate names within any particular workbook.
+    /// </summary>
+    public static string? ValidateSheetNameStructure(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
             return "Sheet name is invalid: it cannot be blank.";
@@ -300,6 +304,16 @@ public sealed class Workbook
 
         if (name.StartsWith('\'') || name.EndsWith('\''))
             return "Sheet name is invalid: it cannot begin or end with an apostrophe.";
+
+        return null;
+    }
+
+    /// <summary>Return an XLSX-compatible validation error for a sheet name, or null when valid.</summary>
+    public string? ValidateSheetName(string name, SheetId? exceptSheetId = null)
+    {
+        var structuralError = ValidateSheetNameStructure(name);
+        if (structuralError is not null)
+            return structuralError;
 
         if (_sheets.Any(s => s.Id != exceptSheetId &&
                              string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)))

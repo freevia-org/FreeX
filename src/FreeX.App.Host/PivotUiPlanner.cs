@@ -213,9 +213,6 @@ public static class PivotUiPlanner
         return sheetName;
     }
 
-    public static string QuoteSheetNameForReference(string sheetName) =>
-        SheetNameFormatter.QuoteIfNeeded(sheetName);
-
     public static PivotDataFieldModel CreateDefaultDataField(
         Sheet sheet,
         PivotTableModel pivotTable,
