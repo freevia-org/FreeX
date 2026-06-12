@@ -43,6 +43,9 @@ public sealed class AddSparklineCommand : IWorkbookCommand
             return new CommandOutcome(false, "Sparkline type is not supported.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
         sheet.Sparklines.Add(_sparkline);
         _added = true;
         return new CommandOutcome(true, AffectedCells: [_sparkline.Location]);

@@ -56,8 +56,15 @@ public sealed class SubtotalCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
-            return protectedOutcome;
+        // Subtotals require both inserting rows and writing formula cells. Check both
+        // permissions atomically before mutating anything, so failures produce accurate
+        // messages rather than a generic "Could not insert subtotal row" from a sub-command.
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.InsertRows) is { } insertOutcome)
+            return insertOutcome;
+        // Formula cells are written into newly-inserted rows; newly-inserted rows default
+        // to Locked=true, so cell editing also requires the sheet to be unprotected.
+        if (CommandGuards.RejectIfProtected(sheet) is { } editOutcome)
+            return editOutcome;
         if (SelectionRangeService.IsWholeColumnSelection(_range) ||
             SelectionRangeService.IsWholeRowSelection(_range))
         {

@@ -29,6 +29,9 @@ public sealed class GoalSeekCommand : IWorkbookCommand
         if (sheet is null)
             return new CommandOutcome(false, ErrorMessage: "Sheet no longer exists.");
 
+        if (sheet.IsProtected && !CommandGuards.CanEditCell(ctx.Workbook, sheet, _changingCell))
+            return CommandGuards.RejectSheetProtected();
+
         _originalCell = sheet.GetCell(_changingCell)?.Clone();
         sheet.SetCell(_changingCell, new NumberValue(_newValue));
         return new CommandOutcome(true, AffectedCells: [_changingCell]);
