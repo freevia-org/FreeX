@@ -447,9 +447,13 @@ public sealed class XlsxFileAdapterFormatTests
         preserveSourcePackageParts.Should().Contain("sourceParts.HasStructuredTables");
         preserveSourcePackageParts.Should().Contain("sourceParts.HasExternalLinks");
         preserveSourcePackageParts.Should().Contain("sourceParts.HasDrawings");
-        preserveSourcePackageParts.Should().Contain("XlsxWorksheetDataConsolidationNormalizer.NormalizeWorksheets(generatedArchive);");
-        preserveSourcePackageParts.Should().Contain("XlsxWorksheetDataValidationNormalizer.NormalizeWorksheets(generatedArchive);");
-        preserveSourcePackageParts.Should().Contain("XlsxWorksheetExtensionListNormalizer.NormalizeWorksheets(generatedArchive);");
+        preserveSourcePackageParts.Should().Contain("XlsxWorksheetSinglePassNormalizer.NormalizeWorksheets(generatedArchive);");
+        preserveSourcePackageParts.Should().NotContain("XlsxWorksheetDataConsolidationNormalizer.NormalizeWorksheets(generatedArchive);",
+            "worksheet normalizers are fused into a single pass — individual NormalizeWorksheets calls must not appear at the save-pipeline level");
+        preserveSourcePackageParts.Should().NotContain("XlsxWorksheetDataValidationNormalizer.NormalizeWorksheets(generatedArchive);",
+            "worksheet normalizers are fused into a single pass — individual NormalizeWorksheets calls must not appear at the save-pipeline level");
+        preserveSourcePackageParts.Should().NotContain("XlsxWorksheetExtensionListNormalizer.NormalizeWorksheets(generatedArchive);",
+            "worksheet normalizers are fused into a single pass — individual NormalizeWorksheets calls must not appear at the save-pipeline level");
         preserveSourcePackageParts.Should().NotContain(
             "HasSourcePackagePart(sourceArchive",
             "loaded-workbook save replay should avoid rescanning all ZIP entries for each optional source package part");

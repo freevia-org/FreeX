@@ -38,17 +38,22 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
         }
     }
 
+    public static bool NormalizeWorksheetRoot(XElement worksheetRoot)
+    {
+        var changed = false;
+        foreach (var conditionalFormatting in worksheetRoot.Elements(WorksheetNs + "conditionalFormatting").ToList())
+            changed |= NormalizeConditionalFormatting(conditionalFormatting);
+
+        return changed;
+    }
+
     internal static bool NormalizeWorksheet(XDocument worksheetXml)
     {
         var root = worksheetXml.Root;
         if (root is null)
             return false;
 
-        var changed = false;
-        foreach (var conditionalFormatting in root.Elements(WorksheetNs + "conditionalFormatting").ToList())
-            changed |= NormalizeConditionalFormatting(conditionalFormatting);
-
-        return changed;
+        return NormalizeWorksheetRoot(root);
     }
 
     private static bool NormalizeConditionalFormatting(XElement conditionalFormatting)

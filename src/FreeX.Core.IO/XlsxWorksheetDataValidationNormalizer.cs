@@ -21,17 +21,22 @@ internal static class XlsxWorksheetDataValidationNormalizer
         }
     }
 
+    public static bool NormalizeWorksheetRoot(XElement worksheetRoot)
+    {
+        var changed = false;
+        foreach (var dataValidations in worksheetRoot.Elements(WorksheetNs + "dataValidations").ToList())
+            changed |= NormalizeElement(dataValidations);
+
+        return changed;
+    }
+
     internal static bool NormalizeWorksheet(XDocument worksheetXml)
     {
         var root = worksheetXml.Root;
         if (root is null)
             return false;
 
-        var changed = false;
-        foreach (var dataValidations in root.Elements(WorksheetNs + "dataValidations").ToList())
-            changed |= NormalizeElement(dataValidations);
-
-        return changed;
+        return NormalizeWorksheetRoot(root);
     }
 
     internal static bool NormalizeElement(XElement dataValidations)

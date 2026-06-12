@@ -107,17 +107,24 @@ internal static class XlsxWorksheetSheetViewNormalizer
         return changed;
     }
 
+    public static bool NormalizeWorksheetRoot(XElement worksheetRoot)
+    {
+        if (worksheetRoot.Element(WorksheetNs + "sheetViews") is not { } sheetViews)
+            return false;
+
+        return NormalizeSheetViewsElement(sheetViews);
+    }
+
     public static void NormalizeWorksheets(ZipArchive archive)
     {
         foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
         {
             var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
             var root = worksheetXml.Root;
-            if (root?.Element(WorksheetNs + "sheetViews") is not { } sheetViews)
+            if (root is null || !NormalizeWorksheetRoot(root))
                 continue;
 
-            if (NormalizeSheetViewsElement(sheetViews))
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
         }
     }
 

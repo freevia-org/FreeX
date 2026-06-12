@@ -75,34 +75,7 @@ public sealed partial class XlsxFileAdapter
         if (sourcePackage.HasUnsupportedConditionalFormatting ?? HasUnsupportedConditionalFormatting(sourceArchive))
             XlsxUnsupportedConditionalFormattingPreserver.Preserve(sourceArchive, generatedArchive);
 
-        XlsxWorksheetGridXmlNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetMergeCellsNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetDimensionNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetSheetFormatNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetSheetPropertiesNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetSheetViewNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetProtectionNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetProtectedRangeNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetScenarioNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetSmartTagNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetCustomSheetViewExtensionListNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetPhoneticPropertyNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetCustomPropertiesNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetConditionalFormatNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetAutoFilterNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetSortStateNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetDataConsolidationNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetDataValidationNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetExtensionListNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetWebPublishItemsNormalizer.NormalizePackage(generatedArchive);
-        XlsxWorksheetOleControlNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheets(generatedArchive);
-        XlsxWorksheetPageBreakNormalizer.NormalizeWorksheets(generatedArchive);
+        XlsxWorksheetSinglePassNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxRichTextFontNormalizer.NormalizePackage(generatedArchive);
         XlsxSharedStringPackageGraphNormalizer.NormalizePackage(generatedArchive);
         XlsxDocumentThumbnailPackageGraphNormalizer.NormalizePackage(generatedArchive);

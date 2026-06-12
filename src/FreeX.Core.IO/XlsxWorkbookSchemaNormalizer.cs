@@ -264,22 +264,36 @@ internal static class XlsxWorkbookSchemaNormalizer
             }
         }
 
-        changed |= XlsxWorkbookExternalReferencesNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+        // Container schemas: definedNames, externalReferences, functionGroups, webPublishObjects, pivotCaches
+        foreach (var containerSchema in XlsxWorkbookContainerElementSchemas.All)
+            changed |= XlsxWorkbookContainerElementNormalizer.NormalizeWorkbookRoot(root, containerSchema, workbookNs);
 
-        foreach (var definedNames in root.Elements(workbookNs + "definedNames").ToList())
+        // oleSize via leaf schema with RequiredAttributes (remove-self-if-invalid)
+        if (XlsxWorkbookLeafElementSchemas.ByLocalName.TryGetValue("oleSize", out var oleSizeSchema))
         {
-            changed |= XlsxWorkbookDefinedNameNormalizer.NormalizeDefinedNamesElement(definedNames);
-            if (XlsxWorkbookDefinedNameNormalizer.ShouldRemoveDefinedNamesElement(definedNames))
+            var keptOleSize = false;
+            foreach (var oleSize in root.Elements(workbookNs + "oleSize").ToList())
             {
-                definedNames.Remove();
-                changed = true;
+                if (keptOleSize)
+                {
+                    oleSize.Remove();
+                    changed = true;
+                    continue;
+                }
+
+                changed |= XlsxWorkbookLeafElementNormalizer.Normalize(oleSize, oleSizeSchema);
+                if (XlsxWorkbookLeafElementNormalizer.ShouldRemove(oleSize, oleSizeSchema))
+                {
+                    oleSize.Remove();
+                    changed = true;
+                    continue;
+                }
+
+                keptOleSize = true;
             }
         }
 
-        changed |= XlsxWorkbookOleSizeNormalizer.NormalizeWorkbookRoot(root, workbookNs);
-        changed |= XlsxWorkbookPivotCachesNormalizer.NormalizeWorkbookRoot(root, workbookNs);
         changed |= XlsxWorkbookWebPublishingNormalizer.NormalizeWorkbookRoot(root, workbookNs);
-        changed |= XlsxWorkbookWebPublishObjectsNormalizer.NormalizeWorkbookRoot(root, workbookNs);
         changed |= XlsxWorkbookExtensionListNormalizer.NormalizeWorkbookRoot(root, workbookNs);
 
         if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
@@ -288,8 +302,7 @@ internal static class XlsxWorkbookSchemaNormalizer
             changed |= XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr);
         foreach (var fileRecoveryPr in root.Elements(workbookNs + "fileRecoveryPr"))
             changed |= XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(fileRecoveryPr);
-        if (root.Element(workbookNs + "functionGroups") is { } functionGroups)
-            changed |= XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
+        // functionGroups is now handled by XlsxWorkbookContainerElementSchemas above.
         if (root.Element(workbookNs + "smartTagPr") is { } smartTagPr)
             changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(smartTagPr);
         if (root.Element(workbookNs + "smartTagTypes") is { } smartTagTypes)

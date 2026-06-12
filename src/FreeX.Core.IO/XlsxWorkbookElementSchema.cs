@@ -54,6 +54,13 @@ internal sealed class XlsxWorkbookLeafElementSchema
     /// schema-empty content types.
     /// </summary>
     public bool RemoveAllChildNodes { get; init; } = true;
+
+    /// <summary>
+    /// Attribute local names that must be present and valid after normalization.
+    /// When any required attribute is absent (or was removed by its rule), the element itself
+    /// is removed from the document. An empty set (the default) means the element is always kept.
+    /// </summary>
+    public IReadOnlySet<string> RequiredAttributes { get; init; } = new HashSet<string>(StringComparer.Ordinal);
 }
 
 /// <summary>
@@ -79,5 +86,25 @@ internal static class XlsxWorkbookLeafElementNormalizer
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(element, attributeName, rule);
 
         return changed;
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when the element should be removed from its parent because one
+    /// or more <see cref="XlsxWorkbookLeafElementSchema.RequiredAttributes"/> are absent or
+    /// were nulled out by their attribute rule. Only meaningful when
+    /// <see cref="XlsxWorkbookLeafElementSchema.RequiredAttributes"/> is non-empty.
+    /// </summary>
+    public static bool ShouldRemove(XElement element, XlsxWorkbookLeafElementSchema schema)
+    {
+        if (schema.RequiredAttributes.Count == 0)
+            return false;
+
+        foreach (var required in schema.RequiredAttributes)
+        {
+            if (element.Attribute(required) is null)
+                return true;
+        }
+
+        return false;
     }
 }

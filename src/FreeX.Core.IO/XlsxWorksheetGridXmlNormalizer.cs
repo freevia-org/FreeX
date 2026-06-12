@@ -104,7 +104,10 @@ internal static class XlsxWorksheetGridXmlNormalizer
     public static bool NormalizeWorksheetRoot(XElement worksheetRoot)
         => NormalizeWorksheetRoot(worksheetRoot, cellMetadataCount: 0, valueMetadataCount: 0);
 
-    private static bool NormalizeWorksheetRoot(
+    internal static (uint CellMetadataCount, uint ValueMetadataCount) ReadMetadataCountsForSinglePass(ZipArchive archive)
+        => ReadMetadataCounts(archive);
+
+    internal static bool NormalizeWorksheetRoot(
         XElement worksheetRoot,
         uint cellMetadataCount,
         uint valueMetadataCount)

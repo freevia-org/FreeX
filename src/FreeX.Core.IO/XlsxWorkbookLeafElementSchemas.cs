@@ -275,10 +275,18 @@ internal static class XlsxWorkbookLeafElementSchemas
         },
 
         // ── oleSize ────────────────────────────────────────────────────────────────────────
-        // NOTE: oleSize is NOT migrated here because it has "remove-self-if-invalid" semantics
-        // (when the ref attribute fails validation the entire element is removed).
-        // That behaviour lives in XlsxWorkbookOleSizeNormalizer.NormalizeWorkbookRoot which
-        // handles the container loop, keeping this element out of the simple table.
+        // Migrated from XlsxWorkbookOleSizeNormalizer.
+        // Uses RequiredAttributes so the element is removed when ref is absent or invalid.
+        new()
+        {
+            LocalName = "oleSize",
+            AllowedAttributes = new HashSet<string>(StringComparer.Ordinal) { "ref" },
+            AttributeRules = new Dictionary<string, Func<string?, string?>>
+            {
+                ["ref"] = NormalizeCellRange
+            },
+            RequiredAttributes = new HashSet<string>(StringComparer.Ordinal) { "ref" }
+        },
     ];
 
     /// <summary>

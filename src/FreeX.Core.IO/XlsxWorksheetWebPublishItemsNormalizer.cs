@@ -163,6 +163,27 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
         return path.Equals(WebPublishItemsPath, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Normalizes standalone webPublishItems.xml part entries and ensures package-level
+    /// metadata (content-types, worksheet relationships). Called by the single-pass normalizer
+    /// after all worksheet XML has been written back.
+    /// </summary>
+    internal static void NormalizePackageResidual(ZipArchive archive, IReadOnlyCollection<string> worksheetPathsWithWebPublishItems)
+    {
+        foreach (var webPublishItemsEntry in archive.Entries.Where(IsWebPublishItemsPartEntry).ToList())
+        {
+            var webPublishItemsXml = XlsxPackageXmlEditor.LoadXml(webPublishItemsEntry);
+            var root = webPublishItemsXml.Root;
+            if (root is null || root.Name != WorksheetNs + "webPublishItems")
+                continue;
+
+            if (NormalizeElement(root))
+                XlsxPackageXmlEditor.ReplaceXml(archive, webPublishItemsEntry.FullName, webPublishItemsXml);
+        }
+
+        NormalizePackageMetadata(archive, worksheetPathsWithWebPublishItems);
+    }
+
     private static void NormalizePackageMetadata(ZipArchive archive, IReadOnlyCollection<string> worksheetPathsWithWebPublishItems)
     {
         if (worksheetPathsWithWebPublishItems.Count == 0 ||
