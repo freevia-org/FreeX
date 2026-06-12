@@ -324,15 +324,15 @@ public sealed partial class MainWindowSourceHygieneTests
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var printSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
 
-        mainSource.Should().NotContain("private void PrintButton_Click(");
-        mainSource.Should().NotContain("private void ExportPdfButton_Click(");
-        mainSource.Should().NotContain("private bool ExportAsPdf(");
-        mainSource.Should().NotContain("private bool ExportAsXps(");
+        mainSource.Should().NotContain("void PrintButton_Click(");
+        mainSource.Should().NotContain("void ExportPdfButton_Click(");
+        mainSource.Should().NotContain("ExportAsPdf(");
+        mainSource.Should().NotContain("ExportAsXps(");
 
         printSource.Should().Contain("private void PrintButton_Click(");
-        printSource.Should().Contain("private void ExportPdfButton_Click(");
-        printSource.Should().Contain("private bool ExportAsPdf(");
-        printSource.Should().Contain("private bool ExportAsXps(");
+        printSource.Should().Contain("private async void ExportPdfButton_Click(");
+        printSource.Should().Contain("private async Task<bool> ExportAsPdf(");
+        printSource.Should().Contain("private async Task<bool> ExportAsXps(");
     }
 
     [Fact]
@@ -416,9 +416,9 @@ public sealed partial class MainWindowSourceHygieneTests
     public void ExportPdfXpsSaveDialog_DeclaresNativeGuardrailsAndOwnedMessages()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
-        var exportMethod = ExtractMethodSource(source, "private void ExportPdfButton_Click(");
-        var exportPdfMethod = ExtractMethodSource(source, "private bool ExportAsPdf(");
-        var exportXpsMethod = ExtractMethodSource(source, "private bool ExportAsXps(");
+        var exportMethod = ExtractMethodSource(source, "private async void ExportPdfButton_Click(");
+        var exportPdfMethod = ExtractMethodSource(source, "private async Task<bool> ExportAsPdf(");
+        var exportXpsMethod = ExtractMethodSource(source, "private async Task<bool> ExportAsXps(");
 
         exportMethod.Should().Contain("new Microsoft.Win32.SaveFileDialog");
         exportMethod.Should().Contain("Title      = UiText.Get(\"MainWindowDialog_ExportPdfXpsTitle\")");
