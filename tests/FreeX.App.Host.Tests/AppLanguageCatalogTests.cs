@@ -21,6 +21,9 @@ public sealed class AppLanguageCatalogTests
         options[1].Should().Be(new AppLanguageOption(
             AppLanguageCatalog.EnglishUnitedStatesCultureName,
             UiText.Get("Options_AppLanguageEnglishUnitedStates")));
+        options[2].Should().Be(new AppLanguageOption(
+            AppLanguageCatalog.PseudoLocalizationCultureName,
+            PseudoLocalization.Expand(UiText.GetNeutral("Options_AppLanguageEnglishUnitedStates"))));
         options.Select(option => option.CultureName)
             .Should()
             .Contain(["uk-UA", "fr-FR"]);
@@ -34,6 +37,7 @@ public sealed class AppLanguageCatalogTests
     [InlineData(null, "")]
     [InlineData("", "")]
     [InlineData("  en-us  ", "en-US")]
+    [InlineData(" QPS-PLOC ", "qps-ploc")]
     [InlineData("uk-UA", "uk-UA")]
     [InlineData("not-a-culture", "")]
     public void NormalizeCultureName_ReturnsCanonicalSupportedCultureOrSystemDefault(

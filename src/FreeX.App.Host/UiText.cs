@@ -19,7 +19,21 @@ internal static class UiText
     public static string Get(string key)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        return ResourceManager.GetString(key, CultureInfo.CurrentUICulture) ?? CreateMissingText(key);
+        var text = ResourceManager.GetString(key, CultureInfo.CurrentUICulture);
+        if (text is null)
+            return CreateMissingText(key);
+
+        if (!AppLanguageCatalog.IsPseudoLocalizationCulture(CultureInfo.CurrentUICulture.Name))
+            return text;
+
+        var neutralText = ResourceManager.GetString(key, CultureInfo.InvariantCulture);
+        return PseudoLocalization.Expand(neutralText ?? text);
+    }
+
+    internal static string GetNeutral(string key)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        return ResourceManager.GetString(key, CultureInfo.InvariantCulture) ?? CreateMissingText(key);
     }
 
     public static string Format(string key, params object?[] args) =>

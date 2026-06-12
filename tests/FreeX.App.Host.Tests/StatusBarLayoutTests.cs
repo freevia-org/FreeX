@@ -71,6 +71,8 @@ public sealed class StatusBarLayoutTests
             harness.StatusAutomationLiveSetting("StatusNumericalCountText").Should().Be(AutomationLiveSetting.Polite);
             harness.StatusAutomationName("StatusMinText").Should().Be("Min: 2");
             harness.StatusAutomationName("StatusMaxText").Should().Be("Max: 4");
+            harness.StatusStatsAutomationName.Should().Be("Average: 3; Count: 2; Sum: 6");
+            harness.StatusStatsAutomationHelpText.Should().Be("Average: 3; Count: 2; Sum: 6");
 
             sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(8)));
             harness.InvalidateNavigationCaches();
@@ -81,6 +83,7 @@ public sealed class StatusBarLayoutTests
             harness.StatusAutomationName("StatusNumericalCountText").Should().Be("Numerical Count: 2");
             harness.StatusAutomationHelpText("StatusNumericalCountText").Should().Be("Numerical Count: 2");
             harness.StatusAutomationName("StatusMaxText").Should().Be("Max: 8");
+            harness.StatusStatsAutomationName.Should().Be("Average: 5; Count: 2; Sum: 10");
         });
     }
 
@@ -495,6 +498,12 @@ public sealed class StatusBarLayoutTests
 
         public Visibility StatusStatsVisibility =>
             ((StackPanel)_window.FindName("StatusStatsPanel")).Visibility;
+
+        public string StatusStatsAutomationName =>
+            AutomationProperties.GetName((StackPanel)_window.FindName("StatusStatsPanel"));
+
+        public string StatusStatsAutomationHelpText =>
+            AutomationProperties.GetHelpText((StackPanel)_window.FindName("StatusStatsPanel"));
 
         public string StatusText(string textBlockName) =>
             ((TextBlock)_window.FindName(textBlockName)).Text;

@@ -39,6 +39,24 @@ public sealed partial class LocalizationResourceTests
     }
 
     [Fact]
+    public void UiText_PseudoLocalizationCulture_ExpandsNeutralResourcesAtRuntime()
+    {
+        using var cultureScope = TestCultureScope.CurrentCultureAndUICulture(currentCulture: "en-US", currentUICulture: "qps-ploc");
+
+        UiText.Get("Common_Cancel")
+            .Should()
+            .Be(PseudoLocalization.Expand(UiText.GetNeutral("Common_Cancel")));
+
+        UiText.Format("Export_PageRangeMultiple", 2, 4)
+            .Should()
+            .Be(string.Format(
+                CultureInfo.CurrentCulture,
+                PseudoLocalization.Expand(UiText.GetNeutral("Export_PageRangeMultiple")),
+                2,
+                4));
+    }
+
+    [Fact]
     public void LocExtension_ProvideValue_ReturnsResourceText()
     {
         new LocExtension("Common_Ok")
