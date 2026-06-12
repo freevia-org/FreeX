@@ -118,4 +118,56 @@ internal static class XlsxChartSeriesRangeReader
             new CellAddress(sheetId, minRow, minCol),
             new CellAddress(sheetId, maxRow, maxCol));
     }
+
+    /// <summary>
+    /// Returns true when at least one formula in the series XML (val/cat/tx containers)
+    /// cannot be parsed as a single rectangular range. Multi-area formulas such as
+    /// "Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5" trigger this path.
+    /// </summary>
+    public static bool HasUnparsableFormula(XElement series, SheetId sheetId)
+    {
+        foreach (var formula in ReadSeriesRangeFormulas(series))
+        {
+            if (!TryParseFormulaRange(formula, sheetId, out _))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Reads the first formula string from a named container element (e.g. "val", "cat", "tx").
+    /// Returns null when the container is absent or has no non-empty formula descendant.
+    /// </summary>
+    public static string? ReadFirstFormula(XElement series, string containerName) =>
+        ReadSeriesRangeFormulas(series, containerName).FirstOrDefault();
+
+    /// <summary>
+    /// Collects <see cref="ChartSeriesVerbatimFormulas"/> for each series element when
+    /// the chart contains at least one formula that cannot be parsed as a rectangular range.
+    /// Returns null when all formulas are parseable (normal path — verbatim bypass not needed).
+    /// </summary>
+    public static List<ChartSeriesVerbatimFormulas>? TryCollectVerbatimFormulas(
+        IEnumerable<XElement> allSeriesElements,
+        SheetId sheetId)
+    {
+        var seriesList = allSeriesElements.ToList();
+        var needsVerbatim = seriesList.Any(series => HasUnparsableFormula(series, sheetId));
+        if (!needsVerbatim)
+            return null;
+
+        var result = new List<ChartSeriesVerbatimFormulas>(seriesList.Count);
+        for (var i = 0; i < seriesList.Count; i++)
+        {
+            var series = seriesList[i];
+            var seriesIndex = ReadSeriesIndex(series, i);
+            result.Add(new ChartSeriesVerbatimFormulas(
+                SeriesIndex: seriesIndex,
+                ValFormula: ReadFirstFormula(series, "val"),
+                CatFormula: ReadFirstFormula(series, "cat"),
+                TxFormula: ReadFirstFormula(series, "tx")));
+        }
+
+        return result;
+    }
 }

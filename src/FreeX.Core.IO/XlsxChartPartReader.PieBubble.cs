@@ -60,6 +60,10 @@ public static partial class XlsxChartPartReader
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
+        ApplyVerbatimSeriesFormulasIfNeeded(
+            pieFamilyChart.Elements(ChartNs + "ser"),
+            sheetId,
+            result);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
@@ -128,6 +132,10 @@ public static partial class XlsxChartPartReader
 
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
+        ApplyVerbatimSeriesFormulasIfNeeded(
+            bubbleChart.Elements(ChartNs + "ser"),
+            sheetId,
+            result);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;

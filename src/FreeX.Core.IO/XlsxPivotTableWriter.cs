@@ -41,7 +41,7 @@ internal static partial class XlsxPivotTableWriter
             var cacheOrdinal = cacheIndex++;
             var cachePath = $"xl/pivotCache/pivotCacheDefinition{cacheOrdinal}.xml";
             var recordsPath = $"xl/pivotCache/pivotCacheRecords{cacheOrdinal}.xml";
-            var recordsRelId = "rIdPivotCacheRecords";
+            var recordsRelId = $"rIdPivotCacheRecords{cacheOrdinal}";
             var calculatedFields = calculatedFieldsByCacheId.TryGetValue(cache.CacheId, out var cacheCalculatedFields)
                 ? cacheCalculatedFields
                 : [];

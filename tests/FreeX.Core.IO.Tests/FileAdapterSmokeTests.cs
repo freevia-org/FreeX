@@ -20114,7 +20114,8 @@ public partial class FileAdapterSmokeTests
             var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
             contentTypesXml.ToString().Should().Contain("/xl/pivotCache/pivotCacheRecords1.xml");
             var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!);
-            cacheXml.Root!.Attribute(relNs + "id")!.Value.Should().Be("rIdPivotCacheRecords");
+            // Fix 5: each cache gets a numbered rel-id so multiple caches get distinct ids.
+            cacheXml.Root!.Attribute(relNs + "id")!.Value.Should().Be("rIdPivotCacheRecords1");
             cacheXml.Root!.Attribute("recordCount")!.Value.Should().Be("2");
             var cacheRelsXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels")!);
             cacheRelsXml.ToString().Should().Contain("pivotCacheRecords");

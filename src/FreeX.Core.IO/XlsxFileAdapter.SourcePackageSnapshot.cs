@@ -6353,6 +6353,9 @@ public sealed partial class XlsxFileAdapter
             sheet.Comments.Clear();
             foreach (var (address, text) in baseline.Comments)
                 sheet.Comments[address] = text;
+            sheet.CommentAuthors.Clear();
+            foreach (var (address, author) in baseline.Authors)
+                sheet.CommentAuthors[address] = author;
         }
 
         private static void ReplaceDictionary<TValue>(
@@ -7728,10 +7731,12 @@ public sealed partial class XlsxFileAdapter
         string? NewTooltip);
 
     private sealed record XlsxWorksheetCommentBaseline(
-        IReadOnlyDictionary<CellAddress, string> Comments)
+        IReadOnlyDictionary<CellAddress, string> Comments,
+        IReadOnlyDictionary<CellAddress, string> Authors)
     {
         public static XlsxWorksheetCommentBaseline Capture(Sheet sheet) =>
-            new(new Dictionary<CellAddress, string>(sheet.Comments));
+            new(new Dictionary<CellAddress, string>(sheet.Comments),
+                new Dictionary<CellAddress, string>(sheet.CommentAuthors));
 
         public bool EqualsModel(XlsxWorksheetCommentBaseline current)
         {

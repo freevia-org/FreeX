@@ -44,6 +44,27 @@ internal static partial class XlsxChartXmlWriter
                                 new XElement(drawingNs + "t", title))))),
                 ToManualLayoutXml(layout, chartNs));
 
+    /// <summary>
+    /// Returns a verbatim <c:title> element parsed from the stored string, or null if
+    /// <paramref name="verbatimXml"/> is null/empty. Used for round-tripping rich axis
+    /// title formatting (bold, italic, multi-run) that the model cannot represent.
+    /// Falls back to null on any parse error so the caller can fall back to computed title.
+    /// </summary>
+    private static XElement? TryParseVerbatimAxisTitleXml(string? verbatimXml)
+    {
+        if (string.IsNullOrWhiteSpace(verbatimXml))
+            return null;
+
+        try
+        {
+            return XElement.Parse(verbatimXml, LoadOptions.PreserveWhitespace);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static XElement? ToTextRunProperties(
         WorkbookThemeColorReference? textThemeColor,
         CellColor? textColor,

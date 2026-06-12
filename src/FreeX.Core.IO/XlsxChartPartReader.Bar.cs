@@ -117,6 +117,10 @@ public static partial class XlsxChartPartReader
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
+        ApplyVerbatimSeriesFormulasIfNeeded(
+            barCharts.Concat(lineCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
+            sheetId,
+            result);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
@@ -196,6 +200,10 @@ public static partial class XlsxChartPartReader
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
+        ApplyVerbatimSeriesFormulasIfNeeded(
+            barCharts.SelectMany(c => c.Elements(ChartNs + "ser")),
+            sheetId,
+            result);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;

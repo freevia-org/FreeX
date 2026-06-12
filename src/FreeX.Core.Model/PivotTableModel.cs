@@ -10,7 +10,7 @@ public sealed class PivotCacheModel
     public int? ConnectionId { get; set; }
     public bool IsOlap { get; set; }
     public string PackagePart { get; init; } = "";
-    public bool RefreshOnLoad { get; set; } = true;
+    public bool RefreshOnLoad { get; set; }
     public bool SaveData { get; set; } = true;
     public bool EnableRefresh { get; set; } = true;
     public bool PreserveSourceSortFilter { get; set; } = true;
@@ -52,6 +52,12 @@ public sealed record PivotCacheFieldModel(
     string? MinDate = null,
     string? MaxDate = null,
     IReadOnlyList<string>? SharedItems = null,
+    /// <summary>
+    /// Element kind for each shared item in <see cref="SharedItems"/> ('s', 'n', 'd', 'b', 'm').
+    /// When present, the writer uses the original element kind instead of re-inferring from the value.
+    /// Null means the writer should infer the kind (for items created fresh in FreeX).
+    /// </summary>
+    IReadOnlyList<char>? SharedItemKinds = null,
     string? Formula = null,
     bool IsDatabaseField = true);
 

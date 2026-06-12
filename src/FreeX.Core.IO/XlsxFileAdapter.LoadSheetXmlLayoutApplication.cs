@@ -41,8 +41,13 @@ public sealed partial class XlsxFileAdapter
             sheet.RowHeights[rowNum] = height;
         foreach (var (colNum, width) in layout.ColumnWidths)
             sheet.ColumnWidths[colNum] = width;
-        foreach (var (row, col, text) in layout.Comments)
-            sheet.Comments[new CellAddress(sheet.Id, row, col)] = text;
+        foreach (var (row, col, text, author) in layout.Comments)
+        {
+            var address = new CellAddress(sheet.Id, row, col);
+            sheet.Comments[address] = text;
+            if (!string.IsNullOrEmpty(author))
+                sheet.CommentAuthors[address] = author;
+        }
         foreach (var (row, col, comment) in layout.ThreadedComments)
             sheet.ThreadedComments[new CellAddress(sheet.Id, row, col)] = comment;
         sheet.BackgroundImage = layout.BackgroundImage;

@@ -43,6 +43,24 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             root.Add(dxfs);
         }
 
+        // Allocate numFmtIds above the maximum existing custom format id to avoid collision
+        // with workbook numFmts (ids >= 164) and other dxf numFmts already in the file.
+        // The OOXML spec reserves 0-163 for built-ins; custom formats start at 164.
+        const int MinCustomNumFmtId = 164;
+        var maxExistingNumFmtId = root
+            .Element(workbookNs + "numFmts")?
+            .Elements(workbookNs + "numFmt")
+            .Select(element => int.TryParse(element.Attribute("numFmtId")?.Value, out var id) ? id : 0)
+            .DefaultIfEmpty(0)
+            .Max() ?? 0;
+        var maxDxfNumFmtId = dxfs
+            .Elements(workbookNs + "dxf")
+            .SelectMany(dxf => dxf.Elements(workbookNs + "numFmt"))
+            .Select(element => int.TryParse(element.Attribute("numFmtId")?.Value, out var id) ? id : 0)
+            .DefaultIfEmpty(0)
+            .Max();
+        var nextNumFmtId = Math.Max(MinCustomNumFmtId, Math.Max(maxExistingNumFmtId, maxDxfNumFmtId) + 1);
+
         var result = new Dictionary<Guid, int>();
         var nextIndex = dxfs.Elements(workbookNs + "dxf").Count();
         foreach (var rule in rules)
@@ -51,7 +69,8 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 continue;
 
             result[rule.Id] = nextIndex++;
-            dxfs.Add(ToDifferentialStyleXml(rule.FormatIfTrue, workbookNs, nextIndex));
+            dxfs.Add(ToDifferentialStyleXml(rule.FormatIfTrue, workbookNs, nextNumFmtId));
+            nextNumFmtId++;
         }
 
         dxfs.SetAttributeValue("count", dxfs.Elements(workbookNs + "dxf").Count().ToString(CultureInfo.InvariantCulture));
@@ -59,7 +78,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         return result;
     }
 
-    private static XElement ToDifferentialStyleXml(CellStyle style, XNamespace workbookNs, int numberFormatId)
+    private static XElement ToDifferentialStyleXml(CellStyle style, XNamespace workbookNs, int numFmtId)
     {
         var def = CellStyle.Default;
         var dxf = new XElement(
@@ -85,7 +104,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             style.NumberFormat != def.NumberFormat
                 ? new XElement(
                     workbookNs + "numFmt",
-                    new XAttribute("numFmtId", (164 + numberFormatId).ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("numFmtId", numFmtId.ToString(CultureInfo.InvariantCulture)),
                     new XAttribute("formatCode", style.NumberFormat))
                 : null,
             HasDifferentialFill(style)

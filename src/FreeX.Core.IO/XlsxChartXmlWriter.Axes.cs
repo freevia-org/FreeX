@@ -52,7 +52,8 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisDisplayUnit,
                 chart.XAxisCustomDisplayUnit,
                 chartNs,
-                drawingNs);
+                drawingNs,
+                verbatimTitle: TryParseVerbatimAxisTitleXml(chart.XAxisTitleVerbatimXml));
             yield return ToValueAxisXml(
                 chart.YAxisTitle,
                 chart.YAxisTitleLayout,
@@ -94,7 +95,8 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisDisplayUnit,
                 chart.YAxisCustomDisplayUnit,
                 chartNs,
-                drawingNs);
+                drawingNs,
+                verbatimTitle: TryParseVerbatimAxisTitleXml(chart.YAxisTitleVerbatimXml));
             var scatterSecondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
             if (chart.Type == ChartType.Scatter && scatterSecondaryIndexes.Count > 0)
             {
@@ -191,7 +193,8 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisCustomDisplayUnit,
             chartNs,
             drawingNs,
-            useExcelNativeMajorGridlineStyle: ShouldUseExcelNativeValueAxisMajorGridlineStyle(chart));
+            useExcelNativeMajorGridlineStyle: ShouldUseExcelNativeValueAxisMajorGridlineStyle(chart),
+            verbatimTitle: TryParseVerbatimAxisTitleXml(chart.YAxisTitleVerbatimXml));
 
         var secondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
         if (secondaryIndexes.Count > 0)
@@ -255,7 +258,8 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "axPos", new XAttribute("val", ToXlsxCategoryAxisPosition(chart))),
             ToAxisGridlinesXml("majorGridlines", chart.ShowXAxisMajorGridlines, chart.XAxisMajorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
             ToAxisGridlinesXml("minorGridlines", chart.ShowXAxisMinorGridlines, chart.XAxisMinorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
-            ToAxisTitleXml(chart.XAxisTitle, chart.XAxisTitleLayout, chart.AxisTitleTextThemeColor, chart.AxisTitleTextColor, chart.AxisTitleFontSize, chartNs, drawingNs),
+            TryParseVerbatimAxisTitleXml(chart.XAxisTitleVerbatimXml)
+                ?? ToAxisTitleXml(chart.XAxisTitle, chart.XAxisTitleLayout, chart.AxisTitleTextThemeColor, chart.AxisTitleTextColor, chart.AxisTitleFontSize, chartNs, drawingNs),
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(ToEffectiveAxisMajorTickStyle(chart.Type, chart.XAxisMajorTickStyle)))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMinorTickStyle))),
             new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(chart.ShowXAxisLabels, chart.XAxisTickLabelPosition))),
@@ -317,7 +321,8 @@ internal static partial class XlsxChartXmlWriter
         double? customDisplayUnit,
         XNamespace chartNs,
         XNamespace drawingNs,
-        bool useExcelNativeMajorGridlineStyle = false) =>
+        bool useExcelNativeMajorGridlineStyle = false,
+        XElement? verbatimTitle = null) =>
         new(chartNs + "valAx",
             new XElement(chartNs + "axId", new XAttribute("val", axisId)),
             new XElement(chartNs + "scaling",
@@ -329,7 +334,7 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "axPos", new XAttribute("val", axisPosition)),
             ToAxisGridlinesXml("majorGridlines", showMajorGridlines, majorGridlineColor, gridlineThickness, chartNs, drawingNs, useExcelNativeMajorGridlineStyle),
             ToAxisGridlinesXml("minorGridlines", showMinorGridlines, minorGridlineColor, gridlineThickness, chartNs, drawingNs),
-            ToAxisTitleXml(title, titleLayout, axisTitleTextThemeColor, axisTitleTextColor, axisTitleFontSize, chartNs, drawingNs),
+            verbatimTitle ?? ToAxisTitleXml(title, titleLayout, axisTitleTextThemeColor, axisTitleTextColor, axisTitleFontSize, chartNs, drawingNs),
             new XElement(chartNs + "numFmt",
                 new XAttribute("formatCode", ToXlsxNumberFormatCode(numberFormat, numberFormatCode)),
                 new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(numberFormat, numberFormatSourceLinked))),

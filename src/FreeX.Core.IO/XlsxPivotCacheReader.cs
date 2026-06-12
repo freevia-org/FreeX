@@ -55,7 +55,7 @@ internal static class XlsxPivotCacheReader
                 ConnectionId = cacheSource is null ? null : XlsxXmlAttributeReader.ReadIntAttribute(cacheSource, "connectionId"),
                 IsOlap = XlsxXmlAttributeReader.ReadBoolAttribute(root, "olap"),
                 PackagePart = cachePath,
-                RefreshOnLoad = XlsxXmlAttributeReader.ReadBoolAttribute(root, "refreshOnLoad", defaultValue: true),
+                RefreshOnLoad = XlsxXmlAttributeReader.ReadBoolAttribute(root, "refreshOnLoad", defaultValue: false),
                 SaveData = XlsxXmlAttributeReader.ReadBoolAttribute(root, "saveData", defaultValue: true),
                 EnableRefresh = XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableRefresh", defaultValue: true),
                 PreserveSourceSortFilter = freeXProps?.Attribute("preserveSourceSortFilter") is { } preserveAttr
@@ -93,6 +93,7 @@ internal static class XlsxPivotCacheReader
                     sharedItems?.Attribute("minDate")?.Value,
                     sharedItems?.Attribute("maxDate")?.Value,
                     sharedItems is null ? null : ReadSharedItemValues(sharedItems, workbookNs),
+                    sharedItems is null ? null : ReadSharedItemKinds(sharedItems, workbookNs),
                     field.Attribute("formula")?.Value,
                     XlsxXmlAttributeReader.ReadBoolAttribute(field, "databaseField", defaultValue: true)));
             }
@@ -120,6 +121,27 @@ internal static class XlsxPivotCacheReader
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => value!)
             .ToList();
+
+    private static IReadOnlyList<char>? ReadSharedItemKinds(XElement sharedItems, XNamespace workbookNs)
+    {
+        // Mirrors the filter in ReadSharedItemValues: only items that have a non-blank "v" attribute.
+        // <m> (missing) items have no "v" attribute and are excluded from SharedItems, so they are
+        // excluded here too to keep indices aligned.
+        var kinds = sharedItems
+            .Elements()
+            .Where(element => element.Name == workbookNs + "s" ||
+                              element.Name == workbookNs + "n" ||
+                              element.Name == workbookNs + "d" ||
+                              element.Name == workbookNs + "b" ||
+                              element.Name == workbookNs + "m")
+            .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("v")?.Value))
+            .Select(element => element.Name.LocalName[0])
+            .ToList();
+
+        // Only return the list when there are items so we can avoid null-check overhead for
+        // fields with no shared items (e.g. calculated fields, external sources).
+        return kinds.Count > 0 ? kinds : null;
+    }
 
     private static PivotCacheSourceType GetSourceType(XElement? cacheSource, XElement? worksheetSource)
     {

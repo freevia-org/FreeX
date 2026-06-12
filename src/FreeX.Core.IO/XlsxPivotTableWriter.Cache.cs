@@ -121,8 +121,11 @@ internal static partial class XlsxPivotTableWriter
             string.IsNullOrWhiteSpace(field.Formula) ? null : new XAttribute("formula", field.Formula),
             ToPivotCacheSharedItemsXml(field, workbookNs));
 
-    private static XElement ToPivotCacheSharedItemsXml(PivotCacheFieldModel field, XNamespace workbookNs) =>
-        new(
+    private static XElement ToPivotCacheSharedItemsXml(PivotCacheFieldModel field, XNamespace workbookNs)
+    {
+        var items = field.SharedItems ?? [];
+        var kinds = field.SharedItemKinds;
+        return new XElement(
             workbookNs + "sharedItems",
             field.SharedItemCount is { } count ? new XAttribute("count", count.ToString(CultureInfo.InvariantCulture)) : null,
             field.ContainsBlank ? new XAttribute("containsBlank", "1") : null,
@@ -138,9 +141,26 @@ internal static partial class XlsxPivotTableWriter
             field.MaxValue is { } maxValue ? new XAttribute("maxValue", maxValue.ToString(CultureInfo.InvariantCulture)) : null,
             !string.IsNullOrWhiteSpace(field.MinDate) ? new XAttribute("minDate", field.MinDate) : null,
             !string.IsNullOrWhiteSpace(field.MaxDate) ? new XAttribute("maxDate", field.MaxDate) : null,
-            (field.SharedItems ?? []).Select(item => ToPivotCacheSharedItemXml(item, workbookNs)));
+            items.Select((item, index) =>
+                ToPivotCacheSharedItemXml(item, kinds is not null && index < kinds.Count ? kinds[index] : '\0', workbookNs)));
+    }
 
-    private static XElement ToPivotCacheSharedItemXml(string item, XNamespace workbookNs)
+    private static XElement ToPivotCacheSharedItemXml(string item, char kind, XNamespace workbookNs)
+    {
+        // Use the preserved element kind from the original file when available.
+        // Fall back to inference only for fresh items (kind == '\0').
+        return kind switch
+        {
+            's' => new XElement(workbookNs + "s", new XAttribute("v", item)),
+            'n' => new XElement(workbookNs + "n", new XAttribute("v", item)),
+            'd' => new XElement(workbookNs + "d", new XAttribute("v", item)),
+            'b' => new XElement(workbookNs + "b", new XAttribute("v", item)),
+            _ => InferPivotCacheSharedItemXml(item, workbookNs)
+        };
+    }
+
+    // Fallback inference for items created fresh in FreeX (no original element kind available).
+    private static XElement InferPivotCacheSharedItemXml(string item, XNamespace workbookNs)
     {
         if (double.TryParse(item, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
             return new XElement(workbookNs + "n", new XAttribute("v", item));

@@ -118,4 +118,19 @@ public static partial class XlsxChartPartReader
 
         return null;
     }
+
+    /// <summary>
+    /// Collects verbatim series formulas when any formula in the set cannot be parsed
+    /// as a single rectangular range (multi-area case). Sets
+    /// <see cref="ChartModel.VerbatimSeriesFormulas"/> on the model when triggered.
+    /// </summary>
+    private static void ApplyVerbatimSeriesFormulasIfNeeded(
+        IEnumerable<XElement> allSeries,
+        SheetId sheetId,
+        ChartModel chart)
+    {
+        var verbatim = XlsxChartSeriesRangeReader.TryCollectVerbatimFormulas(allSeries, sheetId);
+        if (verbatim is not null)
+            chart.VerbatimSeriesFormulas = verbatim;
+    }
 }

@@ -61,6 +61,10 @@ public static partial class XlsxChartPartReader
             .ToList();
         result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
         result.FirstRowIsHeader = hasTitleRange;
+        ApplyVerbatimSeriesFormulasIfNeeded(
+            scatterCharts.SelectMany(c => c.Elements(ChartNs + "ser")),
+            sheetId,
+            result);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
