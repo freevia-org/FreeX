@@ -395,6 +395,31 @@ public static partial class RibbonIconFactory
         AddPath(canvas, "M19,5 C16,4 14,5 12,7 L12,19 C14,17 16,16 19,17 Z", brush, 1.5);
     }
 
+    private static void DrawShapePath(Canvas canvas, string data, Brush brush)
+    {
+        AddPath(canvas, data, brush, 1.5, brush, 0.08);
+    }
+
+    private static void DrawConnector(Canvas canvas, Brush brush)
+    {
+        AddPath(canvas, "M5,7 L11,7 L11,16 L18,16", brush, 1.8);
+        AddFilledCircle(canvas, 5, 7, 2.2, brush);
+        AddFilledCircle(canvas, 18, 16, 2.2, brush);
+    }
+
+    private static void DrawBlockArrow(Canvas canvas, Brush brush, string direction)
+    {
+        var data = direction switch
+        {
+            "left" => "M4,12 L10,6 L10,10 L20,10 L20,14 L10,14 L10,18 Z",
+            "up" => "M12,4 L18,10 L14,10 L14,20 L10,20 L10,10 L6,10 Z",
+            "down" => "M12,20 L6,14 L10,14 L10,4 L14,4 L14,14 L18,14 Z",
+            _ => "M20,12 L14,6 L14,10 L4,10 L4,14 L14,14 L14,18 Z"
+        };
+
+        DrawShapePath(canvas, data, brush);
+    }
+
     private static void DrawGeneric(Canvas canvas, Brush brush)
     {
         AddRectangle(canvas, 6, 6, 12, 12, brush, radius: 2);
