@@ -746,6 +746,8 @@ public sealed partial class NativeJsonAdapter
     {
         public string FontName { get; set; } = "Calibri";
         public double FontSize { get; set; } = 11;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public CellFontScheme FontScheme { get; set; } = CellFontScheme.None;
         public bool Bold { get; set; }
         public bool Italic { get; set; }
         public bool Underline { get; set; }

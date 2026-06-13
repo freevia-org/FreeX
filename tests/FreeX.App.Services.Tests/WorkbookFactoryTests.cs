@@ -57,4 +57,28 @@ public sealed class WorkbookFactoryTests
             UserName = "Analyst",
         });
     }
+
+    [Fact]
+    public void Create_WithNoExplicitFont_DefaultStyleHasMinorFontScheme()
+    {
+        var workbook = WorkbookFactory.Create(new WorkbookCreationOptions(
+            DefaultSheetCount: 1,
+            DefaultFontName: ""));
+
+        var defaultStyle = workbook.GetStyle(StyleId.Default);
+        defaultStyle.FontScheme.Should().Be(CellFontScheme.Minor,
+            "when no custom default font is specified the workbook body font should track the theme minor font");
+    }
+
+    [Fact]
+    public void Create_WithExplicitFont_DefaultStyleHasNoneFontScheme()
+    {
+        var workbook = WorkbookFactory.Create(new WorkbookCreationOptions(
+            DefaultSheetCount: 1,
+            DefaultFontName: "Arial"));
+
+        var defaultStyle = workbook.GetStyle(StyleId.Default);
+        defaultStyle.FontScheme.Should().Be(CellFontScheme.None,
+            "when a specific font is explicitly chosen as the default, the font scheme should be None (pinned)");
+    }
 }

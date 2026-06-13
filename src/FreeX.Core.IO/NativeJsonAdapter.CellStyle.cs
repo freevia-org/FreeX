@@ -88,7 +88,8 @@ public sealed partial class NativeJsonAdapter
             Hidden = dto.Hidden,
             NativeDifferentialAttributes = dto.NativeDifferentialAttributes,
             NativeDifferentialChildXmls = dto.NativeDifferentialChildXmls,
-            NativeDifferentialElementXmls = dto.NativeDifferentialElementXmls
+            NativeDifferentialElementXmls = dto.NativeDifferentialElementXmls,
+            FontScheme = NativeJsonValueSanitizer.ValidEnumOrDefault(dto.FontScheme, CellFontScheme.None),
         };
     }
 
@@ -101,6 +102,7 @@ public sealed partial class NativeJsonAdapter
         {
             FontName = style.FontName,
             FontSize = style.FontSize,
+            FontScheme = style.FontScheme,
             Bold = style.Bold,
             Italic = style.Italic,
             Underline = style.Underline,
@@ -134,6 +136,7 @@ public sealed partial class NativeJsonAdapter
         {
             FontName = safeStyle.FontName,
             FontSize = safeStyle.FontSize,
+            FontScheme = safeStyle.FontScheme,
             Bold = safeStyle.Bold,
             Italic = safeStyle.Italic,
             Underline = safeStyle.Underline,
@@ -188,6 +191,7 @@ public sealed partial class NativeJsonAdapter
 
             return string.Equals(x.FontName, y.FontName, StringComparison.Ordinal)
                 && x.FontSize == y.FontSize
+                && x.FontScheme == y.FontScheme
                 && x.Bold == y.Bold
                 && x.Italic == y.Italic
                 && x.Underline == y.Underline
@@ -222,6 +226,7 @@ public sealed partial class NativeJsonAdapter
             var hash = new HashCode();
             hash.Add(obj.FontName, StringComparer.Ordinal);
             hash.Add(obj.FontSize);
+            hash.Add(obj.FontScheme);
             hash.Add(obj.Bold);
             hash.Add(obj.Italic);
             hash.Add(obj.Underline);

@@ -41,6 +41,16 @@ public sealed record WorkbookTheme(
     public static WorkbookTheme Office { get; } =
         new("Office", "Aptos Display", "Aptos", "Office", OfficeColors, AlternateColorSchemes: []);
 
+    /// <summary>
+    /// Returns the theme font name for the given font scheme, or null when the scheme is None.
+    /// </summary>
+    public string? ResolveSchemeFontName(CellFontScheme scheme) => scheme switch
+    {
+        CellFontScheme.Minor => MinorFontName,
+        CellFontScheme.Major => MajorFontName,
+        _ => null,
+    };
+
     public CellColor GetColor(WorkbookThemeColorSlot slot) =>
         Colors.TryGetValue(slot, out var color)
             ? color

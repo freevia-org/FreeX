@@ -279,7 +279,7 @@ public partial class GridView
         var indentPx = (style?.IndentLevel ?? 0) * 8.0;
         if (style?.ShrinkToFit == true && !wrapText)
         {
-            var typefaceKey = CreateCellTypefaceKey(style);
+            var typefaceKey = CreateCellTypefaceKeyWithTheme(style);
             var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
             var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
             fontSize = ResolveCachedShrinkFontSize(
@@ -317,7 +317,7 @@ public partial class GridView
         }
         else
         {
-            var typefaceKey = CreateCellTypefaceKey(style);
+            var typefaceKey = CreateCellTypefaceKeyWithTheme(style);
             var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
             if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
                 textBrush = BrushForCellColor(fontColor, _brushCache);
@@ -572,7 +572,7 @@ public partial class GridView
             double indentPx = (style?.IndentLevel ?? 0) * 8.0;
             if (style?.ShrinkToFit == true && !wrapText)
             {
-                var typefaceKey = CreateCellTypefaceKey(style);
+                var typefaceKey = CreateCellTypefaceKeyWithTheme(style);
                 var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
                 var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
                 fontSize = ResolveCachedShrinkFontSize(
@@ -611,7 +611,7 @@ public partial class GridView
             }
             else
             {
-                var typefaceKey = CreateCellTypefaceKey(style);
+                var typefaceKey = CreateCellTypefaceKeyWithTheme(style);
                 var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
                 if (style?.FontColor is { } fc && !fc.IsBlack)
                     textBrush = BrushForCellColor(fc, _brushCache);
