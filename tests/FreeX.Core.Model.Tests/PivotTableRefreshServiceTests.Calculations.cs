@@ -28,11 +28,15 @@ public sealed partial class PivotTableRefreshServiceTests
         Text(sheet, "F2").Should().Be("Region");
         Text(sheet, "G2").Should().Be("Sum of Revenue");
         Text(sheet, "F3").Should().Be("East");
-        Number(sheet, "G3").Should().Be(65);
+        // Excel semantics: calculated field evaluated once per group using SUM of each
+        // constituent source field: SUM(Amount)*SUM(Units) = 25*5 = 125
+        Number(sheet, "G3").Should().Be(125);
         Text(sheet, "F4").Should().Be("West");
-        Number(sheet, "G4").Should().Be(135);
+        // SUM(Amount)*SUM(Units) = 45*6.2 = 279
+        Number(sheet, "G4").Should().Be(279);
         Text(sheet, "F5").Should().Be("Grand Total");
-        Number(sheet, "G5").Should().Be(200);
+        // SUM(Amount)*SUM(Units) = 70*11.2 = 784
+        Number(sheet, "G5").Should().Be(784);
     }
 
     [Fact]

@@ -331,9 +331,46 @@ public sealed partial class PivotTableRefreshServiceTests
 
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
-        Number(sheet, "F3").Should().BeApproximately(10d / 25d, 0.0000001);
-        Number(sheet, "G3").Should().BeApproximately(10d / 30d, 0.0000001);
+        // East/Q1 = 10. With a single (outermost) row and column field the parent is the
+        // grand total taken in the SAME column (parent row) or SAME row (parent column):
+        //   % of Parent Row Total    = 10 / (grand total at the Q1 column = 30)
+        //   % of Parent Column Total = 10 / (grand total at the East row  = 25)
+        //   % of Parent Total        = 10 / grand total (70), base-field selection not modeled
+        Number(sheet, "F3").Should().BeApproximately(10d / 30d, 0.0000001);
+        Number(sheet, "G3").Should().BeApproximately(10d / 25d, 0.0000001);
         Number(sheet, "H3").Should().BeApproximately(10d / 70d, 0.0000001);
     }
 
+    [Fact]
+    public void Refresh_RowOnlyNestedShowValuesAsPercentOfParentRowTotal()
+    {
+        var workbook = new Workbook("PivotParentRowNestedTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "H20"),
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "% Parent Row", "sum", ShowValuesAs: PivotShowValuesAs.PercentOfParentRowTotal));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        // Region>Quarter, no columns. Each Quarter row is a % of its Region subtotal,
+        // each Region subtotal is a % of the grand total (220).
+        //   East Q1=25, East Q2=45, East total=70; West Q1=65, West Q2=85, West total=150.
+        Number(sheet, "H3").Should().BeApproximately(25d / 70d, 0.0000001);  // East Q1 / East
+        Number(sheet, "H4").Should().BeApproximately(45d / 70d, 0.0000001);  // East Q2 / East
+        Number(sheet, "H5").Should().BeApproximately(70d / 220d, 0.0000001); // East total / grand
+        Number(sheet, "H6").Should().BeApproximately(65d / 150d, 0.0000001); // West Q1 / West
+        Number(sheet, "H7").Should().BeApproximately(85d / 150d, 0.0000001); // West Q2 / West
+        Number(sheet, "H8").Should().BeApproximately(150d / 220d, 0.0000001);// West total / grand
+        Number(sheet, "H9").Should().BeApproximately(1d, 0.0000001);         // grand total
+    }
 }

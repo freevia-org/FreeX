@@ -88,7 +88,8 @@ public sealed partial class PivotTableCommandTests
         command.Apply(ctx).Success.Should().BeTrue();
 
         pivot.CompactRowLabelIndent.Should().Be(4);
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "D4"))!.StyleId).IndentLevel.Should().Be(4);
+        // D4 is now the header row ("A", level 0, indent 0); D5 is the leaf row ("10", level 1, indent 1*4=4)
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "D5"))!.StyleId).IndentLevel.Should().Be(4);
 
         command.Revert(ctx);
 

@@ -4,6 +4,26 @@ namespace FreeX.Core.Commands;
 
 public static partial class PivotTableRefreshService
 {
+    // FIX 2: Overload that accepts double? — null means write a blank cell (Excel parity
+    // for min/max/product/stddev/var over a group with no numeric values).
+    private static void SetPivotValueCell(
+        Workbook workbook,
+        Sheet sheet,
+        CellAddress address,
+        double? value,
+        PivotDataFieldModel dataField,
+        PivotTableModel? pivotTable = null,
+        bool isEmptyIntersection = false)
+    {
+        if (value is null)
+        {
+            SetPivotCell(sheet, address, BlankValue.Instance);
+            return;
+        }
+
+        SetPivotValueCell(workbook, sheet, address, value.Value, dataField, pivotTable, isEmptyIntersection);
+    }
+
     private static void SetPivotValueCell(
         Workbook workbook,
         Sheet sheet,

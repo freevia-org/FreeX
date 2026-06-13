@@ -27,8 +27,11 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             harness.VisibleRibbonCommandLabels.Should().NotContain("Label Border", harness.DebugActiveRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().NotContain("Y Bounds", harness.DebugActiveRibbonChildren);
             harness.CollapsedActiveRibbonGroupNames.Should().Contain("Charts", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveRibbonGroupVisibleLabels.Should().Contain("Charts", harness.DebugActiveRibbonChildren);
             harness.CollapsedActiveRibbonGroupsWithoutIconSlots.Should().NotContain("Charts", harness.DebugActiveRibbonChildren);
             harness.CollapsedActiveMenuHeaders("Charts").Should().Contain("Column Chart", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveMenuItem("Charts", "Column Chart")?.Icon.Should().NotBeNull(
+                "the collapsed Charts menu should keep command glyphs after the group switches to its large collapsed presentation");
             harness.CollapsedActiveMenuHeaders("Charts").Should().NotContain("Data Label Border", harness.DebugActiveRibbonChildren);
         });
     }
@@ -199,6 +202,32 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
             harness.ActiveRibbonGroupCommandLabelsWithoutIconSlots("Charts").Should().BeEmpty(
                 "the Insert Charts group should show visible chart command icons instead of blank text-only rows");
+        });
+    }
+
+    [Fact]
+    public void InsertRibbon_ChartsCommandsKeepSmallIconsAndLabelsWhenExpanded()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.CreateIsolated();
+
+            harness.SelectRibbonTab("Insert", 1920);
+            if (!harness.CanUseRequestedRibbonWidth(1920))
+                return;
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Charts", harness.DebugActiveRibbonChildren);
+            var chartLabels = harness.ActiveRibbonGroupVisibleCommandLabels("Charts");
+            chartLabels.Should().Contain(
+                ["Recommended Charts", "Column", "Stack Col", "100% Col", "Line", "Pie", "Bar", "Scatter"],
+                $"the expanded Insert Charts group should keep its small chart command labels visible; {harness.DebugActiveRibbonChildren}");
+            chartLabels.Should().NotContain(
+                ["3D Column", "Treemap", "Chart Styles"],
+                "advanced and chart-formatting commands should stay out of the compact Insert Charts ribbon surface");
+            harness.ActiveRibbonGroupCommandLabelsWithoutIconSlots("Charts").Should().BeEmpty(
+                "each visible small chart command should keep a glyph slot beside its label");
+            harness.ActiveRibbonGroupClippedCommandLabels("Charts").Should().BeEmpty(
+                "chart command labels should not be visually clipped out of their small rows");
         });
     }
 
