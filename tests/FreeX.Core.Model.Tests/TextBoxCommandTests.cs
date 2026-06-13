@@ -172,6 +172,41 @@ public sealed class TextBoxCommandTests
     }
 
     [Fact]
+    public void SetTextBoxTextCommand_SetsTextAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var textBox = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 1), Text = "Before" };
+        sheet.TextBoxes.Add(textBox);
+
+        var command = new SetTextBoxTextCommand(sheet.Id, textBox.Id, "After");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        textBox.Text.Should().Be("After");
+
+        command.Revert(ctx);
+
+        textBox.Text.Should().Be("Before");
+    }
+
+    [Fact]
+    public void SetTextBoxTextCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var textBox = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 1), Text = "Before" };
+        sheet.TextBoxes.Add(textBox);
+        sheet.IsProtected = true;
+
+        var outcome = new SetTextBoxTextCommand(sheet.Id, textBox.Id, "After").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        textBox.Text.Should().Be("Before");
+    }
+
+    [Fact]
     public void TextBoxFormattingCommands_RejectInvalidNumbers()
     {
         var wb = new Workbook("test");

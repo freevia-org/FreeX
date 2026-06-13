@@ -116,6 +116,15 @@ public partial class GridView
         set => SetValue(EditingCellProperty, value);
     }
 
+    public static readonly DependencyProperty EditingTextBoxIdProperty =
+        DependencyProperty.Register(nameof(EditingTextBoxId), typeof(Guid?), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public Guid? EditingTextBoxId
+    {
+        get => (Guid?)GetValue(EditingTextBoxIdProperty);
+        set => SetValue(EditingTextBoxIdProperty, value);
+    }
+
     public static readonly DependencyProperty SelectedRangesProperty =
         DependencyProperty.Register(nameof(SelectedRanges), typeof(IReadOnlyList<GridRange>), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnSelectionVisualPropertyChanged));

@@ -126,6 +126,48 @@ public sealed class ResizeTextBoxCommand : IWorkbookCommand
     }
 }
 
+public sealed class SetTextBoxTextCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly Guid _textBoxId;
+    private readonly string _text;
+    private string _previousText = string.Empty;
+    private bool _applied;
+
+    public string Label => "Edit Text Box";
+
+    public SetTextBoxTextCommand(SheetId sheetId, Guid textBoxId, string text)
+    {
+        _sheetId = sheetId;
+        _textBoxId = textBoxId;
+        _text = text;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
+        if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox))
+            return TextBoxCommandGuards.TextBoxNotFound();
+
+        _previousText = textBox.Text;
+        textBox.Text = _text;
+        _applied = true;
+        return new CommandOutcome(true, AffectedCells: [textBox.Anchor]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox)) return;
+        textBox.Text = _previousText;
+        _applied = false;
+    }
+}
+
 public sealed class RotateTextBoxCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;

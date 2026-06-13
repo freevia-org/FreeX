@@ -12,7 +12,8 @@ public partial class MainWindow
 {
     private void RefreshValidationDropdown()
     {
-        if (_inlineEditor?.IsVisible == true)
+        if (_inlineEditor?.IsVisible == true ||
+            _textBoxInlineEditor?.IsVisible == true)
             return;
 
         if (_validationDropdown is null &&
@@ -85,7 +86,9 @@ public partial class MainWindow
         if (_validationDropdown is { Visibility: not Visibility.Collapsed })
             _validationDropdown.Visibility = Visibility.Collapsed;
 
-        if (_inlineEditor?.IsVisible != true && EditOverlay.IsHitTestVisible)
+        if (_inlineEditor?.IsVisible != true &&
+            _textBoxInlineEditor?.IsVisible != true &&
+            EditOverlay.IsHitTestVisible)
             EditOverlay.IsHitTestVisible = false;
     }
 

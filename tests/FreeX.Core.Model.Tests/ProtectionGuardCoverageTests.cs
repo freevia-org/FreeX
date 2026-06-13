@@ -609,6 +609,20 @@ public class ProtectionGuardCoverageTests
                 return new ClearHyperlinksCommand(sheet.Id,
                     new GridRange(addr, addr));
             },
+
+            // ---- Drawing object text ----
+            ["SetTextBoxTextCommand"] = (wb, sheet) =>
+            {
+                var textBox = new TextBoxModel
+                {
+                    Anchor = new CellAddress(sheet.Id, 1, 1),
+                    Text = "Before"
+                };
+                sheet.IsProtected = false;
+                sheet.TextBoxes.Add(textBox);
+                sheet.IsProtected = true;
+                return new SetTextBoxTextCommand(sheet.Id, textBox.Id, "After");
+            },
         };
 
     // ---------------------------------------------------------------------------
