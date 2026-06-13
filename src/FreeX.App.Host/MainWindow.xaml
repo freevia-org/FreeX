@@ -4143,10 +4143,14 @@
                 <ui:GridView x:Name="SheetGrid"
                              AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Worksheet}"
                              AutomationProperties.AutomationId="SheetGrid"
-                             AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_SpreadsheetGridUseArrowKeysToNavigateCellsF2ToEditAndTabEnterToMoveFocus}"/>
+                             AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_SpreadsheetGridUseArrowKeysToNavigateCellsF2ToEditAndTabEnterToMoveFocus}"
+                             CommentOverlayHost="{Binding ElementName=CommentOverlay}"/>
                 <!-- Inline cell edit overlay: a Canvas with a positioned TextBox -->
                 <Canvas x:Name="EditOverlay"
                         IsHitTestVisible="False" Panel.ZIndex="20"/>
+                <Canvas x:Name="CommentOverlay"
+                        ClipToBounds="True"
+                        Panel.ZIndex="30"/>
             </Grid>
 
             <ScrollBar x:Name="VerticalScroll" Grid.Column="1"

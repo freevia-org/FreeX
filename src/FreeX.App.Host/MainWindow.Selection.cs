@@ -1232,33 +1232,19 @@ public partial class MainWindow
 
     private void UpdateCommentPreview(CellAddress address)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
-        {
-            ClearCommentPreview();
-            return;
-        }
-
-        if (sheet.Comments.Count == 0 &&
-            sheet.ThreadedComments.Count == 0)
-        {
-            ClearCommentPreview();
-            return;
-        }
-
-        var preview = CommentNavigationPlanner.FormatCellCommentPreview(
-            sheet.Comments,
-            sheet.ThreadedComments,
-            new CellAddress(_currentSheetId, address.Row, address.Col));
-        SetCommentPreview(preview);
+        SetCommentPreview(null);
     }
 
-    private void ClearCommentPreview() => SetCommentPreview(null);
+    private void ClearCommentPreview()
+    {
+        SheetGrid.HideCommentPreview();
+        SetCommentPreview(null);
+    }
 
     private void SetCommentPreview(string? preview)
     {
-        if (!Equals(SheetGrid.ToolTip, preview))
-            SheetGrid.ToolTip = preview;
+        if (SheetGrid.ToolTip is not null)
+            SheetGrid.ToolTip = null;
     }
 
     private void SheetGrid_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)

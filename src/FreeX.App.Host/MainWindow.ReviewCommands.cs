@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using FreeX.App.UI;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -165,23 +166,10 @@ public partial class MainWindow
         var defaultText = sheet is null
             ? string.Empty
             : CommentNavigationPlanner.GetDefaultCommentText(sheet.Comments, addr);
-        var dialog = new TextEntryDialog(
-            UiText.Get("MainWindowMessage_CommentTitle"),
-            UiText.Format("MainWindowMessage_CommentForCellLabel", addr.ToA1()),
-            defaultText) { Owner = this };
-        if (dialog.ShowDialog() != true) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Comment",
-                SheetGrid.SelectedRange.Value,
-                currentRange => new SetCommentCommand(_currentSheetId, currentRange.Start, dialog.Result.Text)))
-            return;
 
+        EnsureCellVisible(addr);
         UpdateViewport();
-        RefreshReviewCommentNoteCommandStates();
-        RefreshOpenReviewCommentNoteWindows();
-        _messageService.ShowInfo(
-            UiText.Format("MainWindowMessage_CommentAdded", addr.ToA1()),
-            UiText.Get("MainWindowMessage_CommentTitle"));
+        SheetGrid.BeginNoteInlineEdit(addr, addr.ToA1(), defaultText);
     }
 
     private void ReviewNewThreadedCommentBtn_Click(object sender, RoutedEventArgs e)
@@ -191,11 +179,39 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         ThreadedComment? existing = null;
         sheet?.ThreadedComments.TryGetValue(addr, out existing);
-        var dialog = new ThreadedCommentDialog(addr.ToA1(), existing) { Owner = this };
-        if (dialog.ShowDialog() != true) return;
 
-        var result = dialog.Result;
-        var range = SheetGrid.SelectedRange.Value;
+        EnsureCellVisible(addr);
+        UpdateViewport();
+        SheetGrid.BeginThreadedCommentInlineEdit(addr, addr.ToA1(), existing);
+    }
+
+    private void SheetGrid_NoteInlineEditSubmitted(object? sender, GridNoteInlineEditSubmittedEventArgs e)
+    {
+        var range = ResolveInlineCommentEditRange(e.Address);
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Comment",
+                range,
+                currentRange => new SetCommentCommand(_currentSheetId, currentRange.Start, e.Text),
+                out var outcome))
+        {
+            e.KeepOpen = true;
+            e.ErrorMessage = LocalizeCommandErrorMessage(outcome.ErrorMessage);
+            return;
+        }
+
+        UpdateViewport();
+        RefreshReviewCommentNoteCommandStates();
+        RefreshOpenReviewCommentNoteWindows();
+    }
+
+    private void SheetGrid_ThreadedCommentInlineEditSubmitted(object? sender, GridThreadedCommentInlineEditSubmittedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        ThreadedComment? existing = null;
+        sheet?.ThreadedComments.TryGetValue(e.Address, out existing);
+
+        var result = e.Result;
+        var range = ResolveInlineCommentEditRange(e.Address);
         var changed = false;
 
         if (existing is null && result.ReplyText is not null)
@@ -203,13 +219,21 @@ public partial class MainWindow
             changed = TryExecuteRepeatableCurrentRangeCommand(
                 "Threaded Comment",
                 range,
-                r => new SetThreadedCommentCommand(_currentSheetId, r.Start, result.ReplyText));
+                r => new SetThreadedCommentCommand(_currentSheetId, r.Start, result.ReplyText),
+                out var outcome);
+            if (!changed)
+            {
+                e.KeepOpen = true;
+                e.ErrorMessage = LocalizeCommandErrorMessage(outcome.ErrorMessage);
+                return;
+            }
         }
         else if (existing is not null)
         {
             switch (result.Action)
             {
-                case ThreadedCommentDialogAction.EditReply when result.ReplyIndex is { } replyIndex && result.ReplyEditText is not null:
+                case GridThreadedCommentEditAction.EditReply when result.ReplyIndex is { } replyIndex && result.ReplyEditText is not null:
+                {
                     changed = TryExecuteRepeatableCurrentRangeCommand(
                         "Edit Comment Reply",
                         range,
@@ -218,9 +242,18 @@ public partial class MainWindow
                             r.Start,
                             replyIndex,
                             result.ReplyEditText,
-                            result.IsResolved));
+                            result.IsResolved),
+                        out var outcome);
+                    if (!changed)
+                    {
+                        e.KeepOpen = true;
+                        e.ErrorMessage = LocalizeCommandErrorMessage(outcome.ErrorMessage);
+                        return;
+                    }
                     break;
-                case ThreadedCommentDialogAction.DeleteReply when result.ReplyIndex is { } replyIndex:
+                }
+                case GridThreadedCommentEditAction.DeleteReply when result.ReplyIndex is { } replyIndex:
+                {
                     changed = TryExecuteRepeatableCurrentRangeCommand(
                         "Delete Comment Reply",
                         range,
@@ -228,9 +261,18 @@ public partial class MainWindow
                             _currentSheetId,
                             r.Start,
                             replyIndex,
-                            result.IsResolved));
+                            result.IsResolved),
+                        out var outcome);
+                    if (!changed)
+                    {
+                        e.KeepOpen = true;
+                        e.ErrorMessage = LocalizeCommandErrorMessage(outcome.ErrorMessage);
+                        return;
+                    }
                     break;
+                }
                 default:
+                {
                     var hasThreadChange =
                         result.RootText is not null ||
                         result.ReplyText is not null ||
@@ -245,10 +287,18 @@ public partial class MainWindow
                                 r.Start,
                                 result.RootText,
                                 result.ReplyText,
-                                result.IsResolved));
+                                result.IsResolved),
+                            out var outcome);
+                        if (!changed)
+                        {
+                            e.KeepOpen = true;
+                            e.ErrorMessage = LocalizeCommandErrorMessage(outcome.ErrorMessage);
+                            return;
+                        }
                     }
 
                     break;
+                }
             }
         }
 
@@ -258,6 +308,14 @@ public partial class MainWindow
             RefreshReviewCommentNoteCommandStates();
             RefreshOpenReviewCommentNoteWindows();
         }
+    }
+
+    private GridRange ResolveInlineCommentEditRange(CellAddress address)
+    {
+        if (SheetGrid.SelectedRange is { } selectedRange && selectedRange.Contains(address))
+            return selectedRange;
+
+        return new GridRange(address, address);
     }
 
     private void ReviewDeleteCommentBtn_Click(object sender, RoutedEventArgs e)

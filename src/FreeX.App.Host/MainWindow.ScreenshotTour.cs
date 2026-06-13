@@ -5612,17 +5612,7 @@ public partial class MainWindow
             CloseDataToolsTourDialog(openDialog);
             openDialog = null;
 
-            openDialog = new ThreadedCommentDialog(context.NewThreadedCommentCell.ToA1(), existing: null) { Owner = this };
-            await ShowDataToolsTourDialogAsync(openDialog);
-            captures.Add(await CaptureReviewCommentsProtectionDialogAsync(
-                openDialog,
-                outputDir,
-                "new-threaded-comment-dialog",
-                "New Comment",
-                "freex_review_new_threaded_comment_dialog",
-                "New Comment dialog opens for a blank seeded cell with the comment editor, Add default button, Cancel button, and stable threaded-comment automation IDs."));
-            CloseDataToolsTourDialog(openDialog);
-            openDialog = null;
+            captures.Add(await CaptureReviewCommentsProtectionInlineThreadedCommentEditorAsync(outputDir, context));
 
             openDialog = new CommentListWindow(
                 UiText.Get("MainWindowMessage_CommentsTitle"),
@@ -5813,6 +5803,44 @@ public partial class MainWindow
             ActualWidth,
             Math.Min(ActualHeight, 760),
             evidenceSummary);
+    }
+
+    private async Task<ReviewCommentsProtectionTourManifestCapture> CaptureReviewCommentsProtectionInlineThreadedCommentEditorAsync(
+        string outputDir,
+        ReviewCommentsProtectionTourContext context)
+    {
+        var address = context.NewThreadedCommentCell;
+        SetSelectionRange(new GridRange(address, address), address);
+        EnsureCellVisible(address);
+        UpdateViewport();
+        RefreshReviewCommentNoteCommandStates();
+        RefreshToolbar();
+        UpdateLayout();
+
+        try
+        {
+            if (!SheetGrid.BeginThreadedCommentInlineEdit(address, address.ToA1(), existing: null))
+                throw new InvalidOperationException("Review comments/protection tour could not open the inline New Comment popup.");
+
+            await Task.Delay(300);
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+
+            const string fileName = "freex_review_new_threaded_comment_inline_popup";
+            await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+            return CreateReviewCommentsProtectionCapture(
+                "new-threaded-comment-inline-popup",
+                "New Comment",
+                fileName,
+                "RenderTargetBitmap-main-window",
+                ActualWidth,
+                Math.Min(ActualHeight, 760),
+                "New Comment opens as a FreeX-owned in-window yellow popup anchored near the selected cell, with the threaded-comment editor focused inline.");
+        }
+        finally
+        {
+            SheetGrid.HideCommentPreview();
+        }
     }
 
     private async Task<ReviewCommentsProtectionTourManifestCapture> CaptureReviewCommentsProtectionDialogAsync(
@@ -8385,26 +8413,8 @@ public partial class MainWindow
                 "Worksheet visual state after applying model-backed hyperlink, rectangle shape, text box, picture placeholder, threaded comment, and note evidence.",
                 "UI-CMD-INSERT-008"));
 
-            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
-                outputDir,
-                new ThreadedCommentDialog("D6", null) { Owner = this },
-                "freex_insert_new_comment_dialog",
-                "new-threaded-comment-dialog",
-                "New Comment dialog opened for D6 with the threaded-comment text box focused.",
-                "RenderTargetBitmap-threaded-comment-dialog-window",
-                "UI-CMD-INSERT-010"));
-
-            captures.Add(await CaptureInsertObjectsLinksDialogAsync(
-                outputDir,
-                new TextEntryDialog(
-                    UiText.Get("MainWindowMessage_CommentTitle"),
-                    UiText.Format("MainWindowMessage_CommentForCellLabel", "E6"),
-                    "Note evidence") { Owner = this },
-                "freex_insert_new_note_dialog",
-                "new-note-dialog",
-                "New Note dialog opened for E6 with the note text box focused.",
-                "RenderTargetBitmap-note-dialog-window",
-                "UI-CMD-INSERT-010"));
+            captures.Add(await CaptureInsertObjectsLinksInlineThreadedCommentEditorAsync(outputDir));
+            captures.Add(await CaptureInsertObjectsLinksInlineNoteEditorAsync(outputDir));
 
             ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());
             if (_reviewCommentsWindow is null)
@@ -8518,6 +8528,84 @@ public partial class MainWindow
             ActualWidth,
             Math.Min(ActualHeight, 760),
             commandRow);
+    }
+
+    private async Task<InsertObjectsLinksTourManifestCapture> CaptureInsertObjectsLinksInlineThreadedCommentEditorAsync(string outputDir)
+    {
+        var address = new CellAddress(_currentSheetId, 6, 4);
+        var sheet = _workbook.GetSheet(_currentSheetId)
+            ?? throw new InvalidOperationException("Insert objects/links/text tour requires an active worksheet.");
+        sheet.ThreadedComments.TryGetValue(address, out var existing);
+        SetSelectionRange(new GridRange(address, address), address);
+        EnsureCellVisible(address);
+        UpdateViewport();
+        RefreshReviewCommentNoteCommandStates();
+        RefreshToolbar();
+        UpdateLayout();
+
+        try
+        {
+            if (!SheetGrid.BeginThreadedCommentInlineEdit(address, address.ToA1(), existing))
+                throw new InvalidOperationException("Insert objects/links/text tour could not open the inline New Comment popup.");
+
+            await Task.Delay(300);
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+
+            const string fileName = "freex_insert_new_comment_inline_popup";
+            await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+            return CreateInsertObjectsLinksTourCapture(
+                "new-threaded-comment-inline-popup",
+                fileName,
+                "New Comment opens as an in-window yellow popup near D6 with the threaded-comment editor available inline.",
+                "RenderTargetBitmap-window-full",
+                ActualWidth,
+                Math.Min(ActualHeight, 760),
+                "UI-CMD-INSERT-010");
+        }
+        finally
+        {
+            SheetGrid.HideCommentPreview();
+        }
+    }
+
+    private async Task<InsertObjectsLinksTourManifestCapture> CaptureInsertObjectsLinksInlineNoteEditorAsync(string outputDir)
+    {
+        var address = new CellAddress(_currentSheetId, 6, 5);
+        var sheet = _workbook.GetSheet(_currentSheetId)
+            ?? throw new InvalidOperationException("Insert objects/links/text tour requires an active worksheet.");
+        sheet.Comments.TryGetValue(address, out var noteText);
+        SetSelectionRange(new GridRange(address, address), address);
+        EnsureCellVisible(address);
+        UpdateViewport();
+        RefreshReviewCommentNoteCommandStates();
+        RefreshToolbar();
+        UpdateLayout();
+
+        try
+        {
+            if (!SheetGrid.BeginNoteInlineEdit(address, address.ToA1(), noteText ?? string.Empty))
+                throw new InvalidOperationException("Insert objects/links/text tour could not open the inline New Note popup.");
+
+            await Task.Delay(300);
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+
+            const string fileName = "freex_insert_new_note_inline_popup";
+            await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+            return CreateInsertObjectsLinksTourCapture(
+                "new-note-inline-popup",
+                fileName,
+                "New Note opens as an in-window yellow popup near E6 with note text editing available inline.",
+                "RenderTargetBitmap-window-full",
+                ActualWidth,
+                Math.Min(ActualHeight, 760),
+                "UI-CMD-INSERT-010");
+        }
+        finally
+        {
+            SheetGrid.HideCommentPreview();
+        }
     }
 
     private InsertObjectsLinksTourManifestCapture CreateInsertObjectsLinksTourCapture(
@@ -10543,8 +10631,8 @@ public partial class MainWindow
                 "Insert Hyperlink dialog with address box default focus/select-all behavior",
                 "Symbol picker dialog with Symbols tab/grid and Insert/Cancel controls",
                 "Model-backed worksheet visuals for hyperlink, rectangle shape, text box, picture placeholder, threaded comment, and note",
-                "New Comment threaded-comment dialog",
-                "New Note text-entry dialog",
+                "New Comment in-window inline popup",
+                "New Note in-window inline popup",
                 "Threaded comments list surface",
                 "Notes list surface"
             ],
@@ -10552,7 +10640,7 @@ public partial class MainWindow
             [
                 "This tour renders FreeX WPF surfaces in process with RenderTargetBitmap; it is not foreground CopyFromScreen or physical mouse/keytip/UIA proof.",
                 "The picture evidence uses the production InsertPictureCommand sizing/fallback path with deterministic placeholder bytes rather than opening the native Windows file picker.",
-                "Dialog captures show production initial states and focus targets but do not submit hyperlink, symbol, comment, or note dialogs through keyboard/mouse input.",
+                "Dialog and inline popup captures show production initial states and focus targets but do not submit hyperlink, symbol, comment, or note editors through keyboard/mouse input.",
                 "The inserted worksheet object evidence is applied through command model calls so save/reload persistence and selection-handle drag evidence remain separate.",
                 "No paired Microsoft Excel screenshots are produced by this tool."
             ]);
@@ -10940,14 +11028,14 @@ public partial class MainWindow
                 Required: !IsScreenshotTourBackgroundRenderAllowed(),
                 Policy: IsScreenshotTourBackgroundRenderAllowed()
                     ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no foreground mouse, keyboard, or screen capture input was used."
-                    : "Abort before file write unless the expected FreeX main window or Review dialog owns foreground focus for each capture."),
+                    : "Abort before file write unless the expected FreeX main window or owned Review window owns foreground focus for each capture."),
             Captures: captures,
             CoveredStates:
             [
                 "Review tab supported command groups and current Thesaurus/change-history gaps",
                 "Spelling dialog",
                 "Accessibility Checker issue-list dialog",
-                "New threaded comment dialog",
+                "New threaded comment in-window inline popup",
                 "Show Comments and Show Notes list windows",
                 "Protect Sheet and Protect Workbook dialogs",
                 "Allow Users to Edit Ranges dialog"

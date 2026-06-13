@@ -385,8 +385,8 @@ public sealed partial class UiTestCatalogInventoryTests
         objectsRow.Should().Contain("shape/text box/picture placeholder");
         hyperlinkSymbolRow.Should().Contain("freex_insert_hyperlink_dialog_address_focus.png");
         hyperlinkSymbolRow.Should().Contain("freex_insert_symbol_picker_opened.png");
-        commentNoteRow.Should().Contain("freex_insert_new_comment_dialog.png");
-        commentNoteRow.Should().Contain("freex_insert_new_note_dialog.png");
+        commentNoteRow.Should().Contain("freex_insert_new_comment_inline_popup.png");
+        commentNoteRow.Should().Contain("freex_insert_new_note_inline_popup.png");
         commentNoteRow.Should().Contain("freex_insert_comments_list_surface.png");
         commentNoteRow.Should().Contain("freex_insert_notes_list_surface.png");
     }
