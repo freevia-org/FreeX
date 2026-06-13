@@ -32,7 +32,7 @@ public partial class HeaderFooterDialog
             width,
             height);
         SetPictureForActiveBox(picture);
-        if (!(_activeTextBox ?? HeaderCenterBox).Text.Contains(PictureToken, StringComparison.OrdinalIgnoreCase))
+        if (!GetActiveTextBox().Text.Contains(PictureToken, StringComparison.OrdinalIgnoreCase))
             InsertTokenIntoActiveBox(PictureToken);
         UpdatePictureButtonState();
     }
@@ -52,7 +52,7 @@ public partial class HeaderFooterDialog
             return;
 
         SetPictureForActiveBox(dialog.Result);
-        if (!(_activeTextBox ?? HeaderCenterBox).Text.Contains(PictureToken, StringComparison.OrdinalIgnoreCase))
+        if (!GetActiveTextBox().Text.Contains(PictureToken, StringComparison.OrdinalIgnoreCase))
             InsertTokenIntoActiveBox(PictureToken);
         UpdatePictureButtonState();
     }
@@ -70,7 +70,7 @@ public partial class HeaderFooterDialog
 
     private WorksheetHeaderFooterPicture? GetPictureForActiveBox()
     {
-        var target = _activeTextBox ?? HeaderCenterBox;
+        var target = GetActiveTextBox();
         if (ReferenceEquals(target, HeaderLeftBox)) return HeaderPictures.Left;
         if (ReferenceEquals(target, HeaderCenterBox)) return HeaderPictures.Center;
         if (ReferenceEquals(target, HeaderRightBox)) return HeaderPictures.Right;
@@ -94,7 +94,7 @@ public partial class HeaderFooterDialog
 
     private void UpdatePictureButtonState()
     {
-        var target = _activeTextBox ?? HeaderCenterBox;
+        var target = GetActiveTextBox();
         var hasPicture = GetPictureForActiveBox() is not null;
         FormatPictureButton.IsEnabled = hasPicture;
         FormatPictureButton.ToolTip = hasPicture
@@ -107,12 +107,28 @@ public partial class HeaderFooterDialog
 
     private void FocusActiveTextBox()
     {
-        var target = _activeTextBox ?? HeaderCenterBox;
+        var target = GetActiveTextBox();
         target.Focus();
         Keyboard.Focus(target);
     }
 
     private static string ActiveBoxLabel(TextBox target)
+    {
+        var scope = target.Name switch
+        {
+            "HeaderLeftBox" or "HeaderCenterBox" or "HeaderRightBox" => UiText.Get("HeaderFooter_Header"),
+            "FooterLeftBox" or "FooterCenterBox" or "FooterRightBox" => UiText.Get("HeaderFooter_Footer"),
+            "FirstHeaderLeftBox" or "FirstHeaderCenterBox" or "FirstHeaderRightBox" => UiText.Get("HeaderFooter_FirstPageHeader"),
+            "FirstFooterLeftBox" or "FirstFooterCenterBox" or "FirstFooterRightBox" => UiText.Get("HeaderFooter_FirstPageFooter"),
+            "EvenHeaderLeftBox" or "EvenHeaderCenterBox" or "EvenHeaderRightBox" => UiText.Get("HeaderFooter_EvenPageHeader"),
+            "EvenFooterLeftBox" or "EvenFooterCenterBox" or "EvenFooterRightBox" => UiText.Get("HeaderFooter_EvenPageFooter"),
+            _ => string.Empty
+        };
+        var section = ActiveBoxSectionLabel(target);
+        return string.IsNullOrWhiteSpace(scope) ? section : $"{scope} {section}";
+    }
+
+    private static string ActiveBoxSectionLabel(TextBox target)
     {
         if (target.Name.EndsWith("LeftBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooterPicture_LeftSection");
         if (target.Name.EndsWith("CenterBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooterPicture_CenterSection");
@@ -122,7 +138,7 @@ public partial class HeaderFooterDialog
 
     private void SetPictureForActiveBox(WorksheetHeaderFooterPicture picture)
     {
-        var target = _activeTextBox ?? HeaderCenterBox;
+        var target = GetActiveTextBox();
         if (ReferenceEquals(target, HeaderLeftBox)) HeaderPictures = HeaderPictures with { Left = picture };
         else if (ReferenceEquals(target, HeaderCenterBox)) HeaderPictures = HeaderPictures with { Center = picture };
         else if (ReferenceEquals(target, HeaderRightBox)) HeaderPictures = HeaderPictures with { Right = picture };

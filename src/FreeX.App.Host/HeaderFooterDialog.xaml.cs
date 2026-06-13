@@ -72,8 +72,8 @@ public partial class HeaderFooterDialog : Window
         DifferentFirstPageBox.Unchecked += (_, _) => RefreshOptionalSectionState();
         DifferentOddEvenBox.Checked += (_, _) => RefreshOptionalSectionState();
         DifferentOddEvenBox.Unchecked += (_, _) => RefreshOptionalSectionState();
-        RefreshOptionalSectionState();
         _activeTextBox = HeaderCenterBox;
+        RefreshOptionalSectionState();
         UpdatePictureButtonState();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -112,10 +112,25 @@ public partial class HeaderFooterDialog : Window
         ApplyPreset(FooterCenterBox, FooterPresetBox.SelectedItem);
     }
 
+    private void HeaderFooterTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, HeaderFooterTabs) || HeaderCenterBox is null || FooterCenterBox is null)
+            return;
+
+        if (_activeTextBox is null || !IsActiveTextBoxInSelectedTab(_activeTextBox))
+            _activeTextBox = GetDefaultTextBoxForSelectedTab();
+        UpdatePictureButtonState();
+    }
+
     private void RefreshOptionalSectionState()
     {
         var firstEnabled = DifferentFirstPageBox.IsChecked == true;
         var evenEnabled = DifferentOddEvenBox.IsChecked == true;
+        FirstPageHeaderGroup.Visibility = firstEnabled ? Visibility.Visible : Visibility.Collapsed;
+        FirstPageFooterGroup.Visibility = firstEnabled ? Visibility.Visible : Visibility.Collapsed;
+        EvenPageHeaderGroup.Visibility = evenEnabled ? Visibility.Visible : Visibility.Collapsed;
+        EvenPageFooterGroup.Visibility = evenEnabled ? Visibility.Visible : Visibility.Collapsed;
+
         SetControlsEnabled(firstEnabled,
             FirstHeaderLeftBox,
             FirstHeaderCenterBox,
@@ -131,10 +146,48 @@ public partial class HeaderFooterDialog : Window
             EvenFooterCenterBox,
             EvenFooterRightBox);
 
-        if (_activeTextBox is not null && !_activeTextBox.IsEnabled)
-            _activeTextBox = HeaderCenterBox;
+        if (_activeTextBox is null || !_activeTextBox.IsEnabled || !IsActiveTextBoxInSelectedTab(_activeTextBox))
+            _activeTextBox = GetDefaultTextBoxForSelectedTab();
         UpdatePictureButtonState();
     }
 
-}
+    private TextBox GetActiveTextBox()
+    {
+        if (_activeTextBox is null || !_activeTextBox.IsEnabled || !IsActiveTextBoxInSelectedTab(_activeTextBox))
+            _activeTextBox = GetDefaultTextBoxForSelectedTab();
 
+        return _activeTextBox;
+    }
+
+    private TextBox GetDefaultTextBoxForSelectedTab() =>
+        ReferenceEquals(HeaderFooterTabs.SelectedItem, FooterTab)
+            ? FooterCenterBox
+            : HeaderCenterBox;
+
+    private bool IsActiveTextBoxInSelectedTab(TextBox textBox) =>
+        ReferenceEquals(HeaderFooterTabs.SelectedItem, FooterTab)
+            ? IsFooterTextBox(textBox)
+            : IsHeaderTextBox(textBox);
+
+    private bool IsHeaderTextBox(TextBox textBox) =>
+        ReferenceEquals(textBox, HeaderLeftBox)
+        || ReferenceEquals(textBox, HeaderCenterBox)
+        || ReferenceEquals(textBox, HeaderRightBox)
+        || ReferenceEquals(textBox, FirstHeaderLeftBox)
+        || ReferenceEquals(textBox, FirstHeaderCenterBox)
+        || ReferenceEquals(textBox, FirstHeaderRightBox)
+        || ReferenceEquals(textBox, EvenHeaderLeftBox)
+        || ReferenceEquals(textBox, EvenHeaderCenterBox)
+        || ReferenceEquals(textBox, EvenHeaderRightBox);
+
+    private bool IsFooterTextBox(TextBox textBox) =>
+        ReferenceEquals(textBox, FooterLeftBox)
+        || ReferenceEquals(textBox, FooterCenterBox)
+        || ReferenceEquals(textBox, FooterRightBox)
+        || ReferenceEquals(textBox, FirstFooterLeftBox)
+        || ReferenceEquals(textBox, FirstFooterCenterBox)
+        || ReferenceEquals(textBox, FirstFooterRightBox)
+        || ReferenceEquals(textBox, EvenFooterLeftBox)
+        || ReferenceEquals(textBox, EvenFooterCenterBox)
+        || ReferenceEquals(textBox, EvenFooterRightBox);
+}
