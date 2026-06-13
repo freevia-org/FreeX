@@ -91,6 +91,18 @@ public static partial class ChartRenderer
         Brush Fill,
         Pen Stroke);
 
+    internal enum DirectLegendFlow
+    {
+        None,
+        Vertical,
+        Horizontal
+    }
+
+    internal readonly record struct DirectChartLayout(
+        Rect Plot,
+        Rect Legend,
+        DirectLegendFlow LegendFlow);
+
     private static DirectChartData? BuildDirectChartData(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)
     {
         var cellLookup = BuildChartCellLookup(chart, viewport);
@@ -242,21 +254,67 @@ public static partial class ChartRenderer
         if (!string.IsNullOrWhiteSpace(chart.Title))
             DrawCenteredText(dc, chart.Title!, rect.Left, rect.Top + 6, rect.Width, chart.ChartTitleFontSize, DirectChartTextBrush);
 
-        var legendWidth = chart.ShowLegend && data.Series.Count > 1 ? 84.0 : 0.0;
-        var plot = new Rect(
+        var layout = PlanDirectChartLayout(chart, data.Series.Count, rect, titleHeight);
+        dc.DrawRectangle(DirectChartPlotFillBrush, null, layout.Plot);
+
+        if (chart.Type is ChartType.Bar or ChartType.ThreeDBar or ChartType.StackedBar or ChartType.PercentStackedBar)
+            DrawDirectBarChart(dc, chart, data, layout.Plot);
+        else
+            DrawDirectCartesianChart(dc, chart, data, layout.Plot);
+
+        if (layout.LegendFlow != DirectLegendFlow.None)
+            DrawDirectLegend(dc, chart, data, theme, layout.Legend, layout.LegendFlow);
+    }
+
+    internal static DirectChartLayout PlanDirectChartLayout(
+        ChartModel chart,
+        int seriesCount,
+        Rect rect,
+        double titleHeight)
+    {
+        var showLegend = chart.ShowLegend &&
+            chart.LegendPosition != ChartLegendPosition.None &&
+            seriesCount > 1;
+        if (!showLegend)
+        {
+            var plot = new Rect(
+                rect.Left + 46,
+                rect.Top + titleHeight,
+                Math.Max(24, rect.Width - 60),
+                Math.Max(24, rect.Height - titleHeight - 42));
+            return new DirectChartLayout(plot, Rect.Empty, DirectLegendFlow.None);
+        }
+
+        var legendFontSize = GetDirectLegendFontSize(chart);
+        var legendRowHeight = GetDirectLegendRowHeight(legendFontSize);
+        if (chart.LegendPosition == ChartLegendPosition.Bottom)
+        {
+            var legendHeight = Math.Min(56.0, Math.Max(28.0, legendRowHeight * Math.Min(2, seriesCount) + 2));
+            var plot = new Rect(
+                rect.Left + 46,
+                rect.Top + titleHeight,
+                Math.Max(24, rect.Width - 60),
+                Math.Max(24, rect.Height - titleHeight - 42 - legendHeight));
+            var legend = new Rect(
+                plot.Left,
+                plot.Bottom + 22,
+                plot.Width,
+                Math.Max(18, rect.Bottom - plot.Bottom - 24));
+            return new DirectChartLayout(plot, legend, DirectLegendFlow.Horizontal);
+        }
+
+        const double legendWidth = 84.0;
+        var verticalPlot = new Rect(
             rect.Left + 46,
             rect.Top + titleHeight,
             Math.Max(24, rect.Width - 60 - legendWidth),
             Math.Max(24, rect.Height - titleHeight - 42));
-        dc.DrawRectangle(DirectChartPlotFillBrush, null, plot);
-
-        if (chart.Type is ChartType.Bar or ChartType.ThreeDBar or ChartType.StackedBar or ChartType.PercentStackedBar)
-            DrawDirectBarChart(dc, chart, data, plot);
-        else
-            DrawDirectCartesianChart(dc, chart, data, plot);
-
-        if (chart.ShowLegend && data.Series.Count > 1)
-            DrawDirectLegend(dc, data, new Rect(plot.Right + 10, plot.Top + 6, legendWidth - 12, plot.Height - 12));
+        var verticalLegend = new Rect(
+            verticalPlot.Right + 10,
+            verticalPlot.Top + 6,
+            Math.Max(12, legendWidth - 12),
+            Math.Max(12, verticalPlot.Height - 12));
+        return new DirectChartLayout(verticalPlot, verticalLegend, DirectLegendFlow.Vertical);
     }
 
     private static void DrawDirectCartesianChart(DrawingContext dc, ChartModel chart, DirectChartData data, Rect plot)
@@ -516,18 +574,76 @@ public static partial class ChartRenderer
         }
     }
 
-    private static void DrawDirectLegend(DrawingContext dc, DirectChartData data, Rect rect)
+    private static void DrawDirectLegend(
+        DrawingContext dc,
+        ChartModel chart,
+        DirectChartData data,
+        WorkbookTheme theme,
+        Rect rect,
+        DirectLegendFlow flow)
     {
+        var textBrush = chart.ResolveLegendTextColor(theme) is { } textColor
+            ? CreateFrozenBrush(ToMediaColor(textColor))
+            : DirectChartTextBrush;
+        var fontSize = GetDirectLegendFontSize(chart);
+        if (flow == DirectLegendFlow.Horizontal)
+            DrawDirectHorizontalLegend(dc, data, rect, fontSize, textBrush);
+        else
+            DrawDirectVerticalLegend(dc, data, rect, fontSize, textBrush);
+    }
+
+    private static void DrawDirectVerticalLegend(
+        DrawingContext dc,
+        DirectChartData data,
+        Rect rect,
+        double fontSize,
+        Brush textBrush)
+    {
+        var rowHeight = GetDirectLegendRowHeight(fontSize);
         var y = rect.Top;
         foreach (var series in data.Series)
         {
             dc.DrawRectangle(series.Fill, series.Stroke, new Rect(rect.Left, y + 3, 10, 10));
-            DrawText(dc, series.Name, rect.Left + 15, y, Math.Max(10, rect.Width - 15), 11, DirectChartTextBrush);
-            y += 18;
-            if (y > rect.Bottom - 12)
+            DrawText(dc, series.Name, rect.Left + 15, y, Math.Max(10, rect.Width - 15), fontSize, textBrush);
+            y += rowHeight;
+            if (y > rect.Bottom - rowHeight / 2)
                 break;
         }
     }
+
+    private static void DrawDirectHorizontalLegend(
+        DrawingContext dc,
+        DirectChartData data,
+        Rect rect,
+        double fontSize,
+        Brush textBrush)
+    {
+        var rowHeight = GetDirectLegendRowHeight(fontSize);
+        var x = rect.Left;
+        var y = rect.Top;
+        foreach (var series in data.Series)
+        {
+            var label = CreateFormattedText(series.Name, fontSize, textBrush, Math.Max(1, rect.Width));
+            var itemWidth = Math.Min(rect.Width, Math.Max(44, label.WidthIncludingTrailingWhitespace + 24));
+            if (x > rect.Left && x + itemWidth > rect.Right)
+            {
+                x = rect.Left;
+                y += rowHeight;
+                if (y > rect.Bottom - rowHeight / 2)
+                    break;
+            }
+
+            dc.DrawRectangle(series.Fill, series.Stroke, new Rect(x, y + 3, 10, 10));
+            DrawText(dc, series.Name, x + 15, y, Math.Max(10, itemWidth - 15), fontSize, textBrush);
+            x += itemWidth + 12;
+        }
+    }
+
+    private static double GetDirectLegendFontSize(ChartModel chart) =>
+        Math.Clamp(chart.LegendFontSize, 8.0, 18.0);
+
+    private static double GetDirectLegendRowHeight(double fontSize) =>
+        Math.Max(16.0, fontSize + 8.0);
 
     private static (double Minimum, double Maximum) GetDirectValueRange(DirectChartData data, bool includeZero)
     {

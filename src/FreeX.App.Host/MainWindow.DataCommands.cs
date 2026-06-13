@@ -691,7 +691,11 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!TryExecuteCommand(new ForecastSheetCommand(range, dialog.Result.Periods), "Forecast Sheet"))
+        var forecastRange = range;
+        if (_workbook.GetSheet(range.Start.Sheet) is { } sheet)
+            forecastRange = ForecastSheetSourceRangePlanner.Create(sheet, range);
+
+        if (!TryExecuteCommand(new ForecastSheetCommand(forecastRange, dialog.Result.Periods), "Forecast Sheet"))
             return;
 
         var forecastSheet = _workbook.Sheets.LastOrDefault();
