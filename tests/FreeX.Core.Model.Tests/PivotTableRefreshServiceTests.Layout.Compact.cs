@@ -85,14 +85,38 @@ public sealed partial class PivotTableRefreshServiceTests
 
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
+        // East group: 2 Q1 items, Q1 Total, 2 Q2 items, Q2 Total, East Total
+        Text(sheet, "F3").Should().Be("East Q1 Retail");
+        Number(sheet, "G3").Should().Be(10);
+        Text(sheet, "F4").Should().Be("East Q1 Wholesale");
+        Number(sheet, "G4").Should().Be(15);
         Text(sheet, "F5").Should().Be("Q1 Total");
         Number(sheet, "G5").Should().Be(25);
+        Text(sheet, "F6").Should().Be("East Q2 Retail");
+        Number(sheet, "G6").Should().Be(20);
+        Text(sheet, "F7").Should().Be("East Q2 Wholesale");
+        Number(sheet, "G7").Should().Be(25);
         Text(sheet, "F8").Should().Be("Q2 Total");
         Number(sheet, "G8").Should().Be(45);
-        Text(sheet, "F11").Should().Be("Q1 Total");
-        Number(sheet, "G11").Should().Be(65);
-        Text(sheet, "F14").Should().Be("Q2 Total");
-        Number(sheet, "G14").Should().Be(85);
+        Text(sheet, "F9").Should().Be("East Total");
+        Number(sheet, "G9").Should().Be(70);
+        // West group: 2 Q1 items, Q1 Total, 2 Q2 items, Q2 Total, West Total
+        Text(sheet, "F10").Should().Be("West Q1 Retail");
+        Number(sheet, "G10").Should().Be(30);
+        Text(sheet, "F11").Should().Be("West Q1 Wholesale");
+        Number(sheet, "G11").Should().Be(35);
+        Text(sheet, "F12").Should().Be("Q1 Total");
+        Number(sheet, "G12").Should().Be(65);
+        Text(sheet, "F13").Should().Be("West Q2 Retail");
+        Number(sheet, "G13").Should().Be(40);
+        Text(sheet, "F14").Should().Be("West Q2 Wholesale");
+        Number(sheet, "G14").Should().Be(45);
+        Text(sheet, "F15").Should().Be("Q2 Total");
+        Number(sheet, "G15").Should().Be(85);
+        Text(sheet, "F16").Should().Be("West Total");
+        Number(sheet, "G16").Should().Be(150);
+        Text(sheet, "F17").Should().Be("Grand Total");
+        Number(sheet, "G17").Should().Be(220);
     }
 
 }

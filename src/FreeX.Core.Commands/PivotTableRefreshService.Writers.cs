@@ -29,45 +29,101 @@ public static partial class PivotTableRefreshService
         groups = ApplyValueFilters(groups, pivotTable, headers, rowFields);
         groups = ApplySorts(groups, pivotTable, headers, rowFields);
         var retainedRows = groups.SelectMany(group => group).ToList();
-        var topSubtotalRows = pivotTable.ShowSubtotals && rowFields.Count > 1 && pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Top
-            ? groups
-                .GroupBy(group => new PivotKey(group.Key.Values.Take(rowFields.Count - 1).ToArray()))
-                .ToDictionary(group => group.Key, group => group.SelectMany(item => item).ToList())
-            : [];
+
+        // subtotalLevelCount = rowFields.Count - 1; level 0 = outermost (R0), level N-2 = innermost subtotaled (second-to-last field)
+        var subtotalLevelCount = rowFields.Count - 1;
+
+        // Build top subtotal row lookups for all levels (level k → prefix key of length k+1)
+        var topSubtotalRowsByLevel = new Dictionary<PivotKey, List<IReadOnlyList<ScalarValue>>>[subtotalLevelCount];
+        if (pivotTable.ShowSubtotals && rowFields.Count > 1 && pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Top)
+        {
+            for (var level = 0; level < subtotalLevelCount; level++)
+            {
+                var prefixLen = level + 1;
+                topSubtotalRowsByLevel[level] = groups
+                    .GroupBy(group => new PivotKey(group.Key.Values.Take(prefixLen).ToArray()))
+                    .ToDictionary(group => group.Key, group => group.SelectMany(item => item).ToList());
+            }
+        }
+        else
+        {
+            for (var level = 0; level < subtotalLevelCount; level++)
+                topSubtotalRowsByLevel[level] = [];
+        }
+
         var outputRow = start.Row + 1;
-        PivotKey? currentSubtotalKey = null;
+        // Per-level state for bottom subtotals: current prefix key and accumulated rows
+        var currentSubtotalKeys = new PivotKey?[subtotalLevelCount];
+        var subtotalRowSets = new List<IReadOnlyList<ScalarValue>>[subtotalLevelCount];
+        for (var level = 0; level < subtotalLevelCount; level++)
+            subtotalRowSets[level] = [];
         PivotKey? previousRowKey = null;
-        var subtotalRows = new List<IReadOnlyList<ScalarValue>>();
         var calculatedItemTotals = new double[pivotTable.DataFields.Count];
         foreach (var group in groups)
         {
             var groupRows = group.ToList();
             if (pivotTable.ShowSubtotals && rowFields.Count > 1)
             {
-                var subtotalKey = new PivotKey(group.Key.Values.Take(rowFields.Count - 1).ToArray());
-                if (currentSubtotalKey is not null && !currentSubtotalKey.Equals(subtotalKey))
-                {
-                    if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom)
-                    {
-                        WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKey, subtotalRows, retainedRows, outputRow);
-                        outputRow++;
-                    }
-                    subtotalRows.Clear();
-                }
-
-                if (currentSubtotalKey is null || !currentSubtotalKey.Equals(subtotalKey))
-                {
-                    currentSubtotalKey = subtotalKey;
-                    if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Top &&
-                        topSubtotalRows.TryGetValue(subtotalKey, out var rowsForSubtotal))
-                    {
-                        WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, subtotalKey, rowsForSubtotal, retainedRows, outputRow);
-                        outputRow++;
-                    }
-                }
-
                 if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom)
-                    subtotalRows.AddRange(groupRows);
+                {
+                    // Find the outermost level that changed (smallest k where prefix[k] changed)
+                    var breakLevel = subtotalLevelCount; // sentinel: no break
+                    for (var level = 0; level < subtotalLevelCount; level++)
+                    {
+                        var prefixLen = level + 1;
+                        var newKey = new PivotKey(group.Key.Values.Take(prefixLen).ToArray());
+                        if (currentSubtotalKeys[level] is not null && !currentSubtotalKeys[level]!.Equals(newKey))
+                        {
+                            breakLevel = level;
+                            break;
+                        }
+                    }
+
+                    if (breakLevel < subtotalLevelCount)
+                    {
+                        // Flush subtotals from innermost (N-2) down to breakLevel (inclusive), innermost first
+                        for (var level = subtotalLevelCount - 1; level >= breakLevel; level--)
+                        {
+                            if (currentSubtotalKeys[level] is not null)
+                            {
+                                WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKeys[level]!, subtotalRowSets[level], retainedRows, outputRow);
+                                outputRow++;
+                            }
+                        }
+                        // Reset accumulators for all broken levels
+                        for (var level = breakLevel; level < subtotalLevelCount; level++)
+                        {
+                            currentSubtotalKeys[level] = null;
+                            subtotalRowSets[level] = [];
+                        }
+                    }
+
+                    // Initialize/accumulate into all levels
+                    for (var level = 0; level < subtotalLevelCount; level++)
+                    {
+                        var prefixLen = level + 1;
+                        currentSubtotalKeys[level] ??= new PivotKey(group.Key.Values.Take(prefixLen).ToArray());
+                        subtotalRowSets[level].AddRange(groupRows);
+                    }
+                }
+                else // Top placement
+                {
+                    // Emit top subtotals for each level that is newly entered (outermost to innermost)
+                    for (var level = 0; level < subtotalLevelCount; level++)
+                    {
+                        var prefixLen = level + 1;
+                        var newKey = new PivotKey(group.Key.Values.Take(prefixLen).ToArray());
+                        if (currentSubtotalKeys[level] is null || !currentSubtotalKeys[level]!.Equals(newKey))
+                        {
+                            currentSubtotalKeys[level] = newKey;
+                            if (topSubtotalRowsByLevel[level].TryGetValue(newKey, out var rowsForSubtotal))
+                            {
+                                WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, newKey, rowsForSubtotal, retainedRows, outputRow);
+                                outputRow++;
+                            }
+                        }
+                    }
+                }
             }
 
             if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
@@ -129,13 +185,19 @@ public static partial class PivotTableRefreshService
                 outputRow++;
             }
         }
+        // Flush remaining bottom subtotals (innermost to outermost) after the last group
         if (pivotTable.ShowSubtotals &&
             rowFields.Count > 1 &&
-            pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom &&
-            currentSubtotalKey is not null)
+            pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom)
         {
-            WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKey, subtotalRows, retainedRows, outputRow);
-            outputRow++;
+            for (var level = subtotalLevelCount - 1; level >= 0; level--)
+            {
+                if (currentSubtotalKeys[level] is not null)
+                {
+                    WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKeys[level]!, subtotalRowSets[level], retainedRows, outputRow);
+                    outputRow++;
+                }
+            }
         }
 
         if (pivotTable.ShowColumnGrandTotals)
