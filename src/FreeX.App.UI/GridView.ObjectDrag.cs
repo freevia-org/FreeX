@@ -468,7 +468,12 @@ public partial class GridView
     private bool HasLiveObjectTransformPreview() =>
         _objectDragKind != ObjectDragKind.None &&
         _selectedObjectId != Guid.Empty &&
-        _selectedObjectKind is not ObjectKind.None and not ObjectKind.Chart;
+        _selectedObjectKind switch
+        {
+            ObjectKind.None => false,
+            ObjectKind.Chart => _objectDragKind != ObjectDragKind.Rotate,
+            _ => true
+        };
 
     private bool IsSelectedPictureCropModeActive() =>
         IsPictureCropMode &&

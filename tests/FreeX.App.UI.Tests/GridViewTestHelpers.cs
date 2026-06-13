@@ -90,11 +90,21 @@ internal static class GridViewTestHelpers
         SetPrivateField(grid, "_objectDragCurrentFlipVertical", currentFlipVertical);
     }
 
+    public static void CommitChartObjectBoundsChange(GridView grid, Guid id, Rect startRect, Rect currentRect) =>
+        InvokePrivateVoid(grid, "CommitChartObjectBoundsChange", id, startRect, currentRect);
+
     private static object InvokePrivate(GridView grid, string methodName, params object[] arguments)
     {
         var method = typeof(GridView).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         method.Should().NotBeNull();
         return method!.Invoke(grid, arguments)!;
+    }
+
+    private static void InvokePrivateVoid(GridView grid, string methodName, params object[] arguments)
+    {
+        var method = typeof(GridView).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        method!.Invoke(grid, arguments);
     }
 
     private static void SetPrivateField(GridView grid, string fieldName, object value)

@@ -43,6 +43,65 @@ public sealed class GridViewObjectTransformPreviewTests
     }
 
     [Fact]
+    public void ActiveChartMovePreview_DrawsChartAtLiveRectEvenWhenLayerCacheIsWarm()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var chart = CreateRedChart(sheetId, left: 4, top: 4, width: 48, height: 32);
+            var grid = CreateGrid(chart, width: 160, height: 90);
+
+            RenderGrid(grid, 160, 90);
+            RenderGrid(grid, 160, 90);
+
+            GridViewTestHelpers.SetObjectTransformPreview(
+                grid,
+                chart.Id,
+                ObjectKind.Chart,
+                ObjectDragKind.Move,
+                new Rect(4, 4, 48, 32),
+                new Rect(80, 24, 48, 32));
+
+            var bitmap = RenderGrid(grid, 160, 90);
+
+            CountRedPixels(bitmap, new Int32Rect(88, 32, 16, 12))
+                .Should().BeGreaterThan(120, "the selected chart should render at the live move rect");
+            CountRedPixels(bitmap, new Int32Rect(12, 12, 16, 12))
+                .Should().Be(0, "the warmed cached chart layer should not be reused during live transform preview");
+            chart.Left.Should().Be(4);
+            chart.Top.Should().Be(4);
+            chart.Width.Should().Be(48);
+            chart.Height.Should().Be(32);
+        });
+    }
+
+    [Fact]
+    public void ChartMoveCommit_RaisesFinalBoundsWithoutMutatingModel()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var chart = CreateRedChart(sheetId, left: 4, top: 4, width: 48, height: 32);
+            var grid = CreateGrid(chart, width: 160, height: 90);
+            (Guid Id, double Left, double Top, double Width, double Height)? committed = null;
+            grid.ChartBoundsChanged += (id, left, top, width, height) =>
+                committed = (id, left, top, width, height);
+
+            GridViewTestHelpers.CommitChartObjectBoundsChange(
+                grid,
+                chart.Id,
+                new Rect(4, 4, 48, 32),
+                new Rect(80, 24, 48, 32));
+
+            committed.Should().Be((chart.Id, 80d, 24d, 48d, 32d));
+            chart.Left.Should().Be(4);
+            chart.Top.Should().Be(4);
+            chart.Width.Should().Be(48);
+            chart.Height.Should().Be(32);
+        });
+    }
+
+    [Fact]
     public void ActivePictureResizePreview_DrawsPictureAtLiveSizeWithoutMutatingModel()
     {
         WpfTestThread.Run(() =>
@@ -143,6 +202,21 @@ public sealed class GridViewObjectTransformPreviewTests
             SelectedObjectKind = ObjectKind.Picture
         };
 
+    private static GridView CreateGrid(ChartModel chart, double width, double height) =>
+        new()
+        {
+            Width = width,
+            Height = height,
+            ShowHeaders = false,
+            Viewport = new ViewportModel(
+                [],
+                [new RowMetric(1, height, 0)],
+                [new ColMetric(1, width, 0)]),
+            Charts = [chart],
+            SelectedObjectId = chart.Id,
+            SelectedObjectKind = ObjectKind.Chart
+        };
+
     private static PictureModel CreateRedSnapshotPicture(CellAddress anchor, double width, double height) =>
         new()
         {
@@ -182,6 +256,19 @@ public sealed class GridViewObjectTransformPreviewTests
                     "",
                     new CellStyle { FillColor = new CellColor(40, 80, 220) })
             }
+        };
+
+    private static ChartModel CreateRedChart(SheetId sheetId, double left, double top, double width, double height) =>
+        new()
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            Left = left,
+            Top = top,
+            Width = width,
+            Height = height,
+            ChartAreaFillColor = new CellColor(220, 40, 40),
+            ChartAreaBorderColor = new CellColor(220, 40, 40)
         };
 
     private static RenderTargetBitmap RenderGrid(GridView grid, int width, int height)
