@@ -2,6 +2,7 @@ using FreeX.Core.Model;
 using FluentAssertions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace FreeX.App.Host.Tests;
 
@@ -59,6 +60,45 @@ public sealed partial class RemainingDialogTests
             {
                 dialog.Close();
             }
+        });
+    }
+
+    [Fact]
+    public void SparklineDialogOk_FromModelessWindowClosesWithoutDialogResultCrash()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line, sheetId: SheetId.New());
+            try
+            {
+                dialog.Show();
+
+                DialogSourceTestSupport.ClickButton(GetSparklineOkButton(dialog));
+
+                dialog.IsVisible.Should().BeFalse();
+                dialog.Result.Should().Be(new SparklineDialogResult("A1:E1", "F1", SparklineKindChoice.Line));
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void SparklineDialogOk_FromModalDialogReturnsAcceptedResult()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SparklineDialog(" A1:E1 ", " F1 ", SparklineKindChoice.Column, sheetId: SheetId.New());
+            dialog.Loaded += (_, _) =>
+                dialog.Dispatcher.BeginInvoke(
+                    () => DialogSourceTestSupport.ClickButton(GetSparklineOkButton(dialog)),
+                    DispatcherPriority.Background);
+
+            dialog.ShowDialog().Should().BeTrue();
+            dialog.Result.Should().Be(new SparklineDialogResult("A1:E1", "F1", SparklineKindChoice.Column));
         });
     }
 
@@ -214,5 +254,12 @@ public sealed partial class RemainingDialogTests
             .Should().Be(SparklineDialogValidationResult.InvalidDataRange);
         SparklineDialogPlanner.ValidateInputs("A1:A4097", "F1", sheetId)
             .Should().Be(SparklineDialogValidationResult.InvalidDataRange);
+    }
+
+    private static Button GetSparklineOkButton(SparklineDialog dialog)
+    {
+        var stack = dialog.Content.Should().BeOfType<StackPanel>().Subject;
+        var buttonRow = stack.Children[stack.Children.Count - 1].Should().BeOfType<StackPanel>().Subject;
+        return buttonRow.Children.OfType<Button>().Single(button => button.IsDefault);
     }
 }
