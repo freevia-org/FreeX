@@ -65,6 +65,23 @@ public static partial class PivotTableRefreshService
             subtotalRowSets[level] = [];
         PivotKey? previousRowKey = null;
         var calculatedItemTotals = new double[pivotTable.DataFields.Count];
+
+        // For compact multi-row-field layout: track per-row indent levels so the
+        // post-processing style pass can apply per-level indentation.
+        var isCompactMultiRow = pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1;
+        var indentStep = isCompactMultiRow ? Math.Max(1, pivotTable.CompactRowLabelIndent) : 0;
+        Dictionary<uint, int>? compactRowIndentLevels = null;
+        if (isCompactMultiRow)
+        {
+            compactRowIndentLevels = [];
+            if (CurrentRenderFootprint.Value is { } fp)
+                fp.CompactRowIndentLevels = compactRowIndentLevels;
+        }
+
+        // Track which non-leaf levels have already been emitted for compact layout,
+        // so we only emit a header row when that level's value changes.
+        var compactLastKey = (PivotKey?)null;
+
         foreach (var group in groups)
         {
             var groupRows = group.ToList();
@@ -94,6 +111,8 @@ public static partial class PivotTableRefreshService
                             {
                                 var subtotalParentRows = ComputeParentPrefixRows(currentSubtotalKeys[level]!, prefixRowsByLevel, retainedRows);
                                 WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKeys[level]!, subtotalRowSets[level], retainedRows, subtotalParentRows, outputRow);
+                                if (compactRowIndentLevels is not null)
+                                    compactRowIndentLevels[outputRow] = level * indentStep;
                                 outputRow++;
                             }
                         }
@@ -127,6 +146,8 @@ public static partial class PivotTableRefreshService
                             {
                                 var subtotalParentRows = ComputeParentPrefixRows(newKey, prefixRowsByLevel, retainedRows);
                                 WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, newKey, rowsForSubtotal, retainedRows, subtotalParentRows, outputRow);
+                                if (compactRowIndentLevels is not null)
+                                    compactRowIndentLevels[outputRow] = level * indentStep;
                                 outputRow++;
                             }
                         }
@@ -134,9 +155,37 @@ public static partial class PivotTableRefreshService
                 }
             }
 
-            if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
+            if (isCompactMultiRow)
             {
-                SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(string.Join(" ", group.Key.Values)));
+                // Excel compact layout: emit a separate header row for each non-leaf level
+                // that changed relative to the previous group key.
+                var leafIndex = rowFields.Count - 1;
+                var firstChanged = 0;
+                if (compactLastKey is not null)
+                {
+                    firstChanged = leafIndex; // default: only the leaf changed
+                    for (var k = 0; k < leafIndex; k++)
+                    {
+                        if (!string.Equals(group.Key.Values[k], compactLastKey.Values[k], StringComparison.CurrentCultureIgnoreCase))
+                        {
+                            firstChanged = k;
+                            break;
+                        }
+                    }
+                }
+
+                // Emit header rows for each non-leaf level [firstChanged .. leafIndex-1] that changed
+                for (var k = firstChanged; k < leafIndex; k++)
+                {
+                    SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(group.Key.Values[k]));
+                    compactRowIndentLevels![outputRow] = k * indentStep;
+                    outputRow++;
+                }
+
+                // Emit the leaf row (with data values below)
+                SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(group.Key.Values[leafIndex]));
+                compactRowIndentLevels![outputRow] = leafIndex * indentStep;
+                compactLastKey = group.Key;
             }
             else
             {
@@ -209,6 +258,8 @@ public static partial class PivotTableRefreshService
                 {
                     var subtotalParentRows = ComputeParentPrefixRows(currentSubtotalKeys[level]!, prefixRowsByLevel, retainedRows);
                     WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKeys[level]!, subtotalRowSets[level], retainedRows, subtotalParentRows, outputRow);
+                    if (compactRowIndentLevels is not null)
+                        compactRowIndentLevels[outputRow] = level * indentStep;
                     outputRow++;
                 }
             }

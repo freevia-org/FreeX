@@ -209,6 +209,10 @@ public static partial class PivotTableRefreshService
         private uint? _maxRow;
         private uint? _maxCol;
 
+        // Per-row compact indent levels: row → indent. Populated by WriteRowPivot
+        // for compact layout with >1 row field. Null means use legacy flat-indent path.
+        public Dictionary<uint, int>? CompactRowIndentLevels { get; set; }
+
         public PivotRenderFootprint(SheetId sheetId)
         {
             _sheetId = sheetId;

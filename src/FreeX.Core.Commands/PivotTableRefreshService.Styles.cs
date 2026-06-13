@@ -242,7 +242,32 @@ public static partial class PivotTableRefreshService
             return;
         }
 
-        var indent = Math.Clamp(pivotTable.CompactRowLabelIndent, 0, 15);
+        // For multi-row-field compact layout, use per-row indent levels stored during WriteRowPivot.
+        // Each row's level was recorded as k * indentStep (already pre-multiplied), so we apply directly.
+        var perRowIndents = CurrentRenderFootprint.Value?.CompactRowIndentLevels;
+        if (perRowIndents is not null)
+        {
+            for (var row = headerEndRow + 1; row <= materialized.End.Row; row++)
+            {
+                if (grandTotalRows.Contains(row))
+                    continue;
+                if (!perRowIndents.TryGetValue(row, out var indent) || indent <= 0)
+                    continue;
+
+                var cell = sheet.GetCell(row, materialized.Start.Col);
+                if (cell is null)
+                    continue;
+
+                var style = workbook.GetStyle(cell.StyleId).Clone();
+                style.IndentLevel = Math.Clamp(indent, 0, 15);
+                cell.StyleId = workbook.RegisterStyle(style);
+            }
+            return;
+        }
+
+        // Legacy flat-indent path (N==1 compact is excluded above by the RowFields.Count <= 1 guard,
+        // so this path is only reached when CompactRowIndentLevels was not populated).
+        var flatIndent = Math.Clamp(pivotTable.CompactRowLabelIndent, 0, 15);
         for (var row = headerEndRow + 1; row <= materialized.End.Row; row++)
         {
             if (subtotalRows.Contains(row) || grandTotalRows.Contains(row))
@@ -253,7 +278,7 @@ public static partial class PivotTableRefreshService
                 continue;
 
             var style = workbook.GetStyle(cell.StyleId).Clone();
-            style.IndentLevel = indent;
+            style.IndentLevel = flatIndent;
             cell.StyleId = workbook.RegisterStyle(style);
         }
     }
