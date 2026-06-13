@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -32,6 +33,15 @@ public partial class GridView
     {
         get => (bool)GetValue(IsPictureCropModeProperty);
         set => SetValue(IsPictureCropModeProperty, value);
+    }
+
+    public static readonly DependencyProperty CommentOverlayHostProperty =
+        DependencyProperty.Register(nameof(CommentOverlayHost), typeof(Canvas), typeof(GridView),
+            new FrameworkPropertyMetadata(null, OnCommentOverlayHostChanged));
+    public Canvas? CommentOverlayHost
+    {
+        get => (Canvas?)GetValue(CommentOverlayHostProperty);
+        set => SetValue(CommentOverlayHostProperty, value);
     }
 
     public static readonly DependencyProperty ViewportProperty =
@@ -485,6 +495,12 @@ public partial class GridView
             gv.StopMarchTimer();
     }
 
+    private static void OnCommentOverlayHostChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GridView grid)
+            grid.MoveCommentPreviewToOverlay(e.OldValue as Canvas, e.NewValue as Canvas);
+    }
+
     private static void OnChartRenderCacheInputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is GridView grid)
@@ -526,8 +542,7 @@ public partial class GridView
         grid.ClearChartRenderCache();
         grid.ClearFormulaTraceArrowHeadGeometryCache();
         grid.ClearDrawingObjectLayerCache();
-        grid.DismissCommentPreview();
-        grid.UpdateCommentPreviewForSelection();
+        grid.RefreshCommentPreviewAfterViewportChanged();
     }
 
     private static void OnSelectionVisualPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

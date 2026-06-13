@@ -55,7 +55,7 @@ public sealed class GridCommentPreviewPlacementPlannerTests
     }
 
     [Fact]
-    public void GridViewCommentPreviewSurface_UsesHoverSelectionScrollablePopupAndEscapeDismissal()
+    public void GridViewCommentPreviewSurface_UsesHoverSelectionScrollableInWindowPopupAndInlineEditing()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources(
             "GridView.CommentPreview.cs",
@@ -66,8 +66,18 @@ public sealed class GridCommentPreviewPlacementPlannerTests
         source.Should().Contain("UpdateCommentPreviewForSelection()");
         source.Should().Contain("new ScrollViewer");
         source.Should().Contain("VerticalScrollBarVisibility = ScrollBarVisibility.Auto");
-        source.Should().Contain("Placement = PlacementMode.Relative");
+        source.Should().Contain("CommentOverlayHostProperty");
+        source.Should().Contain("CommentOverlayHost.Children.Add(_commentPreviewBorder)");
+        source.Should().Contain("GridCommentInWindowPopup");
+        source.Should().Contain("BeginNoteInlineEdit(");
+        source.Should().Contain("BeginThreadedCommentInlineEdit(");
+        source.Should().Contain("SubmitNoteInlineEdit");
+        source.Should().Contain("SubmitThreadedCommentInlineEdit");
+        source.Should().Contain("Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Enter");
+        source.Should().Contain("CancelCommentInlineEdit();");
         source.Should().Contain("if (e.Key == Key.Escape && _activeCommentPreviewKey.HasValue)");
         source.Should().Contain("DismissCommentPreview();");
+        source.Should().NotContain("Placement = PlacementMode.Relative");
+        source.Should().NotContain("System.Windows.Controls.Primitives");
     }
 }

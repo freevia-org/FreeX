@@ -323,6 +323,8 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.ObjectResizedWithAnchor += OnObjectResizedWithAnchor;
         SheetGrid.ObjectRotated += OnObjectRotated;
         SheetGrid.PictureCropped += OnPictureCropped;
+        SheetGrid.NoteInlineEditSubmitted += SheetGrid_NoteInlineEditSubmitted;
+        SheetGrid.ThreadedCommentInlineEditSubmitted += SheetGrid_ThreadedCommentInlineEditSubmitted;
         DependencyPropertyDescriptor.FromProperty(
             FreeX.App.UI.GridView.SelectedObjectIdProperty,
             typeof(FreeX.App.UI.GridView))?.AddValueChanged(SheetGrid, OnSelectedObjectContextChanged);

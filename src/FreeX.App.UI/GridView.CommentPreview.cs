@@ -1,6 +1,7 @@
+using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
@@ -17,6 +18,14 @@ public partial class GridView
         Selection
     }
 
+    private enum CommentPopupMode
+    {
+        None,
+        Preview,
+        NoteEditor,
+        ThreadedCommentEditor
+    }
+
     private readonly record struct CommentPreviewKey(
         uint Row,
         uint Col,
@@ -26,15 +35,87 @@ public partial class GridView
         string Body,
         bool IsResolved);
 
-    private Popup? _commentPreviewPopup;
+    private const double CommentEditorWidth = 300;
+    private const double CommentEditorDesiredHeight = 230;
+    private const double CommentEditorExistingDesiredHeight = 300;
+
     private Border? _commentPreviewBorder;
+    private StackPanel? _commentPreviewPanel;
     private ScrollViewer? _commentPreviewScrollViewer;
-    private TextBlock? _commentPreviewTitleBlock;
-    private TextBlock? _commentPreviewBodyBlock;
+    private TextBlock? _commentInlineErrorBlock;
     private CommentPreviewKey? _activeCommentPreviewKey;
+    private CommentPopupMode _commentPopupMode;
+    private uint _activeCommentPopupRow;
+    private uint _activeCommentPopupCol;
+    private CellAddress? _activeNoteEditAddress;
+    private CellAddress? _activeThreadedEditAddress;
+    private string _activeCommentCellReference = "";
+    private TextBox? _noteEditBox;
+    private TextBox? _threadedRootBox;
+    private TextBox? _threadedReplyBox;
+    private TextBox? _threadedSelectedReplyBox;
+    private ComboBox? _threadedReplySelector;
+    private Button? _threadedUpdateReplyButton;
+    private Button? _threadedDeleteReplyButton;
+    private CheckBox? _threadedResolveBox;
+    private ThreadedComment? _threadedEditExisting;
+
+    public void HideCommentPreview() => DismissCommentPreview();
+
+    public bool BeginNoteInlineEdit(CellAddress address, string cellReference, string initialText)
+    {
+        if (!TryGetCellRect(Viewport, address.Row, address.Col, out var cellRect))
+            return false;
+
+        _activeNoteEditAddress = address;
+        _activeThreadedEditAddress = null;
+        _activeCommentCellReference = cellReference;
+        _activeCommentPreviewKey = null;
+        _commentPopupMode = CommentPopupMode.NoteEditor;
+        _activeCommentPopupRow = address.Row;
+        _activeCommentPopupCol = address.Col;
+
+        BuildNoteInlineEditor(initialText);
+        ShowCommentPopup(cellRect, new Size(CommentEditorWidth, CommentEditorDesiredHeight));
+        FocusCommentTextBox(_noteEditBox);
+        return true;
+    }
+
+    public bool BeginThreadedCommentInlineEdit(CellAddress address, string cellReference, ThreadedComment? existing)
+    {
+        if (!TryGetCellRect(Viewport, address.Row, address.Col, out var cellRect))
+            return false;
+
+        _activeNoteEditAddress = null;
+        _activeThreadedEditAddress = address;
+        _activeCommentCellReference = cellReference;
+        _activeCommentPreviewKey = null;
+        _commentPopupMode = CommentPopupMode.ThreadedCommentEditor;
+        _activeCommentPopupRow = address.Row;
+        _activeCommentPopupCol = address.Col;
+        _threadedEditExisting = existing;
+
+        BuildThreadedCommentInlineEditor(existing);
+        ShowCommentPopup(
+            cellRect,
+            new Size(
+                CommentEditorWidth,
+                existing is null ? CommentEditorDesiredHeight : CommentEditorExistingDesiredHeight));
+        FocusCommentTextBox(existing is null ? _threadedRootBox : _threadedReplyBox ?? _threadedRootBox);
+        return true;
+    }
+
+    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+    {
+        base.OnRenderSizeChanged(sizeInfo);
+        RefreshActiveCommentPopupPlacement();
+    }
 
     private void UpdateCommentPreviewForPointer(Point pos)
     {
+        if (IsInlineCommentEditorOpen())
+            return;
+
         if (TryGetCommentPreviewAt(pos, out var cell, out var rect))
         {
             ShowCommentPreview(cell, rect, CommentPreviewActivation.Hover);
@@ -46,6 +127,9 @@ public partial class GridView
 
     private void UpdateCommentPreviewForSelection()
     {
+        if (IsInlineCommentEditorOpen())
+            return;
+
         if (TryGetSelectedCommentPreview(out var cell, out var rect))
             ShowCommentPreview(cell, rect, CommentPreviewActivation.Selection);
         else
@@ -54,6 +138,9 @@ public partial class GridView
 
     private void RestoreSelectedCommentPreview()
     {
+        if (IsInlineCommentEditorOpen())
+            return;
+
         if (TryGetSelectedCommentPreview(out var cell, out var rect))
             ShowCommentPreview(cell, rect, CommentPreviewActivation.Selection);
         else
@@ -62,16 +149,35 @@ public partial class GridView
 
     private void DismissCommentPreview(CommentPreviewActivation? activation = null)
     {
+        if (activation.HasValue && IsInlineCommentEditorOpen())
+            return;
+
         if (activation.HasValue &&
             _activeCommentPreviewKey?.Activation != activation.Value)
         {
             return;
         }
 
-        if (_commentPreviewPopup is { IsOpen: true } popup)
-            popup.IsOpen = false;
+        if (_commentPreviewBorder is not null)
+            _commentPreviewBorder.Visibility = Visibility.Collapsed;
+
+        if (CommentOverlayHost is not null)
+            CommentOverlayHost.IsHitTestVisible = false;
 
         _activeCommentPreviewKey = null;
+        _commentPopupMode = CommentPopupMode.None;
+        _activeNoteEditAddress = null;
+        _activeThreadedEditAddress = null;
+        _threadedEditExisting = null;
+        _noteEditBox = null;
+        _threadedRootBox = null;
+        _threadedReplyBox = null;
+        _threadedSelectedReplyBox = null;
+        _threadedReplySelector = null;
+        _threadedUpdateReplyButton = null;
+        _threadedDeleteReplyButton = null;
+        _threadedResolveBox = null;
+        _commentInlineErrorBlock = null;
     }
 
     private bool TryGetCommentPreviewAt(Point pos, out DisplayCell cell, out Rect rect)
@@ -170,8 +276,14 @@ public partial class GridView
         return false;
     }
 
-    private bool TryGetCellRect(ViewportModel viewport, uint row, uint col, out Rect rect)
+    private bool TryGetCellRect(ViewportModel? viewport, uint row, uint col, out Rect rect)
     {
+        if (viewport is null)
+        {
+            rect = Rect.Empty;
+            return false;
+        }
+
         var rowMetric = FindRowMetric(viewport.RowMetrics, row);
         var colMetric = FindColMetric(viewport.ColMetrics, col);
         if (rowMetric is null || colMetric is null)
@@ -193,6 +305,9 @@ public partial class GridView
         Rect cellRect,
         CommentPreviewActivation activation)
     {
+        if (IsInlineCommentEditorOpen())
+            return;
+
         var display = cell.CommentDisplay;
         if (display is null)
         {
@@ -208,61 +323,47 @@ public partial class GridView
             display.Title,
             display.Body,
             display.IsResolved);
-        var popup = EnsureCommentPreviewPopup();
-        var placement = GridCommentPreviewPlacementPlanner.Calculate(
-            cellRect,
-            new Size(GetLogicalViewportWidth(), GetLogicalViewportHeight()),
-            display);
 
-        if (_activeCommentPreviewKey != key)
-            UpdateCommentPreviewContent(display);
+        if (_activeCommentPreviewKey != key || _commentPopupMode != CommentPopupMode.Preview)
+            BuildCommentPreviewContent(display);
 
-        _commentPreviewBorder!.Width = placement.Width;
-        _commentPreviewBorder.MaxHeight = placement.MaxHeight;
-        _commentPreviewScrollViewer!.MaxHeight = Math.Max(32, placement.MaxHeight - 36);
-        popup.HorizontalOffset = placement.HorizontalOffset;
-        popup.VerticalOffset = placement.VerticalOffset;
-        popup.IsOpen = true;
+        _commentPopupMode = CommentPopupMode.Preview;
+        _activeCommentPopupRow = cell.Row;
+        _activeCommentPopupCol = cell.Col;
         _activeCommentPreviewKey = key;
+        ShowCommentPopup(cellRect, GridCommentPreviewPlacementPlanner.EstimatePreviewSize(display));
     }
 
-    private Popup EnsureCommentPreviewPopup()
+    private void ShowCommentPopup(Rect cellRect, Size desiredSize)
     {
-        if (_commentPreviewPopup is { } existing)
+        var border = EnsureCommentPreviewBorder();
+        if (CommentOverlayHost is null)
+            return;
+
+        var placement = CalculateCommentPopupPlacement(cellRect, desiredSize);
+        ApplyCommentPopupPlacement(placement);
+        border.Visibility = Visibility.Visible;
+        CommentOverlayHost.IsHitTestVisible = true;
+    }
+
+    private Border EnsureCommentPreviewBorder()
+    {
+        if (_commentPreviewBorder is { } existing)
+        {
+            if (CommentOverlayHost is not null && !CommentOverlayHost.Children.Contains(existing))
+                CommentOverlayHost.Children.Add(existing);
             return existing;
+        }
 
-        _commentPreviewTitleBlock = new TextBlock
-        {
-            FontWeight = FontWeights.SemiBold,
-            FontSize = 12,
-            Foreground = Brushes.Black,
-            Margin = new Thickness(0, 0, 0, 5)
-        };
-        _commentPreviewBodyBlock = new TextBlock
-        {
-            FontSize = 12,
-            Foreground = Brushes.Black,
-            TextWrapping = TextWrapping.Wrap
-        };
-        _commentPreviewScrollViewer = new ScrollViewer
-        {
-            Content = _commentPreviewBodyBlock,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            CanContentScroll = false
-        };
-
-        var panel = new StackPanel();
-        panel.Children.Add(_commentPreviewTitleBlock);
-        panel.Children.Add(_commentPreviewScrollViewer);
-
+        _commentPreviewPanel = new StackPanel();
         _commentPreviewBorder = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(255, 255, 225)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(158, 151, 113)),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(8),
-            Child = panel,
+            Child = _commentPreviewPanel,
+            Visibility = Visibility.Collapsed,
             Effect = new DropShadowEffect
             {
                 BlurRadius = 8,
@@ -271,26 +372,708 @@ public partial class GridView
                 ShadowDepth = 2
             }
         };
+        AutomationProperties.SetAutomationId(_commentPreviewBorder, "GridCommentInWindowPopup");
+        AutomationProperties.SetName(_commentPreviewBorder, "Comment");
 
-        _commentPreviewPopup = new Popup
-        {
-            AllowsTransparency = true,
-            Placement = PlacementMode.Relative,
-            PlacementTarget = this,
-            StaysOpen = true,
-            Child = _commentPreviewBorder
-        };
-        return _commentPreviewPopup;
+        if (CommentOverlayHost is not null)
+            CommentOverlayHost.Children.Add(_commentPreviewBorder);
+
+        return _commentPreviewBorder;
     }
 
-    private void UpdateCommentPreviewContent(CellCommentDisplay display)
+    private void MoveCommentPreviewToOverlay(Canvas? oldHost, Canvas? newHost)
     {
-        _commentPreviewTitleBlock!.Text = display.Title;
-        _commentPreviewTitleBlock.Foreground = display.IsResolved
+        if (_commentPreviewBorder is not { } border)
+            return;
+
+        oldHost?.Children.Remove(border);
+        if (newHost is not null && !newHost.Children.Contains(border))
+            newHost.Children.Add(border);
+
+        if (newHost is not null)
+            newHost.IsHitTestVisible = border.Visibility == Visibility.Visible;
+        RefreshActiveCommentPopupPlacement();
+    }
+
+    private void BuildCommentPreviewContent(CellCommentDisplay display)
+    {
+        var panel = ResetCommentPanel();
+        var title = CreateHeaderTextBlock(display.Title);
+        title.Foreground = display.IsResolved
             ? new SolidColorBrush(Color.FromRgb(85, 85, 85))
             : Brushes.Black;
-        _commentPreviewBodyBlock!.Text = string.IsNullOrEmpty(display.Body)
-            ? " "
-            : display.Body;
+        panel.Children.Add(title);
+
+        var body = new TextBlock
+        {
+            FontSize = 12,
+            Foreground = Brushes.Black,
+            TextWrapping = TextWrapping.Wrap,
+            Text = string.IsNullOrEmpty(display.Body) ? " " : display.Body
+        };
+        _commentPreviewScrollViewer = new ScrollViewer
+        {
+            Content = body,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            CanContentScroll = false
+        };
+        panel.Children.Add(_commentPreviewScrollViewer);
+    }
+
+    private void BuildNoteInlineEditor(string initialText)
+    {
+        var panel = ResetCommentPanel();
+        panel.Children.Add(CreateHeaderTextBlock($"Note - {_activeCommentCellReference}"));
+
+        _noteEditBox = CreateCommentTextBox(initialText, minLines: 4, maxLines: 7);
+        AutomationProperties.SetAutomationId(_noteEditBox, "GridNoteInlineTextBox");
+        AutomationProperties.SetName(_noteEditBox, "Note");
+        _noteEditBox.PreviewKeyDown += NoteEditBox_PreviewKeyDown;
+        panel.Children.Add(_noteEditBox);
+
+        AddInlineErrorBlock(panel);
+        panel.Children.Add(CreateEditorButtonRow(SubmitNoteInlineEdit, CancelCommentInlineEdit, saveText: "Save"));
+    }
+
+    private void BuildThreadedCommentInlineEditor(ThreadedComment? existing)
+    {
+        var panel = ResetCommentPanel();
+        panel.Children.Add(CreateHeaderTextBlock($"Comment - {_activeCommentCellReference}"));
+
+        if (existing is not null)
+            panel.Children.Add(CreateThreadedConversationViewer(existing));
+
+        _threadedRootBox = CreateCommentTextBox(existing?.Text ?? "", minLines: 3, maxLines: 6);
+        AutomationProperties.SetAutomationId(_threadedRootBox, "GridThreadedCommentRootBox");
+        AutomationProperties.SetName(_threadedRootBox, existing is null ? "Comment" : "Edit comment");
+        _threadedRootBox.PreviewKeyDown += ThreadedTextBox_PreviewKeyDown;
+        panel.Children.Add(CreateFieldLabel(existing is null ? "Comment" : "Edit comment", _threadedRootBox, topMargin: 0));
+        panel.Children.Add(_threadedRootBox);
+
+        if (existing is not null)
+        {
+            if (existing.Replies.Count > 0)
+                panel.Children.Add(CreateSelectedReplyEditor(existing));
+
+            _threadedReplyBox = CreateCommentTextBox("", minLines: 2, maxLines: 4);
+            AutomationProperties.SetAutomationId(_threadedReplyBox, "GridThreadedCommentReplyBox");
+            AutomationProperties.SetName(_threadedReplyBox, "Reply");
+            _threadedReplyBox.PreviewKeyDown += ThreadedTextBox_PreviewKeyDown;
+            panel.Children.Add(CreateFieldLabel("Reply", _threadedReplyBox, topMargin: 8));
+            panel.Children.Add(_threadedReplyBox);
+        }
+
+        _threadedResolveBox = new CheckBox
+        {
+            Content = "Mark as resolved",
+            IsChecked = existing?.IsResolved ?? false,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+        AutomationProperties.SetAutomationId(_threadedResolveBox, "GridThreadedCommentResolvedBox");
+        AutomationProperties.SetName(_threadedResolveBox, "Mark as resolved");
+        panel.Children.Add(_threadedResolveBox);
+
+        AddInlineErrorBlock(panel);
+        panel.Children.Add(CreateEditorButtonRow(SubmitThreadedCommentInlineEdit, CancelCommentInlineEdit, existing is null ? "Save" : "Apply"));
+    }
+
+    private StackPanel ResetCommentPanel()
+    {
+        EnsureCommentPreviewBorder();
+        _commentPreviewPanel ??= new StackPanel();
+        _commentPreviewPanel.Children.Clear();
+        _commentPreviewScrollViewer = null;
+        _commentInlineErrorBlock = null;
+        return _commentPreviewPanel;
+    }
+
+    private static TextBlock CreateHeaderTextBlock(string text) =>
+        new()
+        {
+            Text = text,
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 12,
+            Foreground = Brushes.Black,
+            Margin = new Thickness(0, 0, 0, 5)
+        };
+
+    private static Label CreateFieldLabel(string content, Control target, double topMargin) =>
+        new()
+        {
+            Content = content,
+            Target = target,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, topMargin, 0, 2),
+            FontSize = 11
+        };
+
+    private static TextBox CreateCommentTextBox(string text, int minLines, int maxLines)
+    {
+        var box = new TextBox
+        {
+            Text = text,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            MinLines = minLines,
+            MaxLines = maxLines,
+            Padding = new Thickness(5),
+            FontSize = 12
+        };
+        TextOptions.SetTextFormattingMode(box, TextFormattingMode.Display);
+        TextOptions.SetTextRenderingMode(box, TextRenderingMode.ClearType);
+        TextOptions.SetTextHintingMode(box, TextHintingMode.Fixed);
+        return box;
+    }
+
+    private void AddInlineErrorBlock(Panel panel)
+    {
+        _commentInlineErrorBlock = new TextBlock
+        {
+            Foreground = new SolidColorBrush(Color.FromRgb(178, 34, 34)),
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+        panel.Children.Add(_commentInlineErrorBlock);
+    }
+
+    private static StackPanel CreateEditorButtonRow(Action save, Action cancel, string saveText)
+    {
+        var saveButton = new Button
+        {
+            Content = saveText,
+            Width = 72,
+            MinHeight = 24,
+            Margin = new Thickness(0, 8, 6, 0)
+        };
+        AutomationProperties.SetAutomationId(saveButton, "GridCommentInlineSaveButton");
+        AutomationProperties.SetName(saveButton, saveText);
+        saveButton.Click += (_, _) => save();
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            Width = 72,
+            MinHeight = 24,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "GridCommentInlineCancelButton");
+        AutomationProperties.SetName(cancelButton, "Cancel");
+        cancelButton.Click += (_, _) => cancel();
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+        };
+        row.Children.Add(saveButton);
+        row.Children.Add(cancelButton);
+        return row;
+    }
+
+    private ScrollViewer CreateThreadedConversationViewer(ThreadedComment existing)
+    {
+        var messages = new StackPanel();
+        messages.Children.Add(CreateThreadedMessage(existing.Author, existing.Text, existing.CreatedAtUtc, isRoot: true));
+        foreach (var reply in existing.Replies)
+            messages.Children.Add(CreateThreadedMessage(reply.Author, reply.Text, reply.CreatedAtUtc, isRoot: false));
+
+        return new ScrollViewer
+        {
+            Content = messages,
+            MaxHeight = 92,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+    }
+
+    private StackPanel CreateSelectedReplyEditor(ThreadedComment existing)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        _threadedReplySelector = new ComboBox { MinWidth = 180 };
+        AutomationProperties.SetAutomationId(_threadedReplySelector, "GridThreadedCommentReplySelector");
+        AutomationProperties.SetName(_threadedReplySelector, "Reply to edit or delete");
+        for (var i = 0; i < existing.Replies.Count; i++)
+        {
+            var item = new ComboBoxItem { Content = FormatReplyChoice(i, existing.Replies[i]) };
+            AutomationProperties.SetName(item, FormatReplyAutomationName(i, existing.Replies[i]));
+            _threadedReplySelector.Items.Add(item);
+        }
+
+        _threadedReplySelector.SelectionChanged += (_, _) => PopulateSelectedReplyText(existing);
+        _threadedReplySelector.SelectedIndex = 0;
+        panel.Children.Add(CreateFieldLabel("Reply to edit", _threadedReplySelector, topMargin: 0));
+        panel.Children.Add(_threadedReplySelector);
+
+        _threadedSelectedReplyBox = CreateCommentTextBox("", minLines: 2, maxLines: 4);
+        AutomationProperties.SetAutomationId(_threadedSelectedReplyBox, "GridThreadedCommentSelectedReplyBox");
+        AutomationProperties.SetName(_threadedSelectedReplyBox, "Selected reply text");
+        _threadedSelectedReplyBox.TextChanged += (_, _) => UpdateSelectedReplyActionState(existing);
+        _threadedSelectedReplyBox.PreviewKeyDown += (_, e) =>
+        {
+            if (_threadedUpdateReplyButton?.IsEnabled == true &&
+                Keyboard.Modifiers == ModifierKeys.Control &&
+                e.Key == Key.Enter)
+            {
+                SubmitThreadedCommentReplyEdit();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None)
+            {
+                CancelCommentInlineEdit();
+                e.Handled = true;
+            }
+        };
+        panel.Children.Add(CreateFieldLabel("Selected reply", _threadedSelectedReplyBox, topMargin: 8));
+        panel.Children.Add(_threadedSelectedReplyBox);
+
+        _threadedUpdateReplyButton = new Button
+        {
+            Content = "Update reply",
+            Width = 104,
+            MinHeight = 24,
+            Margin = new Thickness(0, 6, 6, 0)
+        };
+        AutomationProperties.SetAutomationId(_threadedUpdateReplyButton, "GridThreadedCommentUpdateReplyButton");
+        AutomationProperties.SetName(_threadedUpdateReplyButton, "Update selected reply");
+        _threadedUpdateReplyButton.Click += (_, _) => SubmitThreadedCommentReplyEdit();
+
+        _threadedDeleteReplyButton = new Button
+        {
+            Content = "Delete reply",
+            Width = 104,
+            MinHeight = 24,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+        AutomationProperties.SetAutomationId(_threadedDeleteReplyButton, "GridThreadedCommentDeleteReplyButton");
+        AutomationProperties.SetName(_threadedDeleteReplyButton, "Delete selected reply");
+        _threadedDeleteReplyButton.Click += (_, _) => SubmitThreadedCommentReplyDelete();
+
+        var actionRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left
+        };
+        actionRow.Children.Add(_threadedUpdateReplyButton);
+        actionRow.Children.Add(_threadedDeleteReplyButton);
+        panel.Children.Add(actionRow);
+        PopulateSelectedReplyText(existing);
+        return panel;
+    }
+
+    private static Border CreateThreadedMessage(string author, string text, DateTimeOffset? createdAtUtc, bool isRoot)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 5) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = FormatMessageHeading(author, createdAtUtc),
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 11,
+            Foreground = new SolidColorBrush(isRoot ? Color.FromRgb(0x1F, 0x49, 0x7D) : Color.FromRgb(0x40, 0x40, 0x40))
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = text,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(8, 2, 0, 0),
+            FontSize = 11
+        });
+
+        return new Border
+        {
+            Child = panel,
+            Background = new SolidColorBrush(isRoot ? Color.FromRgb(0xF0, 0xF4, 0xF8) : Colors.White),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(7, 5, 7, 5),
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+    }
+
+    private void NoteEditBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Enter)
+        {
+            SubmitNoteInlineEdit();
+            e.Handled = true;
+            return;
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.Escape)
+        {
+            CancelCommentInlineEdit();
+            e.Handled = true;
+        }
+    }
+
+    private void ThreadedTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Enter)
+        {
+            SubmitThreadedCommentInlineEdit();
+            e.Handled = true;
+            return;
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.Escape)
+        {
+            CancelCommentInlineEdit();
+            e.Handled = true;
+        }
+    }
+
+    private void SubmitNoteInlineEdit()
+    {
+        var text = (_noteEditBox?.Text ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            ShowInlineCommentError("Enter a note.");
+            FocusCommentTextBox(_noteEditBox);
+            return;
+        }
+
+        if (_activeNoteEditAddress is not { } address)
+            return;
+
+        var args = new GridNoteInlineEditSubmittedEventArgs(address, text);
+        NoteInlineEditSubmitted?.Invoke(this, args);
+        CompleteInlineSubmit(args.KeepOpen, args.ErrorMessage);
+    }
+
+    private void SubmitThreadedCommentInlineEdit()
+    {
+        if (!TryCreateThreadedCommentEditResult(
+                _threadedEditExisting,
+                _threadedRootBox?.Text,
+                _threadedReplyBox?.Text,
+                _threadedResolveBox?.IsChecked == true,
+                out var result,
+                out var error))
+        {
+            ShowInlineCommentError(error ?? "Enter a comment.");
+            FocusCommentTextBox(_threadedEditExisting is null ? _threadedRootBox : _threadedReplyBox ?? _threadedRootBox);
+            return;
+        }
+
+        SubmitThreadedCommentInlineResult(result);
+    }
+
+    private void SubmitThreadedCommentReplyEdit()
+    {
+        if (_threadedEditExisting is not { } existing ||
+            !TryCreateThreadedReplyEditResult(
+                existing,
+                _threadedReplySelector?.SelectedIndex ?? -1,
+                _threadedSelectedReplyBox?.Text,
+                _threadedResolveBox?.IsChecked == true,
+                out var result,
+                out var error))
+        {
+            ShowInlineCommentError("Select a reply and enter reply text.");
+            FocusCommentTextBox(_threadedSelectedReplyBox);
+            return;
+        }
+
+        SubmitThreadedCommentInlineResult(result);
+    }
+
+    private void SubmitThreadedCommentReplyDelete()
+    {
+        if (_threadedEditExisting is not { } existing)
+        {
+            ShowInlineCommentError("Select a reply.");
+            FocusCommentTextBox(_threadedSelectedReplyBox);
+            return;
+        }
+
+        if (!TryCreateThreadedReplyDeleteResult(
+                existing,
+                _threadedReplySelector?.SelectedIndex ?? -1,
+                _threadedResolveBox?.IsChecked == true,
+                out var result,
+                out var error))
+        {
+            ShowInlineCommentError(error ?? "Select a reply.");
+            FocusCommentTextBox(_threadedSelectedReplyBox);
+            return;
+        }
+
+        SubmitThreadedCommentInlineResult(result);
+    }
+
+    private void SubmitThreadedCommentInlineResult(GridThreadedCommentEditResult result)
+    {
+        if (_activeThreadedEditAddress is not { } address)
+            return;
+
+        var args = new GridThreadedCommentInlineEditSubmittedEventArgs(address, result);
+        ThreadedCommentInlineEditSubmitted?.Invoke(this, args);
+        CompleteInlineSubmit(args.KeepOpen, args.ErrorMessage);
+    }
+
+    private void CompleteInlineSubmit(bool keepOpen, string? errorMessage)
+    {
+        if (keepOpen)
+        {
+            ShowInlineCommentError(errorMessage ?? "The comment could not be saved.");
+            return;
+        }
+
+        DismissCommentPreview();
+        Focus();
+        Keyboard.Focus(this);
+    }
+
+    private void CancelCommentInlineEdit()
+    {
+        DismissCommentPreview();
+        Focus();
+        Keyboard.Focus(this);
+    }
+
+    private void ShowInlineCommentError(string message)
+    {
+        if (_commentInlineErrorBlock is null)
+            return;
+
+        _commentInlineErrorBlock.Text = message;
+        _commentInlineErrorBlock.Visibility = Visibility.Visible;
+    }
+
+    private void FocusCommentTextBox(TextBox? textBox)
+    {
+        if (textBox is null)
+            return;
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            textBox.Focus();
+            Keyboard.Focus(textBox);
+            textBox.CaretIndex = textBox.Text.Length;
+            textBox.SelectionLength = 0;
+        }));
+    }
+
+    private void PopulateSelectedReplyText(ThreadedComment existing)
+    {
+        var replyIndex = _threadedReplySelector?.SelectedIndex ?? -1;
+        if (_threadedSelectedReplyBox is not null)
+        {
+            _threadedSelectedReplyBox.Text = IsValidReplyIndex(existing, replyIndex)
+                ? existing.Replies[replyIndex].Text
+                : "";
+        }
+
+        UpdateSelectedReplyActionState(existing);
+    }
+
+    private void UpdateSelectedReplyActionState(ThreadedComment existing)
+    {
+        var hasSelection = IsValidReplyIndex(existing, _threadedReplySelector?.SelectedIndex ?? -1);
+        if (_threadedDeleteReplyButton is not null)
+            _threadedDeleteReplyButton.IsEnabled = hasSelection;
+        if (_threadedUpdateReplyButton is not null)
+            _threadedUpdateReplyButton.IsEnabled = hasSelection && !string.IsNullOrWhiteSpace(_threadedSelectedReplyBox?.Text);
+    }
+
+    private static bool TryCreateThreadedCommentEditResult(
+        ThreadedComment? existing,
+        string? rootText,
+        string? replyText,
+        bool isResolved,
+        out GridThreadedCommentEditResult result,
+        out string? error)
+    {
+        var trimmedRoot = (rootText ?? "").Trim();
+        var trimmedReply = (replyText ?? "").Trim();
+        if (existing is null)
+        {
+            result = new GridThreadedCommentEditResult(
+                null,
+                string.IsNullOrWhiteSpace(trimmedRoot) ? null : trimmedRoot,
+                isResolved);
+            if (result.ReplyText is null)
+            {
+                error = "Enter a comment.";
+                return false;
+            }
+
+            error = null;
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(trimmedRoot))
+        {
+            result = default;
+            error = "Enter a comment.";
+            return false;
+        }
+
+        var rootEdit = !string.Equals(trimmedRoot, existing.Text, StringComparison.Ordinal)
+            ? trimmedRoot
+            : null;
+        result = new GridThreadedCommentEditResult(
+            rootEdit,
+            string.IsNullOrWhiteSpace(trimmedReply) ? null : trimmedReply,
+            isResolved);
+        error = null;
+        return true;
+    }
+
+    private static bool TryCreateThreadedReplyEditResult(
+        ThreadedComment existing,
+        int replyIndex,
+        string? replyText,
+        bool isResolved,
+        out GridThreadedCommentEditResult result,
+        out string? error)
+    {
+        result = new GridThreadedCommentEditResult(
+            null,
+            null,
+            isResolved,
+            GridThreadedCommentEditAction.EditReply,
+            replyIndex,
+            (replyText ?? "").Trim());
+        if (!IsValidReplyIndex(existing, replyIndex))
+        {
+            error = "Select a reply.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(result.ReplyEditText))
+        {
+            error = "Enter reply text.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    private static bool TryCreateThreadedReplyDeleteResult(
+        ThreadedComment existing,
+        int replyIndex,
+        bool isResolved,
+        out GridThreadedCommentEditResult result,
+        out string? error)
+    {
+        result = new GridThreadedCommentEditResult(
+            null,
+            null,
+            isResolved,
+            GridThreadedCommentEditAction.DeleteReply,
+            replyIndex);
+        if (!IsValidReplyIndex(existing, replyIndex))
+        {
+            error = "Select a reply.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    private void RefreshCommentPreviewAfterViewportChanged()
+    {
+        if (IsInlineCommentEditorOpen())
+        {
+            RefreshActiveCommentPopupPlacement();
+            return;
+        }
+
+        DismissCommentPreview();
+        UpdateCommentPreviewForSelection();
+    }
+
+    private void RefreshActiveCommentPopupPlacement()
+    {
+        if (_commentPreviewBorder is null ||
+            _commentPopupMode == CommentPopupMode.None ||
+            CommentOverlayHost is null)
+        {
+            return;
+        }
+
+        if (!TryGetCellRect(Viewport, _activeCommentPopupRow, _activeCommentPopupCol, out var cellRect))
+        {
+            DismissCommentPreview();
+            return;
+        }
+
+        var desiredSize = _commentPopupMode switch
+        {
+            CommentPopupMode.Preview when TryGetCommentPreviewForCell(_activeCommentPopupRow, _activeCommentPopupCol, out var cell, out _) &&
+                cell.CommentDisplay is { } display => GridCommentPreviewPlacementPlanner.EstimatePreviewSize(display),
+            CommentPopupMode.ThreadedCommentEditor when _threadedEditExisting is not null => new Size(CommentEditorWidth, CommentEditorExistingDesiredHeight),
+            CommentPopupMode.NoteEditor or CommentPopupMode.ThreadedCommentEditor => new Size(CommentEditorWidth, CommentEditorDesiredHeight),
+            _ => GridCommentPreviewPlacementPlanner.EstimatePreviewSize(new CellCommentDisplay(CellCommentDisplayKind.Note, "Note", " "))
+        };
+
+        ApplyCommentPopupPlacement(CalculateCommentPopupPlacement(cellRect, desiredSize));
+    }
+
+    private GridCommentPreviewPlacement CalculateCommentPopupPlacement(Rect cellRect, Size desiredSize)
+    {
+        var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
+        var scaledCellRect = new Rect(
+            cellRect.Left * zoom,
+            cellRect.Top * zoom,
+            cellRect.Width * zoom,
+            cellRect.Height * zoom);
+        return GridCommentPreviewPlacementPlanner.Calculate(
+            scaledCellRect,
+            new Size(Math.Max(0, ActualWidth), Math.Max(0, ActualHeight)),
+            desiredSize);
+    }
+
+    private void ApplyCommentPopupPlacement(GridCommentPreviewPlacement placement)
+    {
+        if (_commentPreviewBorder is null)
+            return;
+
+        _commentPreviewBorder.Width = placement.Width;
+        _commentPreviewBorder.MaxHeight = placement.MaxHeight;
+        if (_commentPreviewScrollViewer is not null)
+            _commentPreviewScrollViewer.MaxHeight = Math.Max(32, placement.MaxHeight - 36);
+        Canvas.SetLeft(_commentPreviewBorder, placement.HorizontalOffset);
+        Canvas.SetTop(_commentPreviewBorder, placement.VerticalOffset);
+    }
+
+    private bool IsInlineCommentEditorOpen() =>
+        _commentPopupMode is CommentPopupMode.NoteEditor or CommentPopupMode.ThreadedCommentEditor;
+
+    private static bool IsValidReplyIndex(ThreadedComment comment, int replyIndex) =>
+        replyIndex >= 0 && replyIndex < comment.Replies.Count;
+
+    private static string FormatReplyChoice(int index, CommentReply reply) =>
+        $"{index + 1}. {FormatMessageHeading(reply.Author, reply.CreatedAtUtc)}: {SummarizeReplyText(reply.Text)}";
+
+    private static string FormatReplyAutomationName(int index, CommentReply reply) =>
+        $"Reply {index + 1} by {FormatMessageHeading(reply.Author, reply.CreatedAtUtc)}: {SummarizeReplyText(reply.Text)}";
+
+    private static string SummarizeReplyText(string text)
+    {
+        var normalized = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return normalized.Length <= 60 ? normalized : normalized[..57] + "...";
+    }
+
+    private static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc)
+    {
+        var label = author.Trim();
+        if (createdAtUtc is null)
+            return label;
+
+        var formatted = createdAtUtc.Value
+            .ToUniversalTime()
+            .ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(label)
+            ? formatted
+            : $"{label} - {formatted}";
     }
 }

@@ -603,9 +603,10 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("new SetThreadedCommentCommand(sheetId, new CellAddress(sheetId, 6, 4), \"Threaded comment evidence\")");
         source.Should().Contain("new SetCommentCommand(sheetId, new CellAddress(sheetId, 6, 5), \"Note evidence\")");
         source.Should().Contain("freex_insert_objects_grid_visuals");
-        source.Should().Contain("new ThreadedCommentDialog(\"D6\", null)");
-        source.Should().Contain("freex_insert_new_comment_dialog");
-        source.Should().Contain("freex_insert_new_note_dialog");
+        source.Should().Contain("CaptureInsertObjectsLinksInlineThreadedCommentEditorAsync");
+        source.Should().Contain("CaptureInsertObjectsLinksInlineNoteEditorAsync");
+        source.Should().Contain("freex_insert_new_comment_inline_popup");
+        source.Should().Contain("freex_insert_new_note_inline_popup");
         source.Should().Contain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("freex_insert_comments_list_surface");
         source.Should().Contain("ReviewShowNotesBtn_Click(this, new RoutedEventArgs())");
@@ -1201,7 +1202,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"Review\"))");
         source.Should().Contain("new SpellCheckDialog(context.SpellingWord, context.SpellingSuggestion)");
         source.Should().Contain("AccessibilityCheckerService.FindIssues(_workbook)");
-        source.Should().Contain("new ThreadedCommentDialog(context.NewThreadedCommentCell.ToA1(), existing: null)");
+        source.Should().Contain("CaptureReviewCommentsProtectionInlineThreadedCommentEditorAsync");
         source.Should().Contain("CommentListWindow.CreateThreadedCommentItems(context.Sheet.ThreadedComments)");
         source.Should().Contain("CommentListWindow.CreateNoteItems(context.Sheet.Comments)");
         source.Should().Contain("new PasswordProtectionDialog(");
@@ -1213,7 +1214,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("freex_review_comments_protection_review_tab");
         source.Should().Contain("freex_review_spell_check_dialog");
         source.Should().Contain("freex_review_accessibility_checker_dialog");
-        source.Should().Contain("freex_review_new_threaded_comment_dialog");
+        source.Should().Contain("freex_review_new_threaded_comment_inline_popup");
         source.Should().Contain("freex_review_show_comments_list");
         source.Should().Contain("freex_review_show_notes_list");
         source.Should().Contain("freex_review_protect_sheet_dialog");
