@@ -6,8 +6,8 @@ namespace FreeX.Core.Formula.Tests;
 
 /// <summary>
 /// Regression tests for two ExcelTextNumberParser defects fixed in fix/text-number-coercion-20260612:
-/// 1. Bare month/day names ("March", "Monday") no longer coerce — they need at least one digit.
-/// 2. Comma thousands grouping is validated — "1,2" and "12,34" are #VALUE!, not silently parsed.
+/// 1. Bare month/day names ("March", "Monday") no longer coerce; they need at least one digit.
+/// 2. Comma thousands grouping is validated; "1,2" and "12,34" are #VALUE!, not silently parsed.
 /// </summary>
 public sealed class ExcelTextNumberParserCoercionTests
 {
@@ -19,7 +19,7 @@ public sealed class ExcelTextNumberParserCoercionTests
         return _eval.Evaluate(formula, sheet);
     }
 
-    // ── Bug 1: bare month / day names must be #VALUE! ────────────────────────
+    // Bug 1: bare month/day names must be #VALUE!
 
     [Theory]
     [InlineData("=\"March\"+0")]
@@ -35,12 +35,12 @@ public sealed class ExcelTextNumberParserCoercionTests
     public void BareMonthName_ValueFunction_IsValueError() =>
         Eval("=VALUE(\"March\")").Should().Be(ErrorValue.Value);
 
-    // ── Dates that contain digits still work ──────────────────────────────────
+    // Dates that contain digits still work.
 
     [Fact]
     public void MonthAndDay_CoercesToSerial()
     {
-        // "March 14" contains a digit → coerces to a date serial in the current year
+        // "March 14" contains a digit and coerces to a date serial in the current year.
         var result = Eval("=\"March 14\"+0");
         result.Should().BeOfType<NumberValue>()
             .Subject.Value.Should().BeGreaterThan(0);
@@ -56,20 +56,20 @@ public sealed class ExcelTextNumberParserCoercionTests
     [Fact]
     public void TimeText_CoercesToFraction()
     {
-        // "1:30 PM" → 13.5/24 = 0.5625
+        // "1:30 PM" coerces to 13.5/24 = 0.5625.
         Eval("=\"1:30 PM\"*24").Should().Be(new NumberValue(13.5));
     }
 
     [Fact]
     public void IsoDateText_CoercesToSerial()
     {
-        // "2026-03-14" → fixed serial (not year-dependent)
+        // "2026-03-14" has a fixed serial, not a year-dependent one.
         var result = Eval("=\"2026-03-14\"+0");
         result.Should().BeOfType<NumberValue>()
             .Subject.Value.Should().BeGreaterThan(45000); // well past 2023
     }
 
-    // ── Bug 2: thousands grouping must be validated ───────────────────────────
+    // Bug 2: thousands grouping must be validated.
 
     [Theory]
     [InlineData("=\"1,2\"+0")]
@@ -100,7 +100,7 @@ public sealed class ExcelTextNumberParserCoercionTests
     public void ValueFunction_CorrectGrouping_CoercesToNumber(string formula, double expected) =>
         Eval(formula).Should().Be(new NumberValue(expected));
 
-    // ── Plain numbers, negatives, decimals, scientific notation — unchanged ───
+    // Plain numbers, negatives, decimals, and scientific notation stay unchanged.
 
     [Theory]
     [InlineData("=\"42\"+0", 42.0)]
