@@ -1,4 +1,5 @@
 using FreeX.Core.Calc;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
 
@@ -43,6 +44,58 @@ public class ViewportLayoutTests
         viewport.RowOutlineGroups.Should().Contain(new OutlineGroupRange(2, 4, 5, 6, IsCollapsed: false));
         viewport.ColumnOutlineGroups.Should().ContainSingle()
             .Which.Should().Be(new OutlineGroupRange(1, 2, 3, 1, IsCollapsed: false));
+    }
+
+    [Fact]
+    public void GetViewport_GroupingAcrossExistingSiblingGroupsPreservesSubgroupBrackets()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+        new GroupRowsCommand(sheet.Id, 2, 3, 1).Apply(ctx);
+        new GroupRowsCommand(sheet.Id, 5, 6, 1).Apply(ctx);
+        new GroupRowsCommand(sheet.Id, 2, 6, 2, preserveExistingHierarchy: true).Apply(ctx);
+        new GroupColumnsCommand(sheet.Id, 2, 3, 1).Apply(ctx);
+        new GroupColumnsCommand(sheet.Id, 5, 6, 1).Apply(ctx);
+        new GroupColumnsCommand(sheet.Id, 2, 6, 2, preserveExistingHierarchy: true).Apply(ctx);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 180, 500));
+
+        viewport.RowOutlineGroups.Should().Equal(
+            new OutlineGroupRange(1, 2, 6, 7, IsCollapsed: false),
+            new OutlineGroupRange(2, 2, 3, 4, IsCollapsed: false),
+            new OutlineGroupRange(2, 5, 6, 7, IsCollapsed: false));
+        viewport.ColumnOutlineGroups.Should().Equal(
+            new OutlineGroupRange(1, 2, 6, 7, IsCollapsed: false),
+            new OutlineGroupRange(2, 2, 3, 4, IsCollapsed: false),
+            new OutlineGroupRange(2, 5, 6, 7, IsCollapsed: false));
+    }
+
+    [Fact]
+    public void GetViewport_OuterFirstThenSubgroupsKeepsNestedBrackets()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+        new GroupRowsCommand(sheet.Id, 2, 6, 1, preserveExistingHierarchy: true).Apply(ctx);
+        new GroupRowsCommand(sheet.Id, 3, 4, 2, preserveExistingHierarchy: true).Apply(ctx);
+        new GroupColumnsCommand(sheet.Id, 2, 6, 1, preserveExistingHierarchy: true).Apply(ctx);
+        new GroupColumnsCommand(sheet.Id, 3, 4, 2, preserveExistingHierarchy: true).Apply(ctx);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 180, 500));
+
+        viewport.RowOutlineGroups.Should().Equal(
+            new OutlineGroupRange(1, 2, 6, 7, IsCollapsed: false),
+            new OutlineGroupRange(2, 3, 4, 5, IsCollapsed: false));
+        viewport.ColumnOutlineGroups.Should().Equal(
+            new OutlineGroupRange(1, 2, 6, 7, IsCollapsed: false),
+            new OutlineGroupRange(2, 3, 4, 5, IsCollapsed: false));
     }
 
     [Fact]

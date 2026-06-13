@@ -112,15 +112,15 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
-            return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, 1);
+            return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, 1, preserveExistingHierarchy: true);
 
         if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
         {
             int newLevel = OutlineGroupingPlanner.GetNextOutlineLevel(range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
-            return new GroupColumnsCommand(_currentSheetId, range.Start.Col, range.End.Col, newLevel);
+            return new GroupColumnsCommand(_currentSheetId, range.Start.Col, range.End.Col, newLevel, preserveExistingHierarchy: true);
         }
 
         int rowLevel = OutlineGroupingPlanner.GetNextOutlineLevel(range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
-        return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, rowLevel);
+        return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, rowLevel, preserveExistingHierarchy: true);
     }
 }

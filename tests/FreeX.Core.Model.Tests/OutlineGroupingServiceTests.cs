@@ -27,4 +27,20 @@ public sealed class OutlineGroupingServiceTests
 
         OutlineGroupingService.GetGroupingAxis(range).Should().Be(OutlineGroupingAxis.Rows);
     }
+
+    [Theory]
+    [InlineData(0, 2, true, 1)]
+    [InlineData(1, 2, true, 2)]
+    [InlineData(7, 8, true, 8)]
+    [InlineData(1, 2, false, 2)]
+    public void GetGroupedOutlineLevel_PreservesExistingHierarchyWhenRequested(
+        int previousLevel,
+        int requestedLevel,
+        bool preserveExistingHierarchy,
+        int expectedLevel)
+    {
+        OutlineGroupingService.GetGroupedOutlineLevel(previousLevel, requestedLevel, preserveExistingHierarchy)
+            .Should()
+            .Be(expectedLevel);
+    }
 }
