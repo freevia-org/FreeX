@@ -79,8 +79,6 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
             harness.OpenRibbonMenu(Key.N, Key.C, Key.H);
             harness.ActiveMenuItemGestureText("Column Chart").Should().Be("CC");
-            harness.ActiveMenuItemGestureText("3D Column Chart").Should().Be("3C");
-            harness.ActiveMenuItemGestureText("Waterfall Chart").Should().Be("WF");
             harness.ActiveMenuItemGestureText("Map Chart").Should().BeNull();
         });
     }

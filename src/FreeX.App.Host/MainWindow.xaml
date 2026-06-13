@@ -2185,6 +2185,7 @@
                                     AutomationProperties.Name="{local:Loc Key=PageSetup_PageSetup}"
                                     AutomationProperties.HelpText="{local:Loc Key=PrintPreview_PageSetupHelpText}"
                                     local:RibbonTooltip.Title="{local:Loc Key=PageSetup_PageSetup}"
+                                    local:RibbonTooltip.KeyTip="PD"
                                     local:RibbonTooltip.Description="{local:Loc Key=PrintPreview_PageSetupHelpText}" local:RibbonMetadata.CommandName="Page Setup dialog">
                                 <TextBlock Text="..." FontSize="12"/>
                             </Button>
