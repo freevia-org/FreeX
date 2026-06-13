@@ -19,6 +19,64 @@ public sealed class ChartTrendlineCalculatorTests
     }
 
     [Fact]
+    public void Calculate_Exponential_ReturnsSmoothCurveNotStraightChord()
+    {
+        // Points exactly on y = 2 * e^(0.5x).
+        var source = new[]
+        {
+            new DataPoint(0, 2 * Math.Exp(0.0)),
+            new DataPoint(1, 2 * Math.Exp(0.5)),
+            new DataPoint(2, 2 * Math.Exp(1.0)),
+            new DataPoint(3, 2 * Math.Exp(1.5)),
+        };
+
+        var trend = ChartTrendlineCalculator.Calculate(ChartTrendlineType.Exponential, source, period: 2, order: 2);
+
+        // Many samples (a curve), not just the two endpoints (a chord)...
+        trend.Count.Should().BeGreaterThan(2);
+        // ...and every sample lies on the fitted exponential curve, not the straight chord.
+        trend.Should().OnlyContain(p => Math.Abs(p.Y - 2 * Math.Exp(0.5 * p.X)) < 1e-6);
+        trend[0].X.Should().BeApproximately(0, 1e-9);
+        trend[^1].X.Should().BeApproximately(3, 1e-9);
+    }
+
+    [Fact]
+    public void Calculate_Logarithmic_ReturnsSmoothCurveNotStraightChord()
+    {
+        // Points exactly on y = 3 + 2*ln(x).
+        var source = new[]
+        {
+            new DataPoint(1, 3 + 2 * Math.Log(1)),
+            new DataPoint(2, 3 + 2 * Math.Log(2)),
+            new DataPoint(4, 3 + 2 * Math.Log(4)),
+            new DataPoint(8, 3 + 2 * Math.Log(8)),
+        };
+
+        var trend = ChartTrendlineCalculator.Calculate(ChartTrendlineType.Logarithmic, source, period: 2, order: 2);
+
+        trend.Count.Should().BeGreaterThan(2);
+        trend.Should().OnlyContain(p => Math.Abs(p.Y - (3 + 2 * Math.Log(p.X))) < 1e-6);
+    }
+
+    [Fact]
+    public void Calculate_Power_ReturnsSmoothCurveNotStraightChord()
+    {
+        // Points exactly on y = 1.5 * x^2.
+        var source = new[]
+        {
+            new DataPoint(1, 1.5 * Math.Pow(1, 2)),
+            new DataPoint(2, 1.5 * Math.Pow(2, 2)),
+            new DataPoint(3, 1.5 * Math.Pow(3, 2)),
+            new DataPoint(4, 1.5 * Math.Pow(4, 2)),
+        };
+
+        var trend = ChartTrendlineCalculator.Calculate(ChartTrendlineType.Power, source, period: 2, order: 2);
+
+        trend.Count.Should().BeGreaterThan(2);
+        trend.Should().OnlyContain(p => Math.Abs(p.Y - 1.5 * Math.Pow(p.X, 2)) < 1e-6);
+    }
+
+    [Fact]
     public void Calculate_MovingAverage_UsesRequestedWindow()
     {
         var trend = ChartTrendlineCalculator.Calculate(
