@@ -23,7 +23,8 @@ public static class ChartTrendlineCalculator
     public static bool TryCalculateRSquared(
         IReadOnlyList<DataPoint> sourcePoints,
         IReadOnlyList<DataPoint> trendPoints,
-        out double rSquared)
+        out double rSquared,
+        bool logTransformY = false)
     {
         rSquared = 0;
         var count = 0;
@@ -35,10 +36,21 @@ public static class ChartTrendlineCalculator
             if (!TryInterpolateTrendY(trendPoints, point.X, out var predicted))
                 continue;
 
+            // Excel reports exponential/power trendline R-squared on the linearized
+            // (log-Y) regression, not the original-scale residuals.
+            var actualY = point.Y;
+            if (logTransformY)
+            {
+                if (actualY <= 0 || predicted <= 0)
+                    continue;
+                actualY = Math.Log(actualY);
+                predicted = Math.Log(predicted);
+            }
+
             count++;
-            sumActual += point.Y;
-            sumActualSquared += point.Y * point.Y;
-            residual += Math.Pow(point.Y - predicted, 2);
+            sumActual += actualY;
+            sumActualSquared += actualY * actualY;
+            residual += Math.Pow(actualY - predicted, 2);
         }
 
         if (count < 2)
@@ -144,7 +156,9 @@ public static class ChartTrendlineCalculator
         var b = ((n * sumXLogY) - (sumX * sumLogY)) / denominator;
         var logA = (sumLogY - (b * sumX)) / n;
         var a = Math.Exp(logA);
-        return [new DataPoint(minX, a * Math.Exp(b * minX)), new DataPoint(maxX, a * Math.Exp(b * maxX))];
+        // Sample the fitted curve across the range (not just the two endpoints) so it
+        // renders as a smooth curve instead of a straight chord, matching Excel.
+        return SampleTrendCurve(minX, maxX, points.Count, x => a * Math.Exp(b * x));
     }
 
     private static IReadOnlyList<DataPoint> CalculateLogarithmicTrendline(IReadOnlyList<DataPoint> points)
@@ -181,9 +195,7 @@ public static class ChartTrendlineCalculator
 
         var slope = ((n * sumLogXY) - (sumLogX * sumY)) / denominator;
         var intercept = (sumY - (slope * sumLogX)) / n;
-        return [
-            new DataPoint(minX, intercept + slope * Math.Log(minX)),
-            new DataPoint(maxX, intercept + slope * Math.Log(maxX))];
+        return SampleTrendCurve(minX, maxX, points.Count, x => intercept + slope * Math.Log(x));
     }
 
     private static IReadOnlyList<DataPoint> CalculatePowerTrendline(IReadOnlyList<DataPoint> points)
@@ -222,9 +234,7 @@ public static class ChartTrendlineCalculator
         var b = ((n * sumLogXLogY) - (sumLogX * sumLogY)) / denominator;
         var logA = (sumLogY - (b * sumLogX)) / n;
         var a = Math.Exp(logA);
-        return [
-            new DataPoint(minX, a * Math.Pow(minX, b)),
-            new DataPoint(maxX, a * Math.Pow(maxX, b))];
+        return SampleTrendCurve(minX, maxX, points.Count, x => a * Math.Pow(x, b));
     }
 
     private static IReadOnlyList<DataPoint> CalculateMovingAverageTrendline(IReadOnlyList<DataPoint> points, int period)
@@ -327,6 +337,27 @@ public static class ChartTrendlineCalculator
         }
 
         return y;
+    }
+
+    // Samples a fitted curve uniformly across [minX, maxX] so curved trendlines
+    // (exponential, logarithmic, power) render as smooth curves like Excel, instead
+    // of a single straight segment between the two endpoints. The first and last
+    // samples land exactly on minX/maxX so equation/R-squared recovery is unaffected.
+    private static IReadOnlyList<DataPoint> SampleTrendCurve(
+        double minX,
+        double maxX,
+        int sourcePointCount,
+        Func<double, double> curve)
+    {
+        var sampleCount = Math.Max(16, sourcePointCount * 4);
+        var trendPoints = new List<DataPoint>(sampleCount);
+        for (var i = 0; i < sampleCount; i++)
+        {
+            var x = minX + ((maxX - minX) * i / (sampleCount - 1));
+            trendPoints.Add(new DataPoint(x, curve(x)));
+        }
+
+        return trendPoints;
     }
 
     private static double[]? SolveLinearSystem(double[,] matrix, double[] vector)

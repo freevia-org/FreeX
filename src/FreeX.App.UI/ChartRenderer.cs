@@ -15,15 +15,9 @@ namespace FreeX.App.UI;
 public static partial class ChartRenderer
 {
     private const string SecondaryYAxisKey = "SecondaryY";
-    private static readonly OxyColor[] PieSlicePalette =
-    [
-        OxyColor.FromRgb(68, 114, 196),
-        OxyColor.FromRgb(237, 125, 49),
-        OxyColor.FromRgb(165, 165, 165),
-        OxyColor.FromRgb(255, 192, 0),
-        OxyColor.FromRgb(91, 155, 213),
-        OxyColor.FromRgb(112, 173, 71)
-    ];
+
+    // Accent tint schedule: round 0 = base, round 1 = +0.4, round 2 = -0.25, round 3 = +0.6, round 4 = -0.5
+    private static readonly double[] AccentTintSchedule = [0.0, 0.4, -0.25, 0.6, -0.5];
 
     public static ImageSource? Render(ChartModel chart, ViewportModel viewport) =>
         Render(chart, viewport, WorkbookTheme.Office);
@@ -97,6 +91,7 @@ public static partial class ChartRenderer
                 categories.Add(cellLookup.TryGetValue((r, startCol), out var c) ? c.DisplayText : "");
 
         var model = new PlotModel { Title = chart.Title };
+        model.DefaultColors = BuildExcelSeriesPalette(theme);
         ApplyTitleStyle(model, chart, theme);
         ApplyAreaStyle(model, chart, theme);
         ConfigureLegend(model, chart, theme);
@@ -133,6 +128,7 @@ public static partial class ChartRenderer
             var pieFormat = GetSeriesFormat(chart, 0);
             ApplyPieFormat(pieSeries, pieFormat, theme);
             ApplyPieDataLabelStyle(pieSeries, chart, theme);
+            var piePalette = BuildExcelSeriesPalette(theme);
             var pieLabelPoints = new List<PieDataLabelPoint>(dataPointCapacity);
             for (uint r = dataStartRow; r <= endRow; r++)
             {
@@ -147,7 +143,7 @@ public static partial class ChartRenderer
                 if (pieFormat?.ResolveFillColor(theme) is { } fill)
                     slice.Fill = OxyColor.FromRgb(fill.R, fill.G, fill.B);
                 else
-                    slice.Fill = PieSlicePalette[sliceIndex % PieSlicePalette.Length];
+                    slice.Fill = piePalette[sliceIndex % piePalette.Count];
                 pieSeries.Slices.Add(slice);
                 pieLabelPoints.Add(new PieDataLabelPoint(label, v));
             }
@@ -565,6 +561,35 @@ public static partial class ChartRenderer
         ApplyLineFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
         ApplyNativeDataLabelStyle(series, chart, theme);
         return series;
+    }
+
+    /// <summary>
+    /// Builds an Excel-matching series color palette from the workbook theme's Accent1–Accent6 colors.
+    /// Round 0 = base accent colors, subsequent rounds apply luminance tints to extend past 6 series.
+    /// </summary>
+    private static IList<OxyColor> BuildExcelSeriesPalette(WorkbookTheme theme)
+    {
+        var accentSlots = new[]
+        {
+            WorkbookThemeColorSlot.Accent1,
+            WorkbookThemeColorSlot.Accent2,
+            WorkbookThemeColorSlot.Accent3,
+            WorkbookThemeColorSlot.Accent4,
+            WorkbookThemeColorSlot.Accent5,
+            WorkbookThemeColorSlot.Accent6
+        };
+
+        var palette = new List<OxyColor>(accentSlots.Length * AccentTintSchedule.Length);
+        foreach (var tint in AccentTintSchedule)
+        {
+            foreach (var slot in accentSlots)
+            {
+                var color = theme.ResolveColor(slot, tint);
+                palette.Add(OxyColor.FromRgb(color.R, color.G, color.B));
+            }
+        }
+
+        return palette;
     }
 
 }

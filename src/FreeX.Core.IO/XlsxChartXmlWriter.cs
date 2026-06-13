@@ -268,8 +268,11 @@ internal static partial class XlsxChartXmlWriter
             : null;
     }
 
+    // Modern Excel writes gapWidth=219 for every bar/column grouping.
     private static int? ToExcelNativeDefaultBarGapWidth(ChartType chartType) =>
-        chartType is ChartType.StackedColumn
+        chartType is ChartType.Column
+            or ChartType.Bar
+            or ChartType.StackedColumn
             or ChartType.PercentStackedColumn
             or ChartType.StackedBar
             or ChartType.PercentStackedBar
@@ -278,8 +281,12 @@ internal static partial class XlsxChartXmlWriter
                 ? 219
                 : null;
 
+    // Excel writes overlap=-27 for clustered AND stacked/100%-stacked 2-D bar/column
+    // (verified against Excel native output); 3-D bar/column do not write overlap.
     private static int? ToExcelNativeDefaultBarOverlap(ChartType chartType) =>
-        chartType is ChartType.StackedColumn
+        chartType is ChartType.Column
+            or ChartType.Bar
+            or ChartType.StackedColumn
             or ChartType.PercentStackedColumn
             or ChartType.StackedBar
             or ChartType.PercentStackedBar

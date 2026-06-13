@@ -75,7 +75,8 @@ public static partial class ChartRenderer
         var lines = new List<string>();
         if (chart.ShowTrendlineEquation)
             lines.Add(GetTrendlineEquationText(chart, trendPoints));
-        if (chart.ShowTrendlineRSquared && ChartTrendlineCalculator.TryCalculateRSquared(sourcePoints, trendPoints, out var rSquared))
+        var logTransformY = chart.TrendlineType is ChartTrendlineType.Exponential or ChartTrendlineType.Power;
+        if (chart.ShowTrendlineRSquared && ChartTrendlineCalculator.TryCalculateRSquared(sourcePoints, trendPoints, out var rSquared, logTransformY))
             lines.Add($"R² = {rSquared:0.0000}");
         if (lines.Count == 0)
             return;
