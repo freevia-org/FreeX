@@ -15,20 +15,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     [Fact]
     public void CustomXmlPackageMetadata_ProducesSchemaValidWorkbook()
     {
-        using var source = CreateCustomXmlSourcePackage();
+        using var source = CreateCustomXmlSourcePackageWithSecondItem();
 
         SchemaErrors(source).Should().BeEmpty();
         AssertCustomXmlPackage(source);
+        AssertSecondCustomXmlPackageItem(source);
     }
 
     [Fact]
     public void LoadedWorkbookPatchSave_WithCustomXmlPackageMetadata_ProducesSchemaValidWorkbook()
     {
-        using var source = CreateCustomXmlSourcePackage();
+        using var source = CreateCustomXmlSourcePackageWithSecondItem();
         var sourceRootRelationships = ReadPackageRootElement(source, "_rels/.rels");
         var sourceItemText = ReadPackageEntryText(source, "customXml/item1.xml");
+        var sourceSecondItemText = ReadPackageEntryText(source, "customXml/item2.xml");
         var sourceItemProperties = ReadPackageRootElement(source, "customXml/itemProps1.xml");
+        var sourceSecondItemProperties = ReadPackageRootElement(source, "customXml/itemProps2.xml");
         var sourceItemRelationships = ReadPackageRootElement(source, "customXml/_rels/item1.xml.rels");
+        var sourceSecondItemRelationships = ReadPackageRootElement(source, "customXml/_rels/item2.xml.rels");
         source.Position = 0;
 
         var adapter = new XlsxFileAdapter();
@@ -52,14 +56,23 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .Be(sourceRootRelationships.ToString(SaveOptions.DisableFormatting));
         ReadPackageEntryText(saved, "customXml/item1.xml").Should().Be(sourceItemText);
+        ReadPackageEntryText(saved, "customXml/item2.xml").Should().Be(sourceSecondItemText);
         ReadPackageRootElement(saved, "customXml/itemProps1.xml")
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceItemProperties.ToString(SaveOptions.DisableFormatting));
+        ReadPackageRootElement(saved, "customXml/itemProps2.xml")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceSecondItemProperties.ToString(SaveOptions.DisableFormatting));
         ReadPackageRootElement(saved, "customXml/_rels/item1.xml.rels")
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceItemRelationships.ToString(SaveOptions.DisableFormatting));
+        ReadPackageRootElement(saved, "customXml/_rels/item2.xml.rels")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceSecondItemRelationships.ToString(SaveOptions.DisableFormatting));
 
         saved.Position = 0;
         adapter.Load(saved)
