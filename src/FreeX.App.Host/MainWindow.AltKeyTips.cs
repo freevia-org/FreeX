@@ -33,15 +33,16 @@ public partial class MainWindow
         {
             _isInWindowResizeMoveLoop = true;
             _ribbonResizeCompactionPendingOnExit = false;
-            _resizeViewportRefreshPending = true;
             _resizeViewportRefreshTimer?.Stop();
-            SheetGrid.IsLiveResizing = true;
         }
         else if (msg == WM_EXITSIZEMOVE && _isInWindowResizeMoveLoop)
         {
             _isInWindowResizeMoveLoop = false;
             CompleteRibbonResizeCompaction();
-            CompleteViewportResizeRefresh();
+            if (_resizeViewportRefreshPending)
+                CompleteViewportResizeRefresh();
+            else
+                SheetGrid.IsLiveResizing = false;
         }
 
         if (msg is WM_KEYDOWN or WM_SYSKEYDOWN &&
