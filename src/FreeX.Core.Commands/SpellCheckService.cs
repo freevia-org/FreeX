@@ -641,6 +641,9 @@ public static partial class SpellCheckService
 
     private static bool TryGetKnownCorrection(ReadOnlySpan<char> word, out string suggestion)
     {
+        if (TryGetCommonProofingCorrection(word, out suggestion))
+            return true;
+
         var first = word.Length > 0 ? ToAsciiLowerInvariant(word[0]) : '\0';
         switch (word.Length)
         {
@@ -5490,6 +5493,101 @@ public static partial class SpellCheckService
                 if (first == 'i' && EqualAsciiWordIgnoreCase(word, "internatonalization"))
                 {
                     suggestion = "internationalization";
+                    return true;
+                }
+
+                break;
+        }
+
+        suggestion = string.Empty;
+        return false;
+    }
+
+    private static bool TryGetCommonProofingCorrection(ReadOnlySpan<char> word, out string suggestion)
+    {
+        var first = word.Length > 0 ? ToAsciiLowerInvariant(word[0]) : '\0';
+        switch (word.Length)
+        {
+            case 4:
+                if (first == 'w' && EqualAsciiWordIgnoreCase(word, "wrod"))
+                {
+                    suggestion = "word";
+                    return true;
+                }
+
+                break;
+            case 5:
+                if (first == 'e' && EqualAsciiWordIgnoreCase(word, "erors"))
+                {
+                    suggestion = "errors";
+                    return true;
+                }
+
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "typoo"))
+                {
+                    suggestion = "typo";
+                    return true;
+                }
+
+                if (first == 'w' && EqualAsciiWordIgnoreCase(word, "wrods"))
+                {
+                    suggestion = "words";
+                    return true;
+                }
+
+                break;
+            case 6:
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "mistke"))
+                {
+                    suggestion = "mistake";
+                    return true;
+                }
+
+                break;
+            case 7:
+                if (first == 'g' && EqualAsciiWordIgnoreCase(word, "grammer"))
+                {
+                    suggestion = "grammar";
+                    return true;
+                }
+
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "mispell"))
+                {
+                    suggestion = "misspell";
+                    return true;
+                }
+
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "mistkae"))
+                {
+                    suggestion = "mistake";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "speling"))
+                {
+                    suggestion = "spelling";
+                    return true;
+                }
+
+                break;
+            case 8:
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "sentance"))
+                {
+                    suggestion = "sentence";
+                    return true;
+                }
+
+                if (first == 'w' && EqualAsciiWordIgnoreCase(word, "writting"))
+                {
+                    suggestion = "writing";
+                    return true;
+                }
+
+                break;
+            case 10:
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "mispelling"))
+                {
+                    suggestion = "misspelling";
                     return true;
                 }
 

@@ -31,6 +31,29 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     }
 
     [Fact]
+    public void ScanWorksheet_DoesNotReportCompleteForCommonUserTestingMisspellings()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(address, new TextValue("Fix this speling erors sentance."));
+
+        var result = SpellCheckWorkflowPlanner.ScanWorksheet(
+            workbook,
+            sheet.Id,
+            customDictionary: null,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            new HashSet<SpellingIssueKey>());
+
+        result.IsComplete.Should().BeFalse();
+        result.Issues.Select(issue => (issue.Word, issue.Suggestion, issue.Source)).Should().Equal(
+            ("speling", "spelling", SpellingIssueSource.CellText),
+            ("erors", "errors", SpellingIssueSource.CellText),
+            ("sentance", "sentence", SpellingIssueSource.CellText));
+        result.Issues.Should().OnlyContain(issue => issue.Address == address);
+    }
+
+    [Fact]
     public void ScanWorksheet_ReportsCompleteOnlyWhenNoMisspellingsRemain()
     {
         var workbook = new Workbook("test");

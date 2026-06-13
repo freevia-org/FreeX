@@ -27,6 +27,24 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void FindIssues_DetectsCommonUserTestingProofingMisspellings()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new TextValue("This speling has erors, a sentance, and bad grammer."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("speling", "spelling"),
+            ("erors", "errors"),
+            ("sentance", "sentence"),
+            ("grammer", "grammar"));
+        issues.Should().OnlyContain(issue => issue.Address == address);
+    }
+
+    [Fact]
     public void FindIssues_ReturnsEmptyForCleanWorksheetText()
     {
         var wb = new Workbook("test");
