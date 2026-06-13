@@ -69,6 +69,60 @@ public class GroupCommandTests
     }
 
     [Fact]
+    public void GroupRows_AcrossExistingSiblingGroups_CreatesOuterParentAndPreservesSubgroups()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 3, 1).Apply(ctx);
+        new GroupRowsCommand(sheet.Id, 5, 6, 1).Apply(ctx);
+
+        var command = new GroupRowsCommand(sheet.Id, 2, 6, 2, preserveExistingHierarchy: true);
+        command.Apply(ctx);
+
+        sheet.RowOutlineLevels.Should().BeEquivalentTo(new Dictionary<uint, int>
+        {
+            [2] = 2,
+            [3] = 2,
+            [4] = 1,
+            [5] = 2,
+            [6] = 2
+        });
+
+        new CollapseRowGroupCommand(sheet.Id, 1).Apply(ctx);
+        sheet.GroupHiddenRows.Should().BeEquivalentTo([2u, 3u, 4u, 5u, 6u]);
+
+        new ExpandRowGroupCommand(sheet.Id, 1).Apply(ctx);
+        sheet.GroupHiddenRows.Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        sheet.RowOutlineLevels.Should().BeEquivalentTo(new Dictionary<uint, int>
+        {
+            [2] = 1,
+            [3] = 1,
+            [5] = 1,
+            [6] = 1
+        });
+    }
+
+    [Fact]
+    public void GroupRows_OuterFirstThenSubgroup_RemainsNested()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 6, 1, preserveExistingHierarchy: true).Apply(ctx);
+
+        new GroupRowsCommand(sheet.Id, 3, 4, 2, preserveExistingHierarchy: true).Apply(ctx);
+
+        sheet.RowOutlineLevels.Should().BeEquivalentTo(new Dictionary<uint, int>
+        {
+            [2] = 1,
+            [3] = 2,
+            [4] = 2,
+            [5] = 1,
+            [6] = 1
+        });
+    }
+
+    [Fact]
     public void CollapseRows_HidesGroupedRows()
     {
         var (_, sheet, ctx) = Setup();
@@ -226,6 +280,60 @@ public class GroupCommandTests
         outcome.Success.Should().BeTrue();
         sheet.ColOutlineLevels[2].Should().Be(1);
         sheet.ColOutlineLevels[4].Should().Be(1);
+    }
+
+    [Fact]
+    public void GroupColumns_AcrossExistingSiblingGroups_CreatesOuterParentAndPreservesSubgroups()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupColumnsCommand(sheet.Id, 2, 3, 1).Apply(ctx);
+        new GroupColumnsCommand(sheet.Id, 5, 6, 1).Apply(ctx);
+
+        var command = new GroupColumnsCommand(sheet.Id, 2, 6, 2, preserveExistingHierarchy: true);
+        command.Apply(ctx);
+
+        sheet.ColOutlineLevels.Should().BeEquivalentTo(new Dictionary<uint, int>
+        {
+            [2] = 2,
+            [3] = 2,
+            [4] = 1,
+            [5] = 2,
+            [6] = 2
+        });
+
+        new CollapseColGroupCommand(sheet.Id, 1).Apply(ctx);
+        sheet.GroupHiddenCols.Should().BeEquivalentTo([2u, 3u, 4u, 5u, 6u]);
+
+        new ExpandColGroupCommand(sheet.Id, 1).Apply(ctx);
+        sheet.GroupHiddenCols.Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        sheet.ColOutlineLevels.Should().BeEquivalentTo(new Dictionary<uint, int>
+        {
+            [2] = 1,
+            [3] = 1,
+            [5] = 1,
+            [6] = 1
+        });
+    }
+
+    [Fact]
+    public void GroupColumns_OuterFirstThenSubgroup_RemainsNested()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupColumnsCommand(sheet.Id, 2, 6, 1, preserveExistingHierarchy: true).Apply(ctx);
+
+        new GroupColumnsCommand(sheet.Id, 3, 4, 2, preserveExistingHierarchy: true).Apply(ctx);
+
+        sheet.ColOutlineLevels.Should().BeEquivalentTo(new Dictionary<uint, int>
+        {
+            [2] = 1,
+            [3] = 2,
+            [4] = 2,
+            [5] = 1,
+            [6] = 1
+        });
     }
 
     [Fact]

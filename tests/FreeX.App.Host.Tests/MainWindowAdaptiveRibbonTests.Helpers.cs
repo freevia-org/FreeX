@@ -590,6 +590,23 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         public bool? ViewRulerCheckBoxIsEnabled =>
             (_window.FindName("ViewRulerChk") as CheckBox)?.IsEnabled;
 
+        public WorksheetViewMode ActiveSheetViewMode =>
+            _window.SheetGrid.WorksheetViewMode;
+
+        public (bool Normal, bool PageBreakPreview, bool PageLayout) ViewRibbonModeToggleState =>
+            (
+                IsToggleChecked("ViewNormalButton"),
+                IsToggleChecked("ViewPageBreakPreviewButton"),
+                IsToggleChecked("ViewPageLayoutButton")
+            );
+
+        public (bool Normal, bool PageBreakPreview, bool PageLayout) StatusViewModeToggleState =>
+            (
+                IsToggleChecked("StatusNormalViewButton"),
+                IsToggleChecked("StatusPageBreakPreviewButton"),
+                IsToggleChecked("StatusPageLayoutViewButton")
+            );
+
         public IReadOnlyList<ScrollBarVisibility> RibbonHorizontalScrollBarModes =>
             _window.FindName("RibbonTabs") is TabControl tabs
                 ? WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(tabs)
@@ -779,6 +796,15 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             PumpDispatcher();
         }
 
+        public void ClickStatusViewShortcut(string name)
+        {
+            var button = _window.FindName(name) as ToggleButton;
+            button.Should().NotBeNull();
+            button!.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
         public static MainWindowHarness Create()
         {
             var window = SharedWindow ??= CreateSharedWindow();
@@ -877,6 +903,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .FirstOrDefault(RibbonMetadata.IsCommandLabel)
                 ?.Text ?? "";
         }
+
+        private bool IsToggleChecked(string name) =>
+            (_window.FindName(name) as ToggleButton)?.IsChecked == true;
 
         private static string GetRibbonPresentationGroupName(FrameworkElement element)
         {

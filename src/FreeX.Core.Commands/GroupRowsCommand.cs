@@ -8,18 +8,20 @@ public sealed class GroupRowsCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly uint _startRow, _endRow;
     private readonly int _level;
+    private readonly bool _preserveExistingHierarchy;
     private Dictionary<uint, int>? _previousLevels;
     private HashSet<uint>? _previouslyHiddenByGroup;
 
     public string Label => _level > 0 ? "Group Rows" : "Ungroup Rows";
 
-    public GroupRowsCommand(SheetId sheetId, uint startRow, uint endRow, int level)
+    public GroupRowsCommand(SheetId sheetId, uint startRow, uint endRow, int level, bool preserveExistingHierarchy = false)
     {
         OutlineGroupingService.ValidateOutlineLevel(level);
         _sheetId  = sheetId;
         _startRow = startRow;
         _endRow   = endRow;
         _level    = level;
+        _preserveExistingHierarchy = preserveExistingHierarchy;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -41,7 +43,7 @@ public sealed class GroupRowsCommand : IWorkbookCommand
                     _previouslyHiddenByGroup.Add(r);
             }
             else
-                sheet.RowOutlineLevels[r] = _level;
+                sheet.RowOutlineLevels[r] = OutlineGroupingService.GetGroupedOutlineLevel(prev, _level, _preserveExistingHierarchy);
         }
         return new CommandOutcome(true);
     }

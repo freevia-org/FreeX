@@ -112,6 +112,18 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void SyncWorkbookViewModeToggleState(WorksheetViewMode viewMode)
+    {
+        if (ViewNormalButton is not null)
+            ViewNormalButton.IsChecked = viewMode == WorksheetViewMode.Normal;
+        if (ViewPageLayoutButton is not null)
+            ViewPageLayoutButton.IsChecked = viewMode == WorksheetViewMode.PageLayout;
+        if (ViewPageBreakPreviewButton is not null)
+            ViewPageBreakPreviewButton.IsChecked = viewMode == WorksheetViewMode.PageBreakPreview;
+
+        SyncStatusViewShortcutState(viewMode);
+    }
+
     private void SyncStatusViewShortcutState(WorksheetViewMode viewMode)
     {
         if (StatusNormalViewButton is not null)
