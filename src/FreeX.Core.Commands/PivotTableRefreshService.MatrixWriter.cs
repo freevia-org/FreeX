@@ -4,6 +4,129 @@ namespace FreeX.Core.Commands;
 
 public static partial class PivotTableRefreshService
 {
+    // A column slot is either a Leaf (a full-length column key) or a Subtotal
+    // (an outer-prefix key that represents a subtotal column for the outer group).
+    // Subtotal slots are only emitted when ShowSubtotals && columnFields.Count > 1.
+    private abstract class ColumnSlot
+    {
+        private ColumnSlot() { }
+
+        public sealed class Leaf(PivotKey key) : ColumnSlot
+        {
+            public PivotKey Key { get; } = key;
+        }
+
+        public sealed class Subtotal(PivotKey prefixKey) : ColumnSlot
+        {
+            // The prefix key identifies this outer group (e.g. ["Q1"] for a Quarter subtotal).
+            public PivotKey PrefixKey { get; } = prefixKey;
+        }
+    }
+
+    // Builds the ordered list of column slots from the sorted leaf column keys.
+    // When subtotals are suppressed (single field or ShowSubtotals=false) this returns
+    // exactly one Leaf slot per key — identical to the prior raw-columnKeys loop.
+    private static List<ColumnSlot> BuildColumnSlots(
+        IReadOnlyList<PivotKey> columnKeys,
+        IReadOnlyList<PivotFieldModel> columnFields,
+        bool emitSubtotals)
+    {
+        var slots = new List<ColumnSlot>(columnKeys.Count);
+        if (!emitSubtotals || columnFields.Count <= 1)
+        {
+            foreach (var key in columnKeys)
+                slots.Add(new ColumnSlot.Leaf(key));
+            return slots;
+        }
+
+        // Walk leaf keys and emit subtotal slots after the last leaf of each outer group,
+        // for every outer level (outermost first, innermost subtotal last within each group).
+        // E.g. for Q1/Retail, Q1/Wholesale, Q2/Retail, Q2/Wholesale:
+        //   Q1/Retail, Q1/Wholesale, [Q1 Total], Q2/Retail, Q2/Wholesale, [Q2 Total]
+        var subtotalLevelCount = columnFields.Count - 1; // levels 0..subtotalLevelCount-1
+
+        for (var i = 0; i < columnKeys.Count; i++)
+        {
+            slots.Add(new ColumnSlot.Leaf(columnKeys[i]));
+
+            // After emitting this leaf, check each outer level (outermost first):
+            // if the NEXT leaf has a different prefix at this level (or there is no next leaf),
+            // emit a subtotal for that prefix.
+            for (var level = 0; level < subtotalLevelCount; level++)
+            {
+                var prefixLen = level + 1;
+                var currentPrefix = new PivotKey(columnKeys[i].Values.Take(prefixLen).ToArray());
+
+                var nextHasDifferentPrefix = i + 1 >= columnKeys.Count ||
+                    !new PivotKey(columnKeys[i + 1].Values.Take(prefixLen).ToArray()).Equals(currentPrefix);
+
+                if (nextHasDifferentPrefix)
+                    slots.Add(new ColumnSlot.Subtotal(currentPrefix));
+            }
+        }
+
+        return slots;
+    }
+
+    // Returns the source rows for a slot in a given row-group context.
+    // For Leaf slots this delegates to RowsForColumnKey.
+    // For Subtotal slots this returns all rows whose column prefix matches.
+    private static IReadOnlyList<IReadOnlyList<ScalarValue>> RowsForSlot(
+        ColumnSlot slot,
+        PivotColumnRowMap rowsByColumnKey,
+        IReadOnlyList<PivotFieldModel> columnFields)
+    {
+        if (slot is ColumnSlot.Leaf leaf)
+            return RowsForColumnKey(rowsByColumnKey, leaf.Key);
+
+        if (slot is ColumnSlot.Subtotal sub)
+        {
+            // Collect all rows whose column key starts with the subtotal prefix.
+            var prefixLen = sub.PrefixKey.Values.Count;
+            var result = new List<IReadOnlyList<ScalarValue>>();
+            foreach (var (key, rows) in rowsByColumnKey.RowsByKey)
+            {
+                if (key.Values.Count >= prefixLen &&
+                    new PivotKey(key.Values.Take(prefixLen).ToArray()).Equals(sub.PrefixKey))
+                {
+                    result.AddRange(rows);
+                }
+            }
+            return result;
+        }
+
+        return Array.Empty<IReadOnlyList<ScalarValue>>();
+    }
+
+    // Returns the "column-total" rows for a slot (used as ColumnTotalRows in PivotDisplayContext).
+    // For Leaf slots this is the rows under that leaf across all row groups (from visibleRowsByColumnKey).
+    // For Subtotal slots this is all visible rows whose column prefix matches.
+    private static IReadOnlyList<IReadOnlyList<ScalarValue>> ColumnTotalRowsForSlot(
+        ColumnSlot slot,
+        PivotColumnRowMap visibleRowsByColumnKey,
+        IReadOnlyList<PivotFieldModel> columnFields)
+    {
+        if (slot is ColumnSlot.Leaf leaf)
+            return RowsForColumnKey(visibleRowsByColumnKey, leaf.Key);
+
+        if (slot is ColumnSlot.Subtotal sub)
+        {
+            var prefixLen = sub.PrefixKey.Values.Count;
+            var result = new List<IReadOnlyList<ScalarValue>>();
+            foreach (var (key, rows) in visibleRowsByColumnKey.RowsByKey)
+            {
+                if (key.Values.Count >= prefixLen &&
+                    new PivotKey(key.Values.Take(prefixLen).ToArray()).Equals(sub.PrefixKey))
+                {
+                    result.AddRange(rows);
+                }
+            }
+            return result;
+        }
+
+        return Array.Empty<IReadOnlyList<ScalarValue>>();
+    }
+
     private static void WriteMatrixPivot(
         Workbook workbook,
         Sheet sheet,
@@ -55,6 +178,11 @@ public static partial class PivotTableRefreshService
                 .ToDictionary(g => g.Key, g => g.ToList());
         }
 
+        // Build the ordered column slot list.  Subtotal slots are emitted only when
+        // ShowSubtotals is on AND there are 2+ column fields.
+        var emitColumnSubtotals = pivotTable.ShowSubtotals && columnFields.Count > 1;
+        var columnSlots = BuildColumnSlots(columnKeys, columnFields, emitColumnSubtotals);
+
         if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
             SetPivotCell(sheet, new CellAddress(sheet.Id, start.Row, start.Col), new TextValue("Row Labels"));
         else
@@ -63,13 +191,34 @@ public static partial class PivotTableRefreshService
                 SetPivotCell(sheet, new CellAddress(sheet.Id, start.Row, start.Col + (uint)index), new TextValue(headers[rowFields[index].SourceFieldIndex]));
         }
 
+        // Site 1: header row loop — route through slot list.
         var valueStartCol = start.Col + (uint)rowFieldOutputColumns;
         var outputColumn = valueStartCol;
-        foreach (var columnKey in columnKeys)
+        foreach (var slot in columnSlots)
         {
             foreach (var dataField in pivotTable.DataFields)
             {
-                WriteColumnHeader(sheet, start.Row, outputColumn, columnKey, dataField, singleDataField);
+                if (slot is ColumnSlot.Leaf leaf)
+                {
+                    WriteColumnHeader(sheet, start.Row, outputColumn, leaf.Key, dataField, singleDataField);
+                }
+                else if (slot is ColumnSlot.Subtotal sub)
+                {
+                    // Write the subtotal column header: emit the outer item text on the outer
+                    // level row and "{outer} Total" on the innermost header row.
+                    var prefixLen = sub.PrefixKey.Values.Count;
+                    for (var level = 0; level < columnFields.Count; level++)
+                    {
+                        if (level < prefixLen)
+                        {
+                            var caption = sub.PrefixKey.Values[level];
+                            if (level == prefixLen - 1)
+                                caption = $"{caption} Total";
+                            SetPivotCell(sheet, new CellAddress(sheet.Id, start.Row + (uint)level, outputColumn), new TextValue(caption));
+                        }
+                        // Rows below the prefix level are left blank in a subtotal column header.
+                    }
+                }
                 outputColumn++;
             }
         }
@@ -148,7 +297,7 @@ public static partial class PivotTableRefreshService
                                     headers,
                                     start,
                                     valueStartCol,
-                                    columnKeys,
+                                    columnSlots,
                                     columnFields,
                                     visibleRows,
                                     visibleRowsByColumnKey,
@@ -198,7 +347,7 @@ public static partial class PivotTableRefreshService
                                     headers,
                                     start,
                                     valueStartCol,
-                                    columnKeys,
+                                    columnSlots,
                                     columnFields,
                                     visibleRows,
                                     visibleRowsByColumnKey,
@@ -236,17 +385,29 @@ public static partial class PivotTableRefreshService
             var parentRowPrefixRows = ComputeParentPrefixRows(rowGroup.Key, rowPrefixRowsByLevel, retainedRows);
             var parentRowPrefixRowsByColumnKey = BuildColumnRowsByKey(parentRowPrefixRows, columnFields);
 
+            // Site 2: data row value loop — route through slot list.
             outputColumn = valueStartCol;
-            foreach (var columnKey in columnKeys)
+            foreach (var slot in columnSlots)
             {
-                var columnRows = RowsForColumnKey(rowGroupRowsByColumnKey, columnKey);
-                var columnTotalRows = RowsForColumnKey(visibleRowsByColumnKey, columnKey);
+                // Rows in this row group that fall under this slot.
+                var columnRows = RowsForSlot(slot, rowGroupRowsByColumnKey, columnFields);
+                // Column-total rows across all row groups for this slot.
+                var columnTotalRows = ColumnTotalRowsForSlot(slot, visibleRowsByColumnKey, columnFields);
 
-                // Parent row denominator: parent prefix rows restricted to same column key.
-                var parentRowRows = RowsForColumnKey(parentRowPrefixRowsByColumnKey, columnKey);
+                // Parent row denominator: parent prefix rows restricted to this slot.
+                IReadOnlyList<IReadOnlyList<ScalarValue>> parentRowRows;
+                if (slot is ColumnSlot.Leaf leaf)
+                    parentRowRows = RowsForColumnKey(parentRowPrefixRowsByColumnKey, leaf.Key);
+                else
+                    parentRowRows = RowsForSlot(slot, BuildColumnRowsByKey(parentRowPrefixRows, columnFields), columnFields);
 
                 // Parent column denominator: rows in this row group matching parent column prefix.
-                var parentColRows = ComputeParentColumnRows(columnKey, colPrefixRowsByLevelAll, visibleRowGroupRows, columnFields, rowGroupRows);
+                // For a Subtotal slot the parent column is one level up from the prefix.
+                IEnumerable<IReadOnlyList<ScalarValue>>? parentColRows;
+                if (slot is ColumnSlot.Leaf leafForParent)
+                    parentColRows = ComputeParentColumnRows(leafForParent.Key, colPrefixRowsByLevelAll, visibleRowGroupRows, columnFields, rowGroupRows);
+                else
+                    parentColRows = null; // subtotal column: no parent column (falls back to row total)
 
                 foreach (var dataField in pivotTable.DataFields)
                 {
@@ -306,7 +467,7 @@ public static partial class PivotTableRefreshService
                         headers,
                         start,
                         valueStartCol,
-                        columnKeys,
+                        columnSlots,
                         columnFields,
                         visibleRows,
                         visibleRowsByColumnKey,
@@ -325,10 +486,12 @@ public static partial class PivotTableRefreshService
         if (pivotTable.ShowColumnGrandTotals)
         {
             SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(GrandTotalCaption(pivotTable)));
+            // Site 4: grand-total row loop — route through slot list.
             outputColumn = valueStartCol;
-            foreach (var columnKey in columnKeys)
+            foreach (var slot in columnSlots)
             {
-                var columnRows = RowsForColumnKey(rowsByColumnKey, columnKey);
+                // Use rows from ALL retained rows (not filtered by row group) for the grand-total row.
+                var columnRows = RowsForSlot(slot, rowsByColumnKey, columnFields);
                 foreach (var dataField in pivotTable.DataFields)
                 {
                     SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
@@ -367,7 +530,7 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<string> headers,
         CellAddress start,
         uint valueStartCol,
-        IReadOnlyList<PivotKey> columnKeys,
+        IReadOnlyList<ColumnSlot> columnSlots,
         IReadOnlyList<PivotFieldModel> columnFields,
         IReadOnlyList<IReadOnlyList<ScalarValue>> visibleRows,
         PivotColumnRowMap visibleRowsByColumnKey,
@@ -383,26 +546,39 @@ public static partial class PivotTableRefreshService
         SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue($"{captionItem} Total"));
 
         var subtotalRowsByColumnKey = BuildColumnRowsByKey(subtotalRows, columnFields);
-        var visibleSubtotalRows = RowsForColumnKeys(subtotalRowsByColumnKey, columnKeys, subtotalRows);
+        var leafColumnKeys = columnSlots
+            .OfType<ColumnSlot.Leaf>()
+            .Select(s => s.Key)
+            .ToList();
+        var visibleSubtotalRows = RowsForColumnKeys(subtotalRowsByColumnKey, leafColumnKeys, subtotalRows);
 
         // Parent row rows restricted per column key (for % of Parent Row Total)
         var parentRowPrefixRowsByColumnKey = parentRowRows is not null
             ? BuildColumnRowsByKey(parentRowRows, columnFields)
             : null;
 
+        // Site 3: subtotal row value loop — route through slot list.
         var outputColumn = valueStartCol;
-        foreach (var columnKey in columnKeys)
+        foreach (var slot in columnSlots)
         {
-            var subtotalColumnRows = RowsForColumnKey(subtotalRowsByColumnKey, columnKey);
-            var columnTotalRows = RowsForColumnKey(visibleRowsByColumnKey, columnKey);
+            var subtotalColumnRows = RowsForSlot(slot, subtotalRowsByColumnKey, columnFields);
+            var columnTotalRows = ColumnTotalRowsForSlot(slot, visibleRowsByColumnKey, columnFields);
 
-            // Parent row denominator restricted to this column key
-            IReadOnlyList<IReadOnlyList<ScalarValue>>? parentRowColRows = parentRowPrefixRowsByColumnKey is not null
-                ? RowsForColumnKey(parentRowPrefixRowsByColumnKey, columnKey)
-                : null;
+            // Parent row denominator restricted to this slot
+            IReadOnlyList<IReadOnlyList<ScalarValue>>? parentRowColRows = null;
+            if (parentRowPrefixRowsByColumnKey is not null)
+            {
+                if (slot is ColumnSlot.Leaf leafSlot)
+                    parentRowColRows = RowsForColumnKey(parentRowPrefixRowsByColumnKey, leafSlot.Key);
+                else
+                    parentRowColRows = RowsForSlot(slot, parentRowPrefixRowsByColumnKey, columnFields);
+            }
 
-            // Parent column denominator: subtotal rows restricted to parent column prefix
-            var parentColRows = ComputeParentColumnRows(columnKey, colPrefixRowsByLevelAll, visibleSubtotalRows, columnFields, subtotalRows);
+            // Parent column denominator: subtotal rows restricted to parent column prefix.
+            // Only meaningful for leaf slots (subtotal slots themselves have no parent column subtotal).
+            IEnumerable<IReadOnlyList<ScalarValue>>? parentColRows = null;
+            if (slot is ColumnSlot.Leaf leafForParent)
+                parentColRows = ComputeParentColumnRows(leafForParent.Key, colPrefixRowsByLevelAll, visibleSubtotalRows, columnFields, subtotalRows);
 
             foreach (var dataField in pivotTable.DataFields)
             {
