@@ -6443,6 +6443,64 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void ApplyFormatPainterToSelectedRange_CopiesValidationAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 3, 2);
+        var sourceStyle = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FillColor = new CellColor(198, 239, 206)
+        });
+        sheet.SetStyleOnly(source.Row, source.Col, sourceStyle);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(source, source),
+            Type = DvType.List,
+            Formula1 = "Red,Blue",
+            AllowBlank = false,
+            ErrorTitle = "Pick a color"
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(target, target),
+            Type = DvType.WholeNumber,
+            Formula1 = "1",
+            Formula2 = "9"
+        });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(source);
+        session.CaptureFormatPainterSource();
+        session.SelectCell(target);
+
+        var result = session.ApplyFormatPainterToSelectedRange();
+
+        result.Success.Should().BeTrue();
+        GetStyle(workbook, sheet, target).Should().Be(workbook.GetStyle(sourceStyle));
+        var targetValidation = DataValidationService.GetApplicable(sheet, target)
+            .Should().ContainSingle().Which;
+        targetValidation.Type.Should().Be(DvType.List);
+        targetValidation.Formula1.Should().Be("Red,Blue");
+        targetValidation.AllowBlank.Should().BeFalse();
+        targetValidation.ErrorTitle.Should().Be("Pick a color");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        GetStyle(workbook, sheet, target).Should().Be(CellStyle.Default);
+        DataValidationService.GetApplicable(sheet, target)
+            .Should().ContainSingle().Which.Type.Should().Be(DvType.WholeNumber);
+        DataValidationService.GetApplicable(sheet, source)
+            .Should().ContainSingle().Which.Formula1.Should().Be("Red,Blue");
+    }
+
+    [Fact]
     public void ApplyFormatPainterToSelectedRange_SingleUseClearsAndPersistentStaysActiveUntilCancel()
     {
         var workbook = CreateWorkbook();

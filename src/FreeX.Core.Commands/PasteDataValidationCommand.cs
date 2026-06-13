@@ -1,4 +1,3 @@
-using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -31,8 +30,8 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(targetSheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var sourceRules = sourceSheet.DataValidations.Select(CloneValidation).ToList();
-        _previous = targetSheet.DataValidations.Select(CloneValidation).ToList();
+        var sourceRules = sourceSheet.DataValidations.Select(DataValidationCopySupport.CloneValidation).ToList();
+        _previous = targetSheet.DataValidations.Select(DataValidationCopySupport.CloneValidation).ToList();
         var destinationRange = GetDestinationRange(_sourceRange, _destination, _transpose);
         targetSheet.DataValidations.RemoveAll(rule => rule.AppliesTo.Overlaps(destinationRange));
 
@@ -48,7 +47,7 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
             var mappedRange = MapRange(intersection.Value, _sourceRange, _destination, _transpose);
             var rowDelta = (int)mappedRange.Start.Row - (int)intersection.Value.Start.Row;
             var colDelta = (int)mappedRange.Start.Col - (int)intersection.Value.Start.Col;
-            targetSheet.DataValidations.Add(CloneValidation(rule, mappedRange, targetSheet.Name, rowDelta, colDelta));
+            targetSheet.DataValidations.Add(DataValidationCopySupport.CloneValidation(rule, mappedRange, targetSheet.Name, rowDelta, colDelta));
         }
 
         return new CommandOutcome(true);
@@ -62,7 +61,7 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         sheet.DataValidations.Clear();
         foreach (var rule in _previous)
-            sheet.DataValidations.Add(CloneValidation(rule));
+            sheet.DataValidations.Add(DataValidationCopySupport.CloneValidation(rule));
     }
 
     private static GridRange GetDestinationRange(GridRange sourceRange, CellAddress destination, bool transpose)
@@ -93,65 +92,4 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
             : new CellAddress(destination.Sheet, destination.Row + rowOffset, destination.Col + colOffset);
     }
 
-    private static DataValidation CloneValidation(DataValidation source) =>
-        CloneValidation(source, source.AppliesTo);
-
-    private static DataValidation CloneValidation(DataValidation source, GridRange range) =>
-        CloneValidation(source, range, hostSheetName: null, rowDelta: 0, colDelta: 0);
-
-    private static DataValidation CloneValidation(
-        DataValidation source,
-        GridRange range,
-        string? hostSheetName,
-        int rowDelta,
-        int colDelta)
-    {
-        var clone = new DataValidation
-        {
-            AppliesTo = range,
-            Type = source.Type,
-            Operator = source.Operator,
-            Formula1 = RewriteValidationFormula(source.Formula1, hostSheetName, rowDelta, colDelta),
-            Formula2 = RewriteValidationFormula(source.Formula2, hostSheetName, rowDelta, colDelta),
-            AllowBlank = source.AllowBlank,
-            ShowDropdown = source.ShowDropdown,
-            AlertStyle = source.AlertStyle,
-            ShowInputMessage = source.ShowInputMessage,
-            ShowErrorMessage = source.ShowErrorMessage,
-            ErrorTitle = source.ErrorTitle,
-            ErrorMessage = source.ErrorMessage,
-            PromptTitle = source.PromptTitle,
-            PromptMessage = source.PromptMessage
-        };
-        clone.AdditionalRanges.AddRange(source.AdditionalRanges);
-        return clone;
-    }
-
-    private static string? RewriteValidationFormula(string? formula, string? hostSheetName, int rowDelta, int colDelta)
-    {
-        if (string.IsNullOrWhiteSpace(formula) || hostSheetName is null || (rowDelta == 0 && colDelta == 0))
-            return formula;
-
-        var trimmed = formula.TrimStart();
-        if (!trimmed.StartsWith('=') || trimmed.Contains(','))
-            return formula;
-
-        var expression = trimmed[1..];
-        if (!LooksLikeCellReferenceFormula(expression))
-            return formula;
-
-        var rewritten = FormulaRewriter.Rewrite(expression, new PasteOffsetOp(rowDelta, colDelta), hostSheetName);
-        return rewritten is null ? formula : "=" + rewritten;
-    }
-
-    private static bool LooksLikeCellReferenceFormula(string expression)
-    {
-        foreach (var ch in expression)
-        {
-            if (char.IsDigit(ch) || ch is '$' or '!' or ':')
-                return true;
-        }
-
-        return false;
-    }
 }

@@ -17,14 +17,16 @@ public static class FormatPainterCommandFactory
         GridRange sourceRange,
         GridRange targetRange)
     {
+        var commands = new List<IWorkbookCommand>();
         if (sourceRange.RowCount == 1 && sourceRange.ColCount == 1)
         {
             var styleId = GetSourceStyleId(sourceSheet, sourceRange.Start);
             var sourceStyle = workbook.GetStyle(styleId);
-            return new ApplyStyleCommand(targetRange.Start.Sheet, targetRange, StyleDiff.FromStyle(sourceStyle));
+            commands.Add(new ApplyStyleCommand(targetRange.Start.Sheet, targetRange, StyleDiff.FromStyle(sourceStyle)));
+            commands.Add(new FormatPainterDataValidationCommand(sourceSheet.Id, sourceRange, targetRange));
+            return new CompositeWorkbookCommand("Format Painter", commands);
         }
 
-        var commands = new List<IWorkbookCommand>();
         foreach (var targetAddress in targetRange.AllCells())
         {
             var sourceAddress = new CellAddress(
@@ -38,6 +40,7 @@ public static class FormatPainterCommandFactory
                 StyleDiff.FromStyle(sourceStyle)));
         }
 
+        commands.Add(new FormatPainterDataValidationCommand(sourceSheet.Id, sourceRange, targetRange));
         return new CompositeWorkbookCommand("Format Painter", commands);
     }
 
