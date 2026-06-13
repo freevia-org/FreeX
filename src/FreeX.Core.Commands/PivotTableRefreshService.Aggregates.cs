@@ -137,7 +137,12 @@ public static partial class PivotTableRefreshService
     private sealed record PivotDisplayContext(
         IEnumerable<IReadOnlyList<ScalarValue>> GrandTotalRows,
         IEnumerable<IReadOnlyList<ScalarValue>> RowTotalRows,
-        IEnumerable<IReadOnlyList<ScalarValue>> ColumnTotalRows);
+        IEnumerable<IReadOnlyList<ScalarValue>> ColumnTotalRows,
+        // Immediate-parent denominators for the "% of Parent Row/Column" modes.
+        // null means fall back: parent-row -> grand total in the same column,
+        // parent-column -> the full row total in the same row.
+        IEnumerable<IReadOnlyList<ScalarValue>>? ParentRowRows = null,
+        IEnumerable<IReadOnlyList<ScalarValue>>? ParentColumnRows = null);
 
     // Returns double? — null means "write a blank cell" (FIX 2 propagation).
     private static double? DisplayAggregate(
@@ -173,13 +178,16 @@ public static partial class PivotTableRefreshService
             return Math.Abs(indexDenominator) < 0.0000001 ? 0 : numericValue * grandTotal / indexDenominator;
         }
 
-        var denominatorRows = dataField.ShowValuesAs switch
+        // For the three "% of Parent" modes, use the immediate-parent denominator rows
+        // that were pre-computed by the writer (null = fall back to grand/row total).
+        IEnumerable<IReadOnlyList<ScalarValue>>? denominatorRows = dataField.ShowValuesAs switch
         {
             PivotShowValuesAs.PercentOfGrandTotal => context.GrandTotalRows,
             PivotShowValuesAs.PercentOfRowTotal => context.RowTotalRows,
             PivotShowValuesAs.PercentOfColumnTotal => context.ColumnTotalRows,
-            PivotShowValuesAs.PercentOfParentRowTotal => context.RowTotalRows,
-            PivotShowValuesAs.PercentOfParentColumnTotal => context.ColumnTotalRows,
+            PivotShowValuesAs.PercentOfParentRowTotal => context.ParentRowRows ?? context.GrandTotalRows,
+            PivotShowValuesAs.PercentOfParentColumnTotal => context.ParentColumnRows ?? context.RowTotalRows,
+            // Base-field-driven "% of Parent Total" is not yet modeled; fall back to grand total.
             PivotShowValuesAs.PercentOfParentTotal => context.GrandTotalRows,
             _ => null
         };
@@ -357,6 +365,60 @@ public static partial class PivotTableRefreshService
         }
 
         return -1;
+    }
+
+    // Returns the rows matching the parent prefix (key minus its last value).
+    // If the key has only one value (outermost level), the parent is the grand total so
+    // grandTotalRows is returned. prefixRowsByLevel[level k] maps prefix keys of length k+1.
+    private static IEnumerable<IReadOnlyList<ScalarValue>> ComputeParentPrefixRows(
+        PivotKey key,
+        Dictionary<PivotKey, List<IReadOnlyList<ScalarValue>>>[] prefixRowsByLevel,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> grandTotalRows)
+    {
+        var depth = key.Values.Count; // e.g. 2 for ["East","Q1"]
+        if (depth <= 1)
+            return grandTotalRows; // outermost → parent is grand total
+
+        // parent prefix length = depth - 1  → sits at prefixRowsByLevel[depth-2]
+        var parentLevel = depth - 2;
+        if (parentLevel < 0 || parentLevel >= prefixRowsByLevel.Length)
+            return grandTotalRows;
+
+        var parentKey = new PivotKey(key.Values.Take(depth - 1).ToArray());
+        return prefixRowsByLevel[parentLevel].TryGetValue(parentKey, out var parentRows)
+            ? parentRows
+            : grandTotalRows;
+    }
+
+    // Returns the rows matching the parent column prefix (column key minus its last value),
+    // restricted to the current row group's rows. Used for % of Parent Column Total.
+    // If the column key has only one level, the parent is all rows in the same row group.
+    private static IEnumerable<IReadOnlyList<ScalarValue>>? ComputeParentColumnRows(
+        PivotKey columnKey,
+        Dictionary<PivotKey, List<IReadOnlyList<ScalarValue>>>[] colPrefixRowsByLevelAll,
+        IEnumerable<IReadOnlyList<ScalarValue>> rowGroupRows,
+        IReadOnlyList<PivotFieldModel> columnFields,
+        IEnumerable<IReadOnlyList<ScalarValue>> allSubtotalRows)
+    {
+        if (colPrefixRowsByLevelAll.Length == 0)
+            return null; // single column level — parent column = row total, use fallback
+
+        var colDepth = columnKey.Values.Count;
+        if (colDepth <= 1)
+            return null; // outermost column → parent is row total (null = use fallback RowTotalRows)
+
+        // parent column prefix length = colDepth - 1 → sits at colPrefixRowsByLevelAll[colDepth-2]
+        var parentColLevel = colDepth - 2;
+        if (parentColLevel < 0 || parentColLevel >= colPrefixRowsByLevelAll.Length)
+            return null;
+
+        var parentColKey = new PivotKey(columnKey.Values.Take(colDepth - 1).ToArray());
+        if (!colPrefixRowsByLevelAll[parentColLevel].TryGetValue(parentColKey, out var parentColAllRows))
+            return null;
+
+        // Restrict the global parent-column rows to just the current row group's rows
+        var parentColRowSet = new HashSet<IReadOnlyList<ScalarValue>>(parentColAllRows);
+        return allSubtotalRows.Where(row => parentColRowSet.Contains(row));
     }
 
     private static int FindOrdinalIgnoreCaseIndex(IReadOnlyList<string> items, string value)

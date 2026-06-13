@@ -30,6 +30,31 @@ public static partial class PivotTableRefreshService
         var visibleRowsByColumnKey = BuildColumnRowsByKey(visibleRows, columnFields);
         var singleDataField = pivotTable.DataFields.Count == 1;
 
+        // Build prefix-row lookup maps for the row hierarchy (for % of Parent Row Total).
+        // prefixRowsByLevel[k] maps (row-prefix of length k+1) → source rows.
+        var rowSubtotalLevelCount = rowFields.Count - 1;
+        var rowPrefixRowsByLevel = new Dictionary<PivotKey, List<IReadOnlyList<ScalarValue>>>[rowSubtotalLevelCount];
+        for (var level = 0; level < rowSubtotalLevelCount; level++)
+        {
+            var prefixLen = level + 1;
+            rowPrefixRowsByLevel[level] = rowGroups
+                .GroupBy(group => new PivotKey(group.Key.Values.Take(prefixLen).ToArray()))
+                .ToDictionary(group => group.Key, group => group.SelectMany(item => item).ToList());
+        }
+
+        // Build column-prefix lookup: for % of Parent Column Total with nested column fields.
+        // colPrefixRowsByLevel[k] maps (column-prefix of length k+1) → source rows (over all retained rows).
+        var colSubtotalLevelCount = columnFields.Count - 1;
+        var colPrefixRowsByLevelAll = new Dictionary<PivotKey, List<IReadOnlyList<ScalarValue>>>[colSubtotalLevelCount];
+        for (var level = 0; level < colSubtotalLevelCount; level++)
+        {
+            var prefixLen = level + 1;
+            colPrefixRowsByLevelAll[level] = rowGroups
+                .SelectMany(g => g)
+                .GroupBy(row => new PivotKey(columnFields.Take(prefixLen).Select(f => GroupKeyText(row[f.SourceFieldIndex], f)).ToArray()))
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+
         if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
             SetPivotCell(sheet, new CellAddress(sheet.Id, start.Row, start.Col), new TextValue("Row Labels"));
         else
@@ -67,19 +92,14 @@ public static partial class PivotTableRefreshService
         var writeTopSubtotals = writeSubtotals && pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Top;
 
         // subtotalLevelCount = rowFields.Count - 1; level 0 = outermost, level N-2 = innermost subtotaled
-        var subtotalLevelCount = rowFields.Count - 1;
+        var subtotalLevelCount = rowSubtotalLevelCount;
 
-        // Build top subtotal row lookups for all levels (level k → prefix key of length k+1)
+        // Build top subtotal row lookups for all levels (reuse precomputed rowPrefixRowsByLevel)
         var topSubtotalRowsByLevel = new Dictionary<PivotKey, List<IReadOnlyList<ScalarValue>>>[subtotalLevelCount];
         if (writeTopSubtotals)
         {
             for (var level = 0; level < subtotalLevelCount; level++)
-            {
-                var prefixLen = level + 1;
-                topSubtotalRowsByLevel[level] = rowGroups
-                    .GroupBy(group => new PivotKey(group.Key.Values.Take(prefixLen).ToArray()))
-                    .ToDictionary(group => group.Key, group => group.SelectMany(item => item).ToList());
-            }
+                topSubtotalRowsByLevel[level] = rowPrefixRowsByLevel[level];
         }
         else
         {
@@ -120,6 +140,7 @@ public static partial class PivotTableRefreshService
                         {
                             if (currentSubtotalKeys[level] is not null)
                             {
+                                var subtotalParentRows = ComputeParentPrefixRows(currentSubtotalKeys[level]!, rowPrefixRowsByLevel, retainedRows);
                                 WriteMatrixSubtotalRow(
                                     workbook,
                                     sheet,
@@ -131,8 +152,10 @@ public static partial class PivotTableRefreshService
                                     columnFields,
                                     visibleRows,
                                     visibleRowsByColumnKey,
+                                    colPrefixRowsByLevelAll,
                                     currentSubtotalKeys[level]!,
                                     subtotalRowSets[level],
+                                    subtotalParentRows,
                                     outputRow);
                                 outputRow++;
                             }
@@ -167,6 +190,7 @@ public static partial class PivotTableRefreshService
                             currentSubtotalKeys[level] = newKey;
                             if (topSubtotalRowsByLevel[level].TryGetValue(newKey, out var rowsForSubtotal))
                             {
+                                var subtotalParentRows = ComputeParentPrefixRows(newKey, rowPrefixRowsByLevel, retainedRows);
                                 WriteMatrixSubtotalRow(
                                     workbook,
                                     sheet,
@@ -178,8 +202,10 @@ public static partial class PivotTableRefreshService
                                     columnFields,
                                     visibleRows,
                                     visibleRowsByColumnKey,
+                                    colPrefixRowsByLevelAll,
                                     newKey,
                                     rowsForSubtotal,
+                                    subtotalParentRows,
                                     outputRow);
                                 outputRow++;
                             }
@@ -204,16 +230,31 @@ public static partial class PivotTableRefreshService
 
             var rowGroupRowsByColumnKey = BuildColumnRowsByKey(rowGroupRows, columnFields);
             var visibleRowGroupRows = RowsForColumnKeys(rowGroupRowsByColumnKey, columnKeys, rowGroupRows);
+
+            // Parent row rows: rows matching parent row prefix, unrestricted by column (will be
+            // further restricted to each column key inside the loop below).
+            var parentRowPrefixRows = ComputeParentPrefixRows(rowGroup.Key, rowPrefixRowsByLevel, retainedRows);
+            var parentRowPrefixRowsByColumnKey = BuildColumnRowsByKey(parentRowPrefixRows, columnFields);
+
             outputColumn = valueStartCol;
             foreach (var columnKey in columnKeys)
             {
                 var columnRows = RowsForColumnKey(rowGroupRowsByColumnKey, columnKey);
                 var columnTotalRows = RowsForColumnKey(visibleRowsByColumnKey, columnKey);
+
+                // Parent row denominator: parent prefix rows restricted to same column key.
+                var parentRowRows = RowsForColumnKey(parentRowPrefixRowsByColumnKey, columnKey);
+
+                // Parent column denominator: rows in this row group matching parent column prefix.
+                var parentColRows = ComputeParentColumnRows(columnKey, colPrefixRowsByLevelAll, visibleRowGroupRows, columnFields, rowGroupRows);
+
                 foreach (var dataField in pivotTable.DataFields)
                 {
                     SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
                         columnRows,
-                        new PivotDisplayContext(visibleRows, visibleRowGroupRows, columnTotalRows),
+                        new PivotDisplayContext(visibleRows, visibleRowGroupRows, columnTotalRows,
+                            ParentRowRows: parentRowRows,
+                            ParentColumnRows: parentColRows),
                         dataField,
                         pivotTable,
                         headers),
@@ -257,6 +298,7 @@ public static partial class PivotTableRefreshService
             {
                 if (currentSubtotalKeys[level] is not null)
                 {
+                    var subtotalParentRows = ComputeParentPrefixRows(currentSubtotalKeys[level]!, rowPrefixRowsByLevel, retainedRows);
                     WriteMatrixSubtotalRow(
                         workbook,
                         sheet,
@@ -268,8 +310,10 @@ public static partial class PivotTableRefreshService
                         columnFields,
                         visibleRows,
                         visibleRowsByColumnKey,
+                        colPrefixRowsByLevelAll,
                         currentSubtotalKeys[level]!,
                         subtotalRowSets[level],
+                        subtotalParentRows,
                         outputRow);
                     outputRow++;
                 }
@@ -327,8 +371,10 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<PivotFieldModel> columnFields,
         IReadOnlyList<IReadOnlyList<ScalarValue>> visibleRows,
         PivotColumnRowMap visibleRowsByColumnKey,
+        Dictionary<PivotKey, List<IReadOnlyList<ScalarValue>>>[] colPrefixRowsByLevelAll,
         PivotKey subtotalKey,
         IReadOnlyList<IReadOnlyList<ScalarValue>> subtotalRows,
+        IEnumerable<IReadOnlyList<ScalarValue>>? parentRowRows,
         uint outputRow)
     {
         var captionItem = subtotalKey.Values.Count == 0
@@ -338,11 +384,26 @@ public static partial class PivotTableRefreshService
 
         var subtotalRowsByColumnKey = BuildColumnRowsByKey(subtotalRows, columnFields);
         var visibleSubtotalRows = RowsForColumnKeys(subtotalRowsByColumnKey, columnKeys, subtotalRows);
+
+        // Parent row rows restricted per column key (for % of Parent Row Total)
+        var parentRowPrefixRowsByColumnKey = parentRowRows is not null
+            ? BuildColumnRowsByKey(parentRowRows, columnFields)
+            : null;
+
         var outputColumn = valueStartCol;
         foreach (var columnKey in columnKeys)
         {
             var subtotalColumnRows = RowsForColumnKey(subtotalRowsByColumnKey, columnKey);
             var columnTotalRows = RowsForColumnKey(visibleRowsByColumnKey, columnKey);
+
+            // Parent row denominator restricted to this column key
+            IReadOnlyList<IReadOnlyList<ScalarValue>>? parentRowColRows = parentRowPrefixRowsByColumnKey is not null
+                ? RowsForColumnKey(parentRowPrefixRowsByColumnKey, columnKey)
+                : null;
+
+            // Parent column denominator: subtotal rows restricted to parent column prefix
+            var parentColRows = ComputeParentColumnRows(columnKey, colPrefixRowsByLevelAll, visibleSubtotalRows, columnFields, subtotalRows);
+
             foreach (var dataField in pivotTable.DataFields)
             {
                 SetPivotValueCell(
@@ -351,7 +412,9 @@ public static partial class PivotTableRefreshService
                     new CellAddress(sheet.Id, outputRow, outputColumn),
                     DisplayAggregate(
                         subtotalColumnRows,
-                        new PivotDisplayContext(visibleRows, visibleSubtotalRows, columnTotalRows),
+                        new PivotDisplayContext(visibleRows, visibleSubtotalRows, columnTotalRows,
+                            ParentRowRows: parentRowColRows,
+                            ParentColumnRows: parentColRows),
                         dataField,
                         pivotTable,
                         headers),
@@ -364,6 +427,7 @@ public static partial class PivotTableRefreshService
 
         if (pivotTable.ShowRowGrandTotals)
         {
+            // Row grand total of the subtotal row: parent is grand total (default fallback)
             foreach (var dataField in pivotTable.DataFields)
             {
                 SetPivotValueCell(
@@ -372,7 +436,8 @@ public static partial class PivotTableRefreshService
                     new CellAddress(sheet.Id, outputRow, outputColumn),
                     DisplayAggregate(
                         visibleSubtotalRows,
-                        new PivotDisplayContext(visibleRows, visibleSubtotalRows, visibleRows),
+                        new PivotDisplayContext(visibleRows, visibleSubtotalRows, visibleRows,
+                            ParentRowRows: parentRowRows),
                         dataField,
                         pivotTable,
                         headers),

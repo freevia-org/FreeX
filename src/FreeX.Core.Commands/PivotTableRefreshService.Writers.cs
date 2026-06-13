@@ -33,17 +33,23 @@ public static partial class PivotTableRefreshService
         // subtotalLevelCount = rowFields.Count - 1; level 0 = outermost (R0), level N-2 = innermost subtotaled (second-to-last field)
         var subtotalLevelCount = rowFields.Count - 1;
 
+        // Build prefix-row lookup for ALL levels (level k → prefix key of length k+1 → rows).
+        // Used for both subtotal placement and parent-row denominator computation.
+        var prefixRowsByLevel = new Dictionary<PivotKey, List<IReadOnlyList<ScalarValue>>>[subtotalLevelCount];
+        for (var level = 0; level < subtotalLevelCount; level++)
+        {
+            var prefixLen = level + 1;
+            prefixRowsByLevel[level] = groups
+                .GroupBy(group => new PivotKey(group.Key.Values.Take(prefixLen).ToArray()))
+                .ToDictionary(group => group.Key, group => group.SelectMany(item => item).ToList());
+        }
+
         // Build top subtotal row lookups for all levels (level k → prefix key of length k+1)
         var topSubtotalRowsByLevel = new Dictionary<PivotKey, List<IReadOnlyList<ScalarValue>>>[subtotalLevelCount];
         if (pivotTable.ShowSubtotals && rowFields.Count > 1 && pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Top)
         {
             for (var level = 0; level < subtotalLevelCount; level++)
-            {
-                var prefixLen = level + 1;
-                topSubtotalRowsByLevel[level] = groups
-                    .GroupBy(group => new PivotKey(group.Key.Values.Take(prefixLen).ToArray()))
-                    .ToDictionary(group => group.Key, group => group.SelectMany(item => item).ToList());
-            }
+                topSubtotalRowsByLevel[level] = prefixRowsByLevel[level];
         }
         else
         {
@@ -86,7 +92,8 @@ public static partial class PivotTableRefreshService
                         {
                             if (currentSubtotalKeys[level] is not null)
                             {
-                                WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKeys[level]!, subtotalRowSets[level], retainedRows, outputRow);
+                                var subtotalParentRows = ComputeParentPrefixRows(currentSubtotalKeys[level]!, prefixRowsByLevel, retainedRows);
+                                WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKeys[level]!, subtotalRowSets[level], retainedRows, subtotalParentRows, outputRow);
                                 outputRow++;
                             }
                         }
@@ -118,7 +125,8 @@ public static partial class PivotTableRefreshService
                             currentSubtotalKeys[level] = newKey;
                             if (topSubtotalRowsByLevel[level].TryGetValue(newKey, out var rowsForSubtotal))
                             {
-                                WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, newKey, rowsForSubtotal, retainedRows, outputRow);
+                                var subtotalParentRows = ComputeParentPrefixRows(newKey, prefixRowsByLevel, retainedRows);
+                                WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, newKey, rowsForSubtotal, retainedRows, subtotalParentRows, outputRow);
                                 outputRow++;
                             }
                         }
@@ -139,6 +147,10 @@ public static partial class PivotTableRefreshService
                         SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col + (uint)index), new TextValue(group.Key.Values[index]));
                 }
             }
+            // Compute parent-row denominator rows: rows matching the parent prefix (key minus last value).
+            // If this is the outermost row key (length 1), the parent is the grand total (retainedRows).
+            var parentRowRows = ComputeParentPrefixRows(group.Key, prefixRowsByLevel, retainedRows);
+
             for (var index = 0; index < pivotTable.DataFields.Count; index++)
                 SetPivotValueCell(
                     workbook,
@@ -146,7 +158,8 @@ public static partial class PivotTableRefreshService
                     new CellAddress(sheet.Id, outputRow, start.Col + (uint)rowFieldOutputColumns + (uint)index),
                     DisplayAggregate(
                         groupRows,
-                        new PivotDisplayContext(retainedRows, groupRows, retainedRows),
+                        new PivotDisplayContext(retainedRows, groupRows, retainedRows,
+                            ParentRowRows: parentRowRows),
                         pivotTable.DataFields[index],
                     pivotTable,
                     headers),
@@ -194,7 +207,8 @@ public static partial class PivotTableRefreshService
             {
                 if (currentSubtotalKeys[level] is not null)
                 {
-                    WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKeys[level]!, subtotalRowSets[level], retainedRows, outputRow);
+                    var subtotalParentRows = ComputeParentPrefixRows(currentSubtotalKeys[level]!, prefixRowsByLevel, retainedRows);
+                    WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKeys[level]!, subtotalRowSets[level], retainedRows, subtotalParentRows, outputRow);
                     outputRow++;
                 }
             }
@@ -353,6 +367,7 @@ public static partial class PivotTableRefreshService
         PivotKey subtotalKey,
         IReadOnlyList<IReadOnlyList<ScalarValue>> subtotalRows,
         IReadOnlyList<IReadOnlyList<ScalarValue>> grandTotalRows,
+        IEnumerable<IReadOnlyList<ScalarValue>>? parentRowRows,
         uint outputRow)
     {
         var captionItem = subtotalKey.Values.Count == 0
@@ -366,7 +381,8 @@ public static partial class PivotTableRefreshService
                 new CellAddress(sheet.Id, outputRow, start.Col + (uint)rowFieldCount + (uint)index),
                 DisplayAggregate(
                     subtotalRows,
-                    new PivotDisplayContext(grandTotalRows, subtotalRows, grandTotalRows),
+                    new PivotDisplayContext(grandTotalRows, subtotalRows, grandTotalRows,
+                        ParentRowRows: parentRowRows),
                     pivotTable.DataFields[index],
                     pivotTable,
                     headers),
