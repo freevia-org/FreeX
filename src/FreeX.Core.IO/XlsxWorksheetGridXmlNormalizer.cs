@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
+using System.Xml;
 using System.Xml.Linq;
 using static FreeX.Core.IO.XlsxXmlNormalizationHelpers;
 
@@ -127,6 +128,14 @@ internal static class XlsxWorksheetGridXmlNormalizer
         var (cellMetadataCount, valueMetadataCount) = ReadMetadataCounts(archive);
         foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
         {
+            // The grid (cols + sheetData cells) is already canonical for virtually every input
+            // (Excel-authored files and packages FreeX itself wrote).  Detect that with a streaming
+            // scan that never materializes the multi-hundred-megabyte cell tree, and only fall back
+            // to the authoritative full load + normalize when the scan finds something that
+            // NormalizeWorksheetRoot would actually rewrite.
+            if (IsWorksheetGridCanonical(worksheetEntry, cellMetadataCount, valueMetadataCount))
+                continue;
+
             var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
             var root = worksheetXml.Root;
             if (root is null)
@@ -134,6 +143,388 @@ internal static class XlsxWorksheetGridXmlNormalizer
 
             if (NormalizeWorksheetRoot(root, cellMetadataCount, valueMetadataCount))
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+        }
+    }
+
+    /// <summary>
+    /// Streaming check that returns <see langword="true"/> only when the worksheet's grid (the
+    /// <c>cols</c> element and the <c>sheetData</c> cells) is already in the exact form
+    /// <see cref="NormalizeWorksheetRoot(XElement, uint, uint)"/> would produce, so the caller can
+    /// skip a full per-cell <see cref="XDocument"/> load.
+    ///
+    /// <para>The check is deliberately CONSERVATIVE.  A <see langword="false"/> result is always safe
+    /// (the authoritative full normalizer runs); only a false POSITIVE would corrupt output, so every
+    /// branch that is not certain the content is already canonical — foreign-namespace attributes,
+    /// cell/row extension lists, metadata indices, values that re-serialize differently — returns
+    /// <see langword="false"/>.  Scalar attribute checks reuse the very same predicate functions the
+    /// normalizer applies, so they cannot drift.</para>
+    /// </summary>
+    private static bool IsWorksheetGridCanonical(
+        ZipArchiveEntry worksheetEntry,
+        uint cellMetadataCount,
+        uint valueMetadataCount)
+    {
+        try
+        {
+            using var stream = worksheetEntry.Open();
+            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+            reader.MoveToContent();
+            if (reader.NodeType != XmlNodeType.Element ||
+                reader.LocalName != "worksheet" ||
+                !string.Equals(reader.NamespaceURI, WorksheetNs.NamespaceName, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (reader.IsEmptyElement)
+                return true;
+
+            var worksheetDepth = reader.Depth;
+            var readNext = true;
+            while (true)
+            {
+                if (readNext && !reader.Read())
+                    break;
+                readNext = true;
+
+                if (reader.NodeType == XmlNodeType.EndElement && reader.Depth == worksheetDepth)
+                    break;
+                if (reader.NodeType != XmlNodeType.Element || reader.Depth != worksheetDepth + 1)
+                    continue;
+
+                var isWorksheetNs = string.Equals(
+                    reader.NamespaceURI, WorksheetNs.NamespaceName, StringComparison.Ordinal);
+
+                if (isWorksheetNs && reader.LocalName == "cols")
+                {
+                    // cols is tiny; materialize it and run the real normalizer for an exact verdict.
+                    if (XNode.ReadFrom(reader) is XElement colsElement)
+                    {
+                        if (NormalizeColumnsElement(new XElement(colsElement)))
+                            return false;
+                        readNext = false; // ReadFrom already advanced past cols.
+                    }
+
+                    continue;
+                }
+
+                if (isWorksheetNs && reader.LocalName == "sheetData")
+                {
+                    if (reader.HasAttributes && HasNonNamespaceAttribute(reader))
+                        return false; // sheetData carries no attributes once normalized.
+                    if (reader.IsEmptyElement)
+                        continue;
+                    if (!IsSheetDataCanonical(reader, cellMetadataCount, valueMetadataCount))
+                        return false;
+
+                    continue;
+                }
+
+                // Elements outside cols/sheetData are not touched by the grid normalizer.
+                reader.Skip();
+                readNext = false;
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsSheetDataCanonical(XmlReader reader, uint cellMetadataCount, uint valueMetadataCount)
+    {
+        var sheetDataDepth = reader.Depth;
+        while (reader.Read())
+        {
+            if (reader.NodeType == XmlNodeType.EndElement && reader.Depth == sheetDataDepth)
+                return true;
+            if (reader.NodeType != XmlNodeType.Element || reader.Depth != sheetDataDepth + 1)
+                continue;
+
+            // Only <row> elements survive directly under sheetData.
+            if (!(string.Equals(reader.NamespaceURI, WorksheetNs.NamespaceName, StringComparison.Ordinal) &&
+                  reader.LocalName == "row"))
+            {
+                return false;
+            }
+
+            if (!IsRowCanonical(reader, cellMetadataCount, valueMetadataCount))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsRowCanonical(XmlReader reader, uint cellMetadataCount, uint valueMetadataCount)
+    {
+        if (!AreAttributesCanonical(reader, RowAttributes, static (name, value) => name switch
+        {
+            "r" => IsCanonical(NormalizeUnsignedIntOrNull, value),
+            "spans" => IsCanonical(NormalizeCellSpans, value),
+            "s" => IsCanonical(NormalizeUnsignedIntOrNull, value),
+            "ht" => IsCanonical(NormalizeNonNegativeDouble, value),
+            "outlineLevel" => IsCanonical(NormalizeOutlineLevel, value),
+            _ => IsCanonical(NormalizeBoolean, value),
+        }))
+        {
+            return false;
+        }
+
+        if (reader.IsEmptyElement)
+            return true;
+
+        var rowDepth = reader.Depth;
+        while (reader.Read())
+        {
+            if (reader.NodeType == XmlNodeType.EndElement && reader.Depth == rowDepth)
+                return true;
+            if (reader.NodeType != XmlNodeType.Element || reader.Depth != rowDepth + 1)
+                continue;
+
+            // Anything other than a worksheet-namespace <c> (e.g. a row-level extLst, which the
+            // normalizer rewrites) is treated as non-canonical.
+            if (!(string.Equals(reader.NamespaceURI, WorksheetNs.NamespaceName, StringComparison.Ordinal) &&
+                  reader.LocalName == "c"))
+            {
+                return false;
+            }
+
+            if (!IsCellCanonical(reader, cellMetadataCount, valueMetadataCount))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsCellCanonical(XmlReader reader, uint cellMetadataCount, uint valueMetadataCount)
+    {
+        if (!AreAttributesCanonical(reader, CellAttributes, (name, value) => name switch
+        {
+            "r" => IsCanonical(NormalizeCellReference, value),
+            "s" => IsCanonical(NormalizeUnsignedIntOrNull, value),
+            "t" => IsCanonical(v => NormalizeToken(v, CellTypeValues), value),
+            "cm" => IsCanonical(v => NormalizeMetadataIndex(v, cellMetadataCount), value),
+            "vm" => IsCanonical(v => NormalizeMetadataIndex(v, valueMetadataCount), value),
+            _ => IsCanonical(NormalizeBoolean, value),
+        }))
+        {
+            return false;
+        }
+
+        if (reader.IsEmptyElement)
+            return true;
+
+        var cellDepth = reader.Depth;
+        var seenFormula = false;
+        var seenValue = false;
+        var seenInlineString = false;
+        while (reader.Read())
+        {
+            if (reader.NodeType == XmlNodeType.EndElement && reader.Depth == cellDepth)
+                return true;
+            if (reader.NodeType != XmlNodeType.Element || reader.Depth != cellDepth + 1)
+                continue;
+
+            if (!string.Equals(reader.NamespaceURI, WorksheetNs.NamespaceName, StringComparison.Ordinal))
+                return false;
+
+            switch (reader.LocalName)
+            {
+                case "f":
+                    if (seenFormula || !IsFormulaCanonical(reader))
+                        return false;
+                    seenFormula = true;
+                    break;
+                case "v":
+                    if (seenValue || !IsValueChildCanonical(reader))
+                        return false;
+                    seenValue = true;
+                    break;
+                case "is":
+                    if (seenInlineString)
+                        return false;
+                    seenInlineString = true;
+                    // Inline strings are preserved verbatim by the normalizer.
+                    ConsumeToEndElement(reader);
+                    break;
+                default:
+                    // extLst or any other child triggers normalization.
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsFormulaCanonical(XmlReader reader)
+    {
+        if (!AreAttributesCanonical(reader, FormulaAttributes, static (name, value) => name switch
+        {
+            "t" => IsCanonical(v => NormalizeToken(v, FormulaTypeValues), value),
+            "ref" => IsCanonical(NormalizeCellRange, value),
+            "r1" => IsCanonical(NormalizeCellReference, value),
+            "r2" => IsCanonical(NormalizeCellReference, value),
+            "si" => IsCanonical(NormalizeUnsignedIntOrNull, value),
+            _ => IsCanonical(NormalizeBoolean, value),
+        }))
+        {
+            return false;
+        }
+
+        // A formula must have no child elements (the normalizer strips them).
+        return HasNoChildElements(reader);
+    }
+
+    private static bool IsValueChildCanonical(XmlReader reader)
+    {
+        // <v> is canonical only with no attributes and no child elements.
+        if (reader.HasAttributes && HasNonNamespaceAttribute(reader))
+            return false;
+
+        return HasNoChildElements(reader);
+    }
+
+    private static bool HasNoChildElements(XmlReader reader)
+    {
+        if (reader.IsEmptyElement)
+            return true;
+
+        var depth = reader.Depth;
+        while (reader.Read())
+        {
+            if (reader.NodeType == XmlNodeType.EndElement && reader.Depth == depth)
+                return true;
+            if (reader.NodeType == XmlNodeType.Element)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static void ConsumeToEndElement(XmlReader reader)
+    {
+        if (reader.IsEmptyElement)
+            return;
+
+        var depth = reader.Depth;
+        while (reader.Read())
+        {
+            if (reader.NodeType == XmlNodeType.EndElement && reader.Depth == depth)
+                return;
+        }
+    }
+
+    /// <summary>
+    /// Iterates the current element's attributes and returns <see langword="false"/> as soon as one
+    /// would be removed or rewritten by the normalizer: a foreign-namespace attribute, an attribute
+    /// outside <paramref name="allowed"/>, or one whose value is not already canonical per
+    /// <paramref name="isValueCanonical"/>.  Namespace declarations and markup-compatibility
+    /// attributes are preserved (matching the normalizer).  Leaves the reader on the element.
+    /// </summary>
+    private static bool AreAttributesCanonical(
+        XmlReader reader,
+        IReadOnlySet<string> allowed,
+        Func<string, string, bool> isValueCanonical)
+    {
+        if (!reader.HasAttributes)
+            return true;
+
+        var canonical = true;
+        for (var i = 0; i < reader.AttributeCount; i++)
+        {
+            reader.MoveToAttribute(i);
+            if (IsNamespaceDeclaration(reader) ||
+                string.Equals(reader.NamespaceURI, MarkupCompatNs.NamespaceName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (reader.NamespaceURI.Length != 0 ||
+                !allowed.Contains(reader.LocalName) ||
+                !isValueCanonical(reader.LocalName, reader.Value))
+            {
+                canonical = false;
+                break;
+            }
+        }
+
+        reader.MoveToElement();
+        return canonical;
+    }
+
+    private static bool HasNonNamespaceAttribute(XmlReader reader)
+    {
+        var hasNonNamespace = false;
+        for (var i = 0; i < reader.AttributeCount; i++)
+        {
+            reader.MoveToAttribute(i);
+            if (!IsNamespaceDeclaration(reader))
+            {
+                hasNonNamespace = true;
+                break;
+            }
+        }
+
+        reader.MoveToElement();
+        return hasNonNamespace;
+    }
+
+    private static bool IsNamespaceDeclaration(XmlReader reader) =>
+        string.Equals(reader.NamespaceURI, "http://www.w3.org/2000/xmlns/", StringComparison.Ordinal);
+
+    private static bool IsCanonical(Func<string?, string?> normalize, string value) =>
+        string.Equals(normalize(value), value, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Streaming check used by the cell-patch save pre-flight: returns <see langword="true"/> if any
+    /// <c>row</c> in the worksheet lacks an <c>r</c> (row-index) attribute.  Avoids loading the full
+    /// worksheet XDocument just to inspect row indices.  Returns <see langword="true"/> on any parse
+    /// failure so the caller conservatively rejects the patch (matching the prior full-parse guard).
+    /// </summary>
+    internal static bool AnyRowMissingRowIndex(ZipArchiveEntry worksheetEntry)
+    {
+        try
+        {
+            using var stream = worksheetEntry.Open();
+            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+            reader.MoveToContent();
+            if (reader.NodeType != XmlNodeType.Element ||
+                reader.LocalName != "worksheet" ||
+                !string.Equals(reader.NamespaceURI, WorksheetNs.NamespaceName, StringComparison.Ordinal) ||
+                reader.IsEmptyElement)
+            {
+                return false;
+            }
+
+            var readNext = true;
+            while (true)
+            {
+                if (readNext && !reader.Read())
+                    break;
+                readNext = true;
+
+                if (reader.NodeType != XmlNodeType.Element ||
+                    reader.LocalName != "row" ||
+                    !string.Equals(reader.NamespaceURI, WorksheetNs.NamespaceName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (reader.GetAttribute("r") is null)
+                    return true;
+
+                // Skip the row's cell subtree, then process the node Skip lands on without re-reading.
+                reader.Skip();
+                readNext = false;
+            }
+
+            return false;
+        }
+        catch
+        {
+            return true;
         }
     }
 

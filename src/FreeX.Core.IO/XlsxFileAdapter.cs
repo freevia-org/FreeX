@@ -702,6 +702,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         bool? hasClosedXmlUnsupportedConditionalFormatting = null;
         bool? hasWorksheetDynamicFilters = null;
         bool? hasWorksheetRelationshipMarkerSchemaIssues = null;
+        bool? hasWorksheetPageLayoutSchemaIssues = null;
+        bool? hasWorksheetPageBreakSchemaIssues = null;
+        bool? hasWorksheetAutoFilterSchemaIssues = null;
+        bool? hasWorksheetSheetViewSchemaIssues = null;
+        bool? hasWorksheetNativeMetadataSchemaIssues = null;
         IReadOnlySet<string>? mergeCellWorksheetPathsToStrip = null;
         if (!sheetXmlLayoutHadWarnings && sheetXmlLayout.Count > 0)
         {
@@ -709,6 +714,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             hasClosedXmlUnsupportedConditionalFormatting = false;
             hasWorksheetDynamicFilters = false;
             hasWorksheetRelationshipMarkerSchemaIssues = false;
+            hasWorksheetPageLayoutSchemaIssues = false;
+            hasWorksheetPageBreakSchemaIssues = false;
+            hasWorksheetAutoFilterSchemaIssues = false;
+            hasWorksheetSheetViewSchemaIssues = false;
+            hasWorksheetNativeMetadataSchemaIssues = false;
             var mergeCellWorksheetPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var layout in sheetXmlLayout.Values)
             {
@@ -716,6 +726,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 hasClosedXmlUnsupportedConditionalFormatting |= layout.HasClosedXmlUnsupportedConditionalFormatting;
                 hasWorksheetDynamicFilters |= layout.HasWorksheetDynamicFilters;
                 hasWorksheetRelationshipMarkerSchemaIssues |= layout.HasWorksheetRelationshipMarkerSchemaIssues;
+                hasWorksheetPageLayoutSchemaIssues |= layout.HasWorksheetPageLayoutSchemaIssues;
+                hasWorksheetPageBreakSchemaIssues |= layout.HasWorksheetPageBreakSchemaIssues;
+                hasWorksheetAutoFilterSchemaIssues |= layout.HasWorksheetAutoFilterSchemaIssues;
+                hasWorksheetSheetViewSchemaIssues |= layout.HasWorksheetSheetViewSchemaIssues;
+                hasWorksheetNativeMetadataSchemaIssues |= layout.HasWorksheetNativeMetadataSchemaIssues;
                 if (layout.MergedRegions.Count > 0)
                     mergeCellWorksheetPaths.Add(layout.WorksheetPath);
             }
@@ -730,16 +745,16 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             hasConditionalFormattingBlocks,
             hasClosedXmlUnsupportedConditionalFormatting,
             hasWorksheetDynamicFilters,
+            null,                                                                              // HasWorksheetGridXmlSchemaIssues: left null; check depends on sheetData cells
+            hasWorksheetPageLayoutSchemaIssues,
+            hasWorksheetPageBreakSchemaIssues,
+            hasWorksheetAutoFilterSchemaIssues,
             null,
             null,
             null,
             null,
             null,
-            null,
-            null,
-            null,
-            null,
-            null,
+            hasWorksheetSheetViewSchemaIssues,
             null,
             null,
             null,
@@ -749,7 +764,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             packageParts.HasInspected ? packageParts.HasWorkbookSmartTagSchemaIssues : null,
             packageParts.HasInspected ? packageParts.HasWorkbookNativeMetadataSchemaIssues : null,
             hasWorksheetRelationshipMarkerSchemaIssues,
-            null,
+            hasWorksheetNativeMetadataSchemaIssues,
             mergeCellWorksheetPathsToStrip);
     }
 

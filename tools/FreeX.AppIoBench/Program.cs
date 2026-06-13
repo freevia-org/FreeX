@@ -30,6 +30,12 @@ internal static class Program
                 return 0;
             }
 
+            if (options.Generate)
+            {
+                GenerateLargeWorkbook(options);
+                return 0;
+            }
+
             if (string.IsNullOrWhiteSpace(options.Path))
             {
                 Console.Error.WriteLine("Missing required --path <xlsx>.");
@@ -183,6 +189,71 @@ internal static class Program
             $"{FormatIteration(options, iteration)}file=\"{fileInfo.Name}\" edit={editResult.Label} output_bytes={saveInfo.Length:N0} " +
             $"progress_updates={saveProgress.Count} elapsed_ms={saveStopwatch.Elapsed.TotalMilliseconds:F2} " +
             $"allocated_bytes={saveAllocatedBytes:N0} {FormatSaveDiagnostics(adapter.LastSaveDiagnostics)}");
+    }
+
+    private static void GenerateLargeWorkbook(AppIoBenchOptions options)
+    {
+        var outPath = options.OutputPath
+            ?? throw new ArgumentException("--generate requires --out <xlsx>.");
+        var buildStopwatch = Stopwatch.StartNew();
+        var workbook = new Workbook("Generated");
+
+        var styles = new StyleId[4];
+        for (var i = 0; i < styles.Length; i++)
+        {
+            var style = CellStyle.Default.Clone();
+            style.FillColor = CellColor.FromArgb((byte)(200 + i * 12), 230, 240);
+            style.FillPatternStyle = CellFillPatternStyle.Solid;
+            style.NumberFormat = i % 2 == 0 ? "#,##0.00" : "0.0%";
+            style.BorderBottom = new CellBorder(BorderStyle.Thin, CellColor.FromArgb(91, 155, 213));
+            style.Bold = i % 2 == 1;
+            styles[i] = workbook.RegisterStyle(style);
+        }
+
+        var baseDate = new DateTime(2020, 1, 1);
+        for (var sheetIndex = 0; sheetIndex < options.GenSheets; sheetIndex++)
+        {
+            var sheet = workbook.AddSheet($"Sheet{sheetIndex + 1}");
+            for (var c = 1u; c <= (uint)options.GenCols; c++)
+                sheet.SetCell(new CellAddress(sheet.Id, 1, c), new TextValue($"Col{c}"));
+
+            for (var r = 2u; r <= (uint)options.GenRows + 1; r++)
+            {
+                for (var c = 1u; c <= (uint)options.GenCols; c++)
+                {
+                    var address = new CellAddress(sheet.Id, r, c);
+                    Cell cell;
+                    if (c == 1)
+                        cell = Cell.FromValue(new TextValue($"Item-{r % 500}")); // repeated -> shared strings
+                    else if (c == 2)
+                        cell = Cell.FromValue(DateTimeValue.FromDateTime(baseDate.AddDays((r * c) % 2000)));
+                    else if (c == (uint)options.GenCols && r % 12 == 0 && options.GenCols >= 5)
+                        cell = Cell.FromFormula($"SUM(C{r}:E{r})");
+                    else
+                        cell = Cell.FromValue(new NumberValue((sheetIndex + 1) * 100000 + r * 10 + c + r * c % 97 * 0.5));
+
+                    if ((r + c) % 4 == 0)
+                        cell.StyleId = styles[(r + c) % (uint)styles.Length];
+                    sheet.SetCell(address, cell);
+                }
+            }
+        }
+
+        buildStopwatch.Stop();
+
+        var saveStopwatch = Stopwatch.StartNew();
+        var adapter = new XlsxFileAdapter();
+        using (var fileStream = File.Create(outPath))
+            adapter.Save(workbook, fileStream);
+        saveStopwatch.Stop();
+
+        var info = new FileInfo(outPath);
+        var totalCells = (long)options.GenSheets * options.GenRows * options.GenCols;
+        Console.WriteLine(
+            "PERF APP_XLSX_GENERATE " +
+            $"out=\"{outPath}\" sheets={options.GenSheets} rows={options.GenRows} cols={options.GenCols} " +
+            $"cells={totalCells:N0} bytes={info.Length:N0} build_ms={buildStopwatch.Elapsed.TotalMilliseconds:F2} " +
+            $"save_ms={saveStopwatch.Elapsed.TotalMilliseconds:F2}");
     }
 
     private static AppIoBenchEditResult ApplyEdit(Workbook workbook, AppIoBenchOptions options)
@@ -537,6 +608,14 @@ internal static class Program
 
         public bool PrewarmXlsx { get; private init; }
 
+        public bool Generate { get; private init; }
+
+        public int GenRows { get; private init; } = 20000;
+
+        public int GenCols { get; private init; } = 15;
+
+        public int GenSheets { get; private init; } = 3;
+
         public bool ShowHelp { get; private init; }
 
         public static AppIoBenchOptions Parse(string[] args)
@@ -586,6 +665,18 @@ internal static class Program
                         break;
                     case "--prewarm":
                         options = options with { PrewarmXlsx = ParsePrewarmMode(ReadValue(args, ref index, "--prewarm")) };
+                        break;
+                    case "--generate":
+                        options = options with { Generate = true };
+                        break;
+                    case "--rows":
+                        options = options with { GenRows = ParsePositiveInt(ReadValue(args, ref index, "--rows"), "--rows") };
+                        break;
+                    case "--cols":
+                        options = options with { GenCols = ParsePositiveInt(ReadValue(args, ref index, "--cols"), "--cols") };
+                        break;
+                    case "--sheets":
+                        options = options with { GenSheets = ParsePositiveInt(ReadValue(args, ref index, "--sheets"), "--sheets") };
                         break;
                     default:
                         if (options.Path is null && !args[index].StartsWith("-", StringComparison.Ordinal))
@@ -637,6 +728,14 @@ internal static class Program
             }
 
             return count;
+        }
+
+        private static int ParsePositiveInt(string value, string option)
+        {
+            if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) || parsed < 1)
+                throw new ArgumentException($"Invalid value for {option}: {value}");
+
+            return parsed;
         }
 
         private static bool ParsePrewarmMode(string value) =>

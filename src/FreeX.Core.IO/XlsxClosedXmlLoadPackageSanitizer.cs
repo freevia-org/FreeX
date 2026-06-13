@@ -2267,7 +2267,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
     }
 
-    private static bool NormalizeWorksheetNativeMetadataRoot(XElement root)
+    internal static bool NormalizeWorksheetNativeMetadataRoot(XElement root)
     {
         var changed = false;
         changed |= XlsxWorksheetProtectionNormalizer.NormalizeWorksheetRoot(root);

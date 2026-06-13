@@ -98,6 +98,11 @@ public sealed partial class XlsxFileAdapter
         bool HasUnsupportedConditionalFormatting,
         bool HasWorksheetDynamicFilters,
         bool HasWorksheetRelationshipMarkerSchemaIssues,
+        bool HasWorksheetPageLayoutSchemaIssues,
+        bool HasWorksheetPageBreakSchemaIssues,
+        bool HasWorksheetAutoFilterSchemaIssues,
+        bool HasWorksheetSheetViewSchemaIssues,
+        bool HasWorksheetNativeMetadataSchemaIssues,
         IReadOnlyList<string> TableRelationshipIds,
         string? CodeName);
 
@@ -302,6 +307,25 @@ public sealed partial class XlsxFileAdapter
         var hasWorksheetRelationshipMarkerSchemaIssues =
             worksheetXml.Root is { } worksheetRoot &&
             XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheetRoot(new XElement(worksheetRoot));
+        // Compute worksheet-scoped schema hints using the pruned root (sheetData children stripped).
+        // Each check is run on a clone so the normalizer mutations don't affect the layout's own root.
+        // These normalizers only inspect structural elements outside sheetData, so the pruned root
+        // gives the same result as the full root for these checks.
+        var hasWorksheetPageLayoutSchemaIssues =
+            worksheetXml.Root is { } pageLayoutRoot &&
+            XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheetRoot(new XElement(pageLayoutRoot));
+        var hasWorksheetPageBreakSchemaIssues =
+            worksheetXml.Root is { } pageBreakRoot &&
+            XlsxWorksheetPageBreakNormalizer.NormalizeWorksheetRoot(new XElement(pageBreakRoot));
+        var hasWorksheetAutoFilterSchemaIssues =
+            worksheetXml.Root?.Element(worksheetNs + "autoFilter") is { } autoFilterElement &&
+            XlsxWorksheetAutoFilterNormalizer.NormalizeElement(new XElement(autoFilterElement));
+        var hasWorksheetSheetViewSchemaIssues =
+            worksheetXml.Root?.Element(worksheetNs + "sheetViews") is { } sheetViewsElement &&
+            XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewsElement(new XElement(sheetViewsElement));
+        var hasWorksheetNativeMetadataSchemaIssues =
+            worksheetXml.Root is { } nativeMetadataRoot &&
+            XlsxClosedXmlLoadPackageSanitizer.NormalizeWorksheetNativeMetadataRoot(new XElement(nativeMetadataRoot));
         var tableRelationshipIds = ReadTableRelationshipIds(worksheetXml, worksheetNs, relNs);
 
         return new SheetXmlLayout(
@@ -393,6 +417,11 @@ public sealed partial class XlsxFileAdapter
             hasUnsupportedConditionalFormatting,
             hasWorksheetDynamicFilters,
             hasWorksheetRelationshipMarkerSchemaIssues,
+            hasWorksheetPageLayoutSchemaIssues,
+            hasWorksheetPageBreakSchemaIssues,
+            hasWorksheetAutoFilterSchemaIssues,
+            hasWorksheetSheetViewSchemaIssues,
+            hasWorksheetNativeMetadataSchemaIssues,
             tableRelationshipIds,
             codeName);
     }
