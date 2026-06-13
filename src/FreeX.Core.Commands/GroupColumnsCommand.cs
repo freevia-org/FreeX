@@ -8,18 +8,20 @@ public sealed class GroupColumnsCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly uint _startCol, _endCol;
     private readonly int _level;
+    private readonly bool _preserveExistingHierarchy;
     private Dictionary<uint, int>? _previousLevels;
     private HashSet<uint>? _previouslyHiddenByGroup;
 
     public string Label => _level > 0 ? "Group Columns" : "Ungroup Columns";
 
-    public GroupColumnsCommand(SheetId sheetId, uint startCol, uint endCol, int level)
+    public GroupColumnsCommand(SheetId sheetId, uint startCol, uint endCol, int level, bool preserveExistingHierarchy = false)
     {
         OutlineGroupingService.ValidateOutlineLevel(level);
         _sheetId  = sheetId;
         _startCol = startCol;
         _endCol   = endCol;
         _level    = level;
+        _preserveExistingHierarchy = preserveExistingHierarchy;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -41,7 +43,7 @@ public sealed class GroupColumnsCommand : IWorkbookCommand
                     _previouslyHiddenByGroup.Add(c);
             }
             else
-                sheet.ColOutlineLevels[c] = _level;
+                sheet.ColOutlineLevels[c] = OutlineGroupingService.GetGroupedOutlineLevel(prev, _level, _preserveExistingHierarchy);
         }
         return new CommandOutcome(true);
     }
