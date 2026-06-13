@@ -161,4 +161,41 @@ public sealed class ChartTrendlineCalculatorTests
         ChartTrendlineCalculator.TryCalculateRSquared(source, trend, out var rSquared).Should().BeTrue();
         rSquared.Should().BeApproximately(1.0, 0.000001);
     }
+
+    [Fact]
+    public void TryCalculateRSquared_Exponential_UsesLogSpaceFit()
+    {
+        // Points exactly on y = 2 * e^(0.5x): a perfect exponential fit. Excel reports the
+        // R-squared of the linearized (ln y vs x) regression, which is 1.0 here.
+        var source = new[]
+        {
+            new DataPoint(0, 2 * Math.Exp(0.0)),
+            new DataPoint(1, 2 * Math.Exp(0.5)),
+            new DataPoint(2, 2 * Math.Exp(1.0)),
+            new DataPoint(3, 2 * Math.Exp(1.5)),
+        };
+        var trend = ChartTrendlineCalculator.Calculate(ChartTrendlineType.Exponential, source, period: 2, order: 2);
+
+        ChartTrendlineCalculator.TryCalculateRSquared(source, trend, out var rSquared, logTransformY: true).Should().BeTrue();
+        rSquared.Should().BeApproximately(1.0, 1e-6);
+    }
+
+    [Fact]
+    public void TryCalculateRSquared_LogSpaceDiffersFromOriginalScaleForNoisyExponentialData()
+    {
+        // Noisy exponential-ish data: the log-space R-squared (Excel's) differs from the
+        // original-scale R-squared, confirming the transform is actually applied.
+        var source = new[]
+        {
+            new DataPoint(0, 2.0),
+            new DataPoint(1, 3.0),
+            new DataPoint(2, 6.5),
+            new DataPoint(3, 8.0),
+        };
+        var trend = ChartTrendlineCalculator.Calculate(ChartTrendlineType.Exponential, source, period: 2, order: 2);
+
+        ChartTrendlineCalculator.TryCalculateRSquared(source, trend, out var original, logTransformY: false).Should().BeTrue();
+        ChartTrendlineCalculator.TryCalculateRSquared(source, trend, out var logSpace, logTransformY: true).Should().BeTrue();
+        logSpace.Should().NotBeApproximately(original, 1e-3);
+    }
 }

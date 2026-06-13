@@ -23,7 +23,8 @@ public static class ChartTrendlineCalculator
     public static bool TryCalculateRSquared(
         IReadOnlyList<DataPoint> sourcePoints,
         IReadOnlyList<DataPoint> trendPoints,
-        out double rSquared)
+        out double rSquared,
+        bool logTransformY = false)
     {
         rSquared = 0;
         var count = 0;
@@ -35,10 +36,21 @@ public static class ChartTrendlineCalculator
             if (!TryInterpolateTrendY(trendPoints, point.X, out var predicted))
                 continue;
 
+            // Excel reports exponential/power trendline R-squared on the linearized
+            // (log-Y) regression, not the original-scale residuals.
+            var actualY = point.Y;
+            if (logTransformY)
+            {
+                if (actualY <= 0 || predicted <= 0)
+                    continue;
+                actualY = Math.Log(actualY);
+                predicted = Math.Log(predicted);
+            }
+
             count++;
-            sumActual += point.Y;
-            sumActualSquared += point.Y * point.Y;
-            residual += Math.Pow(point.Y - predicted, 2);
+            sumActual += actualY;
+            sumActualSquared += actualY * actualY;
+            residual += Math.Pow(actualY - predicted, 2);
         }
 
         if (count < 2)
