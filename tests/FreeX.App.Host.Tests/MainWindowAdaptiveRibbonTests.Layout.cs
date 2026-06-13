@@ -50,7 +50,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                     new DenseCommandPlacement("Print Area", 1, 0),
                     new DenseCommandPlacement("Breaks", 1, 1),
                     new DenseCommandPlacement("Background", 1, 2),
-                    new DenseCommandPlacement("Print Titles", 2, 0));
+                    new DenseCommandPlacement("Print Titles", 2, 0),
+                    new DenseCommandPlacement("Page Setup", 2, 1));
         });
     }
 
@@ -128,7 +129,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 3,
                 "Excel-like Page Setup commands should use three short rows, not one tall vertical stack that clips");
             harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["Margins", "Orientation", "Size", "Print Area", "Breaks", "Background", "Print Titles"]);
+                ["Margins", "Orientation", "Size", "Print Area", "Breaks", "Background", "Print Titles", "Page Setup"]);
         });
     }
 
@@ -147,7 +148,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 "Page Setup",
                 "Excel keeps the primary Page Setup commands directly reachable at normal narrow widths");
             harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["Margins", "Orientation", "Size"],
+                ["Margins", "Orientation", "Size", "Page Setup"],
                 "Page Layout should collapse lower-priority groups before the primary Page Setup group");
             harness.ActiveRibbonGroupCommandOverflow("Page Setup").Should().BeLessThanOrEqualTo(
                 0.5,

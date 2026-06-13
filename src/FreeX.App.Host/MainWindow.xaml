@@ -2172,13 +2172,19 @@
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PrintTitles}"
                                         local:RibbonTooltip.KeyTip="PT"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RepeatSelectedRowsOrColumnsOnEveryPrintedPage}" local:RibbonMetadata.CommandName="Print Titles"/>
+                                <Button x:Name="PageLayoutPageSetupButton" Content="{local:Loc Key=PageSetup_PageSetup}" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageSetupDialogBtn_Click"
+                                        AutomationProperties.Name="{local:Loc Key=PageSetup_PageSetup}"
+                                        AutomationProperties.AutomationId="PageLayoutPageSetupButton"
+                                        AutomationProperties.HelpText="{local:Loc Key=PrintPreview_PageSetupHelpText}"
+                                        local:RibbonTooltip.Title="{local:Loc Key=PageSetup_PageSetup}"
+                                        local:RibbonTooltip.KeyTip="PS"
+                                        local:RibbonTooltip.Description="{local:Loc Key=PrintPreview_PageSetupHelpText}" local:RibbonMetadata.CommandName="Page Setup"/>
                             </StackPanel>
                             <Button x:Name="PageLayoutPageSetupDialogButton" Grid.Row="0" Width="24" Height="22" Margin="0,0,1,1"
                                     HorizontalAlignment="Right" VerticalAlignment="Bottom" Style="{StaticResource RibbonBtn}" Click="PageSetupDialogBtn_Click"
                                     AutomationProperties.Name="{local:Loc Key=PageSetup_PageSetup}"
                                     AutomationProperties.HelpText="{local:Loc Key=PrintPreview_PageSetupHelpText}"
                                     local:RibbonTooltip.Title="{local:Loc Key=PageSetup_PageSetup}"
-                                    local:RibbonTooltip.KeyTip="PS"
                                     local:RibbonTooltip.Description="{local:Loc Key=PrintPreview_PageSetupHelpText}" local:RibbonMetadata.CommandName="Page Setup dialog">
                                 <TextBlock Text="..." FontSize="12"/>
                             </Button>
@@ -2189,10 +2195,15 @@
                         <!-- ▌Scale to Fit ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PageLayoutScaleToFitGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,1,22,0">
-                                <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
-                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_Width}" FontSize="11" Margin="2,0,2,0" Foreground="#444"/>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,1,22,0">
+                                <Grid Margin="1,0,1,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="44"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{local:Loc Key=MainWindow_Text_Width}" FontSize="11" Margin="2,0,6,0" Foreground="#444" VerticalAlignment="Center"/>
                                     <ComboBox x:Name="PageLayoutScaleWidthBox" Width="82" Height="22" Margin="1,0" Background="White" FontSize="12"
+                                              Grid.Column="1"
                                               IsEditable="True" IsTextSearchEnabled="False"
                                               SelectionChanged="PageLayoutScaleWidthBox_SelectionChanged"
                                               KeyDown="PageLayoutScaleWidthBox_KeyDown" LostKeyboardFocus="PageLayoutScaleWidthBox_LostKeyboardFocus"
@@ -2201,10 +2212,15 @@
                                               local:RibbonTooltip.Title="{local:Loc Key=MainWindow_Text_Width}"
                                               local:RibbonTooltip.KeyTip="SW"
                                               local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale Width"/>
-                                </StackPanel>
-                                <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
-                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_Height}" FontSize="11" Margin="2,0,2,0" Foreground="#444"/>
+                                </Grid>
+                                <Grid Margin="1,0,1,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="44"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{local:Loc Key=MainWindow_Text_Height}" FontSize="11" Margin="2,0,6,0" Foreground="#444" VerticalAlignment="Center"/>
                                     <ComboBox x:Name="PageLayoutScaleHeightBox" Width="82" Height="22" Margin="1,0" Background="White" FontSize="12"
+                                              Grid.Column="1"
                                               IsEditable="True" IsTextSearchEnabled="False"
                                               SelectionChanged="PageLayoutScaleHeightBox_SelectionChanged"
                                               KeyDown="PageLayoutScaleHeightBox_KeyDown" LostKeyboardFocus="PageLayoutScaleHeightBox_LostKeyboardFocus"
@@ -2213,10 +2229,15 @@
                                               local:RibbonTooltip.Title="{local:Loc Key=MainWindow_Text_Height}"
                                               local:RibbonTooltip.KeyTip="SH"
                                               local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale Height"/>
-                                </StackPanel>
-                                <StackPanel VerticalAlignment="Center" Margin="0,0,3,0">
-                                    <TextBlock Text="{local:Loc Key=MainWindow_Content_Scale}" FontSize="11" Margin="2,0,2,0" Foreground="#444"/>
-                                    <ComboBox x:Name="PageLayoutScalePercentBox" Width="72" Height="22" Margin="1,0" Background="White" FontSize="12"
+                                </Grid>
+                                <Grid Margin="1,0,1,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="44"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{local:Loc Key=MainWindow_Content_Scale}" FontSize="11" Margin="2,0,6,0" Foreground="#444" VerticalAlignment="Center"/>
+                                    <ComboBox x:Name="PageLayoutScalePercentBox" Width="82" Height="22" Margin="1,0" Background="White" FontSize="12"
+                                              Grid.Column="1"
                                               IsEditable="True" IsTextSearchEnabled="False"
                                               SelectionChanged="PageLayoutScalePercentBox_SelectionChanged"
                                               KeyDown="PageLayoutScalePercentBox_KeyDown" LostKeyboardFocus="PageLayoutScalePercentBox_LostKeyboardFocus"
@@ -2225,7 +2246,7 @@
                                               local:RibbonTooltip.Title="{local:Loc Key=MainWindow_Content_Scale}"
                                               local:RibbonTooltip.KeyTip="SC"
                                               local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale Percent"/>
-                                </StackPanel>
+                                </Grid>
                             </StackPanel>
                             <Button x:Name="PageLayoutScaleToFitDialogButton" Grid.Row="0" Width="18" Height="18" Margin="0,0,1,1"
                                     HorizontalAlignment="Right" VerticalAlignment="Bottom" Style="{StaticResource RibbonBtn}" Click="ScaleToFitBtn_Click"
@@ -6005,4 +6026,3 @@
 
     </Grid>
 </Window>
-

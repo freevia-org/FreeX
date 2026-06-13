@@ -16,6 +16,7 @@ public sealed class PageLayoutCommandSourceTests
     [InlineData("Print Area", "Print Area", "PA", "PrintAreaBtn_Click")]
     [InlineData("Breaks", "Breaks", "BK", "PageBreaksBtn_Click")]
     [InlineData("Print Titles", "Print Titles", "PT", "PrintTitlesBtn_Click")]
+    [InlineData("Page Setup", "Page Setup", "PS", "PageSetupDialogBtn_Click")]
     public void PageLayoutButtons_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string content,
@@ -43,6 +44,28 @@ public sealed class PageLayoutCommandSourceTests
         button.Should().Contain("HorizontalAlignment=\"Right\"");
         button.Should().Contain("VerticalAlignment=\"Bottom\"");
         button.Should().Contain("local:RibbonTooltip.KeyTip=\"SF\"");
+    }
+
+    [Fact]
+    public void ScaleToFitControls_AreVerticallyStacked()
+    {
+        var xaml = ReadMainWindowXaml();
+        var groupStart = xaml.IndexOf("local:RibbonMetadata.CatalogId=\"PageLayoutScaleToFitGroup\"", StringComparison.Ordinal);
+        groupStart.Should().BeGreaterThanOrEqualTo(0);
+        var launcherStart = xaml.IndexOf("x:Name=\"PageLayoutScaleToFitDialogButton\"", groupStart, StringComparison.Ordinal);
+        launcherStart.Should().BeGreaterThan(groupStart);
+        var groupBody = xaml[groupStart..launcherStart];
+
+        groupBody.Should().Contain("<StackPanel Grid.Row=\"0\" VerticalAlignment=\"Center\"");
+        groupBody.Should().NotContain("Orientation=\"Horizontal\"");
+        groupBody.Should().Contain("<ColumnDefinition Width=\"44\"/>");
+        groupBody.Should().Contain("x:Name=\"PageLayoutScaleWidthBox\"");
+        groupBody.Should().Contain("x:Name=\"PageLayoutScaleHeightBox\"");
+        groupBody.Should().Contain("x:Name=\"PageLayoutScalePercentBox\"");
+        groupBody.IndexOf("x:Name=\"PageLayoutScaleWidthBox\"", StringComparison.Ordinal)
+            .Should().BeLessThan(groupBody.IndexOf("x:Name=\"PageLayoutScaleHeightBox\"", StringComparison.Ordinal));
+        groupBody.IndexOf("x:Name=\"PageLayoutScaleHeightBox\"", StringComparison.Ordinal)
+            .Should().BeLessThan(groupBody.IndexOf("x:Name=\"PageLayoutScalePercentBox\"", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -130,6 +153,8 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("new SetPageMarginsCommand(sheetId, WorksheetPageMargins.Normal)");
         source.Should().Contain("new SetPageOrientationCommand(sheetId, WorksheetPageOrientation.Portrait)");
         source.Should().Contain("new SetPaperSizeCommand(sheetId, WorksheetPaperSize.Letter)");
+        SourceMethodExtractor.ExtractMethodSource(source, "private void PageSetupDialogBtn_Click(")
+            .Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PrintAreaBtn_Click(")
             .Should().Contain("OpenRibbonContextMenu(btn, cm);");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PageBreaksBtn_Click(")
