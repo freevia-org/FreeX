@@ -142,10 +142,15 @@ public sealed class ReviewDialogFocusAccessibilityTests
                 ShowAndPump(dialog);
 
                 Keyboard.FocusedElement.Should().Match<Button>(button => button.IsDefault && Equals(button.Content, "_OK"));
-                var summary = WpfTestTree.FindVisualSelfAndDescendants<TextBlock>(dialog)
+                var summary = WpfTestTree.FindVisualSelfAndDescendants<TextBox>(dialog)
                     .FirstOrDefault(element => AutomationProperties.GetAutomationId(element) == "WorkbookStatisticsSummary");
                 summary.Should().NotBeNull();
+                summary!.IsReadOnly.Should().BeTrue();
+                summary.Text.Should().Contain("Cells with data: 2");
                 AutomationProperties.GetHelpText(summary!).Should().Be("Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
+
+                var copy = FindButton(dialog, "Copy to Clipboard");
+                AutomationProperties.GetAutomationId(copy).Should().Be("WorkbookStatisticsCopyButton");
             }
             finally
             {

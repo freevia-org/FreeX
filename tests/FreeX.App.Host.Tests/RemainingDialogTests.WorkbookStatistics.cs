@@ -16,9 +16,17 @@ public sealed partial class RemainingDialogTests
             ChartCount: 4,
             PictureCount: 5,
             ShapeCount: 6,
-            NamedRangeCount: 7));
+            NamedRangeCount: 7,
+            UsedWorksheetCount: 1,
+            TableCount: 8,
+            HyperlinkCount: 9));
 
-        message.Should().Contain("Sheets: 2").And.Contain("Named ranges: 7");
+        message.Should()
+            .Contain("Sheets: 2")
+            .And.Contain("Used sheets: 1")
+            .And.Contain("Tables: 8")
+            .And.Contain("Hyperlinks: 9")
+            .And.Contain("Named ranges: 7");
     }
 
     [Fact]
@@ -37,21 +45,38 @@ public sealed partial class RemainingDialogTests
     }
 
     [Fact]
-    public void WorkbookStatisticsDialog_UsesSingleExcelLikeOkButton()
+    public void WorkbookStatisticsDialog_ProvidesCopyButtonAndDefaultOkButton()
     {
         var source = DialogSourceTestSupport.ReadHostSources("WorkbookStatisticsDialog.cs");
 
-        source.Should().Contain("DialogButtonRowFactory.CreateOkOnly");
-        source.Should().NotContain("DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true");
+        source.Should().Contain("const string copyContent = \"_Copy to Clipboard\";");
+        source.Should().Contain("AutomationProperties.SetAutomationId(copy, \"WorkbookStatisticsCopyButton\");");
+        source.Should().Contain("copy.Click += (_, _) => CopyMessageToClipboard(message);");
+        source.Should().Contain("Content = UiText.Ok");
+        source.Should().Contain("IsDefault = true");
+        source.Should().Contain("IsCancel = true");
     }
 
     [Fact]
-    public void WorkbookStatisticsDialog_StatisticsSummaryExposesAutomationName()
+    public void WorkbookStatisticsDialog_StatisticsSummaryIsSelectableAndExposesAutomationName()
     {
         var source = DialogSourceTestSupport.ReadHostSources("WorkbookStatisticsDialog.cs");
 
+        source.Should().Contain("var statisticsBlock = new TextBox");
+        source.Should().Contain("IsReadOnly = true");
+        source.Should().Contain("AcceptsReturn = true");
         source.Should().Contain("AutomationProperties.SetName(statisticsBlock, UiText.Get(\"WorkbookStatistics_WorkbookStatistics\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(statisticsBlock, \"WorkbookStatisticsSummary\");");
         source.Should().Contain("AutomationProperties.SetHelpText(statisticsBlock, UiText.Get(\"WorkbookStatistics_SummarizesSheetCellFormulaCommentAndObjectCountsForTheWorkbook\"));");
+    }
+
+    [Fact]
+    public void WorkbookStatisticsDialog_CopyButtonUsesWindowsClipboard()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookStatisticsDialog.cs");
+
+        source.Should().Contain("Clipboard.SetText(message, TextDataFormat.UnicodeText);");
+        source.Should().Contain("Clipboard.Flush();");
+        source.Should().Contain("IsClipboardUnavailableException");
     }
 }

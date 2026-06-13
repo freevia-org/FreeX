@@ -10,10 +10,12 @@ public sealed class WorkbookStatisticsDialog : Window
     public WorkbookStatisticsDialog(WorkbookStatistics statistics)
     {
         Title = UiText.Get("WorkbookStatistics_WorkbookStatistics");
-        Width = 360;
-        Height = 260;
+        Width = 500;
+        Height = 560;
+        MinWidth = 420;
+        MinHeight = 420;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ResizeMode = ResizeMode.NoResize;
+        ResizeMode = ResizeMode.CanResizeWithGrip;
         ShowInTaskbar = false;
         Content = CreateTextContent(CreateMessage(statistics));
         Loaded += (_, _) => FocusInitialKeyboardTarget();
@@ -22,22 +24,87 @@ public sealed class WorkbookStatisticsDialog : Window
     public static string CreateMessage(WorkbookStatistics statistics) =>
         WorkbookStatisticsFormatter.Format(statistics);
 
-    private static StackPanel CreateTextContent(string message)
+    private static Grid CreateTextContent(string message)
     {
-        var stack = new StackPanel { Margin = new Thickness(16) };
-        var statisticsBlock = new TextBlock
+        var root = new Grid { Margin = new Thickness(16) };
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var statisticsBlock = new TextBox
         {
             Text = message,
+            AcceptsReturn = true,
+            Background = SystemColors.WindowBrush,
+            BorderBrush = SystemColors.ControlDarkBrush,
+            IsReadOnly = true,
+            Padding = new Thickness(8),
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
+            MinHeight = 260
         };
         AutomationProperties.SetName(statisticsBlock, UiText.Get("WorkbookStatistics_WorkbookStatistics"));
         AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
         AutomationProperties.SetHelpText(statisticsBlock, UiText.Get("WorkbookStatistics_SummarizesSheetCellFormulaCommentAndObjectCountsForTheWorkbook"));
-        stack.Children.Add(statisticsBlock);
-        stack.Children.Add(DialogButtonRowFactory.CreateOkOnly(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
-        return stack;
+        root.Children.Add(statisticsBlock);
+
+        var buttonRow = CreateButtonRow(root, message);
+        Grid.SetRow(buttonRow, 1);
+        root.Children.Add(buttonRow);
+        return root;
     }
+
+    private static StackPanel CreateButtonRow(DependencyObject root, string message)
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+
+        const string copyContent = "_Copy to Clipboard";
+        const string copyHelpText = "Copy the workbook statistics report to the Clipboard.";
+        var copy = new Button
+        {
+            Content = copyContent,
+            MinWidth = 132,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        AutomationProperties.SetName(copy, UiText.CreateAutomationName(copyContent));
+        AutomationProperties.SetAutomationId(copy, "WorkbookStatisticsCopyButton");
+        AutomationProperties.SetHelpText(copy, copyHelpText);
+        copy.Click += (_, _) => CopyMessageToClipboard(message);
+        row.Children.Add(copy);
+
+        var ok = new Button
+        {
+            Content = UiText.Ok,
+            MinWidth = 76,
+            IsDefault = true,
+            IsCancel = true
+        };
+        AutomationProperties.SetName(ok, UiText.CreateAutomationName(UiText.Ok));
+        ok.Click += (_, _) => Window.GetWindow(root)!.DialogResult = true;
+        row.Children.Add(ok);
+
+        return row;
+    }
+
+    private static void CopyMessageToClipboard(string message)
+    {
+        try
+        {
+            Clipboard.SetText(message, TextDataFormat.UnicodeText);
+            Clipboard.Flush();
+        }
+        catch (Exception ex) when (IsClipboardUnavailableException(ex))
+        {
+        }
+    }
+
+    private static bool IsClipboardUnavailableException(Exception ex) =>
+        ex is System.Runtime.InteropServices.COMException or System.Runtime.InteropServices.ExternalException;
 
     private void FocusInitialKeyboardTarget()
     {
