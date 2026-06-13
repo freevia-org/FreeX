@@ -528,6 +528,19 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                     .ToList()
                 : [];
 
+        public IReadOnlyList<string> ActiveRibbonGroupVisibleCommandLabels(string groupName) =>
+            FindActiveRibbonGroup(groupName) is { } group
+                ? WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(group)
+                    .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(group))
+                    .OfType<ButtonBase>()
+                    .Distinct()
+                    .Where(IsEffectivelyVisible)
+                    .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
+                    .Select(GetButtonLabel)
+                    .Where(label => !string.IsNullOrWhiteSpace(label))
+                    .ToList()
+                : [];
+
         public IReadOnlyList<RibbonIconStackOffsets> VerticallyStackedRibbonIconOffsets =>
             WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                 .OfType<Panel>()

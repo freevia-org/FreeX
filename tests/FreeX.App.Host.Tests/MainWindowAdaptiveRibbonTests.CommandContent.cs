@@ -95,6 +95,64 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void IconOnlySmallRibbonCommandsClearFixedContentWidthBeforeCenteringIcon()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var createContent = typeof(MainWindow)
+                .GetMethod("CreateRibbonCommandContent", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCommandContent");
+            var content = (Grid)createContent.Invoke(null, ["Column Chart", "Column", RibbonCommandLayoutKind.Small])!;
+            content.Width = 96;
+            var button = new Button
+            {
+                Content = content,
+                Width = 24,
+                Height = 24,
+                Padding = new Thickness(0),
+                BorderThickness = new Thickness(0),
+                HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left
+            };
+            RibbonMetadata.SetCompactWidths(button, 96, 24);
+            var label = content.Children
+                .OfType<TextBlock>()
+                .First(RibbonMetadata.IsCommandLabel);
+
+            var compactLevel = typeof(MainWindow).GetNestedType("RibbonCompactLevel", BindingFlags.NonPublic)
+                ?? throw new MissingMemberException(nameof(MainWindow), "RibbonCompactLevel");
+            var iconOnly = Enum.Parse(compactLevel, "IconOnly");
+            var setCompact = typeof(MainWindow)
+                .GetMethod("SetRibbonButtonCompact", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SetRibbonButtonCompact");
+
+            setCompact.Invoke(null, [button, iconOnly]);
+
+            double.IsNaN(content.Width).Should().BeTrue(
+                "fixed full-width small command grids should shrink to the icon slot before icon-only centering");
+            label.Visibility.Should().Be(Visibility.Collapsed);
+
+            var window = ShowStandaloneRibbonButton(button, 24, 24);
+            try
+            {
+                var iconSlot = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
+                    .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button))
+                    .OfType<FrameworkElement>()
+                    .Distinct()
+                    .First(element => RibbonMetadata.IsCommandIcon(element));
+                var iconBounds = iconSlot.TransformToAncestor(button)
+                    .TransformBounds(new Rect(0, 0, iconSlot.ActualWidth, iconSlot.ActualHeight));
+
+                iconBounds.Left.Should().BeGreaterThanOrEqualTo(-0.5);
+                iconBounds.Right.Should().BeLessThanOrEqualTo(button.ActualWidth + 0.5);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void RibbonCommandButtonLabelRefresh_PreservesExistingIconContent()
     {
         StaTestRunner.Run(() =>
