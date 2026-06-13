@@ -114,7 +114,7 @@ public sealed class SparklineDialog : Window
             _dataRangeBox.Text,
             _locationBox.Text,
             _kindBox.SelectedItem is ComboBoxItem { Tag: SparklineKindChoice kind } ? kind : SparklineKindChoice.Line);
-        DialogResult = true;
+        CompleteAcceptedDialog();
     }
 
     private bool ValidateInputs()
@@ -175,5 +175,17 @@ public sealed class SparklineDialog : Window
     private static void FocusRangeSelectionInput(TextBox textBox)
     {
         DialogFocus.FocusAndSelect(textBox);
+    }
+
+    private void CompleteAcceptedDialog()
+    {
+        try
+        {
+            DialogResult = true;
+        }
+        catch (InvalidOperationException) when (IsVisible)
+        {
+            Close();
+        }
     }
 }
