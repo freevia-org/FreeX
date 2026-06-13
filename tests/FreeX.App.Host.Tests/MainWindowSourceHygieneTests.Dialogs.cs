@@ -304,8 +304,9 @@ public sealed partial class MainWindowSourceHygieneTests
         goalSeekMethod.Should().NotContain("TryExecuteRepeatable");
 
         forecastMethod.Should().Contain("new ForecastSheetDialog");
+        forecastMethod.Should().Contain("ForecastSheetSourceRangePlanner.Create(sheet, range)");
         forecastMethod.Should().Contain("new ForecastSheetCommand(");
-        forecastMethod.Should().Contain("TryExecuteCommand(new ForecastSheetCommand(range, dialog.Result.Periods), \"Forecast Sheet\")");
+        forecastMethod.Should().Contain("TryExecuteCommand(new ForecastSheetCommand(forecastRange, dialog.Result.Periods), \"Forecast Sheet\")");
         forecastMethod.Should().NotContain("ExecuteRepeatable");
         forecastMethod.Should().NotContain("TryExecuteRepeatable");
     }

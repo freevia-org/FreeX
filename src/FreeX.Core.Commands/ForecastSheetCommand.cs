@@ -7,6 +7,7 @@ public sealed class ForecastSheetCommand : IWorkbookCommand
     private readonly GridRange _sourceRange;
     private readonly uint _forecastPeriods;
     private SheetId? _addedSheetId;
+    private readonly List<CellAddress> _affectedFormulaCells = [];
 
     public string Label => "Forecast Sheet";
 
@@ -18,6 +19,8 @@ public sealed class ForecastSheetCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        _affectedFormulaCells.Clear();
+
         if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } protectedOutcome)
             return protectedOutcome;
         if (_sourceRange.ColCount != 2 || _sourceRange.RowCount < 3)
@@ -45,6 +48,7 @@ public sealed class ForecastSheetCommand : IWorkbookCommand
         forecastSheet.SetCell(new CellAddress(forecastSheet.Id, 1, 3), new TextValue("Forecast"));
         forecastSheet.SetCell(new CellAddress(forecastSheet.Id, 1, 4), new TextValue("Lower Confidence Bound"));
         forecastSheet.SetCell(new CellAddress(forecastSheet.Id, 1, 5), new TextValue("Upper Confidence Bound"));
+        ApplyForecastSheetColumnWidths(forecastSheet);
 
         var dataRowCount = _sourceRange.RowCount - 1;
         for (uint offset = 0; offset < dataRowCount; offset++)
@@ -59,14 +63,17 @@ public sealed class ForecastSheetCommand : IWorkbookCommand
         var lastTimeline = GetNumber(sourceSheet.GetValue(_sourceRange.End.Row, _sourceRange.Start.Col));
         var knownX = $"A2:A{dataRowCount + 1}";
         var knownY = $"B2:B{dataRowCount + 1}";
+        var lastHistoricalRow = dataRowCount + 1;
+        SeedForecastChartJoinPoint(forecastSheet, lastHistoricalRow);
+
         for (uint offset = 1; offset <= _forecastPeriods; offset++)
         {
             var row = dataRowCount + 1 + offset;
             forecastSheet.SetCell(new CellAddress(forecastSheet.Id, row, 1), new NumberValue(lastTimeline + (step * offset)));
-            forecastSheet.SetCell(new CellAddress(forecastSheet.Id, row, 3), Cell.FromFormula($"FORECAST.LINEAR(A{row},{knownY},{knownX})"));
+            SetFormula(forecastSheet, row, 3, $"FORECAST.LINEAR(A{row},{knownY},{knownX})");
             var confidence = $"CONFIDENCE.NORM(0.05,STEYX({knownY},{knownX}),COUNT({knownX}))";
-            forecastSheet.SetCell(new CellAddress(forecastSheet.Id, row, 4), Cell.FromFormula($"C{row}-{confidence}"));
-            forecastSheet.SetCell(new CellAddress(forecastSheet.Id, row, 5), Cell.FromFormula($"C{row}+{confidence}"));
+            SetFormula(forecastSheet, row, 4, $"C{row}-{confidence}");
+            SetFormula(forecastSheet, row, 5, $"C{row}+{confidence}");
         }
 
         // Insert the accompanying forecast chart (Excel parity). Reverting removes the whole
@@ -75,7 +82,7 @@ public sealed class ForecastSheetCommand : IWorkbookCommand
         forecastSheet.Charts.Add(ForecastChartPlanner.Plan(
             new ForecastChartLayout(forecastSheet.Id, HeaderRow: 1, LastRow: lastRow)));
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, AffectedCells: _affectedFormulaCells.ToArray());
     }
 
     public void Revert(ICommandContext ctx)
@@ -101,6 +108,31 @@ public sealed class ForecastSheetCommand : IWorkbookCommand
         forecastSheet.SetCell(
             new CellAddress(forecastSheet.Id, targetRow, targetCol),
             source?.Clone() ?? Cell.FromValue(BlankValue.Instance));
+    }
+
+    private void SetFormula(Sheet forecastSheet, uint row, uint col, string formulaText)
+    {
+        var address = new CellAddress(forecastSheet.Id, row, col);
+        forecastSheet.SetCell(address, Cell.FromFormula(formulaText));
+        _affectedFormulaCells.Add(address);
+    }
+
+    private static void SeedForecastChartJoinPoint(Sheet forecastSheet, uint lastHistoricalRow)
+    {
+        var lastActual = forecastSheet.GetValue(lastHistoricalRow, ForecastChartLayout.ActualColumn);
+
+        forecastSheet.SetCell(new CellAddress(forecastSheet.Id, lastHistoricalRow, ForecastChartLayout.ForecastColumn), lastActual);
+        forecastSheet.SetCell(new CellAddress(forecastSheet.Id, lastHistoricalRow, ForecastChartLayout.LowerBoundColumn), lastActual);
+        forecastSheet.SetCell(new CellAddress(forecastSheet.Id, lastHistoricalRow, ForecastChartLayout.UpperBoundColumn), lastActual);
+    }
+
+    private static void ApplyForecastSheetColumnWidths(Sheet forecastSheet)
+    {
+        forecastSheet.ColumnWidths[ForecastChartLayout.TimelineColumn] = 10;
+        forecastSheet.ColumnWidths[ForecastChartLayout.ActualColumn] = 12;
+        forecastSheet.ColumnWidths[ForecastChartLayout.ForecastColumn] = 14;
+        forecastSheet.ColumnWidths[ForecastChartLayout.LowerBoundColumn] = 21;
+        forecastSheet.ColumnWidths[ForecastChartLayout.UpperBoundColumn] = 21;
     }
 
     private static string GetForecastSheetName(Workbook workbook)

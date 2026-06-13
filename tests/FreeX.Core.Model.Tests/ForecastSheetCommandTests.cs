@@ -25,7 +25,17 @@ public sealed class ForecastSheetCommandTests
             new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)),
             forecastPeriods: 2);
 
-        command.Apply(ctx).Success.Should().BeTrue();
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        var forecastSheetId = workbook.GetSheetAt(1).Id;
+        outcome.AffectedCells.Should().Equal(
+            new CellAddress(forecastSheetId, 5, 3),
+            new CellAddress(forecastSheetId, 5, 4),
+            new CellAddress(forecastSheetId, 5, 5),
+            new CellAddress(forecastSheetId, 6, 3),
+            new CellAddress(forecastSheetId, 6, 4),
+            new CellAddress(forecastSheetId, 6, 5));
 
         workbook.SheetCount.Should().Be(2);
         var forecast = workbook.GetSheetAt(1);
@@ -35,6 +45,12 @@ public sealed class ForecastSheetCommandTests
         forecast.GetValue(1, 3).Should().Be(new TextValue("Forecast"));
         forecast.GetValue(1, 4).Should().Be(new TextValue("Lower Confidence Bound"));
         forecast.GetValue(1, 5).Should().Be(new TextValue("Upper Confidence Bound"));
+        forecast.ColumnWidths[3].Should().BeGreaterThan(forecast.DefaultColumnWidth);
+        forecast.ColumnWidths[4].Should().BeGreaterThanOrEqualTo(21);
+        forecast.ColumnWidths[5].Should().BeGreaterThanOrEqualTo(21);
+        forecast.GetValue(4, 3).Should().Be(new NumberValue(30));
+        forecast.GetValue(4, 4).Should().Be(new NumberValue(30));
+        forecast.GetValue(4, 5).Should().Be(new NumberValue(30));
         forecast.GetValue(5, 1).Should().Be(new NumberValue(4));
         forecast.GetCell(5, 3)!.FormulaText.Should().Be("FORECAST.LINEAR(A5,B2:B4,A2:A4)");
         forecast.GetCell(5, 4)!.FormulaText.Should().Be("C5-CONFIDENCE.NORM(0.05,STEYX(B2:B4,A2:A4),COUNT(A2:A4))");
@@ -78,6 +94,9 @@ public sealed class ForecastSheetCommandTests
         chart.DataRange.Start.Should().Be(new CellAddress(forecast.Id, 1, 1));
         chart.DataRange.End.Should().Be(new CellAddress(forecast.Id, 6, 5));
         ChartTypeSupport.GetDataSeriesCount(chart).Should().Be(4);
+        chart.LegendPosition.Should().Be(ChartLegendPosition.Bottom);
+        chart.Left.Should().BeGreaterThanOrEqualTo(550);
+        chart.Width.Should().BeInRange(380, 420);
         chart.SeriesFormats.Should().Contain(f => f.SeriesIndex == 2 && f.DashStyle == ChartLineDashStyle.Dash);
         chart.SeriesFormats.Should().Contain(f => f.SeriesIndex == 3 && f.DashStyle == ChartLineDashStyle.Dash);
 
