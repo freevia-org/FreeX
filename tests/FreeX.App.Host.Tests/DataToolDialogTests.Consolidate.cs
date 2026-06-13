@@ -284,6 +284,8 @@ public sealed partial class DataToolDialogTests
                 buttonRow.Children.OfType<Button>().Select(button => button.Content)
                     .Should()
                     .Equal(UiText.Ok, UiText.Cancel);
+                buttonRow.Children.OfType<Button>().Should().Contain(button => button.IsDefault);
+                buttonRow.Children.OfType<Button>().Should().Contain(button => button.IsCancel);
 
                 var scrollViewer = root.Children.OfType<ScrollViewer>().Single();
                 scrollViewer.VerticalScrollBarVisibility.Should().Be(ScrollBarVisibility.Auto);
@@ -292,6 +294,32 @@ public sealed partial class DataToolDialogTests
             finally
             {
                 dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void ConsolidateDialogOk_ModelessWindowClosesWithoutDialogResultCrash()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConsolidateDialog(SheetId.New(), "A1:B2", "D1");
+            dialog.Show();
+            try
+            {
+                var ok = WpfTestTree.FindVisualDescendants<Button>(dialog)
+                    .Single(button => button.IsDefault);
+
+                var exception = Record.Exception(() => DialogSourceTestSupport.ClickButton(ok));
+
+                exception.Should().BeNull();
+                dialog.Result.Should().NotBeNull();
+                dialog.IsVisible.Should().BeFalse();
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
             }
         });
     }
@@ -387,6 +415,27 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("WorkbookRangeTextCodec.Format(");
         source.Should().Contain("session.Dialog.ApplyRangeSelection(session.Request.Target, rangeText);");
         source.Should().Contain("catch (Exception ex)");
+    }
+
+    [Fact]
+    public void MainWindow_ConsolidateRangePickerKeepsDialogModalWhileSelectingCells()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
+        var beginSource = SourceMethodExtractor.ExtractMethodSource(source, "private void BeginConsolidateRangeSelection(");
+        var restoreSource = SourceMethodExtractor.ExtractMethodSource(source, "private void RestoreConsolidateDialogAfterRangeSelection(");
+        var collapseSource = SourceMethodExtractor.ExtractMethodSource(source, "private static void CollapseConsolidateDialogForRangeSelection(");
+
+        beginSource.Should().Contain("CollapseConsolidateDialogForRangeSelection(session);");
+        beginSource.Should().NotContain(".Hide()");
+        restoreSource.Should().Contain("session.Dialog.Left = session.DialogLeft;");
+        restoreSource.Should().Contain("session.Dialog.Opacity = session.DialogOpacity;");
+        restoreSource.Should().NotContain(".Show()");
+        source.Should().Contain("SetConsolidateOwnerInputEnabled(true);");
+        source.Should().Contain("SetConsolidateOwnerInputEnabled(session.OwnerWasEnabled);");
+        source.Should().Contain("EnableWindow(handle, isEnabled);");
+        collapseSource.Should().Contain("session.Dialog.Opacity = 0;");
+        collapseSource.Should().Contain("session.Dialog.IsHitTestVisible = false;");
+        collapseSource.Should().Contain("SystemParameters.VirtualScreenLeft");
     }
 
     [Fact]
