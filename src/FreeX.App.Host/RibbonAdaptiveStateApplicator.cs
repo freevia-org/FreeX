@@ -134,6 +134,7 @@ internal static class RibbonAdaptiveStateApplicator
     public static bool ShouldUseSmallWithLabelsForIconOnlyGroup(string? catalogId) =>
         catalogId is
             "DataToolsGroup" or
+            "InsertChartsGroup" or
             "FormulasFormulaAuditingGroup" or
             "ReviewCommentsGroup" or
             "ViewWindowGroup" or
@@ -468,6 +469,7 @@ internal static class RibbonAdaptiveStateApplicator
 
         var smallGrid = snapshot.SmallGrid!;
         var dropdownColumn = GetSmallButtonDropdownColumn(smallGrid);
+        ApplySmallButtonContentWidth(snapshot, smallGrid, level);
         if (level == MainWindow.RibbonCompactLevel.IconOnly)
         {
             if (dropdownColumn is not null)
@@ -502,6 +504,32 @@ internal static class RibbonAdaptiveStateApplicator
             SetIfChanged(smallGrid, FrameworkElement.MarginProperty, new Thickness(0));
             SetIfChanged(snapshot.Button, Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Left);
         }
+    }
+
+    private static void ApplySmallButtonContentWidth(
+        MainWindow.RibbonCompactButtonSnapshot snapshot,
+        Grid smallGrid,
+        MainWindow.RibbonCompactLevel level)
+    {
+        if (level == MainWindow.RibbonCompactLevel.IconOnly)
+        {
+            SetIfChanged(smallGrid, FrameworkElement.WidthProperty, double.NaN);
+            return;
+        }
+
+        if (!snapshot.HasCompactWidths || snapshot.FullWidth <= 0)
+            return;
+
+        var padding = (Thickness)snapshot.Button.GetValue(Control.PaddingProperty);
+        var border = (Thickness)snapshot.Button.GetValue(Control.BorderThicknessProperty);
+        var contentWidth = Math.Max(
+            0,
+            snapshot.FullWidth -
+            padding.Left -
+            padding.Right -
+            border.Left -
+            border.Right);
+        SetIfChanged(smallGrid, FrameworkElement.WidthProperty, contentWidth);
     }
 
     private static ColumnDefinition? GetSmallButtonDropdownColumn(Grid? contentGrid)
