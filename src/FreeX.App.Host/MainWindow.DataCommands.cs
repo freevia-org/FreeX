@@ -2,9 +2,11 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -390,8 +392,16 @@ public partial class MainWindow
         if (dialog is null)
             return;
 
-        CancelConsolidateRangeSelection(restoreDialog: false);
-        _consolidateRangePickerSession = new ConsolidateRangePickerSession(dialog, request, IsEnabled);
+        CancelConsolidateRangeSelection(restoreDialog: true);
+        var session = new ConsolidateRangePickerSession(
+            dialog,
+            request,
+            IsEnabled,
+            dialog.Left,
+            dialog.Top,
+            dialog.Opacity,
+            dialog.IsHitTestVisible);
+        _consolidateRangePickerSession = session;
         SheetGrid.AddHandler(
             UIElement.PreviewMouseLeftButtonUpEvent,
             new MouseButtonEventHandler(ConsolidateRangePicker_MouseLeftButtonUp),
@@ -400,9 +410,9 @@ public partial class MainWindow
         dialog.Closed += ConsolidateRangePickerDialog_Closed;
 
         if (request.CollapseDialog)
-            dialog.Hide();
+            CollapseConsolidateDialogForRangeSelection(session);
 
-        IsEnabled = true;
+        SetConsolidateOwnerInputEnabled(true);
         Activate();
         SheetGrid.Focus();
     }
@@ -474,11 +484,48 @@ public partial class MainWindow
 
     private void RestoreConsolidateDialogAfterRangeSelection(ConsolidateRangePickerSession session)
     {
-        IsEnabled = session.OwnerWasEnabled;
-        if (session.Request.CollapseDialog && !session.Dialog.IsVisible)
-            session.Dialog.Show();
-        session.Dialog.Activate();
+        SetConsolidateOwnerInputEnabled(session.OwnerWasEnabled);
+        if (session.Request.CollapseDialog)
+        {
+            session.Dialog.Left = session.DialogLeft;
+            session.Dialog.Top = session.DialogTop;
+            session.Dialog.Opacity = session.DialogOpacity;
+            session.Dialog.IsHitTestVisible = session.DialogIsHitTestVisible;
+        }
+
+        if (session.Dialog.IsVisible)
+            session.Dialog.Activate();
     }
+
+    private void SetConsolidateOwnerInputEnabled(bool isEnabled)
+    {
+        IsEnabled = isEnabled;
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle != IntPtr.Zero)
+            EnableWindow(handle, isEnabled);
+    }
+
+    private static void CollapseConsolidateDialogForRangeSelection(ConsolidateRangePickerSession session)
+    {
+        var dialogWidth = EffectiveConsolidateDialogDimension(session.Dialog.ActualWidth, session.Dialog.Width, 420);
+        var dialogHeight = EffectiveConsolidateDialogDimension(session.Dialog.ActualHeight, session.Dialog.Height, 560);
+        session.Dialog.Opacity = 0;
+        session.Dialog.IsHitTestVisible = false;
+        session.Dialog.Left = SystemParameters.VirtualScreenLeft - dialogWidth - 32;
+        session.Dialog.Top = SystemParameters.VirtualScreenTop - dialogHeight - 32;
+    }
+
+    private static double EffectiveConsolidateDialogDimension(double actual, double configured, double fallback)
+    {
+        if (!double.IsNaN(actual) && actual > 0)
+            return actual;
+        if (!double.IsNaN(configured) && configured > 0)
+            return configured;
+        return fallback;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool EnableWindow(IntPtr hWnd, bool bEnable);
 
     private string FormatConsolidateRangeSelection(
         SheetId defaultSheetId,
@@ -538,7 +585,11 @@ public partial class MainWindow
     private sealed record ConsolidateRangePickerSession(
         ConsolidateDialog Dialog,
         ConsolidateRangeSelectionRequest Request,
-        bool OwnerWasEnabled);
+        bool OwnerWasEnabled,
+        double DialogLeft,
+        double DialogTop,
+        double DialogOpacity,
+        bool DialogIsHitTestVisible);
 
     // ── What-If Analysis ─────────────────────────────────────────────────────
 
