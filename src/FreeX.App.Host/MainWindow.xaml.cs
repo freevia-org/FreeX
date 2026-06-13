@@ -204,6 +204,10 @@ public partial class MainWindow : Window, IWorkbookWindow
     private System.Windows.Controls.Border? _inlineEditorChrome;
     private System.Windows.Rect? _inlineEditorChromeBaseRect;
     private System.Windows.Controls.TextBlock? _inlineFormulaReferenceOverlay;
+    private System.Windows.Controls.TextBox? _textBoxInlineEditor;
+    private System.Windows.Controls.Border? _textBoxInlineEditorChrome;
+    private Guid? _textBoxInlineEditingId;
+    private string? _textBoxInlineOriginalText;
     private bool _syncingFormulaEditorText;
     private System.Windows.Controls.ComboBox? _validationDropdown;
     private CellAddress? _formulaEditCell;
@@ -323,6 +327,9 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.ObjectResizedWithAnchor += OnObjectResizedWithAnchor;
         SheetGrid.ObjectRotated += OnObjectRotated;
         SheetGrid.PictureCropped += OnPictureCropped;
+        SheetGrid.NoteInlineEditSubmitted += SheetGrid_NoteInlineEditSubmitted;
+        SheetGrid.ThreadedCommentInlineEditSubmitted += SheetGrid_ThreadedCommentInlineEditSubmitted;
+        SheetGrid.TextBoxEditRequested += OnTextBoxEditRequested;
         DependencyPropertyDescriptor.FromProperty(
             FreeX.App.UI.GridView.SelectedObjectIdProperty,
             typeof(FreeX.App.UI.GridView))?.AddValueChanged(SheetGrid, OnSelectedObjectContextChanged);

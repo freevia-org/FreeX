@@ -61,6 +61,9 @@ public partial class MainWindow
 
     private void ShowInlineEditor(CellAddress addr)
     {
+        if (!HideTextBoxInlineEditor(commit: true))
+            return;
+
         HideValidationDropdown();
         var vp = SheetGrid.Viewport;
         if (vp == null) { FormulaBar.Focus(); return; }
@@ -311,7 +314,9 @@ public partial class MainWindow
         SheetGrid.EditingCell = null;
         FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
         ClearFormulaReferenceGridOverlays();
-        EditOverlay.IsHitTestVisible = false;
+        if (_textBoxInlineEditor?.IsVisible != true &&
+            _validationDropdown?.Visibility != Visibility.Visible)
+            EditOverlay.IsHitTestVisible = false;
         if (commit)
             FormulaBar.Text = _inlineEditor.Text;
     }

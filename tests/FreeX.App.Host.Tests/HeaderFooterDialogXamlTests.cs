@@ -63,6 +63,30 @@ public sealed class HeaderFooterDialogXamlTests
         }
     }
 
+    [Fact]
+    public void Dialog_UsesHeaderFooterTabsAndResponsiveChrome()
+    {
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("HeaderFooterDialog.xaml");
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        document.Root!.Attribute("ResizeMode")?.Value.Should().Be("CanResize");
+        document.Root!.Attribute("MinWidth")?.Value.Should().NotBeNullOrWhiteSpace();
+        document.Root!.Attribute("MinHeight")?.Value.Should().NotBeNullOrWhiteSpace();
+
+        var tabs = document.Descendants(presentation + "TabControl")
+            .Single(element => element.Attribute(x + "Name")?.Value == "HeaderFooterTabs");
+        tabs.Elements(presentation + "TabItem")
+            .Select(element => element.Attribute("Header")?.Value)
+            .Should()
+            .Contain(["Header", "Footer"]);
+
+        document.Descendants(presentation + "StackPanel")
+            .SingleOrDefault(element => element.Attribute("Grid.Column")?.Value == "1")
+            .Should()
+            .BeNull("the insert commands should no longer live in a tall right-side button column");
+    }
+
     [Theory]
     [InlineData("_Page number", "&[Page]")]
     [InlineData("Number of pa_ges", "&[Pages]")]
@@ -156,12 +180,12 @@ public sealed class HeaderFooterDialogXamlTests
                 var button = DialogSourceTestSupport.GetPrivateField<Button>(dialog, "FormatPictureButton");
                 var status = DialogSourceTestSupport.GetPrivateField<TextBlock>(dialog, "PictureTargetStatusText");
                 button.IsEnabled.Should().BeTrue();
-                status.Text.Should().Be("Target: center section has a picture.");
+                status.Text.Should().Be("Target: Header center section has a picture.");
 
                 DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "HeaderLeftBox").Focus();
 
                 button.IsEnabled.Should().BeFalse();
-                status.Text.Should().Be("Target: left section has no picture.");
+                status.Text.Should().Be("Target: Header left section has no picture.");
             }
             finally
             {
@@ -191,7 +215,7 @@ public sealed class HeaderFooterDialogXamlTests
 
         source.Should().Contain("FocusActiveTextBox();");
         source.Should().Contain("private void FocusActiveTextBox()");
-        source.Should().Contain("var target = _activeTextBox ?? HeaderCenterBox;");
+        source.Should().Contain("var target = GetActiveTextBox();");
         source.Should().Contain("target.Focus();");
         source.Should().Contain("Keyboard.Focus(target);");
     }
@@ -283,11 +307,79 @@ public sealed class HeaderFooterDialogXamlTests
 
         source.Should().Contain("DifferentFirstPageBox.Checked += (_, _) => RefreshOptionalSectionState()");
         source.Should().Contain("DifferentOddEvenBox.Checked += (_, _) => RefreshOptionalSectionState()");
+        source.Should().Contain("FirstPageHeaderGroup.Visibility = firstEnabled ? Visibility.Visible : Visibility.Collapsed;");
+        source.Should().Contain("FirstPageFooterGroup.Visibility = firstEnabled ? Visibility.Visible : Visibility.Collapsed;");
+        source.Should().Contain("EvenPageHeaderGroup.Visibility = evenEnabled ? Visibility.Visible : Visibility.Collapsed;");
+        source.Should().Contain("EvenPageFooterGroup.Visibility = evenEnabled ? Visibility.Visible : Visibility.Collapsed;");
         source.Should().Contain("SetControlsEnabled(firstEnabled");
         source.Should().Contain("FirstHeaderLeftBox");
         source.Should().Contain("SetControlsEnabled(evenEnabled");
         source.Should().Contain("EvenFooterRightBox");
-        source.Should().Contain("_activeTextBox = HeaderCenterBox");
+        source.Should().Contain("_activeTextBox = GetDefaultTextBoxForSelectedTab()");
+    }
+
+    [Fact]
+    public void OptionalFirstAndEvenSections_AreCollapsedUntilTheirOptionsAreChecked()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new HeaderFooterDialog(new Sheet(SheetId.New(), "Sheet1"));
+            dialog.Show();
+            try
+            {
+                var firstHeaderGroup = DialogSourceTestSupport.GetPrivateField<GroupBox>(dialog, "FirstPageHeaderGroup");
+                var firstFooterGroup = DialogSourceTestSupport.GetPrivateField<GroupBox>(dialog, "FirstPageFooterGroup");
+                var evenHeaderGroup = DialogSourceTestSupport.GetPrivateField<GroupBox>(dialog, "EvenPageHeaderGroup");
+                var evenFooterGroup = DialogSourceTestSupport.GetPrivateField<GroupBox>(dialog, "EvenPageFooterGroup");
+
+                firstHeaderGroup.Visibility.Should().Be(Visibility.Collapsed);
+                firstFooterGroup.Visibility.Should().Be(Visibility.Collapsed);
+                evenHeaderGroup.Visibility.Should().Be(Visibility.Collapsed);
+                evenFooterGroup.Visibility.Should().Be(Visibility.Collapsed);
+
+                DialogSourceTestSupport.GetPrivateField<CheckBox>(dialog, "DifferentFirstPageBox").IsChecked = true;
+                DialogSourceTestSupport.GetPrivateField<CheckBox>(dialog, "DifferentOddEvenBox").IsChecked = true;
+
+                firstHeaderGroup.Visibility.Should().Be(Visibility.Visible);
+                firstFooterGroup.Visibility.Should().Be(Visibility.Visible);
+                evenHeaderGroup.Visibility.Should().Be(Visibility.Visible);
+                evenFooterGroup.Visibility.Should().Be(Visibility.Visible);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void InsertToolbar_TargetsTheSelectedHeaderFooterTabCenterByDefault()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new HeaderFooterDialog(new Sheet(SheetId.New(), "Sheet1"));
+            dialog.Show();
+            try
+            {
+                var tabs = DialogSourceTestSupport.GetPrivateField<TabControl>(dialog, "HeaderFooterTabs");
+                var footerTab = DialogSourceTestSupport.GetPrivateField<TabItem>(dialog, "FooterTab");
+                var headerCenter = DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "HeaderCenterBox");
+                var footerCenter = DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "FooterCenterBox");
+
+                tabs.SelectedItem = footerTab;
+                DialogSourceTestSupport.InvokePrivateHandler(
+                    dialog,
+                    "InsertTokenButton_Click",
+                    new Button { Tag = "&[Page]" });
+
+                footerCenter.Text.Should().Be("&[Page]");
+                headerCenter.Text.Should().BeEmpty();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]

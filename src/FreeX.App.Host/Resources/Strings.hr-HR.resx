@@ -15307,6 +15307,24 @@
   <data name="SymbolPicker_SubsetLabel" xml:space="preserve">
     <value>_Podskup:</value>
   </data>
+  <data name="SymbolPicker_SearchLabel" xml:space="preserve">
+    <value>_Search:</value>
+  </data>
+  <data name="SymbolPicker_SearchAutomationName" xml:space="preserve">
+    <value>Search symbols</value>
+  </data>
+  <data name="SymbolPicker_SearchHelpText" xml:space="preserve">
+    <value>Filter the symbol catalog by symbol, Unicode code, subset, or common name.</value>
+  </data>
+  <data name="SymbolPicker_SearchResultCountFormat" xml:space="preserve">
+    <value>Symbols shown: {0}</value>
+  </data>
+  <data name="SymbolPicker_NoSymbolsFound" xml:space="preserve">
+    <value>No symbols found.</value>
+  </data>
+  <data name="SymbolPicker_NameLabel" xml:space="preserve">
+    <value>Name</value>
+  </data>
   <data name="SymbolPicker_SymbolsAutomationName" xml:space="preserve">
     <value>Simboli</value>
   </data>

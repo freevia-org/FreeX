@@ -94,7 +94,8 @@ public sealed class RibbonTabParityTests
             "Print Area",
             "Breaks",
             "Background",
-            "Print Titles");
+            "Print Titles",
+            "Page Setup");
         CommandTitles(pageSetupGroup).Should().NotContain("Header & Footer");
         GroupNames(pageLayoutTab).Should().NotContain("Arrange",
             "object arrangement remains in Draw and the object-specific contextual format tabs");

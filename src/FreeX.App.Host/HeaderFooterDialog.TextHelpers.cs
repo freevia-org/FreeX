@@ -22,7 +22,7 @@ public partial class HeaderFooterDialog
 
     private void InsertTokenIntoActiveBox(string token)
     {
-        var target = _activeTextBox ?? HeaderCenterBox;
+        var target = GetActiveTextBox();
         var caretIndex = target.CaretIndex;
         target.Text = InsertToken(target.Text, caretIndex, token);
         target.CaretIndex = caretIndex + token.Length;

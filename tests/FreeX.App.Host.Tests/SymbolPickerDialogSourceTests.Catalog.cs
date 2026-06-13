@@ -7,15 +7,15 @@ public sealed partial class SymbolPickerDialogSourceTests
     [Fact]
     public void Dialog_RebuildsSymbolsForSelectedSubset()
     {
-        SymbolPickerDialog.GetSymbolsForSubset("Currency Symbols").Should().Contain('\u20ac');
-        SymbolPickerDialog.GetSymbolsForSubset("Greek and Coptic").Should().Contain('\u03c0');
-        SymbolPickerDialog.GetSymbolsForSubset("Arrows").Should().Contain('\u2192');
+        SymbolPickerDialog.GetSymbolsForSubset("Currency Symbols").Should().Contain("\u20ac");
+        SymbolPickerDialog.GetSymbolsForSubset("Greek and Coptic").Should().Contain("\u03c0");
+        SymbolPickerDialog.GetSymbolsForSubset("Arrows").Should().Contain("\u2192");
 
         var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("SymbolsBySubset");
         source.Should().Contain("subsetBox.SelectionChanged");
-        source.Should().Contain("PopulateGrid(subset)");
+        source.Should().Contain("RefreshSymbols()");
     }
 
     [Fact]
@@ -23,18 +23,49 @@ public sealed partial class SymbolPickerDialogSourceTests
     {
         SymbolPickerDialog.GetSubsetNames().Should().Contain([
             "Latin-1 Supplement",
+            "Latin Extended-A",
             "Greek and Coptic",
             "Cyrillic",
+            "Hebrew",
+            "Arabic",
             "Currency Symbols",
+            "Letterlike Symbols",
+            "Number Forms",
             "Arrows",
             "Mathematical Operators",
+            "Miscellaneous Technical",
             "Box Drawing",
-            "Geometric Shapes"]);
+            "Block Elements",
+            "Geometric Shapes",
+            "Miscellaneous Symbols",
+            "Dingbats",
+            "Supplemental Arrows"]);
 
-        SymbolPickerDialog.GetSymbolsForSubset("Latin-1 Supplement").Should().Contain('\u00f1');
-        SymbolPickerDialog.GetSymbolsForSubset("Cyrillic").Should().Contain('\u0416');
-        SymbolPickerDialog.GetSymbolsForSubset("Box Drawing").Should().Contain('\u250c');
-        SymbolPickerDialog.GetSymbolsForSubset("Geometric Shapes").Should().Contain('\u25c6');
+        SymbolPickerDialog.GetSymbolsForSubset("Latin-1 Supplement").Should().Contain("\u00f1");
+        SymbolPickerDialog.GetSymbolsForSubset("Cyrillic").Should().Contain("\u0416");
+        SymbolPickerDialog.GetSymbolsForSubset("Box Drawing").Should().Contain("\u250c");
+        SymbolPickerDialog.GetSymbolsForSubset("Geometric Shapes").Should().Contain("\u25c6");
+        SymbolPickerDialog.GetSymbolsForSubset("Arrows").Should().HaveCountGreaterThan(100);
+        SymbolPickerDialog.GetSymbolsForSubset("Mathematical Operators").Should().HaveCountGreaterThan(150);
+    }
+
+    [Fact]
+    public void Dialog_SearchesAcrossBroaderSymbolCatalog()
+    {
+        SymbolPickerDialog.SearchSymbolEntries("pi")
+            .Select(entry => entry.Symbol)
+            .Should()
+            .Contain("\u03c0");
+
+        SymbolPickerDialog.SearchSymbolEntries("arrow")
+            .Select(entry => entry.Symbol)
+            .Should()
+            .Contain("\u2192");
+
+        SymbolPickerDialog.SearchSymbolEntries("U+20AC")
+            .Select(entry => entry.Symbol)
+            .Should()
+            .Contain("\u20ac");
     }
 
     [Fact]
@@ -46,6 +77,11 @@ public sealed partial class SymbolPickerDialogSourceTests
             new SymbolPickerDialog.SpecialCharacter("Copyright", "\u00a9"),
             new SymbolPickerDialog.SpecialCharacter("Registered", "\u00ae"),
             new SymbolPickerDialog.SpecialCharacter("Trademark", "\u2122")]);
+        SymbolPickerDialog.GetSpecialCharacters().Should().Contain([
+            new SymbolPickerDialog.SpecialCharacter("Nonbreaking Hyphen", "\u2011"),
+            new SymbolPickerDialog.SpecialCharacter("Less-Than Or Equal", "\u2264"),
+            new SymbolPickerDialog.SpecialCharacter("Check Mark", "\u2713")]);
+        SymbolPickerDialog.GetSpecialCharacters().Should().HaveCountGreaterThan(35);
 
         var source = ReadSymbolPickerDialogSources();
 

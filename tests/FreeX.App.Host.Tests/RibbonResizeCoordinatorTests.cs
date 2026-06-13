@@ -208,6 +208,55 @@ public sealed class RibbonResizeCoordinatorTests
     }
 
     [Fact]
+    public void NativeMoveLoop_DoesNotEnterLiveResizeModeUntilSizeChanges()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonCoordinatorHarness.Create();
+
+            harness.PumpUntil(() => !harness.IsLiveResizing);
+            harness.ResetDiagnostics();
+
+            harness.EnterNativeResizeLoop();
+
+            harness.IsLiveResizing.Should().BeFalse(
+                "a pure window move should preserve the retained worksheet and drawing-object layers");
+            harness.ViewportCallCount.Should().Be(0);
+
+            harness.ExitNativeResizeLoop();
+
+            harness.IsLiveResizing.Should().BeFalse();
+            harness.ViewportCallCount.Should().Be(0);
+        });
+    }
+
+    [Fact]
+    public void NativeResizeLoop_EntersLiveResizeModeWhenWindowActuallyResizes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonCoordinatorHarness.Create();
+
+            harness.PumpUntil(() => !harness.IsLiveResizing);
+            harness.ResetDiagnostics();
+
+            harness.EnterNativeResizeLoop();
+
+            harness.IsLiveResizing.Should().BeFalse();
+
+            harness.ResizeWindow(700);
+
+            harness.IsLiveResizing.Should().BeTrue();
+            harness.ViewportCallCount.Should().Be(0);
+
+            harness.ExitNativeResizeLoop();
+
+            harness.IsLiveResizing.Should().BeFalse();
+            harness.ViewportCallCount.Should().BeGreaterThan(0);
+        });
+    }
+
+    [Fact]
     public void NativeResizeLoop_CoalescesMultipleDeferredCompactionsIntoSingleExitFallback()
     {
         StaTestRunner.Run(() =>

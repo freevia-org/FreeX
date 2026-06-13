@@ -192,6 +192,33 @@ public sealed class GridViewContextMenuTests
         resizeStart.Should().Contain("RowAutoFitRequested?.Invoke(index)");
     }
 
+    [Fact]
+    public void GridViewDoubleClickTextBox_RaisesInlineEditRequestBeforeMoveDrag()
+    {
+        var inputSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
+        var eventsSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Events.cs");
+        var selectedObjectBlock = inputSource[
+            inputSource.IndexOf("// Check if clicking on an already-selected object's handles", StringComparison.Ordinal)..
+            inputSource.IndexOf("// Check if clicking on a new drawing object", StringComparison.Ordinal)];
+        var drawingObjectHitBlock = inputSource[
+            inputSource.IndexOf("var hit = HitTestDrawingObject(pos);", StringComparison.Ordinal)..
+            inputSource.IndexOf("// Clicking empty space deselects", StringComparison.Ordinal)];
+
+        eventsSource.Should().Contain("TextBoxEditRequested");
+        selectedObjectBlock.Should().Contain("SelectedObjectKind == ObjectKind.TextBox");
+        selectedObjectBlock.Should().Contain("e.ClickCount >= 2");
+        selectedObjectBlock.Should().Contain("dragKind == ObjectDragKind.Move");
+        selectedObjectBlock.Should().Contain("TextBoxEditRequested?.Invoke(SelectedObjectId)");
+        selectedObjectBlock.IndexOf("TextBoxEditRequested?.Invoke(SelectedObjectId)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(selectedObjectBlock.IndexOf("_objectDragKind = dragKind", StringComparison.Ordinal));
+        drawingObjectHitBlock.Should().Contain("hit.Kind == ObjectKind.TextBox && e.ClickCount >= 2");
+        drawingObjectHitBlock.Should().Contain("TextBoxEditRequested?.Invoke(hit.Id)");
+        drawingObjectHitBlock.IndexOf("TextBoxEditRequested?.Invoke(hit.Id)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(drawingObjectHitBlock.IndexOf("_objectDragKind = ObjectDragKind.Move", StringComparison.Ordinal));
+    }
+
     private static ViewportModel CreateViewport() =>
         new(
             [],

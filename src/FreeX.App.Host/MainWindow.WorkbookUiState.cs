@@ -71,9 +71,7 @@ public partial class MainWindow
 
     private void ScheduleViewportResizeRefresh()
     {
-        if (!_resizeViewportRefreshPending)
-            SheetGrid.IsLiveResizing = true;
-
+        SheetGrid.IsLiveResizing = true;
         _resizeViewportRefreshPending = true;
         _resizeViewportRefreshGeneration++;
         _resizeViewportRefreshTimer ??= CreateResizeViewportRefreshTimer();
