@@ -125,6 +125,7 @@ public sealed partial class PivotTableCommandTests
         pivot.PreserveFormattingOnUpdate.Should().BeFalse();
         pivot.AltTextTitle.Should().Be("Existing title");
         pivot.AltTextDescription.Should().Be("Existing description");
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "D4"))!.StyleId).IndentLevel.Should().Be(5);
+        // D4 is the header row ("A", level 0, indent 0); D5 is the leaf row ("10", level 1, indent 1*5=5)
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "D5"))!.StyleId).IndentLevel.Should().Be(5);
     }
 }

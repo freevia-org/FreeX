@@ -353,6 +353,159 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_NestedColumnFieldMatrixWithSubtotals_EmitsSubtotalColumns()
+    {
+        // Ground-truth: Region(A)/Quarter(B)/Channel(C)/Amount(D), ShowSubtotals=true.
+        // Column slots: Q1/Retail, Q1/Wholesale, [Q1 Total], Q2/Retail, Q2/Wholesale, [Q2 Total], Grand Total
+        // Columns G..M (7 value columns + F row-label = columns F..M).
+        var workbook = new Workbook("PivotNestedColumnSubtotalsTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "N10"),
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        // Header row 1 (outer quarter groupings)
+        Text(sheet, "F2").Should().Be("Region");
+        Text(sheet, "G2").Should().Be("Q1");   // Q1/Retail
+        Text(sheet, "H2").Should().Be("Q1");   // Q1/Wholesale
+        Text(sheet, "I2").Should().Be("Q1 Total"); // Q1 subtotal column
+        Text(sheet, "J2").Should().Be("Q2");   // Q2/Retail
+        Text(sheet, "K2").Should().Be("Q2");   // Q2/Wholesale
+        Text(sheet, "L2").Should().Be("Q2 Total"); // Q2 subtotal column
+        Text(sheet, "M2").Should().Be("Grand Total");
+
+        // Header row 2 (inner channel labels; subtotal cols have blank channel header)
+        Text(sheet, "G3").Should().Be("Retail");
+        Text(sheet, "H3").Should().Be("Wholesale");
+        Text(sheet, "I3").Should().Be("");      // subtotal column — no channel label
+        Text(sheet, "J3").Should().Be("Retail");
+        Text(sheet, "K3").Should().Be("Wholesale");
+        Text(sheet, "L3").Should().Be("");      // subtotal column — no channel label
+
+        // East data row
+        Text(sheet, "F4").Should().Be("East");
+        Number(sheet, "G4").Should().Be(10);   // Q1/Retail
+        Number(sheet, "H4").Should().Be(15);   // Q1/Wholesale
+        Number(sheet, "I4").Should().Be(25);   // Q1 Total for East
+        Number(sheet, "J4").Should().Be(20);   // Q2/Retail
+        Number(sheet, "K4").Should().Be(25);   // Q2/Wholesale
+        Number(sheet, "L4").Should().Be(45);   // Q2 Total for East
+        Number(sheet, "M4").Should().Be(70);   // Grand Total for East
+
+        // West data row
+        Text(sheet, "F5").Should().Be("West");
+        Number(sheet, "G5").Should().Be(30);   // Q1/Retail
+        Number(sheet, "H5").Should().Be(35);   // Q1/Wholesale
+        Number(sheet, "I5").Should().Be(65);   // Q1 Total for West
+        Number(sheet, "J5").Should().Be(40);   // Q2/Retail
+        Number(sheet, "K5").Should().Be(45);   // Q2/Wholesale
+        Number(sheet, "L5").Should().Be(85);   // Q2 Total for West
+        Number(sheet, "M5").Should().Be(150);  // Grand Total for West
+
+        // Grand Total row
+        Text(sheet, "F6").Should().Be("Grand Total");
+        Number(sheet, "G6").Should().Be(40);   // Q1/Retail grand
+        Number(sheet, "H6").Should().Be(50);   // Q1/Wholesale grand
+        Number(sheet, "I6").Should().Be(90);   // Q1 Total grand
+        Number(sheet, "J6").Should().Be(60);   // Q2/Retail grand
+        Number(sheet, "K6").Should().Be(70);   // Q2/Wholesale grand
+        Number(sheet, "L6").Should().Be(130);  // Q2 Total grand
+        Number(sheet, "M6").Should().Be(220);  // Grand Total grand
+    }
+
+    [Fact]
+    public void Refresh_NestedColumnFieldMatrixShowSubtotalsFalse_NoSubtotalColumns()
+    {
+        // With ShowSubtotals=false the output must be identical to the no-subtotals layout:
+        // leaf columns only (Q1/Retail, Q1/Wholesale, Q2/Retail, Q2/Wholesale) + Grand Total.
+        var workbook = new Workbook("PivotNestedColumnNoSubtotalsTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "M10"),
+            ShowSubtotals = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        // No subtotal columns: G=Q1/Retail, H=Q1/Wholesale, I=Q2/Retail, J=Q2/Wholesale, K=Grand Total
+        Text(sheet, "G2").Should().Be("Q1");
+        Text(sheet, "H2").Should().Be("Q1");
+        Text(sheet, "I2").Should().Be("Q2");
+        Text(sheet, "J2").Should().Be("Q2");
+        Text(sheet, "K2").Should().Be("Grand Total");
+        Text(sheet, "G3").Should().Be("Retail");
+        Text(sheet, "H3").Should().Be("Wholesale");
+        Text(sheet, "I3").Should().Be("Retail");
+        Text(sheet, "J3").Should().Be("Wholesale");
+        // There must be no value at L2 (no subtotal column was emitted)
+        sheet.GetCell(Addr(sheet, "L2")).Should().BeNull();
+
+        Number(sheet, "G4").Should().Be(10);
+        Number(sheet, "H4").Should().Be(15);
+        Number(sheet, "I4").Should().Be(20);
+        Number(sheet, "J4").Should().Be(25);
+        Number(sheet, "K4").Should().Be(70);
+        Number(sheet, "G5").Should().Be(30);
+        Number(sheet, "H5").Should().Be(35);
+        Number(sheet, "I5").Should().Be(40);
+        Number(sheet, "J5").Should().Be(45);
+        Number(sheet, "K5").Should().Be(150);
+    }
+
+    [Fact]
+    public void Refresh_NestedColumnFieldMatrixWithSubtotals_PercentOfParentColumnTotalCorrect()
+    {
+        // With ShowSubtotals=true, the % of Parent Column Total for a leaf cell should use
+        // the subtotal-column group as its parent (e.g. East/Q1/Retail uses Q1-East group = 25 as parent).
+        var workbook = new Workbook("PivotNestedColumnSubtotalsParentColTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "N10"),
+            ShowSubtotals = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "% Parent Col", "sum",
+            ShowValuesAs: PivotShowValuesAs.PercentOfParentColumnTotal));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        // East/Q1/Retail=10, East/Q1/Wholesale=15. Parent column = Q1 restricted to East = 25.
+        // So East/Q1/Retail % = 10/25; East/Q1/Wholesale % = 15/25.
+        // G4 = East/Q1/Retail, H4 = East/Q1/Wholesale, I4 = East/Q1 subtotal
+        Number(sheet, "G4").Should().BeApproximately(10d / 25d, 0.0000001);
+        Number(sheet, "H4").Should().BeApproximately(15d / 25d, 0.0000001);
+    }
+
+    [Fact]
     public void Refresh_MaterializesMultipleRowAndDataFields()
     {
         var workbook = new Workbook("PivotRefreshTest");
