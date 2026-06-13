@@ -719,11 +719,14 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("UpdateCommentPreview(addr)");
         source.Should().Contain("UpdateCommentPreview(hitAddr.Value)");
         source.Should().Contain("ClearCommentPreview()");
-        source.Should().Contain("CommentNavigationPlanner.FormatCellCommentPreview(");
-        source.Should().Contain("SetCommentPreview(preview)");
-        source.Should().Contain("private void ClearCommentPreview() => SetCommentPreview(null);");
-        source.Should().Contain("if (!Equals(SheetGrid.ToolTip, preview))");
-        source.Should().Contain("SheetGrid.ToolTip = preview;");
+        source.Should().Contain("SheetGrid.HideCommentPreview();");
+        source.Should().Contain("SetCommentPreview(null);");
+        source.Should().Contain("private void SetCommentPreview(string? preview)");
+        source.Should().Contain("if (SheetGrid.ToolTip is not null)");
+        source.Should().Contain("SheetGrid.ToolTip = null;");
+        source.Should().NotContain("CommentNavigationPlanner.FormatCellCommentPreview(");
+        source.Should().NotContain("SetCommentPreview(preview)");
+        source.Should().NotContain("SheetGrid.ToolTip = preview;");
     }
 
     [Fact]
