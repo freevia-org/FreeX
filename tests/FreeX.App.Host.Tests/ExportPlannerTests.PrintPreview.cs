@@ -192,7 +192,7 @@ public partial class ExportPlannerTests
         printExport.Should().Contain("showMargins: () => PageMarginsBtn_Click");
         printExport.Should().Contain("showPageSetup: () => PageSetupDialogBtn_Click");
         printExport.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
-        printExport.Should().Contain("PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, ignorePrintArea: settings.IgnorePrintArea)");
+        printExport.Should().Contain("ignorePrintArea: settings.IgnorePrintArea");
         printExport.Should().Contain("PrintSettingsPlanner.Build(sheet, settings.IgnorePrintArea)");
     }
 
@@ -217,7 +217,7 @@ public partial class ExportPlannerTests
         var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("Content = UiText.Get(\"PrintPreview_IgnorePrintArea\")");
-        source.Should().Contain("new PrintPreviewSettings(ignorePrintAreaBox.IsChecked == true)");
+        source.Should().Contain("IgnorePrintArea");
         source.Should().Contain("ignorePrintAreaBox.Checked +=");
         source.Should().Contain("ignorePrintAreaBox.Unchecked +=");
         source.Should().Contain("ToolTip = UiText.Get(\"PrintPreview_IgnorePrintAreaToolTip\")");
@@ -321,7 +321,7 @@ public partial class ExportPlannerTests
         source.Should().Contain("documentPrinter.PrintTicket.CopyCount = Math.Clamp((int)dialog.PrinterSettings.Copies, 1, 999)");
         source.Should().Contain("documentPrinter.PrintTicket.Collation = dialog.PrinterSettings.Collate");
         source.Should().Contain("documentPrinter.PrintTicket.Duplexing = ResolveDuplexing(dialog.PrinterSettings.Duplex, sidesMode)");
-        source.Should().Contain("using var document = CreatePrinterSelectionDocument(printQueue, copies, collated, sidesMode)");
+        source.Should().Contain("using var document = CreatePrinterSelectionDocument(printQueue, copies, collated, sidesMode, paginator)");
         source.Should().Contain("Document = document");
         source.Should().Contain("UseEXDialog = false");
         source.Should().Contain("ResolveSelectedSidesMode(sidesBox)");

@@ -25,7 +25,7 @@ internal static class NativePrintDialogService
         PrintPreviewSidesMode sidesMode,
         Window? owner = null)
     {
-        using var document = CreatePrinterSelectionDocument(printQueue, copies, collated, sidesMode);
+        using var document = CreatePrinterSelectionDocument(printQueue, copies, collated, sidesMode, paginator);
         using var dialog = CreatePrinterSelectionDialog(document);
         if (ShowDialog(dialog, owner) != Forms.DialogResult.OK)
             return;
@@ -51,7 +51,8 @@ internal static class NativePrintDialogService
         PrintQueue? printQueue,
         int copies,
         bool collated,
-        PrintPreviewSidesMode sidesMode)
+        PrintPreviewSidesMode sidesMode,
+        DocumentPaginator? previewPaginator = null)
     {
         var settings = new PrinterSettings
         {
@@ -62,11 +63,86 @@ internal static class NativePrintDialogService
         if (printQueue is not null)
             settings.PrinterName = printQueue.FullName;
 
-        return new PrintDocument
+        var document = new PrintDocument
         {
             DocumentName = "FreeX worksheet",
             PrinterSettings = settings
         };
+
+        // Render the worksheet pages through the PrintDocument so the OS print-dialog
+        // preview works. Without a PrintPage handler the document has no content and the
+        // Windows print dialog reports "this app doesn't support print preview".
+        if (previewPaginator is not null)
+            WirePreviewRendering(document, previewPaginator);
+
+        return document;
+    }
+
+    private static void WirePreviewRendering(PrintDocument document, DocumentPaginator paginator)
+    {
+        var pageIndex = 0;
+        document.BeginPrint += (_, _) => pageIndex = 0;
+        document.PrintPage += (_, e) =>
+        {
+            try
+            {
+                var pageCount = paginator.IsPageCountValid ? paginator.PageCount : int.MaxValue;
+                if (pageIndex >= pageCount)
+                {
+                    e.HasMorePages = false;
+                    return;
+                }
+
+                using var pageImage = RenderPaginatorPageToImage(paginator, pageIndex);
+                if (pageImage is not null && e.Graphics is not null)
+                {
+                    e.Graphics.DrawImage(pageImage, e.PageBounds);
+                }
+
+                pageIndex++;
+                e.HasMorePages = paginator.IsPageCountValid
+                    ? pageIndex < paginator.PageCount
+                    : pageImage is not null;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // A preview render failure must never crash the print flow; end the document.
+                e.HasMorePages = false;
+            }
+        };
+    }
+
+    // Renders a single WPF page from the paginator to a GDI+ bitmap so it can be drawn
+    // onto the print/preview Graphics. Drawing into e.PageBounds scales to the page
+    // regardless of the source DPI, so the image aspect (page DIP size) is all that matters.
+    private static System.Drawing.Image? RenderPaginatorPageToImage(DocumentPaginator paginator, int pageIndex)
+    {
+        if (pageIndex < 0 || (paginator.IsPageCountValid && pageIndex >= paginator.PageCount))
+            return null;
+
+        var page = paginator.GetPage(pageIndex);
+        if (page?.Visual is not { } visual)
+            return null;
+
+        var sizeDip = page.Size;
+        if (sizeDip.Width <= 0 || sizeDip.Height <= 0)
+            return null;
+
+        // Render at ~150 DPI for a crisp preview without excessive memory.
+        const double renderDpi = 150.0;
+        var pixelWidth = Math.Max(1, (int)Math.Ceiling(sizeDip.Width / 96.0 * renderDpi));
+        var pixelHeight = Math.Max(1, (int)Math.Ceiling(sizeDip.Height / 96.0 * renderDpi));
+
+        var target = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            pixelWidth, pixelHeight, renderDpi, renderDpi, System.Windows.Media.PixelFormats.Pbgra32);
+        target.Render(visual);
+
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(target));
+        var stream = new System.IO.MemoryStream();
+        encoder.Save(stream);
+        stream.Position = 0;
+        return System.Drawing.Image.FromStream(stream);
     }
 
     private static Forms.PrintDialog CreatePrinterSelectionDialog(PrintDocument document)

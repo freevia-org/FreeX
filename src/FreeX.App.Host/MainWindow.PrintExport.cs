@@ -35,7 +35,49 @@ public partial class MainWindow
 
     private (FixedDocument Document, PrintSettingsPlan Settings) BuildActiveSheetPrintPreview(PrintPreviewSettings settings)
     {
-        var document = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, ignorePrintArea: settings.IgnorePrintArea);
+        FixedDocument document;
+        switch (settings.PrintWhat)
+        {
+            case PrintWhat.EntireWorkbook:
+                document = PrintRenderer.RenderWorkbook(_workbook, _viewportService, settings.IgnorePrintArea);
+                break;
+
+            case PrintWhat.Selection:
+            {
+                var selectionRange = SheetGrid.SelectedRange;
+                document = PrintRenderer.RenderWorksheet(
+                    _workbook,
+                    _currentSheetId,
+                    _viewportService,
+                    printRangeOverride: selectionRange,
+                    ignorePrintArea: true);
+                break;
+            }
+
+            default: // ActiveSheets
+                document = PrintRenderer.RenderWorksheet(
+                    _workbook,
+                    _currentSheetId,
+                    _viewportService,
+                    ignorePrintArea: settings.IgnorePrintArea);
+                break;
+        }
+
+        // Apply page range subset to the preview document when a range is specified.
+        if ((settings.PageFrom.HasValue || settings.PageTo.HasValue) && document.Pages.Count > 0)
+        {
+            if (PrintSettingsPlanner.TryValidatePageRange(
+                    settings.PageFrom, settings.PageTo, document.Pages.Count,
+                    out var from, out var to))
+            {
+                var rangedDoc = new FixedDocument();
+                rangedDoc.DocumentPaginator.PageSize = document.DocumentPaginator.PageSize;
+                for (var i = from - 1; i <= to - 1 && i < document.Pages.Count; i++)
+                    rangedDoc.Pages.Add(document.Pages[i]);
+                document = rangedDoc;
+            }
+        }
+
         var sheet = _workbook.GetSheet(_currentSheetId);
         var plan = sheet is null
             ? new PrintSettingsPlan([UiText.Get("MainWindowPrintSettings_ActiveSheet")])

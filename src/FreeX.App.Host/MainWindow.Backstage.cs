@@ -227,7 +227,10 @@ public partial class MainWindow
             activeSheet,
             cmd => TryExecuteCommand(cmd, "Print Settings"),
             RefreshBackstagePrintPreview,
-            settings => _backstagePrintPreviewSettings = settings);
+            settings => _backstagePrintPreviewSettings = settings,
+            hasSelection: SheetGrid.SelectedRange is not null,
+            showPageSetup: () => PageSetupDialogBtn_Click(this, new RoutedEventArgs()),
+            showCustomMargins: () => PageSetupDialogBtn_Click(this, new RoutedEventArgs()));
     }
 
     private void RefreshBackstagePrintPreview()
@@ -249,12 +252,51 @@ public partial class MainWindow
         if (_backstagePrintPreviewDocument is null)
             return;
 
+        var settings = _backstagePrintPreviewSettings;
+
+        // Resolve the printer to a PrintQueue (null = Windows default).
+        System.Printing.PrintQueue? printQueue = null;
+        if (!string.IsNullOrWhiteSpace(settings.PrinterName))
+        {
+            try
+            {
+                using var server = new System.Printing.LocalPrintServer();
+                foreach (var q in server.GetPrintQueues())
+                {
+                    if (string.Equals(q.FullName, settings.PrinterName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        printQueue = q;
+                        break;
+                    }
+                }
+            }
+            catch (System.Printing.PrintSystemException)
+            {
+                // Fall through to null (Windows default).
+            }
+        }
+
+        // Apply page range if one was requested.
+        System.Windows.Documents.DocumentPaginator paginator = _backstagePrintPreviewDocument.DocumentPaginator;
+        if (settings.PageFrom.HasValue || settings.PageTo.HasValue)
+        {
+            var totalPages = paginator.PageCount;
+            if (PrintSettingsPlanner.TryValidatePageRange(
+                    settings.PageFrom, settings.PageTo, totalPages,
+                    out var from, out var to))
+            {
+                paginator = new PageRangeDocumentPaginator(
+                    _backstagePrintPreviewDocument.DocumentPaginator,
+                    new ExportPageRange(from, to));
+            }
+        }
+
         NativePrintDialogService.ShowPrintDialogAndPrint(
-            _backstagePrintPreviewDocument.DocumentPaginator,
-            printQueue: null,
-            copies: 1,
-            collated: true,
-            PrintPreviewSidesMode.OneSided,
+            paginator,
+            printQueue,
+            PrintSettingsPlanner.ClampCopies(settings.Copies),
+            settings.Collated,
+            settings.Sides,
             this);
     }
 

@@ -8,8 +8,14 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class PrintPreviewSettingsPanelFactoryTests
 {
+    // Panel ComboBox layout (by index):
+    //   0 printerBox  1 printWhatBox  2 sidesBox  3 collatedBox
+    //   4 orientBox   5 paperBox      6 marginsBox 7 scaleBox
+    // Panel CheckBox layout (by index):
+    //   0 ignorePrintAreaBox  1 gridlinesBox  2 headingsBox
+
     [Fact]
-    public void Build_InitializesControlsFromSheetPrintSettings()
+    public void Build_InitializesOrientationPaperMarginScaleFromSheetPrintSettings()
     {
         StaTestRunner.Run(() =>
         {
@@ -17,16 +23,46 @@ public sealed class PrintPreviewSettingsPanelFactoryTests
             sheet.PageOrientation = WorksheetPageOrientation.Landscape;
             sheet.PaperSize = WorksheetPaperSize.Legal;
             sheet.PageMargins = WorksheetPageMargins.Wide;
-            sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, null);
+            sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, null); // FitColumns → index 2
             sheet.PrintArea = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2));
             sheet.PrintGridlines = true;
             sheet.PrintHeadings = false;
 
             var panel = PrintPreviewSettingsPanelFactory.Build(sheet.Id, sheet, _ => { }, () => { }, _ => { });
+            var combos = ComboBoxes(panel);
 
-            ComboBoxes(panel).Select(box => box.SelectedIndex).Should().Equal(1, 2, 2, 2);
-            CheckBoxes(panel).Select(box => box.IsChecked).Should().Equal(false, true, false);
-            CheckBoxes(panel)[0].IsEnabled.Should().BeTrue();
+            // orientBox (index 4): Landscape → 1
+            combos[4].SelectedIndex.Should().Be(1, "orientation should be Landscape");
+            // paperBox (index 5): Legal → 2
+            combos[5].SelectedIndex.Should().Be(2, "paper size should be Legal");
+            // marginsBox (index 6): Wide → 2
+            combos[6].SelectedIndex.Should().Be(2, "margins should be Wide");
+            // scaleBox (index 7): FitColumns → 2
+            combos[7].SelectedIndex.Should().Be(2, "scaling should be Fit All Columns on One Page");
+
+            // CheckBoxes: ignorePrintArea enabled (has print area), gridlines true, headings false
+            var checkboxes = CheckBoxes(panel);
+            checkboxes[0].IsEnabled.Should().BeTrue("ignore print area should be enabled when sheet has a print area");
+            checkboxes[1].IsChecked.Should().BeTrue("gridlines should be checked");
+            checkboxes[2].IsChecked.Should().BeFalse("headings should be unchecked");
+        });
+    }
+
+    [Fact]
+    public void Build_InitializesDefaultPrintJobSettings()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = CreateSheet();
+            var panel = PrintPreviewSettingsPanelFactory.Build(sheet.Id, sheet, _ => { }, () => { }, _ => { });
+            var combos = ComboBoxes(panel);
+
+            // printWhatBox (index 1): default = ActiveSheets (0)
+            combos[1].SelectedIndex.Should().Be(0, "print what should default to Active Sheets");
+            // sidesBox (index 2): default = OneSided (0)
+            combos[2].SelectedIndex.Should().Be(0, "sides should default to one sided");
+            // collatedBox (index 3): default = Collated (0)
+            combos[3].SelectedIndex.Should().Be(0, "collation should default to collated");
         });
     }
 
@@ -40,7 +76,8 @@ public sealed class PrintPreviewSettingsPanelFactoryTests
             var refreshes = 0;
             var panel = PrintPreviewSettingsPanelFactory.Build(sheet.Id, sheet, commands.Add, () => refreshes++);
 
-            ComboBoxes(panel)[0].SelectedIndex = 1;
+            // orientBox is at index 4
+            ComboBoxes(panel)[4].SelectedIndex = 1;
 
             commands.Should().ContainSingle().Which.Should().BeOfType<SetPageOrientationCommand>();
             commands[0].Label.Should().Be("Page Orientation");
@@ -58,7 +95,8 @@ public sealed class PrintPreviewSettingsPanelFactoryTests
             var refreshes = 0;
             var panel = PrintPreviewSettingsPanelFactory.Build(sheet.Id, sheet, commands.Add, () => refreshes++);
 
-            ComboBoxes(panel)[2].SelectedIndex = 1;
+            // marginsBox is at index 6
+            ComboBoxes(panel)[6].SelectedIndex = 1;
 
             commands.Should().ContainSingle().Which.Should().BeOfType<SetPageMarginsCommand>();
             commands[0].Label.Should().Be("Page Margins");
@@ -76,7 +114,8 @@ public sealed class PrintPreviewSettingsPanelFactoryTests
             var refreshes = 0;
             var panel = PrintPreviewSettingsPanelFactory.Build(sheet.Id, sheet, commands.Add, () => refreshes++);
 
-            ComboBoxes(panel)[3].SelectedIndex = 1;
+            // scaleBox is at index 7
+            ComboBoxes(panel)[7].SelectedIndex = 1;
 
             commands.Should().ContainSingle().Which.Should().BeOfType<SetScaleToFitCommand>();
             commands[0].Label.Should().Be("Scale To Fit");
@@ -123,6 +162,74 @@ public sealed class PrintPreviewSettingsPanelFactoryTests
             commands.Should().HaveCount(2);
             commands.Should().OnlyContain(command => command is SetPrintOptionsCommand);
             refreshes.Should().Be(2);
+        });
+    }
+
+    [Fact]
+    public void PrintWhatSelection_ReportsUpdatedSettings()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = CreateSheet();
+            var settings = new List<PrintPreviewSettings>();
+            var panel = PrintPreviewSettingsPanelFactory.Build(
+                sheet.Id, sheet, _ => { }, () => { }, settings.Add, hasSelection: true);
+
+            // printWhatBox is at index 1; select EntireWorkbook (1)
+            ComboBoxes(panel)[1].SelectedIndex = 1;
+
+            settings.Should().ContainSingle().Which.PrintWhat.Should().Be(PrintWhat.EntireWorkbook);
+        });
+    }
+
+    [Fact]
+    public void SidesSelection_ReportsUpdatedSettings()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = CreateSheet();
+            var settings = new List<PrintPreviewSettings>();
+            var panel = PrintPreviewSettingsPanelFactory.Build(
+                sheet.Id, sheet, _ => { }, () => { }, settings.Add);
+
+            // sidesBox is at index 2; select TwoSidedLongEdge (1)
+            ComboBoxes(panel)[2].SelectedIndex = 1;
+
+            settings.Should().ContainSingle().Which.Sides.Should().Be(PrintPreviewSidesMode.TwoSidedLongEdge);
+        });
+    }
+
+    [Fact]
+    public void CollationSelection_ReportsUpdatedSettings()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = CreateSheet();
+            var settings = new List<PrintPreviewSettings>();
+            var panel = PrintPreviewSettingsPanelFactory.Build(
+                sheet.Id, sheet, _ => { }, () => { }, settings.Add);
+
+            // collatedBox is at index 3; select Uncollated (1)
+            ComboBoxes(panel)[3].SelectedIndex = 1;
+
+            settings.Should().ContainSingle().Which.Collated.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void PageSetupLink_IsPresent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = CreateSheet();
+            var pageSetupCalls = 0;
+            var panel = PrintPreviewSettingsPanelFactory.Build(
+                sheet.Id, sheet, _ => { }, () => { },
+                showPageSetup: () => pageSetupCalls++);
+
+            // There should be at least one Button with "Page Setup" automation name.
+            var buttons = panel.Children.OfType<Button>().ToList();
+            buttons.Should().NotBeEmpty("panel should contain the Page Setup link button");
         });
     }
 
