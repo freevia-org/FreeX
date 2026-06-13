@@ -21,6 +21,45 @@ public readonly record struct GridOutlineGroupToggleRequest(
     uint End,
     bool Collapse);
 
+public enum GridThreadedCommentEditAction
+{
+    ApplyThread,
+    EditReply,
+    DeleteReply
+}
+
+public readonly record struct GridThreadedCommentEditResult(
+    string? RootText,
+    string? ReplyText,
+    bool IsResolved,
+    GridThreadedCommentEditAction Action = GridThreadedCommentEditAction.ApplyThread,
+    int? ReplyIndex = null,
+    string? ReplyEditText = null);
+
+public sealed class GridNoteInlineEditSubmittedEventArgs(CellAddress address, string text) : EventArgs
+{
+    public CellAddress Address { get; } = address;
+
+    public string Text { get; } = text;
+
+    public bool KeepOpen { get; set; }
+
+    public string? ErrorMessage { get; set; }
+}
+
+public sealed class GridThreadedCommentInlineEditSubmittedEventArgs(
+    CellAddress address,
+    GridThreadedCommentEditResult result) : EventArgs
+{
+    public CellAddress Address { get; } = address;
+
+    public GridThreadedCommentEditResult Result { get; } = result;
+
+    public bool KeepOpen { get; set; }
+
+    public string? ErrorMessage { get; set; }
+}
+
 public partial class GridView
 {
     /// <summary>Fired while the user drags a column border (real-time).</summary>
@@ -104,4 +143,10 @@ public partial class GridView
 
     /// <summary>Fired when the user finishes placing a new text box on the grid.</summary>
     public event Action<TextBoxPlacementRequest>? TextBoxPlacementRequested;
+
+    /// <summary>Fired when the user saves an in-window legacy note edit.</summary>
+    public event EventHandler<GridNoteInlineEditSubmittedEventArgs>? NoteInlineEditSubmitted;
+
+    /// <summary>Fired when the user saves an in-window threaded comment edit.</summary>
+    public event EventHandler<GridThreadedCommentInlineEditSubmittedEventArgs>? ThreadedCommentInlineEditSubmitted;
 }
