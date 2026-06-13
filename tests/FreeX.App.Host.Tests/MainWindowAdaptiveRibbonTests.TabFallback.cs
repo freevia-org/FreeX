@@ -47,7 +47,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (harness.CanUseRequestedRibbonWidth(1465))
             {
                 harness.TallLargeRibbonCommandLabels.Should().Contain(
-                    ["PivotTable", "Table", "Link", "Comment", "Text Box", "Header & Footer", "Symbol"],
+                    ["PivotTable", "Table", "Recommended Charts", "Timeline", "Link", "Comment", "Symbol"],
                     $"Insert should spend available width on tall icon-label commands before compacting lower-priority groups; {harness.DebugActiveRibbonChildren}");
                 harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                     0.5,

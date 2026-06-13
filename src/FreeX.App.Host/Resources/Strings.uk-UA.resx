@@ -16026,4 +16026,107 @@ and {0} more.</value>
   <data name="MainWindowMessage_ScenarioNoScenarios" xml:space="preserve">
     <value>No scenarios are saved in this workbook.</value>
   </data>
+
+  <data name="PrintPreview_CollatedOption" xml:space="preserve">
+    <value>Collated</value>
+  </data>
+  <data name="PrintPreview_CollatedSectionAutomationName" xml:space="preserve">
+    <value>Collation</value>
+  </data>
+  <data name="PrintPreview_CollatedSectionHelpText" xml:space="preserve">
+    <value>Choose whether multiple copies are collated or uncollated.</value>
+  </data>
+  <data name="PrintPreview_CollatedSectionLabel" xml:space="preserve">
+    <value>C_ollation:</value>
+  </data>
+  <data name="PrintPreview_CopiesSectionAutomationName" xml:space="preserve">
+    <value>Copies</value>
+  </data>
+  <data name="PrintPreview_CopiesSectionHelpText" xml:space="preserve">
+    <value>Number of copies to print (1–999).</value>
+  </data>
+  <data name="PrintPreview_CopiesSectionLabel" xml:space="preserve">
+    <value>_Copies:</value>
+  </data>
+  <data name="PrintPreview_CustomMarginsOption" xml:space="preserve">
+    <value>Custom Margins...</value>
+  </data>
+  <data name="PrintPreview_PageRangeFromAutomationName" xml:space="preserve">
+    <value>Page from</value>
+  </data>
+  <data name="PrintPreview_PageRangeFromHelpText" xml:space="preserve">
+    <value>First page to print. Leave empty to print from the first page.</value>
+  </data>
+  <data name="PrintPreview_PageRangeFromLabel" xml:space="preserve">
+    <value>Pages: _From:</value>
+  </data>
+  <data name="PrintPreview_PageRangeToAutomationName" xml:space="preserve">
+    <value>Page to</value>
+  </data>
+  <data name="PrintPreview_PageRangeToHelpText" xml:space="preserve">
+    <value>Last page to print. Leave empty to print to the last page.</value>
+  </data>
+  <data name="PrintPreview_PageRangeToLabel" xml:space="preserve">
+    <value>_To:</value>
+  </data>
+  <data name="PrintPreview_PageSetupLink" xml:space="preserve">
+    <value>Page _Setup...</value>
+  </data>
+  <data name="PrintPreview_PageSetupLinkAutomationName" xml:space="preserve">
+    <value>Page Setup</value>
+  </data>
+  <data name="PrintPreview_PageSetupLinkHelpText" xml:space="preserve">
+    <value>Open the full Page Setup dialog to configure all print settings.</value>
+  </data>
+  <data name="PrintPreview_PrinterPropertiesAutomationName" xml:space="preserve">
+    <value>Printer Properties</value>
+  </data>
+  <data name="PrintPreview_PrinterPropertiesButton" xml:space="preserve">
+    <value>Printer _Properties</value>
+  </data>
+  <data name="PrintPreview_PrinterPropertiesHelpText" xml:space="preserve">
+    <value>Open the selected printer's properties dialog.</value>
+  </data>
+  <data name="PrintPreview_PrinterSectionLabel" xml:space="preserve">
+    <value>_Printer:</value>
+  </data>
+  <data name="PrintPreview_PrintWhatActiveSheets" xml:space="preserve">
+    <value>Print Active Sheets</value>
+  </data>
+  <data name="PrintPreview_PrintWhatAutomationName" xml:space="preserve">
+    <value>Print what</value>
+  </data>
+  <data name="PrintPreview_PrintWhatEntireWorkbook" xml:space="preserve">
+    <value>Print Entire Workbook</value>
+  </data>
+  <data name="PrintPreview_PrintWhatHelpText" xml:space="preserve">
+    <value>Choose whether to print the active sheets, the entire workbook, or the current selection.</value>
+  </data>
+  <data name="PrintPreview_PrintWhatLabel" xml:space="preserve">
+    <value>Print _What:</value>
+  </data>
+  <data name="PrintPreview_PrintWhatSelection" xml:space="preserve">
+    <value>Print Selection</value>
+  </data>
+  <data name="PrintPreview_ScaleCustomOptions" xml:space="preserve">
+    <value>Custom Scaling Options...</value>
+  </data>
+  <data name="PrintPreview_ScaleFitColumns" xml:space="preserve">
+    <value>Fit All Columns on One Page</value>
+  </data>
+  <data name="PrintPreview_ScaleFitRows" xml:space="preserve">
+    <value>Fit All Rows on One Page</value>
+  </data>
+  <data name="PrintPreview_ScaleFitSheet" xml:space="preserve">
+    <value>Fit Sheet on One Page</value>
+  </data>
+  <data name="PrintPreview_ScaleNoScaling" xml:space="preserve">
+    <value>No Scaling</value>
+  </data>
+  <data name="PrintPreview_SidesSectionLabel" xml:space="preserve">
+    <value>_Print Sides:</value>
+  </data>
+  <data name="PrintPreview_UncollatedOption" xml:space="preserve">
+    <value>Uncollated</value>
+  </data>
 </root>

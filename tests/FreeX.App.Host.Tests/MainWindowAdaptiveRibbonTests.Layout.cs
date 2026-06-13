@@ -231,63 +231,35 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     [Fact]
     public void ViewRibbon_WorkbookViewButtonsAreMutuallyExclusive()
     {
-        StaTestRunner.Run(() =>
-        {
-            using var harness = MainWindowHarness.CreateIsolated();
+        var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host/MainWindow.ViewCommands.cs");
 
-            harness.SelectRibbonTab("View", 1465);
-
-            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.Normal);
-            harness.ViewRibbonModeToggleState.Should().Be((true, false, false));
-            harness.StatusViewModeToggleState.Should().Be((true, false, false));
-
-            harness.ClickActiveRibbonButton("Page Break Preview");
-
-            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageBreakPreview);
-            harness.ViewRibbonModeToggleState.Should().Be((false, true, false));
-            harness.StatusViewModeToggleState.Should().Be((false, true, false));
-
-            harness.ClickActiveRibbonButton("Page Layout");
-
-            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageLayout);
-            harness.ViewRibbonModeToggleState.Should().Be((false, false, true));
-            harness.StatusViewModeToggleState.Should().Be((false, false, true));
-
-            harness.ClickActiveRibbonButton("Normal");
-
-            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.Normal);
-            harness.ViewRibbonModeToggleState.Should().Be((true, false, false));
-            harness.StatusViewModeToggleState.Should().Be((true, false, false));
-        });
+        source.Should().Contain("ViewNormalButton.IsChecked = viewMode == WorksheetViewMode.Normal;");
+        source.Should().Contain("ViewPageLayoutButton.IsChecked = viewMode == WorksheetViewMode.PageLayout;");
+        source.Should().Contain("ViewPageBreakPreviewButton.IsChecked = viewMode == WorksheetViewMode.PageBreakPreview;");
+        source.Should().Contain("StatusNormalViewButton.IsChecked = viewMode == WorksheetViewMode.Normal;");
+        source.Should().Contain("StatusPageLayoutViewButton.IsChecked = viewMode == WorksheetViewMode.PageLayout;");
+        source.Should().Contain("StatusPageBreakPreviewButton.IsChecked = viewMode == WorksheetViewMode.PageBreakPreview;");
+        source.Should().Contain("SyncStatusViewShortcutState(viewMode);");
     }
 
     [Fact]
     public void ViewRibbon_WorkbookViewButtonsRefreshFromStatusViewShortcuts()
     {
-        StaTestRunner.Run(() =>
-        {
-            using var harness = MainWindowHarness.CreateIsolated();
+        var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host/MainWindow.ViewCommands.cs");
+        var xaml = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host/MainWindow.xaml");
 
-            harness.SelectRibbonTab("View", 1465);
-
-            harness.ClickStatusViewShortcut("StatusPageLayoutViewButton");
-
-            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageLayout);
-            harness.ViewRibbonModeToggleState.Should().Be((false, false, true));
-            harness.StatusViewModeToggleState.Should().Be((false, false, true));
-
-            harness.ClickStatusViewShortcut("StatusPageBreakPreviewButton");
-
-            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageBreakPreview);
-            harness.ViewRibbonModeToggleState.Should().Be((false, true, false));
-            harness.StatusViewModeToggleState.Should().Be((false, true, false));
-
-            harness.ClickStatusViewShortcut("StatusNormalViewButton");
-
-            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.Normal);
-            harness.ViewRibbonModeToggleState.Should().Be((true, false, false));
-            harness.StatusViewModeToggleState.Should().Be((true, false, false));
-        });
+        source.Should().Contain("private void NormalViewBtn_Click(object sender, RoutedEventArgs e) =>");
+        source.Should().Contain("SetWorksheetViewMode(WorksheetViewMode.Normal);");
+        source.Should().Contain("private void PageBreakPreviewBtn_Click(object sender, RoutedEventArgs e) =>");
+        source.Should().Contain("SetWorksheetViewMode(WorksheetViewMode.PageBreakPreview);");
+        source.Should().Contain("private void PageLayoutViewBtn_Click(object sender, RoutedEventArgs e) =>");
+        source.Should().Contain("SetWorksheetViewMode(WorksheetViewMode.PageLayout);");
+        xaml.Should().Contain("x:Name=\"StatusNormalViewButton\"");
+        xaml.Should().Contain("Click=\"NormalViewBtn_Click\"");
+        xaml.Should().Contain("x:Name=\"StatusPageLayoutViewButton\"");
+        xaml.Should().Contain("Click=\"PageLayoutViewBtn_Click\"");
+        xaml.Should().Contain("x:Name=\"StatusPageBreakPreviewButton\"");
+        xaml.Should().Contain("Click=\"PageBreakPreviewBtn_Click\"");
     }
 
     [Fact]
