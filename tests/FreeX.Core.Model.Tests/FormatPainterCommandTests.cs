@@ -105,6 +105,96 @@ public sealed class FormatPainterCommandTests
     }
 
     [Fact]
+    public void CreateApplyFormatPainterCommand_CopiesSingleCellValidationToTargetRangeAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var targetTopLeft = new CellAddress(sheet.Id, 4, 2);
+        var targetBottomRight = new CellAddress(sheet.Id, 5, 3);
+        var targetRange = new GridRange(targetTopLeft, targetBottomRight);
+        var oldValidationRange = Range(sheet.Id, 4, 2, 5, 4);
+        var sourceStyle = wb.RegisterStyle(new CellStyle { Bold = true, FillColor = new CellColor(255, 242, 204) });
+        sheet.SetStyleOnly(source.Row, source.Col, sourceStyle);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(source, source),
+            Type = DvType.WholeNumber,
+            Operator = DvOperator.Between,
+            Formula1 = "1",
+            Formula2 = "10",
+            AllowBlank = false,
+            ErrorTitle = "Numbers only"
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = oldValidationRange,
+            Type = DvType.List,
+            Formula1 = "Old"
+        });
+
+        var command = FormatPainterCommandFactory.Create(wb, sheet, source, targetRange);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.DataValidations.Should().ContainSingle(rule => rule.AppliesTo == targetRange)
+            .Which.Should().Match<DataValidation>(rule =>
+                rule.Type == DvType.WholeNumber &&
+                rule.Operator == DvOperator.Between &&
+                rule.Formula1 == "1" &&
+                rule.Formula2 == "10" &&
+                !rule.AllowBlank &&
+                rule.ErrorTitle == "Numbers only");
+        foreach (var address in targetRange.AllCells())
+        {
+            var styleId = sheet.GetCell(address)?.StyleId ?? sheet.GetStyleOnly(address.Row, address.Col);
+            styleId.Should().NotBeNull();
+            wb.GetStyle(styleId!.Value).Should().Be(wb.GetStyle(sourceStyle));
+        }
+        sheet.DataValidations.Should().Contain(rule =>
+            rule.AppliesTo == Range(sheet.Id, 4, 4, 5, 4) &&
+            rule.Type == DvType.List &&
+            rule.Formula1 == "Old");
+
+        command.Revert(ctx);
+
+        sheet.DataValidations.Should().Contain(rule =>
+            rule.AppliesTo == new GridRange(source, source) &&
+            rule.Type == DvType.WholeNumber &&
+            rule.Formula1 == "1" &&
+            rule.Formula2 == "10");
+        sheet.DataValidations.Should().Contain(rule =>
+            rule.AppliesTo == oldValidationRange &&
+            rule.Type == DvType.List &&
+            rule.Formula1 == "Old");
+        sheet.GetStyleOnly(targetTopLeft.Row, targetTopLeft.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void CreateApplyFormatPainterCommand_RebasesRelativeValidationFormulasLikePaste()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 3, 3);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(source, source),
+            Type = DvType.Custom,
+            Formula1 = "=B1+$C1+B$1+$C$1>0"
+        });
+
+        var command = FormatPainterCommandFactory.Create(wb, sheet, source, new GridRange(target, target));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.DataValidations.Should().ContainSingle(rule => rule.AppliesTo == new GridRange(target, target))
+            .Which.Formula1.Should().Be("=D3+$C3+D$1+$C$1>0");
+    }
+
+    [Fact]
     public void CreateApplyFormatPainterCommand_RepeatsMultiCellSourcePatternAcrossTargetRange()
     {
         var wb = new Workbook("test");
@@ -146,4 +236,64 @@ public sealed class FormatPainterCommandTests
         StyleAt(6, 5).Should().Be(green);
         StyleAt(6, 6).Should().Be(red);
     }
+
+    [Fact]
+    public void CreateApplyFormatPainterCommand_RepeatsMultiCellValidationPatternAcrossTargetRange()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var sourceTopLeft = new CellAddress(sheet.Id, 1, 1);
+        var sourceBottomRight = new CellAddress(sheet.Id, 2, 2);
+        var targetTopLeft = new CellAddress(sheet.Id, 4, 4);
+        var targetBottomRight = new CellAddress(sheet.Id, 6, 6);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(sourceTopLeft, sourceTopLeft),
+            Type = DvType.List,
+            Formula1 = "Red,Blue"
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(sourceBottomRight, sourceBottomRight),
+            Type = DvType.WholeNumber,
+            Formula1 = "1",
+            Formula2 = "9"
+        });
+
+        var command = FormatPainterCommandFactory.Create(
+            wb,
+            sheet,
+            new GridRange(sourceTopLeft, sourceBottomRight),
+            new GridRange(targetTopLeft, targetBottomRight));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.DataValidations.Should().Contain(rule =>
+            rule.AppliesTo == Range(sheet.Id, 4, 4, 4, 4) &&
+            rule.Type == DvType.List &&
+            rule.Formula1 == "Red,Blue");
+        sheet.DataValidations.Should().Contain(rule =>
+            rule.AppliesTo == Range(sheet.Id, 4, 6, 4, 6) &&
+            rule.Type == DvType.List &&
+            rule.Formula1 == "Red,Blue");
+        sheet.DataValidations.Should().Contain(rule =>
+            rule.AppliesTo == Range(sheet.Id, 6, 4, 6, 4) &&
+            rule.Type == DvType.List &&
+            rule.Formula1 == "Red,Blue");
+        sheet.DataValidations.Should().Contain(rule =>
+            rule.AppliesTo == Range(sheet.Id, 6, 6, 6, 6) &&
+            rule.Type == DvType.List &&
+            rule.Formula1 == "Red,Blue");
+        sheet.DataValidations.Should().ContainSingle(rule =>
+            rule.AppliesTo == Range(sheet.Id, 5, 5, 5, 5) &&
+            rule.Type == DvType.WholeNumber &&
+            rule.Formula1 == "1" &&
+            rule.Formula2 == "9");
+    }
+
+    private static GridRange Range(SheetId sheetId, uint startRow, uint startCol, uint endRow, uint endCol) =>
+        new(
+            new CellAddress(sheetId, startRow, startCol),
+            new CellAddress(sheetId, endRow, endCol));
 }

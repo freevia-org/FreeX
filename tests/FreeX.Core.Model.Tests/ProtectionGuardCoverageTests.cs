@@ -337,6 +337,7 @@ public class ProtectionGuardCoverageTests
         ["SetDataValidationCommand"] = "DV metadata; not cell content.",
         ["ClearDataValidationCommand"] = "DV clear; not cell content.",
         ["PasteDataValidationCommand"] = "DV paste; not cell content.",
+        ["FormatPainterDataValidationCommand"] = "DV format painter copy; not cell content.",
 
         // Paste partial variants — covered by sub-command guards
         ["PasteColumnWidthsCommand"] = "Column width paste; FormatColumns-guarded sub-command.",
