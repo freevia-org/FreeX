@@ -1,6 +1,20 @@
 namespace FreeX.Core.Model;
 
 /// <summary>
+/// The font scheme (theme slot) a cell font is tied to.
+/// When set to Minor or Major the displayed font follows the workbook theme's body or heading font respectively.
+/// </summary>
+public enum CellFontScheme
+{
+    /// <summary>Font is pinned to a specific name and does not follow the theme.</summary>
+    None,
+    /// <summary>Font follows the workbook theme's minor (body) font.</summary>
+    Minor,
+    /// <summary>Font follows the workbook theme's major (heading) font.</summary>
+    Major,
+}
+
+/// <summary>
 /// An RGB color value used in cell styling.
 /// </summary>
 public readonly record struct CellColor(byte R, byte G, byte B)
@@ -180,6 +194,12 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// <summary>Whether the cell formula is hidden when worksheet protection is enabled.</summary>
     public bool Hidden { get; set; }
 
+    /// <summary>
+    /// The font scheme this cell's font is tied to. When Minor or Major, the displayed font
+    /// follows the workbook theme rather than the stored <see cref="FontName"/>.
+    /// </summary>
+    public CellFontScheme FontScheme { get; set; } = CellFontScheme.None;
+
     /// <summary>Native dxf attributes not modeled by FreeX, retained for conditional-format XLSX fidelity.</summary>
     public IReadOnlyDictionary<string, string>? NativeDifferentialAttributes { get; set; }
 
@@ -224,6 +244,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         TextRotation = TextRotation,
         Locked = Locked,
         Hidden = Hidden,
+        FontScheme = FontScheme,
         NativeDifferentialAttributes = NativeDifferentialAttributes,
         NativeDifferentialChildXmls = NativeDifferentialChildXmls,
         NativeDifferentialElementXmls = NativeDifferentialElementXmls,
@@ -266,6 +287,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && TextRotation == other.TextRotation
             && Locked == other.Locked
             && Hidden == other.Hidden
+            && FontScheme == other.FontScheme
             && DictionaryEquals(NativeDifferentialAttributes, other.NativeDifferentialAttributes)
             && ListEquals(NativeDifferentialChildXmls, other.NativeDifferentialChildXmls)
             && DictionaryEquals(NativeDifferentialElementXmls, other.NativeDifferentialElementXmls);
@@ -329,10 +351,22 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(TextRotation);
         h.Add(Locked);
         h.Add(Hidden);
+        h.Add(FontScheme);
         h.Add(GetDictionaryHashCode(NativeDifferentialAttributes));
         h.Add(GetListHashCode(NativeDifferentialChildXmls));
         h.Add(GetDictionaryHashCode(NativeDifferentialElementXmls));
         return h.ToHashCode();
+    }
+
+    /// <summary>
+    /// Returns the effective font name that should be displayed, consulting the workbook theme when
+    /// <see cref="FontScheme"/> is not None. Falls back to <see cref="FontName"/> when the scheme
+    /// resolves to null or when the scheme is None.
+    /// </summary>
+    public string ResolveEffectiveFontName(WorkbookTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        return theme.ResolveSchemeFontName(FontScheme) ?? FontName;
     }
 
     /// <summary>Resolves the effective font color against <paramref name="theme"/>.</summary>
@@ -410,7 +444,8 @@ public record StyleDiff(
     bool? ClearFill             = null,
     CellFillPatternStyle? FillPatternStyle = null,
     CellColor? FillPatternColor = null,
-    WorkbookThemeColorReference? FillPatternThemeColor = null
+    WorkbookThemeColorReference? FillPatternThemeColor = null,
+    CellFontScheme? FontScheme  = null
 )
 {
     /// <summary>Create a StyleDiff that captures all properties of <paramref name="style"/> as explicit overrides.</summary>
@@ -443,7 +478,8 @@ public record StyleDiff(
         BorderBottom:    style.BorderBottom,
         BorderLeft:      style.BorderLeft,
         Locked:          style.Locked,
-        Hidden:          style.Hidden
+        Hidden:          style.Hidden,
+        FontScheme:      style.FontScheme
     );
 
     /// <summary>Apply this diff to a base style, returning a new style with only non-null fields overridden.</summary>
@@ -466,7 +502,17 @@ public record StyleDiff(
             if (Subscript.Value)
                 s.Superscript = false;
         }
-        if (FontName       is not null) s.FontName      = FontName;
+        if (FontName       is not null)
+        {
+            s.FontName    = FontName;
+            // When FontScheme is not explicitly specified in the diff, a FontName assignment
+            // represents an explicit user font pick and pins the scheme to None.
+            // When FontScheme IS specified (e.g., FormatPainter copying a themed cell),
+            // the explicit scheme value is honored below.
+            if (FontScheme is null)
+                s.FontScheme = CellFontScheme.None;
+        }
+        if (FontScheme     is not null) s.FontScheme   = FontScheme.Value;
         if (FontSize       is not null) s.FontSize      = FontSize.Value;
         if (FontColor      is not null)
         {

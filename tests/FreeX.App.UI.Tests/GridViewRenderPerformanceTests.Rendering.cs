@@ -158,7 +158,7 @@ public sealed partial class GridViewRenderPerformanceTests
         renderCells.IndexOf("if (cellTop >= visibleBottom) continue;", StringComparison.Ordinal)
             .Should().BeLessThan(renderCells.IndexOf("if (!colLookup.TryGetValue(cell.Col, out var colMetric)) continue;", StringComparison.Ordinal));
         renderCells.IndexOf("rect.Left >= visibleRight", StringComparison.Ordinal)
-            .Should().BeLessThan(renderCells.IndexOf("var typefaceKey = CreateCellTypefaceKey(style);", StringComparison.Ordinal));
+            .Should().BeLessThan(renderCells.IndexOf("var typefaceKey = CreateCellTypefaceKeyWithTheme(style);", StringComparison.Ordinal));
         renderCells.IndexOf("if (!IntersectsVisibleGrid(clipRect, visibleLeft, visibleTop, visibleRight, visibleBottom))", StringComparison.Ordinal)
             .Should().BeLessThan(renderCells.IndexOf("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);", StringComparison.Ordinal));
     }
@@ -634,7 +634,7 @@ public sealed partial class GridViewRenderPerformanceTests
         cacheSource.Should().Contain("_textWidthLayoutCache.Count >= TextWidthLayoutCacheLimit");
         cacheSource.Should().Contain("_shrinkTextLayoutCache.TryGetValue");
         cacheSource.Should().Contain("_shrinkTextLayoutCache.Count >= ShrinkTextLayoutCacheLimit");
-        rendering.Should().Contain("var typefaceKey = CreateCellTypefaceKey(style);");
+        rendering.Should().Contain("var typefaceKey = CreateCellTypefaceKeyWithTheme(style);");
         rendering.Should().Contain("ResolveCachedShrinkFontSize(");
         cacheSource.Should().Contain("MeasureCellTextWidth(text, typefaceKey, typeface, size, pixelsPerDip)");
         rendering.Should().NotContain("size => new FormattedText(");
@@ -858,7 +858,7 @@ public sealed partial class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("var typefaceKey = CreateCellTypefaceKey(style);");
+        renderCells.Should().Contain("var typefaceKey = CreateCellTypefaceKeyWithTheme(style);");
         renderCells.Should().Contain("CreateCellTypeface(typefaceKey, _typefaceCache)");
     }
 

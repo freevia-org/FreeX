@@ -123,6 +123,12 @@ internal static class XlsxClosedXmlCellMapper
             Underline = xlStyle.Font.Underline != XLFontUnderlineValues.None,
             Strikethrough = xlStyle.Font.Strikethrough,
             FontColor = MapColor(xlStyle.Font.FontColor, theme),
+            FontScheme = xlStyle.Font.FontScheme switch
+            {
+                XLFontScheme.Minor => CellFontScheme.Minor,
+                XLFontScheme.Major => CellFontScheme.Major,
+                _ => CellFontScheme.None,
+            },
             FillColor = xlStyle.Fill.PatternType != XLFillPatternValues.None
                 ? (CellColor?)MapColor(xlStyle.Fill.BackgroundColor, theme)
                 : null,
@@ -200,6 +206,13 @@ internal static class XlsxClosedXmlCellMapper
         if (style.FontName != def.FontName) xlStyle.Font.FontName = style.FontName;
         if (style.FontColor != def.FontColor)
             xlStyle.Font.FontColor = XLColor.FromArgb(255, style.FontColor.R, style.FontColor.G, style.FontColor.B);
+        if (style.FontScheme != def.FontScheme)
+            xlStyle.Font.FontScheme = style.FontScheme switch
+            {
+                CellFontScheme.Minor => XLFontScheme.Minor,
+                CellFontScheme.Major => XLFontScheme.Major,
+                _ => XLFontScheme.None,
+            };
 
         if (style.FillPatternStyle != CellFillPatternStyle.None)
         {
