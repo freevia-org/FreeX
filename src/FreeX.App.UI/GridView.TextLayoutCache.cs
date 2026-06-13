@@ -120,18 +120,21 @@ public partial class GridView
         if (style is null)
             return true;
 
+        // The cache is keyed on style object reference equality. When the WorkbookTheme changes,
+        // the WorkbookTheme property callback clears this cache so stale entries do not survive
+        // a Theme Fonts switch.
         if (_defaultTextLayoutStyleCache.TryGetValue(style, out var cached))
             return cached;
 
-        var usesDefaultTextLayout = UsesDefaultTextLayoutStyleCore(style);
-        _defaultTextLayoutStyleCache.Add(style, usesDefaultTextLayout);
-        return usesDefaultTextLayout;
+        var result = UsesDefaultTextLayoutStyleCore(style, WorkbookTheme);
+        _defaultTextLayoutStyleCache[style] = result;
+        return result;
     }
 
-    private static bool UsesDefaultTextLayoutStyleCore(CellStyle style)
+    private static bool UsesDefaultTextLayoutStyleCore(CellStyle style, WorkbookTheme theme)
     {
-        var usesDefaultFontName = string.IsNullOrWhiteSpace(style.FontName) ||
-            string.Equals(ResolveCellFontNameForDisplay(style.FontName), "Calibri", StringComparison.OrdinalIgnoreCase);
+        var effectiveFontName = ResolveEffectiveCellFontName(style, theme);
+        var usesDefaultFontName = string.Equals(effectiveFontName, "Calibri", StringComparison.OrdinalIgnoreCase);
         var usesDefaultFontSize = style.FontSize <= 0 ||
             Math.Abs(style.FontSize - DefaultCellFontSizePoints) < 0.001;
 

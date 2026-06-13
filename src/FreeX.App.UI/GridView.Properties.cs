@@ -190,7 +190,7 @@ public partial class GridView
 
     public static readonly DependencyProperty WorkbookThemeProperty =
         DependencyProperty.Register(nameof(WorkbookTheme), typeof(WorkbookTheme), typeof(GridView),
-            new FrameworkPropertyMetadata(WorkbookTheme.Office, FrameworkPropertyMetadataOptions.AffectsRender, OnChartRenderCacheInputChanged));
+            new FrameworkPropertyMetadata(WorkbookTheme.Office, FrameworkPropertyMetadataOptions.AffectsRender, OnWorkbookThemeChanged));
     public WorkbookTheme WorkbookTheme
     {
         get => (WorkbookTheme)GetValue(WorkbookThemeProperty);
@@ -508,6 +508,18 @@ public partial class GridView
     {
         if (d is GridView grid)
             grid.MoveCommentPreviewToOverlay(e.OldValue as Canvas, e.NewValue as Canvas);
+    }
+
+    private static void OnWorkbookThemeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GridView grid)
+        {
+            grid.ClearChartRenderCache();
+            grid.ClearDrawingObjectLayerCache();
+            // Font scheme resolution depends on the theme: clear the style-to-default-layout cache
+            // so stale entries do not survive a Theme Fonts switch.
+            grid._defaultTextLayoutStyleCache.Clear();
+        }
     }
 
     private static void OnChartRenderCacheInputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

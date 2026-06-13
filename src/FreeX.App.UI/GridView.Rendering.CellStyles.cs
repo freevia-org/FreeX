@@ -194,6 +194,11 @@ public partial class GridView
         return CreateCellTypeface(key);
     }
 
+    private Typeface CreateCellTypefaceWithTheme(CellStyle? style, Dictionary<CellTypefaceKey, Typeface> typefaceCache)
+    {
+        return CreateCellTypeface(CreateCellTypefaceKeyWithTheme(style), typefaceCache);
+    }
+
     private static Typeface CreateCellTypeface(
         CellStyle? style,
         Dictionary<CellTypefaceKey, Typeface> typefaceCache)
@@ -213,10 +218,30 @@ public partial class GridView
         return typeface;
     }
 
+    private CellTypefaceKey CreateCellTypefaceKeyWithTheme(CellStyle? style)
+    {
+        var effectiveName = ResolveEffectiveCellFontName(style, WorkbookTheme);
+        return new CellTypefaceKey(effectiveName, style?.Italic == true, style?.Bold == true);
+    }
+
     private static CellTypefaceKey CreateCellTypefaceKey(CellStyle? style)
     {
         var fontName = ResolveCellFontNameForDisplay(style?.FontName);
         return new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true);
+    }
+
+    /// <summary>
+    /// Resolves the effective display font name for a cell by first consulting the font scheme
+    /// (which may redirect to the workbook theme's minor or major font), then applying the
+    /// availability fallback for fonts not installed on the system.
+    /// </summary>
+    internal static string ResolveEffectiveCellFontName(CellStyle? style, WorkbookTheme theme)
+    {
+        if (style is null)
+            return ResolveCellFontNameForDisplay(null);
+
+        var rawName = theme.ResolveSchemeFontName(style.FontScheme) ?? style.FontName;
+        return ResolveCellFontNameForDisplay(rawName);
     }
 
     internal static string ResolveCellFontNameForDisplay(string? fontName) =>

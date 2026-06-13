@@ -185,7 +185,7 @@ public partial class GridView
 
         if (style?.ShrinkToFit == true && style.WrapText != true)
         {
-            var typefaceKey = CreateCellTypefaceKey(style);
+            var typefaceKey = CreateCellTypefaceKeyWithTheme(style);
             var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
             fontSize = ResolveCachedShrinkFontSize(
                 renderText,
@@ -197,7 +197,7 @@ public partial class GridView
                 pixelsPerDip);
         }
 
-        var typefaceForText = CreateCellTypeface(style);
+        var typefaceForText = CreateCellTypefaceWithTheme(style, _typefaceCache);
         if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
             textBrush = BrushForCellColor(fontColor, _brushCache);
 
