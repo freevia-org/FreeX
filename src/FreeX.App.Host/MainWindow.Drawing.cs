@@ -256,19 +256,18 @@ public partial class MainWindow
     private void InsertTextBox()
     {
         var anchor = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
-        var dialog = new TextEntryDialog(
-            UiText.Get("MainWindowDialog_InsertTextBoxTitle"),
-            UiText.Get("MainWindowDialog_TextEntryLabel"),
-            "") { Owner = this };
-        if (dialog.ShowDialog() != true) return;
-
         AddTextBoxCommand? currentSheetCommand = null;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Insert Text Box",
                 sheetId =>
                 {
                     var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
-                    var command = new AddTextBoxCommand(sheetId, new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col), dialog.Result.Text);
+                    var command = new AddTextBoxCommand(
+                        sheetId,
+                        new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col),
+                        string.Empty,
+                        FreeX.App.UI.GridTextBoxPlacementPlanner.DefaultTextBoxWidth,
+                        FreeX.App.UI.GridTextBoxPlacementPlanner.DefaultTextBoxHeight);
                     if (sheetId == _currentSheetId)
                         currentSheetCommand = command;
                     return command;
@@ -276,7 +275,10 @@ public partial class MainWindow
             return;
 
         if (currentSheetCommand is not null)
+        {
             SelectInsertedDrawingObject(currentSheetCommand.TextBoxId, FreeX.App.UI.ObjectKind.TextBox, anchor);
+            BeginTextBoxInlineEdit(currentSheetCommand.TextBoxId);
+        }
         else
         {
             SetActiveCell(anchor);

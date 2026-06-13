@@ -512,6 +512,20 @@ public partial class GridView
             var dragKind = ObjectDragKind.None;
             if (!IsSelectedPictureCropModeActive())
                 dragKind = HitTestObjectHandle(pos, selRect);
+            if (SelectedObjectKind == ObjectKind.TextBox &&
+                e.ClickCount >= 2 &&
+                dragKind == ObjectDragKind.Move)
+            {
+                _selectedObjectId = SelectedObjectId;
+                _selectedObjectKind = SelectedObjectKind;
+                _objectDragKind = ObjectDragKind.None;
+                Cursor = Cursors.IBeam;
+                InvalidateVisual();
+                TextBoxEditRequested?.Invoke(SelectedObjectId);
+                e.Handled = true;
+                return;
+            }
+
             if (dragKind != ObjectDragKind.None)
             {
                 _selectedObjectId = SelectedObjectId;
@@ -544,6 +558,16 @@ public partial class GridView
             SelectedObjectKind = hit.Kind;
             _selectedObjectId = hit.Id;
             _selectedObjectKind = hit.Kind;
+            if (hit.Kind == ObjectKind.TextBox && e.ClickCount >= 2)
+            {
+                _objectDragKind = ObjectDragKind.None;
+                Cursor = Cursors.IBeam;
+                InvalidateVisual();
+                TextBoxEditRequested?.Invoke(hit.Id);
+                e.Handled = true;
+                return;
+            }
+
             _objectDragKind = ObjectDragKind.Move;
             _objectDragStartPos = pos;
             _objectDragStartRect = hit.Rect;
