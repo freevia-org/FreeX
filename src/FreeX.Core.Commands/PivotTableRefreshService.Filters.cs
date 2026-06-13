@@ -81,7 +81,7 @@ public static partial class PivotTableRefreshService
 
             var dataField = pivotTable.DataFields[filter.DataFieldIndex];
             var groupAggregates = groups
-                .Select(group => (Group: group, Value: Aggregate(group, dataField, pivotTable, headers)))
+                .Select(group => (Group: group, Value: AggregateDouble(group, dataField, pivotTable, headers)))
                 .ToList();
             var average = groupAggregates.Count == 0 ? 0 : groupAggregates.Average(item => item.Value);
             groups = filter.Kind switch
@@ -314,7 +314,7 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<string> headers,
         PivotColumnAggregateCache? aggregateCache) =>
         aggregateCache?.Get(key, dataFieldIndex) ??
-        Aggregate(RowsForColumnKey(rowsByColumnKey, key), dataField, pivotTable, headers);
+        AggregateDouble(RowsForColumnKey(rowsByColumnKey, key), dataField, pivotTable, headers);
 
     private static PivotColumnAggregateCache? CreateColumnAggregateCacheIfNeeded(
         PivotColumnRowMap rowsByColumnKey,
@@ -489,7 +489,7 @@ public static partial class PivotTableRefreshService
             if (_values.TryGetValue(cacheKey, out var value))
                 return value;
 
-            value = Aggregate(RowsForColumnKey(rowsByColumnKey, key), pivotTable.DataFields[dataFieldIndex], pivotTable, headers);
+            value = AggregateDouble(RowsForColumnKey(rowsByColumnKey, key), pivotTable.DataFields[dataFieldIndex], pivotTable, headers);
             _values.Add(cacheKey, value);
             return value;
         }
