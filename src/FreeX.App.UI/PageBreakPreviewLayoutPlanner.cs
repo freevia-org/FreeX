@@ -5,7 +5,14 @@ namespace FreeX.App.UI;
 
 public sealed record PageBreakPreviewPageLayout(
     int PageNumber,
-    Rect Bounds);
+    Rect Bounds,
+    PageBreakPreviewPageEdges VisibleEdges);
+
+public readonly record struct PageBreakPreviewPageEdges(
+    bool Top,
+    bool Bottom,
+    bool Left,
+    bool Right);
 
 public sealed record PageBreakPreviewBreakLine(
     Point Start,
@@ -57,7 +64,8 @@ public static class PageBreakPreviewLayoutPlanner
                 columnHeaderHeight,
                 actualWidth,
                 actualHeight,
-                out var printBounds))
+                out var printBounds,
+                out _))
         {
             return new PageBreakPreviewLayout([], [], []);
         }
@@ -139,7 +147,8 @@ public static class PageBreakPreviewLayoutPlanner
                         columnHeaderHeight,
                         actualWidth,
                         actualHeight,
-                        out var pageBounds))
+                        out var pageBounds,
+                        out var visibleEdges))
                 {
                     continue;
                 }
@@ -147,7 +156,7 @@ public static class PageBreakPreviewLayoutPlanner
                 var pageNumber = pageOrder == WorksheetPageOrder.OverThenDown
                     ? (rowIndex * columnSegments.Count) + columnIndex + 1
                     : (columnIndex * rowSegments.Count) + rowIndex + 1;
-                pages.Add(new PageBreakPreviewPageLayout(pageNumber, pageBounds));
+                pages.Add(new PageBreakPreviewPageLayout(pageNumber, pageBounds, visibleEdges));
             }
         }
 
@@ -334,9 +343,11 @@ public static class PageBreakPreviewLayoutPlanner
         double columnHeaderHeight,
         double actualWidth,
         double actualHeight,
-        out Rect bounds)
+        out Rect bounds,
+        out PageBreakPreviewPageEdges visibleEdges)
     {
         bounds = Rect.Empty;
+        visibleEdges = default;
         var rows = viewport.RowMetrics;
         var columns = viewport.ColMetrics;
         if (rows.Count == 0 || columns.Count == 0)
@@ -346,22 +357,32 @@ public static class PageBreakPreviewLayoutPlanner
         if (range.End.Col < columns[0].Col || range.Start.Col > columns[^1].Col)
             return false;
 
-        var top = TryFindRowTop(rows, range.Start.Row, out var rowTop)
+        var isTopEdgeVisible = TryFindRowTop(rows, range.Start.Row, out var rowTop);
+        var isBottomEdgeVisible = TryFindRowBottom(rows, range.End.Row, out var rowBottom);
+        var isLeftEdgeVisible = TryFindColumnLeft(columns, range.Start.Col, out var columnLeft);
+        var isRightEdgeVisible = TryFindColumnRight(columns, range.End.Col, out var columnRight);
+
+        var top = isTopEdgeVisible
             ? rowTop + columnHeaderHeight
             : columnHeaderHeight;
-        var bottom = TryFindRowBottom(rows, range.End.Row, out var rowBottom)
+        var bottom = isBottomEdgeVisible
             ? rowBottom + columnHeaderHeight
             : actualHeight;
-        var left = TryFindColumnLeft(columns, range.Start.Col, out var columnLeft)
+        var left = isLeftEdgeVisible
             ? columnLeft + rowHeaderWidth
             : rowHeaderWidth;
-        var right = TryFindColumnRight(columns, range.End.Col, out var columnRight)
+        var right = isRightEdgeVisible
             ? columnRight + rowHeaderWidth
             : actualWidth;
 
         bounds = new Rect(
             new Point(Math.Max(rowHeaderWidth, left), Math.Max(columnHeaderHeight, top)),
             new Point(Math.Min(actualWidth, right), Math.Min(actualHeight, bottom)));
+        visibleEdges = new PageBreakPreviewPageEdges(
+            isTopEdgeVisible,
+            isBottomEdgeVisible,
+            isLeftEdgeVisible,
+            isRightEdgeVisible);
         return bounds.Width > 0 && bounds.Height > 0;
     }
 
