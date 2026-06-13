@@ -311,6 +311,7 @@ public sealed partial class MainWindowSourceHygieneTests
         outlineSource.Should().Contain("private void ExpandGroupBtn_Click(");
         outlineSource.Should().Contain("private IWorkbookCommand CreateGroupCommand(");
         outlineSource.Should().Contain("OutlineGroupingPlanner.GetNextOutlineLevel");
+        outlineSource.Should().Contain("preserveExistingHierarchy: true");
     }
 
     [Fact]
