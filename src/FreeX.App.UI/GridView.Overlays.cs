@@ -354,7 +354,8 @@ public partial class GridView
         if (previewRange is { } pageRange)
         {
             RenderPrintAreaBoundary(dc, pageRange,
-                WorksheetViewMode == WorksheetViewMode.PageLayout ? PageLayoutPen : PageBreakPreviewPagePen);
+                WorksheetViewMode == WorksheetViewMode.PageLayout ? PageLayoutPen : PageBreakPreviewPagePen,
+                drawClippedEdges: WorksheetViewMode != WorksheetViewMode.PageLayout);
             if (WorksheetViewMode == WorksheetViewMode.PageLayout)
                 RenderPageMarginGuides(dc, pageRange);
         }
@@ -381,12 +382,29 @@ public partial class GridView
     {
         foreach (var page in layout.Pages)
         {
-            dc.DrawRectangle(PageLayoutPageSurfaceBrush, PageLayoutPen, page.Bounds);
-            DrawPageLayoutHeaderFooterCues(dc, page.Bounds);
+            dc.DrawRectangle(PageLayoutPageSurfaceBrush, null, page.Bounds);
+            DrawPageLayoutBoundary(dc, page);
+            DrawPageLayoutHeaderFooterCues(dc, page);
         }
 
         foreach (var line in layout.AutomaticBreakLines)
             dc.DrawLine(PageBreakAutomaticPen, line.Start, line.End);
+    }
+
+    private static void DrawPageLayoutBoundary(DrawingContext dc, PageBreakPreviewPageLayout page)
+    {
+        var bounds = page.Bounds;
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            return;
+
+        if (page.VisibleEdges.Top)
+            dc.DrawLine(PageLayoutPen, bounds.TopLeft, bounds.TopRight);
+        if (page.VisibleEdges.Bottom)
+            dc.DrawLine(PageLayoutPen, bounds.BottomLeft, bounds.BottomRight);
+        if (page.VisibleEdges.Left)
+            dc.DrawLine(PageLayoutPen, bounds.TopLeft, bounds.BottomLeft);
+        if (page.VisibleEdges.Right)
+            dc.DrawLine(PageLayoutPen, bounds.TopRight, bounds.BottomRight);
     }
 
     private void DrawPageBreakWatermark(DrawingContext dc, PageBreakPreviewPageLayout page)
@@ -411,16 +429,26 @@ public partial class GridView
                 page.Bounds.Top + Math.Max(0, (page.Bounds.Height - text.Height) / 2.0)));
     }
 
-    private void DrawPageLayoutHeaderFooterCues(DrawingContext dc, Rect pageBounds)
+    private void DrawPageLayoutHeaderFooterCues(DrawingContext dc, PageBreakPreviewPageLayout page)
     {
+        var pageBounds = page.Bounds;
         if (!ShowRulers || pageBounds.Width <= 24 || pageBounds.Height <= 48)
             return;
 
         var inset = Math.Min(28.0, Math.Max(12.0, pageBounds.Width * 0.08));
-        var headerY = pageBounds.Top + Math.Min(28.0, Math.Max(16.0, pageBounds.Height * 0.08));
-        var footerY = pageBounds.Bottom - Math.Min(28.0, Math.Max(16.0, pageBounds.Height * 0.08));
-        dc.DrawLine(PageLayoutHeaderFooterCuePen, new Point(pageBounds.Left + inset, headerY), new Point(pageBounds.Right - inset, headerY));
-        dc.DrawLine(PageLayoutHeaderFooterCuePen, new Point(pageBounds.Left + inset, footerY), new Point(pageBounds.Right - inset, footerY));
+        if (page.VisibleEdges.Top)
+        {
+            var headerY = pageBounds.Top + Math.Min(28.0, Math.Max(16.0, pageBounds.Height * 0.08));
+            if (headerY <= pageBounds.Bottom)
+                dc.DrawLine(PageLayoutHeaderFooterCuePen, new Point(pageBounds.Left + inset, headerY), new Point(pageBounds.Right - inset, headerY));
+        }
+
+        if (page.VisibleEdges.Bottom)
+        {
+            var footerY = pageBounds.Bottom - Math.Min(28.0, Math.Max(16.0, pageBounds.Height * 0.08));
+            if (footerY >= pageBounds.Top)
+                dc.DrawLine(PageLayoutHeaderFooterCuePen, new Point(pageBounds.Left + inset, footerY), new Point(pageBounds.Right - inset, footerY));
+        }
     }
 
     private void RenderPageMarginGuides(DrawingContext dc, GridRange printArea)
@@ -466,7 +494,7 @@ public partial class GridView
         return PageMarginRulerLayoutPlanner.HitTestHandles(handles, pos, showRulers);
     }
 
-    private void RenderPrintAreaBoundary(DrawingContext dc, GridRange printArea, Pen pen)
+    private void RenderPrintAreaBoundary(DrawingContext dc, GridRange printArea, Pen pen, bool drawClippedEdges)
     {
         if (Viewport == null) return;
         var rows = Viewport.RowMetrics;
@@ -481,9 +509,23 @@ public partial class GridView
         var drawBottom = bottom ?? GetLogicalViewportHeight();
         var drawRight = right ?? GetLogicalViewportWidth();
 
-        dc.DrawRectangle(null, pen, new Rect(
+        var bounds = new Rect(
             new Point(drawLeft, drawTop),
-            new Point(drawRight, drawBottom)));
+            new Point(drawRight, drawBottom));
+        if (drawClippedEdges)
+        {
+            dc.DrawRectangle(null, pen, bounds);
+            return;
+        }
+
+        if (top.HasValue)
+            dc.DrawLine(pen, bounds.TopLeft, bounds.TopRight);
+        if (bottom.HasValue)
+            dc.DrawLine(pen, bounds.BottomLeft, bounds.BottomRight);
+        if (left.HasValue)
+            dc.DrawLine(pen, bounds.TopLeft, bounds.BottomLeft);
+        if (right.HasValue)
+            dc.DrawLine(pen, bounds.TopRight, bounds.BottomRight);
     }
 
     private void RenderManualPageBreaks(DrawingContext dc)
