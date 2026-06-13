@@ -62,11 +62,13 @@ public static class ForecastChartPlanner
             Title = "Forecast",
             ShowLegend = true,
             LegendPosition = ChartLegendPosition.Bottom,
-            // Place to the right of the five data columns so it does not cover the table.
-            Left = 360,
+            LegendFontSize = 10,
+            // Place to the right of the readable five-column forecast table while keeping the
+            // chart inside a common first viewport.
+            Left = 550,
             Top = 20,
-            Width = 480,
-            Height = 320,
+            Width = 400,
+            Height = 280,
             SeriesFormats =
             [
                 // Actual and Forecast keep their default theme colours but render as solid lines
