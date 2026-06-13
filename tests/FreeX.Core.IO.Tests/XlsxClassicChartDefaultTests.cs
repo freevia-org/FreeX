@@ -58,6 +58,23 @@ public sealed class XlsxClassicChartDefaultTests
                 element.Attribute("sourceLinked")!.Value == "1");
     }
 
+    [Theory]
+    [InlineData(ChartType.Column, "col")]
+    [InlineData(ChartType.Bar, "bar")]
+    public void XlsxAdapter_Save_WritesExcelNativeClusteredBarColumnDefaults(
+        ChartType chartType,
+        string expectedDirection)
+    {
+        var chartXml = SaveChartXml(chartType);
+
+        var barChart = chartXml.Descendants(ChartNs + "barChart").Should().ContainSingle().Subject;
+        barChart.Element(ChartNs + "barDir")!.Attribute("val")!.Value.Should().Be(expectedDirection);
+        barChart.Element(ChartNs + "grouping")!.Attribute("val")!.Value.Should().Be("clustered");
+        // Clustered column/bar emit Excel's native gapWidth=219 / overlap=-27 (previously omitted).
+        barChart.Element(ChartNs + "gapWidth")!.Attribute("val")!.Value.Should().Be("219");
+        barChart.Element(ChartNs + "overlap")!.Attribute("val")!.Value.Should().Be("-27");
+    }
+
     [Fact]
     public void XlsxAdapter_Save_PreservesExplicitPercentStackedValueAxisNumberFormat()
     {

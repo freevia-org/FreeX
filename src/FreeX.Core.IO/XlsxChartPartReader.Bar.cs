@@ -222,16 +222,23 @@ public static partial class XlsxChartPartReader
         XlsxChartTrendlineErrorBarReader.ApplyChartGuideLineMetadata(barChart, chart);
     }
 
+    // Mirror the writer's Excel-native defaults so a default chart round-trips to null.
     private static int? NormalizeExcelNativeDefaultBarGapWidth(ChartType chartType, int? gapWidth) =>
-        gapWidth == 219 && chartType is (ChartType.StackedColumn
+        gapWidth == 219 && chartType is (ChartType.Column
+            or ChartType.Bar
+            or ChartType.StackedColumn
             or ChartType.PercentStackedColumn
             or ChartType.StackedBar
-            or ChartType.PercentStackedBar)
+            or ChartType.PercentStackedBar
+            or ChartType.ThreeDColumn
+            or ChartType.ThreeDBar)
                 ? null
                 : gapWidth;
 
     private static int? NormalizeExcelNativeDefaultBarOverlap(ChartType chartType, int? overlap) =>
-        overlap == -27 && chartType is (ChartType.StackedColumn
+        overlap == -27 && chartType is (ChartType.Column
+            or ChartType.Bar
+            or ChartType.StackedColumn
             or ChartType.PercentStackedColumn
             or ChartType.StackedBar
             or ChartType.PercentStackedBar)
