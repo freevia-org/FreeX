@@ -506,6 +506,7 @@ public partial class MainWindow
         RefreshViewportChartContextualTabs(sheet);
         RefreshViewportPivotFieldListPane(sheet);
         RefreshViewportSlicerTimelinePane();
+        RefreshTextBoxInlineEditorPosition();
     }
 
     private static IReadOnlyDictionary<(uint Row, uint Col), PivotHeaderDropdownTarget> BuildPivotHeaderDropdownTargetLookup(

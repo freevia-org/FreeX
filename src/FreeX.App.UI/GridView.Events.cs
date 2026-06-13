@@ -149,4 +149,7 @@ public partial class GridView
 
     /// <summary>Fired when the user saves an in-window threaded comment edit.</summary>
     public event EventHandler<GridThreadedCommentInlineEditSubmittedEventArgs>? ThreadedCommentInlineEditSubmitted;
+
+    /// <summary>Fired when the user requests in-place editing for an existing text box.</summary>
+    public event Action<Guid>? TextBoxEditRequested;
 }

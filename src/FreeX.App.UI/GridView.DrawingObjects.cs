@@ -296,6 +296,11 @@ public partial class GridView
         var borderPen = GetDrawingObjectPen(255, colors.Outline, 1);
         dc.DrawRectangle(fillBrush, borderPen, rect);
         DrawTextBoxThemeInnerShadow(dc, rect, themeEffect);
+        if (EditingTextBoxId is { } editingTextBoxId && editingTextBoxId == textBox.Id)
+        {
+            PopDrawingObjectTransform(dc, transformDepth);
+            return;
+        }
 
         var textWidth = Math.Max(1, rect.Width - 8);
         var textHeight = Math.Max(1, rect.Height - 8);
