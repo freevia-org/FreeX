@@ -70,6 +70,25 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void PagePreviewRangeFallback_ExtendsBeyondVisibleViewportSoPageLayoutEdgesScroll()
+    {
+        var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
+        var method = ExtractMethodSource(viewportSource, "private static GridRange? CalculatePagePreviewRange(");
+
+        method.Should().Contain("var visibleRowSpan = lastRow - firstRow + 1;");
+        method.Should().Contain("var visibleColumnSpan = lastColumn - firstColumn + 1;");
+        method.Should().Contain("var startRow = Math.Min(usedRange?.Start.Row ?? 1u, firstRow);");
+        method.Should().Contain("var startColumn = Math.Min(usedRange?.Start.Col ?? 1u, firstColumn);");
+        method.Should().Contain("AddWithLimit(lastRow, visibleRowSpan, CellAddress.MaxRow)");
+        method.Should().Contain("AddWithLimit(lastColumn, visibleColumnSpan, CellAddress.MaxCol)");
+        method.Should().Contain("new CellAddress(sheet.Id, startRow, startColumn)");
+        method.Should().Contain("new CellAddress(sheet.Id, endRow, endColumn)");
+        method.Should().NotContain("usedRange?.End.Row ?? lastRow");
+        method.Should().NotContain("usedRange?.End.Col ?? lastColumn");
+        viewportSource.Should().Contain("private static uint AddWithLimit(uint value, uint addend, uint limit)");
+    }
+
+    [Fact]
     public void LiveUiE2eAppProcessLaunch_IsCentralizedInSharedHarness()
     {
         var testsDirectory = new DirectoryInfo(WorkspaceFileLocator.FindAppHostTestsDirectory());

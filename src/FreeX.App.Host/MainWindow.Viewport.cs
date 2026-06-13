@@ -712,15 +712,29 @@ public partial class MainWindow
         if (firstRow == uint.MaxValue || firstColumn == uint.MaxValue || lastRow == 0 || lastColumn == 0)
             return usedRange;
 
+        var visibleRowSpan = lastRow - firstRow + 1;
+        var visibleColumnSpan = lastColumn - firstColumn + 1;
+        var startRow = Math.Min(usedRange?.Start.Row ?? 1u, firstRow);
+        var startColumn = Math.Min(usedRange?.Start.Col ?? 1u, firstColumn);
+        var endRow = Math.Max(
+            Math.Max(usedRange?.End.Row ?? 1u, lastRow),
+            AddWithLimit(lastRow, visibleRowSpan, CellAddress.MaxRow));
+        var endColumn = Math.Max(
+            Math.Max(usedRange?.End.Col ?? 1u, lastColumn),
+            AddWithLimit(lastColumn, visibleColumnSpan, CellAddress.MaxCol));
+
         return new GridRange(
-            new CellAddress(
-                sheet.Id,
-                Math.Min(usedRange?.Start.Row ?? firstRow, firstRow),
-                Math.Min(usedRange?.Start.Col ?? firstColumn, firstColumn)),
-            new CellAddress(
-                sheet.Id,
-                Math.Max(usedRange?.End.Row ?? lastRow, lastRow),
-                Math.Max(usedRange?.End.Col ?? lastColumn, lastColumn)));
+            new CellAddress(sheet.Id, startRow, startColumn),
+            new CellAddress(sheet.Id, endRow, endColumn));
+    }
+
+    private static uint AddWithLimit(uint value, uint addend, uint limit)
+    {
+        if (value >= limit)
+            return limit;
+
+        var remaining = limit - value;
+        return addend >= remaining ? limit : value + addend;
     }
 
     private static int CountScrollableRows(ViewportModel viewport, Sheet? sheet)

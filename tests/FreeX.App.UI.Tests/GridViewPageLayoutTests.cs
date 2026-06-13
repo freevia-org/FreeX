@@ -248,6 +248,65 @@ public sealed class GridViewPageLayoutTests
     }
 
     [Fact]
+    public void PageBreakPreviewLayoutPlanner_MarksOffscreenPageLayoutTopAndBottomEdgesNotVisible()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            Enumerable.Range(10, 11).Select(row => new RowMetric((uint)row, (row - 10) * 20, 20)).ToList(),
+            Enumerable.Range(1, 5).Select(col => new ColMetric((uint)col, (col - 1) * 40, 40)).ToList(),
+            null,
+            []);
+        var printArea = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 40, 5));
+
+        var layout = PageBreakPreviewLayoutPlanner.Calculate(
+            viewport,
+            printArea,
+            rowPageBreaks: null,
+            columnPageBreaks: null,
+            WorksheetPageOrder.DownThenOver,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            actualWidth: 230,
+            actualHeight: 238);
+
+        var page = layout.Pages.Should().ContainSingle().Which;
+        page.Bounds.Top.Should().Be(18);
+        page.Bounds.Bottom.Should().Be(238);
+        page.VisibleEdges.Top.Should().BeFalse();
+        page.VisibleEdges.Bottom.Should().BeFalse();
+        page.VisibleEdges.Left.Should().BeTrue();
+        page.VisibleEdges.Right.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PageBreakPreviewLayoutPlanner_MarksPageLayoutBoundaryEdgesOnlyWhenDocumentRowsAreVisible()
+    {
+        var sheetId = SheetId.New();
+        var printArea = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 40, 5));
+
+        var topViewport = CreatePageLayoutViewport(firstRow: 1, rowCount: 12);
+        var topPage = CalculateSinglePage(topViewport, printArea);
+        topPage.VisibleEdges.Top.Should().BeTrue();
+        topPage.VisibleEdges.Bottom.Should().BeFalse();
+
+        var bottomViewport = CreatePageLayoutViewport(firstRow: 30, rowCount: 11);
+        var bottomPage = CalculateSinglePage(bottomViewport, printArea);
+        bottomPage.VisibleEdges.Top.Should().BeFalse();
+        bottomPage.VisibleEdges.Bottom.Should().BeTrue();
+    }
+
+    [Fact]
     public void GridView_RenderWorksheetViewOverlay_DrawsDistinctPageBreakAndPageLayoutVisuals()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.cs");
@@ -257,7 +316,12 @@ public sealed class GridViewPageLayoutTests
         source.Should().Contain("RenderPageBreakPreviewLayout(dc, layout)");
         source.Should().Contain("DrawPageBreakWatermark");
         source.Should().Contain("RenderPageLayoutPages(dc, layout)");
-        source.Should().Contain("DrawPageLayoutHeaderFooterCues");
+        source.Should().Contain("DrawPageLayoutBoundary(dc, page)");
+        source.Should().Contain("DrawPageLayoutHeaderFooterCues(dc, page)");
+        source.Should().Contain("drawClippedEdges: WorksheetViewMode != WorksheetViewMode.PageLayout");
+        source.Should().Contain("page.VisibleEdges.Top");
+        source.Should().Contain("page.VisibleEdges.Bottom");
+        source.Should().NotContain("dc.DrawRectangle(PageLayoutPageSurfaceBrush, PageLayoutPen, page.Bounds)");
         source.Should().Contain("RenderPageMarginGuides(dc, pageRange)");
     }
 
@@ -273,5 +337,39 @@ public sealed class GridViewPageLayoutTests
         source.Should().Contain("WorksheetRepeatRange? PrintTitleColumns");
         source.Should().Contain("PagePreviewRange,");
     }
+
+    private static ViewportModel CreatePageLayoutViewport(int firstRow, int rowCount) =>
+        new(
+            [],
+            Enumerable.Range(firstRow, rowCount)
+                .Select(row => new RowMetric((uint)row, (row - firstRow) * 20, 20))
+                .ToList(),
+            Enumerable.Range(1, 5)
+                .Select(col => new ColMetric((uint)col, (col - 1) * 40, 40))
+                .ToList(),
+            null,
+            []);
+
+    private static PageBreakPreviewPageLayout CalculateSinglePage(ViewportModel viewport, GridRange printArea) =>
+        PageBreakPreviewLayoutPlanner.Calculate(
+                viewport,
+                printArea,
+                rowPageBreaks: null,
+                columnPageBreaks: null,
+                WorksheetPageOrder.DownThenOver,
+                WorksheetScaleToFit.Default,
+                printTitleRows: null,
+                printTitleColumns: null,
+                WorksheetPaperSize.A4,
+                WorksheetPageOrientation.Portrait,
+                WorksheetPageMargins.Narrow,
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                actualWidth: 230,
+                actualHeight: 238)
+            .Pages
+            .Should()
+            .ContainSingle()
+            .Which;
 
 }

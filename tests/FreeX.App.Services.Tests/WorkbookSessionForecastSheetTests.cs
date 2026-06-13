@@ -28,6 +28,43 @@ public sealed class WorkbookSessionForecastSheetTests
     }
 
     [Fact]
+    public void ExecuteForecastSheetPlan_RecalculatesAndLaysOutIssue102MonthSalesScenario()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sales");
+        workbook.ActiveSheetIndex = 0;
+        SeedIssue102ForecastSource(sheet);
+        var plan = ForecastSheetPlanner.CreatePlan(
+            workbook,
+            Range(sheet.Id, 1, 1, 7, 2),
+            forecastPeriods: 3);
+        plan.IsReady.Should().BeTrue();
+        var session = CreateSession(workbook);
+
+        var result = session.ExecuteForecastSheetPlan(plan);
+
+        result.Success.Should().BeTrue();
+        var forecast = workbook.GetSheetAt(1);
+        forecast.GetValue(7, 3).Should().Be(new NumberValue(3));
+        forecast.GetValue(7, 4).Should().Be(new NumberValue(3));
+        forecast.GetValue(7, 5).Should().Be(new NumberValue(3));
+        forecast.GetValue(8, 1).Should().Be(new NumberValue(7));
+        GetNumber(forecast, 8, 3).Should().BeApproximately(3.9333333333, 0.000000001);
+        GetNumber(forecast, 9, 3).Should().BeApproximately(3.6761904762, 0.000000001);
+        GetNumber(forecast, 10, 3).Should().BeApproximately(3.4190476190, 0.000000001);
+        GetNumber(forecast, 8, 4).Should().BeLessThan(GetNumber(forecast, 8, 3));
+        GetNumber(forecast, 8, 5).Should().BeGreaterThan(GetNumber(forecast, 8, 3));
+        forecast.ColumnWidths[4].Should().BeGreaterThanOrEqualTo(21);
+        forecast.ColumnWidths[5].Should().BeGreaterThanOrEqualTo(21);
+
+        var chart = forecast.Charts.Should().ContainSingle().Subject;
+        chart.DataRange.Should().Be(Range(forecast.Id, 1, 1, 10, 5));
+        chart.LegendPosition.Should().Be(ChartLegendPosition.Bottom);
+        chart.Left.Should().BeGreaterThanOrEqualTo(550);
+        chart.Width.Should().BeInRange(380, 420);
+    }
+
+    [Fact]
     public void ExecuteForecastSheetPlan_UndoRedoRemovesAndRecreatesForecastSheet()
     {
         var (session, workbook, plan) = CreateForecastSheetSession();
@@ -104,11 +141,16 @@ public sealed class WorkbookSessionForecastSheetTests
         forecast.GetValue(1, 3).Should().Be(new TextValue("Forecast"));
         forecast.GetValue(1, 4).Should().Be(new TextValue("Lower Confidence Bound"));
         forecast.GetValue(1, 5).Should().Be(new TextValue("Upper Confidence Bound"));
+        forecast.GetValue(4, 3).Should().Be(new NumberValue(30));
+        forecast.GetValue(4, 4).Should().Be(new NumberValue(30));
+        forecast.GetValue(4, 5).Should().Be(new NumberValue(30));
         forecast.GetValue(5, 1).Should().Be(new NumberValue(4));
+        forecast.GetValue(5, 3).Should().Be(new NumberValue(40));
         forecast.GetCell(5, 3)!.FormulaText.Should().Be("FORECAST.LINEAR(A5,B2:B4,A2:A4)");
         forecast.GetCell(5, 4)!.FormulaText.Should().Be("C5-CONFIDENCE.NORM(0.05,STEYX(B2:B4,A2:A4),COUNT(A2:A4))");
         forecast.GetCell(5, 5)!.FormulaText.Should().Be("C5+CONFIDENCE.NORM(0.05,STEYX(B2:B4,A2:A4),COUNT(A2:A4))");
         forecast.GetValue(6, 1).Should().Be(new NumberValue(5));
+        forecast.GetValue(6, 3).Should().Be(new NumberValue(50));
         forecast.GetCell(6, 3)!.FormulaText.Should().Be("FORECAST.LINEAR(A6,B2:B4,A2:A4)");
         forecast.GetCell(6, 4)!.FormulaText.Should().Be("C6-CONFIDENCE.NORM(0.05,STEYX(B2:B4,A2:A4),COUNT(A2:A4))");
         forecast.GetCell(6, 5)!.FormulaText.Should().Be("C6+CONFIDENCE.NORM(0.05,STEYX(B2:B4,A2:A4),COUNT(A2:A4))");
@@ -127,6 +169,21 @@ public sealed class WorkbookSessionForecastSheetTests
         Set(sheet, 4, 1, 3);
         Set(sheet, 4, 2, 30);
     }
+
+    private static void SeedIssue102ForecastSource(Sheet sheet)
+    {
+        Set(sheet, 1, 1, "Month");
+        Set(sheet, 1, 2, "Sales");
+        var sales = new[] { 5, 4, 6, 7, 4, 3 };
+        for (var i = 0; i < sales.Length; i++)
+        {
+            Set(sheet, (uint)i + 2, 1, i + 1);
+            Set(sheet, (uint)i + 2, 2, sales[i]);
+        }
+    }
+
+    private static double GetNumber(Sheet sheet, uint row, uint col) =>
+        sheet.GetValue(row, col).Should().BeOfType<NumberValue>().Subject.Value;
 
     private static WorkbookSession CreateSession(Workbook workbook) =>
         new WorkbookSessionFactory().Create(

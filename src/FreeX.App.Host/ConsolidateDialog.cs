@@ -259,7 +259,19 @@ public sealed partial class ConsolidateDialog : Window
         }
 
         Result = result;
-        DialogResult = true;
+        CompleteAcceptedDialog();
+    }
+
+    private void CompleteAcceptedDialog()
+    {
+        try
+        {
+            DialogResult = true;
+        }
+        catch (InvalidOperationException)
+        {
+            Close();
+        }
     }
 
     private void FocusInvalidFinalValidation(string? error)

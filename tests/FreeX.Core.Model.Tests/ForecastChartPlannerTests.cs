@@ -88,14 +88,16 @@ public sealed class ForecastChartPlannerTests
     }
 
     [Fact]
-    public void Plan_PositionsChartToTheRightOfTheData()
+    public void Plan_PositionsChartToTheRightOfTheReadableDataTable()
     {
         var chart = ForecastChartPlanner.Plan(SampleLayout());
 
-        chart.Left.Should().BeGreaterThan(0);
+        chart.Left.Should().BeGreaterThanOrEqualTo(550);
         chart.Top.Should().BeGreaterThan(0);
-        chart.Width.Should().BeGreaterThan(0);
-        chart.Height.Should().BeGreaterThan(0);
+        chart.Width.Should().BeInRange(380, 420);
+        chart.Height.Should().BeGreaterThanOrEqualTo(280);
+        chart.LegendPosition.Should().Be(ChartLegendPosition.Bottom);
+        chart.LegendFontSize.Should().BeLessThanOrEqualTo(10);
     }
 
     [Fact]

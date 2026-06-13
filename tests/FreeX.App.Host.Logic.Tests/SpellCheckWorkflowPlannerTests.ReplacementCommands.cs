@@ -68,4 +68,45 @@ public sealed partial class SpellCheckWorkflowPlannerTests
 
         sheet.ThreadedComments[address].Replies[0].Text.Should().Be("Fix teh reply");
     }
+
+    [Fact]
+    public void BuildReplacementCommand_AppliesSequentialUserTestingMisspellingsInSameCell()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new TextValue("speling erors sentance"));
+        var context = new TestCommandContext(workbook);
+        var ignoredWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ignoredIssues = new HashSet<SpellingIssueKey>();
+
+        foreach (var expectedWord in new[] { "speling", "erors", "sentance" })
+        {
+            var scan = SpellCheckWorkflowPlanner.ScanWorksheet(
+                workbook,
+                sheet.Id,
+                customDictionary: null,
+                ignoredWords,
+                ignoredIssues);
+            scan.IsComplete.Should().BeFalse();
+            var issue = scan.Issues[0];
+            issue.Address.Should().Be(address);
+            issue.Word.Should().Be(expectedWord);
+
+            var outcome = SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, issue.Suggestion).Apply(context);
+
+            outcome.Success.Should().BeTrue();
+        }
+
+        SpellCheckWorkflowPlanner.ScanWorksheet(
+                workbook,
+                sheet.Id,
+                customDictionary: null,
+                ignoredWords,
+                ignoredIssues)
+            .IsComplete
+            .Should()
+            .BeTrue();
+        sheet.GetCell(address)!.Value.Should().Be(new TextValue("spelling errors sentence"));
+    }
 }

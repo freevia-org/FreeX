@@ -45,6 +45,7 @@ public partial class MainWindow
             SetActiveCell(issue.Address);
             EnsureCellVisible(issue.Address);
             UpdateViewport();
+            RefreshSpellCheckEditorState(issue.Address);
 
             var dialog = new SpellCheckDialog(issue.Word, issue.Suggestion) { Owner = this };
             if (dialog.ShowDialog() != true)
@@ -78,6 +79,7 @@ public partial class MainWindow
                 if (command is not null && !TryExecuteSpellCheckCommand(command))
                     return;
 
+                RefreshSpellCheckEditorState(issue.Address);
                 UpdateViewport();
                 RefreshStatusBar();
                 continue;
@@ -86,6 +88,7 @@ public partial class MainWindow
             if (!TryExecuteSpellCheckCommand(SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, replacement)))
                 return;
 
+            RefreshSpellCheckEditorState(issue.Address);
             UpdateViewport();
             RefreshStatusBar();
         }
@@ -93,6 +96,14 @@ public partial class MainWindow
 
     private bool TryExecuteSpellCheckCommand(IWorkbookCommand command) =>
         TryExecuteCommand(command, "Spell Check");
+
+    private void RefreshSpellCheckEditorState(CellAddress address)
+    {
+        HideInlineEditor(commit: false);
+        ClearFormulaRangeEntryState();
+        var sheet = _workbook.GetSheet(address.Sheet);
+        SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(address), address));
+    }
 
     private void WorkbookStatisticsBtn_Click(object sender, RoutedEventArgs e)
     {
