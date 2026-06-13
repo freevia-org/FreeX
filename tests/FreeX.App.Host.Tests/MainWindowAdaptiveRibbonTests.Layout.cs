@@ -229,6 +229,68 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void ViewRibbon_WorkbookViewButtonsAreMutuallyExclusive()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.CreateIsolated();
+
+            harness.SelectRibbonTab("View", 1465);
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.Normal);
+            harness.ViewRibbonModeToggleState.Should().Be((true, false, false));
+            harness.StatusViewModeToggleState.Should().Be((true, false, false));
+
+            harness.ClickActiveRibbonButton("Page Break Preview");
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageBreakPreview);
+            harness.ViewRibbonModeToggleState.Should().Be((false, true, false));
+            harness.StatusViewModeToggleState.Should().Be((false, true, false));
+
+            harness.ClickActiveRibbonButton("Page Layout");
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageLayout);
+            harness.ViewRibbonModeToggleState.Should().Be((false, false, true));
+            harness.StatusViewModeToggleState.Should().Be((false, false, true));
+
+            harness.ClickActiveRibbonButton("Normal");
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.Normal);
+            harness.ViewRibbonModeToggleState.Should().Be((true, false, false));
+            harness.StatusViewModeToggleState.Should().Be((true, false, false));
+        });
+    }
+
+    [Fact]
+    public void ViewRibbon_WorkbookViewButtonsRefreshFromStatusViewShortcuts()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.CreateIsolated();
+
+            harness.SelectRibbonTab("View", 1465);
+
+            harness.ClickStatusViewShortcut("StatusPageLayoutViewButton");
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageLayout);
+            harness.ViewRibbonModeToggleState.Should().Be((false, false, true));
+            harness.StatusViewModeToggleState.Should().Be((false, false, true));
+
+            harness.ClickStatusViewShortcut("StatusPageBreakPreviewButton");
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageBreakPreview);
+            harness.ViewRibbonModeToggleState.Should().Be((false, true, false));
+            harness.StatusViewModeToggleState.Should().Be((false, true, false));
+
+            harness.ClickStatusViewShortcut("StatusNormalViewButton");
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.Normal);
+            harness.ViewRibbonModeToggleState.Should().Be((true, false, false));
+            harness.StatusViewModeToggleState.Should().Be((true, false, false));
+        });
+    }
+
+    [Fact]
     public void RibbonScrollViewers_HideHorizontalScrollBarsWithoutDisablingFallbackScroll()
     {
         StaTestRunner.Run(() =>
