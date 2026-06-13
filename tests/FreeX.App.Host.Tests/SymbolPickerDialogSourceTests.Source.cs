@@ -18,13 +18,16 @@ public sealed partial class SymbolPickerDialogSourceTests
     {
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("Content = UiText.Get(\"SymbolPicker_FontLabel\")");
-        source.Should().Contain("Content = UiText.Get(\"SymbolPicker_SubsetLabel\")");
+        source.Should().Contain("AddLabeledControl(grid, 0, UiText.Get(\"SymbolPicker_FontLabel\"), fontBox);");
+        source.Should().Contain("AddLabeledControl(grid, 2, UiText.Get(\"SymbolPicker_SubsetLabel\"), subsetBox);");
         source.Should().Contain("UiText.Get(\"SymbolPicker_RecentlyUsedSymbols\")");
         source.Should().Contain("Content = UiText.Get(\"SymbolPicker_CharacterCodeLabel\")");
         source.Should().Contain("Target = selectedCode");
         source.Should().Contain("UiText.Get(\"SymbolPicker_FromUnicodeHex\")");
-        source.Should().Contain("UniformGrid");
+        source.Should().Contain("UiText.Get(\"SymbolPicker_SearchLabel\")");
+        source.Should().Contain("ListBox");
+        source.Should().Contain("WrapPanel");
+        source.Should().Contain("GridViewColumn");
     }
 
     [Fact]
@@ -44,7 +47,7 @@ public sealed partial class SymbolPickerDialogSourceTests
     {
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("void SelectSymbol(char value)");
+        source.Should().Contain("void SelectCatalogEntry(SymbolCatalogEntry entry)");
         source.Should().Contain("SymbolPickerSelectionPlanner.CreateSelection(value)");
         source.Should().Contain("ApplySelection(selection)");
         source.Should().Contain("insert.Click += (_, _) =>");
@@ -58,12 +61,25 @@ public sealed partial class SymbolPickerDialogSourceTests
         var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("void AcceptSelectedSymbol()");
-        source.Should().Contain("button.MouseDoubleClick += (_, e) =>");
+        source.Should().Contain("symbolList.MouseDoubleClick += (_, e) =>");
+        source.Should().Contain("recentList.MouseDoubleClick += (_, e) =>");
         source.Should().Contain("AcceptSelectedSymbol();");
         source.Should().Contain("specialList.MouseDoubleClick += (_, e) =>");
         source.Should().Contain("acceptSelectedSymbol();");
         source.Split("e.Handled = true;").Length.Should().BeGreaterThanOrEqualTo(3);
         source.Should().Contain("insert.Click += (_, _) => acceptSelectedSymbol();");
+    }
+
+    [Fact]
+    public void Dialog_UsesDenseSelectableListsInsteadOfSymbolCommandButtons()
+    {
+        var source = ReadSymbolPickerDialogSources();
+
+        source.Should().Contain("CreateSymbolList(symbolItems");
+        source.Should().Contain("SelectionMode = SelectionMode.Single");
+        source.Should().Contain("ItemContainerStyle = CreateSymbolItemStyle(cellSize)");
+        source.Should().Contain("KeyboardNavigationMode.Contained");
+        source.Should().NotContain("Button CreateSymbolButton");
     }
 
     [Fact]

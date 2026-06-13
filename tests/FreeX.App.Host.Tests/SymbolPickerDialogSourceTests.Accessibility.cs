@@ -11,9 +11,9 @@ public sealed partial class SymbolPickerDialogSourceTests
 
         source.Should().Contain("Header = UiText.Get(\"SymbolPicker_SymbolsTab\")");
         source.Should().Contain("Header = UiText.Get(\"SymbolPicker_SpecialCharactersTab\")");
-        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget(grid);");
-        source.Should().Contain("private static void FocusInitialKeyboardTarget(UniformGrid grid)");
-        source.Should().Contain("Keyboard.Focus(firstSymbol);");
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget(symbolList);");
+        source.Should().Contain("private static void FocusInitialKeyboardTarget(ListBox symbolList)");
+        source.Should().Contain("Keyboard.Focus(symbolList);");
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public sealed partial class SymbolPickerDialogSourceTests
     {
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("AutomationProperties.SetName(grid, UiText.Get(\"SymbolPicker_SymbolsAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetName(symbolList, UiText.Get(\"SymbolPicker_SymbolsAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetName(specialList, UiText.Get(\"SymbolPicker_SpecialCharactersAutomationName\"));");
     }
 
@@ -43,6 +43,8 @@ public sealed partial class SymbolPickerDialogSourceTests
         source.Should().Contain("AutomationProperties.SetHelpText(fontBox, UiText.Get(\"SymbolPicker_FontHelpText\"));");
         source.Should().Contain("AutomationProperties.SetName(subsetBox, UiText.Get(\"SymbolPicker_SubsetAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetHelpText(subsetBox, UiText.Get(\"SymbolPicker_SubsetHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(searchBox, UiText.Get(\"SymbolPicker_SearchAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(searchBox, UiText.Get(\"SymbolPicker_SearchHelpText\"));");
         source.Should().Contain("AutomationProperties.SetName(selectedCode, UiText.Get(\"SymbolPicker_CharacterCodeAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetHelpText(selectedCode, UiText.Get(\"SymbolPicker_CharacterCodeHelpText\"));");
         source.Should().Contain("AutomationProperties.SetName(preview, UiText.Get(\"SymbolPicker_SelectedSymbolPreviewAutomationName\"));");
@@ -60,8 +62,8 @@ public sealed partial class SymbolPickerDialogSourceTests
     {
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("AutomationProperties.SetName(button, CreateSymbolAutomationName(value));");
+        source.Should().Contain("AutomationProperties.NameProperty, new Binding(nameof(SymbolCatalogEntry.AutomationName))");
         source.Should().Contain("private static string CreateSymbolAutomationName(string value)");
-        source.Should().Contain("AutomationProperties.SetName(item, UiText.Format(\"SymbolPicker_SpecialCharacterAutomationNameFormat\", special.Name, CreateSymbolAutomationName(special.Symbol)));");
+        source.Should().Contain("AutomationProperties.NameProperty, new Binding(nameof(SpecialCharacter.AutomationName))");
     }
 }

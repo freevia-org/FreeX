@@ -18,19 +18,23 @@ public sealed partial class SymbolPickerDialogSourceTests
                     .Single(box => AutomationProperties.GetName(box) == UiText.Get("SymbolPicker_FontAutomationName"));
                 var preview = WpfTestTree.FindLogicalDescendants<TextBlock>(dialog)
                     .Single(text => AutomationProperties.GetName(text) == UiText.Get("SymbolPicker_SelectedSymbolPreviewAutomationName"));
-                var symbolButtons = WpfTestTree.FindLogicalDescendants<Button>(dialog)
-                    .Where(button => button.Tag is string)
-                    .ToList();
+                var symbolList = WpfTestTree.FindLogicalDescendants<ListBox>(dialog)
+                    .Single(list => AutomationProperties.GetName(list) == UiText.Get("SymbolPicker_SymbolsAutomationName"));
+                var recentList = WpfTestTree.FindLogicalDescendants<ListBox>(dialog)
+                    .Single(list => AutomationProperties.GetName(list) == UiText.Get("SymbolPicker_RecentlyUsedSymbols"));
 
                 fontBox.SelectedItem.Should().Be("Segoe UI Symbol");
                 preview.FontFamily.Source.Should().Be("Segoe UI Symbol");
-                symbolButtons.Should().NotBeEmpty();
-                symbolButtons.Should().AllSatisfy(button => button.FontFamily.Source.Should().Be("Segoe UI Symbol"));
+                symbolList.Items.Count.Should().BeGreaterThan(20);
+                recentList.Items.Count.Should().BeGreaterThan(8);
+                symbolList.FontFamily.Source.Should().Be("Segoe UI Symbol");
+                recentList.FontFamily.Source.Should().Be("Segoe UI Symbol");
 
                 fontBox.SelectedItem = "Arial";
 
                 preview.FontFamily.Source.Should().Be("Arial");
-                symbolButtons.Should().AllSatisfy(button => button.FontFamily.Source.Should().Be("Arial"));
+                symbolList.FontFamily.Source.Should().Be("Arial");
+                recentList.FontFamily.Source.Should().Be("Arial");
             }
             finally
             {

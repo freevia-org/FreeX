@@ -21,6 +21,9 @@ public static class SymbolPickerSelectionPlanner
     public static SymbolPickerSelection CreateInitialSelection(IReadOnlyList<char> subsetSymbols) =>
         CreateSelection(subsetSymbols.Count > 0 ? subsetSymbols[0] : '\0');
 
+    public static SymbolPickerSelection CreateInitialSelection(IReadOnlyList<string> subsetSymbols) =>
+        CreateSelection(subsetSymbols.Count > 0 ? subsetSymbols[0] : "");
+
     public static string FormatCodeText(string value)
     {
         if (string.IsNullOrEmpty(value))
