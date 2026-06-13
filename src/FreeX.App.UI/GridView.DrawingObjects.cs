@@ -194,6 +194,21 @@ public partial class GridView
         {
             if (!chart.IsVisible) continue;
             var rect = CreateChartRect(chart);
+            if (TryResolveLiveObjectTransform(
+                    chart.Id,
+                    ObjectKind.Chart,
+                    rect,
+                    committedRotationDegrees: 0,
+                    committedFlipHorizontal: false,
+                    committedFlipVertical: false,
+                    out var previewRect,
+                    out _,
+                    out _,
+                    out _))
+            {
+                rect = previewRect;
+            }
+
             if (!IntersectsDrawingViewport(rect, 0, visibleRight, visibleBottom))
                 continue;
 
