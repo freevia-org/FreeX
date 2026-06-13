@@ -209,12 +209,13 @@ public static partial class ChartRenderer
 
         if (values.Count == 0) return model;
 
+        var treemapPalette = BuildExcelSeriesPalette(theme);
         double x = 0;
 
         for (int i = 0; i < values.Count; i++)
         {
             double w = values[i].Value / total;
-            var color = PieSlicePalette[i % PieSlicePalette.Length];
+            var color = treemapPalette[i % treemapPalette.Count];
             model.Annotations.Add(new RectangleAnnotation
             {
                 MinimumX = x,
@@ -262,6 +263,7 @@ public static partial class ChartRenderer
             InsideLabelPosition = 0.6
         };
 
+        var sunburstPalette = BuildExcelSeriesPalette(theme);
         for (uint r = dataStartRow; r <= endRow; r++)
         {
             if (!cellLookup.TryGetValue((r, dataStartCol), out var cell)) continue;
@@ -272,7 +274,7 @@ public static partial class ChartRenderer
             var sliceIndex = pieSeries.Slices.Count;
             pieSeries.Slices.Add(new PieSlice(label, v)
             {
-                Fill = PieSlicePalette[sliceIndex % PieSlicePalette.Length]
+                Fill = sunburstPalette[sliceIndex % sunburstPalette.Count]
             });
         }
 
@@ -309,12 +311,13 @@ public static partial class ChartRenderer
 
         if (maxVal == 0) return model;
 
+        var funnelPalette = BuildExcelSeriesPalette(theme);
         for (int i = 0; i < values.Count; i++)
         {
             double halfWidth = values[i].Value / maxVal * 0.45;
             double yTop = -(i);
             double yBot = -(i + 0.9);
-            var color = PieSlicePalette[i % PieSlicePalette.Length];
+            var color = funnelPalette[i % funnelPalette.Count];
 
             model.Annotations.Add(new RectangleAnnotation
             {
