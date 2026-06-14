@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -78,6 +79,15 @@ public sealed class WorkbookOpenService
             }).ConfigureAwait(false);
         WorkbookOpenNormalizer.ApplyTextWorkbookSheetName(workbook, extension, Path.GetFileNameWithoutExtension(path));
 
+        // Excel applies pivot table styles (PivotStyleLight16, ...) dynamically rather than baking them
+        // into per-cell styles, so a pivot loaded from xlsx has correct values but no header/banding
+        // formatting.  Materialize the style onto the loaded cells so the pivot looks like Excel.  This
+        // runs on the load's background thread.  When the recalc branch below runs it rebases the
+        // patch-save snapshot (which captures the styling); otherwise rebase here so the materialized
+        // styling persists through a later save instead of being replaced by the original source bytes.
+        var materializedPivotStyles = adapter is XlsxFileAdapter &&
+            PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
+
         if (WorkbookFormulaScanner.HasFormulas(workbook) &&
             ShouldRecalculateLoadedFormulas(workbook, adapter, isOpenXmlExcelPackage))
         {
@@ -97,6 +107,8 @@ public sealed class WorkbookOpenService
         }
         else
         {
+            if (materializedPivotStyles && adapter is XlsxFileAdapter pivotStyleAdapter)
+                pivotStyleAdapter.RebaseLoadedPackageSnapshot(workbook);
             ReportProgress(progress, WorkbookOpenPhase.Calculating, TimeSpan.Zero, 98);
         }
 

@@ -8,6 +8,40 @@ public static partial class PivotTableRefreshService
 {
     private static readonly AsyncLocal<PivotRenderFootprint?> CurrentRenderFootprint = new();
 
+    /// <summary>
+    /// Materializes each loaded pivot table's built-in style (e.g. PivotStyleLight16) onto the cells
+    /// already present for it, WITHOUT recomputing the pivot output.  Excel applies pivot styles
+    /// dynamically and does not bake them into per-cell styles, so a pivot read from xlsx arrives with
+    /// correct values but no header/group/subtotal/grand-total/banding formatting; this applies that
+    /// formatting the same way a refresh would, so a loaded pivot looks like it does in Excel.
+    /// Returns true if any pivot was styled.  Best-effort per pivot — a malformed pivot is skipped
+    /// rather than failing the whole open.
+    /// </summary>
+    public static bool ApplyLoadedPivotStyles(Workbook workbook)
+    {
+        var styledAny = false;
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var pivotTable in sheet.PivotTables)
+            {
+                if (string.IsNullOrEmpty(pivotTable.StyleName))
+                    continue;
+
+                try
+                {
+                    ApplyPivotTableStyle(workbook, sheet, pivotTable);
+                    styledAny = true;
+                }
+                catch
+                {
+                    // A single malformed pivot must not break opening the workbook.
+                }
+            }
+        }
+
+        return styledAny;
+    }
+
     public static void Refresh(Workbook workbook, Sheet targetSheet, PivotTableModel pivotTable)
     {
         var sourceSheet = workbook.GetSheet(pivotTable.SourceRange.Start.Sheet);
