@@ -84,6 +84,23 @@ public static partial class ChartRenderer
     }
 
     /// <summary>
+    /// Returns true when the series legend entry at <paramref name="seriesIndex"/> is
+    /// marked deleted in the chart XML (Excel's way to hide helper series from the legend).
+    /// </summary>
+    private static bool IsLegendEntryDeleted(ChartModel chart, int seriesIndex)
+    {
+        var entries = chart.LegendEntries;
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            if (entry.Index == seriesIndex)
+                return entry.IsDeleted == true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Returns the per-point fill color for a given series/point pair,
     /// resolved against the workbook theme. Returns null when no per-point
     /// override exists (caller should fall back to series-level or palette color).
@@ -129,20 +146,39 @@ public static partial class ChartRenderer
     {
         if (format is null)
             return;
-        if (format.ResolveFillColor(theme) is { } fill)
+        if (format.NoFill)
+        {
+            // Explicit <a:noFill/> — render the bar body fully transparent so helper
+            // series (e.g. "Max Invisible" bullet-chart scaffolding) do not paint over
+            // the real data series beneath them.
+            series.FillColor = OxyColors.Transparent;
+        }
+        else if (format.ResolveFillColor(theme) is { } fill)
+        {
             series.FillColor = OxyColor.FromRgb(fill.R, fill.G, fill.B);
+        }
         if (format.ResolveStrokeColor(theme) is { } stroke)
             series.StrokeColor = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
         if (format.StrokeThickness is { } thickness)
             series.StrokeThickness = thickness;
+        // Note: RectangleBarSeries does not support dash-style strokes; the dash
+        // pattern on outline-only helper series (e.g. "Max Outline") is a best-effort
+        // approximation via stroke color + thickness only.
     }
 
     private static void ApplyBarFormat(BarSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
         if (format is null)
             return;
-        if (format.ResolveFillColor(theme) is { } fill)
+        if (format.NoFill)
+        {
+            // Explicit <a:noFill/> — render the bar body fully transparent.
+            series.FillColor = OxyColors.Transparent;
+        }
+        else if (format.ResolveFillColor(theme) is { } fill)
+        {
             series.FillColor = OxyColor.FromRgb(fill.R, fill.G, fill.B);
+        }
         if (format.ResolveStrokeColor(theme) is { } stroke)
             series.StrokeColor = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
         if (format.StrokeThickness is { } thickness)

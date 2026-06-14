@@ -391,4 +391,84 @@ public sealed partial class ChartRendererTests
         source.Should().NotContain("surfaceValues.Min(");
         source.Should().NotContain("surfaceValues.Max(");
     }
+
+    [Fact]
+    public void ColumnRenderer_NoFillSeriesRendersTransparentFill()
+    {
+        // A series with explicit NoFill=true must produce a RectangleBarSeries
+        // with FillColor=Transparent so it does not paint over other series
+        // (bullet-chart "Max Invisible" helper pattern).
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
+            SeriesFormats =
+            [
+                // Series 0: normal solid fill — must stay solid
+                new ChartSeriesFormat(0, FillColor: new CellColor(200, 100, 50)),
+                // Series 1: explicit noFill — must render transparent
+                new ChartSeriesFormat(1, NoFill: true, StrokeColor: new CellColor(128, 128, 128))
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Cat"), Cell(1, 2, "Actual"), Cell(1, 3, "Helper"),
+                Cell(2, 1, "A"),   Cell(2, 2, "100"),    Cell(2, 3, "450"),
+                Cell(3, 1, "B"),   Cell(3, 2, "200"),    Cell(3, 3, "450")
+            ],
+            [],
+            []));
+
+        var allBar = model.Series.OfType<RectangleBarSeries>().ToList();
+        allBar.Should().HaveCount(2);
+
+        var solidSeries = allBar[0];
+        solidSeries.FillColor.Should().NotBe(OxyColors.Transparent,
+            "series 0 has a concrete fill color and must not be transparent");
+        solidSeries.FillColor.R.Should().Be(200);
+
+        var noFillSeries = allBar[1];
+        noFillSeries.FillColor.Should().Be(OxyColors.Transparent,
+            "series 1 has explicit NoFill and must render transparent");
+        noFillSeries.StrokeColor.R.Should().Be(128);
+    }
+
+    [Fact]
+    public void ColumnRenderer_LegendEntryDeletedSeriesHasEmptyTitle()
+    {
+        // When a series' legend entry is marked deleted (Excel bullet-chart helper pattern),
+        // the series title must be empty so OxyPlot omits it from the legend.
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 4)),
+            LegendEntries =
+            [
+                // Mark series index 2 as deleted from the legend
+                new ChartLegendEntryModel(2, IsDeleted: true)
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Cat"), Cell(1, 2, "Actual"), Cell(1, 3, "Budget"), Cell(1, 4, "Helper"),
+                Cell(2, 1, "A"),   Cell(2, 2, "100"),    Cell(2, 3, "200"),    Cell(2, 4, "450"),
+                Cell(3, 1, "B"),   Cell(3, 2, "150"),    Cell(3, 3, "250"),    Cell(3, 4, "450")
+            ],
+            [],
+            []));
+
+        var allBar = model.Series.OfType<RectangleBarSeries>().ToList();
+        allBar.Should().HaveCount(3);
+        allBar[0].Title.Should().Be("Actual");
+        allBar[1].Title.Should().Be("Budget");
+        allBar[2].Title.Should().BeEmpty("series index 2 legend entry is deleted");
+    }
 }

@@ -230,4 +230,92 @@ public sealed partial class XlsxChartPartReaderTests
                 MarkerBorderThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3),
                 MarkerBorderThickness: 1.5));
     }
+
+    [Fact]
+    public void TryReadSupportedChart_ReadsExplicitNoFillAsSeparateFromAbsentFill()
+    {
+        // A series with explicit <a:noFill/> must set NoFill=true so the renderer
+        // can paint it transparent.  A series with NO <c:spPr> at all must NOT
+        // produce a format entry (palette fallback applies instead).
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = ParseChartXml("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                      <c:spPr>
+                        <a:noFill/>
+                        <a:ln w="44450"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln>
+                      </c:spPr>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                    <c:ser>
+                      <c:idx val="1"/>
+                      <c:order val="1"/>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$C$2:$C$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        // Series 0 has explicit <a:noFill/> — must produce a format with NoFill=true
+        var seriesZeroFormat = chart.SeriesFormats.Should().ContainSingle(f => f.SeriesIndex == 0).Which;
+        seriesZeroFormat.NoFill.Should().BeTrue();
+        seriesZeroFormat.StrokeColor.Should().Be(new CellColor(255, 255, 255));
+        seriesZeroFormat.StrokeThickness.Should().BeApproximately(3.5, 0.1);
+
+        // Series 1 has no <c:spPr> at all — must NOT produce any format entry
+        chart.SeriesFormats.Should().NotContain(f => f.SeriesIndex == 1);
+    }
+
+    [Fact]
+    public void TryReadSupportedChart_ReadsOutlineOnlySeriesFillAsNoFillWithStroke()
+    {
+        // A series with <a:noFill/> and a dashed border line should be read as
+        // NoFill=true with stroke color + dash so the renderer can draw a dashed outline box.
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = ParseChartXml("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:idx val="4"/>
+                      <c:order val="4"/>
+                      <c:spPr>
+                        <a:noFill/>
+                        <a:ln><a:solidFill><a:schemeClr val="accent2"/></a:solidFill><a:prstDash val="sysDash"/></a:ln>
+                      </c:spPr>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        var format = chart.SeriesFormats.Should().ContainSingle().Which;
+        format.SeriesIndex.Should().Be(4);
+        format.NoFill.Should().BeTrue();
+        format.StrokeThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2));
+        format.DashStyle.Should().Be(ChartLineDashStyle.Dash);
+    }
 }

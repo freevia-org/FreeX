@@ -12,8 +12,13 @@ internal static class XlsxChartSeriesFormatReader
     {
         format = default!;
         var shapeProperties = series.Element(ChartNs + "spPr");
-        var solidFill = shapeProperties?.Element(DrawingNs + "solidFill");
 
+        // Detect explicit <a:noFill/> on the series fill (not just absence of a fill).
+        // An explicit noFill means the bar must render transparent; absence of spPr means
+        // use the palette default instead.
+        var hasNoFill = shapeProperties?.Element(DrawingNs + "noFill") is not null;
+
+        var solidFill = shapeProperties?.Element(DrawingNs + "solidFill");
         CellColor? fillColor = null;
         WorkbookThemeColorReference? fillThemeColor = null;
         if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
@@ -38,7 +43,8 @@ internal static class XlsxChartSeriesFormatReader
             ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
             : null;
         var invertIfNegative = XlsxChartScalarReader.ReadOptionalBool(series.Element(ChartNs + "invertIfNegative")?.Attribute("val")?.Value);
-        if (fillColor is null &&
+        if (!hasNoFill &&
+            fillColor is null &&
             fillThemeColor is null &&
             strokeColor is null &&
             strokeThemeColor is null &&
@@ -57,7 +63,8 @@ internal static class XlsxChartSeriesFormatReader
             DashStyle: dashStyle,
             FillThemeColor: fillThemeColor,
             StrokeThemeColor: strokeThemeColor,
-            InvertIfNegative: invertIfNegative);
+            InvertIfNegative: invertIfNegative,
+            NoFill: hasNoFill);
         return true;
     }
 

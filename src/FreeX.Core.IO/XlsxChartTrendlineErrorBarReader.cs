@@ -138,8 +138,8 @@ internal static class XlsxChartTrendlineErrorBarReader
     public static ChartLineDashStyle FromXlsxPresetDash(string? value) =>
         value switch
         {
-            "dot" => ChartLineDashStyle.Dot,
-            "dash" => ChartLineDashStyle.Dash,
+            "dot" or "sysDot" or "dotDot" => ChartLineDashStyle.Dot,
+            "dash" or "sysDash" or "dashDot" or "lgDash" or "lgDashDot" or "lgDashDotDot" => ChartLineDashStyle.Dash,
             _ => ChartLineDashStyle.Solid
         };
 

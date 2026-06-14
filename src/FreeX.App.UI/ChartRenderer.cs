@@ -289,7 +289,10 @@ public static partial class ChartRenderer
 
                 var series = new RectangleBarSeries
                 {
-                    Title = seriesName,
+                    // When the chart XML marks this series' legend entry as deleted
+                    // (e.g. bullet-chart helper series "Max Invisible", "Max Outline"),
+                    // suppress the legend entry by leaving the title blank.
+                    Title = IsLegendEntryDeleted(chart, seriesIndex) ? "" : seriesName,
                     LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4),
                     YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
                 };
@@ -332,7 +335,7 @@ public static partial class ChartRenderer
 
                 var series = new BarSeries
                 {
-                    Title = seriesName,
+                    Title = IsLegendEntryDeleted(chart, seriesIndex) ? "" : seriesName,
                     LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 0),
                     LabelPlacement = ToOxyLabelPlacement(chart.DataLabelPosition)
                 };
@@ -522,7 +525,7 @@ public static partial class ChartRenderer
                 var seriesName = seriesData.SeriesName ?? $"Series {seriesData.SeriesIndex + 1}";
                 var series = new RectangleBarSeries
                 {
-                    Title = seriesName,
+                    Title = IsLegendEntryDeleted(chart, seriesData.SeriesIndex) ? "" : seriesName,
                     LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4)
                 };
                 ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesData.SeriesIndex), theme);
@@ -551,7 +554,7 @@ public static partial class ChartRenderer
                 var seriesName = seriesData.SeriesName ?? $"Series {seriesData.SeriesIndex + 1}";
                 var series = new BarSeries
                 {
-                    Title = seriesName,
+                    Title = IsLegendEntryDeleted(chart, seriesData.SeriesIndex) ? "" : seriesName,
                     LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 0),
                     LabelPlacement = ToOxyLabelPlacement(chart.DataLabelPosition)
                 };

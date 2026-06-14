@@ -270,7 +270,8 @@ public sealed record ChartSeriesFormat(
     CellColor? MarkerBorderColor = null,
     WorkbookThemeColorReference? MarkerBorderThemeColor = null,
     double? MarkerBorderThickness = null,
-    bool? InvertIfNegative = null)
+    bool? InvertIfNegative = null,
+    bool NoFill = false)
 {
     public CellColor? ResolveFillColor(WorkbookTheme theme) =>
         FillThemeColor?.Resolve(theme) ?? FillColor;
