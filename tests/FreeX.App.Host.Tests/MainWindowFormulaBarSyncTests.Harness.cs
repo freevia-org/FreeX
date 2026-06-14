@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Calc;
@@ -136,6 +137,12 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public bool InlineEditorVisible => InlineEditor?.IsVisible == true;
 
         public bool InlineEditorFocused => InlineEditor is { } inlineEditor && IsFocused(inlineEditor);
+
+        public Color? InlineEditorBackgroundColor => InlineEditor?.Background is SolidColorBrush brush
+            ? brush.Color
+            : null;
+
+        public double? InlineEditorBackgroundOpacity => InlineEditor?.Background?.Opacity;
 
         public bool FormulaBarFocused => IsFocused((TextBox)_window.FindName("FormulaBar"));
 

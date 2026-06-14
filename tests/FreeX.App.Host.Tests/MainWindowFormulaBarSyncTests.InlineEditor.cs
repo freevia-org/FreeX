@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Calc;
@@ -46,6 +47,27 @@ public sealed partial class MainWindowFormulaBarSyncTests
             harness.SetFormulaBarText("typed in formula bar");
 
             harness.InlineEditorText.Should().Be("typed in formula bar");
+        });
+    }
+
+    [Fact]
+    public void InlineEditor_LongTextUsesOpaqueBackgroundOverNeighboringCells()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            var longText = "This edited value is intentionally long enough to extend over the next cell.";
+            harness.SetCellText(1, 1, longText);
+            harness.SetCellText(1, 2, "neighbor text");
+            harness.SelectActiveCell(1, 1);
+
+            harness.ShowInlineEditor(1, 1);
+
+            harness.InlineEditorVisible.Should().BeTrue();
+            harness.InlineEditorText.Should().Be(longText);
+            harness.InlineEditorBackgroundColor.Should().Be(Colors.White);
+            harness.InlineEditorBackgroundOpacity.Should().Be(1.0);
         });
     }
 

@@ -95,7 +95,7 @@ public partial class MainWindow
                 Padding         = new System.Windows.Thickness(4, 0, 4, 0),
                 FontFamily      = new System.Windows.Media.FontFamily("Calibri"),
                 FontSize        = 15.0,
-                Background      = System.Windows.Media.Brushes.Transparent,
+                Background      = System.Windows.Media.Brushes.White,
                 AcceptsReturn   = false,
                 VerticalContentAlignment = System.Windows.VerticalAlignment.Center,
             };
