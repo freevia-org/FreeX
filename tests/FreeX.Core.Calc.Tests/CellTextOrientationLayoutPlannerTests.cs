@@ -65,6 +65,29 @@ public sealed class CellTextOrientationLayoutPlannerTests
     }
 
     [Fact]
+    public void CalculateLayout_RightAlignedTextWiderThanCell_OverflowsLeftNotRight()
+    {
+        // Cell spans x:[100,140] (width 40); the text is 100 wide — wider than the cell.  A
+        // right-aligned string must keep its right edge at the cell's right edge (140 - 2 = 138) and
+        // extend to the LEFT (left edge 38, well left of the cell), mirroring Excel.  Regression
+        // guard: the old clamp pinned it to the LEFT edge so it overflowed RIGHT into the next column.
+        var layout = CellTextOrientationLayoutPlanner.CalculateLayout(
+            new CellTextLayoutRect(100, 0, 40, 20),
+            textWidth: 100,
+            textHeight: 10,
+            HorizontalAlignment.Right,
+            VerticalAlignment.Center,
+            isNumeric: false,
+            indentPixels: 0,
+            textRotation: 0);
+
+        layout.Bounds.Right.Should().BeApproximately(138, 0.001);
+        layout.Bounds.Left.Should().BeApproximately(38, 0.001);
+        layout.Bounds.Left.Should().BeLessThan(100, "right-aligned overflow must extend left of the cell, not right");
+        layout.Bounds.Right.Should().BeLessThan(140, "the text must not spill past the cell's right edge into the next column");
+    }
+
+    [Fact]
     public void ShouldClip_UsesLayoutBoundsAndWrappedTextHeight()
     {
         var clipRect = new CellTextLayoutRect(0, 0, 50, 20);
