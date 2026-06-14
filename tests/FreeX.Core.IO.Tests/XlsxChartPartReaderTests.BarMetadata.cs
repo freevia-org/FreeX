@@ -152,4 +152,130 @@ public sealed partial class XlsxChartPartReaderTests
         chart.ErrorBarThickness.Should().Be(2);
         chart.ErrorBarDashStyle.Should().Be(ChartLineDashStyle.Dash);
     }
+
+    /// <summary>
+    /// Regression test: when a chart series uses named-range formulas (e.g. OFFSET-based
+    /// dynamic ranges like <c>'Sheet1'!rngCount</c>) the reader must fall back to the
+    /// embedded numCache/strCache values and expose them via
+    /// <see cref="ChartModel.EmbeddedSeriesData"/> so the renderer can draw bars without recalc.
+    /// </summary>
+    [Fact]
+    public void TryReadSupportedChart_NamedRangeValCat_PopulatesEmbeddedSeriesData()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        // Chart20-style: both cat and val formulas reference named ranges (non-cell-address)
+        var chartXml = ParseChartXml("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:grouping val="clustered"/>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                      <c:tx>
+                        <c:strRef>
+                          <c:f>'Sheet1'!$E$13</c:f>
+                          <c:strCache>
+                            <c:ptCount val="1"/>
+                            <c:pt idx="0"><c:v>Frequency</c:v></c:pt>
+                          </c:strCache>
+                        </c:strRef>
+                      </c:tx>
+                      <c:cat>
+                        <c:strRef>
+                          <c:f>'Sheet1'!rngGroups</c:f>
+                          <c:strCache>
+                            <c:ptCount val="2"/>
+                            <c:pt idx="0"><c:v>10-44</c:v></c:pt>
+                            <c:pt idx="1"><c:v>45-80</c:v></c:pt>
+                          </c:strCache>
+                        </c:strRef>
+                      </c:cat>
+                      <c:val>
+                        <c:numRef>
+                          <c:f>'Sheet1'!rngCount</c:f>
+                          <c:numCache>
+                            <c:formatCode>General</c:formatCode>
+                            <c:ptCount val="2"/>
+                            <c:pt idx="0"><c:v>64</c:v></c:pt>
+                            <c:pt idx="1"><c:v>36</c:v></c:pt>
+                          </c:numCache>
+                        </c:numRef>
+                      </c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue("chart should load even when formulas reference named ranges");
+
+        chart.Type.Should().Be(ChartType.Column);
+        chart.EmbeddedSeriesData.Should().NotBeNull()
+            .And.HaveCount(1);
+
+        var series0 = chart.EmbeddedSeriesData![0];
+        series0.SeriesIndex.Should().Be(0);
+        series0.SeriesName.Should().Be("Frequency");
+        series0.Categories.Should().Equal("10-44", "45-80");
+        series0.Values.Should().HaveCount(2);
+        series0.Values[0].Should().Be(64.0);
+        series0.Values[1].Should().Be(36.0);
+    }
+
+    /// <summary>
+    /// When a chart series uses normal cell-range formulas (not named ranges), the
+    /// <see cref="ChartModel.EmbeddedSeriesData"/> must be null (normal cell-lookup path used).
+    /// </summary>
+    [Fact]
+    public void TryReadSupportedChart_NormalCellRangeFormulas_EmbeddedSeriesDataIsNull()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = ParseChartXml("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:cat>
+                        <c:strRef>
+                          <c:f>Sheet1!$A$2:$A$4</c:f>
+                          <c:strCache>
+                            <c:ptCount val="3"/>
+                            <c:pt idx="0"><c:v>A</c:v></c:pt>
+                            <c:pt idx="1"><c:v>B</c:v></c:pt>
+                            <c:pt idx="2"><c:v>C</c:v></c:pt>
+                          </c:strCache>
+                        </c:strRef>
+                      </c:cat>
+                      <c:val>
+                        <c:numRef>
+                          <c:f>Sheet1!$B$2:$B$4</c:f>
+                          <c:numCache>
+                            <c:ptCount val="3"/>
+                            <c:pt idx="0"><c:v>10</c:v></c:pt>
+                            <c:pt idx="1"><c:v>20</c:v></c:pt>
+                            <c:pt idx="2"><c:v>30</c:v></c:pt>
+                          </c:numCache>
+                        </c:numRef>
+                      </c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.EmbeddedSeriesData.Should().BeNull("normal cell-range formulas should use the cell-lookup path");
+    }
 }

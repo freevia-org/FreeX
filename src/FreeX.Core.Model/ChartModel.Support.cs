@@ -58,6 +58,18 @@ public sealed record ChartSeriesVerbatimFormulas(
     string? CatFormula,
     string? TxFormula);
 
+/// <summary>
+/// Embedded data values for a single chart series, extracted from the
+/// <c>&lt;c:numCache&gt;</c> / <c>&lt;c:strCache&gt;</c> elements in the chart XML.
+/// Used as a fallback when the series data range formula is an unresolvable named range
+/// (e.g. <c>Sheet1!rngMyData</c>) so FreeX can still render the chart without recalc.
+/// </summary>
+public sealed record ChartEmbeddedSeriesData(
+    int SeriesIndex,
+    string? SeriesName,
+    IReadOnlyList<string> Categories,
+    IReadOnlyList<double?> Values);
+
 public enum ChartBubbleSizeRepresents { Area, Width }
 
 public enum ChartAxisTickStyle { None, Inside, Outside, Cross }

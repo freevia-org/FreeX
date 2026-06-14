@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -169,5 +170,158 @@ internal static class XlsxChartSeriesRangeReader
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Returns true when a formula string refers to a named range rather than a direct
+    /// cell/range address (i.e. the part after the last '!' cannot be parsed as a cell address).
+    /// Examples: <c>'Sheet1'!rngCount</c> → true; <c>'Sheet1'!$A$1:$A$10</c> → false.
+    /// Formulas with no '!' are also considered named ranges (workbook-scope names).
+    /// </summary>
+    public static bool IsNamedRangeFormula(string formula, SheetId sheetId)
+    {
+        if (string.IsNullOrWhiteSpace(formula))
+            return false;
+        // If it's parseable as a cell/range reference it is NOT a named range
+        return !TryParseFormulaRange(formula, sheetId, out _);
+    }
+
+    /// <summary>
+    /// Returns true when the val or cat formula of every series in <paramref name="seriesElements"/>
+    /// that has a formula is a named range (not a direct cell address). When this returns true,
+    /// the embedded numCache/strCache values should be used for rendering.
+    /// </summary>
+    public static bool AllValCatFormulasAreNamedRanges(IReadOnlyList<XElement> seriesElements, SheetId sheetId)
+    {
+        var anyNamedRange = false;
+        foreach (var series in seriesElements)
+        {
+            foreach (var containerName in new[] { "val", "cat" })
+            {
+                var formula = ReadFirstFormula(series, containerName);
+                if (string.IsNullOrWhiteSpace(formula))
+                    continue;
+
+                if (!IsNamedRangeFormula(formula, sheetId))
+                    return false; // at least one val/cat formula IS a direct cell reference
+
+                anyNamedRange = true;
+            }
+        }
+
+        return anyNamedRange; // true only if we saw at least one named-range formula and NO direct cell refs
+    }
+
+    /// <summary>
+    /// Reads embedded data from numCache/strCache elements in a series list.
+    /// Returns a list of <see cref="ChartEmbeddedSeriesData"/> (one per series) when:
+    /// <list type="bullet">
+    ///   <item>All val/cat formulas are named ranges (not direct cell addresses), AND</item>
+    ///   <item>At least one series has non-empty embedded numCache values.</item>
+    /// </list>
+    /// Returns null when formulas are direct cell references (normal cell-lookup path) or when
+    /// the named-range formulas have no embedded cache (e.g. full-column refs like Sheet1!$B:$B
+    /// that lack a numCache — use the verbatim-formula path instead).
+    /// </summary>
+    public static List<ChartEmbeddedSeriesData>? TryReadEmbeddedSeriesData(
+        IReadOnlyList<XElement> seriesElements,
+        SheetId sheetId)
+    {
+        if (!AllValCatFormulasAreNamedRanges(seriesElements, sheetId))
+            return null;
+
+        var result = new List<ChartEmbeddedSeriesData>(seriesElements.Count);
+        for (var i = 0; i < seriesElements.Count; i++)
+        {
+            var series = seriesElements[i];
+            var seriesIndex = ReadSeriesIndex(series, i);
+            var seriesName = ReadEmbeddedStringCacheFirstValue(series, "tx");
+            var categories = ReadEmbeddedStringCacheValues(series, "cat");
+            var values = ReadEmbeddedNumericCacheValues(series, "val");
+            result.Add(new ChartEmbeddedSeriesData(seriesIndex, seriesName, categories, values));
+        }
+
+        // Only use embedded data when at least one series has actual numeric cache values.
+        // If no series has cache data (e.g. full-column references Sheet1!$B:$B with no numCache),
+        // fall through to the verbatim-formula path instead.
+        return result.Any(s => s.Values.Count > 0) ? result : null;
+    }
+
+    /// <summary>Reads the first string value from a &lt;c:strCache&gt; inside the named container.</summary>
+    private static string? ReadEmbeddedStringCacheFirstValue(XElement series, string containerName)
+    {
+        var container = ElementByLocalName(series, containerName);
+        if (container is null)
+            return null;
+
+        // Try strRef/strCache first, then numRef/numCache
+        var cache = FindDescendantByLocalName(container, "strCache")
+                    ?? FindDescendantByLocalName(container, "numCache");
+        if (cache is null)
+            return null;
+
+        return cache.Elements()
+            .FirstOrDefault(e => e.Name.LocalName == "pt")?
+            .Element(ChartNs + "v")?
+            .Value;
+    }
+
+    /// <summary>Reads all string values from a &lt;c:strCache&gt; inside the named container.</summary>
+    private static IReadOnlyList<string> ReadEmbeddedStringCacheValues(XElement series, string containerName)
+    {
+        var container = ElementByLocalName(series, containerName);
+        if (container is null)
+            return [];
+
+        var cache = FindDescendantByLocalName(container, "strCache");
+        if (cache is null)
+            return [];
+
+        return cache.Elements()
+            .Where(e => e.Name.LocalName == "pt")
+            .Select(pt => pt.Element(ChartNs + "v")?.Value ?? "")
+            .ToList();
+    }
+
+    /// <summary>Reads all numeric values from a &lt;c:numCache&gt; inside the named container.</summary>
+    private static IReadOnlyList<double?> ReadEmbeddedNumericCacheValues(XElement series, string containerName)
+    {
+        var container = ElementByLocalName(series, containerName);
+        if (container is null)
+            return [];
+
+        var cache = FindDescendantByLocalName(container, "numCache");
+        if (cache is null)
+            return [];
+
+        var ptCount = int.TryParse(
+            cache.Elements().FirstOrDefault(e => e.Name.LocalName == "ptCount")?.Attribute("val")?.Value,
+            NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) ? count : 0;
+
+        // Build sparse array — pts use idx attribute to indicate position
+        var values = new double?[Math.Max(ptCount, 0)];
+        foreach (var pt in cache.Elements().Where(e => e.Name.LocalName == "pt"))
+        {
+            if (!int.TryParse(pt.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx))
+                continue;
+            if (idx < 0 || idx >= values.Length)
+                continue;
+
+            var raw = pt.Element(ChartNs + "v")?.Value;
+            values[idx] = double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : null;
+        }
+
+        return values;
+    }
+
+    private static XElement? FindDescendantByLocalName(XElement element, string localName)
+    {
+        foreach (var descendant in element.Descendants())
+        {
+            if (descendant.Name.LocalName == localName)
+                return descendant;
+        }
+
+        return null;
     }
 }

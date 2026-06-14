@@ -126,6 +126,26 @@ public static partial class XlsxChartPartReader
             }
         }
 
+        // When all val/cat formulas are named ranges, fall back to embedded cache data.
+        var allComboSeriesElements = barCharts.Concat(lineCharts).Concat(scatterCharts)
+            .SelectMany(c => c.Elements(ChartNs + "ser"))
+            .ToList();
+        var comboEmbeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(allComboSeriesElements, sheetId);
+        if (comboEmbeddedData is not null)
+        {
+            var placeholderSheet = ranges.Count > 0 ? ranges[0].Start.Sheet : sheetId;
+            result.DataRange = new GridRange(
+                new CellAddress(placeholderSheet, 1, 1),
+                new CellAddress(placeholderSheet, 1, 1));
+            result.FirstRowIsHeader = hasTitleRange;
+            result.FirstColIsCategories = hasCategoryRange;
+            result.EmbeddedSeriesData = comboEmbeddedData;
+            XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
+            XlsxChartSanitizer.SanitizeLoadedChart(result);
+            chart = result;
+            return true;
+        }
+
         if (ranges.Count == 0)
         {
             chart = new ChartModel();
@@ -219,6 +239,27 @@ public static partial class XlsxChartPartReader
                 XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
+        }
+
+        // When all val/cat formulas are named ranges (e.g. OFFSET-based dynamic names like
+        // 'Sheet1'!rngCount), TryParseFormulaRange fails and ranges stays empty or only
+        // contains the tx (title) cell.  Fall back to the embedded numCache/strCache values.
+        var allBarSeriesElements = barCharts.SelectMany(c => c.Elements(ChartNs + "ser")).ToList();
+        var embeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(allBarSeriesElements, sheetId);
+        if (embeddedData is not null)
+        {
+            // Use a synthetic 1×1 placeholder DataRange; the renderer will use EmbeddedSeriesData instead.
+            var placeholderSheet = ranges.Count > 0 ? ranges[0].Start.Sheet : sheetId;
+            result.DataRange = new GridRange(
+                new CellAddress(placeholderSheet, 1, 1),
+                new CellAddress(placeholderSheet, 1, 1));
+            result.FirstRowIsHeader = hasTitleRange;
+            result.FirstColIsCategories = hasCategoryRange;
+            result.EmbeddedSeriesData = embeddedData;
+            XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
+            XlsxChartSanitizer.SanitizeLoadedChart(result);
+            chart = result;
+            return true;
         }
 
         if (ranges.Count == 0)

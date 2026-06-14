@@ -74,6 +74,10 @@ public static partial class ChartRenderer
         if (!ChartTypeSupport.IsRenderable(chart.Type))
             return null;
 
+        // When embedded cache data is available (named-range series formulas), bypass cell lookup.
+        if (chart.EmbeddedSeriesData is { Count: > 0 })
+            return BuildPlotModelFromEmbeddedData(chart, theme);
+
         var cellLookup = BuildChartCellLookup(chart, viewport);
 
         uint startRow = chart.DataRange.Start.Row;
@@ -470,6 +474,95 @@ public static partial class ChartRenderer
         AddTrendlineIfRequested(model, chart, theme, firstSeriesPoints, swapTrendlineAxes: chart.Type == ChartType.Bar);
         ApplyAxisBounds(model, chart, theme);
         AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+        return model;
+    }
+
+    /// <summary>
+    /// Renders a Column or Bar chart entirely from <see cref="ChartModel.EmbeddedSeriesData"/>,
+    /// bypassing the cell lookup.  Used when the series data formulas are unresolvable named
+    /// ranges (e.g. OFFSET-based dynamic names like <c>'Sheet1'!rngCount</c>) but the chart XML
+    /// carries embedded <c>&lt;c:numCache&gt;</c> / <c>&lt;c:strCache&gt;</c> values.
+    /// </summary>
+    private static PlotModel? BuildPlotModelFromEmbeddedData(ChartModel chart, WorkbookTheme theme)
+    {
+        var embeddedData = chart.EmbeddedSeriesData!;
+        var categories = embeddedData.Count > 0 ? embeddedData[0].Categories.ToList() : new List<string>();
+
+        var model = new PlotModel { Title = chart.Title };
+        model.DefaultColors = BuildExcelSeriesPalette(theme);
+        ApplyTitleStyle(model, chart, theme);
+        ApplyAreaStyle(model, chart, theme);
+        ConfigureLegend(model, chart, theme);
+        AddPivotChartFieldButtons(model, chart);
+        var pointDataLabelFormats = ShouldUseAnnotationLabels(chart)
+            ? new ChartPointDataLabelFormatLookup(chart.PointDataLabelFormats)
+            : default;
+
+        if (chart.Type is ChartType.Column or ChartType.ThreeDColumn)
+        {
+            model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+            model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
+
+            foreach (var seriesData in embeddedData)
+            {
+                var seriesName = seriesData.SeriesName ?? $"Series {seriesData.SeriesIndex + 1}";
+                var series = new RectangleBarSeries
+                {
+                    Title = seriesName,
+                    LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4)
+                };
+                ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesData.SeriesIndex), theme);
+                ApplyNativeDataLabelStyle(series, chart, theme);
+                var colHalfWidth = ColumnBarHalfWidth(chart);
+                for (var i = 0; i < seriesData.Values.Count; i++)
+                {
+                    var v = seriesData.Values[i];
+                    if (v.HasValue)
+                    {
+                        series.Items.Add(new RectangleBarItem(i - colHalfWidth, Math.Min(0, v.Value), i + colHalfWidth, Math.Max(0, v.Value)));
+                        if (ShouldUseAnnotationLabels(chart))
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesData.SeriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v.Value, v.Value);
+                    }
+                }
+                model.Series.Add(series);
+            }
+        }
+        else if (chart.Type is ChartType.Bar or ChartType.ThreeDBar)
+        {
+            model.Axes.Add(CreateCategoryAxis(AxisPosition.Left, chart.YAxisTitle, categories));
+            model.Axes.Add(new LinearAxis { Position = AxisPosition.Bottom, Title = chart.XAxisTitle });
+
+            foreach (var seriesData in embeddedData)
+            {
+                var seriesName = seriesData.SeriesName ?? $"Series {seriesData.SeriesIndex + 1}";
+                var series = new BarSeries
+                {
+                    Title = seriesName,
+                    LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 0),
+                    LabelPlacement = ToOxyLabelPlacement(chart.DataLabelPosition)
+                };
+                ApplyBarFormat(series, GetSeriesFormat(chart, seriesData.SeriesIndex), theme);
+                ApplyNativeDataLabelStyle(series, chart, theme);
+                for (var i = 0; i < seriesData.Values.Count; i++)
+                {
+                    var v = seriesData.Values[i];
+                    if (v.HasValue)
+                    {
+                        series.Items.Add(new BarItem { Value = v.Value });
+                        if (ShouldUseAnnotationLabels(chart))
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesData.SeriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), v.Value, i, v.Value);
+                    }
+                }
+                model.Series.Add(series);
+            }
+        }
+        else
+        {
+            // Unsupported type for embedded data path — fall through to null (empty render)
+            return null;
+        }
+
+        ApplyAxisBounds(model, chart, theme);
         return model;
     }
 

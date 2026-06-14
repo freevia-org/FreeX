@@ -295,6 +295,14 @@ public sealed class ChartModel
     /// them positionally from <see cref="DataRange"/>.
     /// </summary>
     public List<ChartSeriesVerbatimFormulas>? VerbatimSeriesFormulas { get; set; }
+
+    /// <summary>
+    /// Embedded series data extracted from <c>&lt;c:numCache&gt;</c> / <c>&lt;c:strCache&gt;</c>
+    /// elements in the chart XML. Populated when the series data range formula is an
+    /// unresolvable named range (e.g. <c>Sheet1!rngMyData</c>). When non-null and non-empty,
+    /// the renderer uses these values directly instead of looking up cells by <see cref="DataRange"/>.
+    /// </summary>
+    public List<ChartEmbeddedSeriesData>? EmbeddedSeriesData { get; set; }
     public bool UseComboLineForSecondarySeries { get; set; }
     public double Left   { get; set; } = 50;
     public double Top    { get; set; } = 50;
