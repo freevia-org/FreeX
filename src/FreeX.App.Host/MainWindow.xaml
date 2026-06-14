@@ -5078,7 +5078,10 @@
                                        Margin="8,0,0,0"
                                        MaxWidth="280"
                                        TextTrimming="CharacterEllipsis"
-                                       VerticalAlignment="Center"/>
+                                       VerticalAlignment="Center"
+                                       AutomationProperties.AutomationId="StatusSaveProgressText"
+                                       AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_OpenProgressDetail}"
+                                       AutomationProperties.LiveSetting="Assertive"/>
                         </StackPanel>
                         <StackPanel x:Name="StatusStatsPanel" Orientation="Horizontal"
                                     HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -5254,37 +5257,18 @@
         </Border>
 
         <!-- START SCREEN - full-window overlay shown at launch / via Backstage Home -->
+        <!-- Transparent input blocker shown while a workbook open/save runs.  Excel keeps the sheet
+             visible during these operations rather than greying it out, so this layer only intercepts
+             input over the editing surface (rows 1-5); the title bar and the footer (where the actual
+             progress bar lives) stay live.  The visible progress is the status-bar StatusSaveProgressPanel. -->
         <Border x:Name="OpenProgressOverlay"
                 Grid.Row="1" Grid.RowSpan="5"
                 Panel.ZIndex="260"
-                Background="#80FFFFFF"
+                Background="Transparent"
+                Focusable="False"
                 Visibility="Collapsed"
                 AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_OpeningWorkbook}"
-                AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_ShowsWorkbookOpenProgressAndBlocksWorkbookInteractionUntilLoadingFinishe_45BE9EDF}">
-            <Border Width="360" Padding="22" Background="White"
-                    BorderBrush="#D0D0D0" BorderThickness="1"
-                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                <StackPanel>
-                    <TextBlock x:Name="OpenProgressTitle"
-                               Text="{local:Loc Key=MainWindow_Text_OpeningWorkbook}"
-                               FontSize="16" Foreground="#1F1F1F"
-                               Margin="0,0,0,10"
-                               AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_OpenProgressTitle}"/>
-                    <ProgressBar x:Name="OpenProgressBar"
-                                 Height="5"
-                                 Minimum="0"
-                                 Maximum="100"
-                                 IsIndeterminate="True"
-                                 Foreground="#0F6D8C"
-                                 AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_OpeningProgress}"/>
-                    <TextBlock x:Name="OpenProgressDetail"
-                               Text="{local:Loc Key=MainWindow_Text_ReadingFile}"
-                               FontSize="12" Foreground="#666"
-                               Margin="0,10,0,0"
-                               AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_OpenProgressDetail}"/>
-                </StackPanel>
-            </Border>
-        </Border>
+                AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_ShowsWorkbookOpenProgressAndBlocksWorkbookInteractionUntilLoadingFinishe_45BE9EDF}"/>
 
         <Grid x:Name="StartScreenOverlay"
               Grid.Row="1" Grid.RowSpan="5"

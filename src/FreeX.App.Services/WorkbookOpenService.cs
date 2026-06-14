@@ -33,7 +33,8 @@ public sealed class WorkbookOpenService
         ArgumentNullException.ThrowIfNull(adapter);
         ArgumentNullException.ThrowIfNull(format);
 
-        WorkbookOpenSizeGuard.EnsureFileWithinLimit(new FileInfo(path).Length, _maxFileBytes);
+        var fileBytes = new FileInfo(path).Length;
+        WorkbookOpenSizeGuard.EnsureFileWithinLimit(fileBytes, _maxFileBytes);
         ReportProgress(progress, WorkbookOpenPhase.Reading, TimeSpan.Zero, 8);
 
         XlsxFeatureReport? featureReport = null;
@@ -46,7 +47,7 @@ public sealed class WorkbookOpenService
                 WorkbookOpenPhase.Inspecting,
                 8,
                 16,
-                TimeSpan.FromSeconds(4),
+                EstimateStageDuration(fileBytes, secondsPerMegabyte: 0.5, floorSeconds: 0.4),
                 () =>
                 {
                     using var fileStream = OpenFileStream(path);
@@ -61,7 +62,7 @@ public sealed class WorkbookOpenService
             WorkbookOpenPhase.Parsing,
             parseStartPercent,
             90,
-            TimeSpan.FromSeconds(45),
+            EstimateStageDuration(fileBytes, secondsPerMegabyte: 1.4, floorSeconds: 0.5),
             () =>
             {
                 using var fileStream = OpenFileStream(path);
@@ -85,7 +86,7 @@ public sealed class WorkbookOpenService
                 WorkbookOpenPhase.Calculating,
                 90,
                 98,
-                TimeSpan.FromSeconds(12),
+                EstimateStageDuration(fileBytes, secondsPerMegabyte: 0.9, floorSeconds: 0.4),
                 () =>
                 {
                     _recalculateAllFormulas(workbook);
@@ -176,6 +177,17 @@ public sealed class WorkbookOpenService
             FileShare.Read,
             bufferSize: 1024 * 128,
             useAsync: true);
+    }
+
+    // Estimates how long a load stage should take for a file of this size so the progress bar can
+    // advance roughly linearly with real time instead of crawling against a fixed worst-case guess.
+    // Calibrated from large-file measurements (~1.4 s/MB for the ClosedXML-backed parse).  Estimates
+    // need only be in the right ballpark: the per-stage interpolation holds just short of the stage
+    // end until the work actually completes, so an under- or over-estimate self-corrects gracefully.
+    private static TimeSpan EstimateStageDuration(long fileBytes, double secondsPerMegabyte, double floorSeconds)
+    {
+        var megabytes = Math.Max(0, fileBytes) / (1024.0 * 1024.0);
+        return TimeSpan.FromSeconds(Math.Max(floorSeconds, megabytes * secondsPerMegabyte));
     }
 
     private static double CalculateStageProgress(

@@ -5,25 +5,6 @@ namespace FreeX.App.Host;
 
 internal static class BackstageProgressOverlayBinder
 {
-    public static void ShowOverlay(
-        FrameworkElement? overlay,
-        TextBlock titleText,
-        TextBlock detailText,
-        ProgressBar? progressBar,
-        string title,
-        string detail,
-        double? percent)
-    {
-        if (overlay is null)
-            return;
-
-        titleText.Text = title;
-        detailText.Text = detail;
-        ApplyProgress(progressBar, percent);
-        overlay.Visibility = Visibility.Visible;
-        overlay.UpdateLayout();
-    }
-
     public static void ShowStatusPanel(
         FrameworkElement? panel,
         TextBlock statusText,
@@ -35,7 +16,7 @@ internal static class BackstageProgressOverlayBinder
         if (panel is null)
             return;
 
-        statusText.Text = $"{title}: {detail}";
+        statusText.Text = string.IsNullOrEmpty(title) ? detail : $"{title}: {detail}";
         ApplyProgress(progressBar, percent);
         panel.Visibility = Visibility.Visible;
     }

@@ -74,6 +74,8 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _isOpeningFile;
     private bool _isSavingFile;
     private bool _isExportingFile;
+    // File name shown in the footer operation-progress message during an open/save (null when idle).
+    private string? _operationProgressFileName;
     // ── Dirty / save-state cluster: canonical state lives in _documentState ──
     // These private properties delegate to the injected WorkbookDocumentState service.
     // They preserve the same names used across the 50-file partial-class surface so

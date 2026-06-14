@@ -473,6 +473,7 @@ public partial class MainWindow
             if (await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")) == SaveChangesConfirmation.Cancel)
                 return;
 
+            _operationProgressFileName = System.IO.Path.GetFileName(path);
             ShowOpenProgress(
                 OpenWorkbookProgressPlanner.ProgressTitle(),
                 OpenWorkbookProgressPlanner.FormatLoadingFileDetail("preparing", TimeSpan.Zero),
@@ -572,20 +573,42 @@ public partial class MainWindow
 
     private void ShowOpenProgress(string title, string detail, double? percent = null)
     {
-        BackstageProgressOverlayBinder.ShowOverlay(
-            OpenProgressOverlay,
-            OpenProgressTitle,
-            OpenProgressDetail,
-            OpenProgressBar,
-            title,
-            detail,
-            percent);
+        ShowOperationFooterProgress(title, detail, percent);
+        // Open replaces the workbook wholesale (it never serializes the live model), so a transparent
+        // mouse blocker over the editing surface is enough — there is no torn-snapshot race to guard
+        // against, and the sheet stays visible with the footer progress live, matching Excel.
+        OpenProgressOverlay.Visibility = Visibility.Visible;
         Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
     }
 
     private void HideOpenProgress()
     {
+        HideOperationFooterProgress();
         BackstageProgressOverlayBinder.Hide(OpenProgressOverlay);
+    }
+
+    // Excel-style footer progress: the operation runs asynchronously while a small progress bar and a
+    // live status message appear in the status bar (footer) instead of a modal dialog.  The message
+    // leads with the file name so it reads as a real, specific action.
+    private void ShowOperationFooterProgress(string title, string detail, double? percent)
+    {
+        var message = string.IsNullOrEmpty(_operationProgressFileName)
+            ? detail
+            : $"{_operationProgressFileName} — {detail}";
+        BackstageProgressOverlayBinder.ShowStatusPanel(
+            StatusSaveProgressPanel,
+            StatusSaveProgressText,
+            StatusSaveProgressBar,
+            title: string.Empty,
+            message,
+            percent);
+        StatusSaveProgressPanel.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, title);
+    }
+
+    private void HideOperationFooterProgress()
+    {
+        BackstageProgressOverlayBinder.Hide(StatusSaveProgressPanel);
+        _operationProgressFileName = null;
     }
 
     // Start screen button handlers
@@ -898,12 +921,13 @@ public partial class MainWindow
         {
             _isSavingFile = true;
 
-            // Block all user input for the duration of the save, mirroring the
-            // open path's OpenProgressOverlay pattern.  This is the primary defence
-            // against torn-snapshot and false-clean-save races; the generation check
-            // below is belt-and-suspenders.
+            // Block all user input for the duration of the save.  Unlike open (which builds a fresh
+            // workbook), save serializes the LIVE model on a background thread, so a concurrent edit —
+            // including a keyboard edit, which a mouse-only overlay would not stop — could tear the
+            // snapshot.  Disabling the root grid is the primary defence; the generation check below is
+            // belt-and-suspenders.  The footer progress still advances while disabled.
             RootGrid.IsEnabled = false;
-
+            _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
             ShowSaveProgress(
                 UiText.Get("Progress_SavingWorkbook"),
                 UiText.Get("Progress_SavingFilePreparing"),
@@ -968,18 +992,12 @@ public partial class MainWindow
 
     private void ShowSaveProgress(string title, string detail, double? percent = null)
     {
-        BackstageProgressOverlayBinder.ShowStatusPanel(
-            StatusSaveProgressPanel,
-            StatusSaveProgressText,
-            StatusSaveProgressBar,
-            title,
-            detail,
-            percent);
+        ShowOperationFooterProgress(title, detail, percent);
     }
 
     private void HideSaveProgress()
     {
-        BackstageProgressOverlayBinder.Hide(StatusSaveProgressPanel);
+        HideOperationFooterProgress();
     }
 
     private bool ConfirmUnsupportedXlsxFeatureSave()

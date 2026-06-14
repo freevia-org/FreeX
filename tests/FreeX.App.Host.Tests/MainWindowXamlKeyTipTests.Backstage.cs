@@ -543,36 +543,36 @@ public sealed partial class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void BackstageOpenProgressOverlay_ExposesAccessibleStatusText()
+    public void BackstageOperationProgress_ExposesAccessibleStatusTextInFooter()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
+        // The open/save operation overlay is now a transparent input blocker over the editing surface;
+        // the visible, accessible progress lives in the status-bar (footer) panel, like Excel.
         var overlay = document
             .Descendants(presentation + "Border")
             .Single(element => element.Attribute(x + "Name")?.Value == "OpenProgressOverlay");
 
         LocalizedAttribute(overlay, "AutomationProperties.Name").Should().Be("Opening workbook");
-        LocalizedAttribute(overlay, "AutomationProperties.HelpText")
-            .Should().Be("Shows workbook open progress and blocks workbook interaction until loading finishes or fails.");
         overlay.Attribute("Panel.ZIndex")?.Value.Should().Be("260");
+        overlay.Attribute("Background")?.Value.Should().Be("Transparent");
 
         var progressBar = document
             .Descendants(presentation + "ProgressBar")
-            .Single(element => element.Attribute(x + "Name")?.Value == "OpenProgressBar");
+            .Single(element => element.Attribute(x + "Name")?.Value == "StatusSaveProgressBar");
 
-        LocalizedAttribute(progressBar, "AutomationProperties.Name").Should().Be("Opening Progress");
         progressBar.Attribute("Minimum")?.Value.Should().Be("0");
         progressBar.Attribute("Maximum")?.Value.Should().Be("100");
 
-        var progressTexts = document
+        var progressText = document
             .Descendants(presentation + "TextBlock")
-            .Where(element => element.Attribute(x + "Name")?.Value is "OpenProgressTitle" or "OpenProgressDetail")
-            .Select(element => LocalizedAttribute(element, "AutomationProperties.Name"))
-            .ToList();
+            .Single(element => element.Attribute(x + "Name")?.Value == "StatusSaveProgressText");
 
-        progressTexts.Should().Equal("Open progress title", "Open progress detail");
+        LocalizedAttribute(progressText, "AutomationProperties.Name").Should().Be("Open progress detail");
+        progressText.Attribute("AutomationProperties.LiveSetting")?.Value
+            .Should().Be("Assertive");
     }
 
     [Fact]
