@@ -288,6 +288,14 @@ public sealed class ChartModel
     public List<ChartPointDataLabelFormat> PointDataLabelFormats { get; set; } = [];
 
     /// <summary>
+    /// Per-data-point fill color overrides for pie/doughnut slices, read from
+    /// <c>&lt;c:dPt&gt;</c> elements with explicit <c>&lt;c:spPr&gt;</c> fills.
+    /// When a slice's index matches an entry here its fill color takes precedence
+    /// over the series-level fill (or palette fallback).
+    /// </summary>
+    public List<ChartPointFillFormat> PointFillColors { get; set; } = [];
+
+    /// <summary>
     /// Per-series verbatim formula strings preserved from the source XML.
     /// Populated when any series formula cannot be parsed as a single rectangular range
     /// (e.g. multi-area unions like "Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5").

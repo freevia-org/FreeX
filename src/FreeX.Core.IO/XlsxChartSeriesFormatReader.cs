@@ -150,6 +150,41 @@ internal static class XlsxChartSeriesFormatReader
         return true;
     }
 
+    /// <summary>
+    /// Reads per-data-point fill colors from <c>&lt;c:dPt&gt;</c> elements within a series
+    /// and appends them to <see cref="ChartModel.PointFillColors"/>.
+    /// </summary>
+    public static void ApplyPiePointFills(XElement series, int seriesIndex, ChartModel chart)
+    {
+        foreach (var dPt in series.Elements(ChartNs + "dPt"))
+        {
+            if (!int.TryParse(dPt.Element(ChartNs + "idx")?.Attribute("val")?.Value, out var pointIndex) ||
+                pointIndex < 0)
+            {
+                continue;
+            }
+
+            var spPr = dPt.Element(ChartNs + "spPr");
+            var solidFill = spPr?.Element(DrawingNs + "solidFill");
+            if (solidFill is null)
+                continue;
+
+            CellColor? fillColor = null;
+            WorkbookThemeColorReference? fillThemeColor = null;
+            if (XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+                fillThemeColor = themeColor;
+            else if (XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+                fillColor = color;
+
+            if (fillColor is null && fillThemeColor is null)
+                continue;
+
+            chart.PointFillColors.RemoveAll(existing =>
+                existing.SeriesIndex == seriesIndex && existing.PointIndex == pointIndex);
+            chart.PointFillColors.Add(new ChartPointFillFormat(seriesIndex, pointIndex, fillColor, fillThemeColor));
+        }
+    }
+
     private static ChartMarkerStyle FromXlsxMarkerStyle(string? value) =>
         value switch
         {

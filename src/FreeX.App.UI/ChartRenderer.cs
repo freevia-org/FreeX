@@ -144,7 +144,12 @@ public static partial class ChartRenderer
                 {
                     IsExploded = chart.ExplodedSliceIndex == sliceIndex
                 };
-                if (pieFormat?.ResolveFillColor(theme) is { } fill)
+                // Per-point fill (from <c:dPt> in chart XML) takes highest priority;
+                // fall back to series-level fill, then palette.
+                var pointFill = GetPointFillColor(chart, 0, sliceIndex, theme);
+                if (pointFill is { } perPointFill)
+                    slice.Fill = OxyColor.FromRgb(perPointFill.R, perPointFill.G, perPointFill.B);
+                else if (pieFormat?.ResolveFillColor(theme) is { } fill)
                     slice.Fill = OxyColor.FromRgb(fill.R, fill.G, fill.B);
                 else
                     slice.Fill = piePalette[sliceIndex % piePalette.Count];

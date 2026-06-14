@@ -83,6 +83,24 @@ public static partial class ChartRenderer
         return null;
     }
 
+    /// <summary>
+    /// Returns the per-point fill color for a given series/point pair,
+    /// resolved against the workbook theme. Returns null when no per-point
+    /// override exists (caller should fall back to series-level or palette color).
+    /// </summary>
+    private static CellColor? GetPointFillColor(ChartModel chart, int seriesIndex, int pointIndex, WorkbookTheme theme)
+    {
+        var formats = chart.PointFillColors;
+        for (var i = formats.Count - 1; i >= 0; i--)
+        {
+            var format = formats[i];
+            if (format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex)
+                return format.ResolveFillColor(theme);
+        }
+
+        return null;
+    }
+
     private static void ApplyLineFormat(LineSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
         if (format is null)

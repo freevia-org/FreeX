@@ -242,6 +242,20 @@ public sealed class ChartSurfaceFormatModel
     public double? BorderThickness { get; set; }
 }
 
+/// <summary>
+/// Per-data-point fill color override for pie/doughnut slices, read from
+/// <c>&lt;c:dPt&gt;</c> elements with explicit <c>&lt;c:spPr&gt;</c> fills in the chart XML.
+/// </summary>
+public sealed record ChartPointFillFormat(
+    int SeriesIndex,
+    int PointIndex,
+    CellColor? FillColor = null,
+    WorkbookThemeColorReference? FillThemeColor = null)
+{
+    public CellColor? ResolveFillColor(WorkbookTheme theme) =>
+        FillThemeColor?.Resolve(theme) ?? FillColor;
+}
+
 public sealed record ChartSeriesFormat(
     int SeriesIndex,
     CellColor? FillColor = null,

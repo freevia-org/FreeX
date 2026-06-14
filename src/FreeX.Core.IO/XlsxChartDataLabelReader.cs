@@ -14,7 +14,6 @@ internal static class XlsxChartDataLabelReader
         if (dataLabels is null)
             return;
 
-        chart.ShowDataLabels = true;
         chart.DataLabelPosition = FromXlsxDataLabelPosition(dataLabels.Element(ChartNs + "dLblPos")?.Attribute("val")?.Value);
         var numberFormatElement = dataLabels.Element(ChartNs + "numFmt");
         var numberFormatCode = numberFormatElement?.Attribute("formatCode")?.Value;
@@ -33,6 +32,16 @@ internal static class XlsxChartDataLabelReader
         chart.ShowDataLabelPercentage = ChartTypeSupport.SupportsPercentageDataLabels(chart.Type)
             && XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showPercent")?.Attribute("val")?.Value);
         chart.ShowDataLabelCallouts = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showLeaderLines")?.Attribute("val")?.Value);
+
+        // Only mark ShowDataLabels=true when at least one visible label component is requested.
+        // A <c:dLbls> element with all show flags = 0 means "labels present in XML but effectively
+        // disabled"; rendering it would produce spurious per-point numeric labels on the chart.
+        chart.ShowDataLabels = chart.ShowDataLabelValue
+            || chart.ShowDataLabelCategoryName
+            || chart.ShowDataLabelSeriesName
+            || chart.ShowDataLabelPercentage
+            || chart.ShowDataLabelBubbleSize
+            || chart.ShowDataLabelLegendKey;
         var separator = dataLabels.Element(ChartNs + "separator");
         chart.DataLabelSeparator = FromXlsxDataLabelSeparator(separator?.Attribute("val")?.Value ?? separator?.Value);
         ApplyDataLabelShapeProperties(dataLabels.Element(ChartNs + "spPr"), chart);

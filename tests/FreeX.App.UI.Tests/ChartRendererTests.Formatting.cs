@@ -266,4 +266,115 @@ public sealed partial class ChartRendererTests
         series.Slices.Should().HaveCount(2);
         series.Slices.Should().OnlyContain(slice => slice.Fill == OxyColor.FromRgb(91, 155, 213));
     }
+
+    [Fact]
+    public void DoughnutRenderer_AppliesPerPointFillColorsOverridingSeriesColor()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Doughnut,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2)),
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(0, FillColor: new CellColor(70, 130, 180)) // series-level (steel blue)
+            ],
+            PointFillColors =
+            [
+                new ChartPointFillFormat(0, 0, FillColor: new CellColor(0x92, 0xD0, 0x50)), // slice 0 -> green
+                new ChartPointFillFormat(0, 2, FillColor: new CellColor(0xFF, 0xC0, 0x00))  // slice 2 -> gold
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Cat"),
+                Cell(1, 2, "Val"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20"),
+                Cell(4, 1, "C"),
+                Cell(4, 2, "30")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        series.Slices.Should().HaveCount(3);
+
+        // Slice 0 -> per-point green
+        series.Slices[0].Fill.Should().Be(OxyColor.FromRgb(0x92, 0xD0, 0x50));
+
+        // Slice 1 -> no per-point override, falls back to series-level color
+        series.Slices[1].Fill.Should().Be(OxyColor.FromRgb(70, 130, 180));
+
+        // Slice 2 -> per-point gold
+        series.Slices[2].Fill.Should().Be(OxyColor.FromRgb(0xFF, 0xC0, 0x00));
+    }
+
+    [Fact]
+    public void DoughnutRenderer_PerPointFillWithThemeColorResolvesAgainstTheme()
+    {
+        var sheetId = SheetId.New();
+        var theme = WorkbookTheme.Office
+            .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(255, 0, 0));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Doughnut,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            PointFillColors =
+            [
+                new ChartPointFillFormat(0, 0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2))
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Cat"),
+                Cell(1, 2, "Val"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []),
+            theme);
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        series.Slices[0].Fill.Should().Be(OxyColor.FromRgb(255, 0, 0));
+    }
+
+    [Fact]
+    public void DoughnutRenderer_AllShowFlagsZero_ProducesNoDataLabels()
+    {
+        var sheetId = SheetId.New();
+        // ShowDataLabels = false (all show flags were 0 in XML, reader didn't set it)
+        var chart = new ChartModel
+        {
+            Type = ChartType.Doughnut,
+            ShowDataLabels = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Cat"),
+                Cell(1, 2, "Val"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "1"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "0")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        // Native OxyPlot pie labels should be empty strings when ShowDataLabels=false
+        series.InsideLabelFormat.Should().BeEmpty();
+        series.OutsideLabelFormat.Should().BeEmpty();
+        // No annotation labels either
+        model.Annotations.Should().BeEmpty();
+    }
 }

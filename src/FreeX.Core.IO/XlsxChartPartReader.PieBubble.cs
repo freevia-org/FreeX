@@ -46,6 +46,7 @@ public static partial class XlsxChartPartReader
                 result.SeriesFormats.Add(format);
 
             ApplyPieExplosion(series, result);
+            XlsxChartSeriesFormatReader.ApplyPiePointFills(series, modelSeriesIndex, result);
             XlsxChartDataLabelReader.ApplyPointDataLabels(series, modelSeriesIndex, result);
             XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
             seriesIndex++;
