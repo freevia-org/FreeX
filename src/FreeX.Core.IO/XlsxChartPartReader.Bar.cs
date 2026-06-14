@@ -128,16 +128,22 @@ public static partial class XlsxChartPartReader
         }
 
         // When all val/cat formulas are named ranges, fall back to embedded cache data.
+        // Also fall back when all formulas are cross-sheet refs (viewport can't provide those cells).
         var allComboSeriesElements = barCharts.Concat(lineCharts).Concat(scatterCharts)
             .SelectMany(c => c.Elements(ChartNs + "ser"))
             .ToList();
-        var comboEmbeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(allComboSeriesElements, sheetId);
+        var comboEmbeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(allComboSeriesElements, sheetId)
+                                ?? XlsxChartSeriesRangeReader.TryReadCrossSheetEmbeddedData(allComboSeriesElements, sheetId, sheetNameResolver);
         if (comboEmbeddedData is not null)
         {
+            // Prefer the actual parsed DataRange so the chart host knows which data sheet is
+            // referenced.  Fall back to a synthetic 1×1 placeholder only when no formula was parseable.
             var placeholderSheet = ranges.Count > 0 ? ranges[0].Start.Sheet : sheetId;
-            result.DataRange = new GridRange(
-                new CellAddress(placeholderSheet, 1, 1),
-                new CellAddress(placeholderSheet, 1, 1));
+            result.DataRange = ranges.Count > 0
+                ? XlsxChartSeriesRangeReader.UnionRanges(ranges)
+                : new GridRange(
+                    new CellAddress(placeholderSheet, 1, 1),
+                    new CellAddress(placeholderSheet, 1, 1));
             result.FirstRowIsHeader = hasTitleRange;
             result.FirstColIsCategories = hasCategoryRange;
             result.EmbeddedSeriesData = comboEmbeddedData;
@@ -246,15 +252,23 @@ public static partial class XlsxChartPartReader
         // When all val/cat formulas are named ranges (e.g. OFFSET-based dynamic names like
         // 'Sheet1'!rngCount), TryParseFormulaRange fails and ranges stays empty or only
         // contains the tx (title) cell.  Fall back to the embedded numCache/strCache values.
+        // Also fall back when all formulas are cross-sheet cell refs — the viewport live-cell
+        // lookup only covers the chart's host sheet, so cross-sheet cells yield nothing.
         var allBarSeriesElements = barCharts.SelectMany(c => c.Elements(ChartNs + "ser")).ToList();
-        var embeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(allBarSeriesElements, sheetId);
+        var embeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(allBarSeriesElements, sheetId)
+                           ?? XlsxChartSeriesRangeReader.TryReadCrossSheetEmbeddedData(allBarSeriesElements, sheetId, sheetNameResolver);
         if (embeddedData is not null)
         {
-            // Use a synthetic 1×1 placeholder DataRange; the renderer will use EmbeddedSeriesData instead.
+            // Prefer the actual parsed DataRange so the chart host knows which data sheet is
+            // referenced (important for BuildChartCellLookup sheet-ID matching).  Fall back to
+            // a synthetic 1×1 placeholder only when no formula could be parsed (e.g. all named-range
+            // formulas that TryParseFormulaRange cannot decode).
             var placeholderSheet = ranges.Count > 0 ? ranges[0].Start.Sheet : sheetId;
-            result.DataRange = new GridRange(
-                new CellAddress(placeholderSheet, 1, 1),
-                new CellAddress(placeholderSheet, 1, 1));
+            result.DataRange = ranges.Count > 0
+                ? XlsxChartSeriesRangeReader.UnionRanges(ranges)
+                : new GridRange(
+                    new CellAddress(placeholderSheet, 1, 1),
+                    new CellAddress(placeholderSheet, 1, 1));
             result.FirstRowIsHeader = hasTitleRange;
             result.FirstColIsCategories = hasCategoryRange;
             result.EmbeddedSeriesData = embeddedData;

@@ -74,10 +74,6 @@ public static partial class ChartRenderer
         if (!ChartTypeSupport.IsRenderable(chart.Type))
             return null;
 
-        // When embedded cache data is available (named-range series formulas), bypass cell lookup.
-        if (chart.EmbeddedSeriesData is { Count: > 0 })
-            return BuildPlotModelFromEmbeddedData(chart, theme);
-
         var cellLookup = BuildChartCellLookup(chart, viewport);
 
         uint startRow = chart.DataRange.Start.Row;
@@ -487,7 +483,41 @@ public static partial class ChartRenderer
         AddTrendlineIfRequested(model, chart, theme, firstSeriesPoints, swapTrendlineAxes: chart.Type == ChartType.Bar);
         ApplyAxisBounds(model, chart, theme);
         AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+
+        // If the live-cell lookup produced no data for any series and embedded cache data is
+        // available (e.g. cross-sheet refs whose data sheet cells are not in the viewport),
+        // fall back to the embedded numCache/strCache values so the chart renders rather than
+        // appearing blank.  Charts that DO have live data continue to use live cells.
+        if (chart.EmbeddedSeriesData is { Count: > 0 } && AllSeriesEmpty(model))
+            return BuildPlotModelFromEmbeddedData(chart, theme) ?? model;
+
         return model;
+    }
+
+    /// <summary>
+    /// Returns true when every series in the model has zero data points (items/points).
+    /// Used to decide whether to fall back to embedded numCache data.
+    /// </summary>
+    private static bool AllSeriesEmpty(PlotModel model)
+    {
+        if (model.Series.Count == 0)
+            return true;
+
+        foreach (var series in model.Series)
+        {
+            if (series is RectangleBarSeries rbs && rbs.Items.Count > 0)
+                return false;
+            if (series is BarSeries bs && bs.Items.Count > 0)
+                return false;
+            if (series is LineSeries ls && ls.Points.Count > 0)
+                return false;
+            if (series is AreaSeries als && als.Points.Count > 0)
+                return false;
+            if (series is ScatterSeries ss && ss.Points.Count > 0)
+                return false;
+        }
+
+        return true;
     }
 
     /// <summary>

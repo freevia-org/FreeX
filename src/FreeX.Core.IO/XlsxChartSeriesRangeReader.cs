@@ -276,6 +276,70 @@ internal static class XlsxChartSeriesRangeReader
         return result.Any(s => s.Values.Count > 0) ? result : null;
     }
 
+    /// <summary>
+    /// Returns embedded numCache/strCache data when ALL val/cat series formulas are direct cell
+    /// references that resolve to a <em>different</em> sheet than <paramref name="chartSheetId"/>
+    /// (i.e. cross-sheet references such as <c>'4. Dynamic Histogram'!$B$31:$B$32</c>).
+    /// <para>
+    /// When the referenced cells live on another sheet, the renderer's live-cell lookup will
+    /// find nothing (viewport only carries the host-sheet cells), so the embedded numCache values
+    /// should be used as a fallback.  Returns <see langword="null"/> when:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item>No <paramref name="sheetNameResolver"/> is provided (cannot confirm cross-sheet-ness).</item>
+    ///   <item>Any formula references the chart's own sheet (live cells can be used).</item>
+    ///   <item>Any formula is a named range (handled by <see cref="TryReadEmbeddedSeriesData"/>).</item>
+    ///   <item>No series has non-empty numCache values.</item>
+    /// </list>
+    /// </summary>
+    public static List<ChartEmbeddedSeriesData>? TryReadCrossSheetEmbeddedData(
+        IEnumerable<XElement> seriesElements,
+        SheetId chartSheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver)
+    {
+        if (sheetNameResolver is null)
+            return null;
+
+        var seriesList = seriesElements.ToList();
+        var anyCrossSheet = false;
+
+        foreach (var series in seriesList)
+        {
+            foreach (var containerName in new[] { "val", "cat" })
+            {
+                var formula = ReadFirstFormula(series, containerName);
+                if (string.IsNullOrWhiteSpace(formula))
+                    continue;
+
+                // Must be a parseable cell range (not a named range — those are handled elsewhere)
+                if (!TryParseFormulaRange(formula, chartSheetId, sheetNameResolver, out var range))
+                    return null; // named range or unparseable — not the cross-sheet case
+
+                if (range.Start.Sheet == chartSheetId)
+                    return null; // references the chart's own sheet — live cells can be used
+
+                anyCrossSheet = true;
+            }
+        }
+
+        if (!anyCrossSheet)
+            return null;
+
+        var result = new List<ChartEmbeddedSeriesData>(seriesList.Count);
+        for (var i = 0; i < seriesList.Count; i++)
+        {
+            var series = seriesList[i];
+            var seriesIndex = ReadSeriesIndex(series, i);
+            var seriesName = ReadEmbeddedStringCacheFirstValue(series, "tx");
+            var categories = ReadEmbeddedStringCacheValues(series, "cat");
+            var values = ReadEmbeddedNumericCacheValues(series, "val");
+            result.Add(new ChartEmbeddedSeriesData(seriesIndex, seriesName, categories, values));
+        }
+
+        // Only use embedded data when at least one series has numeric cache values.
+        return result.Any(s => s.Values.Count > 0) ? result : null;
+    }
+
     /// <summary>Reads the first string value from a &lt;c:strCache&gt; inside the named container.</summary>
     private static string? ReadEmbeddedStringCacheFirstValue(XElement series, string containerName)
     {

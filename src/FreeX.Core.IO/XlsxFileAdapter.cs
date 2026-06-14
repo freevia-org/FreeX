@@ -270,9 +270,16 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         // spec requires cells in ascending row/col order) would allow binary search, but we keep the
         // dictionary to handle malformed files where cells arrive out of order without silent mis-styling.
         Dictionary<(uint Row, uint Col), int>? sharedPopulatedCellStyleIndexes = null;
+        // Pre-register all sheets so that the sheetNameResolver built inside ApplySheetXmlLayout
+        // contains every sheet's SheetId — even sheets that haven't been fully loaded yet.
+        // Without this pre-pass, charts on early sheets (e.g. "10 Charts") that reference later
+        // sheets (e.g. "4. Dynamic Histogram") would not find the referenced SheetId and would
+        // fall back to the chart host's own SheetId, breaking cross-sheet DataRange resolution.
+        foreach (var xlSheet in xlWorkbook.Worksheets)
+            workbook.AddSheet(xlSheet.Name);
         foreach (var xlSheet in xlWorkbook.Worksheets)
         {
-            var sheet = workbook.AddSheet(xlSheet.Name);
+            var sheet = workbook.GetSheet(xlSheet.Name)!;
             sheetXmlLayout.TryGetValue(xlSheet.Name, out var xmlLayout);
             Dictionary<(uint Row, uint Col), int>? populatedCellStyleIndexes = null;
             if (cellBorderStyles.HasVisibleBorders)
