@@ -147,6 +147,25 @@ internal static class XlsxWorksheetGridXmlNormalizer
     }
 
     /// <summary>
+    /// Streaming equivalent of "would <see cref="NormalizeWorksheets"/> rewrite any worksheet grid?".
+    /// Used by the load sanitizer (which historically loaded every worksheet's full cell XDocument
+    /// just to answer this) to decide whether grid normalization is required.  Reuses the canonical
+    /// pre-scan, so no worksheet's cell tree is materialized; conservative (a worksheet whose grid the
+    /// scan cannot prove canonical is reported as having issues, which is always safe).
+    /// </summary>
+    internal static bool HasGridXmlSchemaIssues(ZipArchive archive)
+    {
+        var (cellMetadataCount, valueMetadataCount) = ReadMetadataCounts(archive);
+        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
+        {
+            if (!IsWorksheetGridCanonical(worksheetEntry, cellMetadataCount, valueMetadataCount))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Streaming check that returns <see langword="true"/> only when the worksheet's grid (the
     /// <c>cols</c> element and the <c>sheetData</c> cells) is already in the exact form
     /// <see cref="NormalizeWorksheetRoot(XElement, uint, uint)"/> would produce, so the caller can

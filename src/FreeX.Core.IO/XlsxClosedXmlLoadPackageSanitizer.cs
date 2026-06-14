@@ -2171,29 +2171,9 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
     }
 
     private static bool HasWorksheetGridXmlSchemaIssues(ZipArchive archive)
-    {
-        foreach (var worksheetEntry in archive.Entries
-                     .Where(XlsxConditionalFormatRuleSupport.IsWorksheetEntry)
-                     .ToList())
-        {
-            try
-            {
-                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-                var root = worksheetXml.Root;
-                if (root is not null &&
-                    XlsxWorksheetGridXmlNormalizer.NormalizeWorksheetRoot(root))
-                {
-                    return true;
-                }
-            }
-            catch
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+        // Streaming canonical scan instead of a full per-worksheet XDocument load: the previous
+        // implementation materialized every cell of every sheet on each load just to answer this.
+        => XlsxWorksheetGridXmlNormalizer.HasGridXmlSchemaIssues(archive);
 
     private static void NormalizeWorksheetGridXml(ZipArchive archive) =>
         XlsxWorksheetGridXmlNormalizer.NormalizeWorksheets(archive);
