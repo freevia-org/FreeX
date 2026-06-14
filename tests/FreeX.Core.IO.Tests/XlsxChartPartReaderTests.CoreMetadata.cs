@@ -256,4 +256,112 @@ public sealed partial class XlsxChartPartReaderTests
             UserInterface = true
         });
     }
+
+    [Fact]
+    public void TryReadSupportedChart_ReadsChartSpaceGradFillFirstStopAsChartAreaFill()
+    {
+        // chart34 in 10-Advanced-Excel-Charts.xlsx uses a radial gradient on the chartSpace/spPr
+        // with all stops referencing tx1 (Dark1) at near-black luminance. FreeX should
+        // approximate the background by reading the first gradient stop.
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = ParseChartXml("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$3</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$3</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+              <c:spPr>
+                <a:gradFill flip="none" rotWithShape="1">
+                  <a:gsLst>
+                    <a:gs pos="0">
+                      <a:schemeClr val="tx1">
+                        <a:lumMod val="75000"/>
+                        <a:lumOff val="25000"/>
+                      </a:schemeClr>
+                    </a:gs>
+                    <a:gs pos="51000">
+                      <a:schemeClr val="tx1">
+                        <a:lumMod val="85000"/>
+                        <a:lumOff val="15000"/>
+                      </a:schemeClr>
+                    </a:gs>
+                  </a:gsLst>
+                  <a:path path="circle">
+                    <a:fillToRect l="50000" t="50000" r="50000" b="50000"/>
+                  </a:path>
+                </a:gradFill>
+                <a:ln><a:noFill/></a:ln>
+              </c:spPr>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        // The first gradient stop is tx1 at lumOff=25000 (tint≈0.25)
+        chart.ChartAreaFillThemeColor.Should().Be(
+            new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1, 0.25));
+        chart.ChartAreaFillColor.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryReadSupportedChart_ReadsSolidFillOnChartSpaceAsChartAreaFill()
+    {
+        // chart35 in 10-Advanced-Excel-Charts.xlsx uses solidFill bg1 on the chartSpace/spPr
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = ParseChartXml("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$3</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$3</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+              <c:spPr>
+                <a:solidFill>
+                  <a:schemeClr val="bg1"/>
+                </a:solidFill>
+                <a:ln><a:noFill/></a:ln>
+              </c:spPr>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.ChartAreaFillThemeColor.Should().Be(
+            new WorkbookThemeColorReference(WorkbookThemeColorSlot.Light1, 0));
+        chart.ChartAreaFillColor.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryReadSupportedChart_NoChartSpaceSpPr_LeavesChartAreaFillNull()
+    {
+        // Charts without explicit chartSpace/spPr (most charts) should leave fill as null
+        // so the renderer falls back to white/transparent default
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = ParseChartXml(BuildSingleSeriesChartXml("barChart", "<c:barDir val=\"col\"/>"));
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.ChartAreaFillColor.Should().BeNull();
+        chart.ChartAreaFillThemeColor.Should().BeNull();
+    }
 }

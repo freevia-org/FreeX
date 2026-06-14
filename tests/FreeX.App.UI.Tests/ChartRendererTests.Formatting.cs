@@ -347,6 +347,142 @@ public sealed partial class ChartRendererTests
     }
 
     [Fact]
+    public void ColumnRenderer_AppliesChartAreaFillColorToBackground()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            // Simulate a dark gradient-fill background approximated as a solid color
+            ChartAreaFillColor = new CellColor(30, 30, 40)
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Cat"),
+                Cell(1, 2, "Val"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        model.Background.Should().Be(OxyColor.FromRgb(30, 30, 40));
+    }
+
+    [Fact]
+    public void ColumnRenderer_AppliesPlotAreaFillColorToPlotAreaBackground()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            PlotAreaFillColor = new CellColor(200, 220, 255)
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Cat"),
+                Cell(1, 2, "Val"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        model.PlotAreaBackground.Should().Be(OxyColor.FromRgb(200, 220, 255));
+    }
+
+    [Fact]
+    public void ColumnRenderer_NullFillColors_LeavesOxyPlotDefaults()
+    {
+        // Charts without explicit fill (most charts) must not regress — background stays at OxyPlot default
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Cat"),
+                Cell(1, 2, "Val"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        // OxyPlot default background is Undefined when not set explicitly
+        model.Background.Should().Be(OxyColors.Undefined);
+    }
+
+    [Fact]
+    public void ColumnRenderer_ChartAreaFillThemeColorResolvesViaTheme()
+    {
+        var sheetId = SheetId.New();
+        var theme = WorkbookTheme.Office
+            .WithColor(WorkbookThemeColorSlot.Dark1, new CellColor(20, 25, 30));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            ChartAreaFillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1, 0.25)
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Cat"),
+                Cell(1, 2, "Val"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []),
+            theme);
+
+        // With Dark1=(20,25,30) and tint=0.25, the resolved color should not be null
+        model.Background.Should().NotBe(OxyColors.Undefined);
+    }
+
+    [Fact]
+    public void ColumnRenderer_ChartDefaultTextColorAppliedToModelTextColor()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            ChartDefaultTextColor = new CellColor(255, 255, 255)  // white text for dark theme
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Cat"),
+                Cell(1, 2, "Val"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        model.TextColor.Should().Be(OxyColor.FromRgb(255, 255, 255));
+    }
+
+    [Fact]
     public void DoughnutRenderer_AllShowFlagsZero_ProducesNoDataLabels()
     {
         var sheetId = SheetId.New();

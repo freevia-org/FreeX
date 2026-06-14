@@ -147,6 +147,8 @@ public static partial class ChartRenderer
         if (chart.ResolvePlotAreaBorderColor(theme) is { } plotBorder)
             model.PlotAreaBorderColor = OxyColor.FromRgb(plotBorder.R, plotBorder.G, plotBorder.B);
         model.PlotAreaBorderThickness = new OxyThickness(chart.PlotAreaBorderThickness);
+        if (chart.ResolveChartDefaultTextColor(theme) is { } defaultText)
+            model.TextColor = OxyColor.FromRgb(defaultText.R, defaultText.G, defaultText.B);
     }
 
     private static void ApplyTitleStyle(PlotModel model, ChartModel chart, WorkbookTheme theme)

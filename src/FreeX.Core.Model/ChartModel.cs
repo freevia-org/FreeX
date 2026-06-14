@@ -318,6 +318,9 @@ public sealed class ChartModel
     public double Height { get; set; } = 300;
     public ChartDrawingAnchorKind DrawingAnchorKind { get; set; } = ChartDrawingAnchorKind.Absolute;
 
+    public CellColor? ResolveChartDefaultTextColor(WorkbookTheme theme) =>
+        ChartDefaultTextThemeColor?.Resolve(theme) ?? ChartDefaultTextColor;
+
     public CellColor? ResolveChartAreaFillColor(WorkbookTheme theme) =>
         ChartAreaFillThemeColor?.Resolve(theme) ?? ChartAreaFillColor;
 

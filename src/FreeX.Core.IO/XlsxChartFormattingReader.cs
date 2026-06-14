@@ -51,6 +51,11 @@ internal static class XlsxChartFormattingReader
             chart.ChartAreaFillColor = color;
             chart.ChartAreaFillThemeColor = null;
         }
+        else if (TryReadGradientFillFirstStop(shapeProperties, out var gradThemeColor, out var gradColor))
+        {
+            chart.ChartAreaFillThemeColor = gradThemeColor;
+            chart.ChartAreaFillColor = gradColor;
+        }
 
         var line = shapeProperties.Element(DrawingNs + "ln");
         if (line is null)
@@ -93,6 +98,11 @@ internal static class XlsxChartFormattingReader
                 chart.PlotAreaFillColor = color;
                 chart.PlotAreaFillThemeColor = null;
             }
+        }
+        else if (TryReadGradientFillFirstStop(shapeProperties, out var gradThemeColor, out var gradColor))
+        {
+            chart.PlotAreaFillThemeColor = gradThemeColor;
+            chart.PlotAreaFillColor = gradColor;
         }
 
         var line = shapeProperties.Element(DrawingNs + "ln");
@@ -178,5 +188,49 @@ internal static class XlsxChartFormattingReader
             result.BorderColor = borderColor;
             result.BorderThemeColor = null;
         }
+    }
+
+    /// <summary>
+    /// Reads the first gradient stop from a &lt;a:gradFill&gt; element and returns its
+    /// color as either a theme-color reference or a concrete color.  Used to approximate
+    /// gradient chart-area and plot-area backgrounds as a single solid fill.
+    /// </summary>
+    private static bool TryReadGradientFillFirstStop(
+        XElement shapeProperties,
+        out WorkbookThemeColorReference? gradThemeColor,
+        out CellColor? gradColor)
+    {
+        gradThemeColor = null;
+        gradColor = null;
+
+        var gradFill = shapeProperties.Element(DrawingNs + "gradFill");
+        if (gradFill is null)
+            return false;
+
+        // Walk the gradient stop list; use the first stop whose color we can resolve.
+        var gsLst = gradFill.Element(DrawingNs + "gsLst");
+        if (gsLst is null)
+            return false;
+
+        foreach (var gs in gsLst.Elements(DrawingNs + "gs"))
+        {
+            // A gradient stop (<a:gs>) carries its color directly as a child element
+            // (e.g. <a:schemeClr> or <a:srgbClr>), NOT wrapped in a <a:solidFill>.
+            // The color-reader helpers look for schemeClr/srgbClr as children of the
+            // element they receive, so we can pass the <a:gs> element directly.
+            if (XlsxDrawingColorReader.TryReadThemeColorReference(gs, DrawingNs, out var themeRef))
+            {
+                gradThemeColor = themeRef;
+                return true;
+            }
+
+            if (XlsxDrawingColorReader.TryReadConcreteColor(gs, DrawingNs, out var concrete))
+            {
+                gradColor = concrete;
+                return true;
+            }
+        }
+
+        return false;
     }
 }
