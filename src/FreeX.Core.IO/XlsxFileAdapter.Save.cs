@@ -27,6 +27,18 @@ public sealed partial class XlsxFileAdapter
 
     private void SaveCore(Workbook workbook, Stream stream, List<string>? warnings)
     {
+        // Serialize with loads/other saves: the full-save path builds a ClosedXML XLWorkbook, which
+        // shares process-global static state with the load path.  The cheap patch/source-copy paths
+        // don't touch ClosedXML, but gating the whole method keeps the rule simple and the cost is
+        // negligible (saves are user-initiated and brief on the patch path).  See ClosedXmlGate.
+        lock (ClosedXmlGate)
+        {
+            SaveCoreUnlocked(workbook, stream, warnings);
+        }
+    }
+
+    private void SaveCoreUnlocked(Workbook workbook, Stream stream, List<string>? warnings)
+    {
         LastSaveDiagnostics = XlsxSaveDiagnostics.NotRun;
         string? currentModelFingerprint = null;
         if (SourcePackages.TryGetValue(workbook, out var sourcePackage) &&

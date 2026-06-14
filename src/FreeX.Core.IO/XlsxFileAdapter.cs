@@ -41,10 +41,25 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     public XlsxLoadResult LoadWithWarnings(Stream stream)
         => LoadWithWarnings(stream, inspectFeatures: false);
 
+    // ClosedXML's XLWorkbook construction and population touch process-global static state and are
+    // NOT safe to run on multiple threads at once.  Every ClosedXML-backed load AND full-save is
+    // serialized through this single process-wide gate so a background startup prewarm — or a second
+    // window opening/saving a file — can never race a concurrent load and corrupt ClosedXML's
+    // internals.  That race manifested as intermittent crashes on the first file opens after launch.
+    // Opens/saves are infrequent and user-initiated, so serializing them is a non-issue versus the
+    // crash it prevents.
+    internal static readonly object ClosedXmlGate = new();
+
     public XlsxLoadResult LoadWithWarnings(Stream stream, bool inspectFeatures)
     {
         var warnings = new List<string>();
-        var workbook = LoadCore(stream, warnings, inspectFeatures, out var featureReport);
+        Workbook workbook;
+        XlsxFeatureReport? featureReport;
+        lock (ClosedXmlGate)
+        {
+            workbook = LoadCore(stream, warnings, inspectFeatures, out featureReport);
+        }
+
         return new XlsxLoadResult(workbook, warnings.AsReadOnly(), featureReport);
     }
 

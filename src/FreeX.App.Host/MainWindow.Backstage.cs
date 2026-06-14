@@ -491,7 +491,16 @@ public partial class MainWindow
             InvalidateToolbarVisualState();
             _workbook.Name = result.DisplayName;
             _worksheetSelections.Clear();
-            _currentSheetId = _workbook.Sheets[0].Id;
+            // Honor the workbook's saved active sheet (Excel's activeTab) instead of always landing on
+            // the first sheet.  ApplyOpenedWorksheetViewState below then restores that sheet's saved
+            // active cell / scroll position, so the file reopens exactly where it was saved.
+            var activeSheetIndex =
+                _workbook.ActiveSheetIndex is { } savedActiveIndex &&
+                savedActiveIndex >= 0 &&
+                savedActiveIndex < _workbook.Sheets.Count
+                    ? savedActiveIndex
+                    : 0;
+            _currentSheetId = _workbook.Sheets[activeSheetIndex].Id;
             InvalidateNavigationCaches();
             _currentFilePath = result.OpenedAsTemplate ? null : path;
             UpdateTitleBar();
