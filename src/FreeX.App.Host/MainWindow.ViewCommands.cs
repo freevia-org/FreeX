@@ -529,7 +529,7 @@ public partial class MainWindow
         }
         else
         {
-            FormulaBar.ClearValue(System.Windows.Controls.TextBox.HeightProperty);
+            FormulaBar.Height       = 30;
             FormulaBar.AcceptsReturn = false;
             FormulaBarExpandBtn.Content = CreateFormulaBarChevron(pointsUp: false);
             System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));

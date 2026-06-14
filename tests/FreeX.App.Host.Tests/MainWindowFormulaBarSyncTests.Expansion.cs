@@ -26,7 +26,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
                 harness.ToggleFormulaBarExpansion();
 
             harness.FormulaBarAcceptsReturn.Should().BeFalse();
-            harness.FormulaBarHeight.Should().Be(double.NaN);
+            harness.FormulaBarHeight.Should().Be(30);
             harness.FormulaBarExpandButtonAutomationName.Should().Be(UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));
 
             harness.ToggleFormulaBarExpansion();
@@ -38,8 +38,49 @@ public sealed partial class MainWindowFormulaBarSyncTests
             harness.ToggleFormulaBarExpansion();
 
             harness.FormulaBarAcceptsReturn.Should().BeFalse();
-            harness.FormulaBarHeight.Should().Be(double.NaN);
+            harness.FormulaBarHeight.Should().Be(30);
             harness.FormulaBarExpandButtonAutomationName.Should().Be(UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));
+        });
+    }
+
+    [Fact]
+    public void FormulaBarSelectionSync_LongWrappedTextLeavesHeightUnderChevronControl()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            if (harness.FormulaBarAcceptsReturn)
+                harness.ToggleFormulaBarExpansion();
+
+            var longWrappedText = string.Join(
+                Environment.NewLine,
+                "This is a long wrapped value that should not make the collapsed formula bar grow.",
+                "The chevron alone controls whether the formula bar becomes multiline.");
+
+            harness.SetCellText(2, 1, longWrappedText);
+            harness.SelectActiveCell(2, 1);
+
+            harness.FormulaBarText.Should().Be(longWrappedText);
+            harness.FormulaBarAcceptsReturn.Should().BeFalse();
+            harness.FormulaBarHeight.Should().Be(30);
+
+            harness.ToggleFormulaBarExpansion();
+            harness.FormulaBarHeight.Should().Be(84);
+
+            harness.SelectActiveCell(1, 1);
+            harness.SelectActiveCell(2, 1);
+            harness.FormulaBarText.Should().Be(longWrappedText);
+            harness.FormulaBarHeight.Should().Be(84);
+
+            harness.ToggleFormulaBarExpansion();
+            harness.FormulaBarAcceptsReturn.Should().BeFalse();
+            harness.FormulaBarHeight.Should().Be(30);
+
+            harness.SelectActiveCell(1, 1);
+            harness.SelectActiveCell(2, 1);
+            harness.FormulaBarText.Should().Be(longWrappedText);
+            harness.FormulaBarHeight.Should().Be(30);
         });
     }
 
