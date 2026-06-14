@@ -87,10 +87,15 @@ public static class CellTextOrientationLayoutPlanner
 
         var boundsX = horizontalAlignment switch
         {
-            HorizontalAlignment.Right => cellRect.Right - Math.Min(boundsWidth, cellRect.Width - 2) - 2,
+            // Right / numeric-General text anchors its RIGHT edge at the cell's right edge (minus a
+            // 2px pad).  When the text is wider than the cell, the left edge therefore lands to the
+            // LEFT of the cell — i.e. the text overflows leftward, exactly like Excel.  Do NOT clamp
+            // the position to keep the text inside the cell: clamping pins a too-wide right-aligned
+            // string to the LEFT edge so it spills RIGHTWARD into the next column (a visible bug).
+            HorizontalAlignment.Right => cellRect.Right - boundsWidth - 2,
             HorizontalAlignment.Justify or HorizontalAlignment.Distributed => cellRect.Left + (cellRect.Width - boundsWidth) / 2,
             HorizontalAlignment.Center => cellRect.Left + (cellRect.Width - boundsWidth) / 2,
-            HorizontalAlignment.General when isNumeric => cellRect.Right - Math.Min(boundsWidth, cellRect.Width - 2) - 2,
+            HorizontalAlignment.General when isNumeric => cellRect.Right - boundsWidth - 2,
             _ => cellRect.Left + 2 + indentPixels
         };
         var boundsY = verticalAlignment switch
