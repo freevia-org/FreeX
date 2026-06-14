@@ -661,7 +661,9 @@ public sealed class WorkbookSession
         if (!result.Success)
             return result;
 
-        ApplySuccessfulRangeEditResult(result, range);
+        ApplySuccessfulRangeEditResult(
+            result,
+            SubtotalPlanner.ExpandRangeForInsertedSubtotalRows(range, result.AffectedCells));
         return result;
     }
 

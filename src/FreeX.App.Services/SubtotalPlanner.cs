@@ -9,6 +9,33 @@ public static class SubtotalPlanner
     public const string NotEnoughRowsMessage = "Subtotal requires a header row and at least one data row.";
     public const string NotEnoughColumnsMessage = "Subtotal requires at least one grouping column and one subtotal column.";
 
+    public static GridRange ExpandRangeForInsertedSubtotalRows(
+        GridRange sourceRange,
+        IReadOnlyList<CellAddress>? affectedCells)
+    {
+        if (affectedCells is null || affectedCells.Count == 0)
+            return sourceRange;
+
+        var insertedRows = affectedCells
+            .Where(address => address.Sheet == sourceRange.Start.Sheet)
+            .Select(address => address.Row)
+            .Distinct()
+            .Count();
+        if (insertedRows == 0)
+            return sourceRange;
+
+        var expandedEndRow = (uint)Math.Min(
+            (ulong)CellAddress.MaxRow,
+            (ulong)sourceRange.End.Row + (ulong)insertedRows);
+
+        return new GridRange(
+            sourceRange.Start,
+            new CellAddress(
+                sourceRange.End.Sheet,
+                expandedEndRow,
+                sourceRange.End.Col));
+    }
+
     public static bool TryCreateSourceRange(
         Sheet sheet,
         GridRange selectedRange,

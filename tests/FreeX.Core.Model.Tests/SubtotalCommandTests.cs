@@ -310,6 +310,42 @@ public sealed class SubtotalCommandTests
     }
 
     [Fact]
+    public void SubtotalCommand_WithMergedGroupLabels_UsesVisibleLabelSpans()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Project"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Hours"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Boohoo"));
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 2, 1),
+            new CellAddress(sheet.Id, 5, 1)));
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 1), new TextValue("Optimize"));
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 6, 1),
+            new CellAddress(sheet.Id, 8, 1)));
+        for (uint row = 2; row <= 8; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row));
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 8, 2));
+
+        var command = new SubtotalCommand(sheet.Id, range, groupByColumnOffset: 0, subtotalColumnOffset: 1);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.GetValue(6, 1).Should().Be(new TextValue("Boohoo Total"));
+        sheet.GetCell(6, 2)!.FormulaText.Should().Be("SUBTOTAL(9,B2:B5)");
+        sheet.GetValue(10, 1).Should().Be(new TextValue("Optimize Total"));
+        sheet.GetCell(10, 2)!.FormulaText.Should().Be("SUBTOTAL(9,B7:B9)");
+        sheet.GetValue(11, 1).Should().Be(new TextValue("Grand Total"));
+        sheet.GetCell(11, 2)!.FormulaText.Should().Be("SUBTOTAL(9,B2:B10)");
+        sheet.MergedRegions.Should().BeEquivalentTo([
+            new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 5, 1)),
+            new GridRange(new CellAddress(sheet.Id, 7, 1), new CellAddress(sheet.Id, 9, 1))
+        ]);
+    }
+
+    [Fact]
     public void CompositeWorkbookCommand_AppliesSubtotalsAcrossGroupedSheetsAndUndoRestores()
     {
         var workbook = new Workbook("test");

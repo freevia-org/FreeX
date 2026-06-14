@@ -672,7 +672,28 @@ public partial class MainWindow
             return;
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        SelectSubtotalResultRange(
+            SubtotalPlanner.ExpandRangeForInsertedSubtotalRows(sourceRange, outcome.AffectedCells));
         UpdateViewport();
+    }
+
+    private void SelectSubtotalResultRange(GridRange range)
+    {
+        _selectionAnchor = range.Start;
+        _selectionCursor = range.End;
+        if (_workbook.GetSheet(_currentSheetId) is { } sheet)
+        {
+            sheet.ActiveRow = range.Start.Row;
+            sheet.ActiveCol = range.Start.Col;
+        }
+
+        SetSelectedRangesIfChanged(null);
+        SheetGrid.SelectedRange = range;
+        SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(range));
+        RefreshToolbarAfterSelectionChange();
+        RefreshStatusBar();
+        RefreshValidationDropdown();
+        UpdateCommentPreview(range.Start);
     }
 
     private void GoalSeekBtn_Click(object sender, RoutedEventArgs e)

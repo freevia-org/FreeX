@@ -111,11 +111,11 @@ internal static class SubtotalPlanBuilder
         var groupColumn = range.Start.Col + groupByColumnOffset;
         var groups = new List<GroupSpan>();
         var groupStart = range.Start.Row + 1;
-        var currentLabel = FormatLabel(sheet.GetValue(groupStart, groupColumn));
+        var currentLabel = FormatLabel(GetGroupValue(sheet, range, groupStart, groupColumn));
 
         for (uint row = groupStart + 1; row <= range.End.Row; row++)
         {
-            var label = FormatLabel(sheet.GetValue(row, groupColumn));
+            var label = FormatLabel(GetGroupValue(sheet, range, row, groupColumn));
             if (label == currentLabel)
                 continue;
 
@@ -126,6 +126,21 @@ internal static class SubtotalPlanBuilder
 
         groups.Add(new GroupSpan(currentLabel, groupStart, range.End.Row));
         return groups;
+    }
+
+    private static ScalarValue GetGroupValue(Sheet sheet, GridRange range, uint row, uint groupColumn)
+    {
+        var address = new CellAddress(range.Start.Sheet, row, groupColumn);
+        if (sheet.GetMergeRegion(address) is { } merge &&
+            merge.Start.Sheet == range.Start.Sheet &&
+            merge.Start.Col == groupColumn &&
+            merge.Start.Row >= range.Start.Row + 1 &&
+            merge.Start.Row <= range.End.Row)
+        {
+            return sheet.GetValue(merge.Start.Row, merge.Start.Col);
+        }
+
+        return sheet.GetValue(row, groupColumn);
     }
 
     private static string FormatLabel(ScalarValue value) => value switch
