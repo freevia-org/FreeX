@@ -243,7 +243,12 @@ public static partial class ChartRenderer
             {
                 if (!model.Axes.Any())
                 {
-                    model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+                    // When there are no category labels (no <c:cat> in the series) the effective
+                    // data-point count comes from the row range so the x-axis spans all points.
+                    var categoryOrRowCount = categories.Count > 0
+                        ? categories.Count
+                        : (int)(endRow - dataStartRow + 1);
+                    model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories, categoryOrRowCount));
                     model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
                     AddSecondaryAxisIfRequested(model, chart);
                 }
@@ -505,7 +510,11 @@ public static partial class ChartRenderer
 
         if (chart.Type is ChartType.Column or ChartType.ThreeDColumn)
         {
-            model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+            // When there are no category labels the effective count comes from the value series
+            // so the x-axis spans all data points (same fix as the live-cell path).
+            var maxValueCount = embeddedData.Count > 0 ? embeddedData.Max(s => s.Values.Count) : 0;
+            var categoryOrValueCount = categories.Count > 0 ? categories.Count : maxValueCount;
+            model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories, categoryOrValueCount));
             model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
 
             foreach (var seriesData in embeddedData)

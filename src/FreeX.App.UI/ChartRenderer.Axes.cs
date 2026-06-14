@@ -96,8 +96,12 @@ public static partial class ChartRenderer
     private static LinearAxis CreateCenteredIndexedCategoryAxis(
         AxisPosition position,
         string? title,
-        IReadOnlyList<string> labels) =>
-        CreateIndexedCategoryAxis(position, title, labels, -0.5, Math.Max(0.5, labels.Count - 0.5));
+        IReadOnlyList<string> labels,
+        int? effectiveCount = null)
+    {
+        var count = effectiveCount ?? labels.Count;
+        return CreateIndexedCategoryAxis(position, title, labels, -0.5, Math.Max(0.5, count - 0.5));
+    }
 
     private static LinearAxis CreateZeroBasedIndexedCategoryAxis(
         AxisPosition position,

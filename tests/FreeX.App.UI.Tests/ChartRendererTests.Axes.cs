@@ -153,6 +153,44 @@ public sealed partial class ChartRendererTests
         axis.FormatValue(0).Should().Be("Q1");
     }
 
+    /// <summary>
+    /// Regression test for NN=21 (4. Dynamic Histogram): a Column chart whose series val formula
+    /// is a direct cell-ref range (e.g. $B$31:$B$32) with no cat element.
+    /// When categories is empty the x-axis maximum must still span all N data rows, not just 1.
+    /// </summary>
+    [Fact]
+    public void ColumnRenderer_NoCategoryAxis_ShowsAllDataPointsWhenSeriesHasMultipleRows()
+    {
+        var sheetId = SheetId.New();
+        // Mirrors chart21.xml: 1-column 2-row val-only range, no cat, no header (FirstColIsCategories=false)
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstRowIsHeader = false,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 31, 2), new CellAddress(sheetId, 32, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [],
+            [],
+            [],
+            ChartDataCells:
+            [
+                ChartCell(sheetId, 31, 2, "6", new NumberValue(6)),
+                ChartCell(sheetId, 32, 2, "4", new NumberValue(4))
+            ]));
+
+        // Should produce 1 series with 2 bars (not 1)
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+        series.Items.Should().HaveCount(2, "both data rows must be visible as separate bars");
+
+        // The x-axis must span at least 0..1 so neither bar is clipped
+        var xAxis = model.Axes.Single(a => a.Position == AxisPosition.Bottom);
+        xAxis.Maximum.Should().BeGreaterThan(0.5,
+            "axis maximum must cover both category positions (0 and 1)");
+    }
+
     [Fact]
     public void ColumnRenderer_AppliesAxisTickPlacement()
     {
