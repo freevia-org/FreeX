@@ -384,6 +384,14 @@ public static partial class ChartRenderer
         return chart.ComboLineSeriesIndexes.Contains(seriesIndex);
     }
 
+    private static bool IsComboScatterSeries(ChartModel chart, int seriesIndex)
+    {
+        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type) || seriesIndex <= 0)
+            return false;
+
+        return chart.ComboScatterSeriesIndexes.Contains(seriesIndex);
+    }
+
     private static LabelPlacement ToOxyLabelPlacement(ChartDataLabelPosition position) =>
         position switch
         {

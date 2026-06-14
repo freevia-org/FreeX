@@ -282,6 +282,7 @@ public sealed class ChartModel
     public bool ShowSecondaryAxis { get; set; }
     public List<int> SecondaryAxisSeriesIndexes { get; set; } = [];
     public List<int> ComboLineSeriesIndexes { get; set; } = [];
+    public List<int> ComboScatterSeriesIndexes { get; set; } = [];
     public List<ChartSeriesFormat> SeriesFormats { get; set; } = [];
     public List<ChartSeriesDataLabelFormat> SeriesDataLabelFormats { get; set; } = [];
     public List<ChartPointDataLabelFormat> PointDataLabelFormats { get; set; } = [];

@@ -55,10 +55,12 @@ public static partial class XlsxChartPartReader
             read = TryReadAreaChart(chartXml, plotArea, areaCharts, sheetId, ChartType.Area, out chart);
         else if (threeDAreaChart is not null)
             read = TryReadAreaChart(chartXml, plotArea, threeDAreaCharts, sheetId, ChartType.ThreeDArea, out chart);
+        else if (barChart is not null && lineChart is not null && scatterCharts.Count > 0)
+            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, scatterCharts, sheetId, out chart);
         else if (scatterCharts.Count > 0)
             read = TryReadScatterChart(chartXml, plotArea, scatterCharts, sheetId, out chart);
         else if (barChart is not null && lineChart is not null)
-            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, sheetId, out chart);
+            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, [], sheetId, out chart);
         else if (lineCharts.Count > 1)
             read = TryReadLineChart(chartXml, plotArea, lineCharts, sheetId, out chart);
         else if (lineChart is not null)

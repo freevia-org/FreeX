@@ -239,6 +239,29 @@ public static partial class ChartRenderer
                     AddSecondaryAxisIfRequested(model, chart);
                 }
 
+                if (IsComboScatterSeries(chart, seriesIndex))
+                {
+                    var scatterSeries = new ScatterSeries
+                    {
+                        Title = seriesName,
+                        MarkerType = MarkerType.Circle,
+                        MarkerSize = 4,
+                        YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
+                    };
+                    ApplyScatterFormat(scatterSeries, GetSeriesFormat(chart, seriesIndex), theme);
+                    var scatterPointIndex = 0;
+                    for (uint r = dataStartRow; r <= endRow; r++, scatterPointIndex++)
+                    {
+                        if (cellLookup.TryGetValue((r, col), out var cell)
+                            && TryGetChartNumericValue(cell, out var v))
+                        {
+                            scatterSeries.Points.Add(new ScatterPoint(scatterPointIndex, v));
+                        }
+                    }
+                    model.Series.Add(scatterSeries);
+                    continue;
+                }
+
                 if (IsComboLineSeries(chart, seriesIndex))
                 {
                     var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex, theme);

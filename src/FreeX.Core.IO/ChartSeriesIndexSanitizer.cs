@@ -21,6 +21,8 @@ internal static class ChartSeriesIndexSanitizer
             chart.UseComboLineForSecondarySeries = false;
             chart.ComboLineSeriesIndexes = [];
         }
+
+        chart.ComboScatterSeriesIndexes = SanitizeSeriesIndexes(chart.ComboScatterSeriesIndexes, seriesCount);
     }
 
     private static List<int> SanitizeSeriesIndexes(IEnumerable<int> indexes, int seriesCount) =>

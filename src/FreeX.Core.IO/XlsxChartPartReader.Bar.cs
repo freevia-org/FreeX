@@ -10,6 +10,7 @@ public static partial class XlsxChartPartReader
         XElement? plotArea,
         IReadOnlyList<XElement> barCharts,
         IReadOnlyList<XElement> lineCharts,
+        IReadOnlyList<XElement> scatterCharts,
         SheetId sheetId,
         out ChartModel chart)
     {
@@ -96,6 +97,35 @@ public static partial class XlsxChartPartReader
             }
         }
 
+        foreach (var scatterChart in scatterCharts)
+        {
+            var scatterUsesSecondaryAxis = XlsxChartSeriesRangeReader.UsesSecondaryValueAxis(plotArea, scatterChart);
+            var fallbackSeriesIndex = 0;
+            foreach (var series in scatterChart.Elements(ChartNs + "ser"))
+            {
+                var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackSeriesIndex);
+                hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
+                // Scatter series uses xVal/yVal; read their ranges as category/value ranges
+                foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series, "tx", "xVal", "yVal"))
+                {
+                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                        ranges.Add(range);
+                }
+
+                result.ComboScatterSeriesIndexes.Add(seriesIndex);
+                if (scatterUsesSecondaryAxis && seriesIndex > 0)
+                    result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
+
+                if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))
+                    result.SeriesFormats.Add(format);
+
+                XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
+                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
+                fallbackSeriesIndex++;
+            }
+        }
+
         if (ranges.Count == 0)
         {
             chart = new ChartModel();
@@ -112,13 +142,18 @@ public static partial class XlsxChartPartReader
             .Distinct()
             .Order()
             .ToList();
+        result.ComboScatterSeriesIndexes = result.ComboScatterSeriesIndexes
+            .Where(index => index > 0)
+            .Distinct()
+            .Order()
+            .ToList();
         result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
         result.UseComboLineForSecondarySeries = result.ComboLineSeriesIndexes.Count > 0;
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
         ApplyVerbatimSeriesFormulasIfNeeded(
-            barCharts.Concat(lineCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
+            barCharts.Concat(lineCharts).Concat(scatterCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
             sheetId,
             result);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
