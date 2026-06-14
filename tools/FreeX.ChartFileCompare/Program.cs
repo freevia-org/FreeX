@@ -224,7 +224,7 @@ internal static class Program
                     null,
                     chartDataCells);
 
-                var image = ChartRenderer.Render(entry.Chart, viewport, WorkbookTheme.Office, renderScale: 1.5);
+                var image = ChartRenderer.Render(entry.Chart, viewport, workbook.Theme, renderScale: 1.5);
                 if (image is not null)
                 {
                     var freexPath = Path.Combine(OutputDir, $"freex_{nn:D2}.png");

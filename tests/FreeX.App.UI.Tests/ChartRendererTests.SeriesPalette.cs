@@ -188,6 +188,75 @@ public sealed partial class ChartRendererTests
         pieSeries.Slices[1].Fill.Should().Be(OxyColor.FromRgb(233, 113, 50), "slice 1 = Accent2");
     }
 
+    /// <summary>
+    /// Regression test: FidelityCompare was calling ChartRenderer.Render(..., WorkbookTheme.Office)
+    /// instead of workbook.Theme, causing workbooks with the classic Office 2013 theme
+    /// (Accent1 = #4472C4, cornflower blue) to render as teal (#156082, modern Office default).
+    /// The palette must honour whatever theme the loaded workbook supplies.
+    /// </summary>
+    [Fact]
+    public void ColumnRenderer_WorkbookThemeAccent1IsUsedForDefaultPalette()
+    {
+        // Arrange: build a theme with the classic Office 2013 Accent1 = #4472C4 (cornflower blue).
+        // This matches the colour found in xl/theme/theme1.xml of 10-Advanced-Excel-Charts.xlsx.
+        var classicTheme = WorkbookTheme.Office
+            .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(0x44, 0x72, 0xC4)); // #4472C4
+
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3))
+        };
+
+        // Act
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Cat"), Cell(1, 2, "S1"), Cell(1, 3, "S2"),
+                Cell(2, 1, "A"),   Cell(2, 2, "10"), Cell(2, 3, "20"),
+                Cell(3, 1, "B"),   Cell(3, 2, "15"), Cell(3, 3, "25")
+            ],
+            [],
+            []),
+            classicTheme);
+
+        // Assert: first default colour must be the classic cornflower blue, NOT the modern teal.
+        model.DefaultColors[0].Should().Be(OxyColor.FromRgb(0x44, 0x72, 0xC4),
+            "the chart palette Accent1 must come from the loaded workbook theme, not from WorkbookTheme.Office");
+        model.DefaultColors[0].Should().NotBe(OxyColor.FromRgb(21, 96, 130),
+            "teal #156082 is the modern Office default and must NOT appear when the workbook theme says #4472C4");
+    }
+
+    [Fact]
+    public void ColumnRenderer_ExplicitFormatColorStillWinsOverWorkbookThemePalette()
+    {
+        // Workbook theme with Accent1 = #4472C4 but series has an explicit fill colour → explicit wins.
+        var classicTheme = WorkbookTheme.Office
+            .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(0x44, 0x72, 0xC4));
+
+        var sheetId = SheetId.New();
+        var explicitRed = new CellColor(200, 0, 0);
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            SeriesFormats = [new ChartSeriesFormat(0, FillColor: explicitRed)]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [Cell(1, 1, "A"), Cell(1, 2, "10"), Cell(2, 1, "B"), Cell(2, 2, "20")],
+            [],
+            []),
+            classicTheme);
+
+        // The explicit series fill colour must still win over the theme palette.
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+        series.FillColor.Should().Be(OxyColor.FromRgb(200, 0, 0),
+            "explicit <c:spPr><a:solidFill> must override the workbook theme palette");
+    }
+
     [Fact]
     public void PieRenderer_ExplicitFormatColorStillWinsOverPalette()
     {
