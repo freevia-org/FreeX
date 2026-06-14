@@ -10,6 +10,7 @@ public static partial class XlsxChartPartReader
         XElement pieFamilyChart,
         SheetId sheetId,
         ChartType chartType,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
         var ranges = new List<GridRange>();
@@ -37,7 +38,7 @@ public static partial class XlsxChartPartReader
             hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
             foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
             {
-                if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                     ranges.Add(range);
             }
 
@@ -92,7 +93,12 @@ public static partial class XlsxChartPartReader
             chart.ExplodedSliceDistance = Math.Clamp(explosion / 100.0, 0, 0.5);
     }
 
-    private static bool TryReadBubbleChart(XDocument chartXml, XElement bubbleChart, SheetId sheetId, out ChartModel chart)
+    private static bool TryReadBubbleChart(
+        XDocument chartXml,
+        XElement bubbleChart,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
+        out ChartModel chart)
     {
         var ranges = new List<GridRange>();
         var hasTitleRange = false;
@@ -113,7 +119,7 @@ public static partial class XlsxChartPartReader
             hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
             foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series, "tx", "xVal", "yVal", "bubbleSize"))
             {
-                if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                     ranges.Add(range);
             }
 

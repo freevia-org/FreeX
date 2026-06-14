@@ -7,15 +7,21 @@ public static partial class XlsxChartPartReader
 {
     private static readonly XNamespace ChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
-    public static bool TryReadSupportedChart(XDocument chartXml, SheetId sheetId, out ChartModel chart)
-    {
-        return TryReadSupportedChart(chartXml, sheetId, fallbackDataRange: null, out chart);
-    }
+    public static bool TryReadSupportedChart(XDocument chartXml, SheetId sheetId, out ChartModel chart) =>
+        TryReadSupportedChart(chartXml, sheetId, fallbackDataRange: null, sheetNameResolver: null, out chart);
 
     public static bool TryReadSupportedChart(
         XDocument chartXml,
         SheetId sheetId,
         GridRange? fallbackDataRange,
+        out ChartModel chart) =>
+        TryReadSupportedChart(chartXml, sheetId, fallbackDataRange, sheetNameResolver: null, out chart);
+
+    public static bool TryReadSupportedChart(
+        XDocument chartXml,
+        SheetId sheetId,
+        GridRange? fallbackDataRange,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
         chart = new ChartModel();
@@ -42,41 +48,41 @@ public static partial class XlsxChartPartReader
         var doughnutChart = plotArea?.Element(ChartNs + "doughnutChart");
         bool read;
         if (doughnutChart is not null)
-            read = TryReadPieFamilyChart(chartXml, doughnutChart, sheetId, ChartType.Doughnut, out chart);
+            read = TryReadPieFamilyChart(chartXml, doughnutChart, sheetId, ChartType.Doughnut, sheetNameResolver, out chart);
         else if (threeDPieChart is not null)
-            read = TryReadPieFamilyChart(chartXml, threeDPieChart, sheetId, ChartType.ThreeDPie, out chart);
+            read = TryReadPieFamilyChart(chartXml, threeDPieChart, sheetId, ChartType.ThreeDPie, sheetNameResolver, out chart);
         else if (pieChart is not null)
-            read = TryReadPieFamilyChart(chartXml, pieChart, sheetId, ChartType.Pie, out chart);
+            read = TryReadPieFamilyChart(chartXml, pieChart, sheetId, ChartType.Pie, sheetNameResolver, out chart);
         else if (bubbleChart is not null)
-            read = TryReadBubbleChart(chartXml, bubbleChart, sheetId, out chart);
+            read = TryReadBubbleChart(chartXml, bubbleChart, sheetId, sheetNameResolver, out chart);
         else if (areaChart is not null && lineChart is not null)
-            read = TryReadAreaLineComboChart(chartXml, plotArea, areaCharts, lineCharts, sheetId, out chart);
+            read = TryReadAreaLineComboChart(chartXml, plotArea, areaCharts, lineCharts, sheetId, sheetNameResolver, out chart);
         else if (areaCharts.Count > 0)
-            read = TryReadAreaChart(chartXml, plotArea, areaCharts, sheetId, ChartType.Area, out chart);
+            read = TryReadAreaChart(chartXml, plotArea, areaCharts, sheetId, ChartType.Area, sheetNameResolver, out chart);
         else if (threeDAreaChart is not null)
-            read = TryReadAreaChart(chartXml, plotArea, threeDAreaCharts, sheetId, ChartType.ThreeDArea, out chart);
+            read = TryReadAreaChart(chartXml, plotArea, threeDAreaCharts, sheetId, ChartType.ThreeDArea, sheetNameResolver, out chart);
         else if (barChart is not null && lineChart is not null && scatterCharts.Count > 0)
-            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, scatterCharts, sheetId, out chart);
+            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, scatterCharts, sheetId, sheetNameResolver, out chart);
         else if (scatterCharts.Count > 0)
-            read = TryReadScatterChart(chartXml, plotArea, scatterCharts, sheetId, out chart);
+            read = TryReadScatterChart(chartXml, plotArea, scatterCharts, sheetId, sheetNameResolver, out chart);
         else if (barChart is not null && lineChart is not null)
-            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, [], sheetId, out chart);
+            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, [], sheetId, sheetNameResolver, out chart);
         else if (lineCharts.Count > 1)
-            read = TryReadLineChart(chartXml, plotArea, lineCharts, sheetId, out chart);
+            read = TryReadLineChart(chartXml, plotArea, lineCharts, sheetId, sheetNameResolver, out chart);
         else if (lineChart is not null)
-            read = TryReadLineChart(chartXml, plotArea, [lineChart], sheetId, out chart);
+            read = TryReadLineChart(chartXml, plotArea, [lineChart], sheetId, sheetNameResolver, out chart);
         else if (threeDLineChart is not null)
-            read = TryReadLineLikeChart(chartXml, plotArea, threeDLineCharts, sheetId, ChartType.ThreeDLine, out chart);
+            read = TryReadLineLikeChart(chartXml, plotArea, threeDLineCharts, sheetId, ChartType.ThreeDLine, sheetNameResolver, out chart);
         else if (radarCharts.Count > 0)
-            read = TryReadLineLikeChart(chartXml, plotArea, radarCharts, sheetId, ChartType.Radar, out chart);
+            read = TryReadLineLikeChart(chartXml, plotArea, radarCharts, sheetId, ChartType.Radar, sheetNameResolver, out chart);
         else if (stockCharts.Count > 0)
-            read = TryReadStockChart(chartXml, plotArea, stockCharts, barCharts, sheetId, out chart);
+            read = TryReadStockChart(chartXml, plotArea, stockCharts, barCharts, sheetId, sheetNameResolver, out chart);
         else if (threeDBarChart is not null)
-            read = TryReadThreeDBarChart(chartXml, threeDBarChart, sheetId, out chart);
+            read = TryReadThreeDBarChart(chartXml, threeDBarChart, sheetId, sheetNameResolver, out chart);
         else if (deferredAdvancedChart is { } advanced)
-            read = TryReadDeferredAdvancedChart(chartXml, advanced.Element, sheetId, advanced.Type, fallbackDataRange, out chart);
+            read = TryReadDeferredAdvancedChart(chartXml, advanced.Element, sheetId, advanced.Type, fallbackDataRange, sheetNameResolver, out chart);
         else if (barChart is not null)
-            read = TryReadBarChart(chartXml, plotArea, barCharts, sheetId, out chart);
+            read = TryReadBarChart(chartXml, plotArea, barCharts, sheetId, sheetNameResolver, out chart);
         else
             return false;
 

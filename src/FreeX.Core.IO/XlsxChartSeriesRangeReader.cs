@@ -78,13 +78,42 @@ internal static class XlsxChartSeriesRangeReader
     public static bool HasDescendant(XElement element, string localName) =>
         element.Descendants().Any(descendant => descendant.Name.LocalName == localName);
 
-    public static bool TryParseFormulaRange(string formula, SheetId sheetId, out GridRange range)
+    public static bool TryParseFormulaRange(string formula, SheetId sheetId, out GridRange range) =>
+        TryParseFormulaRange(formula, sheetId, null, out range);
+
+    /// <summary>
+    /// Parses a chart series formula string into a <see cref="GridRange"/>.
+    /// When <paramref name="sheetNameResolver"/> is supplied and the formula contains a sheet-name
+    /// prefix (e.g. <c>'DataSheet'!$B$2:$B$6</c>), the prefix is looked up in the resolver to
+    /// obtain the correct <see cref="SheetId"/> for the referenced sheet — enabling cross-sheet
+    /// data ranges to point at the sheet that actually holds the data.
+    /// When the resolver is <see langword="null"/> or the sheet name is not found, the supplied
+    /// <paramref name="sheetId"/> (the chart's own sheet) is used as a fallback.
+    /// </summary>
+    public static bool TryParseFormulaRange(
+        string formula,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
+        out GridRange range)
     {
         range = default;
         var local = formula.Trim();
+
+        // Extract and resolve the sheet name from the formula prefix (e.g. 'Sheet1'!$A$1:$A$5).
         var bang = local.LastIndexOf('!');
         if (bang >= 0)
+        {
+            if (sheetNameResolver is not null)
+            {
+                // Unquote single-quoted sheet names: 'Sheet Name' → Sheet Name, or bare SheetName
+                var sheetPrefix = local[..bang].Trim('\'');
+                // Also handle doubled single-quotes inside quoted names per OOXML spec
+                sheetPrefix = sheetPrefix.Replace("''", "'", StringComparison.Ordinal);
+                if (sheetNameResolver.TryGetValue(sheetPrefix, out var resolvedId))
+                    sheetId = resolvedId;
+            }
             local = local[(bang + 1)..];
+        }
 
         local = local.Replace("$", "", StringComparison.Ordinal).Trim('\'');
         var parts = local.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

@@ -12,6 +12,7 @@ public static partial class XlsxChartPartReader
         IReadOnlyList<XElement> lineCharts,
         IReadOnlyList<XElement> scatterCharts,
         SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
         var firstBarChart = FirstChartElement(barCharts);
@@ -50,7 +51,7 @@ public static partial class XlsxChartPartReader
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
                 {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                         ranges.Add(range);
                 }
 
@@ -79,7 +80,7 @@ public static partial class XlsxChartPartReader
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
                 {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                         ranges.Add(range);
                 }
 
@@ -108,7 +109,7 @@ public static partial class XlsxChartPartReader
                 // Scatter series uses xVal/yVal; read their ranges as category/value ranges
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series, "tx", "xVal", "yVal"))
                 {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                         ranges.Add(range);
                 }
 
@@ -187,6 +188,7 @@ public static partial class XlsxChartPartReader
         XElement? plotArea,
         IReadOnlyList<XElement> barCharts,
         SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
         var firstBarChart = FirstChartElement(barCharts);
@@ -224,7 +226,7 @@ public static partial class XlsxChartPartReader
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
                 {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                         ranges.Add(range);
                 }
 

@@ -11,9 +11,10 @@ public static partial class XlsxChartPartReader
         IReadOnlyList<XElement> stockCharts,
         IReadOnlyList<XElement> barCharts,
         SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
-        if (!TryReadLineLikeChart(chartXml, plotArea, stockCharts, sheetId, ChartType.Stock, out chart))
+        if (!TryReadLineLikeChart(chartXml, plotArea, stockCharts, sheetId, ChartType.Stock, sheetNameResolver, out chart))
             return false;
 
         var stockSeriesCount = stockCharts.Sum(plotChart => plotChart.Elements(ChartNs + "ser").Count());
@@ -22,7 +23,7 @@ public static partial class XlsxChartPartReader
         {
             foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
             {
-                if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                     volumeRanges.Add(range);
             }
         }
@@ -51,6 +52,7 @@ public static partial class XlsxChartPartReader
         IReadOnlyList<XElement> plotCharts,
         SheetId sheetId,
         ChartType chartType,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
         var ranges = new List<GridRange>();
@@ -74,7 +76,7 @@ public static partial class XlsxChartPartReader
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
                 {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                         ranges.Add(range);
                 }
 
@@ -121,6 +123,7 @@ public static partial class XlsxChartPartReader
         XElement? plotArea,
         IReadOnlyList<XElement> lineCharts,
         SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
         var ranges = new List<GridRange>();
@@ -144,7 +147,7 @@ public static partial class XlsxChartPartReader
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
                 {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                         ranges.Add(range);
                 }
 

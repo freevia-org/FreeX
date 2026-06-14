@@ -11,6 +11,7 @@ public static partial class XlsxChartPartReader
         IReadOnlyList<XElement> areaCharts,
         IReadOnlyList<XElement> lineCharts,
         SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
         var ranges = new List<GridRange>();
@@ -33,7 +34,7 @@ public static partial class XlsxChartPartReader
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
                 {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                         ranges.Add(range);
                 }
 
@@ -62,7 +63,7 @@ public static partial class XlsxChartPartReader
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
                 {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                         ranges.Add(range);
                 }
 
@@ -117,6 +118,7 @@ public static partial class XlsxChartPartReader
         IReadOnlyList<XElement> areaCharts,
         SheetId sheetId,
         ChartType chartType,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
         var ranges = new List<GridRange>();
@@ -139,7 +141,7 @@ public static partial class XlsxChartPartReader
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
                 {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                         ranges.Add(range);
                 }
 

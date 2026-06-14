@@ -10,6 +10,7 @@ public static partial class XlsxChartPartReader
         XElement? plotArea,
         IReadOnlyList<XElement> scatterCharts,
         SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
         var ranges = new List<GridRange>();
@@ -31,7 +32,7 @@ public static partial class XlsxChartPartReader
                 hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series, "tx", "xVal", "yVal"))
                 {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                         ranges.Add(range);
                 }
 

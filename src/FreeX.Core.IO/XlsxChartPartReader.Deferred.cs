@@ -108,7 +108,7 @@ public static partial class XlsxChartPartReader
         ChartType chartType,
         out ChartModel chart)
     {
-        return TryReadDeferredAdvancedChart(chartXml, plotChart, sheetId, chartType, fallbackDataRange: null, out chart);
+        return TryReadDeferredAdvancedChart(chartXml, plotChart, sheetId, chartType, fallbackDataRange: null, sheetNameResolver: null, out chart);
     }
 
     private static bool TryReadDeferredAdvancedChart(
@@ -117,6 +117,7 @@ public static partial class XlsxChartPartReader
         SheetId sheetId,
         ChartType chartType,
         GridRange? fallbackDataRange,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
         var ranges = new List<GridRange>();
@@ -161,7 +162,7 @@ public static partial class XlsxChartPartReader
 
             foreach (var formula in ReadDeferredAdvancedSeriesRangeFormulas(chartXml, series))
             {
-                if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                     ranges.Add(range);
             }
         }
@@ -330,6 +331,7 @@ public static partial class XlsxChartPartReader
         XDocument chartXml,
         XElement plotChart,
         SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
         var barDirection = FirstChildElementByLocalName(plotChart, "barDir")?
@@ -339,6 +341,6 @@ public static partial class XlsxChartPartReader
             ? ChartType.ThreeDBar
             : ChartType.ThreeDColumn;
 
-        return TryReadDeferredAdvancedChart(chartXml, plotChart, sheetId, chartType, out chart);
+        return TryReadDeferredAdvancedChart(chartXml, plotChart, sheetId, chartType, fallbackDataRange: null, sheetNameResolver, out chart);
     }
 }
