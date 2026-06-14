@@ -93,11 +93,13 @@ public partial class App : Application
         // window is already hosting the recovered workbook (and is dirty).
         var recoveryAccepted = OfferStartupRecovery(mainWindow, snapshotStore);
 
+        var openedStartupFile = false;
         foreach (var startupWorkbookPath in e.Args)
         {
             if (!File.Exists(startupWorkbookPath))
                 continue;
 
+            openedStartupFile = true;
             if (recoveryAccepted)
             {
                 // The main window already holds a recovered workbook. Opening the command-line
@@ -129,6 +131,13 @@ public partial class App : Application
 
             break;
         }
+
+        // Warm the XLSX open/save pipeline off the UI thread so the user's first real file open does
+        // not pay the cold-process JIT / static-init / assembly-load cost (~6-7s).  Skip it when a
+        // startup file-arg or crash-recovery open is already underway — that open is itself the
+        // warmup, and a concurrent prewarm would only contend for CPU.
+        if (!openedStartupFile && !recoveryAccepted)
+            StartupPipelinePrewarmer.StartBackgroundPrewarm();
 
         diagnostics.RecordEvent("app_ready");
         Log.Information("FreeX ready");
