@@ -222,7 +222,21 @@ for tab in mainorder + ctxorder:
             kk = esc(k)
             large = (i == 0 and kind == "Button" and len(ctrls) >= 2)
             if m == "ComboBox":
-                cl.append(f'                .ComboBox("{cesc}", "{cesc}", c => c with {{ Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}) }})')
+                low = cn.lower()
+                if "font size" in low:
+                    items = '"8", "9", "10", "11", "12", "14", "16", "18", "20", "24"'
+                elif "font" in low:
+                    items = '"Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana"'
+                elif "number" in low:
+                    items = '"General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text"'
+                elif "width" in low or "height" in low:
+                    items = '"Automatic", "1 page", "2 pages"'
+                elif "percent" in low or "scale" in low:
+                    items = '"100%", "90%", "80%", "75%", "50%"'
+                else:
+                    items = ""
+                itemexpr = (", Items = new[] { " + items + " }") if items else ""
+                cl.append(f'                .ComboBox("{cesc}", "{cesc}", c => c with {{ Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}){itemexpr} }})')
             elif large:
                 cl.append(f'                .Button("{cesc}", "{cesc}", b => b with {{ PreferredLayout = RibbonCommandLayoutKind.Large, Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}), KeyTip = "{kk}" }})')
             else:

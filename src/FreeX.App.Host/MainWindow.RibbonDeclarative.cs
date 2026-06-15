@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using FreeX.Ribbon;
 
 namespace FreeX.App.Host;
@@ -40,12 +44,59 @@ public partial class MainWindow
 
                 tabItem.Content = RibbonWpfRenderer.BuildTabContent(definitionTab, this, registry);
             }
+
+            if (Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_CAPTURE") == "1")
+                Dispatcher.BeginInvoke(new Action(CaptureDeclarativeRibbon), DispatcherPriority.ContextIdle);
         }
         catch (Exception ex)
         {
             // A preview-mode swap must never take down startup.
             System.Diagnostics.Debug.WriteLine($"Declarative ribbon swap failed: {ex}");
         }
+    }
+
+    /// <summary>Renders the live (swapped) ribbon tab strip to a PNG and exits — capture-mode proof.</summary>
+    private void CaptureDeclarativeRibbon()
+    {
+        try
+        {
+            if (RibbonTabs is null)
+                return;
+
+            RibbonTabs.UpdateLayout();
+            var width = (int)Math.Ceiling(RibbonTabs.ActualWidth);
+            var height = (int)Math.Ceiling(RibbonTabs.ActualHeight);
+            if (width <= 0 || height <= 0)
+                return;
+
+            var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(RibbonTabs);
+
+            var outputPath = Path.Combine(FindScreenshotDirectory(), "home_live.png");
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var stream = File.Create(outputPath);
+            encoder.Save(stream);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Declarative ribbon capture failed: {ex}");
+        }
+        finally
+        {
+            Application.Current?.Shutdown();
+        }
+    }
+
+    private static string FindScreenshotDirectory()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FreeX.slnx")))
+            dir = dir.Parent;
+
+        var root = dir?.FullName ?? AppContext.BaseDirectory;
+        return Path.Combine(root, "screenshots", "ribbon-declarative");
     }
 
     private RibbonCommandRegistry BuildDeclarativeRibbonRegistry()
