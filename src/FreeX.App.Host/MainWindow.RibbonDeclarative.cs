@@ -125,6 +125,15 @@ public partial class MainWindow
 
     private static IEnumerable<DependencyObject> EnumerateLogicalTree(DependencyObject root)
     {
+        // A control's ContextMenu (its dropdown contents) is not always reached by GetChildren,
+        // so descend into it explicitly to register the menu-item commands too.
+        if (root is FrameworkElement { ContextMenu: { } contextMenu })
+        {
+            yield return contextMenu;
+            foreach (var descendant in EnumerateLogicalTree(contextMenu))
+                yield return descendant;
+        }
+
         foreach (var child in LogicalTreeHelper.GetChildren(root))
         {
             if (child is not DependencyObject node)
@@ -145,8 +154,15 @@ public partial class MainWindow
 
         public void Execute(RibbonCommandContext context)
         {
-            if (_source is ButtonBase button)
-                button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            switch (_source)
+            {
+                case MenuItem menuItem:
+                    menuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                    break;
+                case ButtonBase button:
+                    button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                    break;
+            }
         }
     }
 }

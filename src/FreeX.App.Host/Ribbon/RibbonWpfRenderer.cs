@@ -339,14 +339,76 @@ public static class RibbonWpfRenderer
         if (registry is null)
             return;
 
-        element.IsEnabled = registry.TryGet(control.CommandId, out _);
-        if (element is ButtonBase buttonBase)
+        var menu = GetMenu(control);
+        var hasMenuItems = menu is not null && menu.Items.Count > 0;
+        element.IsEnabled = hasMenuItems || registry.TryGet(control.CommandId, out _);
+
+        if (element is not ButtonBase buttonBase)
+            return;
+
+        if (hasMenuItems)
+        {
+            var contextMenu = BuildContextMenu(menu!, registry);
+            contextMenu.PlacementTarget = buttonBase;
+            contextMenu.Placement = PlacementMode.Bottom;
+            buttonBase.ContextMenu = contextMenu;
+            buttonBase.Click += (_, _) => contextMenu.IsOpen = true;
+        }
+        else
         {
             buttonBase.Click += (_, _) =>
             {
                 if (registry.TryGet(control.CommandId, out var command) && command is not null)
                     command.Execute(RibbonCommandContext.Empty);
             };
+        }
+    }
+
+    private static RibbonMenu? GetMenu(RibbonControl control) => control switch
+    {
+        RibbonSplitButton sb => sb.Menu,
+        RibbonDropdown dd => dd.Menu,
+        _ => null
+    };
+
+    private static ContextMenu BuildContextMenu(RibbonMenu menu, IRibbonCommandRegistry registry)
+    {
+        var contextMenu = new ContextMenu();
+        AddMenuItems(contextMenu.Items, menu.Items, registry);
+        return contextMenu;
+    }
+
+    private static void AddMenuItems(ItemCollection target, IReadOnlyList<RibbonMenuItem> items, IRibbonCommandRegistry registry)
+    {
+        foreach (var item in items)
+        {
+            if (item.Kind == FreeX.Ribbon.RibbonMenuItemKind.Separator)
+            {
+                target.Add(new Separator());
+                continue;
+            }
+
+            var menuItem = new MenuItem
+            {
+                Header = item.Header,
+                InputGestureText = item.InputGesture ?? string.Empty
+            };
+
+            if (item.Children.Count > 0)
+            {
+                AddMenuItems(menuItem.Items, item.Children, registry);
+            }
+            else if (item.CommandId is { } commandId)
+            {
+                menuItem.IsEnabled = registry.TryGet(commandId, out _);
+                menuItem.Click += (_, _) =>
+                {
+                    if (registry.TryGet(commandId, out var command) && command is not null)
+                        command.Execute(RibbonCommandContext.Empty);
+                };
+            }
+
+            target.Add(menuItem);
         }
     }
 

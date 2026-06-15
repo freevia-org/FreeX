@@ -69,9 +69,24 @@ for e in root.iter():
                 if not cn:
                     continue
                 style = re.sub(r"\{StaticResource (\w+)\}", r"\1", d.get("Style") or "")
-                has_drop = d.get(LK + "RibbonMetadata.DropdownMenuButton") == "true" or \
-                    any(ch.tag.split("}")[-1].endswith(".ContextMenu") for ch in list(d))
-                items.append(("ctrl", tag, cn, keytip(d) or "", style, has_drop))
+                menu = []
+                for ch in list(d):
+                    if not ch.tag.split("}")[-1].endswith(".ContextMenu"):
+                        continue
+                    cm = ch.find(P + "ContextMenu")
+                    if cm is None:
+                        continue
+                    for mi in list(cm):
+                        mt = mi.tag.split("}")[-1]
+                        if mt == "Separator":
+                            menu.append(("sep",))
+                        elif mt == "MenuItem":
+                            mcn = mi.get(LK + "RibbonMetadata.CommandName") or mi.get("Header") or ""
+                            if mcn:
+                                menu.append(("item", mcn, mi.get(LK + "RibbonTooltip.KeyTip") or "",
+                                             mi.get("InputGestureText") or ""))
+                has_drop = d.get(LK + "RibbonMetadata.DropdownMenuButton") == "true" or len(menu) > 0
+                items.append(("ctrl", tag, cn, keytip(d) or "", style, has_drop, menu))
         if curtab not in data:
             data[curtab] = []
             order.append(curtab)
@@ -211,6 +226,31 @@ def method(kind):
     return {"Button": "Button", "ToggleButton": "Toggle", "CheckBox": "CheckBox", "ComboBox": "ComboBox"}[kind]
 
 
+def menu_expr(menu):
+    parts = []
+    n = 0
+    for m in menu:
+        if m[0] == "sep":
+            if parts and not parts[-1].endswith("Separator()"):
+                parts.append(".Separator()")
+            continue
+        if n >= 14:
+            break
+        mcn, mkt, mg = esc(m[1]), esc(m[2]), esc(m[3])
+        args = f'"{mcn}", "{mcn}"'
+        if mkt or mg:
+            args += f', "{mkt}"'
+        if mg:
+            args += f', "{mg}"'
+        parts.append(f".Item({args})")
+        n += 1
+    while parts and parts[0].endswith("Separator()"):
+        parts.pop(0)
+    while parts and parts[-1].endswith("Separator()"):
+        parts.pop()
+    return "".join(parts)
+
+
 out = []
 out.append("using FreeX.Ribbon;")
 out.append("using Ico = FreeX.Ribbon.RibbonCommandIconKind;")
@@ -276,11 +316,17 @@ for tab in mainorder + ctxorder:
             if it[0] == "sep":
                 cl.append("                .Separator()")
                 continue
-            _, kind, cn, k, style, has_drop = it
+            _, kind, cn, k, style, has_drop, menu = it
             ic = icon(cn)
             cesc = esc(cn)
             kk = esc(k)
-            drop = ", dropdown: true" if has_drop else ""
+            mx = menu_expr(menu) if menu else ""
+            if mx:
+                drop = f", menu: m => m{mx}"
+            elif has_drop:
+                drop = ", dropdown: true"
+            else:
+                drop = ""
             if kind == "ComboBox":
                 low = cn.lower()
                 if "font size" in low:

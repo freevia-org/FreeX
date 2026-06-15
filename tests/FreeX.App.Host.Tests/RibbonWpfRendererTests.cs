@@ -17,6 +17,54 @@ public class RibbonWpfRendererTests
     }
 
     [Fact]
+    public void GeneratedTabs_HaveDropdownsWithPopulatedMenus()
+    {
+        var definition = FreeXRibbon.Build();
+        var dropdownsWithMenus = definition.Tabs
+            .SelectMany(t => t.Groups)
+            .SelectMany(g => g.Controls)
+            .OfType<RibbonDropdown>()
+            .Count(d => d.Menu.Items.Count > 0);
+
+        dropdownsWithMenus.Should().BeGreaterThan(10);
+    }
+
+    [Fact]
+    public void RenderedDropdown_OpensMenu_AndItemInvokesCommand()
+    {
+        var registry = new RibbonCommandRegistry();
+        var shadow = new RecordingCommand();
+        registry.Register("Shadow", shadow);
+
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("t", "T", "T", tab => tab
+                .Group("g", "G", "G", 1, g => g
+                    .Medium("Shape Effects", "Shape Effects", RibbonCommandIconKind.RibbonShape, "FX",
+                        menu: m => m.Item("Shadow", "Shadow", "S").Separator().Item("Glow", "Glow", "G"))))
+            .Build();
+
+        StaTestRunner.Run(() =>
+        {
+            var host = BuildHost();
+            host.Child = RibbonWpfRenderer.BuildTabContent(definition.FindTab("t")!, host, registry);
+            host.Measure(new Size(600, 130));
+            host.Arrange(new Rect(0, 0, 600, 130));
+            host.UpdateLayout();
+
+            var button = (ButtonBase)FindByCommandName(host, "Shape Effects")!;
+            button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+
+            var menu = button.ContextMenu;
+            menu.Should().NotBeNull();
+            menu!.IsOpen.Should().BeTrue();
+            var shadowItem = menu.Items.OfType<MenuItem>().First(mi => Equals(mi.Header, "Shadow"));
+            shadowItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        });
+
+        shadow.Invocations.Should().Be(1);
+    }
+
+    [Fact]
     public void HomeDefinition_IsValid_AndHasAllSevenGroups()
     {
         var definition = HomeRibbonDefinition.Build();
