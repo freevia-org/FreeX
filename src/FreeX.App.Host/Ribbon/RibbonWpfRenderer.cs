@@ -183,10 +183,25 @@ public static class RibbonWpfRenderer
         {
             RibbonSeparator => BuildInlineDivider(),
             RibbonComboBox combo => BuildComboControl(combo, resourceHost, registry),
+            RibbonCheckBox check => BuildCheckControl(check, registry),
             { PreferredLayout: RibbonCommandLayoutKind.Large } => BuildLargeControl(control, resourceHost, registry),
             { PreferredLayout: RibbonCommandLayoutKind.Small } => BuildIconControl(control, resourceHost, registry),
             _ => BuildMediumControl(control, resourceHost, registry)
         };
+
+    private static FrameworkElement BuildCheckControl(RibbonCheckBox check, IRibbonCommandRegistry? registry)
+    {
+        var box = new CheckBox
+        {
+            Content = check.Label,
+            FontSize = 12,
+            Height = SmallRowHeight,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 1, 2, 1)
+        };
+        WireMetadata(box, check, registry);
+        return box;
+    }
 
     private static FrameworkElement BuildLargeControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry)
     {

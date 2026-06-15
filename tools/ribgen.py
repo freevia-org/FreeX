@@ -62,7 +62,8 @@ for e in root.iter():
                 cn = cmdname(d)
                 if not cn:
                     continue
-                ctrls.append((tag, cn, keytip(d) or ""))
+                style = re.sub(r"\{StaticResource (\w+)\}", r"\1", d.get("Style") or "")
+                ctrls.append((tag, cn, keytip(d) or "", style))
         if curtab not in data:
             data[curtab] = []
             order.append(curtab)
@@ -153,6 +154,37 @@ def icon(cn):
     return "Generic"
 
 
+# Mirrors RibbonCommandPresentationPlanner.IsLargeRibbonCommand (the authoritative hero-button list).
+LARGE_EQ = {
+    "paste", "table", "pivottable", "3d map", "insert picture", "pictures", "shapes",
+    "insert link", "comment", "symbol", "line", "rotate object", "object size",
+    "sort ascending", "sort descending", "filter", "group", "ungroup", "zoom", "100%", "macros", "feedback",
+}
+LARGE_CONTAINS = [
+    "conditional formatting", "format as table", "cell styles", "add-ins", "recommended chart",
+    "recommended pivottable", "insert symbol", "insert slicer", "insert timeline", "header", "equation",
+    "text box", "rectangle", "ellipse", "bring forward", "send backward", "selection pane", "themes",
+    "margins", "orientation", "paper size", "print area", "breaks", "background", "print titles",
+    "theme colors", "theme fonts", "theme effects", "scale to fit", "insert function", "autosum",
+    "name manager", "define name", "use in formula", "create from selection", "calculation options",
+    "calculate now", "calculate sheet", "get data", "refresh all", "text to columns", "flash fill",
+    "remove duplicates", "data validation", "consolidate", "data model", "analyze data", "what-if",
+    "forecast sheet", "collapse group", "expand group", "subtotal", "spelling", "workbook statistics",
+    "check accessibility", "show changes", "new comment", "show comments", "protect sheet",
+    "protect workbook", "allow edit", "normal", "page break preview", "page layout", "custom views",
+    "zoom to 100", "zoom to selection", "help online", "copy diagnostics", "check for updates",
+    "about freex", "legal notices",
+]
+ICON_STYLES = {"RibbonIconButton", "RibbonIconToggleButton"}
+
+
+def is_large(name):
+    n = name.strip().lower()
+    if n in LARGE_EQ:
+        return True
+    return any(s in n for s in LARGE_CONTAINS)
+
+
 def grouphdr(cid, tab):
     s = cid[:-5] if cid.endswith("Group") else cid
     tp = tab[:-3]
@@ -173,6 +205,7 @@ def method(kind):
 
 out = []
 out.append("using FreeX.Ribbon;")
+out.append("using Ico = FreeX.Ribbon.RibbonCommandIconKind;")
 out.append("")
 out.append("namespace FreeX.App.Host;")
 out.append("")
@@ -217,32 +250,45 @@ for tab in mainorder + ctxorder:
         ghdr = esc(grouphdr(cid, tab))
         ctrls = ctrls[:16]
         cl = []
-        for i, (kind, cn, k) in enumerate(ctrls):
-            m = method(kind)
+        for i, (kind, cn, k, style) in enumerate(ctrls):
             ic = icon(cn)
             cesc = esc(cn)
             kk = esc(k)
-            large = (i == 0 and kind == "Button" and len(ctrls) >= 2)
-            if m == "ComboBox":
+            if kind == "ComboBox":
                 low = cn.lower()
                 if "font size" in low:
                     items = '"8", "9", "10", "11", "12", "14", "16", "18", "20", "24"'
+                    width = "44"
                 elif "font" in low:
                     items = '"Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana"'
+                    width = "120"
                 elif "number" in low:
                     items = '"General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text"'
+                    width = "120"
                 elif "width" in low or "height" in low:
                     items = '"Automatic", "1 page", "2 pages"'
+                    width = "96"
                 elif "percent" in low or "scale" in low:
                     items = '"100%", "90%", "80%", "75%", "50%"'
+                    width = "70"
                 else:
                     items = ""
-                itemexpr = (", Items = new[] { " + items + " }") if items else ""
-                cl.append(f'                .ComboBox("{cesc}", "{cesc}", c => c with {{ Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}){itemexpr} }})')
-            elif large:
-                cl.append(f'                .Button("{cesc}", "{cesc}", b => b with {{ PreferredLayout = RibbonCommandLayoutKind.Large, Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}), KeyTip = "{kk}" }})')
+                    width = ""
+                parts = [f"Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic})"]
+                if width:
+                    parts.append(f"Width = {width}")
+                if items:
+                    parts.append("Items = new[] { " + items + " }")
+                cl.append(f'                .ComboBox("{cesc}", "{cesc}", c => c with {{ {", ".join(parts)} }})')
+            elif kind == "CheckBox":
+                cl.append(f'                .CheckBox("{cesc}", "{cesc}", b => b with {{ Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}) }})')
+            elif is_large(cn):
+                cl.append(f'                .Large("{cesc}", "{cesc}", Ico.{ic}, "{kk}")')
+            elif style in ICON_STYLES or kind == "ToggleButton":
+                meth = "IconToggle" if kind == "ToggleButton" else "Icon"
+                cl.append(f'                .{meth}("{cesc}", "{cesc}", Ico.{ic}, "{kk}")')
             else:
-                cl.append(f'                .{m}("{cesc}", "{cesc}", b => b with {{ Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}), KeyTip = "{kk}" }})')
+                cl.append(f'                .Medium("{cesc}", "{cesc}", Ico.{ic}, "{kk}")')
         body = "\n".join(cl)
         out.append(f'            .Group("{cid}", "{ghdr}", null, priority: {gp},')
         out.append("                g => g")
