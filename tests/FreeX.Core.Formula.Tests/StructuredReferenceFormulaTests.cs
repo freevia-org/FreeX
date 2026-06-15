@@ -135,6 +135,113 @@ public sealed class StructuredReferenceFormulaTests
         result.Should().Be(new NumberValue(27));
     }
 
+    // ----- Empty-selector (whole-table-body) structured references: tblName[] -----
+
+    [Fact]
+    public void EmptySelector_WholeTableBody_SumReturnsAllDataBodyValues()
+    {
+        // tblShifts[] with empty [] = entire data body across all columns.
+        // Data body: row1=[1,2,"A"], row2=[3,4,"B"]. SUM ignores text → 1+2+3+4=10.
+        var (workbook, sheet) = CreateShiftsWorkbook();
+        var evaluator = new FormulaEvaluator();
+
+        var result = evaluator.Evaluate("=SUM(tblShifts[])", sheet, workbook);
+
+        result.Should().Be(new NumberValue(10));
+    }
+
+    [Fact]
+    public void EmptySelector_WholeTableBody_RowsCountReturnsDataBodyRowCount()
+    {
+        var (workbook, sheet) = CreateShiftsWorkbook();
+        var evaluator = new FormulaEvaluator();
+
+        var result = evaluator.Evaluate("=ROWS(tblShifts[])", sheet, workbook);
+
+        result.Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void EmptySelector_WholeTableBody_VlookupFindsThirdColumnValue()
+    {
+        // VLOOKUP(3, tblShifts[], 3, FALSE) = exact match on col1=3 → returns col3 = "B".
+        // This is the canonical tblShifts[] use-case from the Shift Calendar sheet.
+        var (workbook, sheet) = CreateShiftsWorkbook();
+        var evaluator = new FormulaEvaluator();
+
+        var result = evaluator.Evaluate("=VLOOKUP(3,tblShifts[],3,FALSE)", sheet, workbook);
+
+        result.Should().Be(new TextValue("B"));
+    }
+
+    [Fact]
+    public void EmptySelector_WholeTableBody_VlookupMiss_ReturnsNaError()
+    {
+        // VLOOKUP with no match (exact) should return #N/A (not #VALUE!/#REF!), confirming the range resolved.
+        var (workbook, sheet) = CreateShiftsWorkbook();
+        var evaluator = new FormulaEvaluator();
+
+        var result = evaluator.Evaluate("=VLOOKUP(99,tblShifts[],3,FALSE)", sheet, workbook);
+
+        result.Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void EmptySelector_ExistingSelectorsUnchanged_DataSelectorStillWorks()
+    {
+        // tblShifts[#Data] must still resolve the same full data body (regression guard).
+        var (workbook, sheet) = CreateShiftsWorkbook();
+        var evaluator = new FormulaEvaluator();
+
+        var dataResult = evaluator.Evaluate("=SUM(tblShifts[#Data])", sheet, workbook);
+        var emptyResult = evaluator.Evaluate("=SUM(tblShifts[])", sheet, workbook);
+
+        dataResult.Should().Be(emptyResult);
+    }
+
+    private static (Workbook Workbook, Sheet Sheet) CreateShiftsWorkbook()
+    {
+        // Simulates the tblShifts table from the Shift Calendar file.
+        // 3 columns: "From Date" (col 1), "To Date" (col 2), "Shift" (col 3, text).
+        // 2 data rows. All numeric columns have values 1-6 so SUM = 21.
+        var workbook = new Workbook("ShiftsTest");
+        var sheet = workbook.AddSheet("Calendar");
+
+        // Header row (row 1)
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("From Date"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("To Date"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Shift"));
+
+        // Data row 1 (row 2): From=1, To=2, Shift="A"
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new TextValue("A"));
+
+        // Data row 2 (row 3): From=3, To=4, Shift="B"
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(4));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new TextValue("B"));
+
+        var table = new StructuredTableModel
+        {
+            Id = 2,
+            Name = "tblShifts",
+            DisplayName = "tblShifts",
+            Range = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 3)),
+            HasAutoFilter = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "From Date"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "To Date"));
+        table.Columns.Add(new StructuredTableColumnModel(3, "Shift"));
+        sheet.StructuredTables.Add(table);
+
+        return (workbook, sheet);
+    }
+
     private static (Workbook Workbook, Sheet Sheet) CreateSalesWorkbook()
     {
         var workbook = new Workbook("StructuredReferenceTest");
