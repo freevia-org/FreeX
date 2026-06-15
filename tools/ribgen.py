@@ -53,21 +53,29 @@ for e in root.iter():
     if cid and cid.endswith("Tab"):
         curtab = cid
     if cid and cid.endswith("Group"):
-        ctrls = []
+        items = []
         for d in e.iter():
             tag = d.tag.split("}")[-1]
-            if tag in ("Button", "ToggleButton", "ComboBox", "CheckBox"):
-                if any(a.tag == P + "ContextMenu" for a in anc(d)):
-                    continue
+            ancestors = anc(d)
+            if any(a.tag == P + "ContextMenu" for a in ancestors):
+                continue
+            inside_ctrl = any(
+                a.tag.split("}")[-1] in ("Button", "ToggleButton", "ComboBox", "CheckBox")
+                for a in ancestors)
+            if tag == "Rectangle" and d.get("Width") == "1" and not inside_ctrl:
+                items.append(("sep",))
+            elif tag in ("Button", "ToggleButton", "ComboBox", "CheckBox") and not inside_ctrl:
                 cn = cmdname(d)
                 if not cn:
                     continue
                 style = re.sub(r"\{StaticResource (\w+)\}", r"\1", d.get("Style") or "")
-                ctrls.append((tag, cn, keytip(d) or "", style))
+                has_drop = d.get(LK + "RibbonMetadata.DropdownMenuButton") == "true" or \
+                    any(ch.tag.split("}")[-1].endswith(".ContextMenu") for ch in list(d))
+                items.append(("ctrl", tag, cn, keytip(d) or "", style, has_drop))
         if curtab not in data:
             data[curtab] = []
             order.append(curtab)
-        data[curtab].append((cid, ctrls))
+        data[curtab].append((cid, items))
 
 ctxkey = {
     "ShapeFormatTab": "shape.selected",
@@ -235,7 +243,7 @@ for tab in mainorder + ctxorder:
         raw_hdr = ctxlabel[tab]
     hdr = esc(raw_hdr)
     kt = esc(meta["keytip"])
-    groups = [g for g in data[tab] if g[1]]
+    groups = [g for g in data[tab] if any(it[0] == "ctrl" for it in g[1])]
     if not groups:
         continue
     if tab in ctxkey:
@@ -246,49 +254,70 @@ for tab in mainorder + ctxorder:
     else:
         out.append(f'        .Tab("{tab}", "{hdr}", "{kt}", tab => tab')
     gp = 180
-    for cid, ctrls in groups:
+    for cid, items in groups:
         ghdr = esc(grouphdr(cid, tab))
-        ctrls = ctrls[:16]
+        # Cap control count (keep separators), and drop leading/trailing/duplicate separators.
+        kept = []
+        ctrl_count = 0
+        for it in items:
+            if it[0] == "sep":
+                if kept and kept[-1][0] != "sep":
+                    kept.append(it)
+                continue
+            if ctrl_count >= 16:
+                continue
+            kept.append(it)
+            ctrl_count += 1
+        while kept and kept[-1][0] == "sep":
+            kept.pop()
+
         cl = []
-        for i, (kind, cn, k, style) in enumerate(ctrls):
+        for it in kept:
+            if it[0] == "sep":
+                cl.append("                .Separator()")
+                continue
+            _, kind, cn, k, style, has_drop = it
             ic = icon(cn)
             cesc = esc(cn)
             kk = esc(k)
+            drop = ", dropdown: true" if has_drop else ""
             if kind == "ComboBox":
                 low = cn.lower()
                 if "font size" in low:
-                    items = '"8", "9", "10", "11", "12", "14", "16", "18", "20", "24"'
+                    citems = '"8", "9", "10", "11", "12", "14", "16", "18", "20", "24"'
                     width = "44"
                 elif "font" in low:
-                    items = '"Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana"'
+                    citems = '"Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana"'
                     width = "120"
                 elif "number" in low:
-                    items = '"General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text"'
+                    citems = '"General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text"'
                     width = "120"
                 elif "width" in low or "height" in low:
-                    items = '"Automatic", "1 page", "2 pages"'
+                    citems = '"Automatic", "1 page", "2 pages"'
                     width = "96"
                 elif "percent" in low or "scale" in low:
-                    items = '"100%", "90%", "80%", "75%", "50%"'
+                    citems = '"100%", "90%", "80%", "75%", "50%"'
                     width = "70"
                 else:
-                    items = ""
+                    citems = ""
                     width = ""
                 parts = [f"Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic})"]
                 if width:
                     parts.append(f"Width = {width}")
-                if items:
-                    parts.append("Items = new[] { " + items + " }")
+                if citems:
+                    parts.append("Items = new[] { " + citems + " }")
                 cl.append(f'                .ComboBox("{cesc}", "{cesc}", c => c with {{ {", ".join(parts)} }})')
             elif kind == "CheckBox":
                 cl.append(f'                .CheckBox("{cesc}", "{cesc}", b => b with {{ Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}) }})')
             elif is_large(cn):
-                cl.append(f'                .Large("{cesc}", "{cesc}", Ico.{ic}, "{kk}")')
+                cl.append(f'                .Large("{cesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
             elif style in ICON_STYLES or kind == "ToggleButton":
-                meth = "IconToggle" if kind == "ToggleButton" else "Icon"
-                cl.append(f'                .{meth}("{cesc}", "{cesc}", Ico.{ic}, "{kk}")')
+                if kind == "ToggleButton":
+                    cl.append(f'                .IconToggle("{cesc}", "{cesc}", Ico.{ic}, "{kk}")')
+                else:
+                    cl.append(f'                .Icon("{cesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
             else:
-                cl.append(f'                .Medium("{cesc}", "{cesc}", Ico.{ic}, "{kk}")')
+                cl.append(f'                .Medium("{cesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
         body = "\n".join(cl)
         out.append(f'            .Group("{cid}", "{ghdr}", null, priority: {gp},')
         out.append("                g => g")
