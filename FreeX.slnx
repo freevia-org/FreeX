@@ -9,6 +9,7 @@
     <Project Path="src/FreeX.Core.Formula/FreeX.Core.Formula.csproj" />
     <Project Path="src/FreeX.Core.IO/FreeX.Core.IO.csproj" />
     <Project Path="src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <Project Path="src/FreeX.Ribbon/FreeX.Ribbon.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FreeX.Core.Calc.Tests/FreeX.Core.Calc.Tests.csproj" />
@@ -20,6 +21,7 @@
     <Project Path="tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj" />
     <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj" />
     <Project Path="tests/FreeX.App.Host.Logic.Tests/FreeX.App.Host.Logic.Tests.csproj" />
+    <Project Path="tests/FreeX.Ribbon.Tests/FreeX.Ribbon.Tests.csproj" />
     <Project Path="tests/FreeX.Fixtures/FreeX.Fixtures.csproj" />
     <Project Path="tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj" />
   </Folder>
