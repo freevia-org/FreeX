@@ -32,5 +32,7 @@
     <Project Path="tools/FreeX.ExcelOpenSmoke/FreeX.ExcelOpenSmoke.csproj" />
     <Project Path="tools/FreeX.FidelityCompare/FreeX.FidelityCompare.csproj" />
     <Project Path="tools/FreeX.ForegroundCapture/FreeX.ForegroundCapture.csproj" />
+    <Project Path="tools/FreeX.SheetFidelity/FreeX.SheetFidelity.csproj" />
+    <Project Path="tools/FreeX.SheetImageCompare/FreeX.SheetImageCompare.csproj" />
   </Folder>
 </Solution>

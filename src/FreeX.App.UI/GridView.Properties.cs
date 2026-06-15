@@ -161,6 +161,15 @@ public partial class GridView
         set => SetValue(ValidationCircleCellsProperty, value);
     }
 
+    public static readonly DependencyProperty HyperlinkCellsProperty =
+        DependencyProperty.Register(nameof(HyperlinkCells), typeof(IReadOnlySet<CellAddress>), typeof(GridView),
+            new FrameworkPropertyMetadata(null));
+    public IReadOnlySet<CellAddress>? HyperlinkCells
+    {
+        get => (IReadOnlySet<CellAddress>?)GetValue(HyperlinkCellsProperty);
+        set => SetValue(HyperlinkCellsProperty, value);
+    }
+
     public static readonly DependencyProperty ChartsProperty =
         DependencyProperty.Register(nameof(Charts), typeof(IReadOnlyList<ChartModel>), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnChartRenderCacheInputChanged));

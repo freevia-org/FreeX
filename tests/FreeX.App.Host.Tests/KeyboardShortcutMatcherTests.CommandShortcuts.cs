@@ -26,6 +26,7 @@ public sealed partial class KeyboardShortcutMatcherTests
     [InlineData(Key.T, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CreateTable)]
     [InlineData(Key.L, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CreateTable)]
     [InlineData(Key.K, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.InsertHyperlink)]
+    [InlineData(Key.Enter, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenHyperlink)]
     [InlineData(Key.D, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.FillDown)]
     [InlineData(Key.R, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.FillRight)]
     [InlineData(Key.E, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.FlashFill)]

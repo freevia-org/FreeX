@@ -19,6 +19,7 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.Redo, (_, _) => ExecuteRedo());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CreateTable, TableBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertHyperlink, InsertLinkBtn_Click);
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHyperlink, (_, _) => TryOpenSelectedHyperlink());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.FillDown, FillDownMenuItem_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.FillRight, FillRightMenuItem_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.FlashFill, (_, _) => TryFlashFill());

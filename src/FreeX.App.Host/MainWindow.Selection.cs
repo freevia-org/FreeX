@@ -354,6 +354,9 @@ public partial class MainWindow
 
     private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (IsControlModifierKey(e))
+            SheetGrid.RefreshPointerCursor();
+
         if (Keyboard.FocusedElement is not TextBox and not ComboBox)
         {
             var keyTipKey = GetEffectiveKey(e);

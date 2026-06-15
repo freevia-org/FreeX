@@ -193,6 +193,14 @@ public partial class MainWindow
         return true;
     }
 
+    private bool TryOpenSelectedHyperlink()
+    {
+        if (SheetGrid.SelectedRange is not { } selectedRange)
+            return false;
+
+        return TryOpenHyperlink(selectedRange.Start);
+    }
+
     private bool TryNavigateToWorkbookReference(string reference)
     {
         if (!TryParseWorkbookReference(reference, out var sheetName, out var row, out var col))

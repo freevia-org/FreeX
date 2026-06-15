@@ -401,6 +401,9 @@ public partial class MainWindow
 
     private void MainWindow_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (IsControlModifierKey(e))
+            SheetGrid.RefreshPointerCursor();
+
         var keyTipKey = GetEffectiveKey(e);
         if (!_standaloneAltKeyTipTracker.ShouldToggleOnKeyUp(keyTipKey))
             return;
@@ -412,6 +415,10 @@ public partial class MainWindow
 
         e.Handled = true;
     }
+
+    private static bool IsControlModifierKey(System.Windows.Input.KeyEventArgs e) =>
+        e.Key is Key.LeftCtrl or Key.RightCtrl ||
+        e.SystemKey is Key.LeftCtrl or Key.RightCtrl;
 
     private void MainWindow_Deactivated(object? sender, EventArgs e)
     {

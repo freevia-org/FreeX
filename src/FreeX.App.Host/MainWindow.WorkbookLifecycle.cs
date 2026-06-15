@@ -170,6 +170,7 @@ public partial class MainWindow
             SheetGrid.EditingCell = null;
             SheetGrid.FormulaTraceArrows = null;
             SheetGrid.FormulaTraceSheetId = default;
+            SheetGrid.HyperlinkCells = null;
             SheetGrid.Charts = null;
             SheetGrid.TextBoxes = null;
             SheetGrid.DrawingShapes = null;
