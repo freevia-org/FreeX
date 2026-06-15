@@ -36,6 +36,10 @@ public sealed partial class Sheet
     private readonly Dictionary<(uint Row, uint Col), Cell> _cells = [];
     private readonly Dictionary<(uint Row, uint Col), ScalarValue> _spillValues = [];
     private readonly Dictionary<(uint Row, uint Col), (uint Rows, uint Cols)> _spillAnchors = [];
+    // Maps a position to the anchor address of the array formula whose cached spill value was
+    // loaded into _cells from the XLSX. These cells are displayable (in _cells) but should not
+    // block the owning anchor's SetSpillRange during recalculation.
+    private Dictionary<(uint Row, uint Col), (uint AnchorRow, uint AnchorCol)>? _provisionalSpillCells;
     private readonly Dictionary<(uint Row, uint Col), StyleId> _styleOnly = [];
     private List<StyleOnlyRun>? _styleOnlyRuns;
     private HashSet<(uint Row, uint Col)>? _styleOnlyRunTombstones;
@@ -545,6 +549,8 @@ public sealed partial class Sheet
     /// <summary>
     /// Returns true if any non-anchor cell in the proposed spill range is occupied by user data
     /// or by a spill value from a different anchor.
+    /// Provisional spill cells (cached values loaded from an XLSX for this anchor's own declared
+    /// ref range) are transparent to this check — the anchor is allowed to overwrite them.
     /// </summary>
     public bool IsSpillBlocked(CellAddress anchor, int rows, int cols)
     {
@@ -556,21 +562,64 @@ public sealed partial class Sheet
                 long targetCol = (long)anchor.Col + c;
                 if (targetRow > CellAddress.MaxRow || targetCol > CellAddress.MaxCol) return true;
                 var key = ((uint)targetRow, (uint)targetCol);
-                if (_cells.ContainsKey(key)) return true;
+                if (_cells.ContainsKey(key))
+                {
+                    // A provisional cached spill cell loaded from the XLSX for THIS anchor does not
+                    // block the anchor — it is overwritten when the anchor re-spills via SetSpillRange.
+                    if (_provisionalSpillCells is not null &&
+                        _provisionalSpillCells.TryGetValue(key, out var owningAnchor) &&
+                        owningAnchor == (anchor.Row, anchor.Col))
+                        continue;
+                    return true;
+                }
                 if (_spillValues.ContainsKey(key)) return true;
             }
         return false;
     }
 
     /// <summary>
+    /// Register a cell as a provisional cached spill value loaded from an XLSX.
+    /// The cell is stored in <c>_cells</c> so the viewport can display it, but it is also
+    /// tagged as provisional so <see cref="IsSpillBlocked"/> allows the owning anchor to
+    /// overwrite it during recalculation via <see cref="SetSpillRange"/>.
+    /// </summary>
+    public void SetProvisionalSpillCell(CellAddress anchor, uint row, uint col, Cell cell)
+    {
+        var key = (row, col);
+        _provisionalSpillCells ??= [];
+        _provisionalSpillCells[key] = (anchor.Row, anchor.Col);
+        // SetCell tracks _formulaCells and _usedRangeCache for us.
+        SetCell(new CellAddress(Id, row, col), cell);
+    }
+
+    /// <summary>
     /// Write the spill range for a dynamic-array anchor cell.
-    /// Clears any previous spill from this anchor first.
+    /// Clears any previous spill from this anchor first and removes any provisional cached spill
+    /// cells registered for this anchor (replacing them with freshly computed spill values).
     /// Does NOT check for blockage — call IsSpillBlocked first.
     /// </summary>
     public void SetSpillRange(CellAddress anchor, RangeValue rv)
     {
         ClearSpillRange(anchor);
         int rows = rv.RowCount, cols = rv.ColCount;
+        // Remove any provisional cached spill cells for this anchor from _cells now that the
+        // anchor is re-spilling with freshly computed values.
+        if (_provisionalSpillCells is { Count: > 0 })
+        {
+            for (int r = 0; r < rows; r++)
+                for (int c = 0; c < cols; c++)
+                {
+                    if (r == 0 && c == 0) continue;
+                    var key = (anchor.Row + (uint)r, anchor.Col + (uint)c);
+                    if (_provisionalSpillCells.TryGetValue(key, out var owning) &&
+                        owning == (anchor.Row, anchor.Col))
+                    {
+                        _provisionalSpillCells.Remove(key);
+                        _cells.Remove(key);
+                        TrackUsedRangeCellCleared(key.Item1, key.Item2);
+                    }
+                }
+        }
         for (int r = 0; r < rows; r++)
             for (int c = 0; c < cols; c++)
             {
@@ -601,15 +650,40 @@ public sealed partial class Sheet
     /// <summary>Remove all spill values written by the given anchor cell's formula.</summary>
     public void ClearSpillRange(CellAddress anchor)
     {
-        if (!_spillAnchors.TryGetValue((anchor.Row, anchor.Col), out var extent)) return;
-        for (uint r = 0; r < extent.Rows; r++)
-            for (uint c = 0; c < extent.Cols; c++)
+        var hadSpillValues = false;
+        if (_spillAnchors.TryGetValue((anchor.Row, anchor.Col), out var extent))
+        {
+            for (uint r = 0; r < extent.Rows; r++)
+                for (uint c = 0; c < extent.Cols; c++)
+                {
+                    if (r == 0 && c == 0) continue;
+                    _spillValues.Remove((anchor.Row + r, anchor.Col + c));
+                }
+            _spillAnchors.Remove((anchor.Row, anchor.Col));
+            hadSpillValues = true;
+        }
+        // Also clear any provisional spill cells from _cells that belong to this anchor.
+        // These are loaded-from-xlsx cached values tagged as overwriteable by this anchor.
+        if (_provisionalSpillCells is { Count: > 0 })
+        {
+            List<(uint, uint)>? toRemove = null;
+            foreach (var (key, owningAnchor) in _provisionalSpillCells)
             {
-                if (r == 0 && c == 0) continue;
-                _spillValues.Remove((anchor.Row + r, anchor.Col + c));
+                if (owningAnchor == (anchor.Row, anchor.Col))
+                    (toRemove ??= []).Add(key);
             }
-        _spillAnchors.Remove((anchor.Row, anchor.Col));
-        _contentVersion++;
+            if (toRemove is not null)
+            {
+                foreach (var key in toRemove)
+                {
+                    _provisionalSpillCells.Remove(key);
+                    if (_cells.Remove(key))
+                        TrackUsedRangeCellCleared(key.Item1, key.Item2);
+                }
+                hadSpillValues = true;
+            }
+        }
+        if (hadSpillValues) _contentVersion++;
     }
 
     /// <summary>

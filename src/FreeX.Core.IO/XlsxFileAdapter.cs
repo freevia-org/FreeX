@@ -301,63 +301,92 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 sheet.TabColor = XlsxClosedXmlCellMapper.MapColor(xlSheet.TabColor, workbook.Theme);
             }
 
-            // Track declared array formula ref ranges so that their cached spill-value cells
-            // (stored as plain <v> elements by Excel 365) are not treated as blocker data cells.
-            // Without this, SetSpillRange would find those cells in _cells and return #SPILL!.
-            List<(uint R0, uint C0, uint R1, uint C1)>? arraySpillRanges = null;
+            // Track declared array formula ref ranges (anchor address + bounding box).
+            // Excel 365 stores the cached output of a dynamic/CSE array formula as plain <v> cells
+            // in the spill range (no formula). FreeX loads these as "provisional spill cells":
+            //   • They are stored in _cells so the viewport displays them on open (no recalc).
+            //   • They are tagged in Sheet._provisionalSpillCells so IsSpillBlocked allows the
+            //     owning anchor to overwrite them when the anchor formula re-spills on recalc.
+            //   • SetSpillRange removes provisional entries from _cells before writing to _spillValues.
+            List<(uint R0, uint C0, uint R1, uint C1, CellAddress AnchorAddr)>? arraySpillRanges = null;
 
             foreach (var xlCell in xlSheet.CellsUsed())
             {
                 var addr = new CellAddress(sheet.Id, (uint)xlCell.Address.RowNumber, (uint)xlCell.Address.ColumnNumber);
 
-                // Legacy multi-cell array formula (CSE / Ctrl+Shift+Enter): Excel stores one formula on the
-                // top-left anchor with a declared <f t="array" ref="..."> range and propagates it to every
-                // covered cell. Load only the anchor as the formula cell — its evaluation spills across the
-                // ref range. Covered (non-anchor) cells must not become independent formula cells, or they
-                // mutually block each other's spill and the whole range collapses to #SPILL!.
+                // Determine whether this cell is a provisional spill cell (non-anchor in array range).
+                CellAddress? provisionalAnchor = null;
+
                 if (xlCell.HasArrayFormula && xlCell.FormulaReference is { } arrayRef)
                 {
+                    // Legacy multi-cell array formula (CSE / Ctrl+Shift+Enter): Excel stores one formula
+                    // on the top-left anchor with a declared <f t="array" ref="..."> range and propagates
+                    // it to every covered cell. Load only the anchor as the formula cell — covered cells
+                    // must not become independent formula cells (they would mutually block each other's
+                    // spill and collapse the range to #SPILL!). The non-anchor cells carry cached <v>
+                    // values that we load as provisional spill cells for display.
                     var isAnchor = arrayRef.FirstAddress.RowNumber == xlCell.Address.RowNumber &&
                                    arrayRef.FirstAddress.ColumnNumber == xlCell.Address.ColumnNumber;
 
-                    // For the anchor: collect the declared ref range so we can skip cached spill values later.
-                    if (isAnchor && (arrayRef.LastAddress.RowNumber > arrayRef.FirstAddress.RowNumber ||
-                                     arrayRef.LastAddress.ColumnNumber > arrayRef.FirstAddress.ColumnNumber))
+                    if (isAnchor)
                     {
-                        arraySpillRanges ??= [];
-                        arraySpillRanges.Add((
-                            (uint)arrayRef.FirstAddress.RowNumber,
-                            (uint)arrayRef.FirstAddress.ColumnNumber,
-                            (uint)arrayRef.LastAddress.RowNumber,
-                            (uint)arrayRef.LastAddress.ColumnNumber));
+                        // Register the declared ref range so we can identify non-anchor cells as
+                        // provisional spill cells when they appear later in the iteration.
+                        if (arrayRef.LastAddress.RowNumber > arrayRef.FirstAddress.RowNumber ||
+                            arrayRef.LastAddress.ColumnNumber > arrayRef.FirstAddress.ColumnNumber)
+                        {
+                            arraySpillRanges ??= [];
+                            arraySpillRanges.Add((
+                                (uint)arrayRef.FirstAddress.RowNumber,
+                                (uint)arrayRef.FirstAddress.ColumnNumber,
+                                (uint)arrayRef.LastAddress.RowNumber,
+                                (uint)arrayRef.LastAddress.ColumnNumber,
+                                addr));
+                        }
+                        // Anchor falls through to normal formula-cell loading below.
                     }
-
-                    if (!isAnchor)
-                        continue;
+                    else
+                    {
+                        // Non-anchor: find its owning anchor and mark as provisional.
+                        if (arraySpillRanges is not null)
+                        {
+                            var row = (uint)xlCell.Address.RowNumber;
+                            var col = (uint)xlCell.Address.ColumnNumber;
+                            foreach (var (r0, c0, r1, c1, anchorAddr) in arraySpillRanges)
+                            {
+                                if (row >= r0 && row <= r1 && col >= c0 && col <= c1)
+                                {
+                                    provisionalAnchor = anchorAddr;
+                                    break;
+                                }
+                            }
+                        }
+                        if (provisionalAnchor is null)
+                            continue; // orphaned non-anchor — skip as before
+                        // Fall through to provisional value loading below.
+                    }
                 }
                 else if (!xlCell.HasFormula && arraySpillRanges is not null)
                 {
                     // Excel 365 stores dynamic-array spill cells as plain value cells (no formula,
-                    // no HasArrayFormula flag). If a value cell falls inside a previously seen array
-                    // formula ref range, skip it — it is just a cached spill result that FreeX will
-                    // recompute when the anchor re-evaluates. Loading it would block SetSpillRange.
+                    // no HasArrayFormula flag). Detect if this cell falls inside a known array
+                    // formula ref range (but is not the anchor) and mark it as provisional.
                     var row = (uint)xlCell.Address.RowNumber;
                     var col = (uint)xlCell.Address.ColumnNumber;
-                    var insideSpillRange = false;
-                    foreach (var (r0, c0, r1, c1) in arraySpillRanges)
+                    foreach (var (r0, c0, r1, c1, anchorAddr) in arraySpillRanges)
                     {
                         if (row >= r0 && row <= r1 && col >= c0 && col <= c1 && !(row == r0 && col == c0))
                         {
-                            insideSpillRange = true;
+                            provisionalAnchor = anchorAddr;
                             break;
                         }
                     }
-                    if (insideSpillRange)
-                        continue;
+                    // Fall through to provisional value loading below if provisionalAnchor is set;
+                    // otherwise falls through to normal value-cell loading.
                 }
 
                 Cell cell;
-                if (xlCell.HasFormula)
+                if (xlCell.HasFormula && provisionalAnchor is null)
                 {
                     cell = Cell.FromFormula(XlsxClosedXmlCellMapper.NormalizeFormulaText(xlCell.FormulaA1));
                     // A plain (non-array) formula uses Excel's legacy implicit intersection; an array
@@ -374,7 +403,12 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 }
                 else
                 {
-                    cell = Cell.FromValue(XlsxClosedXmlCellMapper.MapValue(xlCell));
+                    // Plain value cell (or provisional spill cell that ClosedXML exposes as HasArrayFormula
+                    // — those have a cached <v> value accessible via MapFormulaValue).
+                    var v = xlCell.HasFormula
+                        ? XlsxClosedXmlCellMapper.MapFormulaValue(xlCell)
+                        : XlsxClosedXmlCellMapper.MapValue(xlCell);
+                    cell = Cell.FromValue(v);
                 }
 
                 int? xlsxStyleIndex = populatedCellStyleIndexes is not null &&
@@ -401,7 +435,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     continue;
                 }
 
-                sheet.SetCell(addr, cell);
+                if (provisionalAnchor is { } anchor)
+                    sheet.SetProvisionalSpillCell(anchor, addr.Row, addr.Col, cell);
+                else
+                    sheet.SetCell(addr, cell);
             }
 
             List<StyleOnlyRun>? explicitStyleOnlyRuns = null;
