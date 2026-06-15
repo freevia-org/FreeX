@@ -24,6 +24,7 @@ public static partial class KeyboardShortcutMatcher
             modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.Z),
         new(KeyboardCommandShortcut.CreateTable, (key, modifiers) => modifiers == ModifierKeys.Control && key is (Key.T or Key.L)),
         new(KeyboardCommandShortcut.InsertHyperlink, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.K),
+        new(KeyboardCommandShortcut.OpenHyperlink, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Enter),
         new(KeyboardCommandShortcut.FillDown, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.D),
         new(KeyboardCommandShortcut.FillRight, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.R),
         new(KeyboardCommandShortcut.FlashFill, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.E),

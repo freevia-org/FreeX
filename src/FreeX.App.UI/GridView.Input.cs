@@ -234,93 +234,126 @@ public partial class GridView
         }
         else
         {
-            var selectedObjectDragKind = ObjectDragKind.None;
-            if (SelectedObjectId != Guid.Empty &&
-                SelectedObjectKind != ObjectKind.None)
-            {
-                var selectedObjectRect = GetSelectedObjectRect();
-                if (IsSelectedPictureCropModeActive())
-                {
-                    var selectedPictureCropHandle = HitTestPictureCropHandle(pos, selectedObjectRect);
-                    if (selectedPictureCropHandle != PictureCropHandle.None)
-                    {
-                        Cursor = PictureCropCursor(selectedPictureCropHandle);
-                        return;
-                    }
-                }
-                else
-                {
-                    selectedObjectDragKind = HitTestObjectHandle(pos, selectedObjectRect);
-                }
-            }
-            if (selectedObjectDragKind != ObjectDragKind.None)
-            {
-                Cursor = ObjectDragCursor(selectedObjectDragKind);
-                return;
-            }
-
-            var hitObject = HitTestDrawingObject(pos);
-            var hoveringObjectBody = selectedObjectDragKind == ObjectDragKind.None &&
-                hitObject.Id != Guid.Empty;
-            if (hoveringObjectBody)
-            {
-                Cursor = Cursors.SizeAll;
-                return;
-            }
-
-            var splitHandle = Viewport is null
-                ? SplitDividerHandle.None
-                : HitTestSplitDividerHandle(Viewport, pos, ActualWidth, ActualHeight);
-            if (splitHandle != SplitDividerHandle.None)
-            {
-                Cursor = splitHandle == SplitDividerHandle.Intersection ? Cursors.SizeAll
-                       : splitHandle == SplitDividerHandle.Vertical ? Cursors.SizeWE
-                       : Cursors.SizeNS;
-                return;
-            }
-
-            if (TryHitTestOutlineGroupToggle(Viewport, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight, out _))
-            {
-                Cursor = Cursors.Hand;
-                return;
-            }
-
-            var (target, _, _, _) = HitTestResize(pos);
-            if (target == ResizeTarget.Column)
-            {
-                Cursor = Cursors.SizeWE;
-                return;
-            }
-
-            if (target == ResizeTarget.Row)
-            {
-                Cursor = Cursors.SizeNS;
-                return;
-            }
-
-            var splitScrollbarHit = Viewport is null
-                ? null
-                : HitTestSplitPaneScrollbar(CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight), pos);
-            if (splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Horizontal)
-            {
-                Cursor = Cursors.SizeWE;
-                return;
-            }
-
-            if (splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Vertical)
-            {
-                Cursor = Cursors.SizeNS;
-                return;
-            }
-
-            var marginGuide = HitTestPageMarginGuide(pos);
-            Cursor = marginGuide is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right ? Cursors.SizeWE
-                   : marginGuide is WorksheetPageMarginEdge.Top or WorksheetPageMarginEdge.Bottom ? Cursors.SizeNS
-                   : IsOnAutofillHandle(pos) ? Cursors.Cross
-                   : IsOnSelectionMoveBorder(pos) ? Cursors.SizeAll
-                   : null;
+            UpdateHoverCursor(pos);
         }
     }
+
+    public void RefreshPointerCursor()
+    {
+        if (!IsMouseOver || HasActiveCapturedGridDrag())
+            return;
+
+        UpdateHoverCursor(Mouse.GetPosition(this));
+    }
+
+    private void UpdateHoverCursor(Point pos)
+    {
+        var selectedObjectDragKind = ObjectDragKind.None;
+        if (SelectedObjectId != Guid.Empty &&
+            SelectedObjectKind != ObjectKind.None)
+        {
+            var selectedObjectRect = GetSelectedObjectRect();
+            if (IsSelectedPictureCropModeActive())
+            {
+                var selectedPictureCropHandle = HitTestPictureCropHandle(pos, selectedObjectRect);
+                if (selectedPictureCropHandle != PictureCropHandle.None)
+                {
+                    Cursor = PictureCropCursor(selectedPictureCropHandle);
+                    return;
+                }
+            }
+            else
+            {
+                selectedObjectDragKind = HitTestObjectHandle(pos, selectedObjectRect);
+            }
+        }
+        if (selectedObjectDragKind != ObjectDragKind.None)
+        {
+            Cursor = ObjectDragCursor(selectedObjectDragKind);
+            return;
+        }
+
+        var hitObject = HitTestDrawingObject(pos);
+        var hoveringObjectBody = selectedObjectDragKind == ObjectDragKind.None &&
+            hitObject.Id != Guid.Empty;
+        if (hoveringObjectBody)
+        {
+            Cursor = Cursors.SizeAll;
+            return;
+        }
+
+        var splitHandle = Viewport is null
+            ? SplitDividerHandle.None
+            : HitTestSplitDividerHandle(Viewport, pos, ActualWidth, ActualHeight);
+        if (splitHandle != SplitDividerHandle.None)
+        {
+            Cursor = splitHandle == SplitDividerHandle.Intersection ? Cursors.SizeAll
+                   : splitHandle == SplitDividerHandle.Vertical ? Cursors.SizeWE
+                   : Cursors.SizeNS;
+            return;
+        }
+
+        if (TryHitTestOutlineGroupToggle(Viewport, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight, out _))
+        {
+            Cursor = Cursors.Hand;
+            return;
+        }
+
+        var (target, _, _, _) = HitTestResize(pos);
+        if (target == ResizeTarget.Column)
+        {
+            Cursor = Cursors.SizeWE;
+            return;
+        }
+
+        if (target == ResizeTarget.Row)
+        {
+            Cursor = Cursors.SizeNS;
+            return;
+        }
+
+        var splitScrollbarHit = Viewport is null
+            ? null
+            : HitTestSplitPaneScrollbar(CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight), pos);
+        if (splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Horizontal)
+        {
+            Cursor = Cursors.SizeWE;
+            return;
+        }
+
+        if (splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Vertical)
+        {
+            Cursor = Cursors.SizeNS;
+            return;
+        }
+
+        var marginGuide = HitTestPageMarginGuide(pos);
+        Cursor = marginGuide is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right ? Cursors.SizeWE
+               : marginGuide is WorksheetPageMarginEdge.Top or WorksheetPageMarginEdge.Bottom ? Cursors.SizeNS
+               : IsOnAutofillHandle(pos) ? Cursors.Cross
+               : IsOnSelectionMoveBorder(pos) ? Cursors.SizeAll
+               : IsCtrlModifierDown() && TryHitTestHyperlinkCell(pos, out _) ? Cursors.Hand
+               : null;
+    }
+
+    private bool TryHitTestHyperlinkCell(Point pos, out CellAddress address)
+    {
+        address = default;
+        if (Viewport is null || HyperlinkCells is null || HyperlinkCells.Count == 0)
+            return false;
+
+        if (HitTestViewportCell(Viewport, default, pos) is not { } hitCell ||
+            !HyperlinkCells.Contains(hitCell))
+        {
+            return false;
+        }
+
+        address = hitCell;
+        return true;
+    }
+
+    private static bool IsCtrlModifierDown() =>
+        (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
 
     public static GridAutoScrollRequest CalculateAutofillEdgeScrollIntent(
         double pointerX,

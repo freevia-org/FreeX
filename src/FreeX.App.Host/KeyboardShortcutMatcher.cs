@@ -207,6 +207,7 @@ public enum KeyboardCommandShortcut
     Redo,
     CreateTable,
     InsertHyperlink,
+    OpenHyperlink,
     FillDown,
     FillRight,
     FlashFill,

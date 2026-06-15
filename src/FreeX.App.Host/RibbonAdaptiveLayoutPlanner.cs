@@ -76,19 +76,3 @@ public static class RibbonAdaptiveLayoutPlanner
         };
 
 }
-
-public sealed record RibbonAdaptiveGroup(
-    string Name,
-    double FullWidth,
-    double SmallWithLabelsWidth,
-    double IconOnlyWidth,
-    double CollapsedWidth,
-    string? CatalogId = null);
-
-public enum RibbonAdaptiveGroupState
-{
-    Full,
-    SmallWithLabels,
-    IconOnly,
-    Collapsed
-}

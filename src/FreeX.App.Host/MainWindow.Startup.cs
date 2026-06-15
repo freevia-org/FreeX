@@ -42,6 +42,7 @@ public partial class MainWindow
         RefreshSheetTabs();
         UpdateTitleBar();
         RegisterWithWindowRegistry();
+        TryApplyDeclarativeRibbon();
         TryStartScreenshotTour();
         TryStartSheetTabVisualTour();
         TryStartSheetTabWorkflowsTour();

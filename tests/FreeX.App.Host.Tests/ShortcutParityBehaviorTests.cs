@@ -417,6 +417,28 @@ public sealed class ShortcutParityBehaviorTests
     }
 
     [Fact]
+    public void CtrlEnter_IsRegisteredAsOpenHyperlinkCommand()
+    {
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+            Key.Enter, Key.None, ModifierKeys.Control, out var shortcut)
+            .Should().BeTrue();
+
+        shortcut.Should().Be(KeyboardCommandShortcut.OpenHyperlink);
+    }
+
+    [Fact]
+    public void OpenHyperlinkShortcut_RoutesToSelectedHyperlink()
+    {
+        var commandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
+        var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
+
+        commandsSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHyperlink");
+        commandsSource.Should().Contain("TryOpenSelectedHyperlink()");
+        insertSource.Should().Contain("private bool TryOpenSelectedHyperlink()");
+        insertSource.Should().Contain("TryOpenHyperlink(selectedRange.Start)");
+    }
+
+    [Fact]
     public void WorksheetContextMenu_IncludesPasteSpecialInsertDeleteAndFormatCellsItems()
     {
         var plannerSource = DialogSourceTestSupport.ReadHostSources("WorksheetContextMenuPlanner.cs");

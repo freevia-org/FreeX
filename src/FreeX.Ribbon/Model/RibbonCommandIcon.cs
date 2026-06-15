@@ -1,11 +1,4 @@
-namespace FreeX.App.Host;
-
-public enum RibbonCommandLayoutKind
-{
-    Small,
-    Medium,
-    Large
-}
+namespace FreeX.Ribbon;
 
 public sealed record RibbonCommandIcon(
     RibbonCommandIconKind Kind,

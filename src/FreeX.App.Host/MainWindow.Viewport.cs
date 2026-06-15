@@ -417,6 +417,11 @@ public partial class MainWindow
             .ToList();
         SheetGrid.FormulaTraceSheetId = _currentSheetId;
         SheetGrid.FormulaTraceArrows = _formulaTraceArrows;
+        SheetGrid.HyperlinkCells = sheet is null
+            ? null
+            : sheet.Hyperlinks.Keys
+                .Select(address => new CellAddress(default, address.Row, address.Col))
+                .ToHashSet();
         SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch
         {
             FreeXObjectDisplay.Placeholders => FreeX.App.UI.GridObjectDisplayMode.Placeholders,

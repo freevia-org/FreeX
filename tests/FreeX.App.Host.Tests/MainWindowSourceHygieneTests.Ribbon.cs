@@ -671,10 +671,11 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var iconResources = DialogSourceTestSupport.ReadHostSources("Resources\\IconResources.xaml");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Ribbon.cs");
+        // RibbonCommandIconKind/Accent now live in FreeX.Ribbon (Model/RibbonCommandIcon.cs);
+        // the presentation planner still references them, which is what this test asserts.
         var planner = DialogSourceTestSupport.ReadHostSources(
             "RibbonCommandPresentationPlanner.cs",
-            "RibbonCommandPresentationPlanner.Icons.cs",
-            "RibbonCommandPresentationTypes.cs");
+            "RibbonCommandPresentationPlanner.Icons.cs");
 
         DialogSourceTestSupport.ReadHostSources("RibbonIconFactory.cs").Should().NotBeNull();
         iconResources.Should().Contain("FreeXRibbonLargeIconSlot");

@@ -358,6 +358,24 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void CtrlHoverOverHyperlinkCellUsesHandCursorAfterHigherPriorityGridHits()
+    {
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
+        var hoverCursorBlock = source[
+            source.IndexOf("var (target, _, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
+            source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
+
+        hoverCursorBlock.Should().Contain("IsCtrlModifierDown() && TryHitTestHyperlinkCell(pos, out _) ? Cursors.Hand");
+        hoverCursorBlock.Should().Contain("private bool TryHitTestHyperlinkCell(Point pos, out CellAddress address)");
+        hoverCursorBlock.Should().Contain("HyperlinkCells.Contains(hitCell)");
+        source.Should().Contain("public void RefreshPointerCursor()");
+        hoverCursorBlock.IndexOf("if (target == ResizeTarget.Column)", StringComparison.Ordinal)
+            .Should().BeLessThan(hoverCursorBlock.IndexOf("TryHitTestHyperlinkCell(pos, out _)", StringComparison.Ordinal));
+        hoverCursorBlock.IndexOf("IsOnSelectionMoveBorder(pos) ? Cursors.SizeAll", StringComparison.Ordinal)
+            .Should().BeLessThan(hoverCursorBlock.IndexOf("TryHitTestHyperlinkCell(pos, out _)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SplitPaneDividerMouseUpRaisesMoveEventAndClearsCaptureState()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
