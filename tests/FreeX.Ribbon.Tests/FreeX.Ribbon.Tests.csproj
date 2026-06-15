@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+    <Using Include="FreeX.Ribbon" />
   </ItemGroup>
 
   <ItemGroup>
