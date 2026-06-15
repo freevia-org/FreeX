@@ -10,65 +10,6 @@ namespace FreeX.App.Host;
 public static class FreeXRibbonDefinition
 {
     public static RibbonDefinition Build() => new RibbonDefinitionBuilder()
-        .Tab("HomeTab", "Home", "H", tab => tab
-            .Group("HomeClipboardGroup", "Clipboard", null, priority: 180,
-                g => g
-                .Button("Paste", "Paste", b => b with { PreferredLayout = RibbonCommandLayoutKind.Large, Icon = new RibbonCommandIcon(RibbonCommandIconKind.Paste), KeyTip = "V" })
-                .Button("Cut", "Cut", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Cut), KeyTip = "X" })
-                .Button("Copy", "Copy", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Copy), KeyTip = "C" })
-                .Button("Format Painter", "Format Painter", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.FormatPainter), KeyTip = "FP" }))
-            .Group("HomeFontGroup", "Font", null, priority: 170,
-                g => g
-                .ComboBox("Font", "Font", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font), Items = new[] { "Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana" } })
-                .ComboBox("Font Size", "Font Size", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font), Items = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24" } })
-                .Button("Increase Font Size", "Increase Font Size", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font), KeyTip = "FG" })
-                .Button("Decrease Font Size", "Decrease Font Size", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font), KeyTip = "FK" })
-                .Toggle("Bold", "Bold", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Bold), KeyTip = "1" })
-                .Toggle("Italic", "Italic", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Italic), KeyTip = "2" })
-                .Toggle("Underline", "Underline", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Underline), KeyTip = "3" })
-                .Toggle("Strikethrough", "Strikethrough", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Strikethrough), KeyTip = "4" })
-                .Button("Borders", "Borders", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border), KeyTip = "B" })
-                .Button("Fill Color", "Fill Color", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill), KeyTip = "H" })
-                .Button("Font Color", "Font Color", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Color), KeyTip = "FC" }))
-            .Group("HomeAlignmentGroup", "Alignment", null, priority: 160,
-                g => g
-                .Toggle("Top Align", "Top Align", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align), KeyTip = "AT" })
-                .Toggle("Middle Align", "Middle Align", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align), KeyTip = "AM" })
-                .Toggle("Bottom Align", "Bottom Align", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align), KeyTip = "AB" })
-                .Button("Orientation", "Orientation", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Orientation), KeyTip = "RO" })
-                .Toggle("Wrap Text", "Wrap Text", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Wrap), KeyTip = "W" })
-                .Toggle("Align Left", "Align Left", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align), KeyTip = "AL" })
-                .Toggle("Center", "Center", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Generic), KeyTip = "AC" })
-                .Toggle("Align Right", "Align Right", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align), KeyTip = "AR" })
-                .Button("Decrease Indent", "Decrease Indent", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align), KeyTip = "AO" })
-                .Button("Increase Indent", "Increase Indent", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align), KeyTip = "AI" })
-                .Button("Merge & Center", "Merge & Center", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Merge), KeyTip = "M" }))
-            .Group("HomeNumberGroup", "Number", null, priority: 150,
-                g => g
-                .ComboBox("Number Format", "Number Format", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Number), Items = new[] { "General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text" } })
-                .Button("Accounting Number Format", "Accounting Number Format", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Number), KeyTip = "AN" })
-                .Button("Percent Style", "Percent Style", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Percent), KeyTip = "P" })
-                .Button("Comma Style", "Comma Style", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Comma), KeyTip = "K" })
-                .Button("Increase Decimal Places", "Increase Decimal Places", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Decimal), KeyTip = "QI" })
-                .Button("Decrease Decimal Places", "Decrease Decimal Places", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Decimal), KeyTip = "QD" }))
-            .Group("HomeStylesGroup", "Styles", null, priority: 140,
-                g => g
-                .Button("Conditional Formatting", "Conditional Formatting", b => b with { PreferredLayout = RibbonCommandLayoutKind.Large, Icon = new RibbonCommandIcon(RibbonCommandIconKind.Effects), KeyTip = "L" })
-                .Button("Format as Table", "Format as Table", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Table), KeyTip = "T" })
-                .Button("Cell Styles", "Cell Styles", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Theme), KeyTip = "J" }))
-            .Group("HomeCellsGroup", "Cells", null, priority: 130,
-                g => g
-                .Button("Insert", "Insert", b => b with { PreferredLayout = RibbonCommandLayoutKind.Large, Icon = new RibbonCommandIcon(RibbonCommandIconKind.Insert), KeyTip = "I" })
-                .Button("Delete", "Delete", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Delete), KeyTip = "D" })
-                .Button("Format", "Format", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Size), KeyTip = "O" }))
-            .Group("HomeEditingGroup", "Editing", null, priority: 120,
-                g => g
-                .Button("AutoSum", "AutoSum", b => b with { PreferredLayout = RibbonCommandLayoutKind.Large, Icon = new RibbonCommandIcon(RibbonCommandIconKind.Sum), KeyTip = "U" })
-                .Button("Fill", "Fill", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Generic), KeyTip = "FI" })
-                .Button("Clear", "Clear", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Clear), KeyTip = "E" })
-                .Button("Sort & Filter", "Sort & Filter", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Sort), KeyTip = "S" })
-                .Button("Find & Select", "Find & Select", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Search), KeyTip = "FD" }))
-        )
         .Tab("InsertTab", "Insert", "N", tab => tab
             .Group("InsertTablesGroup", "Tables", null, priority: 180,
                 g => g

@@ -16,7 +16,7 @@ public class RibbonDeclarativeMontageTests
         const double width = 1700;
         const double tabHeight = 116;
         const double labelHeight = 22;
-        var definition = FreeXRibbonDefinition.Build();
+        var definition = FreeXRibbon.Build();
 
         // Show all tabs (normal + contextual) for the montage.
         var allActive = RibbonContextState.None

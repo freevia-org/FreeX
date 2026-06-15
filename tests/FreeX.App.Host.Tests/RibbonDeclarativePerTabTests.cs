@@ -16,7 +16,7 @@ public class RibbonDeclarativePerTabTests
         const double width = 1700;
         const double tabHeight = 116;
         const double labelHeight = 24;
-        var definition = FreeXRibbonDefinition.Build();
+        var definition = FreeXRibbon.Build();
 
         var allActive = RibbonContextState.None
             .With("chart.selected").With("picture.selected").With("shape.selected")

@@ -31,7 +31,7 @@ public partial class MainWindow
         try
         {
             var registry = BuildDeclarativeRibbonRegistry();
-            var definition = FreeXRibbonDefinition.Build();
+            var definition = FreeXRibbon.Build();
 
             foreach (var item in RibbonTabs.Items)
             {

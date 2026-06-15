@@ -191,6 +191,8 @@ ctxorder = ["ChartDesignTab", "ChartFormatTab", "PictureFormatTab", "ShapeFormat
 for tab in mainorder + ctxorder:
     if tab not in data:
         continue
+    if tab == "HomeTab":
+        continue  # Home is hand-authored in HomeRibbonDefinition for full fidelity.
     meta = tabmeta.get(tab, dict(header=tab, keytip="", contextual=tab in ctxkey))
     raw_hdr = meta["header"]
     if raw_hdr.startswith("MainWindow_Header_"):

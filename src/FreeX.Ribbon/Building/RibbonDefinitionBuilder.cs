@@ -93,6 +93,69 @@ public sealed class RibbonGroupBuilder
         return this;
     }
 
+    public RibbonGroupBuilder RowBreak()
+    {
+        _controls.Add(new RibbonRowBreak());
+        return this;
+    }
+
+    /// <summary>A large "hero" button: big icon, label below, optional dropdown.</summary>
+    public RibbonGroupBuilder Large(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null, bool dropdown = false)
+    {
+        RibbonControl control = dropdown
+            ? new RibbonDropdown(commandId, label, RibbonMenu.Empty)
+            : new RibbonButton(commandId, label);
+        _controls.Add(control with
+        {
+            PreferredLayout = RibbonCommandLayoutKind.Large,
+            Icon = new RibbonCommandIcon(icon),
+            KeyTip = keyTip
+        });
+        return this;
+    }
+
+    /// <summary>An icon-only button (no label), optionally a dropdown.</summary>
+    public RibbonGroupBuilder Icon(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null, bool dropdown = false)
+    {
+        RibbonControl control = dropdown
+            ? new RibbonDropdown(commandId, label, RibbonMenu.Empty)
+            : new RibbonButton(commandId, label);
+        _controls.Add(control with
+        {
+            PreferredLayout = RibbonCommandLayoutKind.Small,
+            Icon = new RibbonCommandIcon(icon),
+            KeyTip = keyTip
+        });
+        return this;
+    }
+
+    /// <summary>An icon-only toggle button (no label).</summary>
+    public RibbonGroupBuilder IconToggle(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null)
+    {
+        _controls.Add(new RibbonToggleButton(commandId, label) with
+        {
+            PreferredLayout = RibbonCommandLayoutKind.Small,
+            Icon = new RibbonCommandIcon(icon),
+            KeyTip = keyTip
+        });
+        return this;
+    }
+
+    /// <summary>A medium button: small icon with a label to the right, optional dropdown.</summary>
+    public RibbonGroupBuilder Medium(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null, bool dropdown = false)
+    {
+        RibbonControl control = dropdown
+            ? new RibbonDropdown(commandId, label, RibbonMenu.Empty)
+            : new RibbonButton(commandId, label);
+        _controls.Add(control with
+        {
+            PreferredLayout = RibbonCommandLayoutKind.Medium,
+            Icon = new RibbonCommandIcon(icon),
+            KeyTip = keyTip
+        });
+        return this;
+    }
+
     public RibbonGroupBuilder Sizing(RibbonGroupSizing sizing)
     {
         _sizing = sizing;
