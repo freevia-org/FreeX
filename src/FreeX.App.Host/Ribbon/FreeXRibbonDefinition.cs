@@ -19,8 +19,8 @@ public static class FreeXRibbonDefinition
                 .Button("Format Painter", "Format Painter", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.FormatPainter), KeyTip = "FP" }))
             .Group("HomeFontGroup", "Font", null, priority: 170,
                 g => g
-                .ComboBox("Font", "Font", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font) })
-                .ComboBox("Font Size", "Font Size", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font) })
+                .ComboBox("Font", "Font", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font), Items = new[] { "Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana" } })
+                .ComboBox("Font Size", "Font Size", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font), Items = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24" } })
                 .Button("Increase Font Size", "Increase Font Size", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font), KeyTip = "FG" })
                 .Button("Decrease Font Size", "Decrease Font Size", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font), KeyTip = "FK" })
                 .Toggle("Bold", "Bold", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Bold), KeyTip = "1" })
@@ -45,7 +45,7 @@ public static class FreeXRibbonDefinition
                 .Button("Merge & Center", "Merge & Center", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Merge), KeyTip = "M" }))
             .Group("HomeNumberGroup", "Number", null, priority: 150,
                 g => g
-                .ComboBox("Number Format", "Number Format", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Number) })
+                .ComboBox("Number Format", "Number Format", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Number), Items = new[] { "General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text" } })
                 .Button("Accounting Number Format", "Accounting Number Format", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Number), KeyTip = "AN" })
                 .Button("Percent Style", "Percent Style", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Percent), KeyTip = "P" })
                 .Button("Comma Style", "Comma Style", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Comma), KeyTip = "K" })
@@ -155,9 +155,9 @@ public static class FreeXRibbonDefinition
                 .Button("Page Setup dialog", "Page Setup dialog", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Page), KeyTip = "PD" }))
             .Group("PageLayoutScaleToFitGroup", "Scale To Fit", null, priority: 160,
                 g => g
-                .ComboBox("Scale Width", "Scale Width", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale) })
-                .ComboBox("Scale Height", "Scale Height", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale) })
-                .ComboBox("Scale Percent", "Scale Percent", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Percent) })
+                .ComboBox("Scale Width", "Scale Width", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale), Items = new[] { "Automatic", "1 page", "2 pages" } })
+                .ComboBox("Scale Height", "Scale Height", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale), Items = new[] { "Automatic", "1 page", "2 pages" } })
+                .ComboBox("Scale Percent", "Scale Percent", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Percent), Items = new[] { "100%", "90%", "80%", "75%", "50%" } })
                 .Button("Scale to Fit", "Scale to Fit", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale), KeyTip = "SF" }))
             .Group("PageLayoutSheetOptionsGroup", "Sheet Options", null, priority: 150,
                 g => g
