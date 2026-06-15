@@ -71,6 +71,14 @@ public partial class MainWindow
             if (RibbonTabs is null)
                 return;
 
+            if (double.TryParse(Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_WIDTH"),
+                    System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var forcedWidth) &&
+                forcedWidth > 0)
+            {
+                WindowState = WindowState.Normal;
+                Width = forcedWidth;
+            }
+
             RibbonTabs.UpdateLayout();
             var width = (int)Math.Ceiling(RibbonTabs.ActualWidth);
             var height = (int)Math.Ceiling(RibbonTabs.ActualHeight);

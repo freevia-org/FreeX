@@ -27,29 +27,29 @@ public static class RibbonWpfRenderer
         FrameworkElement resourceHost,
         IRibbonCommandRegistry? registry = null)
     {
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, MinHeight = 88 };
+        var panel = new RibbonAdaptivePanel { MinHeight = 88 };
 
         var first = true;
         foreach (var group in tab.Groups)
         {
             if (!first)
                 panel.Children.Add(BuildGroupDivider(resourceHost));
-            panel.Children.Add(BuildGroup(group, resourceHost, registry));
+
+            var full = (FrameworkElement)BuildGroup(group, resourceHost, registry);
+            var captured = group;
+            panel.Children.Add(new RibbonGroupHost(
+                group,
+                full,
+                () => (FrameworkElement)BuildGroup(captured, resourceHost, registry),
+                resourceHost));
             first = false;
         }
-
-        var scroller = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = panel
-        };
 
         return new Border
         {
             Background = Brush(resourceHost, "FreeXRibbonSurfaceBrush", Brushes.White),
             Padding = new Thickness(0, 4, 0, 0),
-            Child = scroller
+            Child = panel
         };
     }
 

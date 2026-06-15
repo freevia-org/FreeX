@@ -17,6 +17,50 @@ public class RibbonWpfRendererTests
     }
 
     [Fact]
+    public void AdaptivePanel_CollapsesLowestPriorityGroupsFirst_WhenNarrow()
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("t", "T", "T", tab => tab
+                .Group("g1", "Alpha", "1", priority: 100, g => g
+                    .Large("a1", "A1", RibbonCommandIconKind.Paste).Large("a2", "A2", RibbonCommandIconKind.Copy))
+                .Group("g2", "Beta", "2", priority: 50, g => g
+                    .Large("b1", "B1", RibbonCommandIconKind.Cut).Large("b2", "B2", RibbonCommandIconKind.Font))
+                .Group("g3", "Gamma", "3", priority: 10, g => g
+                    .Large("c1", "C1", RibbonCommandIconKind.Filter).Large("c2", "C2", RibbonCommandIconKind.Sort)))
+            .Build();
+
+        StaTestRunner.Run(() =>
+        {
+            var host = BuildHost();
+            host.Child = RibbonWpfRenderer.BuildTabContent(definition.FindTab("t")!, host);
+
+            // Wide: everything fits, nothing collapses.
+            Layout(host, 1200);
+            var hosts = Descendants(host).OfType<RibbonGroupHost>().ToList();
+            hosts.Should().HaveCount(3);
+            hosts.Should().OnlyContain(h => !h.Collapsed);
+
+            // A width that comfortably fits the two highest-priority groups but not the third:
+            // only the lowest-priority group should collapse.
+            var byPriorityDesc = hosts.OrderByDescending(h => h.Priority).ToList();
+            var width = byPriorityDesc[0].FullWidth + byPriorityDesc[1].FullWidth + 120;
+            Layout(host, width);
+
+            var diag = $"width={width}, fulls=[{string.Join(",", hosts.Select(h => $"{h.Priority}:{h.FullWidth}:{h.Collapsed}"))}]";
+            hosts.Single(h => h.Priority == 10).Collapsed.Should().BeTrue(diag);
+            hosts.Single(h => h.Priority == 100).Collapsed.Should().BeFalse(diag);
+        });
+    }
+
+    private static void Layout(FrameworkElement host, double width)
+    {
+        host.Width = width;
+        host.Measure(new Size(width, 130));
+        host.Arrange(new Rect(0, 0, width, 130));
+        host.UpdateLayout();
+    }
+
+    [Fact]
     public void GeneratedTabs_HaveDropdownsWithPopulatedMenus()
     {
         var definition = FreeXRibbon.Build();
