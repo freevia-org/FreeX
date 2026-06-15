@@ -1127,4 +1127,92 @@ public partial class FunctionLibraryTests
 
         _eval.Evaluate($"=SUBTOTAL({functionNumber},A1:A2)", sheet).Should().Be(ErrorValue.Num);
     }
+
+    // ── SUBTOTAL with array-producing OFFSET (CSE row-visibility mask idiom) ───
+
+    [Fact]
+    public void Subtotal_Counta_WithArrayOffset_ReturnsVisibilityMaskArray()
+    {
+        // Simulates: SUBTOTAL(3, OFFSET(A1:A3, ROW(A1:A3)-ROW(A1), 0, 1))
+        // which in CSE context returns {1,1,1} when all rows are visible.
+        // Rows: A1="Alice", A2="Bob", A3="Charlie" — all visible.
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Alice")),
+            (2, 1, new TextValue("Bob")),
+            (3, 1, new TextValue("Charlie")));
+
+        // ROW(A1:A3)-ROW(A1) = {0,1,2}; OFFSET(A1:A3, {0,1,2}, 0, 1) = rows A1, A2, A3.
+        // SUBTOTAL(3, each_row) = 1 for each non-blank visible row.
+        var result = _eval.Evaluate("=SUBTOTAL(3,OFFSET(A1:A3,ROW(A1:A3)-ROW(A1),0,1))", sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(3);
+        range.ColCount.Should().Be(1);
+        range.At(1, 1).Should().Be(new NumberValue(1));
+        range.At(2, 1).Should().Be(new NumberValue(1));
+        range.At(3, 1).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Subtotal_Counta_WithArrayOffset_HiddenRow_ReturnsZeroForHiddenRows()
+    {
+        // Same formula but row 2 is filter-hidden → SUBTOTAL(3, A2) = 0.
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Alice")),
+            (2, 1, new TextValue("Bob")),
+            (3, 1, new TextValue("Charlie")));
+        sheet.FilterHiddenRows.Add(2); // hide row 2
+
+        var result = _eval.Evaluate("=SUBTOTAL(3,OFFSET(A1:A3,ROW(A1:A3)-ROW(A1),0,1))", sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(3);
+        range.ColCount.Should().Be(1);
+        range.At(1, 1).Should().Be(new NumberValue(1)); // row 1 visible
+        range.At(2, 1).Should().Be(new NumberValue(0)); // row 2 filter-hidden
+        range.At(3, 1).Should().Be(new NumberValue(1)); // row 3 visible
+    }
+
+    [Fact]
+    public void Subtotal_Counta_WithArrayOffset_IfFilter_ProducesFilteredNameList()
+    {
+        // Models the full sub-expression: IF(SUBTOTAL(3,OFFSET(A1:A3,...)),A1:A3)
+        // With row 2 hidden, the result of the IF should yield "Alice"/"Charlie" and FALSE for row 2.
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Alice")),
+            (2, 1, new TextValue("Bob")),
+            (3, 1, new TextValue("Charlie")));
+        sheet.FilterHiddenRows.Add(2);
+
+        var result = _eval.Evaluate(
+            "=IF(SUBTOTAL(3,OFFSET(A1:A3,ROW(A1:A3)-ROW(A1),0,1)),A1:A3)",
+            sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(3);
+        range.ColCount.Should().Be(1);
+        range.At(1, 1).Should().Be(new TextValue("Alice"));
+        range.At(2, 1).Should().Be(new BoolValue(false)); // hidden → 0 → IF returns FALSE
+        range.At(3, 1).Should().Be(new TextValue("Charlie"));
+    }
+
+    [Fact]
+    public void Subtotal_Sum_WithArrayOffset_ReturnsPerRowSums()
+    {
+        // SUBTOTAL(9, OFFSET(B1:B3, {0,1,2}, 0, 1)) = {B1, B2, B3} values.
+        // With row 2 filter-hidden, the sum of a single-cell range at B2 = 0 (row excluded).
+        var sheet = MakeSheet(
+            (1, 2, new NumberValue(10)),
+            (2, 2, new NumberValue(20)),
+            (3, 2, new NumberValue(30)));
+        sheet.FilterHiddenRows.Add(2);
+
+        var result = _eval.Evaluate("=SUBTOTAL(9,OFFSET(B1:B3,ROW(B1:B3)-ROW(B1),0,1))", sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(3);
+        range.At(1, 1).Should().Be(new NumberValue(10));
+        range.At(2, 1).Should().Be(new NumberValue(0));  // row 2 hidden → excluded from SUM
+        range.At(3, 1).Should().Be(new NumberValue(30));
+    }
 }

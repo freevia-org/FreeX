@@ -449,6 +449,194 @@ public sealed partial class FormulaEvaluator
             : context.GetCellValue(range.SheetName, row, col);
     }
 
+    // ── SUBTOTAL with array-producing OFFSET argument ──────────────────────────
+    //
+    // The classic CSE idiom  SUBTOTAL(3, OFFSET(ref, ROW(ref)-ROW(anchor), 0, 1))
+    // relies on OFFSET being "array-called" once per element of its rows argument:
+    //   • rows  = RangeValue {0,1,2,...,n-1}  (produced by ROW(range)-ROW(anchor))
+    //   • for each rows_i: OFFSET returns a 1-row range at  baseRow + rows_i
+    //   • SUBTOTAL(funcNum, that_range) returns a scalar per row
+    //   • The outer call returns the n-element array of scalars
+    //
+    // FreeX's normal OFFSET evaluation calls CoerceToNumber(rowsArg), which
+    // returns #VALUE! for a RangeValue.  This special-case path detects the
+    // pattern early and produces the expected array result.
+
+    private bool TryEvaluateSubtotalOffsetArrayArg(
+        FunctionCallNode node,
+        IEvalContext context,
+        out ScalarValue result)
+    {
+        result = BlankValue.Instance;
+
+        // Require exactly 2 arguments: func_num + one OFFSET call.
+        if (node.Arguments.Count != 2) return false;
+
+        var funcState = TryEvaluateFastScalarControl(node.Arguments[0], context, out var funcValue);
+        if (funcState == DirectRangeFastPathState.Unsupported) return false;
+        if (funcValue is ErrorValue funcError) { result = funcError; return true; }
+
+        var coerced = CoerceToNumber(funcValue);
+        if (coerced is ErrorValue coercionError) { result = coercionError; return true; }
+
+        var funcNumD = ((NumberValue)coerced).Value;
+        if (!double.IsFinite(funcNumD)) { result = ErrorValue.Value; return true; }
+        int funcNum = (int)funcNumD;
+        if (funcNum is 7 or 8 or 10 or 11) return false; // statistical: need list, not just count/sum
+        bool skipHidden = funcNum >= 101;
+        int baseFunc = funcNum > 100 ? funcNum - 100 : funcNum;
+
+        // Check that the second argument is an OFFSET call.
+        if (node.Arguments[1] is not FunctionCallNode offsetNode ||
+            !string.Equals(offsetNode.FunctionName, "OFFSET", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (offsetNode.Arguments.Count is < 3 or > 5) return false;
+
+        // Parse the OFFSET base reference (mirrors EvaluateOffsetReference).
+        uint baseRow, baseCol; int baseHeight, baseWidth; string? baseSheet = null;
+        switch (offsetNode.Arguments[0])
+        {
+            case CellRefNode cellRef:
+                if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
+                { result = ErrorValue.Ref; return true; }
+                baseRow = cellRef.Row; baseCol = cellRef.ColumnNumber;
+                baseHeight = 1; baseWidth = 1;
+                baseSheet = cellRef.SheetName;
+                break;
+            case RangeRefNode rangeRef:
+                if (rangeRef.SheetName is not null && !context.SheetExists(rangeRef.SheetName))
+                { result = ErrorValue.Ref; return true; }
+                uint r0 = Math.Min(rangeRef.Start.Row, rangeRef.End.Row);
+                uint r1 = Math.Max(rangeRef.Start.Row, rangeRef.End.Row);
+                uint c0 = Math.Min(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber);
+                uint c1 = Math.Max(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber);
+                baseRow = r0; baseCol = c0;
+                baseHeight = (int)(r1 - r0 + 1);
+                baseWidth = (int)(c1 - c0 + 1);
+                baseSheet = rangeRef.SheetName;
+                break;
+            default:
+                return false; // named ranges and full-col/row are uncommon here; fall through to slow path
+        }
+
+        // Evaluate scalar arguments (rows, cols, height, width).
+        var rowsRaw = EvaluateNode(offsetNode.Arguments[1], context);
+        if (rowsRaw is ErrorValue re) { result = re; return true; }
+        var colsRaw = EvaluateNode(offsetNode.Arguments[2], context);
+        if (colsRaw is ErrorValue ce) { result = ce; return true; }
+
+        // Require at least one of rows/cols to be a RangeValue (array); otherwise the
+        // normal scalar OFFSET path handles it.
+        bool rowsIsArray = rowsRaw is RangeValue;
+        bool colsIsArray = colsRaw is RangeValue;
+        if (!rowsIsArray && !colsIsArray) return false;
+
+        // Evaluate height and width overrides if present.
+        int height = baseHeight;
+        int width  = baseWidth;
+        if (offsetNode.Arguments.Count >= 4 && offsetNode.Arguments[3] is not OmittedArgumentNode)
+        {
+            var hRaw = EvaluateNode(offsetNode.Arguments[3], context);
+            if (hRaw is ErrorValue he) { result = he; return true; }
+            if (hRaw is not BlankValue)
+            {
+                var hc = CoerceToNumber(hRaw);
+                if (hc is ErrorValue hce) { result = hce; return true; }
+                double dh = ((NumberValue)hc).Value;
+                if (!double.IsFinite(dh)) { result = ErrorValue.Value; return true; }
+                height = (int)Math.Truncate(dh);
+            }
+        }
+        if (offsetNode.Arguments.Count == 5 && offsetNode.Arguments[4] is not OmittedArgumentNode)
+        {
+            var wRaw = EvaluateNode(offsetNode.Arguments[4], context);
+            if (wRaw is ErrorValue we) { result = we; return true; }
+            if (wRaw is not BlankValue)
+            {
+                var wc = CoerceToNumber(wRaw);
+                if (wc is ErrorValue wce) { result = wce; return true; }
+                double dw = ((NumberValue)wc).Value;
+                if (!double.IsFinite(dw)) { result = ErrorValue.Value; return true; }
+                width = (int)Math.Truncate(dw);
+            }
+        }
+        if (height <= 0 || width <= 0) { result = ErrorValue.Ref; return true; }
+
+        // Determine the shape of the output array from whichever arg is an array.
+        var shapeSource = rowsIsArray ? (RangeValue)rowsRaw : (RangeValue)colsRaw;
+        int outRows = shapeSource.RowCount;
+        int outCols = shapeSource.ColCount;
+
+        var cells = new ScalarValue[outRows, outCols];
+        for (int ri = 0; ri < outRows; ri++)
+        {
+            for (int ci = 0; ci < outCols; ci++)
+            {
+                // Extract scalar rows offset for this element.
+                ScalarValue rowsElem = rowsIsArray
+                    ? ((RangeValue)rowsRaw).Cells[ri, ci]
+                    : rowsRaw;
+                ScalarValue colsElem = colsIsArray
+                    ? ((RangeValue)colsRaw).Cells[ri, ci]
+                    : colsRaw;
+
+                if (rowsElem is ErrorValue rowsErr) { cells[ri, ci] = rowsErr; continue; }
+                if (colsElem is ErrorValue colsErr) { cells[ri, ci] = colsErr; continue; }
+
+                var rowsCo = CoerceToNumber(rowsElem);
+                if (rowsCo is ErrorValue rce) { cells[ri, ci] = rce; continue; }
+                var colsCo = CoerceToNumber(colsElem);
+                if (colsCo is ErrorValue cce) { cells[ri, ci] = cce; continue; }
+
+                double dRows = ((NumberValue)rowsCo).Value;
+                double dCols = ((NumberValue)colsCo).Value;
+                if (!double.IsFinite(dRows) || !double.IsFinite(dCols))
+                { cells[ri, ci] = ErrorValue.Value; continue; }
+
+                long startRow = (long)baseRow + (long)Math.Truncate(dRows);
+                long startCol = (long)baseCol + (long)Math.Truncate(dCols);
+                long endRow   = startRow + height - 1;
+                long endCol   = startCol + width  - 1;
+                if (startRow < 1 || startCol < 1 ||
+                    endRow > CellAddress.MaxRow || endCol > CellAddress.MaxCol)
+                { cells[ri, ci] = ErrorValue.Ref; continue; }
+
+                var rangeArg = new DirectRangeArgument(
+                    baseSheet,
+                    (uint)startRow, (uint)startCol,
+                    (uint)endRow,   (uint)endCol);
+
+                // Run SUBTOTAL(baseFunc) on this single range element.
+                var numeric = new DirectRangeNumericAccumulator();
+                long countA = 0;
+                bool errorSeen = false;
+                ScalarValue errorVal = BlankValue.Instance;
+
+                for (uint row = rangeArg.StartRow; row <= rangeArg.EndRow && !errorSeen; row++)
+                {
+                    if (ShouldSkipFastSubtotalRow(context, rangeArg, row, skipHidden)) continue;
+                    for (uint col = rangeArg.StartCol; col <= rangeArg.EndCol && !errorSeen; col++)
+                    {
+                        if (IsFastNestedSubtotalOrAggregateCell(context, rangeArg, row, col)) continue;
+                        var v = GetFastRangeCellValue(context, rangeArg, row, col);
+                        if (v is ErrorValue ev) { errorSeen = true; errorVal = ev; break; }
+                        if (TryDirectRangeNumber(v, out var num, out _))
+                        {
+                            numeric.Add(num, baseFunc);
+                        }
+                        if (v is not BlankValue) countA++;
+                    }
+                }
+
+                cells[ri, ci] = errorSeen ? errorVal : EvaluateSubtotalAggregateNumericResult(baseFunc, numeric, countA);
+            }
+        }
+
+        result = new RangeValue(cells);
+        return true;
+    }
+
     private readonly record struct DirectRangeArgument(
         string? SheetName,
         uint StartRow,

@@ -134,4 +134,40 @@ public partial class FunctionLibraryTests
         var sheet = MakeSheet((1, 1, new NumberValue(1)));
         _eval.Evaluate("=SORT(A1:A1,1,1,NA())", sheet).Should().Be(ErrorValue.NA);
     }
+
+    [Fact]
+    public void Sort_InlineArrayConstant_SortsBySecondColumnAscending()
+    {
+        // SORT({"b",2;"a",1;"c",3}, 2, 1) must sort rows by col 2 ascending → a/1, b/2, c/3
+        var sheet = MakeSheet();
+        var result = _eval.Evaluate("=SORT({\"b\",2;\"a\",1;\"c\",3},2,1)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(3);
+        result.ColCount.Should().Be(2);
+        // Row 0: "a", 1
+        result.Cells[0, 0].Should().Be(new TextValue("a"), "first row col 1 should be 'a' when sorted by col 2 asc");
+        result.Cells[0, 1].Should().Be(new NumberValue(1), "first row col 2 should be 1");
+        // Row 1: "b", 2
+        result.Cells[1, 0].Should().Be(new TextValue("b"), "second row col 1 should be 'b'");
+        result.Cells[1, 1].Should().Be(new NumberValue(2), "second row col 2 should be 2");
+        // Row 2: "c", 3
+        result.Cells[2, 0].Should().Be(new TextValue("c"), "third row col 1 should be 'c'");
+        result.Cells[2, 1].Should().Be(new NumberValue(3), "third row col 2 should be 3");
+    }
+
+    [Fact]
+    public void Sort_InlineArrayConstant_SortsByFirstColumnAscending()
+    {
+        // SORT({"b",2;"a",1;"c",3}, 1, 1) must sort rows by col 1 ascending → a/1, b/2, c/3
+        var sheet = MakeSheet();
+        var result = _eval.Evaluate("=SORT({\"b\",2;\"a\",1;\"c\",3},1,1)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(3);
+        result.ColCount.Should().Be(2);
+        result.Cells[0, 0].Should().Be(new TextValue("a"), "first row should be 'a' when sorted by col 1 asc");
+        result.Cells[1, 0].Should().Be(new TextValue("b"));
+        result.Cells[2, 0].Should().Be(new TextValue("c"));
+    }
 }

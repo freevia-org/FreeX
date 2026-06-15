@@ -121,7 +121,8 @@ public static partial class BuiltInFunctions
             {
                 var va = sortIdx < arr.ColCount ? arr.Cells[a, sortIdx] : BlankValue.Instance;
                 var vb = sortIdx < arr.ColCount ? arr.Cells[b, sortIdx] : BlankValue.Instance;
-                return sortOrder * CompareScalar(va, vb);
+                var cmp = CompareSortKey(va, vb, sortOrder);
+                return cmp != 0 ? cmp : a.CompareTo(b); // stable: preserve original order for ties (Excel SORT is stable)
             });
             var result = new ScalarValue[arr.RowCount, arr.ColCount];
             for (int r = 0; r < arr.RowCount; r++)
@@ -136,7 +137,8 @@ public static partial class BuiltInFunctions
             {
                 var va = sortIdx < arr.RowCount ? arr.Cells[sortIdx, a] : BlankValue.Instance;
                 var vb = sortIdx < arr.RowCount ? arr.Cells[sortIdx, b] : BlankValue.Instance;
-                return sortOrder * CompareScalar(va, vb);
+                var cmp = CompareSortKey(va, vb, sortOrder);
+                return cmp != 0 ? cmp : a.CompareTo(b); // stable: preserve original order for ties (Excel SORT is stable)
             });
             var result = new ScalarValue[arr.RowCount, arr.ColCount];
             for (int r = 0; r < arr.RowCount; r++)
@@ -144,6 +146,20 @@ public static partial class BuiltInFunctions
                     result[r, c] = arr.Cells[r, colIndices[c]];
             return new RangeValue(result);
         }
+    }
+
+    // Excel's SORT/SORTBY always places blank cells LAST, regardless of ascending/descending order.
+    // (Empty cells in the sort key are pushed to the end; only non-blank values honor sort_order.)
+    private static int CompareSortKey(ScalarValue va, ScalarValue vb, int sortOrder)
+    {
+        // Excel always pushes empty cells to the very bottom of a SORT, regardless of
+        // ascending/descending order. Only non-empty values honor sort_order.
+        bool aBlank = va is BlankValue;
+        bool bBlank = vb is BlankValue;
+        if (aBlank && bBlank) return 0;
+        if (aBlank) return 1;
+        if (bBlank) return -1;
+        return sortOrder * CompareScalar(va, vb);
     }
 
     private static ScalarValue SortBy(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

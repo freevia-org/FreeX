@@ -112,7 +112,16 @@ public sealed partial class FormulaEvaluator
     }
 
     private static ScalarValue NormalizeTopLevelResult(ScalarValue value) =>
-        value is LambdaValue ? ErrorValue.Calc : value;
+        value switch
+        {
+            // Excel rule: a formula whose final result is blank (i.e. a bare reference to an empty
+            // cell, e.g. =A1 where A1 is empty) evaluates to 0, not blank.
+            // ISBLANK / concatenation / comparisons are unaffected because they receive BlankValue
+            // as an *argument* (before this normalization step) and handle it internally.
+            BlankValue => NumberValueFor(0d),
+            LambdaValue => ErrorValue.Calc,
+            _ => value,
+        };
 
     /// <summary>
     /// Evaluate an AST node recursively.

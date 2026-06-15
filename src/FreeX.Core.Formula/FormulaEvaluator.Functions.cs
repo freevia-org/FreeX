@@ -95,6 +95,10 @@ public sealed partial class FormulaEvaluator
             return directIrrResult;
 
         if (functionName == "SUBTOTAL" &&
+            TryEvaluateSubtotalOffsetArrayArg(node, context, out var subtotalOffsetArrayResult))
+            return subtotalOffsetArrayResult;
+
+        if (functionName == "SUBTOTAL" &&
             TryEvaluateSubtotalDirectRanges(node, context, out var directSubtotalResult))
             return directSubtotalResult;
 
