@@ -68,6 +68,12 @@ internal static class Program
             workbook = result.Workbook;
             if (result.Warnings.Count > 0)
                 Console.WriteLine($"  Load warnings ({result.Warnings.Count}): {string.Join("; ", result.Warnings.Take(5))}");
+
+            // Mirror WorkbookOpenService: Excel applies pivot/table styles dynamically and does not
+            // bake them into per-cell styles, so materialize them onto the loaded cells so the GridView
+            // render shows the header fills + row banding exactly as the real app does on open.
+            FreeX.Core.Commands.PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
+            FreeX.Core.Commands.StructuredTableStyleService.ApplyLoadedTableStyles(workbook);
         }
         catch (Exception ex)
         {
