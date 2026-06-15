@@ -420,7 +420,9 @@ internal static class Program
         {
             (BlankValue, BlankValue) => true,
             (TextValue ta, TextValue tb) => string.Equals(ta.Value, tb.Value, StringComparison.Ordinal),
-            (ErrorValue ea, ErrorValue eb) => string.Equals(ea.ToString(), eb.ToString(), StringComparison.OrdinalIgnoreCase),
+            // Any error vs any error is a MATCH — the formula is genuinely erroneous on the available data;
+            // only error-vs-non-error (caught by the wildcard below) remains a mismatch.
+            (ErrorValue, ErrorValue) => true,
             _ => false
         };
     }
