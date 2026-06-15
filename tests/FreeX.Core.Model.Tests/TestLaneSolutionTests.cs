@@ -23,7 +23,8 @@ public sealed class TestLaneSolutionTests
             "tests/FreeX.Core.IO.Tests/FreeX.Core.IO.Tests.csproj",
             "tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj",
             "tests/FreeX.Fixtures/FreeX.Fixtures.csproj",
-            "tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj"
+            "tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj",
+            "tests/FreeX.Ribbon.Tests/FreeX.Ribbon.Tests.csproj"
         });
 
         uiLaneProjects.Should().BeEquivalentTo(new[]
