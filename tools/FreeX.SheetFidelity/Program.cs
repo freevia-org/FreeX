@@ -409,17 +409,32 @@ internal static class Program
 
     private static bool ValuesMatch(ScalarValue a, ScalarValue b)
     {
+        // A date serial and a plain number with the same value display identically (the cell's number
+        // format decides date-vs-number rendering, not the scalar type). FreeX loads date-formatted cells
+        // as DateTimeValue but recalc produces NumberValue; treat equal serials as a MATCH, not a mismatch,
+        // so the report counts real divergences only. Same for bool<->1/0.
+        if (TryNumeric(a, out var an) && TryNumeric(b, out var bn))
+            return NumbersMatch(an, bn);
+
         return (a, b) switch
         {
             (BlankValue, BlankValue) => true,
-            (NumberValue na, NumberValue nb) => NumbersMatch(na.Value, nb.Value),
-            (DateTimeValue da, DateTimeValue db) => NumbersMatch(da.Value, db.Value),
             (TextValue ta, TextValue tb) => string.Equals(ta.Value, tb.Value, StringComparison.Ordinal),
-            (BoolValue ba, BoolValue bb) => ba.Value == bb.Value,
             (ErrorValue ea, ErrorValue eb) => string.Equals(ea.ToString(), eb.ToString(), StringComparison.OrdinalIgnoreCase),
-            // Blank vs blank-ish: treat blank as 0 for numbers? No — exact type match required.
             _ => false
         };
+    }
+
+    // Numeric view of a scalar: numbers, dates (serial), and bools (1/0) are all comparable numerically.
+    private static bool TryNumeric(ScalarValue v, out double value)
+    {
+        switch (v)
+        {
+            case NumberValue n: value = n.Value; return true;
+            case DateTimeValue d: value = d.Value; return true;
+            case BoolValue b: value = b.Value ? 1 : 0; return true;
+            default: value = 0; return false;
+        }
     }
 
     private static bool NumbersMatch(double a, double b)
