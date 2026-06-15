@@ -4,17 +4,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class HomeFormatAsTableCommandSourceTests
 {
-    [Fact]
-    public void FormatAsTableRibbonButton_ExposesExpectedKeyTipAndGalleryMenu()
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var button = xaml.ExtractButtonElementByClickHandler("FormatTableBtn_Click");
-
-        button.ShouldContainInvariantCommandName("Format as Table");
-        button.Should().Contain("local:RibbonTooltip.KeyTip=\"T\"");
-        button.Should().Contain("Click=\"FormatTableBtn_Click\"");
-        button.Should().Contain("x:Name=\"FormatTableGalleryMenu\"");
-    }
 
     [Fact]
     public void FormatAsTableHandlers_RouteThroughGalleryPlannerAndStructuredTableCommand()

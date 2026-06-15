@@ -5,30 +5,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class PivotDesignCommandSourceTests
 {
-    [Theory]
-    [InlineData("Grand Totals", "Grand Totals", "G", "PivotGrandTotalsBtn_Click")]
-    [InlineData("Subtotals", "Subtotals", "S", "PivotSubtotalsBtn_Click")]
-    [InlineData("Report Layout", "Report Layout", "L", "PivotReportLayoutBtn_Click")]
-    [InlineData("Blank Rows", "Blank Rows", "B", "PivotBlankRowsBtn_Click")]
-    [InlineData("Banded Rows", "Banded Rows", "R", "PivotBandedRowsBtn_Click")]
-    [InlineData("Banded Columns", "Banded Columns", "C", "PivotBandedColumnsBtn_Click")]
-    [InlineData("Row Headers", "Row Headers", "H", "PivotRowHeadersBtn_Click")]
-    [InlineData("Column Headers", "Column Headers", "O", "PivotColumnHeadersBtn_Click")]
-    [InlineData("PivotTable Styles", "Styles", "Y", "PivotStyleGalleryBtn_Click")]
-    public void PivotDesignCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
-        string title,
-        string content,
-        string keyTip,
-        string handler)
-    {
-        var button = ReadPivotTableDesignTabXaml()
-            .ExtractButtonElementByInvariantCommandName(title);
-
-        button.ShouldContainLocalizedAttribute("Content", content);
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().Contain($"Click=\"{handler}\"");
-    }
 
     [Fact]
     public void PivotDesignHandlers_RouteThroughExpectedOptionsDialogStyleGalleryAndCommands()

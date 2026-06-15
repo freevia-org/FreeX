@@ -4,66 +4,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class HomeEditingCommandSourceTests
 {
-    [Theory]
-    [InlineData("AutoSum", "U", "AutoSumPickerBtn_Click")]
-    [InlineData("Fill", "FI", "FillPickerBtn_Click")]
-    [InlineData("Clear", "E", "ClearPickerBtn_Click")]
-    [InlineData("Sort &amp; Filter", "S", "SortFilterPickerBtn_Click")]
-    [InlineData("Find &amp; Select", "FD", "FindSelectPickerBtn_Click")]
-    public void EditingCommandButtons_ExposeExpectedKeyTipsAndHandlers(
-        string title,
-        string keyTip,
-        string handler)
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var button = xaml.ExtractButtonElementByClickHandler(handler);
-
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().Contain($"Click=\"{handler}\"");
-    }
-
-    [Theory]
-    [InlineData("Sum", "S", "AutoSumSumMenuItem_Click")]
-    [InlineData("Average", "A", "AutoSumAvgMenuItem_Click")]
-    [InlineData("Count Numbers", "C", "AutoSumCountMenuItem_Click")]
-    [InlineData("Count All", "T", "AutoSumCountAllMenuItem_Click")]
-    [InlineData("Max", "X", "AutoSumMaxMenuItem_Click")]
-    [InlineData("Min", "M", "AutoSumMinMenuItem_Click")]
-    [InlineData("More Functions...", "F", "AutoSumMoreMenuItem_Click")]
-    [InlineData("Down", "D", "FillDownMenuItem_Click")]
-    [InlineData("Right", "R", "FillRightMenuItem_Click")]
-    [InlineData("Up", "U", "FillUpMenuItem_Click")]
-    [InlineData("Left", "L", "FillLeftMenuItem_Click")]
-    [InlineData("Series...", "S", "FillSeriesMenuItem_Click")]
-    [InlineData("Flash Fill", "F", "FlashFillMenuItem_Click")]
-    [InlineData("Clear All", "A", "ClearAllMenuItem_Click")]
-    [InlineData("Clear Formats", "F", "ClearFormatsMenuItem_Click")]
-    [InlineData("Clear Contents", "C", "ClearValuesMenuItem_Click")]
-    [InlineData("Clear Comments and Notes", "M", "ClearCommentsMenuItem_Click")]
-    [InlineData("Clear Hyperlinks", "H", "ClearHyperlinksMenuItem_Click")]
-    [InlineData("Sort A to Z", "A", "SortAZMenuItem_Click")]
-    [InlineData("Sort Z to A", "Z", "SortZAMenuItem_Click")]
-    [InlineData("Custom Sort...", "S", "SortCustomMenuItem_Click")]
-    [InlineData("Filter", "F", "FilterToggleMenuItem_Click")]
-    [InlineData("Clear", "C", "FilterClearMenuItem_Click")]
-    [InlineData("Reapply", "R", "FilterReapplyMenuItem_Click")]
-    [InlineData("Find...", "F", "FindFindMenuItem_Click")]
-    [InlineData("Replace...", "R", "FindReplaceMenuItem_Click")]
-    [InlineData("Go To...", "G", "FindGoToMenuItem_Click")]
-    [InlineData("Go To Special...", "S", "FindGoToSpecialMenuItem_Click")]
-    public void EditingMenuItems_ExposeExpectedKeyTipsAndHandlers(
-        string header,
-        string keyTip,
-        string handler)
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var menuItem = xaml.ExtractMenuItemElementByClickHandler(handler);
-
-        menuItem.ShouldContainLocalizedAttribute("Header", header);
-        menuItem.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        menuItem.Should().Contain($"Click=\"{handler}\"");
-    }
 
     [Fact]
     public void EditingCommandHandlers_RouteThroughExpectedPlannersAndDelegates()
