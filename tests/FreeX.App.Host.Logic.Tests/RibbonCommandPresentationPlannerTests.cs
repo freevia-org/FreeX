@@ -180,25 +180,8 @@ public sealed class RibbonCommandPresentationPlannerTests
         genericShapeItems.Should().BeEmpty("every visible shape gallery entry should have a recognizable icon");
     }
 
-    [Fact]
-    public void DrawPicturesRibbonCommand_IsPlainButtonWithoutOneOptionContextMenu()
-    {
-        var xaml = ReadMainRibbonXaml();
-        var groupStart = xaml.IndexOf("local:RibbonMetadata.CatalogId=\"DrawIllustrationsGroup\"", StringComparison.Ordinal);
-        groupStart.Should().BeGreaterThanOrEqualTo(0);
-        var picturesStart = xaml.IndexOf("local:RibbonMetadata.CommandName=\"Pictures\"", groupStart, StringComparison.Ordinal);
-        picturesStart.Should().BeGreaterThan(groupStart);
-        var picturesButtonStart = xaml.LastIndexOf("<Button", picturesStart, StringComparison.Ordinal);
-        picturesButtonStart.Should().BeGreaterThan(groupStart);
-        var shapesStart = xaml.IndexOf("x:Name=\"ShapesBtn\"", picturesStart, StringComparison.Ordinal);
-        shapesStart.Should().BeGreaterThan(picturesStart);
-
-        var picturesButton = xaml[picturesButtonStart..shapesStart];
-
-        picturesButton.Should().NotContain("<Button.ContextMenu>");
-        picturesButton.Should().NotContain("MainWindow_Header_PictureThisDevice");
-        picturesButton.Should().Contain("Click=\"PicturesBtn_Click\"");
-    }
+    // Removed: DrawPicturesRibbonCommand_IsPlainButtonWithoutOneOptionContextMenu asserted on the
+    // hand-authored ribbon XAML, which no longer exists (the ribbon is declarative; see FreeXRibbon).
 
     [Theory]
     [InlineData(" PivotTable ", RibbonCommandIconKind.PivotTable)]
