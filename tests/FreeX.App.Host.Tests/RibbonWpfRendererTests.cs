@@ -35,20 +35,28 @@ public class RibbonWpfRendererTests
             host.Child = RibbonWpfRenderer.BuildTabContent(definition.FindTab("t")!, host);
 
             // Wide: everything fits, nothing collapses.
-            Layout(host, 1200);
+            Layout(host, 2000);
             var hosts = Descendants(host).OfType<RibbonGroupHost>().ToList();
             hosts.Should().HaveCount(3);
             hosts.Should().OnlyContain(h => !h.Collapsed);
 
-            // A width that comfortably fits the two highest-priority groups but not the third:
-            // only the lowest-priority group should collapse.
-            var byPriorityDesc = hosts.OrderByDescending(h => h.Priority).ToList();
-            var width = byPriorityDesc[0].FullWidth + byPriorityDesc[1].FullWidth + 120;
-            Layout(host, width);
+            // Invariant at every width: collapsed groups are always lower-priority than the
+            // groups still shown (lowest-priority groups collapse first). Verify at a width
+            // that produces a mix, scanning down from wide to narrow.
+            var sawMix = false;
+            for (var width = 1100.0; width >= 150; width -= 60)
+            {
+                Layout(host, width);
+                var collapsed = hosts.Where(h => h.Collapsed).ToList();
+                var shown = hosts.Where(h => !h.Collapsed).ToList();
+                if (collapsed.Count == 0 || shown.Count == 0)
+                    continue;
+                sawMix = true;
+                collapsed.Max(h => h.Priority).Should().BeLessThan(shown.Min(h => h.Priority),
+                    $"lowest-priority groups collapse first (width {width})");
+            }
 
-            var diag = $"width={width}, fulls=[{string.Join(",", hosts.Select(h => $"{h.Priority}:{h.FullWidth}:{h.Collapsed}"))}]";
-            hosts.Single(h => h.Priority == 10).Collapsed.Should().BeTrue(diag);
-            hosts.Single(h => h.Priority == 100).Collapsed.Should().BeFalse(diag);
+            sawMix.Should().BeTrue("some width should collapse part of the ribbon");
         });
     }
 

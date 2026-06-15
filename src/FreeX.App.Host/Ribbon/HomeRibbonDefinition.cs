@@ -16,7 +16,7 @@ public static class HomeRibbonDefinition
     public static RibbonTab HomeTab() => new RibbonDefinitionBuilder()
         .Tab("HomeTab", "Home", "H", tab => tab
             .Group("HomeClipboardGroup", "Clipboard", "C", priority: 100, g => g
-                .Large("Paste", "Paste", Ico.Paste, "V", dropdown: true)
+                .Large("Paste", "Paste", Ico.Paste, "V", menu: HomeRibbonMenus.Paste)
                 .Medium("Cut", "Cut", Ico.Cut, "X")
                 .Medium("Copy", "Copy", Ico.Copy, "C")
                 .Medium("Format Painter", "Format Painter", Ico.FormatPainter, "FP"))
@@ -40,7 +40,7 @@ public static class HomeRibbonDefinition
                 .IconToggle("Underline", "Underline", Ico.Underline, "3")
                 .IconToggle("Strikethrough", "Strikethrough", Ico.Strikethrough, "4")
                 .Separator()
-                .Icon("Borders", "Borders", Ico.Border, "B", dropdown: true)
+                .Icon("Borders", "Borders", Ico.Border, "B", menu: HomeRibbonMenus.Borders)
                 .Icon("Fill Color", "Fill Color", Ico.Fill, "H", dropdown: true)
                 .Icon("Font Color", "Font Color", Ico.Color, "FC", dropdown: true))
 
@@ -49,7 +49,7 @@ public static class HomeRibbonDefinition
                 .IconToggle("Middle Align", "Middle Align", Ico.Align, "AM")
                 .IconToggle("Bottom Align", "Bottom Align", Ico.Align, "AB")
                 .Separator()
-                .Icon("Orientation", "Orientation", Ico.Orientation, "RO", dropdown: true)
+                .Icon("Orientation", "Orientation", Ico.Orientation, "RO", menu: HomeRibbonMenus.Orientation)
                 .Medium("Wrap Text", "Wrap Text", Ico.Wrap, "W")
                 .RowBreak()
                 .IconToggle("Align Left", "Align Left", Ico.Align, "AL")
@@ -58,7 +58,7 @@ public static class HomeRibbonDefinition
                 .Separator()
                 .Icon("Decrease Indent", "Decrease Indent", Ico.Align, "AO")
                 .Icon("Increase Indent", "Increase Indent", Ico.Align, "AI")
-                .Medium("Merge & Center", "Merge & Center", Ico.Merge, "M", dropdown: true))
+                .Medium("Merge & Center", "Merge & Center", Ico.Merge, "M", menu: HomeRibbonMenus.MergeCenter))
 
             .Group("HomeNumberGroup", "Number", "N", priority: 70, g => g
                 .ComboBox("Number Format", "Number Format", c => c with
@@ -67,7 +67,7 @@ public static class HomeRibbonDefinition
                     Items = new[] { "General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text" }
                 })
                 .RowBreak()
-                .Icon("Accounting Number Format", "Accounting", Ico.Currency, "AN", dropdown: true)
+                .Icon("Accounting Number Format", "Accounting", Ico.Currency, "AN", menu: HomeRibbonMenus.AccountingNumberFormat)
                 .Icon("Percent Style", "Percent Style", Ico.Percent, "P")
                 .Icon("Comma Style", "Comma Style", Ico.Comma, "K")
                 .Separator()
@@ -75,21 +75,21 @@ public static class HomeRibbonDefinition
                 .Icon("Decrease Decimal Places", "Decrease Decimal", Ico.Decimal, "QD"))
 
             .Group("HomeStylesGroup", "Styles", "Y", priority: 60, g => g
-                .Large("Conditional Formatting", "Conditional Formatting", Ico.Effects, "L", dropdown: true)
+                .Large("Conditional Formatting", "Conditional Formatting", Ico.Effects, "L", menu: HomeRibbonMenus.ConditionalFormatting)
                 .Large("Format as Table", "Format as Table", Ico.Table, "T", dropdown: true)
-                .Large("Cell Styles", "Cell Styles", Ico.Theme, "J", dropdown: true))
+                .Large("Cell Styles", "Cell Styles", Ico.Theme, "J", menu: HomeRibbonMenus.CellStyles))
 
             .Group("HomeCellsGroup", "Cells", "E", priority: 50, g => g
-                .Medium("Insert", "Insert", Ico.Insert, "I", dropdown: true)
-                .Medium("Delete", "Delete", Ico.Delete, "D", dropdown: true)
-                .Medium("Format", "Format", Ico.Size, "O", dropdown: true))
+                .Medium("Insert", "Insert", Ico.Insert, "I", menu: HomeRibbonMenus.Insert)
+                .Medium("Delete", "Delete", Ico.Delete, "D", menu: HomeRibbonMenus.Delete)
+                .Medium("Format", "Format", Ico.Size, "O", menu: HomeRibbonMenus.Format))
 
             .Group("HomeEditingGroup", "Editing", "G", priority: 40, g => g
-                .Medium("AutoSum", "AutoSum", Ico.Sum, "U", dropdown: true)
-                .Medium("Fill", "Fill", Ico.Fill, "FI", dropdown: true)
-                .Medium("Clear", "Clear", Ico.Clear, "E", dropdown: true)
-                .Medium("Sort & Filter", "Sort & Filter", Ico.Sort, "S", dropdown: true)
-                .Medium("Find & Select", "Find & Select", Ico.Search, "FD", dropdown: true)))
+                .Medium("AutoSum", "AutoSum", Ico.Sum, "U", menu: HomeRibbonMenus.AutoSum)
+                .Medium("Fill", "Fill", Ico.Fill, "FI", menu: HomeRibbonMenus.Fill)
+                .Medium("Clear", "Clear", Ico.Clear, "E", menu: HomeRibbonMenus.Clear)
+                .Medium("Sort & Filter", "Sort & Filter", Ico.Sort, "S", menu: HomeRibbonMenus.SortFilter)
+                .Medium("Find & Select", "Find & Select", Ico.Search, "FD", menu: HomeRibbonMenus.FindSelect)))
         .Build()
         .FindTab("HomeTab")!;
 }

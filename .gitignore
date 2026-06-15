@@ -44,3 +44,5 @@ src/FreeX.App.Host/Resources/CommandIcons/
 capture_*.ps1
 enum_tabs.ps1
 *.png
+
+tools/_old_mainwindow.xaml
