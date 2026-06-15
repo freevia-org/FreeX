@@ -30,11 +30,16 @@ public partial class MainWindow
 
         try
         {
-            // Capture the original controls (the behavior + state backplane) before replacing them.
+            // Capture the original controls (kept for state mirroring), then bind commands NATIVELY:
+            // each CommandId invokes its MainWindow handler method directly (no XAML control needed).
+            // The control bridge is only a fallback for commands with no generated handler mapping.
             var originals = CollectControlsByName();
-            var registry = new RibbonCommandRegistry();
+            var registry = BuildNativeRibbonRegistry();
             foreach (var (name, control) in originals)
-                registry.Register(name, new RibbonHandlerCommand(control));
+            {
+                if (!registry.TryGet(name, out _))
+                    registry.Register(name, new RibbonHandlerCommand(control));
+            }
 
             var definition = FreeXRibbon.Build();
             foreach (var item in RibbonTabs.Items)
@@ -113,6 +118,60 @@ public partial class MainWindow
 
         var root = dir?.FullName ?? AppContext.BaseDirectory;
         return Path.Combine(root, "screenshots", "ribbon-declarative");
+    }
+
+    /// <summary>
+    /// Builds the native command registry: each CommandId is bound directly to its MainWindow
+    /// Click-handler method (via the generated <see cref="FreeXRibbonHandlerMap"/>), so command
+    /// execution no longer depends on the XAML control tree.
+    /// </summary>
+    private RibbonCommandRegistry BuildNativeRibbonRegistry()
+    {
+        var registry = new RibbonCommandRegistry();
+        var type = typeof(MainWindow);
+        const System.Reflection.BindingFlags flags =
+            System.Reflection.BindingFlags.Instance |
+            System.Reflection.BindingFlags.NonPublic |
+            System.Reflection.BindingFlags.Public;
+
+        foreach (var (name, methodName) in FreeXRibbonHandlerMap.Handlers)
+        {
+            var method = type.GetMethod(methodName, flags, binder: null,
+                types: new[] { typeof(object), typeof(RoutedEventArgs) }, modifiers: null)
+                ?? type.GetMethod(methodName, flags, binder: null, types: System.Type.EmptyTypes, modifiers: null);
+            if (method is not null)
+                registry.Register(name, new ReflectiveHandlerCommand(this, method));
+        }
+
+        return registry;
+    }
+
+    /// <summary>Invokes a MainWindow handler method (object,RoutedEventArgs) or parameterless.</summary>
+    private sealed class ReflectiveHandlerCommand : IRibbonCommand
+    {
+        private readonly MainWindow _window;
+        private readonly System.Reflection.MethodInfo _method;
+
+        public ReflectiveHandlerCommand(MainWindow window, System.Reflection.MethodInfo method)
+        {
+            _window = window;
+            _method = method;
+        }
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var args = _method.GetParameters().Length == 0
+                ? System.Array.Empty<object?>()
+                : new object?[] { _window, new RoutedEventArgs() };
+            try
+            {
+                _method.Invoke(_window, args);
+            }
+            catch (System.Reflection.TargetInvocationException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ribbon command '{_method.Name}' threw: {ex.InnerException}");
+            }
+        }
     }
 
     /// <summary>Maps each ribbon control (and menu item) to the first instance found, keyed by CommandName.</summary>

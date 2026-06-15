@@ -48,6 +48,7 @@ for e in root.iter():
 data = {}
 order = []
 curtab = None
+handler_map = {}  # CommandName -> Click handler method name (controls + menu items)
 for e in root.iter():
     cid = catid(e)
     if cid and cid.endswith("Tab"):
@@ -69,6 +70,8 @@ for e in root.iter():
                 if not cn:
                     continue
                 style = re.sub(r"\{StaticResource (\w+)\}", r"\1", d.get("Style") or "")
+                if d.get("Click") and cn not in handler_map:
+                    handler_map[cn] = d.get("Click")
                 menu = []
                 for ch in list(d):
                     if not ch.tag.split("}")[-1].endswith(".ContextMenu"):
@@ -83,6 +86,8 @@ for e in root.iter():
                         elif mt == "MenuItem":
                             mcn = mi.get(LK + "RibbonMetadata.CommandName") or mi.get("Header") or ""
                             if mcn:
+                                if mi.get("Click") and mcn not in handler_map:
+                                    handler_map[mcn] = mi.get("Click")
                                 menu.append(("item", mcn, mi.get(LK + "RibbonTooltip.KeyTip") or "",
                                              mi.get("InputGestureText") or ""))
                 has_drop = d.get(LK + "RibbonMetadata.DropdownMenuButton") == "true" or len(menu) > 0
@@ -375,6 +380,26 @@ out.append("}")
 
 open(OUT, "w", encoding="utf-8").write("\n".join(out) + "\n")
 print("wrote", OUT)
+
+# Emit the CommandName -> Click-handler-method map for the native command registry.
+HMAP = "src/FreeX.App.Host/Ribbon/FreeXRibbonHandlerMap.g.cs"
+hm = []
+hm.append("using System.Collections.Generic;")
+hm.append("")
+hm.append("namespace FreeX.App.Host;")
+hm.append("")
+hm.append("/// <summary>Generated map: ribbon CommandName -> the MainWindow Click-handler method name.</summary>")
+hm.append("public static class FreeXRibbonHandlerMap")
+hm.append("{")
+hm.append("    public static readonly IReadOnlyDictionary<string, string> Handlers =")
+hm.append("        new Dictionary<string, string>(System.StringComparer.Ordinal)")
+hm.append("        {")
+for cmd in sorted(handler_map):
+    hm.append(f'            ["{esc(cmd)}"] = "{esc(handler_map[cmd])}",')
+hm.append("        };")
+hm.append("}")
+open(HMAP, "w", encoding="utf-8").write("\n".join(hm) + "\n")
+print("wrote", HMAP, "with", len(handler_map), "handlers")
 print("tabs:", sum(1 for t in (mainorder + ctxorder) if t in data and any(g[1] for g in data[t])))
 print("groups:", sum(1 for t in data for g in data[t] if g[1]))
 print("controls:", sum(len(g[1][:16]) for t in data for g in data[t] if g[1]))
