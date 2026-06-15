@@ -94,6 +94,12 @@ public sealed partial class FormulaEvaluator
             return null;
         }
 
+        public string? TryGetNamedFormulaText(string name)
+        {
+            if (_workbook is null) return null;
+            return _workbook.NamedFormulas.TryGetValue(name, out var formulaText) ? formulaText : null;
+        }
+
         public string? TryGetSheetName(FreeX.Core.Model.SheetId sheetId)
             => _workbook?.GetSheet(sheetId)?.Name;
 
@@ -183,6 +189,9 @@ public sealed partial class FormulaEvaluator
 
         public ScalarValue? TryResolveLambdaBinding(string name) =>
             _bindings.TryGetValue(name, out var v) ? v : _inner.TryResolveLambdaBinding(name);
+
+        public string? TryGetNamedFormulaText(string name) =>
+            _inner.TryGetNamedFormulaText(name);
 
         public ScalarValue InvokeLambda(LambdaValue lambda, IReadOnlyList<ScalarValue> args)
         {

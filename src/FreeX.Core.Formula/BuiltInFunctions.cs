@@ -699,6 +699,15 @@ public interface IEvalContext
     ScalarValue? TryResolveLambdaBinding(string name) => null;
 
     /// <summary>
+    /// Try to retrieve the raw formula-expression text for a defined name that is bound
+    /// to a formula rather than a plain cell range (e.g. DateOfFirst = DATE(2011,1,1)).
+    /// Returns null if the name is not a named formula in the current workbook.
+    /// The returned text does NOT include the leading '='.
+    /// Default: no named formulas.
+    /// </summary>
+    string? TryGetNamedFormulaText(string name) => null;
+
+    /// <summary>
     /// Invoke a LambdaValue with pre-evaluated scalar arguments, creating a new scope.
     /// Default: returns #VALUE! — implementations that support LAMBDA must override this.
     /// </summary>

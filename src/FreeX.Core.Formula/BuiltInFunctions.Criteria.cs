@@ -141,7 +141,22 @@ public static partial class BuiltInFunctions
 
         private bool MatchesNumericComparison(ScalarValue cellValue)
         {
-            if (!TryCellNumber(cellValue, out double value)) return false;
+            // Excel rule: when the criterion is a number, text cells are treated as
+            // "not equal to" (i.e. they are a different type and do not equal any number).
+            // Only blank cells are excluded (blank coerces to 0 for equality, but for
+            // *IF(S) matching, blank cells never match "<>0" — Excel treats blank as 0).
+            // Concretely:
+            //   "<>0"  → text cells count   (text ≠ 0),  blank cells don't (blank = 0)
+            //   "=0"   → text cells don't   (text ≠ 0),  blank cells do    (blank = 0)
+            //   ">5"   → text cells don't   (ordering across types is undefined)
+            //   "<=5"  → text cells don't
+            if (!TryCellNumber(cellValue, out double value))
+            {
+                // Non-numeric, non-blank cell: only "<>" (NotEqual) matches.
+                // Blank is excluded entirely (returns false for all ops including "<>").
+                if (cellValue is BlankValue) return false;
+                return _op == CriteriaComparisonOp.NotEqual;
+            }
             return _op switch
             {
                 CriteriaComparisonOp.GreaterThan => value > _number,

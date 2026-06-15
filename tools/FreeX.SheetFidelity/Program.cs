@@ -1,0 +1,495 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
+using FreeX.Core.Calc;
+using FreeX.Core.Formula;
+using FreeX.Core.IO;
+using FreeX.Core.Model;
+using DOXV = DocumentFormat.OpenXml.FileFormatVersions;
+
+/// <summary>
+/// FreeX Sheet Fidelity — discovery-only tool that loads an .xlsx file through FreeX and
+/// emits a thorough automated fidelity report covering load warnings, unsupported features,
+/// structural inventory, formula parity, and round-trip schema validation.
+/// </summary>
+internal static class Program
+{
+    private const string DefaultWorkbookPath = @"E:\Users\quinn\Downloads\ExcelExamples1.xlsx";
+
+    public static int Main(string[] args)
+    {
+        var culture = CultureInfo.GetCultureInfo("en-US");
+        System.Threading.Thread.CurrentThread.CurrentCulture = culture;
+        System.Threading.Thread.CurrentThread.CurrentUICulture = culture;
+        CultureInfo.DefaultThreadCurrentCulture = culture;
+        CultureInfo.DefaultThreadCurrentUICulture = culture;
+
+        var xlsxPath = args.Length > 0 ? args[0] : DefaultWorkbookPath;
+
+        var outputDir = Path.Combine(Path.GetTempPath(), "sheetfidelity");
+        Directory.CreateDirectory(outputDir);
+        var reportPath = Path.Combine(outputDir, "REPORT.txt");
+
+        var sb = new StringBuilder();
+        void Emit(string line)
+        {
+            sb.AppendLine(line);
+            Console.WriteLine(line);
+        }
+
+        Emit("================================================================================");
+        Emit("  FreeX Sheet Fidelity Report");
+        Emit($"  Generated : {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}");
+        Emit($"  Input file: {xlsxPath}");
+        Emit($"  Report    : {reportPath}");
+        Emit("================================================================================");
+        Emit("");
+
+        // =====================================================================
+        // SECTION 1 — LOAD
+        // =====================================================================
+        Emit("--------------------------------------------------------------------------------");
+        Emit("SECTION 1: LOAD");
+        Emit("--------------------------------------------------------------------------------");
+
+        Workbook workbook;
+        XlsxLoadResult loadResult;
+        try
+        {
+            using var stream = File.OpenRead(xlsxPath);
+            loadResult = new XlsxFileAdapter().LoadWithWarnings(stream, inspectFeatures: true);
+            workbook = loadResult.Workbook;
+            Emit("  Status: SUCCESS");
+        }
+        catch (Exception ex)
+        {
+            Emit($"  Status: EXCEPTION — {ex.GetType().FullName}: {ex.Message}");
+            Emit($"  Stack top: {FirstStackLine(ex)}");
+            File.WriteAllText(reportPath, sb.ToString(), Encoding.UTF8);
+            return 1;
+        }
+
+        if (loadResult.Warnings.Count == 0)
+        {
+            Emit("  Load warnings: none");
+        }
+        else
+        {
+            Emit($"  Load warnings ({loadResult.Warnings.Count}):");
+            foreach (var w in loadResult.Warnings)
+                Emit($"    - {w}");
+        }
+
+        Emit("");
+
+        // =====================================================================
+        // SECTION 2 — UNSUPPORTED FEATURES
+        // =====================================================================
+        Emit("--------------------------------------------------------------------------------");
+        Emit("SECTION 2: UNSUPPORTED FEATURES");
+        Emit("--------------------------------------------------------------------------------");
+
+        var featureReport = loadResult.FeatureReport;
+        if (featureReport is null)
+        {
+            Emit("  Feature report: not available (inspectFeatures returned null)");
+        }
+        else if (!featureReport.HasUnsupportedFeatures)
+        {
+            Emit("  No unsupported features detected.");
+        }
+        else
+        {
+            Emit($"  Unsupported features ({featureReport.Features.Count}):");
+            foreach (var f in featureReport.Features)
+                Emit($"    Kind={f.Kind,-30}  PackagePart={f.PackagePart}");
+        }
+
+        Emit("");
+
+        // =====================================================================
+        // SECTION 3 — STRUCTURAL INVENTORY
+        // =====================================================================
+        Emit("--------------------------------------------------------------------------------");
+        Emit("SECTION 3: STRUCTURAL INVENTORY");
+        Emit("--------------------------------------------------------------------------------");
+
+        var totalCells = 0;
+        var totalFormulas = 0;
+        var totalMerges = 0;
+        var totalCF = 0;
+        var totalDV = 0;
+        var totalTables = 0;
+        var totalCharts = 0;
+        var totalPivots = 0;
+        var totalHyperlinks = 0;
+        var totalComments = 0;
+
+        Emit($"  {"Sheet",-30} {"Cells",7} {"Fmlas",6} {"Merges",7} {"CF",5} {"DV",5} {"Tbls",5} {"Chrts",5} {"Pivts",5} {"Links",6} {"Cmts",5}");
+        Emit($"  {new string('-', 100)}");
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            var cellMap = sheet.GetOccupiedCellMap();
+            var cells = cellMap.Count;
+            var fmlas = sheet.FormulaCellCount;
+            var merges = sheet.MergedRegions.Count;
+            var cf = sheet.ConditionalFormats.Count;
+            var dv = sheet.DataValidations.Count();
+            var tables = sheet.StructuredTables.Count;
+            var charts = sheet.Charts.Count;
+            var pivots = sheet.PivotTables.Count;
+            var hyperlinks = sheet.Hyperlinks.Count;
+            var comments = sheet.Comments.Count;
+
+            Emit($"  {Trunc(sheet.Name, 30),-30} {cells,7} {fmlas,6} {merges,7} {cf,5} {dv,5} {tables,5} {charts,5} {pivots,5} {hyperlinks,6} {comments,5}");
+
+            totalCells += cells;
+            totalFormulas += fmlas;
+            totalMerges += merges;
+            totalCF += cf;
+            totalDV += dv;
+            totalTables += tables;
+            totalCharts += charts;
+            totalPivots += pivots;
+            totalHyperlinks += hyperlinks;
+            totalComments += comments;
+        }
+
+        Emit($"  {new string('-', 100)}");
+        Emit($"  {"WORKBOOK TOTALS",-30} {totalCells,7} {totalFormulas,6} {totalMerges,7} {totalCF,5} {totalDV,5} {totalTables,5} {totalCharts,5} {totalPivots,5} {totalHyperlinks,6} {totalComments,5}");
+        Emit($"  Named ranges: {workbook.NamedRanges.Count}");
+        Emit($"  Sheet count : {workbook.Sheets.Count}");
+
+        Emit("");
+
+        // =====================================================================
+        // SECTION 4 — FORMULA PARITY
+        // =====================================================================
+        Emit("--------------------------------------------------------------------------------");
+        Emit("SECTION 4: FORMULA PARITY");
+        Emit("--------------------------------------------------------------------------------");
+
+        // Snapshot cached values BEFORE recalc
+        var snapshots = new Dictionary<(string SheetName, uint Row, uint Col), (string Formula, ScalarValue Cached)>();
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+            {
+                if (cell.HasFormula && cell.FormulaText is not null)
+                    snapshots[(sheet.Name, row, col)] = (cell.FormulaText, cell.Value);
+            }
+        }
+
+        Emit($"  Total formula cells (snapshot): {snapshots.Count}");
+
+        // Run recalc
+        Exception? recalcException = null;
+        try
+        {
+            new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()).RecalculateAllFormulas(workbook);
+            Emit("  Recalc: completed without exception");
+        }
+        catch (Exception ex)
+        {
+            recalcException = ex;
+            Emit($"  Recalc: EXCEPTION — {ex.GetType().FullName}: {ex.Message}");
+            Emit($"  Stack top: {FirstStackLine(ex)}");
+        }
+
+        Emit("");
+
+        // Compare recalc result vs cached
+        var mismatches = new List<(string Sheet, uint Row, uint Col, string Formula, ScalarValue Cached, ScalarValue Recalc)>();
+
+        if (recalcException is null)
+        {
+            foreach (var sheet in workbook.Sheets)
+            {
+                foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+                {
+                    if (!cell.HasFormula || cell.FormulaText is null) continue;
+
+                    var key = (sheet.Name, row, col);
+                    if (!snapshots.TryGetValue(key, out var snap)) continue;
+
+                    var cached = snap.Cached;
+                    var recalc = cell.Value;
+
+                    if (!ValuesMatch(cached, recalc))
+                        mismatches.Add((sheet.Name, row, col, snap.Formula, cached, recalc));
+                }
+            }
+        }
+
+        // Per-sheet summary
+        Emit($"  {"Sheet",-30} {"Formula Cells",14} {"Mismatches",12}");
+        Emit($"  {new string('-', 60)}");
+        int workbookFormulas = 0, workbookMismatches = 0;
+        foreach (var sheet in workbook.Sheets)
+        {
+            var sheetFormulas = snapshots.Keys.Count(k => k.SheetName == sheet.Name);
+            var sheetMismatches = mismatches.Count(m => m.Sheet == sheet.Name);
+            if (sheetFormulas > 0)
+                Emit($"  {Trunc(sheet.Name, 30),-30} {sheetFormulas,14} {sheetMismatches,12}");
+            workbookFormulas += sheetFormulas;
+            workbookMismatches += sheetMismatches;
+        }
+        Emit($"  {new string('-', 60)}");
+        Emit($"  {"WORKBOOK TOTAL",-30} {workbookFormulas,14} {workbookMismatches,12}");
+        Emit("");
+
+        // Up to 40 example mismatches, grouped by leading function name
+        if (mismatches.Count > 0 && recalcException is null)
+        {
+            // Sort by inferred function name so patterns are visible, then by sheet/row/col
+            var sorted = mismatches
+                .OrderBy(m => ExtractLeadingFunction(m.Formula))
+                .ThenBy(m => m.Sheet)
+                .ThenBy(m => m.Row)
+                .ThenBy(m => m.Col)
+                .Take(40)
+                .ToList();
+
+            Emit($"  Mismatch examples (up to 40, sorted by function pattern):");
+            Emit($"  {"Address",-22} {"Formula",-45} {"Cached",-22} {"Recalc",-22}");
+            Emit($"  {new string('-', 115)}");
+            foreach (var (sht, row, col, formula, cached, recalc) in sorted)
+            {
+                var addr = $"{sht}!{ColToLetter(col)}{row}";
+                Emit($"  {Trunc(addr, 22),-22} {Trunc(formula, 45),-45} {Trunc(ScalarStr(cached), 22),-22} {Trunc(ScalarStr(recalc), 22),-22}");
+            }
+
+            Emit("");
+            // Cluster summary
+            var clusters = mismatches
+                .GroupBy(m => ExtractLeadingFunction(m.Formula))
+                .OrderByDescending(g => g.Count())
+                .ToList();
+            Emit($"  Mismatch clusters by leading function ({clusters.Count} distinct patterns):");
+            foreach (var g in clusters.Take(20))
+                Emit($"    {g.Key,-30} {g.Count(),6} mismatches");
+        }
+        else if (recalcException is null)
+        {
+            Emit("  No mismatches — all formula cells match cached values.");
+        }
+
+        Emit("");
+
+        // =====================================================================
+        // SECTION 5 — ROUND-TRIP
+        // =====================================================================
+        Emit("--------------------------------------------------------------------------------");
+        Emit("SECTION 5: ROUND-TRIP");
+        Emit("--------------------------------------------------------------------------------");
+
+        var roundTripPath = Path.Combine(outputDir, "roundtrip.xlsx");
+
+        // Save
+        Exception? saveException = null;
+        try
+        {
+            using var outStream = File.Create(roundTripPath);
+            new XlsxFileAdapter().Save(workbook, outStream);
+            Emit($"  Save: SUCCESS -> {roundTripPath}");
+        }
+        catch (Exception ex)
+        {
+            saveException = ex;
+            Emit($"  Save: EXCEPTION — {ex.GetType().FullName}: {ex.Message}");
+            Emit($"  Stack top: {FirstStackLine(ex)}");
+        }
+
+        if (saveException is null)
+        {
+            // OPC open + schema validation — capture all strings while doc is still open
+            List<(string Id, string Desc, string Path, string Node)> schemaErrorCaptures = [];
+            int schemaErrorCount = 0;
+            Exception? valException = null;
+            try
+            {
+                using (var doc = SpreadsheetDocument.Open(roundTripPath, isEditable: false))
+                {
+                    var validator = new OpenXmlValidator(DOXV.Microsoft365);
+                    foreach (var e in validator.Validate(doc).Where(ev => ev.ErrorType == ValidationErrorType.Schema))
+                    {
+                        schemaErrorCount++;
+                        if (schemaErrorCaptures.Count < 15)
+                        {
+                            var xpath = "(none)";
+                            var nodeName = "(none)";
+                            try { xpath = e.Path?.XPath ?? "(none)"; } catch { xpath = "(unavailable)"; }
+                            try { nodeName = e.Node?.LocalName ?? "(none)"; } catch { nodeName = "(unavailable)"; }
+                            schemaErrorCaptures.Add((e.Id ?? "", e.Description ?? "", xpath, nodeName));
+                        }
+                    }
+                }
+                Emit($"  OpenXML schema validation: {schemaErrorCount} errors");
+            }
+            catch (Exception ex)
+            {
+                valException = ex;
+                Emit($"  OpenXML validation: EXCEPTION — {ex.GetType().FullName}: {ex.Message}");
+                Emit($"  Stack top: {FirstStackLine(ex)}");
+            }
+
+            if (valException is null && schemaErrorCount > 0)
+            {
+                Emit($"  First {schemaErrorCaptures.Count} schema errors:");
+                foreach (var (id, desc, path, node) in schemaErrorCaptures)
+                {
+                    Emit($"    [{id}] {desc}");
+                    Emit($"      Path : {path}");
+                    Emit($"      Node : {node}");
+                }
+            }
+
+            Emit("");
+
+            // Reload round-trip in FreeX and compare cell counts
+            Exception? reloadException = null;
+            Workbook? reloaded = null;
+            try
+            {
+                using var reloadStream = File.OpenRead(roundTripPath);
+                reloaded = new XlsxFileAdapter().Load(reloadStream);
+                Emit("  FreeX reload of round-trip: SUCCESS");
+            }
+            catch (Exception ex)
+            {
+                reloadException = ex;
+                Emit($"  FreeX reload: EXCEPTION — {ex.GetType().FullName}: {ex.Message}");
+                Emit($"  Stack top: {FirstStackLine(ex)}");
+            }
+
+            if (reloadException is null && reloaded is not null)
+            {
+                var origTotal = workbook.Sheets.Sum(s => s.GetOccupiedCellMap().Count);
+                var rtTotal = reloaded.Sheets.Sum(s => s.GetOccupiedCellMap().Count);
+                var delta = rtTotal - origTotal;
+                Emit($"  Occupied cells — original: {origTotal}, round-trip: {rtTotal}, delta: {delta:+0;-0;0}");
+
+                Emit($"  Per-sheet cell-count delta:");
+                Emit($"  {"Sheet",-30} {"Orig",7} {"RT",7} {"Delta",7}");
+                Emit($"  {new string('-', 55)}");
+                foreach (var origSheet in workbook.Sheets)
+                {
+                    var origCount = origSheet.GetOccupiedCellMap().Count;
+                    var rtSheet = reloaded.Sheets.FirstOrDefault(s => s.Name == origSheet.Name);
+                    var rtCount = rtSheet?.GetOccupiedCellMap().Count ?? 0;
+                    var d = rtCount - origCount;
+                    if (d != 0 || origCount > 0)
+                    {
+                        var dStr = d == 0 ? "0" : d > 0 ? $"+{d}" : $"{d}";
+                        Emit($"  {Trunc(origSheet.Name, 30),-30} {origCount,7} {rtCount,7} {dStr,7}");
+                    }
+                }
+            }
+        }
+
+        Emit("");
+        Emit("================================================================================");
+        Emit("  END OF REPORT");
+        Emit("================================================================================");
+
+        File.WriteAllText(reportPath, sb.ToString(), Encoding.UTF8);
+        Console.WriteLine($"\n[Report written to {reportPath}]");
+        return 0;
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    private static bool ValuesMatch(ScalarValue a, ScalarValue b)
+    {
+        // A date serial and a plain number with the same value display identically (the cell's number
+        // format decides date-vs-number rendering, not the scalar type). FreeX loads date-formatted cells
+        // as DateTimeValue but recalc produces NumberValue; treat equal serials as a MATCH, not a mismatch,
+        // so the report counts real divergences only. Same for bool<->1/0.
+        if (TryNumeric(a, out var an) && TryNumeric(b, out var bn))
+            return NumbersMatch(an, bn);
+
+        return (a, b) switch
+        {
+            (BlankValue, BlankValue) => true,
+            (TextValue ta, TextValue tb) => string.Equals(ta.Value, tb.Value, StringComparison.Ordinal),
+            (ErrorValue ea, ErrorValue eb) => string.Equals(ea.ToString(), eb.ToString(), StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
+    }
+
+    // Numeric view of a scalar: numbers, dates (serial), and bools (1/0) are all comparable numerically.
+    private static bool TryNumeric(ScalarValue v, out double value)
+    {
+        switch (v)
+        {
+            case NumberValue n: value = n.Value; return true;
+            case DateTimeValue d: value = d.Value; return true;
+            case BoolValue b: value = b.Value ? 1 : 0; return true;
+            default: value = 0; return false;
+        }
+    }
+
+    private static bool NumbersMatch(double a, double b)
+    {
+        if (a == b) return true;
+        if (double.IsNaN(a) && double.IsNaN(b)) return true;
+        var absDiff = Math.Abs(a - b);
+        if (absDiff < 1e-9) return true;
+        var magnitude = Math.Max(Math.Abs(a), Math.Abs(b));
+        if (magnitude > 0 && absDiff / magnitude < 1e-6) return true;
+        return false;
+    }
+
+    private static string ScalarStr(ScalarValue v) => v switch
+    {
+        BlankValue => "(blank)",
+        NumberValue nv => nv.Value.ToString("G", CultureInfo.InvariantCulture),
+        DateTimeValue dv => $"Date({dv.Value:G})",
+        TextValue tv => $"\"{tv.Value}\"",
+        BoolValue bv => bv.Value ? "TRUE" : "FALSE",
+        ErrorValue ev => ev.ToString(),
+        _ => v.ToString() ?? "?"
+    };
+
+    private static string ExtractLeadingFunction(string formula)
+    {
+        if (string.IsNullOrWhiteSpace(formula)) return "(empty)";
+        var trimmed = formula.TrimStart();
+        var idx = trimmed.IndexOf('(');
+        if (idx <= 0) return trimmed.Length > 20 ? trimmed[..20] : trimmed;
+        return trimmed[..idx].ToUpperInvariant();
+    }
+
+    private static string ColToLetter(uint col)
+    {
+        var sb = new StringBuilder(3);
+        while (col > 0)
+        {
+            col--;
+            sb.Insert(0, (char)('A' + col % 26));
+            col /= 26;
+        }
+        return sb.ToString();
+    }
+
+    private static string Trunc(string? s, int max)
+    {
+        s ??= "";
+        return s.Length <= max ? s : s[..(max - 1)] + "~";
+    }
+
+    private static string FirstStackLine(Exception ex)
+    {
+        var lines = ex.StackTrace?.Split('\n');
+        return lines?.FirstOrDefault(l => l.TrimStart().StartsWith("at ", StringComparison.Ordinal))?.Trim()
+               ?? "(no stack)";
+    }
+}

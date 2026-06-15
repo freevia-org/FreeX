@@ -104,6 +104,14 @@ public sealed class Workbook
     public Dictionary<string, NamedRangeMetadata> NamedRangeMetadataByName { get; } =
         new Dictionary<string, NamedRangeMetadata>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Defined names whose "refers to" is a formula expression rather than a plain cell range.
+    /// Keys are name strings (case-insensitive). Values are the raw refers-to formula text
+    /// (without the leading '='). These are evaluated on-demand by the formula engine.
+    /// </summary>
+    public Dictionary<string, string> NamedFormulas { get; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Pivot cache metadata loaded from XLSX packages.</summary>
     public List<PivotCacheModel> PivotCaches { get; } = [];
 

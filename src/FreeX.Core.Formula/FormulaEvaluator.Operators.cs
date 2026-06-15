@@ -453,6 +453,11 @@ public sealed partial class FormulaEvaluator
         {
             double lv = left is DateTimeValue ld ? ld.Value : ((NumberValue)left).Value;
             double rv = right is DateTimeValue rd ? rd.Value : ((NumberValue)right).Value;
+            // Excel rounds numeric values to 15 significant digits before comparison.
+            // This matches Excel's well-known behavior where, for example,
+            // SUMPRODUCT(1/COUNTIFS(A,A)) = 6 even though raw double gives 5.999999999999998.
+            lv = RoundToExcel15SigDigits(lv);
+            rv = RoundToExcel15SigDigits(rv);
             return lv.CompareTo(rv);
         }
         if (left is TextValue lt && right is TextValue rt)
@@ -462,6 +467,28 @@ public sealed partial class FormulaEvaluator
 
         // Mixed types: numbers/dates < text < booleans (Excel convention)
         return TypeOrder(left).CompareTo(TypeOrder(right));
+    }
+
+    /// <summary>
+    /// Round a double to 15 significant digits, matching Excel's numeric comparison behavior.
+    /// Excel rounds numbers to 15 significant digits before comparing, so that results of
+    /// floating-point arithmetic that are very close to an exact value compare as equal.
+    /// For example: SUMPRODUCT(1/COUNTIFS(A,A)) yields ~5.999999999999998 in raw double,
+    /// but rounded to 15 sig digits = 6, matching Excel's answer.
+    /// </summary>
+    private static double RoundToExcel15SigDigits(double value)
+    {
+        if (!double.IsFinite(value) || value == 0) return value;
+        // Use G15 format round-trip: equivalent to what Excel does internally.
+        // G15 outputs the shortest representation with at most 15 significant digits,
+        // then parsing back gives the nearest double to that 15-sig-digit decimal.
+        if (double.TryParse(
+                value.ToString("G15", System.Globalization.CultureInfo.InvariantCulture),
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out double rounded))
+            return rounded;
+        return value;
     }
 
     /// <summary>
@@ -631,6 +658,7 @@ public sealed partial class FormulaEvaluator
     {
         TextValue t => t.Value,
         NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        DateTimeValue dt => dt.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         BlankValue => "",
         ErrorValue e => e.Code,

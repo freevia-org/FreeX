@@ -421,7 +421,82 @@ public sealed class RecalcEngine
         RebuildFormulaDependencies(workbook);
         var formulaCells = CollectFormulaCells(workbook);
 
-        return Recalculate(workbook, formulaCells);
+        var report = Recalculate(workbook, formulaCells);
+
+        // Second pass: some formula cells reference spill-target cells (cells whose value is
+        // written by a sibling formula's spill, not by a direct formula on that cell).  The
+        // first-pass topological sort cannot know about this dependency — spill targets are not
+        // formula cells and therefore have no slot in the evaluation order — so such readers may
+        // have executed before the spill anchor and observed a blank value.  After the first pass
+        // all spill ranges are populated; re-evaluate the affected dependents so they pick up the
+        // correct spilled values.
+        var spillTargetDependents = CollectSpillTargetDependentFormulaCells(workbook);
+        if (spillTargetDependents.Count > 0)
+        {
+            var report2 = Recalculate(workbook, spillTargetDependents);
+            return MergeRecalcReports(report, report2);
+        }
+
+        return report;
+    }
+
+    /// <summary>
+    /// Collect the set of formula cells that directly reference at least one spill-target cell
+    /// (a cell whose value comes from another formula's spill, not from its own formula).
+    /// These are the cells that may have received an incorrect blank in the first recalc pass.
+    /// </summary>
+    private List<CellAddress> CollectSpillTargetDependentFormulaCells(Workbook workbook)
+    {
+        List<CellAddress>? result = null;
+        HashSet<CellAddress>? seen = null;
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (!sheet.HasSpillValues)
+                continue;
+
+            foreach (var spillTarget in sheet.EnumerateSpillTargetCells())
+            {
+                var deps = _graph.GetDirectDependents(spillTarget);
+                foreach (var dep in deps)
+                {
+                    var depSheet = workbook.GetSheet(dep.Sheet);
+                    if (depSheet?.GetCell(dep)?.HasFormula != true)
+                        continue;
+
+                    seen ??= [];
+                    if (!seen.Add(dep))
+                        continue;
+
+                    result ??= [];
+                    result.Add(dep);
+                }
+            }
+        }
+
+        return result ?? [];
+    }
+
+    private static RecalcReport MergeRecalcReports(RecalcReport first, RecalcReport second)
+    {
+        if (second.RecalculatedCells.Count == 0 && second.Errors.Count == 0 && second.CyclicCells.Count == 0)
+            return first;
+        if (first.RecalculatedCells.Count == 0 && first.Errors.Count == 0 && first.CyclicCells.Count == 0)
+            return second;
+
+        var recalculated = new List<CellAddress>(first.RecalculatedCells.Count + second.RecalculatedCells.Count);
+        recalculated.AddRange(first.RecalculatedCells);
+        recalculated.AddRange(second.RecalculatedCells);
+
+        var errors = new List<(CellAddress Cell, string Error)>(first.Errors.Count + second.Errors.Count);
+        errors.AddRange(first.Errors);
+        errors.AddRange(second.Errors);
+
+        var cyclic = new List<CellAddress>(first.CyclicCells.Count + second.CyclicCells.Count);
+        cyclic.AddRange(first.CyclicCells);
+        cyclic.AddRange(second.CyclicCells);
+
+        return new RecalcReport(recalculated, errors, cyclic);
     }
 
     /// <summary>Rebuild dependencies and evaluate formula cells on a single worksheet.</summary>

@@ -44,6 +44,12 @@ public static class StructuredReferenceResolver
                     continue;
                 }
 
+                // An empty / whitespace selector — e.g. tblName[] — means the entire data body
+                // spanning every column (equivalent to [#Data] across all columns). Excel's structured
+                // reference spec defines [] as the data body range for the whole table.
+                if (string.IsNullOrWhiteSpace(selector))
+                    return DataBodyRange(sheet, table, table.Range.Start.Col, table.Range.End.Col);
+
                 if (TryParseCombinedColumnRangeSelector(selector, out var rangeSection, out var rangeStartColumn, out var rangeEndColumn))
                 {
                     if (IsThisRowSection(rangeSection))

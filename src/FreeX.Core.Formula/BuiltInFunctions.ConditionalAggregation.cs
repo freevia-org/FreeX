@@ -6,14 +6,80 @@ public static partial class BuiltInFunctions
 {
     // Conditional aggregation functions.
 
+    // ── Array-criteria helpers ──────────────────────────────────────────────────
+    //
+    // Excel rule: when a *IF(S) function receives a range/array where a scalar
+    // criteria value is expected, it evaluates element-by-element and returns an
+    // array of results with the same shape.  SUMPRODUCT (and array formulas) then
+    // consume that array.
+    //
+    // We detect the array-criteria case at the top of each function and dispatch
+    // to a loop that substitutes each element in turn, collecting results into a
+    // RangeValue of matching shape.  Scalar-criteria paths are byte-identical to
+    // the previous behaviour.
+    //
+    // Only ONE criteria argument may be a range at a time (per Excel semantics).
+    // If multiple criteria args are RangeValues, only the first one encountered
+    // triggers the array expansion; the rest are treated as parallel-criteria
+    // ranges (normal behaviour) or produce #VALUE! if their shape differs.
+
+    /// <summary>
+    /// Returns (pairIndex, criteriaRangeArg) for the first criteria argument
+    /// (among the *IF(S) criteria slots) that is a RangeValue, or null if all
+    /// criteria are scalars.
+    /// <para>
+    /// For SUMIFS/COUNTIFS/AVERAGEIFS <paramref name="firstCriteriaArgIndex"/>
+    /// is the index of the first criteria-value slot (not the criteria-range
+    /// slot).  For SUMIF/COUNTIF/AVERAGEIF it is 1.
+    /// </para>
+    /// </summary>
+    private static (int argIndex, RangeValue criteriaArray)? FindArrayCriteriaArg(
+        IReadOnlyList<ScalarValue> args,
+        int firstCriteriaArgIndex,
+        int criteriaArgStep)  // 2 for *IFS (interleaved range,criteria), 1 for *IF
+    {
+        for (int i = firstCriteriaArgIndex; i < args.Count; i += criteriaArgStep)
+        {
+            if (args[i] is RangeValue rv)
+                return (i, rv);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Substitute <paramref name="replacement"/> at position
+    /// <paramref name="argIndex"/> in <paramref name="args"/> and return the new
+    /// list. All other elements are shared (no copy of their values).
+    /// </summary>
+    private static IReadOnlyList<ScalarValue> ReplaceArg(
+        IReadOnlyList<ScalarValue> args,
+        int argIndex,
+        ScalarValue replacement)
+    {
+        var copy = new ScalarValue[args.Count];
+        for (int i = 0; i < args.Count; i++)
+            copy[i] = i == argIndex ? replacement : args[i];
+        return copy;
+    }
+
+    // ── SUMIF ──────────────────────────────────────────────────────────────────
+
     private static ScalarValue Sumif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue rangeError) return rangeError;
         if (args[0] is not RangeValue rangeArg) return ErrorValue.Value;
         var criteria = args[1];
         if (criteria is ErrorValue criteriaError) return criteriaError;
+
+        // Array-criteria: criteria is a range → return one result per element.
+        // Check before validating the optional sum-range so the expansion path
+        // handles its own validation per element.
+        if (criteria is RangeValue criteriaArray)
+            return ExpandConditionalArrayCriteria(criteriaArray, args, 1, ctx, Sumif);
+
         if (args.Count > 2 && args[2] is ErrorValue sumRangeError) return sumRangeError;
         if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
+
         RangeValue? sumRange = args.Count > 2 ? (RangeValue)args[2] : null;
         var criteriaMatcher = CompileCriteria(criteria);
 
@@ -34,16 +100,24 @@ public static partial class BuiltInFunctions
         return NumberResult(total);
     }
 
+    // ── COUNTIF ────────────────────────────────────────────────────────────────
+
     private static ScalarValue Countif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue rangeError) return rangeError;
         if (args[0] is not RangeValue rangeArg) return ErrorValue.Value;
         var criteria = args[1];
         if (criteria is ErrorValue criteriaError) return criteriaError;
-        var criteriaMatcher = CompileCriteria(criteria);
 
+        // Array-criteria: criteria is a range → return one result per element.
+        if (criteria is RangeValue criteriaArray)
+            return ExpandConditionalArrayCriteria(criteriaArray, args, 1, ctx, Countif);
+
+        var criteriaMatcher = CompileCriteria(criteria);
         return new NumberValue(CountMatchingCells(rangeArg, criteriaMatcher));
     }
+
+    // ── AVERAGEIF ──────────────────────────────────────────────────────────────
 
     private static ScalarValue Averageif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -51,8 +125,14 @@ public static partial class BuiltInFunctions
         if (args[0] is not RangeValue rangeArg) return ErrorValue.Value;
         var criteria = args[1];
         if (criteria is ErrorValue criteriaError) return criteriaError;
+
+        // Array-criteria: criteria is a range → return one result per element.
+        if (criteria is RangeValue criteriaArray)
+            return ExpandConditionalArrayCriteria(criteriaArray, args, 1, ctx, Averageif);
+
         if (args.Count > 2 && args[2] is ErrorValue avgRangeError) return avgRangeError;
         if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
+
         RangeValue? avgRange = args.Count > 2 ? (RangeValue)args[2] : null;
         var criteriaMatcher = CompileCriteria(criteria);
 
@@ -74,11 +154,20 @@ public static partial class BuiltInFunctions
         return NumberResult(total / count);
     }
 
+    // ── SUMIFS ─────────────────────────────────────────────────────────────────
+
     private static ScalarValue Sumifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue sumRangeError) return sumRangeError;
         if (args[0] is not RangeValue sumRange) return ErrorValue.Value;
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
+
+        // Array-criteria: any criteria-value slot holds a range → expand element-wise.
+        // Criteria-value slots for SUMIFS are at indices 2, 4, 6, … (step 2).
+        var arrayCriteria = FindArrayCriteriaArg(args, firstCriteriaArgIndex: 2, criteriaArgStep: 2);
+        if (arrayCriteria is var (arrayArgIdx, criteriaArray))
+            return ExpandConditionalArrayCriteria(criteriaArray, args, arrayArgIdx, ctx, Sumifs);
+
         int pairCount = (args.Count - 1) / 2;
         if (TryCreateConditionalCriteriaSet(args, 1, pairCount, sumRange, out var criteriaSet) is { } pairError)
             return pairError;
@@ -98,9 +187,17 @@ public static partial class BuiltInFunctions
         return NumberResult(total);
     }
 
+    // ── COUNTIFS ───────────────────────────────────────────────────────────────
+
     private static ScalarValue Countifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count < 2 || args.Count % 2 != 0) return ErrorValue.Value;
+
+        // Array-criteria: criteria-value slots for COUNTIFS are at indices 1, 3, 5, … (step 2).
+        var arrayCriteria = FindArrayCriteriaArg(args, firstCriteriaArgIndex: 1, criteriaArgStep: 2);
+        if (arrayCriteria is var (arrayArgIdx, criteriaArray))
+            return ExpandConditionalArrayCriteria(criteriaArray, args, arrayArgIdx, ctx, Countifs);
+
         int pairCount = args.Count / 2;
         if (TryCreateConditionalCriteriaSet(args, 0, pairCount, null, out var criteriaSet) is { } pairError)
             return pairError;
@@ -117,11 +214,19 @@ public static partial class BuiltInFunctions
         return new NumberValue(count);
     }
 
+    // ── AVERAGEIFS ─────────────────────────────────────────────────────────────
+
     private static ScalarValue Averageifs2(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue avgRangeError) return avgRangeError;
         if (args[0] is not RangeValue avgRange) return ErrorValue.Value;
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
+
+        // Array-criteria: criteria-value slots for AVERAGEIFS are at indices 2, 4, 6, … (step 2).
+        var arrayCriteria = FindArrayCriteriaArg(args, firstCriteriaArgIndex: 2, criteriaArgStep: 2);
+        if (arrayCriteria is var (arrayArgIdx, criteriaArray))
+            return ExpandConditionalArrayCriteria(criteriaArray, args, arrayArgIdx, ctx, Averageifs2);
+
         int pairCount = (args.Count - 1) / 2;
         if (TryCreateConditionalCriteriaSet(args, 1, pairCount, avgRange, out var criteriaSet) is { } pairError)
             return pairError;
@@ -141,6 +246,37 @@ public static partial class BuiltInFunctions
         }
         if (count == 0) return ErrorValue.DivByZero;
         return NumberResult(total / count);
+    }
+
+    // ── Array-criteria expansion ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Iterate over every element of <paramref name="criteriaArray"/>, substitute
+    /// it at <paramref name="criteriaArgIndex"/> in <paramref name="args"/>, call
+    /// <paramref name="scalarFunc"/>, and collect results into a RangeValue of the
+    /// same shape.  Used by all *IF(S) functions when their criteria argument is a
+    /// multi-cell range.
+    /// </summary>
+    private static ScalarValue ExpandConditionalArrayCriteria(
+        RangeValue criteriaArray,
+        IReadOnlyList<ScalarValue> args,
+        int criteriaArgIndex,
+        IEvalContext ctx,
+        Func<IReadOnlyList<ScalarValue>, IEvalContext, ScalarValue> scalarFunc)
+    {
+        int rows = criteriaArray.RowCount;
+        int cols = criteriaArray.ColCount;
+        var resultCells = new ScalarValue[rows, cols];
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < cols; c++)
+            {
+                var scalarCriteria = criteriaArray.Cells[r, c];
+                var substitutedArgs = ReplaceArg(args, criteriaArgIndex, scalarCriteria);
+                resultCells[r, c] = scalarFunc(substitutedArgs, ctx);
+            }
+        }
+        return new RangeValue(resultCells);
     }
 
     private readonly struct ConditionalCriteriaPair

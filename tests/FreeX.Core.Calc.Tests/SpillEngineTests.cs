@@ -249,4 +249,69 @@ public class SpillEngineTests
         sheet.GetValue(2, 1).Should().Be(BlankValue.Instance);
         sheet.GetValue(3, 1).Should().Be(BlankValue.Instance);
     }
+
+    // ── Spill-target dependency (the cross-anchor ordering bug) ───────────────
+    // Regression test for: formula cell B references a spill-target cell T that is populated
+    // by a different formula anchor A.  In a full RecalculateAllFormulas call, A and B may be
+    // topologically unordered (T is not a formula cell, so it contributes 0 to B's in-degree),
+    // causing B to read T as blank before A has spilled.  The fix adds a second evaluation pass.
+
+    [Fact]
+    public void RecalculateAllFormulas_FormulaReferencingSpillTarget_SeesSpilledValue()
+    {
+        // Arrange: anchor A1 spills SEQUENCE(3) → A1=1, A2=2, A3=3
+        //          formula C1 = A2  (references a spill-target, not a formula cell)
+        var (engine, wb) = MakeEngine();
+        var sheet = wb.Sheets.First();
+
+        var anchor = new CellAddress(sheet.Id, 1, 1);  // A1 — spill anchor
+        var reader = new CellAddress(sheet.Id, 1, 3);  // C1 — reads spill target A2
+
+        sheet.SetFormula(anchor, "SEQUENCE(3)");
+        sheet.SetFormula(reader, "A2");  // A2 is a spill target of anchor A1
+
+        // Act: full recalc (this is the code path that had the ordering bug)
+        engine.RecalculateAllFormulas(wb);
+
+        // Assert: anchor spilled correctly
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1), "A1 is anchor value");
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(2), "A2 is spilled value");
+        sheet.GetValue(3, 1).Should().Be(new NumberValue(3), "A3 is spilled value");
+
+        // Assert: C1 picked up the spilled value, not blank
+        sheet.GetValue(1, 3).Should().Be(new NumberValue(2),
+            "C1 = A2 must see the spilled value (2), not blank — ordering bug regression");
+    }
+
+    [Fact]
+    public void RecalculateAllFormulas_CrossSheetFormulaReferencingSpillTarget_SeesSpilledValue()
+    {
+        // Arrange: two-sheet scenario (mirrors Calendar↔Calc real-world case)
+        //   Sheet1!A1: SEQUENCE(3)  → spills A1=1, A2=2, A3=3
+        //   Sheet2!B1: =Sheet1!A3   → cross-sheet reference to a spill target
+        var graph     = new DependencyGraph();
+        var evaluator = new FormulaEvaluator();
+        var engine    = new RecalcEngine(graph, evaluator);
+        var wb        = new Workbook();
+        wb.AddSheet("Sheet1");
+        wb.AddSheet("Sheet2");
+
+        var sheet1 = wb.GetSheet("Sheet1")!;
+        var sheet2 = wb.GetSheet("Sheet2")!;
+
+        var anchor = new CellAddress(sheet1.Id, 1, 1);  // Sheet1!A1
+        var reader = new CellAddress(sheet2.Id, 1, 2);  // Sheet2!B1
+
+        sheet1.SetFormula(anchor, "SEQUENCE(3)");
+        sheet2.SetFormula(reader, "Sheet1!A3");  // Sheet1!A3 is a spill target
+
+        engine.RecalculateAllFormulas(wb);
+
+        sheet1.GetValue(1, 1).Should().Be(new NumberValue(1));
+        sheet1.GetValue(2, 1).Should().Be(new NumberValue(2));
+        sheet1.GetValue(3, 1).Should().Be(new NumberValue(3));
+
+        sheet2.GetValue(1, 2).Should().Be(new NumberValue(3),
+            "Sheet2!B1 = Sheet1!A3 must see the cross-sheet spilled value (3)");
+    }
 }

@@ -25,11 +25,39 @@ internal static class XlsxNamedRangeMapper
                 if (IsExcelReservedDefinedName(namedRange.Name))
                     continue;
 
-                IXLRange? xlRange = null;
-                foreach (var candidateRange in namedRange.Ranges)
+                // Use the raw RefersTo text as the primary discriminant.
+                // ClosedXML's Ranges property may return cell references found *inside* a formula
+                // (e.g. for DATE(Sheet1!$C$13,...) it yields $C$13), which is NOT the named range
+                // — it's just a constituent reference. We must classify the refers-to expression
+                // first and only use Ranges when the refers-to is a plain range reference.
+                var refersTo = namedRange.RefersTo?.Trim();
+                if (string.IsNullOrWhiteSpace(refersTo))
+                    continue;
+
+                // Strip the leading '=' if present.
+                var refersToBody = refersTo.StartsWith('=') ? refersTo[1..].Trim() : refersTo;
+
+                if (IsFormulaExpression(refersToBody))
                 {
-                    xlRange = candidateRange;
-                    break;
+                    // Named formula: store the bare expression for on-demand evaluation.
+                    if (workbook.ValidateNamedRangeName(namedRange.Name) is null)
+                        workbook.NamedFormulas[namedRange.Name] = refersToBody;
+                    continue;
+                }
+
+                // Plain range reference: resolve through ClosedXML.
+                IXLRange? xlRange = null;
+                try
+                {
+                    foreach (var candidateRange in namedRange.Ranges)
+                    {
+                        xlRange = candidateRange;
+                        break;
+                    }
+                }
+                catch
+                {
+                    // ClosedXML failed — skip this name.
                 }
 
                 if (xlRange is null)
@@ -57,6 +85,44 @@ internal static class XlsxNamedRangeMapper
                 // Skip any named range that cannot be mapped into the workbook model.
             }
         }
+    }
+
+    /// <summary>
+    /// Returns true when the refers-to expression is a formula (function call, arithmetic, etc.)
+    /// rather than a plain cell/range reference like Sheet1!$A$1:$B$2 or Table[Column].
+    /// <para>
+    /// Detection strategy: scan for operators and parentheses that appear OUTSIDE of single-quoted
+    /// sheet-name sections. A plain range reference has sheet names quoted with apostrophes
+    /// ('Sheet Name'!$A$1) and cell addresses that contain only alphanumerics, $, !, and :.
+    /// </para>
+    /// </summary>
+    private static bool IsFormulaExpression(string refersToBody)
+    {
+        bool inQuote = false;
+        for (int i = 0; i < refersToBody.Length; i++)
+        {
+            var ch = refersToBody[i];
+            if (ch == '\'')
+            {
+                // Handle escaped apostrophes ('') inside quoted sheet names
+                if (inQuote && i + 1 < refersToBody.Length && refersToBody[i + 1] == '\'')
+                {
+                    i++; // skip escaped apostrophe
+                    continue;
+                }
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (inQuote)
+                continue;
+
+            // Outside a quoted section: any of these characters indicates a formula expression.
+            // Plain range refs only have: alphanumeric, $, !, :, comma (multi-area), space.
+            if (ch is '(' or ')' or '+' or '-' or '*' or '/' or '^' or '&' or '%')
+                return true;
+        }
+        return false;
     }
 
     public static void Save(Workbook workbook, XLWorkbook xlWorkbook, List<string>? warnings = null)

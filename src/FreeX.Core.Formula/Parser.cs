@@ -433,9 +433,10 @@ public sealed class Parser
                 if (Current.Type == TokenType.StructuredReferenceSelector)
                 {
                     var selector = Advance();
+                    // An empty selector — tblName[] — means the entire data body (all columns).
+                    // Pass "" through to the resolver which handles this case.
                     if (string.IsNullOrWhiteSpace(selector.Value))
-                        throw new FormulaParseException(
-                            $"Expected structured reference column name at position {selector.Position}");
+                        return new StructuredReferenceNode(token.Value, "");
                     if (selector.Value.Trim().StartsWith('@'))
                         return new StructuredCurrentRowReferenceNode(
                             selector.Value.Trim()[1..].Trim(),
