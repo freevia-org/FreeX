@@ -1,10 +1,41 @@
 using System.Windows.Input;
 using FluentAssertions;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
 public sealed partial class MainWindowRibbonKeyTipTests
 {
+    [Fact]
+    public void LegacyAltDataFilterKeyTip_DFF_TogglesAutoFilterOnSelection()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create(workbook =>
+            {
+                var sheet = workbook.Sheets[0];
+                var sheetId = sheet.Id;
+                sheet.SetCell(new CellAddress(sheetId, 1, 1), new TextValue("Country"));
+                sheet.SetCell(new CellAddress(sheetId, 2, 1), new TextValue("US"));
+                sheet.SetCell(new CellAddress(sheetId, 3, 1), new TextValue("UK"));
+            });
+            harness.SelectRange(1, 1, 3, 1);
+            harness.ActiveSheetHasAutoFilter.Should().BeFalse();
+
+            // Legacy Excel access-key sequence Alt+D, F, F should toggle AutoFilter on (Issue 119).
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.D);
+            harness.SelectedRibbonTabHeader.Should().Be("Data");
+            harness.HandleKeyTip(Key.F);
+            // After the first F the keytip mode must stay active to accept the second F.
+            harness.KeyTipScope.Should().NotBe("None");
+            harness.HandleKeyTip(Key.F);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveSheetHasAutoFilter.Should().BeTrue();
+        });
+    }
+
     [Fact]
     public void DataWhatIfKeyTip_OpensAnalysisMenuWithExcelChoices()
     {
