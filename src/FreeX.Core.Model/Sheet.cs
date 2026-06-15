@@ -612,6 +612,18 @@ public sealed partial class Sheet
         _contentVersion++;
     }
 
+    /// <summary>
+    /// Enumerate all non-anchor cells that currently have a spill value (i.e. every cell that
+    /// was written by <see cref="SetSpillRange"/> and not yet cleared by <see cref="ClearSpillRange"/>).
+    /// Used by the recalc engine to discover formula cells whose results depend on spill targets so
+    /// that a second evaluation pass can be triggered when needed.
+    /// </summary>
+    public IEnumerable<CellAddress> EnumerateSpillTargetCells()
+    {
+        foreach (var ((row, col), _) in _spillValues)
+            yield return new CellAddress(Id, row, col);
+    }
+
     /// <summary>Get the value at a cell address, returning BlankValue if no cell exists.</summary>
     public ScalarValue GetValue(uint row, uint col)
     {
@@ -678,6 +690,9 @@ public sealed partial class Sheet
 
     /// <summary>Whether any cell on the sheet currently contains a formula.</summary>
     public bool HasFormulas => _formulaCells.Count > 0;
+
+    /// <summary>Whether any spill values have been written to this sheet (i.e. at least one dynamic-array formula has spilled).</summary>
+    public bool HasSpillValues => _spillValues.Count > 0;
 
     /// <summary>Get all non-empty cells as a dictionary keyed by CellAddress.</summary>
     public Dictionary<CellAddress, Cell> GetUsedCells()

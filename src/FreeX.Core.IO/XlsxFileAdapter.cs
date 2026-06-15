@@ -301,6 +301,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 sheet.TabColor = XlsxClosedXmlCellMapper.MapColor(xlSheet.TabColor, workbook.Theme);
             }
 
+            // Track declared array formula ref ranges so that their cached spill-value cells
+            // (stored as plain <v> elements by Excel 365) are not treated as blocker data cells.
+            // Without this, SetSpillRange would find those cells in _cells and return #SPILL!.
+            List<(uint R0, uint C0, uint R1, uint C1)>? arraySpillRanges = null;
+
             foreach (var xlCell in xlSheet.CellsUsed())
             {
                 var addr = new CellAddress(sheet.Id, (uint)xlCell.Address.RowNumber, (uint)xlCell.Address.ColumnNumber);
@@ -310,11 +315,45 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 // covered cell. Load only the anchor as the formula cell — its evaluation spills across the
                 // ref range. Covered (non-anchor) cells must not become independent formula cells, or they
                 // mutually block each other's spill and the whole range collapses to #SPILL!.
-                if (xlCell.HasArrayFormula && xlCell.FormulaReference is { } arrayRef &&
-                    (arrayRef.FirstAddress.RowNumber != xlCell.Address.RowNumber ||
-                     arrayRef.FirstAddress.ColumnNumber != xlCell.Address.ColumnNumber))
+                if (xlCell.HasArrayFormula && xlCell.FormulaReference is { } arrayRef)
                 {
-                    continue;
+                    var isAnchor = arrayRef.FirstAddress.RowNumber == xlCell.Address.RowNumber &&
+                                   arrayRef.FirstAddress.ColumnNumber == xlCell.Address.ColumnNumber;
+
+                    // For the anchor: collect the declared ref range so we can skip cached spill values later.
+                    if (isAnchor && (arrayRef.LastAddress.RowNumber > arrayRef.FirstAddress.RowNumber ||
+                                     arrayRef.LastAddress.ColumnNumber > arrayRef.FirstAddress.ColumnNumber))
+                    {
+                        arraySpillRanges ??= [];
+                        arraySpillRanges.Add((
+                            (uint)arrayRef.FirstAddress.RowNumber,
+                            (uint)arrayRef.FirstAddress.ColumnNumber,
+                            (uint)arrayRef.LastAddress.RowNumber,
+                            (uint)arrayRef.LastAddress.ColumnNumber));
+                    }
+
+                    if (!isAnchor)
+                        continue;
+                }
+                else if (!xlCell.HasFormula && arraySpillRanges is not null)
+                {
+                    // Excel 365 stores dynamic-array spill cells as plain value cells (no formula,
+                    // no HasArrayFormula flag). If a value cell falls inside a previously seen array
+                    // formula ref range, skip it — it is just a cached spill result that FreeX will
+                    // recompute when the anchor re-evaluates. Loading it would block SetSpillRange.
+                    var row = (uint)xlCell.Address.RowNumber;
+                    var col = (uint)xlCell.Address.ColumnNumber;
+                    var insideSpillRange = false;
+                    foreach (var (r0, c0, r1, c1) in arraySpillRanges)
+                    {
+                        if (row >= r0 && row <= r1 && col >= c0 && col <= c1 && !(row == r0 && col == c0))
+                        {
+                            insideSpillRange = true;
+                            break;
+                        }
+                    }
+                    if (insideSpillRange)
+                        continue;
                 }
 
                 Cell cell;
