@@ -241,6 +241,7 @@ public partial class MainWindow : Window, IWorkbookWindow
 
     // ── Per-window document save/dirty state service ──────────────────────────
     private readonly WorkbookDocumentState _documentState;
+    private readonly NewWorkbookNameSequence _newWorkbookNameSequence;
 
     public MainWindow(
         ILogger<MainWindow> logger,
@@ -256,10 +257,12 @@ public partial class MainWindow : Window, IWorkbookWindow
         AppDiagnosticsMetadata? diagnosticsMetadata = null,
         AppDiagnosticsOptions? diagnosticsOptions = null,
         FreeXOptions? options = null,
-        WorkbookWindowRegistry? windowRegistry = null)
+        WorkbookWindowRegistry? windowRegistry = null,
+        NewWorkbookNameSequence? newWorkbookNameSequence = null)
     {
         // DI supplies a Transient WorkbookDocumentState; tests that omit it get a fresh default.
         _documentState = documentState ?? new WorkbookDocumentState();
+        _newWorkbookNameSequence = newWorkbookNameSequence ?? new NewWorkbookNameSequence();
         _logger = logger;
         _viewportService = viewportService;
         _commandBus = commandBus;

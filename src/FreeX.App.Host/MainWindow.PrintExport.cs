@@ -137,6 +137,10 @@ public partial class MainWindow
             : await ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options);
         if (exported && request.Options.OpenAfterPublish)
             OpenExportedFile(request.ActualPath);
+        // Return to the workbook after a successful export instead of leaving the user
+        // stranded in the File backstage (Issue 118).
+        if (exported && IsStartScreenVisible())
+            HideStartScreen();
     }
 
     private async Task<bool> ExportAsPdf(string pdfPath, string optionSummary, ExportOptions options)

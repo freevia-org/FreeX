@@ -4,7 +4,8 @@ namespace FreeX.App.Services;
 
 public static class WorkbookFactory
 {
-    public const string DefaultWorkbookName = "Book1";
+    public const string DefaultWorkbookNamePrefix = "Book";
+    public const string DefaultWorkbookName = DefaultWorkbookNamePrefix + "1";
     public const string DefaultFontNameFallback = "Calibri";
     public const int DefaultFontSizeFallback = 11;
     public const int MaxDefaultFontSize = 409;
