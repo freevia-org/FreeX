@@ -216,11 +216,7 @@ public sealed partial class FormulaEvaluator
                 else
                 {
                     var resolvedRange = context.TryResolveNamedRange(named.Name);
-                    if (resolvedRange is null)
-                    {
-                        expandedArgs.Add(ErrorValue.Name);
-                    }
-                    else
+                    if (resolvedRange is not null)
                     {
                         var r = resolvedRange.Value;
                         if (isStructured)
@@ -240,6 +236,18 @@ public sealed partial class FormulaEvaluator
                                     r.End.Row, r.End.Col);
                             AddRangeValues(expandedArgs, values, preservesReferenceProvenance);
                         }
+                    }
+                    else if (TryEvaluateNamedFormula(named.Name, context, out var namedFormulaArg))
+                    {
+                        // Named formula: the evaluated result may be a scalar or RangeValue (array).
+                        if (!isStructured && isAggregate && namedFormulaArg is RangeValue namedRv)
+                            AddRangeValues(expandedArgs, namedRv.Flatten(), preservesReferenceProvenance);
+                        else
+                            expandedArgs.Add(namedFormulaArg);
+                    }
+                    else
+                    {
+                        expandedArgs.Add(ErrorValue.Name);
                     }
                 }
             }

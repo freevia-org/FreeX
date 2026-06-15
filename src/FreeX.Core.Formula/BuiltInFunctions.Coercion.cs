@@ -38,6 +38,10 @@ public static partial class BuiltInFunctions
             case DateTimeValue d: result = d.Value != 0.0; return true;
             case DirectTextLiteralValue t when ExcelTextNumberParser.TryParse(t.Value, out var dn): result = dn != 0.0; return true;
             case TextValue t when ExcelTextNumberParser.TryParse(t.Value, out var tn): result = tn != 0.0; return true;
+            // A 1×1 RangeValue collapses to its single cell for logical evaluation (implicit intersection).
+            // This handles cases like OR(cell<namedRange,...) where the comparison returns RangeValue(1×1).
+            case RangeValue rv when rv.RowCount == 1 && rv.ColCount == 1:
+                return TryDirectLogicalBool(rv.Cells[0, 0], out result);
             default: return false;
         }
     }

@@ -4,6 +4,13 @@ namespace FreeX.Core.Formula;
 
 public sealed partial class FormulaEvaluator
 {
+    /// <summary>
+    /// Per-thread set of named formulas currently being evaluated.
+    /// Used to detect and break circular name→name dependency chains.
+    /// </summary>
+    [ThreadStatic]
+    private static HashSet<string>? _namedFormulaVisiting;
+
     private static ScalarValue EvaluateNamedRange(NamedRangeNode node, IEvalContext context)
     {
         // Local LET/LAMBDA bindings shadow workbook named ranges.
@@ -11,13 +18,74 @@ public sealed partial class FormulaEvaluator
         if (binding is not null) return binding;
 
         var range = context.TryResolveNamedRange(node.Name);
-        if (range is null)
-            return ErrorValue.Name;
+        if (range is not null)
+        {
+            // Bare named range reference outside a function: return top-left cell value.
+            // For 2D named ranges this is intentionally lossy — full implicit-intersection
+            // semantics (Excel 365 spill behaviour) are a Phase 5 enhancement.
+            return BuildRangeValueOrError(range.Value, context);
+        }
 
-        // Bare named range reference outside a function: return top-left cell value.
-        // For 2D named ranges this is intentionally lossy — full implicit-intersection
-        // semantics (Excel 365 spill behaviour) are a Phase 5 enhancement.
-        return BuildRangeValueOrError(range.Value, context);
+        // Not a plain range — check whether it's a formula-expression named definition.
+        return TryEvaluateNamedFormula(node.Name, context, out var formulaValue)
+            ? formulaValue
+            : ErrorValue.Name;
+    }
+
+    /// <summary>
+    /// Evaluate a name that is bound to a formula expression rather than a plain cell range.
+    /// Handles name→name dependencies and guards against cycles (returns #REF! on cycle).
+    /// Returns the scalar result, which may itself be a RangeValue for array-valued names.
+    /// </summary>
+    private static bool TryEvaluateNamedFormula(string name, IEvalContext context, out ScalarValue result)
+    {
+        result = ErrorValue.Name;
+        var formulaText = context.TryGetNamedFormulaText(name);
+        if (formulaText is null)
+            return false;
+
+        // Cycle detection: if we're already evaluating this name (directly or transitively),
+        // return #REF! to match Excel's circular-reference behaviour.
+        var visiting = _namedFormulaVisiting ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!visiting.Add(name))
+        {
+            result = ErrorValue.Ref;
+            return true;
+        }
+
+        try
+        {
+            var ast = GetOrParseFormula(formulaText);
+            result = EvaluateNamedFormulaAst(ast, context);
+            return true;
+        }
+        catch (FormulaEvalException ex)
+        {
+            result = ErrorFromCode(ex.ErrorCode);
+            return true;
+        }
+        catch (FormulaParseException)
+        {
+            result = ErrorValue.Value;
+            return true;
+        }
+        finally
+        {
+            visiting.Remove(name);
+        }
+    }
+
+    /// <summary>
+    /// Evaluate an AST node in "array-aware" mode for named formula expansion.
+    /// Range-ref nodes are materialized into RangeValues (not collapsed to their top-left cell)
+    /// so that array-valued named formulas (e.g. FortyTwoDays = COLUMN($A:$G)*ROW($1:$4))
+    /// work correctly when passed to aggregate functions.
+    /// </summary>
+    private static ScalarValue EvaluateNamedFormulaAst(FormulaNode ast, IEvalContext context)
+    {
+        // FormulaEvaluator instances are lightweight (just a parse-cache slot).
+        var evaluator = new FormulaEvaluator();
+        return evaluator.EvaluateArrayOperand(ast, context);
     }
 
     private static ScalarValue EvaluateRange(RangeRefNode range, IEvalContext context)
@@ -42,9 +110,13 @@ public sealed partial class FormulaEvaluator
                 return binding;
 
             var resolvedRange = context.TryResolveNamedRange(named.Name);
-            return resolvedRange is null
-                ? ErrorValue.Name
-                : BuildRangeValueOrError(resolvedRange.Value, context);
+            if (resolvedRange is not null)
+                return BuildRangeValueOrError(resolvedRange.Value, context);
+
+            // Fall back to named formula evaluation (may return a RangeValue for array names).
+            return TryEvaluateNamedFormula(named.Name, context, out var namedFormulaValue)
+                ? namedFormulaValue
+                : ErrorValue.Name;
         }
 
         if (node is StructuredReferenceNode structured)
