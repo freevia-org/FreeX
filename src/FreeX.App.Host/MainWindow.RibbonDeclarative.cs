@@ -30,9 +30,13 @@ public partial class MainWindow
 
         try
         {
-            var registry = BuildDeclarativeRibbonRegistry();
-            var definition = FreeXRibbon.Build();
+            // Capture the original controls (the behavior + state backplane) before replacing them.
+            var originals = CollectControlsByName();
+            var registry = new RibbonCommandRegistry();
+            foreach (var (name, control) in originals)
+                registry.Register(name, new RibbonHandlerCommand(control));
 
+            var definition = FreeXRibbon.Build();
             foreach (var item in RibbonTabs.Items)
             {
                 if (item is not TabItem tabItem)
@@ -44,6 +48,10 @@ public partial class MainWindow
 
                 tabItem.Content = RibbonWpfRenderer.BuildTabContent(definitionTab, this, registry);
             }
+
+            // Mirror the original controls' visual state (toggles pressed, combo values) onto the
+            // rendered controls, so the declarative ribbon reflects the selection like the XAML one.
+            WireDeclarativeStateSync(originals, CollectControlsByName());
 
             if (Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_CAPTURE") == "1")
                 Dispatcher.BeginInvoke(new Action(CaptureDeclarativeRibbon), DispatcherPriority.ContextIdle);
@@ -99,11 +107,10 @@ public partial class MainWindow
         return Path.Combine(root, "screenshots", "ribbon-declarative");
     }
 
-    private RibbonCommandRegistry BuildDeclarativeRibbonRegistry()
+    /// <summary>Maps each ribbon control (and menu item) to the first instance found, keyed by CommandName.</summary>
+    private Dictionary<string, Control> CollectControlsByName()
     {
-        var registry = new RibbonCommandRegistry();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-
+        var map = new Dictionary<string, Control>(StringComparer.Ordinal);
         foreach (var item in RibbonTabs!.Items)
         {
             if (item is not TabItem { Content: DependencyObject content })
@@ -113,14 +120,41 @@ public partial class MainWindow
             {
                 if (element is Control control &&
                     RibbonMetadata.TryGetCommandName(control, out var name) &&
-                    seen.Add(name))
+                    !map.ContainsKey(name))
                 {
-                    registry.Register(name, new RibbonHandlerCommand(control));
+                    map[name] = control;
                 }
             }
         }
 
-        return registry;
+        return map;
+    }
+
+    private static void WireDeclarativeStateSync(
+        IReadOnlyDictionary<string, Control> originals,
+        IReadOnlyDictionary<string, Control> rendered)
+    {
+        foreach (var (name, original) in originals)
+        {
+            if (!rendered.TryGetValue(name, out var target))
+                continue;
+
+            if (original is ToggleButton sourceToggle && target is ToggleButton targetToggle)
+            {
+                void Sync() => targetToggle.IsChecked = sourceToggle.IsChecked;
+                sourceToggle.Checked += (_, _) => Sync();
+                sourceToggle.Unchecked += (_, _) => Sync();
+                sourceToggle.Indeterminate += (_, _) => Sync();
+                Sync();
+            }
+            else if (original is ComboBox sourceCombo && target is ComboBox targetCombo)
+            {
+                void Sync() => targetCombo.Text = sourceCombo.Text;
+                sourceCombo.SelectionChanged += (_, _) => Sync();
+                sourceCombo.LostFocus += (_, _) => Sync();
+                Sync();
+            }
+        }
     }
 
     private static IEnumerable<DependencyObject> EnumerateLogicalTree(DependencyObject root)
