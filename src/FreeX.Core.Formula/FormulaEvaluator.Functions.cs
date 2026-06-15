@@ -18,8 +18,8 @@ public sealed partial class FormulaEvaluator
         if (lambdaBinding is not null)
             return ErrorValue.Value;
 
-        // LET, LAMBDA, and SINGLE are AST-aware special forms not in the built-in registry.
-        if (functionName is "LET" or "LAMBDA" or "SINGLE")
+        // LET, LAMBDA, SINGLE, and ANCHORARRAY are AST-aware special forms not in the built-in registry.
+        if (functionName is "LET" or "LAMBDA" or "SINGLE" or "ANCHORARRAY")
             return EvaluateAstAware(node, context);
 
         if (!BuiltInFunctions.TryGet(functionName, out var entry))
@@ -374,6 +374,7 @@ public sealed partial class FormulaEvaluator
             "LET"          => EvaluateLet(node, context),
             "LAMBDA"       => EvaluateLambda(node, context),
             "SINGLE"       => EvaluateSingle(node, context),
+            "ANCHORARRAY"  => EvaluateAnchorArray(node, context),
             _              => ErrorValue.Value
         };
     }
@@ -387,6 +388,71 @@ public sealed partial class FormulaEvaluator
         return value is ErrorValue error
             ? error
             : ImplicitIntersectionOp(value, context);
+    }
+
+    /// <summary>
+    /// ANCHORARRAY(ref) — the spill reference operator (#).
+    /// Given a reference to a cell that is a dynamic-array spill anchor, returns the full
+    /// spill range as a RangeValue.  If the argument is not a spill anchor, returns #REF!.
+    /// This is an AST-aware function because it needs the address of the cell, not its value.
+    /// </summary>
+    private ScalarValue EvaluateAnchorArray(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count != 1)
+            return ErrorValue.Value;
+
+        var arg = node.Arguments[0];
+
+        // Resolve to a single cell address; we need the address to look up the spill anchor.
+        uint anchorRow, anchorCol;
+        string? anchorSheet = null;
+
+        switch (arg)
+        {
+            case CellRefNode cellRef:
+                if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
+                    return ErrorValue.Ref;
+                anchorRow = cellRef.Row;
+                anchorCol = cellRef.ColumnNumber;
+                anchorSheet = cellRef.SheetName;
+                break;
+
+            default:
+                // ANCHORARRAY only accepts a cell reference argument.
+                return ErrorValue.Value;
+        }
+
+        // Resolve the sheet containing the anchor.
+        FreeX.Core.Model.Sheet? sheet;
+        if (anchorSheet is not null)
+        {
+            sheet = context.CurrentWorkbook?.GetSheet(anchorSheet);
+            if (sheet is null) return ErrorValue.Ref;
+        }
+        else
+        {
+            sheet = context.CurrentSheet;
+            if (sheet is null) return ErrorValue.Ref;
+        }
+
+        // Look up the spill extent at the anchor address.
+        var anchorAddr = new FreeX.Core.Model.CellAddress(sheet.Id, anchorRow, anchorCol);
+        if (!sheet.TryGetSpillExtent(anchorAddr, out uint spillRows, out uint spillCols))
+            return ErrorValue.Ref;  // not a spill anchor
+
+        // Read the spill range values (including the anchor cell at [0,0]).
+        var cells = new ScalarValue[(int)spillRows, (int)spillCols];
+        for (int r = 0; r < (int)spillRows; r++)
+            for (int c = 0; c < (int)spillCols; c++)
+            {
+                var row = anchorRow + (uint)r;
+                var col = anchorCol + (uint)c;
+                cells[r, c] = anchorSheet is not null
+                    ? context.GetCellValue(anchorSheet, row, col)
+                    : context.GetCellValue(row, col);
+            }
+
+        return new RangeValue(cells, anchorRow, anchorCol) { SheetName = anchorSheet };
     }
 
 }

@@ -384,6 +384,29 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     // Fall through to provisional value loading below if provisionalAnchor is set;
                     // otherwise falls through to normal value-cell loading.
                 }
+                else if (xlCell.HasFormula && !xlCell.HasArrayFormula &&
+                         string.IsNullOrEmpty(xlCell.FormulaA1) &&
+                         arraySpillRanges is not null)
+                {
+                    // Excel 365 also stores dynamic-array spill cells with a <f ca="1"/> marker —
+                    // an empty formula element with ca="1" (which ClosedXML surfaces as HasFormula=true,
+                    // FormulaA1="").  These are NOT independent formula cells; they are spill
+                    // continuation cells that carry the anchor's cached result as <v>.
+                    // Detect them by checking whether they fall inside a declared array ref range.
+                    var row = (uint)xlCell.Address.RowNumber;
+                    var col = (uint)xlCell.Address.ColumnNumber;
+                    foreach (var (r0, c0, r1, c1, anchorAddr) in arraySpillRanges)
+                    {
+                        if (row >= r0 && row <= r1 && col >= c0 && col <= c1 && !(row == r0 && col == c0))
+                        {
+                            provisionalAnchor = anchorAddr;
+                            break;
+                        }
+                    }
+                    // Fall through to provisional value loading below if provisionalAnchor is set;
+                    // otherwise falls through to the empty-formula path (treated as a formula cell
+                    // that will produce #VALUE! on recalc — unexpected but not a regression).
+                }
 
                 Cell cell;
                 if (xlCell.HasFormula && provisionalAnchor is null)
