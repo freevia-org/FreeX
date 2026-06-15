@@ -41,6 +41,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _insertDefinedNameIntoFormula;
         private readonly MethodInfo _formulaBarExpandButtonClick;
         private readonly MethodInfo _editActiveCellInFormulaBar;
+        private readonly MethodInfo _tryApplyFormulaRangeSelection;
 
         private MainWindowHarness(MainWindow window, ICommandBus commandBus)
         {
@@ -106,6 +107,9 @@ public sealed partial class MainWindowFormulaBarSyncTests
             _editActiveCellInFormulaBar = typeof(MainWindow)
                 .GetMethod("EditActiveCellInFormulaBar", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "EditActiveCellInFormulaBar");
+            _tryApplyFormulaRangeSelection = typeof(MainWindow)
+                .GetMethod("TryApplyFormulaRangeSelection", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "TryApplyFormulaRangeSelection");
         }
 
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
@@ -262,6 +266,20 @@ public sealed partial class MainWindowFormulaBarSyncTests
             var sheet = Workbook.Sheets[0];
             _showInlineEditor.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
             PumpDispatcher();
+        }
+
+        /// <summary>
+        /// Drives the real grid-click formula reference-insertion path (the method invoked from
+        /// <c>SheetGrid_MouseDown</c> / <c>SheetGrid_MouseMove</c> during point-mode formula entry).
+        /// </summary>
+        public bool ApplyFormulaRangeSelection(uint row, uint col, bool extend)
+        {
+            var sheet = Workbook.Sheets[0];
+            var applied = (bool)_tryApplyFormulaRangeSelection.Invoke(
+                _window,
+                [new CellAddress(sheet.Id, row, col), extend])!;
+            PumpDispatcher();
+            return applied;
         }
 
         public void InsertFormulaFunction(string functionName)

@@ -95,11 +95,22 @@ public partial class MainWindow
             return;
         }
 
+        // Legacy Excel access-key route Alt+D, F, F (Data ▸ Filter ▸ AutoFilter). Once the
+        // Alt+D top-level token has flagged the legacy Data sequence, the "F" keys must be
+        // consumed by this dedicated route and accumulate to "FF" rather than falling through
+        // to the generic command-keytip logic below — otherwise a single "F" could invoke an
+        // unrelated Data command or exit keytip mode before the second "F" arrives, leaving
+        // the filter unset (Issue 119).
         if (_legacyDataKeyTipSequence &&
-            string.Equals(_ribbonKeyTipSequence, "FF", StringComparison.OrdinalIgnoreCase))
+            "FF".StartsWith(_ribbonKeyTipSequence, StringComparison.OrdinalIgnoreCase))
         {
-            FilterButton_Click(this, new RoutedEventArgs());
-            ExitRibbonKeyTipMode();
+            if (string.Equals(_ribbonKeyTipSequence, "FF", StringComparison.OrdinalIgnoreCase))
+            {
+                FilterButton_Click(this, new RoutedEventArgs());
+                ExitRibbonKeyTipMode();
+            }
+
+            // "F" so far — keep keytip mode active and wait for the second "F".
             return;
         }
 

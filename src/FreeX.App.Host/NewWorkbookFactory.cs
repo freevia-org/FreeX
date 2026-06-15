@@ -5,11 +5,14 @@ namespace FreeX.App.Host;
 
 internal static class NewWorkbookFactory
 {
-    public static Workbook Create(FreeXOptions options)
+    public static Workbook Create(FreeXOptions options) => Create(options, name: null);
+
+    public static Workbook Create(FreeXOptions options, string? name)
     {
         ArgumentNullException.ThrowIfNull(options);
 
         return WorkbookFactory.Create(new WorkbookCreationOptions(
+            Name: string.IsNullOrWhiteSpace(name) ? WorkbookFactory.DefaultWorkbookName : name,
             DefaultSheetCount: options.DefaultSheetCount,
             DefaultFontName: options.DefaultFontName,
             DefaultFontSize: options.DefaultFontSize,
