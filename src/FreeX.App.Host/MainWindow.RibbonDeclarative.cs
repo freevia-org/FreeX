@@ -23,17 +23,16 @@ public partial class MainWindow
     /// </summary>
     private void TryApplyDeclarativeRibbon()
     {
-        if (Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE") != "1")
-            return;
         if (RibbonTabs is null)
             return;
 
         try
         {
-            // Capture the original controls (kept for state mirroring), then bind commands NATIVELY:
-            // each CommandId invokes its MainWindow handler method directly (no XAML control needed).
-            // The control bridge is only a fallback for commands with no generated handler mapping.
-            var originals = CollectControlsByName();
+            // The ribbon is now declarative. Hidden backplane controls (MainWindow.RibbonBackplane.g.cs)
+            // hold state and serve as the 'sender' for handlers. Commands bind NATIVELY: each CommandId
+            // invokes its MainWindow handler method directly; the control bridge is only a fallback.
+            InitializeRibbonControlBackplane();
+            var originals = RibbonBackplaneControls;
             var registry = BuildNativeRibbonRegistry();
             foreach (var (name, control) in originals)
             {
@@ -140,7 +139,8 @@ public partial class MainWindow
                 types: new[] { typeof(object), typeof(RoutedEventArgs) }, modifiers: null)
                 ?? type.GetMethod(methodName, flags, binder: null, types: System.Type.EmptyTypes, modifiers: null);
             if (method is not null)
-                registry.Register(name, new ReflectiveHandlerCommand(this, method));
+                registry.Register(name, new ReflectiveHandlerCommand(this, method,
+                    RibbonBackplaneControls.GetValueOrDefault(name)));
         }
 
         return registry;
@@ -151,18 +151,20 @@ public partial class MainWindow
     {
         private readonly MainWindow _window;
         private readonly System.Reflection.MethodInfo _method;
+        private readonly object? _sender;
 
-        public ReflectiveHandlerCommand(MainWindow window, System.Reflection.MethodInfo method)
+        public ReflectiveHandlerCommand(MainWindow window, System.Reflection.MethodInfo method, object? sender)
         {
             _window = window;
             _method = method;
+            _sender = sender;
         }
 
         public void Execute(RibbonCommandContext context)
         {
             var args = _method.GetParameters().Length == 0
                 ? System.Array.Empty<object?>()
-                : new object?[] { _window, new RoutedEventArgs() };
+                : new object?[] { _sender ?? _window, new RoutedEventArgs() };
             try
             {
                 _method.Invoke(_window, args);
