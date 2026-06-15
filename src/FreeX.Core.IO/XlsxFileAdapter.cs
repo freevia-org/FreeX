@@ -464,6 +464,47 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     sheet.SetCell(addr, cell);
             }
 
+            // ClosedXML's CellsUsed() silently skips SharedString cells whose SST entry is an
+            // empty string (t="s" with <v> pointing to SST[n]="").  Those cells are data cells
+            // that carry a formula-empty-string value ("") and must be loaded as TextValue("").
+            // We detect them via the raw XML layout (SharedStringValueCells) and access them
+            // directly from ClosedXML here so they are not silently treated as BlankValue.
+            foreach (var (row, col) in xmlLayout?.SharedStringValueCells ?? [])
+            {
+                if (sheet.GetCell(row, col) is not null)
+                    continue; // already loaded by CellsUsed()
+
+                var xlCell = xlSheet.Cell((int)row, (int)col);
+                // Note: do NOT use xlCell.IsEmpty() here — ClosedXML considers SharedString-""
+                // cells as "empty" (the displayed value is ""), but they are NOT blank; they are
+                // text cells that carry an explicit empty-string value from the SST.
+                if (xlCell.DataType != XLDataType.Text)
+                    continue; // not a text cell — skip (e.g. blank cell unexpectedly in the list)
+
+                var text = xlCell.Value.GetText();
+                if (text.Length > 0)
+                    continue; // non-empty text — CellsUsed() should have caught it; skip here
+
+                // Empty-string SharedString cell: store as TextValue("") so SORT/FILTER treat it
+                // as a text value (sorts after numbers, before true blanks), matching Excel behavior.
+                var addr = new CellAddress(sheet.Id, row, col);
+                var styleId = GetRegisteredStyleId(
+                    xlCell,
+                    workbook,
+                    workbook.Theme,
+                    styleIdsByXlsxStyleValue,
+                    cellBorderStyles,
+                    populatedCellStyleIndexes is not null &&
+                        populatedCellStyleIndexes.TryGetValue((row, col), out var ssStyleIndex)
+                        ? ssStyleIndex
+                        : null,
+                    styleIdsByNativeBorderStyleIndex);
+                var valueCell = Cell.FromValue(new TextValue(""));
+                if (styleId is { } ssStyleId)
+                    valueCell.StyleId = ssStyleId;
+                sheet.SetCell(addr, valueCell);
+            }
+
             List<StyleOnlyRun>? explicitStyleOnlyRuns = null;
             foreach (var (row, col, styleIndex) in xmlLayout?.ExplicitStyleOnlyCells ?? [])
             {

@@ -51,6 +51,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
         var explicitPopulatedCellStyles = new List<(uint Row, uint Col, int StyleIndex)>();
         var cachedFormulaErrors = new Dictionary<(uint Row, uint Col), ErrorValue>();
+        var sharedStringValueCells = new List<(uint Row, uint Col)>();
         var styleOnlyStyleIndexes = new HashSet<string>(StringComparer.Ordinal);
         var hasDuplicateStyleOnlyCellStyleIndexes = false;
         var hasStyleOnlyCells = false;
@@ -81,7 +82,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                         cachedFormulaErrors,
                         styleOnlyStyleIndexes,
                         ref hasDuplicateStyleOnlyCellStyleIndexes,
-                        ref populatedCellCount);
+                        ref populatedCellCount,
+                        sharedStringValueCells);
                 }
             }
 
@@ -108,7 +110,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 explicitStyleOnlyCells,
                 hasStyleOnlyCells,
                 hasDuplicateStyleOnlyCellStyleIndexes,
-                populatedCellCount));
+                populatedCellCount,
+                sharedStringValueCells));
     }
 
     public static XlsxWorksheetSheetDataLayout ReadSheetDataLayout(
@@ -127,6 +130,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
         var explicitPopulatedCellStyles = new List<(uint Row, uint Col, int StyleIndex)>();
         var cachedFormulaErrors = new Dictionary<(uint Row, uint Col), ErrorValue>();
+        var sharedStringValueCells = new List<(uint Row, uint Col)>();
         var styleOnlyStyleIndexes = new HashSet<string>(StringComparer.Ordinal);
         var hasDuplicateStyleOnlyCellStyleIndexes = false;
         var hasStyleOnlyCells = false;
@@ -160,6 +164,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         var currentHasStyle = false;
         var currentStyleIndex = 0;
         var currentIsErrorType = false;
+        var currentIsSharedStringType = false;
         var currentHasFormula = false;
         var currentHasValue = false;
         var currentHasInlineString = false;
@@ -344,7 +349,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                     explicitStyleOnlyCells,
                     hasStyleOnlyCells,
                     hasDuplicateStyleOnlyCellStyleIndexes,
-                    populatedCellCount),
+                    populatedCellCount,
+                    sharedStringValueCells),
                 hasPreservableSourceSheetDataMetadata);
 
         void BeginCurrentCell(XmlReader cell)
@@ -358,6 +364,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 CultureInfo.InvariantCulture,
                 out currentStyleIndex);
             currentIsErrorType = string.Equals(type, "e", StringComparison.OrdinalIgnoreCase);
+            currentIsSharedStringType = string.Equals(type, "s", StringComparison.OrdinalIgnoreCase);
             currentCellIsInlineString = string.Equals(type, "inlineStr", StringComparison.OrdinalIgnoreCase);
             currentHasFormula = false;
             currentHasValue = false;
@@ -369,6 +376,15 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         {
             if (currentHasFormula || currentHasValue || currentHasInlineString)
                 populatedCellCount++;
+
+            // Track SharedString cells that have a value but no formula: ClosedXML's CellsUsed()
+            // silently skips these when the SST entry is an empty string, causing a loading gap.
+            if (currentIsSharedStringType && currentHasValue && !currentHasFormula &&
+                !string.IsNullOrWhiteSpace(currentReference) &&
+                CellAddress.TryParse(currentReference, ParseOnlySheetId, out var ssAddr))
+            {
+                sharedStringValueCells.Add((ssAddr.Row, ssAddr.Col));
+            }
 
             if (!currentHasStyle && !currentIsErrorType)
                 return;

@@ -15,6 +15,7 @@ internal static class XlsxWorksheetCellLayoutReader
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
         var explicitPopulatedCellStyles = new List<(uint Row, uint Col, int StyleIndex)>();
         var cachedFormulaErrors = new Dictionary<(uint Row, uint Col), ErrorValue>();
+        var sharedStringValueCells = new List<(uint Row, uint Col)>();
         var populatedCellCount = 0;
         var styleOnlyStyleIndexes = new HashSet<string>(StringComparer.Ordinal);
         var hasDuplicateStyleOnlyCellStyleIndexes = false;
@@ -27,7 +28,8 @@ internal static class XlsxWorksheetCellLayoutReader
             cachedFormulaErrors,
             styleOnlyStyleIndexes,
             ref hasDuplicateStyleOnlyCellStyleIndexes,
-            ref populatedCellCount);
+            ref populatedCellCount,
+            sharedStringValueCells);
 
         return new XlsxWorksheetCellLayout(
             cachedFormulaErrors,
@@ -35,7 +37,8 @@ internal static class XlsxWorksheetCellLayoutReader
             explicitStyleOnlyCells,
             hasStyleOnlyCells,
             hasDuplicateStyleOnlyCellStyleIndexes,
-            populatedCellCount);
+            populatedCellCount,
+            sharedStringValueCells);
     }
 
     public static IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ReadExplicitStyleOnlyCells(
@@ -56,7 +59,8 @@ internal static class XlsxWorksheetCellLayoutReader
         Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors,
         HashSet<string> styleOnlyStyleIndexes,
         ref bool hasDuplicateStyleOnlyCellStyleIndexes,
-        ref int populatedCellCount)
+        ref int populatedCellCount,
+        List<(uint Row, uint Col)>? sharedStringValueCells = null)
     {
         if (sheetData is null)
             return false;
@@ -82,7 +86,8 @@ internal static class XlsxWorksheetCellLayoutReader
                     cachedFormulaErrors,
                     styleOnlyStyleIndexes,
                     ref hasDuplicateStyleOnlyCellStyleIndexes,
-                    ref populatedCellCount);
+                    ref populatedCellCount,
+                    sharedStringValueCells);
             }
         }
 
@@ -97,7 +102,8 @@ internal static class XlsxWorksheetCellLayoutReader
         Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors,
         HashSet<string> styleOnlyStyleIndexes,
         ref bool hasDuplicateStyleOnlyCellStyleIndexes,
-        ref int populatedCellCount)
+        ref int populatedCellCount,
+        List<(uint Row, uint Col)>? sharedStringValueCells = null)
         => ReadCell(
             cell,
             worksheetNs + "f",
@@ -108,7 +114,8 @@ internal static class XlsxWorksheetCellLayoutReader
             cachedFormulaErrors,
             styleOnlyStyleIndexes,
             ref hasDuplicateStyleOnlyCellStyleIndexes,
-            ref populatedCellCount);
+            ref populatedCellCount,
+            sharedStringValueCells);
 
     internal static bool ReadCell(
         XElement cell,
@@ -120,7 +127,8 @@ internal static class XlsxWorksheetCellLayoutReader
         Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors,
         HashSet<string> styleOnlyStyleIndexes,
         ref bool hasDuplicateStyleOnlyCellStyleIndexes,
-        ref int populatedCellCount)
+        ref int populatedCellCount,
+        List<(uint Row, uint Col)>? sharedStringValueCells = null)
     {
         var formula = cell.Element(formulaName);
         var value = cell.Element(valueName);
@@ -134,7 +142,18 @@ internal static class XlsxWorksheetCellLayoutReader
             NumberStyles.Integer,
             CultureInfo.InvariantCulture,
             out var styleIndex);
-        var isErrorType = string.Equals(cell.Attribute("t")?.Value, "e", StringComparison.OrdinalIgnoreCase);
+        var cellType = cell.Attribute("t")?.Value;
+        var isErrorType = string.Equals(cellType, "e", StringComparison.OrdinalIgnoreCase);
+        var isSharedStringType = string.Equals(cellType, "s", StringComparison.OrdinalIgnoreCase);
+
+        // Track cells with SharedString type and a value element: ClosedXML's CellsUsed() skips
+        // these when the SST entry is an empty string, so we need to handle them separately.
+        if (isSharedStringType && value is not null && formula is null && sharedStringValueCells is not null)
+        {
+            var ssRef = cell.Attribute("r")?.Value;
+            if (!string.IsNullOrWhiteSpace(ssRef) && CellAddress.TryParse(ssRef, ParseOnlySheetId, out var ssAddr))
+                sharedStringValueCells.Add((ssAddr.Row, ssAddr.Col));
+        }
 
         if (!hasStyle && !isErrorType)
             return false;
@@ -187,4 +206,5 @@ internal sealed record XlsxWorksheetCellLayout(
     IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
     bool HasStyleOnlyCells,
     bool HasDuplicateStyleOnlyCellStyleIndexes,
-    int PopulatedCellCount);
+    int PopulatedCellCount,
+    IReadOnlyList<(uint Row, uint Col)> SharedStringValueCells);

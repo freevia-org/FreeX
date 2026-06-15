@@ -91,6 +91,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitPopulatedCellStyles,
         IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
         bool HasDuplicateStyleOnlyCellStyleIndexes,
+        IReadOnlyList<(uint Row, uint Col)> SharedStringValueCells,
         string WorksheetPath,
         bool HasConditionalFormattingBlocks,
         bool HasPreservableSourceWorksheetMetadata,
@@ -410,6 +411,7 @@ public sealed partial class XlsxFileAdapter
             cellLayout.ExplicitPopulatedCellStyles,
             cellLayout.ExplicitStyleOnlyCells,
             cellLayout.HasDuplicateStyleOnlyCellStyleIndexes,
+            cellLayout.SharedStringValueCells,
             worksheetPath,
             hasConditionalFormattingBlocks,
             hasPreservableSourceWorksheetMetadata,
@@ -571,7 +573,7 @@ public sealed partial class XlsxFileAdapter
     private static XlsxWorksheetSheetDataLayout CreateEmptySheetDataLayout() =>
         new(
             new XlsxWorksheetRowColumnLayout([], [], [], [], [], [], [], []),
-            new XlsxWorksheetCellLayout([], [], [], false, false, 0));
+            new XlsxWorksheetCellLayout([], [], [], false, false, 0, []));
 
     private static XElement CreateShallowElement(XmlReader reader)
     {
