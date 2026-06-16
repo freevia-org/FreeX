@@ -102,6 +102,44 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void TabStops_RoundTrip_WithAlignmentsAndPositions()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("tabbed")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops =
+                [
+                    new TabStop(36, TabStopAlignment.Left),
+                    new TabStop(108, TabStopAlignment.Center),
+                    new TabStop(216, TabStopAlignment.Right),
+                    new TabStop(324, TabStopAlignment.Decimal)
+                ]
+            }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.TabStops.Should().Equal(
+            new TabStop(36, TabStopAlignment.Left),
+            new TabStop(108, TabStopAlignment.Center),
+            new TabStop(216, TabStopAlignment.Right),
+            new TabStop(324, TabStopAlignment.Decimal));
+    }
+
+    [Fact]
+    public void PlainParagraph_HasEmptyTabStops()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain"));
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.TabStops.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ParagraphBorder_RoundTrips()
     {
         var doc = new TextDocument();

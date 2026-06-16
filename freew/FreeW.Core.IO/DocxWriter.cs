@@ -400,6 +400,19 @@ public static class DocxWriter
                 TextAlignment.Justify => "both",
                 _ => "left"
             })));
+        // Tab stops (w:tabs): one w:tab per stop, position in dxa, alignment via w:val. Mirrors how
+        // w:ind/w:spacing carry their dxa values.
+        if (f.TabStops.Count > 0)
+            pPr.Add(new XElement(W + "tabs",
+                f.TabStops.Select(t => new XElement(W + "tab",
+                    new XAttribute(W + "val", t.Alignment switch
+                    {
+                        TabStopAlignment.Center => "center",
+                        TabStopAlignment.Right => "right",
+                        TabStopAlignment.Decimal => "decimal",
+                        _ => "left"
+                    }),
+                    new XAttribute(W + "pos", PointsToDxa(t.PositionPt))))));
         if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
             pPr.Add(new XElement(W + "spacing",
                 new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)),

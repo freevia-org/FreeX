@@ -6,6 +6,18 @@ public enum TextAlignment { Left, Center, Right, Justify }
 /// <summary>List decoration for a paragraph.</summary>
 public enum ListKind { None, Bullet, Number }
 
+/// <summary>Horizontal alignment of text at a paragraph tab stop (maps to OOXML w:tab/@w:val).</summary>
+public enum TabStopAlignment { Left, Center, Right, Decimal }
+
+/// <summary>
+/// Immutable paragraph tab stop (pPr/w:tabs/w:tab). Round-trips to docx as a single
+/// <c>w:tab</c> with <c>w:pos</c> in dxa (twentieths of a point) and <c>w:val</c> giving the
+/// alignment.
+/// </summary>
+/// <param name="PositionPt">Tab-stop position from the left margin, in points.</param>
+/// <param name="Alignment">How text aligns at the stop.</param>
+public sealed record TabStop(double PositionPt, TabStopAlignment Alignment = TabStopAlignment.Left);
+
 /// <summary>
 /// Immutable paragraph box border (pPr/w:pBdr). When present, all four edges are drawn with the
 /// given colour and width. Round-trips to docx as <c>w:top</c>/<c>w:bottom</c>/<c>w:left</c>/<c>w:right</c>
@@ -66,6 +78,13 @@ public sealed record ParagraphFormatting
     /// <see cref="RunFormatting.HighlightColorHex"/>.
     /// </summary>
     public string? ShadingColorHex { get; init; }
+
+    /// <summary>
+    /// Paragraph tab stops (pPr/w:tabs), in document order. Never null; defaults to an empty list so
+    /// paragraphs without explicit stops are unaffected. Round-trips to docx as one <c>w:tab</c> per
+    /// stop, mirroring how <c>w:ind</c>/<c>w:spacing</c> are written/read.
+    /// </summary>
+    public IReadOnlyList<TabStop> TabStops { get; init; } = [];
 
     public static readonly ParagraphFormatting Default = new();
 }
