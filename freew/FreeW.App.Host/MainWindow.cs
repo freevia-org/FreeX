@@ -17,6 +17,7 @@ namespace FreeW.App.Host;
 public sealed class MainWindow : Window
 {
     private FileCommands _file = null!;
+    private AutosaveCoordinator _autosave = null!;
     private TextBlock _titleText = null!;
 
     public MainWindow()
@@ -34,6 +35,9 @@ public sealed class MainWindow : Window
         var commands = FreeWRibbonCommands.Build(editor, stateStore);
         _file = new FileCommands(this, editor, UpdateTitle);
         editor.TextChanged += (_, _) => _file.MarkDirty();
+        _autosave = new AutosaveCoordinator(editor, _file);
+        Loaded += (_, _) => { _autosave.OfferRecovery(this); _autosave.Start(); };
+        Closing += (_, _) => _autosave.Stop();
 
         var titleBar = BuildTitleBar();
         DockPanel.SetDock(titleBar, Dock.Top);
@@ -75,6 +79,10 @@ public sealed class MainWindow : Window
         bar.Children.Add(FileButton("Open", ApplicationCommands.Open));
         bar.Children.Add(FileButton("Save", ApplicationCommands.Save));
 
+        var recentButton = new Button { Content = "Recent ▾", Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(10, 2, 10, 2) };
+        recentButton.Click += (_, _) => ShowRecentMenu(recentButton);
+        bar.Children.Add(recentButton);
+
         _titleText = new TextBlock
         {
             Foreground = Brushes.White,
@@ -98,6 +106,27 @@ public sealed class MainWindow : Window
         var name = _file.DisplayName + (_file.IsDirty ? " *" : "");
         Title = $"{name} — FreeW";
         _titleText.Text = $"{name} — FreeW";
+    }
+
+    private void ShowRecentMenu(Button anchor)
+    {
+        var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
+        var entries = _file.RecentEntries;
+        if (entries.Count == 0)
+        {
+            menu.Items.Add(new MenuItem { Header = "(no recent files)", IsEnabled = false });
+        }
+        else
+        {
+            foreach (var entry in entries.Take(15))
+            {
+                var path = entry.Path;
+                var item = new MenuItem { Header = System.IO.Path.GetFileName(path), ToolTip = path };
+                item.Click += (_, _) => _file.OpenPath(path);
+                menu.Items.Add(item);
+            }
+        }
+        menu.IsOpen = true;
     }
 
     // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.

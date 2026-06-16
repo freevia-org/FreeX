@@ -21,7 +21,26 @@ internal sealed class FileCommands(Window window, DocumentView editor, Action on
 
     public bool IsDirty { get; private set; }
 
+    public string? CurrentPath => _currentPath;
+
     public string DisplayName => _currentPath is null ? "Untitled" : Path.GetFileNameWithoutExtension(_currentPath);
+
+    /// <summary>Load a recovered autosave snapshot, targeting the original path and marking dirty.</summary>
+    public void OpenSnapshot(string snapshotPath, string? originalPath)
+    {
+        try
+        {
+            editor.LoadModel(DocxReader.Read(snapshotPath));
+            _currentPath = originalPath;
+            IsDirty = true;
+            onChanged();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(window, $"Could not recover the document:\n{ex.Message}", "FreeW",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
 
     public void MarkDirty()
     {
@@ -42,17 +61,37 @@ internal sealed class FileCommands(Window window, DocumentView editor, Action on
     public void Open()
     {
         var dialog = new OpenFileDialog { Filter = Filter, DefaultExt = ".docx" };
-        if (dialog.ShowDialog(window) != true)
-            return;
+        if (dialog.ShowDialog(window) == true)
+            OpenPath(dialog.FileName);
+    }
+
+    public void OpenPath(string path)
+    {
         try
         {
-            editor.LoadModel(DocxReader.Read(dialog.FileName));
-            SetSaved(dialog.FileName);
+            editor.LoadModel(DocxReader.Read(path));
+            SetSaved(path);
         }
         catch (Exception ex)
         {
             MessageBox.Show(window, $"Could not open the document:\n{ex.Message}", "FreeW",
                 MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Recent files (most recent first) from the shared store; never throws.</summary>
+    public IReadOnlyList<RecentFileEntry> RecentEntries
+    {
+        get
+        {
+            try
+            {
+                return RecentFilesStore.Load().Entries;
+            }
+            catch
+            {
+                return Array.Empty<RecentFileEntry>();
+            }
         }
     }
 
