@@ -193,24 +193,35 @@ public static class DocxReader
             paragraph.Formatting = ReadParagraphFormatting(pPr, numbering);
         }
 
-        // Iterate in document order so runs nested inside a w:hyperlink keep their position; a
-        // w:hyperlink carries an r:id resolving (via the rels) to the external URL its runs link to.
+        // Iterate in document order so runs nested inside a w:hyperlink keep their position, and so a
+        // bookmark's name (w:bookmarkStart, a run sibling) is captured wherever it appears. A
+        // w:hyperlink either carries an r:id (external URL, resolved via the rels) or a w:anchor
+        // (internal link to a bookmark name).
         foreach (var child in p.Elements())
         {
             if (child.Name == W + "r")
             {
-                AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl: null);
+                AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null);
             }
             else if (child.Name == W + "hyperlink")
             {
+                var anchor = child.Attribute(W + "anchor")?.Value;
                 var id = child.Attribute(R + "id")?.Value;
                 var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
                 foreach (var r in child.Elements(W + "r"))
-                    AddRun(paragraph, r, archive, imageRelationships, url);
+                    AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null);
             }
             else if (child.Name == W + "fldSimple")
             {
                 AddSimpleField(paragraph, child);
+            }
+            else if (child.Name == W + "bookmarkStart")
+            {
+                // Capture the first non-internal bookmark name on the paragraph. Word emits an
+                // implicit "_GoBack" bookmark on the document; skip it so it is not mistaken for a target.
+                var name = child.Attribute(W + "name")?.Value;
+                if (paragraph.BookmarkName is null && name is { Length: > 0 } && name != "_GoBack")
+                    paragraph.BookmarkName = name;
             }
         }
 
@@ -243,12 +254,13 @@ public static class DocxReader
         XElement r,
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
-        string? hyperlinkUrl)
+        string? hyperlinkUrl,
+        string? hyperlinkAnchor)
     {
         var image = ReadImage(r, archive, imageRelationships);
         if (image is not null)
         {
-            paragraph.Runs.Add(new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl });
+            paragraph.Runs.Add(new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor });
             return;
         }
 
@@ -265,7 +277,7 @@ public static class DocxReader
             text += "\t";
         if (text.Length == 0)
             return;
-        paragraph.Runs.Add(new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl });
+        paragraph.Runs.Add(new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor });
     }
 
     private static Table ReadTable(

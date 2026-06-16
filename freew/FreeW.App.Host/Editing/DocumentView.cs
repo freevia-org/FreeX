@@ -476,6 +476,14 @@ public sealed class DocumentView : RichTextBox
         public TextDocument Document => view._model;
     }
 
+    /// <summary>
+    /// Side-band paragraph data carried on a WPF <see cref="WpfParagraph.Tag"/> so it survives an
+    /// edit/commit cycle even though the FlowDocument paragraph has no native slot for it. Holds the
+    /// model's tab stops (not representable in WPF) and the paragraph's bookmark name (an invisible
+    /// marker). Either field may be empty/null; the Tag is only stamped when at least one is set.
+    /// </summary>
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName);
+
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
     {
@@ -504,10 +512,12 @@ public sealed class DocumentView : RichTextBox
     {
         var modelParagraph = new ModelParagraph
         {
-            Formatting = ReadParagraphFormatting(wpfParagraph, document)
+            Formatting = ReadParagraphFormatting(wpfParagraph, document),
+            // The bookmark name (an invisible marker) is preserved across edits via the paragraph Tag.
+            BookmarkName = wpfParagraph.Tag is ParagraphTag { BookmarkName: { Length: > 0 } name } ? name : null
         };
         foreach (var inline in wpfParagraph.Inlines)
-            ReadInline(modelParagraph, inline, hyperlinkUrl: null);
+            ReadInline(modelParagraph, inline, hyperlinkUrl: null, hyperlinkAnchor: null);
         return modelParagraph;
     }
 
@@ -547,24 +557,27 @@ public sealed class DocumentView : RichTextBox
     };
 
     // Maps one FlowDocument inline to model run(s). A Hyperlink is a Span of inlines, so we recurse
-    // into it carrying its NavigateUri, which lands on each produced run as its HyperlinkUrl.
-    private static void ReadInline(ModelParagraph modelParagraph, Inline inline, string? hyperlinkUrl)
+    // into it carrying its target. An external link carries a NavigateUri (-> HyperlinkUrl); an
+    // internal link carries its bookmark name on the Hyperlink's Tag (-> HyperlinkAnchor).
+    private static void ReadInline(ModelParagraph modelParagraph, Inline inline, string? hyperlinkUrl, string? hyperlinkAnchor)
     {
         switch (inline)
         {
             case WpfHyperlink link:
-                var url = link.NavigateUri?.ToString() ?? hyperlinkUrl;
+                var anchor = link.Tag as string ?? hyperlinkAnchor;
+                // An internal link has no NavigateUri; only treat NavigateUri as an external URL.
+                var url = anchor is { Length: > 0 } ? hyperlinkUrl : link.NavigateUri?.ToString() ?? hyperlinkUrl;
                 foreach (var child in link.Inlines)
-                    ReadInline(modelParagraph, child, url);
+                    ReadInline(modelParagraph, child, url, anchor);
                 break;
             case InlineUIContainer { Child: Image { Tag: InlineImage modelImage } }:
-                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl });
+                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor });
                 break;
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
                 break;
             case WpfRun run when run.Text.Length > 0:
-                modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl });
+                modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor });
                 break;
         }
     }
@@ -677,11 +690,12 @@ public sealed class DocumentView : RichTextBox
             wpf.Background = new SolidColorBrush(shading);
 
         // WPF's FlowDocument Paragraph has no tab-stop API, so tab stops cannot be rendered with
-        // custom positions/alignments (default tab rendering applies visually). To avoid losing them
-        // on an edit/commit cycle, we carry the model's TabStops on the paragraph's Tag and read them
-        // back verbatim in ReadParagraphFormatting; the docx round-trip remains exact.
-        if (paraFmt.TabStops.Count > 0)
-            wpf.Tag = paraFmt.TabStops;
+        // custom positions/alignments (default tab rendering applies visually). A bookmark name is an
+        // invisible marker with no FlowDocument representation either. To avoid losing either on an
+        // edit/commit cycle, we carry both on the paragraph's Tag (a ParagraphTag) and read them back
+        // verbatim on commit; the docx round-trip remains exact.
+        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 })
+            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName);
 
         foreach (var run in paragraph.Runs)
             wpf.Inlines.Add(BuildRun(run, paragraph, document));
@@ -742,8 +756,54 @@ public sealed class DocumentView : RichTextBox
 
         if (run.HyperlinkUrl is { Length: > 0 } url)
             return BuildHyperlink(wpf, url);
+        if (run.HyperlinkAnchor is { Length: > 0 } anchor)
+            return BuildInternalHyperlink(wpf, anchor);
 
         return wpf;
+    }
+
+    // Wraps a styled run in a WPF Hyperlink that targets an internal bookmark. The bookmark name is
+    // stored on the link's Tag (not NavigateUri, which is reserved for external URLs) so it reads back
+    // on commit; navigating scrolls the bookmarked paragraph into view (best-effort).
+    private static Inline BuildInternalHyperlink(WpfRun content, string anchor)
+    {
+        var link = new WpfHyperlink(content);
+        StyleInternalLink(link, anchor);
+        return link;
+    }
+
+    private static void StyleInternalLink(WpfHyperlink link, string anchor)
+    {
+        link.Tag = anchor;
+        link.ToolTip = "Go to bookmark: " + anchor;
+        link.Foreground = new SolidColorBrush(Color.FromRgb(0x05, 0x63, 0xC1));
+        link.Click += OnInternalLinkClick;
+    }
+
+    // Scroll the paragraph carrying the linked bookmark into view (best-effort). Matches on the
+    // model BookmarkName preserved via each WPF paragraph's ParagraphTag, searching the FlowDocument
+    // that hosts the clicked link.
+    private static void OnInternalLinkClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not WpfHyperlink { Tag: string anchor } link || anchor.Length == 0)
+            return;
+        var flow = FindFlowDocument(link);
+        var target = flow?.Blocks.OfType<WpfParagraph>()
+            .FirstOrDefault(p => p.Tag is ParagraphTag { BookmarkName: { } name } && name == anchor);
+        target?.BringIntoView();
+    }
+
+    // Walk a TextElement's logical parent chain up to the hosting FlowDocument, if any.
+    private static FlowDocument? FindFlowDocument(TextElement element)
+    {
+        DependencyObject? node = element;
+        while (node is not null)
+        {
+            if (node is FlowDocument flow)
+                return flow;
+            node = node is TextElement te ? te.Parent : LogicalTreeHelper.GetParent(node);
+        }
+        return null;
     }
 
     // Wraps a styled run in a WPF Hyperlink (blue + underlined, with NavigateUri) so the link reads
@@ -949,6 +1009,77 @@ public sealed class DocumentView : RichTextBox
         return link;
     }
 
+    /// <summary>The names of every bookmark defined in the document (committed state), in document order.</summary>
+    public IReadOnlyList<string> BookmarkNames()
+    {
+        CommitToModel();
+        return _model.Blocks.OfType<ModelParagraph>()
+            .Where(p => p.BookmarkName is { Length: > 0 })
+            .Select(p => p.BookmarkName!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Names the paragraph containing the caret as a bookmark target (an invisible marker). An empty
+    /// or whitespace name clears any existing bookmark on that paragraph. Re-renders so the name
+    /// round-trips through the model on the next commit.
+    /// </summary>
+    public void SetBookmarkAtCaret(string? name)
+    {
+        Focus();
+        CommitToModel();
+        var index = CaretBlockIndex();
+        if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph paragraph)
+            return;
+        paragraph.BookmarkName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        Render();
+    }
+
+    /// <summary>
+    /// Applies an internal hyperlink (to an existing bookmark) over the current selection. If the
+    /// selection is empty the bookmark name itself is inserted as a linked run at the caret. Re-renders
+    /// so the link is styled and round-trips (as w:hyperlink w:anchor) on the next commit.
+    /// </summary>
+    public void ApplyInternalLink(string anchor)
+    {
+        if (string.IsNullOrWhiteSpace(anchor))
+            return;
+        anchor = anchor.Trim();
+
+        Focus();
+        var selection = Selection;
+        if (selection.IsEmpty)
+        {
+            var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+            var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
+            if (paragraph is null)
+            {
+                paragraph = new WpfParagraph();
+                Document.Blocks.Add(paragraph);
+            }
+            var link = new WpfHyperlink(new WpfRun(anchor));
+            StyleInternalLink(link, anchor);
+            paragraph.Inlines.Add(link);
+        }
+        else
+        {
+            try
+            {
+                var link = new WpfHyperlink(selection.Start, selection.End);
+                StyleInternalLink(link, anchor);
+            }
+            catch (ArgumentException)
+            {
+                // Selection spanned a non-text boundary (e.g. a table); ignore rather than crash.
+                return;
+            }
+        }
+
+        CommitToModel();
+        Render();
+    }
+
     private static void StyleLink(WpfHyperlink link, string url)
     {
         link.ToolTip = url;
@@ -1005,7 +1136,7 @@ public sealed class DocumentView : RichTextBox
             ShadingColorHex = paragraph.Background is SolidColorBrush shading ? ToHex(shading.Color) : null,
             // Tab stops are not representable in the WPF FlowDocument Paragraph, so they are preserved
             // verbatim from the Tag stamped by BuildParagraph (see comment there); empty if none.
-            TabStops = paragraph.Tag is IReadOnlyList<TabStop> tabStops ? tabStops : []
+            TabStops = paragraph.Tag is ParagraphTag { TabStops: var tabStops } ? tabStops : []
         };
 
     // Recover the line-spacing multiplier from a WPF paragraph's LineHeight, inverting the formula used

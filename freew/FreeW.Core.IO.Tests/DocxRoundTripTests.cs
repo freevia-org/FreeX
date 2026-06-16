@@ -529,6 +529,106 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Bookmark_RoundTrips_WithNameIntact()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("intro"));
+        doc.Blocks.Add(new Paragraph("the target") { BookmarkName = "Section1" });
+
+        var paragraphs = RoundTrip(doc).Paragraphs.ToList();
+
+        paragraphs.Select(p => p.PlainText).Should().Equal("intro", "the target");
+        paragraphs[0].BookmarkName.Should().BeNull();
+        paragraphs[1].BookmarkName.Should().Be("Section1");
+    }
+
+    [Fact]
+    public void InternalLink_RoundTrips_WithAnchorIntact()
+    {
+        var doc = new TextDocument();
+        var linking = new Paragraph();
+        linking.Runs.Add(new Run("jump to "));
+        linking.Runs.Add(new Run("Section 1") { HyperlinkAnchor = "Section1" });
+        linking.Runs.Add(new Run(" please"));
+        doc.Blocks.Add(linking);
+        doc.Blocks.Add(new Paragraph("the target") { BookmarkName = "Section1" });
+
+        var result = RoundTrip(doc);
+        var runs = result.Paragraphs.First().Runs;
+
+        runs.Select(r => r.Text).Should().Equal("jump to ", "Section 1", " please");
+        runs[0].HyperlinkAnchor.Should().BeNull();
+        runs[1].HyperlinkAnchor.Should().Be("Section1");
+        runs[1].HyperlinkUrl.Should().BeNull();
+        runs[2].HyperlinkAnchor.Should().BeNull();
+        result.Paragraphs.Last().BookmarkName.Should().Be("Section1");
+    }
+
+    [Fact]
+    public void InternalLink_WritesAnchorAndBookmarkElements()
+    {
+        var doc = new TextDocument();
+        var linking = new Paragraph();
+        linking.Runs.Add(new Run("go") { HyperlinkAnchor = "Top" });
+        doc.Blocks.Add(linking);
+        doc.Blocks.Add(new Paragraph("top") { BookmarkName = "Top" });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var xml = docReader.ReadToEnd();
+        xml.Should().Contain("anchor=\"Top\"");
+        xml.Should().Contain("bookmarkStart");
+        xml.Should().Contain("name=\"Top\"");
+        xml.Should().Contain("bookmarkEnd");
+
+        // An internal link must NOT create an external hyperlink relationship.
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        relsReader.ReadToEnd().Should().NotContain("/hyperlink");
+    }
+
+    [Fact]
+    public void InternalLink_PreservesRunFormatting()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("bold anchor", new RunFormatting { Bold = true })
+        {
+            HyperlinkAnchor = "Here"
+        });
+        doc.Blocks.Add(paragraph);
+        doc.Blocks.Add(new Paragraph("dest") { BookmarkName = "Here" });
+
+        var run = RoundTrip(doc).Paragraphs.First().Runs.Single();
+
+        run.Text.Should().Be("bold anchor");
+        run.HyperlinkAnchor.Should().Be("Here");
+        run.Formatting.Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ExternalAndInternalLinks_CoexistInSameDocument()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("external") { HyperlinkUrl = "https://example.com" });
+        paragraph.Runs.Add(new Run(" and "));
+        paragraph.Runs.Add(new Run("internal") { HyperlinkAnchor = "Mark" });
+        doc.Blocks.Add(paragraph);
+        doc.Blocks.Add(new Paragraph("dest") { BookmarkName = "Mark" });
+
+        var runs = RoundTrip(doc).Paragraphs.First().Runs;
+
+        runs.Single(r => r.Text == "external").HyperlinkUrl.Should().Be("https://example.com");
+        runs.Single(r => r.Text == "external").HyperlinkAnchor.Should().BeNull();
+        runs.Single(r => r.Text == "internal").HyperlinkAnchor.Should().Be("Mark");
+        runs.Single(r => r.Text == "internal").HyperlinkUrl.Should().BeNull();
+    }
+
+    [Fact]
     public void BulletList_RoundTrips_ListKindAndLevel()
     {
         var doc = new TextDocument();

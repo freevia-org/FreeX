@@ -96,6 +96,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
         // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
         registry.Register("freew.footnote", new InsertFootnoteCommand(editor));
+        // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
+        registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
+        // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
+        registry.Register("freew.link-bookmark", new LinkToBookmarkCommand(editor));
 
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
@@ -595,6 +599,93 @@ internal static class FreeWRibbonCommands
                 return; // cancelled or empty — nothing to anchor a footnote to
             editor.Focus();
             editor.InsertFootnote(text.Trim());
+        }
+    }
+
+    // Insert > Links > Bookmark: name the caret's paragraph as a bookmark target. Seeds the prompt
+    // with any existing bookmark on that paragraph; an empty entry clears it.
+    private sealed class InsertBookmarkCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var name = TextPrompt.Ask(Window.GetWindow(editor), "Bookmark",
+                "Bookmark name (leave blank to remove):", string.Empty);
+            if (name is null)
+                return; // cancelled — leave the model untouched
+            editor.SetBookmarkAtCaret(name);
+        }
+    }
+
+    // Insert > Links > Link to Bookmark: pick an existing bookmark and link the selection to it. If no
+    // bookmarks exist yet, tell the user to create one first.
+    private sealed class LinkToBookmarkCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var bookmarks = editor.BookmarkNames();
+            if (bookmarks.Count == 0)
+            {
+                MessageBox.Show(Window.GetWindow(editor),
+                    "No bookmarks exist yet. Add a bookmark first (Insert › Bookmark), then link to it.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var chosen = BookmarkPicker.Ask(Window.GetWindow(editor), bookmarks);
+            if (!string.IsNullOrWhiteSpace(chosen))
+                editor.ApplyInternalLink(chosen!);
+        }
+    }
+
+    // A tiny modal dialog to pick one of the document's bookmark names. Returns the chosen name, or
+    // null if cancelled.
+    private static class BookmarkPicker
+    {
+        public static string? Ask(Window? owner, IReadOnlyList<string> bookmarks)
+        {
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 280,
+                MinHeight = 120,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            foreach (var name in bookmarks)
+                list.Items.Add(name);
+            list.SelectedIndex = 0;
+
+            string? result = null;
+            var dialog = new Window
+            {
+                Title = "Link to Bookmark",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
+            list.MouseDoubleClick += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Bookmark:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(list);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 

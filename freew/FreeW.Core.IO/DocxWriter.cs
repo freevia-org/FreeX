@@ -268,6 +268,9 @@ public static class DocxWriter
         bool hasHeader,
         bool hasFooter)
     {
+        // Reset the document-scoped bookmark id counter so ids start at 1 for each written document.
+        System.Threading.Interlocked.Exchange(ref _bookmarkId, 0);
+
         // Map each image run to its assigned relationship id by replaying the same walk order.
         var imagesByRun = new Dictionary<Run, ImagePart>();
         var next = 0;
@@ -403,6 +406,10 @@ public static class DocxWriter
         return tblPr;
     }
 
+    // Bookmark ids are scoped to the whole document; one monotonically increasing counter keeps
+    // every w:bookmarkStart/w:bookmarkEnd pair's w:id unique across all paragraphs.
+    private static int _bookmarkId;
+
     private static XElement BuildParagraph(Paragraph paragraph, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var p = new XElement(W + "p");
@@ -410,17 +417,37 @@ public static class DocxWriter
         if (pPr is not null)
             p.Add(pPr);
 
-        // Wrap maximal spans of consecutive runs sharing the same hyperlink URL in a single
-        // w:hyperlink referencing the URL's external relationship id.
+        // A bookmarked paragraph is bracketed by a w:bookmarkStart/w:bookmarkEnd pair (siblings of the
+        // runs) sharing one w:id; the start also carries the bookmark's w:name.
+        var bookmarkId = -1;
+        if (paragraph.BookmarkName is { Length: > 0 } bookmarkName)
+        {
+            bookmarkId = System.Threading.Interlocked.Increment(ref _bookmarkId);
+            p.Add(new XElement(W + "bookmarkStart",
+                new XAttribute(W + "id", bookmarkId),
+                new XAttribute(W + "name", bookmarkName)));
+        }
+
+        // Wrap maximal spans of consecutive runs sharing the same hyperlink target in a single
+        // w:hyperlink. External links reference the URL's relationship id (r:id); internal links
+        // reference a bookmark name via w:anchor (no relationship).
         var i = 0;
         var runs = paragraph.Runs;
         while (i < runs.Count)
         {
             var url = runs[i].HyperlinkUrl;
+            var anchor = runs[i].HyperlinkAnchor;
             if (url is { Length: > 0 } && hyperlinks.TryGetValue(url, out var relationshipId))
             {
                 var hyperlink = new XElement(W + "hyperlink", new XAttribute(R + "id", relationshipId));
                 while (i < runs.Count && runs[i].HyperlinkUrl == url)
+                    hyperlink.Add(BuildRun(runs[i++], imagesByRun));
+                p.Add(hyperlink);
+            }
+            else if (anchor is { Length: > 0 })
+            {
+                var hyperlink = new XElement(W + "hyperlink", new XAttribute(W + "anchor", anchor));
+                while (i < runs.Count && runs[i].HyperlinkAnchor == anchor)
                     hyperlink.Add(BuildRun(runs[i++], imagesByRun));
                 p.Add(hyperlink);
             }
@@ -429,6 +456,10 @@ public static class DocxWriter
                 p.Add(BuildRun(runs[i++], imagesByRun));
             }
         }
+
+        if (bookmarkId >= 0)
+            p.Add(new XElement(W + "bookmarkEnd", new XAttribute(W + "id", bookmarkId)));
+
         return p;
     }
 
