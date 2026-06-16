@@ -172,6 +172,19 @@ public sealed class RibbonMenuBuilder
         return this;
     }
 
+    /// <summary>Adds a submenu: a header item whose children are built by <paramref name="build"/>.</summary>
+    public RibbonMenuBuilder Submenu(string header, string? keyTip, Action<RibbonMenuBuilder> build)
+    {
+        var child = new RibbonMenuBuilder();
+        build(child);
+        _items.Add(new RibbonMenuItem(
+            header,
+            CommandId: null,
+            KeyTip: keyTip,
+            Children: child._items.ToArray()));
+        return this;
+    }
+
     public RibbonMenuBuilder Separator()
     {
         _items.Add(RibbonMenuItem.Separator());
