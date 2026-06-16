@@ -191,6 +191,77 @@ public sealed class DocumentView : RichTextBox
         _commands.Execute(new InsertBlockCommand(index, ModelTable.Create(rows, columns)));
     }
 
+    /// <summary>
+    /// Insert a Table of Contents generated from the document's heading outline. The TOC paragraphs
+    /// (built by <see cref="TableOfContents.Build"/>) are inserted at the caret's block (else at the
+    /// document start), routed one-by-one through the undo/redo bus so the insert is reversible. The
+    /// paragraphs carry dedicated TOC styles (registered via <see cref="TableOfContents.EnsureStyles"/>)
+    /// which both give them distinct formatting and mark the region for <see cref="RefreshTableOfContents"/>.
+    /// </summary>
+    public void InsertTableOfContents()
+    {
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+        TableOfContents.EnsureStyles(_model);
+
+        // Insert before the caret's block so the TOC reads as a front-matter region; fall back to the
+        // document start when the caret can't be mapped.
+        var index = CaretBlockIndex();
+        if (index < 0 || index > _model.Blocks.Count)
+            index = 0;
+
+        InsertTocAt(index);
+    }
+
+    /// <summary>
+    /// Rebuild the Table of Contents: remove the previously inserted TOC region (paragraphs carrying a
+    /// TOC style, see <see cref="TableOfContents.IsTocParagraph"/>) and re-insert a freshly generated
+    /// TOC at the same position. With no existing TOC this behaves like <see cref="InsertTableOfContents"/>,
+    /// inserting at the document start. Every removal/insert is reversible through the undo/redo bus.
+    /// </summary>
+    public void RefreshTableOfContents()
+    {
+        CommitToModel();
+        TableOfContents.EnsureStyles(_model);
+
+        // Find the contiguous run of existing TOC paragraphs (the marker region). They are inserted as
+        // a block, so the first TOC paragraph anchors the region and the rest follow consecutively.
+        var firstToc = -1;
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            if (TableOfContents.IsTocParagraph(_model.Blocks[i]))
+            {
+                firstToc = i;
+                break;
+            }
+        }
+
+        var insertAt = firstToc >= 0 ? firstToc : 0;
+
+        // Remove every existing TOC paragraph (reversible). Delete from the end so earlier indices stay
+        // valid; collect first to avoid mutating while scanning.
+        var tocIndices = new List<int>();
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            if (TableOfContents.IsTocParagraph(_model.Blocks[i]))
+                tocIndices.Add(i);
+        }
+        for (var i = tocIndices.Count - 1; i >= 0; i--)
+            _commands.Execute(new DeleteParagraphCommand(tocIndices[i]));
+
+        InsertTocAt(insertAt);
+    }
+
+    // Insert the freshly built TOC paragraphs starting at block index `at`, one reversible
+    // InsertParagraphCommand each (kept in order), then re-render. The bus's Changed event redraws.
+    private void InsertTocAt(int at)
+    {
+        var toc = TableOfContents.Build(_model);
+        var index = Math.Clamp(at, 0, _model.Blocks.Count);
+        foreach (var paragraph in toc)
+            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+    }
+
     /// <summary>Insert a blank row below the caret's row in the table containing the caret.</summary>
     public void InsertTableRow() => MutateCaretTable((index, rowIndex, _) =>
         new InsertTableRowCommand(index, rowIndex + 1));
