@@ -18,7 +18,9 @@ public sealed class MainWindow : Window
 {
     private FileCommands _file = null!;
     private AutosaveCoordinator _autosave = null!;
+    private DocumentView _editor = null!;
     private TextBlock _titleText = null!;
+    private FindReplaceDialog? _findDialog;
 
     public MainWindow()
     {
@@ -30,6 +32,7 @@ public sealed class MainWindow : Window
         var root = new DockPanel();
 
         var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
+        _editor = editor;
         editor.LoadModel(CreateSampleDocument());
         var stateStore = new RibbonStateStore();
         var commands = FreeWRibbonCommands.Build(editor, stateStore);
@@ -58,6 +61,11 @@ public sealed class MainWindow : Window
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, (_, _) => _file.Open()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Save, (_, _) => _file.Save()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.SaveAs, (_, _) => _file.SaveAs()));
+
+        var findReplace = new RoutedUICommand("Find & Replace", "FindReplace", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(findReplace, (_, _) => OpenFindReplace()));
+        InputBindings.Add(new KeyBinding(findReplace, new KeyGesture(Key.F, ModifierKeys.Control)));
+        InputBindings.Add(new KeyBinding(findReplace, new KeyGesture(Key.H, ModifierKeys.Control)));
 
         UpdateTitle();
 
@@ -106,6 +114,17 @@ public sealed class MainWindow : Window
         var name = _file.DisplayName + (_file.IsDirty ? " *" : "");
         Title = $"{name} — FreeW";
         _titleText.Text = $"{name} — FreeW";
+    }
+
+    private void OpenFindReplace()
+    {
+        if (_findDialog is null)
+        {
+            _findDialog = new FindReplaceDialog(this, _editor);
+            _findDialog.Closed += (_, _) => _findDialog = null;
+        }
+        _findDialog.Show();
+        _findDialog.Activate();
     }
 
     private void ShowRecentMenu(Button anchor)
