@@ -108,7 +108,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
     }
 
-    private static bool MergeWorksheetRowAttributes(XElement? sourceSheetData, XElement targetRoot, XNamespace workbookNs)
+    internal static bool MergeWorksheetRowAttributes(XElement? sourceSheetData, XElement targetRoot, XNamespace workbookNs)
     {
         if (sourceSheetData is null)
             return false;
@@ -138,6 +138,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             foreach (var attribute in sourceRow.Attributes())
             {
                 if (IsOfficeRevisionAttribute(attribute) ||
+                    IsStylesheetIndexRowAttribute(attribute) ||
                     targetRow.Attribute(attribute.Name) is not null)
                 {
                     continue;
