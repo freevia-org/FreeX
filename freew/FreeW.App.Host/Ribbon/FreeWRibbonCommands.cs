@@ -116,6 +116,10 @@ internal static class FreeWRibbonCommands
         // and rebuild it in place (remove the prior TOC region + re-insert). Both route through the bus.
         registry.Register("freew.toc", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));
         registry.Register("freew.toc-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshTableOfContents(); }));
+        // Insert tab — References: insert an in-text citation (pick an existing source or add a new one),
+        // and insert a bibliography built from the document's sources at the caret (reversible).
+        registry.Register("freew.citation", new InsertCitationCommand(editor));
+        registry.Register("freew.bibliography", new ActionCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
         // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
         registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
@@ -733,6 +737,50 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Insert > References > Citation: insert an in-text citation at the caret. If the document already
+    // has sources, the user picks one (or chooses "Add New Source…"); otherwise they go straight to the
+    // new-source form. A new source is appended to the model, then its in-text citation is inserted.
+    private sealed class InsertCitationCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var sources = editor.Sources;
+
+            Source? chosen;
+            if (sources.Count > 0)
+            {
+                var pick = SourcePicker.Ask(owner, sources);
+                if (pick is null)
+                    return; // cancelled
+                chosen = pick.AddNew ? PromptForNewSource(owner) : pick.Source;
+            }
+            else
+            {
+                chosen = PromptForNewSource(owner);
+            }
+
+            if (chosen is null)
+                return; // cancelled or nothing entered
+
+            editor.Focus();
+            editor.InsertCitation(chosen);
+        }
+
+        // Show the new-source form, append the captured source to the model, and return it (or null if
+        // the user cancelled or left every field blank — nothing worth citing).
+        private Source? PromptForNewSource(Window? owner)
+        {
+            var entry = NewSourceDialog.Ask(owner);
+            if (entry is null)
+                return null;
+            if (entry.Author.Length == 0 && entry.Title.Length == 0 && entry.Year.Length == 0)
+                return null;
+            return editor.AddSource(entry.Tag, entry.Author, entry.Title, entry.Year, entry.Publisher);
+        }
+    }
+
     // Review > Comments > New Comment: prompt for the comment text, then attach it over the current
     // selection. The author comes from the document's Author property (falling back to the OS user),
     // with initials derived from it; the view marks the selected runs and stores the comment.
@@ -876,6 +924,155 @@ internal static class FreeWRibbonCommands
             dialog.Content = panel;
 
             return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // The outcome of the SourcePicker: either an existing source was chosen, or "Add New Source…" was.
+    private sealed record SourcePick(Source? Source, bool AddNew);
+
+    // A tiny modal dialog to pick one of the document's existing sources, or to choose "Add New Source…".
+    // Returns the pick, or null if cancelled.
+    private static class SourcePicker
+    {
+        public static SourcePick? Ask(Window? owner, IReadOnlyList<Source> sources)
+        {
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 320,
+                MinHeight = 140,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            foreach (var source in sources)
+                list.Items.Add(DescribeSource(source));
+            list.SelectedIndex = 0;
+
+            SourcePick? result = null;
+            var dialog = new Window
+            {
+                Title = "Insert Citation",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "Insert", IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
+            var addNew = new System.Windows.Controls.Button { Content = "Add New Source…", MinWidth = 120, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+
+            void Choose()
+            {
+                if (list.SelectedIndex >= 0 && list.SelectedIndex < sources.Count)
+                {
+                    result = new SourcePick(sources[list.SelectedIndex], AddNew: false);
+                    dialog.DialogResult = true;
+                }
+            }
+
+            ok.Click += (_, _) => Choose();
+            list.MouseDoubleClick += (_, _) => Choose();
+            addNew.Click += (_, _) => { result = new SourcePick(null, AddNew: true); dialog.DialogResult = true; };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(addNew);
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Source:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(list);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
+        }
+
+        // A short human-readable label for the picker list: "Author (Year) — Title", degrading gracefully.
+        private static string DescribeSource(Source source)
+        {
+            var parts = new List<string>(3);
+            if (!string.IsNullOrWhiteSpace(source.Author))
+                parts.Add(source.Author.Trim());
+            if (!string.IsNullOrWhiteSpace(source.Year))
+                parts.Add($"({source.Year.Trim()})");
+            var head = string.Join(" ", parts);
+            if (!string.IsNullOrWhiteSpace(source.Title))
+                head = head.Length > 0 ? $"{head} — {source.Title.Trim()}" : source.Title.Trim();
+            if (head.Length == 0)
+                head = string.IsNullOrWhiteSpace(source.Tag) ? "(untitled source)" : source.Tag.Trim();
+            return head;
+        }
+    }
+
+    // The fields captured by the NewSourceDialog (all trimmed; publisher may be empty).
+    private sealed record SourceEntry(string Tag, string Author, string Title, string Year, string Publisher);
+
+    // A small modal form capturing a new source's tag/author/title/year/publisher. Returns the entry, or
+    // null if cancelled.
+    private static class NewSourceDialog
+    {
+        public static SourceEntry? Ask(Window? owner)
+        {
+            var tag = NewField();
+            var author = NewField();
+            var title = NewField();
+            var year = NewField();
+            var publisher = NewField();
+
+            SourceEntry? result = null;
+            var dialog = new Window
+            {
+                Title = "Add New Source",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                result = new SourceEntry(
+                    tag.Text.Trim(), author.Text.Trim(), title.Text.Trim(), year.Text.Trim(), publisher.Text.Trim());
+                dialog.DialogResult = true;
+            };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            AddRow(panel, "Tag (short id):", tag);
+            AddRow(panel, "Author:", author);
+            AddRow(panel, "Title:", title);
+            AddRow(panel, "Year:", year);
+            AddRow(panel, "Publisher (optional):", publisher);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            author.Focus();
+            return dialog.ShowDialog() == true ? result : null;
+        }
+
+        private static System.Windows.Controls.TextBox NewField() =>
+            new() { MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
+
+        private static void AddRow(System.Windows.Controls.Panel panel, string label, System.Windows.Controls.TextBox box)
+        {
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(box);
         }
     }
 

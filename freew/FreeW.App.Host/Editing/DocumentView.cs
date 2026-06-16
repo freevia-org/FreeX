@@ -1410,6 +1410,69 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    /// <summary>The document's bibliographic sources (Insert &gt; Citation reads/writes this list).</summary>
+    public IReadOnlyList<Source> Sources
+    {
+        get
+        {
+            CommitToModel();
+            return _model.Sources;
+        }
+    }
+
+    /// <summary>
+    /// Appends a new bibliographic source to the model and returns it, so a caller can immediately insert
+    /// its in-text citation (see <see cref="InsertCitation(Source)"/>). Does not touch the visible flow.
+    /// </summary>
+    public Source AddSource(string tag, string author, string title, string year, string? publisher)
+    {
+        CommitToModel();
+        var source = new Source
+        {
+            Tag = tag?.Trim() ?? string.Empty,
+            Author = author?.Trim() ?? string.Empty,
+            Title = title?.Trim() ?? string.Empty,
+            Year = year?.Trim() ?? string.Empty,
+            Publisher = string.IsNullOrWhiteSpace(publisher) ? null : publisher.Trim()
+        };
+        _model.Sources.Add(source);
+        return source;
+    }
+
+    /// <summary>
+    /// Inserts the in-text citation for <paramref name="source"/> (e.g. <c>(Author, Year)</c>, formatted
+    /// by <see cref="Citations.FormatInText(Source)"/>) as ordinary text at the caret, flowing through the
+    /// RichTextBox's own edit path so it joins the surrounding run and is captured by the undo stack.
+    /// </summary>
+    public void InsertCitation(Source source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        InsertText(Citations.FormatInText(source));
+    }
+
+    /// <summary>
+    /// Insert a bibliography generated from the document's <see cref="TextDocument.Sources"/> at the
+    /// caret's block (else at the document end), routed one-by-one through the undo/redo bus so the insert
+    /// is reversible — mirroring <see cref="InsertTableOfContents"/>. The paragraphs carry dedicated
+    /// bibliography styles (registered via <see cref="Citations.EnsureStyles"/>) which both give them
+    /// distinct formatting and mark the region.
+    /// </summary>
+    public void InsertBibliography()
+    {
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+        Citations.EnsureStyles(_model);
+
+        // Insert at the caret's block (a bibliography reads as back-matter); fall back to the document end.
+        var index = CaretBlockIndex();
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+
+        var bibliography = Citations.BuildBibliography(_model);
+        foreach (var paragraph in bibliography)
+            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+    }
+
     /// <summary>
     /// When true, the editor is in Track Changes mode. Live keystroke-level tracking is not attempted
     /// (it is brittle in a RichTextBox); the flag is a model/UI state that the ribbon toggle reflects and

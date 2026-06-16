@@ -107,6 +107,8 @@ internal static class FreeWRibbon
                     g.Button("freew.footnote", "Footnote");
                     g.Button("freew.toc", "Table of Contents");
                     g.Button("freew.toc-refresh", "Update TOC");
+                    g.Button("freew.citation", "Citation");
+                    g.Button("freew.bibliography", "Bibliography");
                 });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {
