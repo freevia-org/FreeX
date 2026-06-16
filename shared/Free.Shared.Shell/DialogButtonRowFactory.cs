@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 
-namespace FreeX.App.Host;
+namespace Free.Shared.Shell;
 
 internal static class DialogButtonRowFactory
 {
@@ -24,18 +24,18 @@ internal static class DialogButtonRowFactory
             Margin = new Thickness(0, 0, 8, 0),
             IsDefault = true
         };
-        AutomationProperties.SetName(ok, UiText.CreateAutomationName(resolvedAcceptContent));
+        AutomationProperties.SetName(ok, ShellStrings.Current.CreateAutomationName(resolvedAcceptContent));
         SetAcceleratorKey(ok, resolvedAcceptContent);
         ok.Click += (_, _) => accept();
         row.Children.Add(ok);
-        var cancelContent = UiText.Cancel;
+        var cancelContent = ShellStrings.Current.Cancel;
         var cancel = new Button
         {
             Content = cancelContent,
             MinWidth = buttonWidth,
             IsCancel = true
         };
-        AutomationProperties.SetName(cancel, UiText.CreateAutomationName(cancelContent));
+        AutomationProperties.SetName(cancel, ShellStrings.Current.CreateAutomationName(cancelContent));
         SetAcceleratorKey(cancel, cancelContent);
         row.Children.Add(cancel);
         return row;
@@ -57,7 +57,7 @@ internal static class DialogButtonRowFactory
             IsDefault = true,
             IsCancel = true
         };
-        AutomationProperties.SetName(ok, UiText.CreateAutomationName(resolvedAcceptContent));
+        AutomationProperties.SetName(ok, ShellStrings.Current.CreateAutomationName(resolvedAcceptContent));
         SetAcceleratorKey(ok, resolvedAcceptContent);
         ok.Click += (_, _) => accept();
         row.Children.Add(ok);
@@ -66,7 +66,7 @@ internal static class DialogButtonRowFactory
 
     private static string ResolveDefaultAcceptContent(string acceptContent) =>
         string.Equals(acceptContent, DefaultOkContent, StringComparison.Ordinal)
-            ? UiText.Ok
+            ? ShellStrings.Current.Ok
             : acceptContent;
 
     private static void SetAcceleratorKey(Button button, string content)
