@@ -124,5 +124,12 @@ internal static class FreeWRibbon
                     g.Button("freew.print-preview", "Print Preview");
                 });
             })
+            .Tab("view", "View", "W", tab =>
+            {
+                tab.Group("show", "Show", "S", 100, g =>
+                {
+                    g.Toggle("freew.nav-pane", "Navigation Pane");
+                });
+            })
             .Build();
 }

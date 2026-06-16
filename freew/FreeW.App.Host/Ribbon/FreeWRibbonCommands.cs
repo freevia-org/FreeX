@@ -24,7 +24,15 @@ internal static class FreeWRibbonCommands
     public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore) =>
         Build(editor, stateStore, onPrintPreview: null);
 
-    public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore, Action? onPrintPreview)
+    public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore, Action? onPrintPreview) =>
+        Build(editor, stateStore, onPrintPreview, onToggleNavPane: null, isNavPaneVisible: null);
+
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Action? onPrintPreview,
+        Action? onToggleNavPane,
+        Func<bool>? isNavPaneVisible)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -157,6 +165,11 @@ internal static class FreeWRibbonCommands
         if (onPrintPreview is not null)
             registry.Register("freew.print-preview", new ActionCommand(onPrintPreview));
 
+        // View tab — toggle the navigation pane (heading outline). Stateful so the ribbon's toggle
+        // button reflects whether the pane is currently shown.
+        if (onToggleNavPane is not null && isNavPaneVisible is not null)
+            registry.Register("freew.nav-pane", new ToggleActionCommand(onToggleNavPane, isNavPaneVisible));
+
         return registry;
     }
 
@@ -233,6 +246,15 @@ internal static class FreeWRibbonCommands
     private sealed class ActionCommand(Action action) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => action();
+    }
+
+    // A stateful toggle command: executing runs the host action (e.g. show/hide a panel) and its
+    // checked-ness is read back from a host predicate, so the ribbon toggle reflects the live state.
+    private sealed class ToggleActionCommand(Action toggle, Func<bool> isChecked) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) => toggle();
+
+        public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: isChecked());
     }
 
     // Home > Paragraph > Line Spacing: parse the chosen multiplier (e.g. "1.5") and apply it to every
