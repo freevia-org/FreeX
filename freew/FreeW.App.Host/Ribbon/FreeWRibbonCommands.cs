@@ -106,6 +106,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
         // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
         registry.Register("freew.footnote", new InsertFootnoteCommand(editor));
+        // Insert tab — References: generate a Table of Contents from the heading outline at the caret,
+        // and rebuild it in place (remove the prior TOC region + re-insert). Both route through the bus.
+        registry.Register("freew.toc", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));
+        registry.Register("freew.toc-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshTableOfContents(); }));
         // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
         registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.

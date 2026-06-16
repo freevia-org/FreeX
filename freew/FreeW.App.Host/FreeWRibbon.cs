@@ -99,7 +99,12 @@ internal static class FreeWRibbon
                     g.Button("freew.bookmark", "Bookmark");
                     g.Button("freew.link-bookmark", "Link to Bookmark");
                 });
-                tab.Group("references", "References", "R", 65, g => g.Button("freew.footnote", "Footnote"));
+                tab.Group("references", "References", "R", 65, g =>
+                {
+                    g.Button("freew.footnote", "Footnote");
+                    g.Button("freew.toc", "Table of Contents");
+                    g.Button("freew.toc-refresh", "Update TOC");
+                });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {
                     g.Button("freew.header", "Header");
