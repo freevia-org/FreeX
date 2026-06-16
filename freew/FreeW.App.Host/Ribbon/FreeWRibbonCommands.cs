@@ -1,7 +1,10 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using Microsoft.Win32;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
@@ -66,6 +69,9 @@ internal static class FreeWRibbonCommands
                 selection.ApplyPropertyValue(TextElement.FontSizeProperty, points * 96.0 / 72.0);
         }));
 
+        // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
+        registry.Register("freew.picture", new InsertPictureCommand(editor));
+
         registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
         registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
         registry.Register("freew.style-title", new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
@@ -110,6 +116,62 @@ internal static class FreeWRibbonCommands
     private sealed class PageCommand(DocumentView editor, Action<PageSettings> apply) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => apply(editor.Model.Page);
+    }
+
+    // Insert > Illustrations > Picture: pick an image, normalise to PNG, insert as an inline image run.
+    private sealed class InsertPictureCommand(DocumentView editor) : IRibbonCommand
+    {
+        private const double PxPerPoint = 96.0 / 72.0;
+        private const double MaxWidthPt = 400;
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|All files (*.*)|*.*",
+                Title = "Insert Picture"
+            };
+            if (dialog.ShowDialog(Window.GetWindow(editor)) != true)
+                return;
+
+            try
+            {
+                var image = LoadAsInlineImage(dialog.FileName);
+                editor.Focus();
+                editor.InsertImage(image);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(Window.GetWindow(editor), $"Could not insert the image:\n{ex.Message}",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        // Decode any supported format and re-encode to PNG so the docx writer only ever emits PNG.
+        private static InlineImage LoadAsInlineImage(string path)
+        {
+            var source = new BitmapImage();
+            source.BeginInit();
+            source.CacheOption = BitmapCacheOption.OnLoad;
+            source.UriSource = new Uri(path);
+            source.EndInit();
+            source.Freeze();
+
+            using var buffer = new MemoryStream();
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(source));
+            encoder.Save(buffer);
+
+            // Convert device-independent pixels to points, capping the width so large photos fit.
+            var widthPt = source.PixelWidth / PxPerPoint;
+            var heightPt = source.PixelHeight / PxPerPoint;
+            if (widthPt > MaxWidthPt && widthPt > 0)
+            {
+                heightPt *= MaxWidthPt / widthPt;
+                widthPt = MaxWidthPt;
+            }
+            return new InlineImage(buffer.ToArray(), widthPt, heightPt);
+        }
     }
 
     // Applies a value chosen from a ribbon combo (font family/size) to the current selection.
