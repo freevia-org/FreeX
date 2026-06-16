@@ -968,4 +968,118 @@ public class DocxRoundTripTests
 
         DocxReader.Read(new MemoryStream(stream.ToArray())).Footnotes.Should().BeEmpty();
     }
+
+    [Fact]
+    public void Comment_Range_And_Content_RoundTrip()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Before "));
+        body.Runs.Add(new Run("commented text") { CommentId = 0 });
+        body.Runs.Add(Run.CommentReference(0));
+        body.Runs.Add(new Run(" after"));
+        doc.Blocks.Add(body);
+        doc.Comments[0] = new Comment(0, "A reviewer note.", author: "Alice Adams", initials: "AA")
+        {
+            DateXml = "2026-06-17T10:30:00Z"
+        };
+
+        var result = RoundTrip(doc);
+
+        // The covered text run keeps its comment id; the reference anchor is recovered as a textless run.
+        var paragraph = result.Paragraphs.First();
+        var covered = paragraph.Runs.Single(r => r.CommentId is not null && !r.IsCommentReference);
+        covered.Text.Should().Be("commented text");
+        covered.CommentId.Should().Be(0);
+        var reference = paragraph.Runs.Single(r => r.IsCommentReference);
+        reference.CommentId.Should().Be(0);
+
+        // The surrounding text is untouched and the comment content/metadata is recovered intact.
+        paragraph.PlainText.Should().Be("Before commented text after");
+        result.Comments.Should().ContainKey(0);
+        var comment = result.Comments[0];
+        comment.PlainText.Should().Be("A reviewer note.");
+        comment.Author.Should().Be("Alice Adams");
+        comment.Initials.Should().Be("AA");
+        comment.DateXml.Should().Be("2026-06-17T10:30:00Z");
+    }
+
+    [Fact]
+    public void Comments_Package_HasPartContentTypeAndRelationship()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Reviewed") { CommentId = 0 });
+        body.Runs.Add(Run.CommentReference(0));
+        doc.Blocks.Add(body);
+        doc.Comments[0] = new Comment(0, "Needs work.", author: "Bob", initials: "B");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/comments.xml").Should().NotBeNull();
+
+        using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+        var contentTypes = ctReader.ReadToEnd();
+        contentTypes.Should().Contain("/word/comments.xml");
+        contentTypes.Should().Contain("wordprocessingml.comments+xml");
+
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        var rels = relsReader.ReadToEnd();
+        rels.Should().Contain("relationships/comments");
+        rels.Should().Contain("comments.xml");
+
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = docReader.ReadToEnd();
+        documentXml.Should().Contain("commentRangeStart");
+        documentXml.Should().Contain("commentRangeEnd");
+        documentXml.Should().Contain("commentReference");
+
+        using var commentsReader = new StreamReader(zip.GetEntry("word/comments.xml")!.Open());
+        var commentsXml = commentsReader.ReadToEnd();
+        commentsXml.Should().Contain("Needs work.");
+        commentsXml.Should().Contain("w:id=\"0\"");
+        commentsXml.Should().Contain("w:author=\"Bob\"");
+    }
+
+    [Fact]
+    public void NoComments_DoesNotEmitPart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/comments.xml").Should().BeNull();
+
+        DocxReader.Read(new MemoryStream(stream.ToArray())).Comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CommentDate_Unset_IsNotEmitted()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Reviewed") { CommentId = 0 });
+        body.Runs.Add(Run.CommentReference(0));
+        doc.Blocks.Add(body);
+        doc.Comments[0] = new Comment(0, "No date.", author: "C", initials: "C");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var commentsReader = new StreamReader(zip.GetEntry("word/comments.xml")!.Open());
+        var commentsXml = commentsReader.ReadToEnd();
+        commentsXml.Should().NotContain("w:date");
+
+        // A comment with no date round-trips with DateXml null.
+        DocxReader.Read(new MemoryStream(stream.ToArray())).Comments[0].DateXml.Should().BeNull();
+    }
 }

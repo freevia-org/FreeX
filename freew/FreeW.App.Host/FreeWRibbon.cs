@@ -132,5 +132,12 @@ internal static class FreeWRibbon
                     g.Toggle("freew.nav-pane", "Navigation Pane");
                 });
             })
+            .Tab("review", "Review", "R", tab =>
+            {
+                tab.Group("comments", "Comments", "C", 100, g =>
+                {
+                    g.Button("freew.new-comment", "New Comment");
+                });
+            })
             .Build();
 }

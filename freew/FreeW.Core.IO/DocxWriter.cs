@@ -26,6 +26,7 @@ public static class DocxWriter
     private const string HeaderRelationshipId = "rIdHeader1";
     private const string FooterRelationshipId = "rIdFooter1";
     private const string FootnotesRelationshipId = "rIdFootnotes";
+    private const string CommentsRelationshipId = "rIdComments";
     private const string HeaderPartName = "word/header1.xml";
     private const string FooterPartName = "word/footer1.xml";
 
@@ -59,11 +60,14 @@ public static class DocxWriter
         // A footnotes part is emitted only when the document actually carries footnotes.
         var hasFootnotes = document.Footnotes.Count > 0;
 
+        // A comments part is emitted only when the document actually carries review comments.
+        var hasComments = document.Comments.Count > 0;
+
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments));
         WritePart(archive, "_rels/.rels", BuildPackageRels());
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks, hasHeader, hasFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         if (hasLists)
@@ -74,6 +78,8 @@ public static class DocxWriter
             WritePart(archive, FooterPartName, BuildHeaderFooter(W + "ftr", document.Footer!));
         if (hasFootnotes)
             WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document));
+        if (hasComments)
+            WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document));
         foreach (var image in images)
             WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
     }
@@ -134,7 +140,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasComments) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -163,6 +169,10 @@ public static class DocxWriter
             hasFootnotes
                 ? new XElement(Ct + "Override", new XAttribute("PartName", FootnotesPartName),
                     new XAttribute("ContentType", FootnotesContentType))
+                : null,
+            hasComments
+                ? new XElement(Ct + "Override", new XAttribute("PartName", CommentsPartName),
+                    new XAttribute("ContentType", CommentsContentType))
                 : null,
             new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
                 new XAttribute("ContentType", CorePropertiesContentType))));
@@ -220,7 +230,8 @@ public static class DocxWriter
         bool includeNumbering,
         bool hasHeader,
         bool hasFooter,
-        bool hasFootnotes)
+        bool hasFootnotes,
+        bool hasComments)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
@@ -247,6 +258,11 @@ public static class DocxWriter
                 new XAttribute("Id", FootnotesRelationshipId),
                 new XAttribute("Type", FootnotesRelType),
                 new XAttribute("Target", "footnotes.xml")));
+        if (hasComments)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", CommentsRelationshipId),
+                new XAttribute("Type", CommentsRelType),
+                new XAttribute("Target", "comments.xml")));
         foreach (var image in images)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", image.RelationshipId),
@@ -348,6 +364,41 @@ public static class DocxWriter
         }
 
         return new XDocument(footnotes);
+    }
+
+    /// <summary>
+    /// Builds word/comments.xml (w:comments): one w:comment w:id="N" per modelled comment (ascending
+    /// id), each carrying w:author / w:initials and — when set — an explicit w:date, plus the comment's
+    /// paragraphs. The date is only emitted when the model carries one, keeping the writer deterministic.
+    /// </summary>
+    private static XDocument BuildComments(TextDocument document)
+    {
+        var comments = new XElement(W + "comments",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+
+        // Comment paragraphs carry no inline images or hyperlinks (those walks target the body).
+        var noImages = new Dictionary<Run, ImagePart>();
+        var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
+        {
+            var element = new XElement(W + "comment",
+                new XAttribute(W + "id", comment.Id),
+                new XAttribute(W + "author", comment.Author),
+                new XAttribute(W + "initials", comment.Initials));
+            if (comment.DateXml is { Length: > 0 } date)
+                element.Add(new XAttribute(W + "date", date));
+
+            if (comment.Content.Count == 0)
+                element.Add(new XElement(W + "p"));
+            else
+                foreach (var paragraph in comment.Content)
+                    element.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+            comments.Add(element);
+        }
+
+        return new XDocument(comments);
     }
 
     private static XElement BuildBlock(Block block, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks) => block switch
@@ -461,23 +512,42 @@ public static class DocxWriter
         // Wrap maximal spans of consecutive runs sharing the same hyperlink target in a single
         // w:hyperlink. External links reference the URL's relationship id (r:id); internal links
         // reference a bookmark name via w:anchor (no relationship).
+        //
+        // Review comments overlay this: a run carrying a CommentId (other than the textless reference
+        // run) is bracketed by a w:commentRangeStart/End pair sharing that id, emitted as siblings of
+        // the runs. The textless reference run (IsCommentReference) serialises as a w:commentReference
+        // run placed just after the matching range end. Comment-covered runs are not also hyperlinks in
+        // the editor, so the two wrappings do not interleave in practice.
         var i = 0;
         var runs = paragraph.Runs;
+        var openCommentId = (int?)null;
         while (i < runs.Count)
         {
+            // Update the open comment range to match this run before emitting it. The textless
+            // reference run does not open/extend a range; it only emits the reference marker below.
+            var coveringId = runs[i].IsCommentReference ? null : runs[i].CommentId;
+            if (openCommentId != coveringId)
+            {
+                if (openCommentId is { } closing)
+                    p.Add(new XElement(W + "commentRangeEnd", new XAttribute(W + "id", closing)));
+                if (coveringId is { } opening)
+                    p.Add(new XElement(W + "commentRangeStart", new XAttribute(W + "id", opening)));
+                openCommentId = coveringId;
+            }
+
             var url = runs[i].HyperlinkUrl;
             var anchor = runs[i].HyperlinkAnchor;
             if (url is { Length: > 0 } && hyperlinks.TryGetValue(url, out var relationshipId))
             {
                 var hyperlink = new XElement(W + "hyperlink", new XAttribute(R + "id", relationshipId));
-                while (i < runs.Count && runs[i].HyperlinkUrl == url)
+                while (i < runs.Count && runs[i].HyperlinkUrl == url && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId)
                     hyperlink.Add(BuildRun(runs[i++], imagesByRun));
                 p.Add(hyperlink);
             }
             else if (anchor is { Length: > 0 })
             {
                 var hyperlink = new XElement(W + "hyperlink", new XAttribute(W + "anchor", anchor));
-                while (i < runs.Count && runs[i].HyperlinkAnchor == anchor)
+                while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId)
                     hyperlink.Add(BuildRun(runs[i++], imagesByRun));
                 p.Add(hyperlink);
             }
@@ -486,6 +556,10 @@ public static class DocxWriter
                 p.Add(BuildRun(runs[i++], imagesByRun));
             }
         }
+
+        // Close any still-open comment range at the end of the paragraph.
+        if (openCommentId is { } trailing)
+            p.Add(new XElement(W + "commentRangeEnd", new XAttribute(W + "id", trailing)));
 
         if (bookmarkId >= 0)
             p.Add(new XElement(W + "bookmarkEnd", new XAttribute(W + "id", bookmarkId)));
@@ -575,6 +649,11 @@ public static class DocxWriter
                 new XElement(W + "rPr",
                     new XElement(W + "vertAlign", new XAttribute(W + "val", "superscript"))),
                 new XElement(W + "footnoteReference", new XAttribute(W + "id", footnoteId)));
+
+        // The textless comment anchor run carries the w:commentReference for its id (no literal text).
+        if (run is { IsCommentReference: true, CommentId: { } commentRefId })
+            return new XElement(W + "r",
+                new XElement(W + "commentReference", new XAttribute(W + "id", commentRefId)));
 
         return BuildTextRun(run, imagesByRun);
     }
