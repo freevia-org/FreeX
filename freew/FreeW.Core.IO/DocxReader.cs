@@ -52,8 +52,43 @@ public static class DocxReader
             document.Blocks.Add(new Paragraph());
 
         ReadHeaderFooter(documentXml, archive, document, imageRelationships, hyperlinkRelationships);
+        ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
 
         return document;
+    }
+
+    /// <summary>
+    /// Loads word/footnotes.xml (if present) into <see cref="TextDocument.Footnotes"/>, reconstructing
+    /// each w:footnote's paragraphs. The conventional separator footnotes (type separator /
+    /// continuationSeparator, ids -1 and 0) are skipped — only real content footnotes are kept.
+    /// </summary>
+    private static void ReadFootnotes(
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+    {
+        var footnotesXml = LoadPart(archive, "word/footnotes.xml");
+        var root = footnotesXml?.Root;
+        if (root is null)
+            return;
+
+        var noNumbering = new Dictionary<int, ListKind>();
+        foreach (var element in root.Elements(W + "footnote"))
+        {
+            var type = element.Attribute(W + "type")?.Value;
+            if (type is "separator" or "continuationSeparator")
+                continue;
+            if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
+                continue;
+
+            var footnote = new Footnote(id);
+            foreach (var p in element.Elements(W + "p"))
+                footnote.Content.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+            if (footnote.Content.Count == 0)
+                footnote.Content.Add(new Paragraph());
+            document.Footnotes[id] = footnote;
+        }
     }
 
     /// <summary>
@@ -214,6 +249,14 @@ public static class DocxReader
         if (image is not null)
         {
             paragraph.Runs.Add(new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl });
+            return;
+        }
+
+        // A run wrapping a w:footnoteReference is a footnote marker; recover its id into the model.
+        var footnoteRef = r.Element(W + "footnoteReference");
+        if (footnoteRef is not null && int.TryParse(footnoteRef.Attribute(W + "id")?.Value, out var footnoteId))
+        {
+            paragraph.Runs.Add(Run.FootnoteReference(footnoteId, ReadRunFormatting(r.Element(W + "rPr"))));
             return;
         }
 

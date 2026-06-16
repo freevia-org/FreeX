@@ -38,12 +38,45 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// </summary>
     public RunFieldKind FieldKind { get; set; } = RunFieldKind.None;
 
+    /// <summary>
+    /// When set, this run is a footnote reference marker pointing at the footnote with this id in
+    /// <see cref="TextDocument.Footnotes"/>. It carries no literal text of its own; the marker number
+    /// is the id. Serialises as a superscript run wrapping a w:footnoteReference w:id="N".
+    /// </summary>
+    public int? FootnoteId { get; set; }
+
     /// <summary>Creates a run that carries an inline image instead of text.</summary>
     public static Run FromImage(InlineImage image) => new(string.Empty) { Image = image };
 
     /// <summary>Creates a page-number field run (renders as the current page number).</summary>
     public static Run PageNumberField(RunFormatting? formatting = null) =>
         new("1", formatting) { FieldKind = RunFieldKind.PageNumber };
+
+    /// <summary>
+    /// Creates a footnote-reference run for the footnote with id <paramref name="footnoteId"/>. The
+    /// run renders as a superscript marker; its <see cref="Text"/> mirrors the id for field-unaware
+    /// consumers. The matching content lives in <see cref="TextDocument.Footnotes"/>.
+    /// </summary>
+    public static Run FootnoteReference(int footnoteId, RunFormatting? formatting = null) =>
+        new(footnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            formatting ?? new RunFormatting { VerticalAlign = VerticalAlign.Superscript })
+        {
+            FootnoteId = footnoteId
+        };
+}
+
+/// <summary>
+/// A single footnote: an id (matching a body <see cref="Run.FootnoteId"/>) and its block content,
+/// a list of paragraphs. Maps onto a w:footnote element inside word/footnotes.xml.
+/// </summary>
+public sealed class Footnote(int id)
+{
+    public int Id { get; } = id;
+    public List<Paragraph> Content { get; } = [];
+
+    public Footnote(int id, string text) : this(id) => Content.Add(new Paragraph(text));
+
+    public string PlainText => string.Join("\n", Content.Select(p => p.PlainText));
 }
 
 /// <summary>
@@ -226,6 +259,16 @@ public sealed class TextDocument
 
     /// <summary>Document-level metadata (maps to docProps/core.xml).</summary>
     public DocumentProperties Properties { get; } = new();
+
+    /// <summary>
+    /// The document's footnotes, keyed by footnote id (matching <see cref="Run.FootnoteId"/> on the
+    /// body reference runs). Maps to word/footnotes.xml (w:footnotes / w:footnote w:id="N"). Empty
+    /// when the document has no footnotes, in which case no footnotes part is emitted.
+    /// </summary>
+    public Dictionary<int, Footnote> Footnotes { get; } = [];
+
+    /// <summary>The next unused footnote id (1-based; ignores the reserved separator ids -1 and 0).</summary>
+    public int NextFootnoteId() => Footnotes.Count == 0 ? 1 : Math.Max(0, Footnotes.Keys.Max()) + 1;
 
     /// <summary>The body's paragraphs (top-level only; table cell paragraphs are not included).</summary>
     public IEnumerable<Paragraph> Paragraphs => Blocks.OfType<Paragraph>();
