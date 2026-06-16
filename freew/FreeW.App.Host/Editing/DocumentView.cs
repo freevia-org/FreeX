@@ -23,6 +23,7 @@ public sealed class DocumentView : RichTextBox
     private const double PxPerPoint = 96.0 / 72.0;
 
     private TextDocument _model = TextDocument.CreateEmpty();
+    private readonly DocumentCommandBus _commands;
 
     public DocumentView()
     {
@@ -33,23 +34,38 @@ public sealed class DocumentView : RichTextBox
         BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
         Background = Brushes.White;
         Padding = new Thickness(48);
+
+        _commands = new DocumentCommandBus(new ViewContext(this));
+        _commands.Changed += Render;
     }
 
     public TextDocument Model => _model;
+
+    /// <summary>Undo/redo command bus over this view's model (backed by the shared UndoRedoStack).</summary>
+    public DocumentCommandBus Commands => _commands;
 
     /// <summary>Render a model document into the editable surface.</summary>
     public void LoadModel(TextDocument document)
     {
         _model = document;
-        var flow = new FlowDocument { PagePadding = new Thickness(0) };
-        var defaultFamily = document.DefaultRun.FontFamily ?? "Calibri";
-        flow.FontFamily = new FontFamily(defaultFamily);
-        flow.FontSize = (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
+        Render();
+    }
 
-        foreach (var paragraph in document.Paragraphs)
-            flow.Blocks.Add(BuildParagraph(paragraph, document));
+    private void Render()
+    {
+        var flow = new FlowDocument { PagePadding = new Thickness(0) };
+        flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
+        flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
+
+        foreach (var paragraph in _model.Paragraphs)
+            flow.Blocks.Add(BuildParagraph(paragraph, _model));
 
         Document = flow;
+    }
+
+    private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
+    {
+        public TextDocument Document => view._model;
     }
 
     /// <summary>Read the edited FlowDocument back into the model (text + run formatting).</summary>
