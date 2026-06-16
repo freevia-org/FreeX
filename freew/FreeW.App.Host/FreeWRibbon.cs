@@ -105,6 +105,11 @@ internal static class FreeWRibbon
                     g.Button("freew.bookmark", "Bookmark");
                     g.Button("freew.link-bookmark", "Link to Bookmark");
                 });
+                tab.Group("quick-parts", "Quick Parts", "Q", 67, g =>
+                {
+                    g.Button("freew.save-quickpart", "Save Selection");
+                    g.Button("freew.insert-quickpart", "Insert Quick Part");
+                });
                 tab.Group("references", "References", "R", 65, g =>
                 {
                     g.Button("freew.footnote", "Footnote");
