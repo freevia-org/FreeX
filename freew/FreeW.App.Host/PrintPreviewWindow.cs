@@ -67,11 +67,12 @@ internal static class PrintLayout
             PageWidth = pageWidth,
             PageHeight = pageHeight,
             PagePadding = new Thickness(left, top, right, bottom),
-            ColumnWidth = double.PositiveInfinity, // single column spanning the content area
-            ColumnGap = 0,
             FontFamily = editor.Document.FontFamily,
             FontSize = editor.Document.FontSize
         };
+
+        // Mirror the editor's multi-column layout so preview/print match the on-screen rendering.
+        DocumentView.ApplyColumnLayout(flow, page);
 
         foreach (var block in CloneBlocks(editor.Document))
             flow.Blocks.Add(block);

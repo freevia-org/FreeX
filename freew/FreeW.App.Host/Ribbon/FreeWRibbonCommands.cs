@@ -165,6 +165,8 @@ internal static class FreeWRibbonCommands
             var isLetter = Math.Abs(page.WidthPt - 612) < 1 && Math.Abs(page.HeightPt - 792) < 1;
             (page.WidthPt, page.HeightPt) = isLetter ? (595.0, 842.0) : (612.0, 792.0); // toggle Letter <-> A4
         }));
+        // Columns: cycle 1 -> 2 -> 3 -> 1 equal-width columns, re-rendering so the layout shows at once.
+        registry.Register("freew.columns", new ColumnCountCommand(editor));
 
         // Layout tab — open the modeless print-preview window (paginated, page-settings-aware).
         if (onPrintPreview is not null)
@@ -558,6 +560,14 @@ internal static class FreeWRibbonCommands
     private sealed class PageCommand(DocumentView editor, Action<PageSettings> apply) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => apply(editor.Model.Page);
+    }
+
+    // Cycles the page through 1 -> 2 -> 3 -> 1 equal-width columns. Routes through ApplyPageSettings so
+    // the editor commits pending edits, mutates PageSettings.ColumnCount, and re-renders immediately.
+    private sealed class ColumnCountCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.ColumnCount = page.ColumnCount >= 3 ? 1 : page.ColumnCount + 1);
     }
 
     // Inserts a table at the caret. Delegates to the view, which routes through the undo/redo bus.

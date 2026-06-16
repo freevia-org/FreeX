@@ -178,6 +178,18 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Mutate the page settings and re-render so layout-affecting changes (notably the column count)
+    /// show immediately. Pending in-progress edits are committed first so the re-render does not drop
+    /// them. Used by the Layout ribbon's page-setup commands.
+    /// </summary>
+    public void ApplyPageSettings(Action<PageSettings> apply)
+    {
+        CommitToModel();
+        apply(_model.Page);
+        Render();
+    }
+
+    /// <summary>
     /// Insert a table at the caret (after the block the caret sits in, else at the end), routing
     /// through the undo/redo command bus so the insert is reversible. Re-renders the surface.
     /// </summary>
@@ -521,6 +533,7 @@ public sealed class DocumentView : RichTextBox
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
+        ApplyColumnLayout(flow, _model.Page);
 
         // Coalesce consecutive list paragraphs of the same kind into one WPF List so they render with
         // shared bullet/number decoration; everything else maps one-to-one via BuildBlock.
@@ -553,6 +566,32 @@ public sealed class DocumentView : RichTextBox
 
     private static TextMarkerStyle ToMarkerStyle(ListKind kind) =>
         kind == ListKind.Number ? TextMarkerStyle.Decimal : TextMarkerStyle.Disc;
+
+    /// <summary>
+    /// Applies the page's multi-column layout to a <see cref="FlowDocument"/>. A FlowDocument derives
+    /// its column count from <see cref="FlowDocument.ColumnWidth"/> relative to its content area, so to
+    /// render exactly <see cref="PageSettings.ColumnCount"/> equal columns we set the column width to
+    /// (contentWidth - (N-1)*gap) / N and the gap to the model's column spacing. Single-column pages
+    /// (the default) keep an infinite column width so the text spans the full content area, exactly as
+    /// before. Shared by the editor and the print/preview path so on-screen and printed layouts match.
+    /// </summary>
+    internal static void ApplyColumnLayout(FlowDocument flow, PageSettings page)
+    {
+        var columns = Math.Max(1, page.ColumnCount);
+        if (columns <= 1)
+        {
+            flow.ColumnWidth = double.PositiveInfinity; // single column spans the whole content area
+            flow.ColumnGap = 0;
+            return;
+        }
+
+        var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
+        var gapDip = PageLayout.PointsToDip(page.ColumnSpacingPt);
+        var columnWidthDip = (contentWidthDip - (columns - 1) * gapDip) / columns;
+        // Guard degenerate geometry (narrow page / wide gaps) so the width stays usable and positive.
+        flow.ColumnWidth = Math.Max(1, columnWidthDip);
+        flow.ColumnGap = Math.Max(0, gapDip);
+    }
 
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
     {

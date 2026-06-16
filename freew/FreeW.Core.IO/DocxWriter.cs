@@ -766,7 +766,12 @@ public static class DocxWriter
                 new XAttribute(W + "left", PointsToDxa(page.MarginLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(page.MarginRightPt)),
                 new XAttribute(W + "top", PointsToDxa(page.MarginTopPt)),
-                new XAttribute(W + "bottom", PointsToDxa(page.MarginBottomPt))));
+                new XAttribute(W + "bottom", PointsToDxa(page.MarginBottomPt))),
+            // Equal-width columns: w:cols carries the count (w:num) and inter-column gap (w:space, dxa).
+            // Emitted unconditionally; w:num="1" is harmless and keeps the section shape stable.
+            new XElement(W + "cols",
+                new XAttribute(W + "num", Math.Max(1, page.ColumnCount)),
+                new XAttribute(W + "space", PointsToDxa(page.ColumnSpacingPt))));
 
     /// <summary>
     /// Builds word/numbering.xml: two abstract numbering definitions (bullet + decimal), each with

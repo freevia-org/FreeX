@@ -1082,4 +1082,54 @@ public class DocxRoundTripTests
         // A comment with no date round-trips with DateXml null.
         DocxReader.Read(new MemoryStream(stream.ToArray())).Comments[0].DateXml.Should().BeNull();
     }
+
+    [Fact]
+    public void DefaultDocument_StaysSingleColumn()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Single column body."));
+
+        var result = RoundTrip(doc);
+
+        result.Page.ColumnCount.Should().Be(1);
+        // The default column spacing (36 pt) survives the dxa round-trip exactly.
+        result.Page.ColumnSpacingPt.Should().BeApproximately(36, 0.001);
+    }
+
+    [Theory]
+    [InlineData(2, 24)]
+    [InlineData(3, 18)]
+    public void MultiColumnPage_RoundTripsCountAndSpacing(int columns, double spacingPt)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Multi-column body text that flows across the page."));
+        doc.Page.ColumnCount = columns;
+        doc.Page.ColumnSpacingPt = spacingPt;
+
+        var result = RoundTrip(doc);
+
+        result.Page.ColumnCount.Should().Be(columns);
+        result.Page.ColumnSpacingPt.Should().BeApproximately(spacingPt, 0.001);
+    }
+
+    [Fact]
+    public void MultiColumnPage_EmitsColsElementInSectPr()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Two columns."));
+        doc.Page.ColumnCount = 2;
+        doc.Page.ColumnSpacingPt = 36;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = reader.ReadToEnd();
+
+        // w:cols carries the column count and the spacing as dxa (36 pt -> 720 twentieths of a point).
+        documentXml.Should().Contain("w:num=\"2\"");
+        documentXml.Should().Contain("w:space=\"720\"");
+    }
 }
