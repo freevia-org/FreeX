@@ -26,6 +26,29 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void ParagraphStyleId_RoundTrips_AndBuiltInStylesPersist()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Add(new Paragraph("A heading") { StyleId = "Heading2" });
+        doc.Blocks.Add(new Paragraph("A subtitle") { StyleId = "Subtitle" });
+        doc.Blocks.Add(new Paragraph("A quote") { StyleId = "Quote" });
+
+        var result = RoundTrip(doc);
+
+        // The paragraphs keep their StyleId reference.
+        var styled = result.Paragraphs.Where(p => p.StyleId is not null).ToList();
+        styled.Select(p => p.StyleId).Should().Contain(new[] { "Heading2", "Subtitle", "Quote" });
+
+        // The new built-in styles survive in styles.xml (write -> read keeps the catalog entries).
+        result.Styles.Keys.Should().Contain(new[]
+        {
+            "Heading2", "Heading3", "Subtitle", "Quote"
+        });
+        result.Styles["Heading2"].Name.Should().Be("Heading 2");
+        result.Styles["Subtitle"].Run.Italic.Should().BeTrue();
+    }
+
+    [Fact]
     public void RunFormatting_RoundTrips()
     {
         var doc = new TextDocument();

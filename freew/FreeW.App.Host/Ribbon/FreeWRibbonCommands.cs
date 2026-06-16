@@ -120,6 +120,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
         registry.Register("freew.style-title", new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
 
+        // Home > Styles: the styles dropdown. Picking an entry sets the selected paragraph(s)' StyleId
+        // (reversible via the bus), then re-renders so the style's run/paragraph formatting resolves.
+        registry.Register("freew.style", new ApplyParagraphStyleCommand(editor));
+
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
         registry.Register("freew.orientation", new PageCommand(editor, page =>
         {
@@ -250,6 +254,43 @@ internal static class FreeWRibbonCommands
             var brush = colorHex is null ? Brushes.Black : new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
             selection.ApplyPropertyValue(TextElement.ForegroundProperty, brush);
         }
+    }
+
+    // Home > Styles: apply a real paragraph style. The styles dropdown's value is a display name
+    // (e.g. "Heading 1"); this maps it to the matching style id in the model's catalog and sets the
+    // selected paragraph(s)' StyleId through the view's undo/redo bus (re-rendered to resolve formatting).
+    private sealed class ApplyParagraphStyleCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value || value.Length == 0)
+                return;
+
+            var styleId = ResolveStyleId(editor.Model, value);
+            if (styleId is null)
+                return;
+
+            editor.Focus();
+            editor.SetParagraphStyle(styleId);
+        }
+
+        // Match the chosen combo entry to a style in the document by id first, then by display name
+        // (case-insensitive, ignoring spaces) so "Heading 1" resolves to the "Heading1" style id.
+        private static string? ResolveStyleId(TextDocument model, string choice)
+        {
+            if (model.Styles.ContainsKey(choice))
+                return choice;
+            foreach (var style in model.Styles.Values)
+            {
+                if (string.Equals(style.Name, choice, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(Compact(style.Id), Compact(choice), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(Compact(style.Name), Compact(choice), StringComparison.OrdinalIgnoreCase))
+                    return style.Id;
+            }
+            return null;
+        }
+
+        private static string Compact(string value) => value.Replace(" ", string.Empty);
     }
 
     // Home > Font: pick a colour from a small fixed palette and apply it to the selection. When

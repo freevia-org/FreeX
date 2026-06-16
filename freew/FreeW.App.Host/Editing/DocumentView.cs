@@ -233,6 +233,25 @@ public sealed class DocumentView : RichTextBox
         FormatSelectedModelParagraphs(f => f with { SpaceAfterPt = enable ? spacePt : 0 });
     }
 
+    /// <summary>
+    /// Apply a named paragraph style (its <paramref name="styleId"/>) to every model paragraph spanned
+    /// by the selection, routing one reversible <see cref="SetParagraphStyleCommand"/> per paragraph
+    /// through the undo/redo bus. The view re-renders so the style's run/paragraph formatting resolves.
+    /// A null <paramref name="styleId"/> (or one not in the catalog) clears the style. No-op if unknown.
+    /// </summary>
+    public void SetParagraphStyle(string? styleId)
+    {
+        if (styleId is { Length: > 0 } && !_model.Styles.ContainsKey(styleId))
+            return;
+        Focus();
+        CommitToModel();
+        foreach (var index in SelectedModelParagraphIndices())
+        {
+            if (_model.Blocks[index] is ModelParagraph)
+                _commands.Execute(new SetParagraphStyleCommand(index, styleId));
+        }
+    }
+
     // Commit pending edits, then apply a paragraph-formatting transform to every model paragraph spanned
     // by the selection, one reversible SetParagraphFormattingCommand per paragraph on the undo/redo bus.
     private void FormatSelectedModelParagraphs(Func<ParagraphFormatting, ParagraphFormatting> transform)

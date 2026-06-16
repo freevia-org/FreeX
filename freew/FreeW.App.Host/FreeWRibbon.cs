@@ -60,6 +60,11 @@ internal static class FreeWRibbon
                 });
                 tab.Group("styles", "Styles", "S", 70, g =>
                 {
+                    g.ComboBox("freew.style", "Style", c => c with
+                    {
+                        Items = new[] { "Normal", "Heading 1", "Heading 2", "Heading 3", "Title", "Subtitle", "Quote" },
+                        Width = 130
+                    });
                     g.Button("freew.style-normal", "Normal");
                     g.Button("freew.style-heading1", "Heading 1");
                     g.Button("freew.style-title", "Title");

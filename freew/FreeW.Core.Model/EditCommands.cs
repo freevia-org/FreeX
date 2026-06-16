@@ -68,6 +68,36 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
         (Paragraph)context.Document.Blocks[index];
 }
 
+/// <summary>
+/// Set a paragraph's <see cref="Paragraph.StyleId"/> (the named style it resolves formatting through),
+/// snapshotting the previous style id for undo. Setting <paramref name="styleId"/> to null clears the
+/// style back to the document defaults.
+/// </summary>
+public sealed class SetParagraphStyleCommand(int index, string? styleId) : IDocumentCommand
+{
+    private string? _previous;
+    private bool _applied;
+
+    public string Label => "Apply Style";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var paragraph = ParagraphAt(context, index);
+        _previous = paragraph.StyleId;
+        paragraph.StyleId = styleId;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_applied)
+            ParagraphAt(context, index).StyleId = _previous;
+    }
+
+    private static Paragraph ParagraphAt(IDocumentCommandContext context, int index) =>
+        (Paragraph)context.Document.Blocks[index];
+}
+
 /// <summary>Replace one run's formatting, snapshotting the previous value for undo.</summary>
 public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, RunFormatting formatting) : IDocumentCommand
 {
