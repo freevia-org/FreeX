@@ -3029,6 +3029,13 @@ public sealed class MainWindow : Window
         var indentPadding = GetCellIndentPadding(style);
         var textRotation = style?.TextRotation ?? CellStyle.Default.TextRotation;
 
+        // Highlight and color-scale rules are already baked into cell.Style (fill/font) by the
+        // engine, so they ride along with the background/foreground above. Data bars and icon sets
+        // arrive as separate engine results on the DisplayCell; the portable planner turns each into
+        // a framework-neutral render instruction that the cell content layer draws.
+        var dataBar = ConditionalFormatCellRenderPlanner.PlanDataBar(cell.ConditionalDataBar);
+        var icon = ConditionalFormatCellRenderPlanner.PlanIcon(cell.ConditionalIcon);
+
         return CreateInteractiveCellBorder(
             cell.DisplayText,
             background,
@@ -3050,7 +3057,9 @@ public sealed class MainWindow : Window
             cellHeight,
             horizontalAlignment,
             verticalAlignmentModel,
-            isNumeric);
+            isNumeric,
+            dataBar,
+            icon);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -3074,7 +3083,9 @@ public sealed class MainWindow : Window
         double cellHeight = 20,
         CellHAlign horizontalAlignment = CellHAlign.General,
         CellVAlign? verticalAlignmentModel = null,
-        bool isNumeric = false)
+        bool isNumeric = false,
+        CfDataBarRenderInstruction? conditionalDataBar = null,
+        CfIconRenderInstruction? conditionalIcon = null)
     {
         var border = CreateCellBorder(
             text,
@@ -3097,7 +3108,9 @@ public sealed class MainWindow : Window
             cellHeight,
             horizontalAlignment,
             verticalAlignmentModel,
-            isNumeric);
+            isNumeric,
+            conditionalDataBar,
+            conditionalIcon);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -3218,7 +3231,9 @@ public sealed class MainWindow : Window
         double cellHeight = 20,
         CellHAlign horizontalAlignment = CellHAlign.General,
         CellVAlign? verticalAlignmentModel = null,
-        bool isNumeric = false)
+        bool isNumeric = false,
+        CfDataBarRenderInstruction? conditionalDataBar = null,
+        CfIconRenderInstruction? conditionalIcon = null)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -3254,7 +3269,7 @@ public sealed class MainWindow : Window
                 textRotation,
                 effectiveTextWrapping,
                 style)
-            : CreateDefaultCellContent(textBlock, style);
+            : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding);
 
         return new Border
         {
@@ -3266,12 +3281,104 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static AvaloniaGrid CreateDefaultCellContent(TextBlock textBlock, CellStyle? style)
+    private static AvaloniaGrid CreateDefaultCellContent(
+        TextBlock textBlock,
+        CellStyle? style,
+        CfDataBarRenderInstruction? conditionalDataBar = null,
+        CfIconRenderInstruction? conditionalIcon = null,
+        double zoomFactor = 1,
+        double scaledIndentPadding = 0)
     {
         var content = new AvaloniaGrid { ClipToBounds = true };
+
+        // Data bars render behind the text; add them first so they sit at the bottom of the z-order.
+        if (conditionalDataBar is { } bar)
+            content.Children.Add(CreateConditionalDataBarLayer(bar, zoomFactor));
+
+        // Icon-set glyphs occupy a left gutter and push the cell text right by the gutter width.
+        if (conditionalIcon is { } icon)
+        {
+            var gutter = icon.TextGutter * zoomFactor;
+            if (gutter > 0)
+            {
+                var existing = textBlock.Margin;
+                textBlock.Margin = new Thickness(
+                    Math.Max(existing.Left, gutter + scaledIndentPadding),
+                    existing.Top,
+                    existing.Right,
+                    existing.Bottom);
+            }
+        }
+
         content.Children.Add(textBlock);
+
+        if (conditionalIcon is { } iconGlyph)
+            content.Children.Add(CreateConditionalIconLayer(iconGlyph, zoomFactor));
+
         AddStyledCellBorderOverlay(content, style);
         return content;
+    }
+
+    private static Control CreateConditionalDataBarLayer(CfDataBarRenderInstruction bar, double zoomFactor)
+    {
+        var horizontalInset = bar.HorizontalInset * zoomFactor;
+        var verticalInset = bar.VerticalInset * zoomFactor;
+        var color = Color.FromRgb(bar.FillColor.R, bar.FillColor.G, bar.FillColor.B);
+
+        IBrush fill = bar.Gradient
+            ? new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.FromArgb(90, color.R, color.G, color.B), 0),
+                    new GradientStop(color, 1),
+                },
+            }
+            : new SolidColorBrush(color);
+
+        var rectangle = new AvaloniaRectangle
+        {
+            Fill = fill,
+            // Horizontal extent is set by the hosting panel at arrange time; the rectangle only
+            // applies the vertical inset so the bar is shorter than the cell.
+            Margin = new Thickness(0, verticalInset, 0, verticalInset),
+            IsHitTestVisible = false,
+        };
+        if (bar.Border)
+        {
+            rectangle.Stroke = new SolidColorBrush(color);
+            rectangle.StrokeThickness = 0.75 * zoomFactor;
+        }
+
+        // Width is resolved relative to the cell's drawable content area via a binding-free
+        // panel that places the fraction-sized rectangle at arrange time.
+        return new ConditionalDataBarPanel(rectangle, bar.StartFraction, bar.FractionWidth, horizontalInset);
+    }
+
+    private static Control CreateConditionalIconLayer(CfIconRenderInstruction icon, double zoomFactor)
+    {
+        const double iconSize = 10d;
+        const double iconLeftInset = 4d;
+        var size = iconSize * zoomFactor;
+        var glyph = ConditionalFormatIconGlyphFactory.Create(icon, size);
+        return new Border
+        {
+            Width = (iconLeftInset + iconSize) * zoomFactor,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
+            Padding = new Thickness(iconLeftInset * zoomFactor, 0, 0, 0),
+            IsHitTestVisible = false,
+            Child = new Border
+            {
+                Width = size,
+                Height = size,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Child = glyph,
+            },
+        };
     }
 
     private static AvaloniaGrid CreateOrientedCellContent(
