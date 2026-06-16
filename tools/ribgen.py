@@ -333,7 +333,7 @@ for tab in mainorder + ctxorder:
                 continue
             if tab == "InsertTab" and should_hide_from_insert(it[2]):
                 continue
-            if ctrl_count >= 40:
+            if ctrl_count >= 16:
                 continue
             kept.append(it)
             ctrl_count += 1
