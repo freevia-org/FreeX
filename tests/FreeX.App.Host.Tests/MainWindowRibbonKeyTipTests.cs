@@ -719,19 +719,10 @@ public sealed partial class MainWindowRibbonKeyTipTests
         {
             if (_window.FindName("RibbonTabs") is TabControl ribbonTabs)
             {
-                // Establish the newly-selected tab's layout at full width first so its declarative
-                // adaptive panel measures each group's full size, then constrain to the target width so
-                // it collapses deterministically (independent of whichever tab the prior test left).
+                ribbonTabs.Width = width;
                 ribbonTabs.SelectedItem = ribbonTabs.Items
                     .OfType<TabItem>()
                     .First(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
-                ribbonTabs.Width = 2400;
-                _window.WindowState = WindowState.Normal;
-                _window.Width = 2400;
-                _window.UpdateLayout();
-                PumpDispatcher();
-
-                ribbonTabs.Width = width;
             }
 
             _window.WindowState = WindowState.Normal;
