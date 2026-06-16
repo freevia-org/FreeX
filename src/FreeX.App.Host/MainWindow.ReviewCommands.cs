@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using Microsoft.Extensions.DependencyInjection;
 using FreeX.App.UI;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -739,14 +740,29 @@ public partial class MainWindow
         OpenExternalHelpLink(AppInfo.HelpUrl, UiText.Get("MainWindowMessage_HelpOnlineTitle"));
     }
 
-    private void CheckForUpdatesBtn_Click(object sender, RoutedEventArgs e)
+    private async void CheckForUpdatesBtn_Click(object sender, RoutedEventArgs e)
     {
         RecordDiagnosticEvent("update_check_opened", new Dictionary<string, string?>
         {
             ["source"] = "help"
         });
 
-        OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, UiText.Get("MainWindowMessage_CheckForUpdatesTitle"));
+        var updates = App.Services.GetService<FreeX.App.Services.Updates.IUpdateService>();
+        if (updates is null) return;
+
+        var result = await updates.CheckAndDownloadAsync();
+        switch (result.State)
+        {
+            case FreeX.App.Services.Updates.UpdateState.ReadyToApply:
+                ShowUpdateReady(result.AvailableVersion);
+                break;
+            case FreeX.App.Services.Updates.UpdateState.UpToDate:
+                MessageBox.Show("You're up to date.", "FreeX", MessageBoxButton.OK, MessageBoxImage.Information);
+                break;
+            default: // Unavailable — fall back to the releases page
+                OpenExternalHelpLink(updates.ReleasesPageUrl, UiText.Get("MainWindowMessage_CheckForUpdatesTitle"));
+                break;
+        }
     }
 
     private void AboutBtn_Click(object sender, RoutedEventArgs e)
