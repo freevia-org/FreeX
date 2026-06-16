@@ -31,6 +31,7 @@ public static class DocxReader
 
         var document = new TextDocument();
         ReadCoreProperties(archive, document);
+        ReadCustomProperties(archive, document);
         ReadStyles(archive, document);
         var imageRelationships = ReadImageRelationships(archive);
         var hyperlinkRelationships = ReadHyperlinkRelationships(archive);
@@ -153,6 +154,9 @@ public static class DocxReader
             if (cols.Attribute(W + "space") is { } space)
                 document.Page.ColumnSpacingPt = DxaToPoints(space.Value);
         }
+
+        // Page border (w:pgBorders) lives in the same w:sectPr; recover it into PageSettings.PageBorder.
+        document.Page.PageBorder = ReadPageBorder(sectPr.Element(W + "pgBorders"));
 
         var partsById = ReadHeaderFooterRelationships(archive);
 
@@ -627,6 +631,25 @@ public static class DocxReader
             bottomOnly);
     }
 
+    /// <summary>Reads a page border (w:pgBorders) into a <see cref="PageBorder"/>, or null if absent/off.</summary>
+    private static PageBorder? ReadPageBorder(XElement? pgBorders)
+    {
+        if (pgBorders is null)
+            return null;
+        // Take the first drawn edge (val not none/nil) for colour/width — page borders are a uniform box.
+        var edge = pgBorders.Elements().FirstOrDefault(e =>
+            (e.Attribute(W + "val")?.Value ?? "single") is not ("none" or "nil"));
+        if (edge is null)
+            return null;
+
+        var color = edge.Attribute(W + "color")?.Value;
+        var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+
+        return new PageBorder(
+            color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
+            width > 0 ? width : 1.0);
+    }
+
     /// <summary>
     /// Maps each w:num id in word/numbering.xml to a <see cref="ListKind"/> by following its
     /// abstractNumId to the abstract definition's level-0 w:numFmt (bullet -> Bullet, else Number).
@@ -711,6 +734,24 @@ public static class DocxReader
         properties.Modified = ParseW3CDtf(root.Element(DcTerms + "modified")?.Value);
 
         static string? Trimmed(string? value) => string.IsNullOrEmpty(value) ? null : value;
+    }
+
+    /// <summary>
+    /// Reads the FreeW page watermark from docProps/custom.xml into <see cref="PageSettings.Watermark"/>,
+    /// mirroring how the writer persists it as a named custom property. A missing part is fine.
+    /// </summary>
+    private static void ReadCustomProperties(ZipArchive archive, TextDocument document)
+    {
+        var customXml = LoadPart(archive, "docProps/custom.xml");
+        var root = customXml?.Root;
+        if (root is null)
+            return;
+
+        var property = root.Elements(CustomProps + "property")
+            .FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkPropertyName);
+        var text = property?.Element(VtVariant + "lpwstr")?.Value;
+        if (!string.IsNullOrEmpty(text))
+            document.Page.Watermark = text;
     }
 
     private static void ReadStyles(ZipArchive archive, TextDocument document)

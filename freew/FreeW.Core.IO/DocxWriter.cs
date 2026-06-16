@@ -63,10 +63,16 @@ public static class DocxWriter
         // A comments part is emitted only when the document actually carries review comments.
         var hasComments = document.Comments.Count > 0;
 
+        // The watermark text is persisted best-effort as a custom document property (docProps/custom.xml),
+        // emitted only when a watermark is set.
+        var hasWatermark = !string.IsNullOrEmpty(document.Page.Watermark);
+
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments));
-        WritePart(archive, "_rels/.rels", BuildPackageRels());
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments, hasWatermark));
+        WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
+        if (hasWatermark)
+            WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks, hasHeader, hasFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
@@ -140,7 +146,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasComments) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasComments, bool hasWatermark) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -175,9 +181,13 @@ public static class DocxWriter
                     new XAttribute("ContentType", CommentsContentType))
                 : null,
             new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
-                new XAttribute("ContentType", CorePropertiesContentType))));
+                new XAttribute("ContentType", CorePropertiesContentType)),
+            hasWatermark
+                ? new XElement(Ct + "Override", new XAttribute("PartName", CustomPropertiesPartName),
+                    new XAttribute("ContentType", CustomPropertiesContentType))
+                : null));
 
-    private static XDocument BuildPackageRels() => new(
+    private static XDocument BuildPackageRels(bool hasWatermark) => new(
         new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rId1"),
@@ -186,7 +196,27 @@ public static class DocxWriter
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rIdCore"),
                 new XAttribute("Type", CorePropertiesRelType),
-                new XAttribute("Target", "docProps/core.xml"))));
+                new XAttribute("Target", "docProps/core.xml")),
+            hasWatermark
+                ? new XElement(Rel + "Relationship",
+                    new XAttribute("Id", "rIdCustom"),
+                    new XAttribute("Type", CustomPropertiesRelType),
+                    new XAttribute("Target", "docProps/custom.xml"))
+                : null));
+
+    /// <summary>
+    /// Builds docProps/custom.xml carrying the page watermark text as a single named custom property
+    /// (<see cref="WatermarkPropertyName"/>). This is a standards-compliant OPC custom-properties part,
+    /// so the watermark text round-trips even though it is not a true Word VML watermark.
+    /// </summary>
+    private static XDocument BuildCustomProperties(string watermark) => new(
+        new XElement(CustomProps + "Properties",
+            new XAttribute(XNamespace.Xmlns + "vt", VtVariant.NamespaceName),
+            new XElement(CustomProps + "property",
+                new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
+                new XAttribute("pid", "2"),
+                new XAttribute("name", WatermarkPropertyName),
+                new XElement(VtVariant + "lpwstr", watermark))));
 
     /// <summary>Builds docProps/core.xml from <see cref="DocumentProperties"/>, emitting only set values.</summary>
     private static XDocument BuildCoreProperties(DocumentProperties properties)
@@ -853,11 +883,35 @@ public static class DocxWriter
                 new XAttribute(W + "right", PointsToDxa(page.MarginRightPt)),
                 new XAttribute(W + "top", PointsToDxa(page.MarginTopPt)),
                 new XAttribute(W + "bottom", PointsToDxa(page.MarginBottomPt))),
+            // Page border (w:pgBorders): a uniform box on all four edges, offset from the page edge.
+            // Emitted only when set; w:sz is in eighths of a point, matching w:pBdr edges.
+            BuildPageBorders(page.PageBorder),
             // Equal-width columns: w:cols carries the count (w:num) and inter-column gap (w:space, dxa).
             // Emitted unconditionally; w:num="1" is harmless and keeps the section shape stable.
             new XElement(W + "cols",
                 new XAttribute(W + "num", Math.Max(1, page.ColumnCount)),
                 new XAttribute(W + "space", PointsToDxa(page.ColumnSpacingPt))));
+
+    /// <summary>
+    /// Builds the w:pgBorders element (a uniform box on all four edges) for a page border, or null when
+    /// no page border is set. w:offsetFrom="page" with w:space="24" places the border 24pt off the page
+    /// edge — Word's default. Edge widths (w:sz) are in eighths of a point, like w:pBdr.
+    /// </summary>
+    private static XElement? BuildPageBorders(PageBorder? border)
+    {
+        if (border is null)
+            return null;
+
+        XElement Edge(string name) => new(W + name,
+            new XAttribute(W + "val", "single"),
+            new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
+            new XAttribute(W + "space", 24),
+            new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
+
+        return new XElement(W + "pgBorders",
+            new XAttribute(W + "offsetFrom", "page"),
+            Edge("top"), Edge("left"), Edge("bottom"), Edge("right"));
+    }
 
     /// <summary>
     /// Builds word/numbering.xml: two abstract numbering definitions (bullet + decimal), each with
