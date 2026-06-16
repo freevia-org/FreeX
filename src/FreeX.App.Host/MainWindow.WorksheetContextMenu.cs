@@ -23,8 +23,13 @@ public partial class MainWindow
         var targetKind = GetWorksheetContextMenuTargetKind(actualAddr);
         var state = GetWorksheetContextMenuState(actualAddr);
         var menu = new ContextMenu();
-        foreach (var command in WorksheetContextMenuPlanner.BuildCommands(targetKind, state))
-            AddWorksheetContextMenuItem(menu.Items, command, actualAddr);
+        // Planner commands → shared declarative RibbonMenu (same model as ribbon dropdowns) → WPF items.
+        var commands = WorksheetContextMenuPlanner.BuildCommands(targetKind, state);
+        var ribbonMenu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
+        WorksheetContextMenuRenderer.AddItems(
+            menu.Items,
+            ribbonMenu.Items,
+            action => ExecuteWorksheetContextMenuAction(action, actualAddr));
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = SheetGrid;
@@ -37,46 +42,6 @@ public partial class MainWindow
         SheetGrid.ContextMenu = menu;
         PositionWorksheetContextMenu(menu, gridPos);
         menu.IsOpen = true;
-    }
-
-    private void AddWorksheetContextMenuItem(ItemCollection items, WorksheetContextMenuCommand command, CellAddress address)
-    {
-        if (command.IsSeparator)
-        {
-            items.Add(new Separator());
-            return;
-        }
-
-        var item = new MenuItem { Header = command.AccessHeader, IsEnabled = command.IsEnabled };
-        System.Windows.Automation.AutomationProperties.SetName(item, command.Header);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(
-            item,
-            command.Action == WorksheetContextMenuAction.None
-                ? $"WorksheetContextMenu_{NormalizeWorksheetContextMenuAutomationId(command.Header)}"
-                : $"WorksheetContextMenu_{command.Action}");
-        if (command.HasChildren)
-        {
-            foreach (var child in command.Children)
-                AddWorksheetContextMenuItem(item.Items, child, address);
-        }
-        else
-        {
-            item.Click += (_, _) => ExecuteWorksheetContextMenuAction(command.Action, address);
-        }
-
-        items.Add(item);
-    }
-
-    private static string NormalizeWorksheetContextMenuAutomationId(string header)
-    {
-        var builder = new System.Text.StringBuilder(header.Length);
-        foreach (var character in header)
-        {
-            if (char.IsLetterOrDigit(character))
-                builder.Append(character);
-        }
-
-        return builder.Length == 0 ? "Item" : builder.ToString();
     }
 
     private void OnWaterfallChartPointContextMenuRequested(ChartModel chart, int pointIndex, System.Windows.Point gridPos)
