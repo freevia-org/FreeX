@@ -419,10 +419,15 @@ public partial class MainWindow
             : inactiveBrush;
     }
 
-    private void CreateNewWorkbook()
+    // Startup and test paths create the initial Book1; the user-facing File > New path passes the
+    // next session name (Book2, Book3, …) via RequestNewWorkbookAsync (Issue 121). Kept as a single
+    // parameterless method so reflection-based test harnesses resolve it unambiguously.
+    private void CreateNewWorkbook() => InitializeNewWorkbook(workbookName: null);
+
+    private void InitializeNewWorkbook(string? workbookName)
     {
         CloseFindReplaceDialogIfOpen();
-        var wb = NewWorkbookFactory.Create(_options);
+        var wb = NewWorkbookFactory.Create(_options, workbookName);
         _workbook = wb;
         _workbookRef.Current = wb;
         InvalidateToolbarVisualState();
@@ -447,7 +452,9 @@ public partial class MainWindow
         if (await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeCreatingWorkbook")) == SaveChangesConfirmation.Cancel)
             return;
 
-        CreateNewWorkbook();
+        // Advance the session name sequence so File > New produces Book2, Book3, … rather than
+        // repeatedly creating another Book1 (Issue 121).
+        InitializeNewWorkbook(_newWorkbookNameSequence.Next());
         HideStartScreen();
     }
 

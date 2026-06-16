@@ -5,6 +5,12 @@
     <ProjectReference Include="..\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
     <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\FreeX.Ribbon\FreeX.Ribbon.csproj" />
+    <ProjectReference Include="..\FreeX.Ribbon.Avalonia\FreeX.Ribbon.Avalonia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.Tests" />
   </ItemGroup>
 
   <ItemGroup>

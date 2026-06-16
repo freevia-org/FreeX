@@ -205,6 +205,10 @@ public partial class App : Application
         // after a dirty/saved transition is broadcast via WorkbookWindowRegistry.
         services.AddSingleton<WorkbookDocumentState>();
 
+        // New-workbook name sequence (Book1, Book2, …) shared across the session so File > New
+        // keeps advancing the default name instead of repeatedly producing Book1 (Issue 121).
+        services.AddSingleton<NewWorkbookNameSequence>();
+
         // UI
         services.AddTransient<MainWindow>();
     }

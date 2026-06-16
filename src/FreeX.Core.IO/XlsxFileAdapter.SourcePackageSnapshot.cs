@@ -679,14 +679,23 @@ public sealed partial class XlsxFileAdapter
 
         public XlsxSourcePackage Rebase(Workbook workbook)
         {
+            // Rebasing declares the CURRENT in-memory workbook to be the loaded baseline that maps to
+            // the stored source bytes (used after the open service paints dynamic table/pivot styles
+            // for display, which Excel keeps unbaked).  Recompute the source fingerprint from the now-
+            // materialized workbook so an otherwise-unchanged save matches and takes the byte-copy fast
+            // path (NOT a full rebuild that would write the materialized fills into the file).  Falls
+            // back to null only when the workbook is too large to fingerprint, preserving prior
+            // behaviour for that case.
+            var rebasedFingerprint = GetModelFingerprint(workbook, currentModelFingerprint: null);
+
             if (CellPatchBaseline is null)
                 return IsCellPatchBaselineLazy
-                    ? this with { ModelFingerprint = null }
+                    ? this with { ModelFingerprint = rebasedFingerprint }
                     : this;
 
             return this with
             {
-                ModelFingerprint = null,
+                ModelFingerprint = rebasedFingerprint,
                 CellPatchBaseline = CellPatchBaseline.Rebase(workbook, CreatePatchValidationModelFingerprint(workbook)),
                 CellPatchBaselineBlockReason = null
             };

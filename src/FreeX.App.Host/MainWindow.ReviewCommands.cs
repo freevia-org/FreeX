@@ -721,6 +721,10 @@ public partial class MainWindow
         try
         {
             await _shareService.ShareFileAsync(this, sharePath, _workbook.Name);
+            // Return to the workbook after a successful share instead of leaving the user
+            // stranded in the File backstage (Issue 118).
+            if (IsStartScreenVisible())
+                HideStartScreen();
         }
         catch (Exception ex)
         {

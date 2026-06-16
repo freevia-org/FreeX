@@ -236,6 +236,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public WorksheetViewMode ActiveSheetViewMode => _workbook.Sheets[0].ViewMode;
 
+        public bool ActiveSheetHasAutoFilter => _workbook.Sheets[0].AutoFilter is not null;
+
         public IReadOnlyList<uint> ActiveSheetRowPageBreaks => _workbook.Sheets[0].RowPageBreaks.ToList();
 
         public IReadOnlyList<uint> ActiveSheetColumnPageBreaks => _workbook.Sheets[0].ColumnPageBreaks.ToList();
