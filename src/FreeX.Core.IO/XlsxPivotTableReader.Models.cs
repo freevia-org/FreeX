@@ -6,7 +6,9 @@ internal static partial class XlsxPivotTableReader
 {
     private static PivotTableModel ToPivotTableModel(PendingPivotTableModel pending, SheetId sheetId)
     {
-        var targetRange = GridRange.Parse(pending.TargetReference, sheetId);
+        // A pivot table's <location ref="..."> can collapse to a single cell (e.g. "D6") for an
+        // empty or freshly-anchored pivot; accept both single-cell and multi-cell references.
+        var targetRange = GridRange.ParseCellOrRange(pending.TargetReference, sheetId);
         var pivotTable = new PivotTableModel
         {
             Name = pending.Name,
