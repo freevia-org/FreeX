@@ -66,4 +66,7 @@
     <InformationalVersion>0.5.0</InformationalVersion>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Using Include="Free.Shared.Opc" />
+  </ItemGroup>
 </Project>

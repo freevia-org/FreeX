@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 
-namespace FreeX.Core.IO;
+namespace Free.Shared.Opc;
 
 /// <summary>
 /// Escapes model-originated text strings for safe placement in XLSX XML (OOXML) element text and

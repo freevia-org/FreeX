@@ -20,4 +20,7 @@
     <Nullable>enable</Nullable>
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
+  <ItemGroup>
+    <Using Include="Free.Shared.Opc" />
+  </ItemGroup>
 </Project>

@@ -1,4 +1,4 @@
-namespace FreeX.Core.IO;
+namespace Free.Shared.Opc;
 
 internal static class SaveStreamPreparer
 {

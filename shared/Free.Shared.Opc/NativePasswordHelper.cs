@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace FreeX.Core.IO;
+namespace Free.Shared.Opc;
 
 /// <summary>
 /// Helpers for hashing and verifying protection passwords stored in .fxl files.

@@ -2,7 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
-using static FreeX.Core.IO.XlsxXmlNormalizationHelpers;
+using static Free.Shared.Opc.XlsxXmlNormalizationHelpers;
 
 namespace FreeX.Core.IO;
 

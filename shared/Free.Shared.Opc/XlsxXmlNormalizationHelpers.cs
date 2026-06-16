@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Xml.Linq;
 
-namespace FreeX.Core.IO;
+namespace Free.Shared.Opc;
 
 internal static class XlsxXmlNormalizationHelpers
 {

@@ -1,7 +1,7 @@
 using System.Xml;
 using System.Xml.Xsl;
 
-namespace FreeX.Core.IO;
+namespace Free.Shared.Opc;
 
 public static class XsltWorkbookTransform
 {

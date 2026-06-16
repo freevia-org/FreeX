@@ -1,4 +1,4 @@
-namespace FreeX.Core.IO;
+namespace Free.Shared.Opc;
 
 /// <summary>
 /// Result of saving an XLSX file, containing any non-fatal warnings collected during the save

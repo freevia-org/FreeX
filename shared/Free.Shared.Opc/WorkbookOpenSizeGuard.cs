@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 
-namespace FreeX.Core.IO;
+namespace Free.Shared.Opc;
 
 /// <summary>
 /// Raised when a workbook is rejected before loading because its on-disk size or

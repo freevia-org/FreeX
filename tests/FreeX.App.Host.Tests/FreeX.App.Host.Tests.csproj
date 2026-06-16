@@ -29,4 +29,7 @@
     <ProjectReference Include="..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="Free.Shared.Opc" />
+  </ItemGroup>
 </Project>

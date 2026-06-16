@@ -30,4 +30,7 @@
     <None Include="Fixtures\Simple.xls" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="Free.Shared.Opc" />
+  </ItemGroup>
 </Project>

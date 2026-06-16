@@ -2,6 +2,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Free.Shared.Opc" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Generic OPC helpers extracted from FreeX.Core.IO. Their existing consumers
+         live in FreeX.Core.IO and rely on internal visibility; preserve it until a
+         type is intentionally promoted to the public shared API (e.g. for FreeW). -->
+    <InternalsVisibleTo Include="FreeX.Core.IO" />
+    <InternalsVisibleTo Include="FreeX.Core.IO.Tests" />
+  </ItemGroup>
+
+</Project>

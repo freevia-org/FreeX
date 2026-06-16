@@ -1,6 +1,6 @@
 using System.Xml;
 
-namespace FreeX.Core.IO;
+namespace Free.Shared.Opc;
 
 internal static class SecureXmlReaderSettings
 {

@@ -3,7 +3,7 @@ using System.IO.Compression;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
-using static FreeX.Core.IO.XlsxXmlNormalizationHelpers;
+using static Free.Shared.Opc.XlsxXmlNormalizationHelpers;
 
 namespace FreeX.Core.IO;
 
