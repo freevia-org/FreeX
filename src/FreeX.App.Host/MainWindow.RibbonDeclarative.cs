@@ -50,7 +50,18 @@ public partial class MainWindow
                 if (definition.FindTab(catalogId) is not { } definitionTab)
                     continue;
 
-                tabItem.Content = RibbonWpfRenderer.BuildTabContent(definitionTab, this, registry);
+                var content = RibbonWpfRenderer.BuildTabContent(definitionTab, this, registry);
+
+                // The Home tab keeps the HomeRibbonPanel backplane in its rendered subtree so commands
+                // injected into it at runtime (Excel add-ins / tests) still surface as keytip candidates.
+                // It carries no laid-out children normally, so it does not affect the visual ribbon.
+                if (string.Equals(catalogId, "HomeTab", StringComparison.Ordinal) &&
+                    HomeRibbonPanel.Parent is null && content is Border { Child: Panel rootPanel })
+                {
+                    rootPanel.Children.Add(HomeRibbonPanel);
+                }
+
+                tabItem.Content = content;
             }
 
             // Mirror the original controls' visual state (toggles pressed, combo values) onto the
