@@ -64,6 +64,7 @@ public static class HomeRibbonDefinition
                 .ComboBox("Number Format", "Number Format", c => c with
                 {
                     Width = 124,
+                    KeyTip = "N",
                     Items = new[] { "General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text" }
                 })
                 .RowBreak()
