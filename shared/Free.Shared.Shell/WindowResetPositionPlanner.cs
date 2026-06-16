@@ -1,7 +1,7 @@
 using System;
 using System.Windows;
 
-namespace FreeX.App.Host;
+namespace Free.Shared.Shell;
 
 /// <summary>
 /// Pure geometry for "Reset Window Position": computes a standard, work-area-relative

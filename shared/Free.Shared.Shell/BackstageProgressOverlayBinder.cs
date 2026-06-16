@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 
-namespace FreeX.App.Host;
+namespace Free.Shared.Shell;
 
 internal static class BackstageProgressOverlayBinder
 {

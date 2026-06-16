@@ -9,6 +9,7 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\FreeX.App.Services\FreeX.App.Services.csproj" />
     <ProjectReference Include="..\FreeX.App.UI\FreeX.App.UI.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -70,5 +71,6 @@
     <Using Include="Free.Shared.Opc" />
     <Using Include="Free.Shared.Commands" />
     <Using Include="Free.Shared.AppServices" />
+    <Using Include="Free.Shared.Shell" />
   </ItemGroup>
 </Project>

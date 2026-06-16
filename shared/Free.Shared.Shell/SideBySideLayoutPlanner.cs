@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace FreeX.App.Host;
+namespace Free.Shared.Shell;
 
 /// <summary>
 /// Pure geometry for "View Side by Side": splits the work area into two equal, non-overlapping
