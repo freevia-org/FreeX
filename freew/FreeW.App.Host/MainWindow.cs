@@ -35,7 +35,7 @@ public sealed class MainWindow : Window
         _editor = editor;
         editor.LoadModel(CreateSampleDocument());
         var stateStore = new RibbonStateStore();
-        var commands = FreeWRibbonCommands.Build(editor, stateStore);
+        var commands = FreeWRibbonCommands.Build(editor, stateStore, OpenPrintPreview);
         _file = new FileCommands(this, editor, UpdateTitle);
         editor.TextChanged += (_, _) => _file.MarkDirty();
         _autosave = new AutosaveCoordinator(editor, _file);
@@ -121,25 +121,28 @@ public sealed class MainWindow : Window
     private void Print()
     {
         var dialog = new PrintDialog();
+
+        // Print at the model's page size (points -> DIP), not just the printer's printable area, so
+        // margins and page breaks match what the user sees in Print Preview.
+        var page = _editor.Model.Page;
+        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
+        dialog.PrintTicket.PageMediaSize = new System.Printing.PageMediaSize(pageWidth, pageHeight);
+
         if (dialog.ShowDialog() != true)
             return;
 
-        var doc = _editor.Document;
-        var saved = (doc.PageWidth, doc.PageHeight, doc.PagePadding, doc.ColumnWidth);
-        try
-        {
-            _editor.CommitToModel();
-            doc.PageWidth = dialog.PrintableAreaWidth;
-            doc.PageHeight = dialog.PrintableAreaHeight;
-            doc.PagePadding = new Thickness(60);
-            doc.ColumnWidth = double.PositiveInfinity;
-            var paginator = ((System.Windows.Documents.IDocumentPaginatorSource)doc).DocumentPaginator;
-            dialog.PrintDocument(paginator, "FreeW Document");
-        }
-        finally
-        {
-            (doc.PageWidth, doc.PageHeight, doc.PagePadding, doc.ColumnWidth) = saved;
-        }
+        // Build a fresh, page-settings-aware FlowDocument (display-only clone of the editor content)
+        // and let its paginator break the flow into pages at the model's geometry.
+        var printDoc = PrintLayout.BuildPaginatedDocument(_editor);
+        var paginator = ((System.Windows.Documents.IDocumentPaginatorSource)printDoc).DocumentPaginator;
+        paginator.PageSize = new Size(pageWidth, pageHeight);
+        dialog.PrintDocument(paginator, "FreeW Document");
+    }
+
+    private void OpenPrintPreview()
+    {
+        var preview = new PrintPreviewWindow(_editor) { Owner = this };
+        preview.Show();
     }
 
     private void OpenFindReplace()
