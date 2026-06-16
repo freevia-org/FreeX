@@ -106,6 +106,12 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.font-color", new ColorPickCommand(editor, isHighlight: false));
         registry.Register("freew.highlight", new ColorPickCommand(editor, isHighlight: true));
 
+        // Home > Paragraph: set line spacing (a multiplier on the default font size) over the selection,
+        // and toggle Add/Remove Space Before/After. All route through the view's undo/redo bus.
+        registry.Register("freew.line-spacing", new LineSpacingCommand(editor));
+        registry.Register("freew.space-before-toggle", new ActionCommand(() => editor.ToggleSpaceBefore()));
+        registry.Register("freew.space-after-toggle", new ActionCommand(() => editor.ToggleSpaceAfter()));
+
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
         registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
         registry.Register("freew.para-shading", new ParagraphShadingCommand(editor));
@@ -212,6 +218,22 @@ internal static class FreeWRibbonCommands
     private sealed class ActionCommand(Action action) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => action();
+    }
+
+    // Home > Paragraph > Line Spacing: parse the chosen multiplier (e.g. "1.5") and apply it to every
+    // paragraph spanned by the selection. The view routes the change through its undo/redo bus.
+    private sealed class LineSpacingCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+                return;
+            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var multiplier) && multiplier > 0)
+            {
+                editor.Focus();
+                editor.SetLineSpacing(multiplier);
+            }
+        }
     }
 
     // Applies a named paragraph style's formatting (size/weight/colour) to the current selection.

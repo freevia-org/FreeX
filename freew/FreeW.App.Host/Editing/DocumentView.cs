@@ -204,6 +204,106 @@ public sealed class DocumentView : RichTextBox
                     : new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex!));
         });
 
+    /// <summary>
+    /// Set the line spacing (a multiplier on the default font size, e.g. 1.0 single / 1.5 / 2.0 double)
+    /// on every paragraph spanned by the selection. Routes through the undo/redo bus so it is reversible.
+    /// </summary>
+    public void SetLineSpacing(double multiplier) =>
+        FormatSelectedModelParagraphs(f => f with { LineSpacing = multiplier });
+
+    /// <summary>
+    /// Toggle "Add/Remove Space Before Paragraph" over the selection: if any spanned paragraph has no
+    /// space before, all get <paramref name="spacePt"/> points; otherwise space-before is cleared.
+    /// Reversible via the bus.
+    /// </summary>
+    public void ToggleSpaceBefore(double spacePt = 12)
+    {
+        var enable = SelectedModelParagraphs().Any(p => p.Formatting.SpaceBeforePt <= 0);
+        FormatSelectedModelParagraphs(f => f with { SpaceBeforePt = enable ? spacePt : 0 });
+    }
+
+    /// <summary>
+    /// Toggle "Add/Remove Space After Paragraph" over the selection: if any spanned paragraph has no
+    /// space after, all get <paramref name="spacePt"/> points; otherwise space-after is cleared.
+    /// Reversible via the bus.
+    /// </summary>
+    public void ToggleSpaceAfter(double spacePt = 12)
+    {
+        var enable = SelectedModelParagraphs().Any(p => p.Formatting.SpaceAfterPt <= 0);
+        FormatSelectedModelParagraphs(f => f with { SpaceAfterPt = enable ? spacePt : 0 });
+    }
+
+    // Commit pending edits, then apply a paragraph-formatting transform to every model paragraph spanned
+    // by the selection, one reversible SetParagraphFormattingCommand per paragraph on the undo/redo bus.
+    private void FormatSelectedModelParagraphs(Func<ParagraphFormatting, ParagraphFormatting> transform)
+    {
+        Focus();
+        CommitToModel();
+        var indices = SelectedModelParagraphIndices();
+        foreach (var index in indices)
+        {
+            if (_model.Blocks[index] is ModelParagraph paragraph)
+                _commands.Execute(new SetParagraphFormattingCommand(index, transform(paragraph.Formatting)));
+        }
+    }
+
+    // The model paragraphs spanned by the current selection/caret (post-commit snapshot, for state checks).
+    private IReadOnlyList<ModelParagraph> SelectedModelParagraphs()
+    {
+        CommitToModel();
+        return SelectedModelParagraphIndices()
+            .Select(i => _model.Blocks[i])
+            .OfType<ModelParagraph>()
+            .ToList();
+    }
+
+    // Map the WPF paragraphs spanned by the selection to their model block indices. The model is built
+    // by flattening lists into their item paragraphs in document order (see CommitToModel), so a WPF
+    // paragraph's model index equals the count of "leaf" blocks (paragraphs/tables) preceding it.
+    private IReadOnlyList<int> SelectedModelParagraphIndices()
+    {
+        var start = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
+        var end = Selection.End.Paragraph ?? start;
+        if (start is null)
+            return [];
+
+        // Number every leaf block in document order, recording the model index of each WPF paragraph.
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var modelIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref modelIndex);
+
+        if (!indexOf.TryGetValue(start, out var startIndex))
+            return [];
+        if (end is null || !indexOf.TryGetValue(end, out var endIndex))
+            endIndex = startIndex;
+
+        var result = new List<int>();
+        for (var i = Math.Min(startIndex, endIndex); i <= Math.Max(startIndex, endIndex); i++)
+            result.Add(i);
+        return result;
+    }
+
+    // Walk a FlowDocument block in the same order CommitToModel reads it, assigning each top-level
+    // paragraph/table a model index and recording paragraph identities so the selection can be mapped.
+    private static void NumberLeafBlocks(System.Windows.Documents.Block block, IDictionary<WpfParagraph, int> indexOf, ref int modelIndex)
+    {
+        switch (block)
+        {
+            case WpfParagraph paragraph:
+                indexOf[paragraph] = modelIndex++;
+                break;
+            case WpfList list:
+                foreach (var item in list.ListItems)
+                    foreach (var itemBlock in item.Blocks)
+                        NumberLeafBlocks(itemBlock, indexOf, ref modelIndex);
+                break;
+            case WpfTable:
+                modelIndex++;
+                break;
+        }
+    }
+
     // Apply a mutation to the WPF paragraphs spanned by the selection (or the caret's paragraph),
     // then commit + re-render so the change lands in the model and round-trips on save.
     private void MutateSelectedParagraphs(Action<IReadOnlyList<WpfParagraph>> mutate)
@@ -366,13 +466,13 @@ public sealed class DocumentView : RichTextBox
             switch (block)
             {
                 case WpfList wpfList:
-                    ReadList(_model.Blocks, wpfList);
+                    ReadList(_model.Blocks, wpfList, _model);
                     break;
                 case WpfParagraph wpfParagraph:
-                    _model.Blocks.Add(ReadParagraph(wpfParagraph));
+                    _model.Blocks.Add(ReadParagraph(wpfParagraph, _model));
                     break;
                 case WpfTable wpfTable:
-                    _model.Blocks.Add(ReadTable(wpfTable));
+                    _model.Blocks.Add(ReadTable(wpfTable, _model));
                     break;
             }
         }
@@ -381,11 +481,11 @@ public sealed class DocumentView : RichTextBox
             _model.Blocks.Add(new ModelParagraph());
     }
 
-    private static ModelParagraph ReadParagraph(WpfParagraph wpfParagraph)
+    private static ModelParagraph ReadParagraph(WpfParagraph wpfParagraph, TextDocument document)
     {
         var modelParagraph = new ModelParagraph
         {
-            Formatting = ReadParagraphFormatting(wpfParagraph)
+            Formatting = ReadParagraphFormatting(wpfParagraph, document)
         };
         foreach (var inline in wpfParagraph.Inlines)
             ReadInline(modelParagraph, inline, hyperlinkUrl: null);
@@ -394,7 +494,7 @@ public sealed class DocumentView : RichTextBox
 
     // Flatten a WPF List into model paragraphs, stamping each with the list's kind and the nesting
     // depth as ListLevel. ListItems may hold nested Lists (deeper levels) alongside paragraphs.
-    private static void ReadList(IList<ModelBlock> target, WpfList wpfList, int level = 0)
+    private static void ReadList(IList<ModelBlock> target, WpfList wpfList, TextDocument document, int level = 0)
     {
         var kind = FromMarkerStyle(wpfList.MarkerStyle);
         foreach (var item in wpfList.ListItems)
@@ -404,15 +504,15 @@ public sealed class DocumentView : RichTextBox
                 switch (itemBlock)
                 {
                     case WpfList nested:
-                        ReadList(target, nested, level + 1);
+                        ReadList(target, nested, document, level + 1);
                         break;
                     case WpfParagraph paragraph:
-                        var model = ReadParagraph(paragraph);
+                        var model = ReadParagraph(paragraph, document);
                         model.Formatting = model.Formatting with { ListKind = kind, ListLevel = level };
                         target.Add(model);
                         break;
                     case WpfTable table:
-                        target.Add(ReadTable(table));
+                        target.Add(ReadTable(table, document));
                         break;
                 }
             }
@@ -447,7 +547,7 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
-    private static ModelTable ReadTable(WpfTable wpfTable)
+    private static ModelTable ReadTable(WpfTable wpfTable, TextDocument document)
     {
         var table = new ModelTable();
         foreach (var rowGroup in wpfTable.RowGroups)
@@ -461,7 +561,7 @@ public sealed class DocumentView : RichTextBox
                     foreach (var cellBlock in wpfCell.Blocks)
                     {
                         if (cellBlock is WpfParagraph cellParagraph)
-                            cell.Paragraphs.Add(ReadParagraph(cellParagraph));
+                            cell.Paragraphs.Add(ReadParagraph(cellParagraph, document));
                     }
                     if (cell.Paragraphs.Count == 0)
                         cell.Paragraphs.Add(new ModelParagraph());
@@ -788,12 +888,13 @@ public sealed class DocumentView : RichTextBox
         };
     }
 
-    private static ParagraphFormatting ReadParagraphFormatting(WpfParagraph paragraph) =>
+    private static ParagraphFormatting ReadParagraphFormatting(WpfParagraph paragraph, TextDocument document) =>
         ParagraphFormatting.Default with
         {
             Alignment = FromWpfAlignment(paragraph.TextAlignment),
             SpaceBeforePt = paragraph.Margin.Top / PxPerPoint,
             SpaceAfterPt = paragraph.Margin.Bottom / PxPerPoint,
+            LineSpacing = ReadLineSpacing(paragraph.LineHeight, document),
             IndentLeftPt = paragraph.Margin.Left / PxPerPoint,
             IndentRightPt = paragraph.Margin.Right / PxPerPoint,
             FirstLineIndentPt = paragraph.TextIndent / PxPerPoint,
@@ -805,6 +906,17 @@ public sealed class DocumentView : RichTextBox
             // verbatim from the Tag stamped by BuildParagraph (see comment there); empty if none.
             TabStops = paragraph.Tag is IReadOnlyList<TabStop> tabStops ? tabStops : []
         };
+
+    // Recover the line-spacing multiplier from a WPF paragraph's LineHeight, inverting the formula used
+    // in BuildParagraph (LineHeight = LineSpacing * defaultFontSize * PxPerPoint). An unset LineHeight is
+    // NaN; fall back to the model default so editing text never silently flattens a paragraph's spacing.
+    private static double ReadLineSpacing(double lineHeight, TextDocument document)
+    {
+        var fontPt = document.DefaultRun.FontSizePt ?? 11;
+        if (double.IsNaN(lineHeight) || lineHeight <= 0 || fontPt <= 0)
+            return ParagraphFormatting.Default.LineSpacing;
+        return lineHeight / (fontPt * PxPerPoint);
+    }
 
     // --- formatting resolution (run/paragraph -> style -> document default) ---
 

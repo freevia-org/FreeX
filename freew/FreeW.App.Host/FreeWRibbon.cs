@@ -48,6 +48,13 @@ internal static class FreeWRibbon
                     g.Button("freew.align-left", "Align Left");
                     g.Button("freew.align-center", "Center");
                     g.Button("freew.align-right", "Align Right");
+                    g.ComboBox("freew.line-spacing", "Line Spacing", c => c with
+                    {
+                        Items = new[] { "1.0", "1.15", "1.5", "2.0" },
+                        Width = 56
+                    });
+                    g.Button("freew.space-before-toggle", "Space Before");
+                    g.Button("freew.space-after-toggle", "Space After");
                     g.Button("freew.para-border", "Border");
                     g.Button("freew.para-shading", "Shading");
                 });
