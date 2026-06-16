@@ -145,6 +145,12 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.new-comment", "New Comment");
                 });
+                tab.Group("tracking", "Tracking", "G", 90, g =>
+                {
+                    g.Toggle("freew.track-changes", "Track Changes");
+                    g.Button("freew.accept-all", "Accept All");
+                    g.Button("freew.reject-all", "Reject All");
+                });
             })
             .Build();
 }

@@ -284,8 +284,9 @@ public static class DocxWriter
         bool hasHeader,
         bool hasFooter)
     {
-        // Reset the document-scoped bookmark id counter so ids start at 1 for each written document.
+        // Reset the document-scoped bookmark + revision id counters so ids start at 1 each write.
         System.Threading.Interlocked.Exchange(ref _bookmarkId, 0);
+        System.Threading.Interlocked.Exchange(ref _revisionId, 0);
 
         // Map each image run to its assigned relationship id by replaying the same walk order.
         var imagesByRun = new Dictionary<Run, ImagePart>();
@@ -491,6 +492,33 @@ public static class DocxWriter
     // every w:bookmarkStart/w:bookmarkEnd pair's w:id unique across all paragraphs.
     private static int _bookmarkId;
 
+    // Revision (w:ins/w:del) ids are scoped to the whole document; this counter keeps each wrapper's
+    // w:id unique across all paragraphs. Reset alongside _bookmarkId at the start of each document.
+    private static int _revisionId;
+
+    /// <summary>True when two runs carry the same tracked-change kind, author and date (so they coalesce).</summary>
+    private static bool SameRevision(Run a, Run b) =>
+        a.Revision == b.Revision
+        && string.Equals(a.RevisionAuthor, b.RevisionAuthor, StringComparison.Ordinal)
+        && string.Equals(a.RevisionDateXml, b.RevisionDateXml, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Builds an empty w:ins (insertion) or w:del (deletion) wrapper carrying a unique w:id plus the
+    /// run's author/date attributes. The caller fills it with the wrapped run/hyperlink elements. The
+    /// run is assumed to carry a non-None revision.
+    /// </summary>
+    private static XElement NewRevisionWrapper(Run run)
+    {
+        var name = run.Revision == RevisionKind.Deleted ? "del" : "ins";
+        var wrapper = new XElement(W + name,
+            new XAttribute(W + "id", System.Threading.Interlocked.Increment(ref _revisionId)));
+        if (run.RevisionAuthor is { Length: > 0 } author)
+            wrapper.Add(new XAttribute(W + "author", author));
+        if (run.RevisionDateXml is { Length: > 0 } date)
+            wrapper.Add(new XAttribute(W + "date", date));
+        return wrapper;
+    }
+
     private static XElement BuildParagraph(Paragraph paragraph, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var p = new XElement(W + "p");
@@ -518,9 +546,51 @@ public static class DocxWriter
         // the runs. The textless reference run (IsCommentReference) serialises as a w:commentReference
         // run placed just after the matching range end. Comment-covered runs are not also hyperlinks in
         // the editor, so the two wrappings do not interleave in practice.
+        //
+        // Tracked changes overlay this again: a run carrying Revision != None is wrapped in a w:ins
+        // (insertion) or w:del (deletion) element carrying the author/date attributes; the wrapped run's
+        // text serialises as w:delText (not w:t) inside a w:del so Word treats it as deleted content.
+        // Consecutive runs sharing the same revision kind/author/date coalesce into one wrapper. The
+        // wrapper sits between the paragraph (or hyperlink) and the run elements, while comment-range and
+        // bookmark markers stay as paragraph-level siblings.
         var i = 0;
         var runs = paragraph.Runs;
         var openCommentId = (int?)null;
+
+        // The current open revision wrapper (w:ins/w:del) and the run it was opened for; run-level
+        // elements are added through Content(...) so they land inside the wrapper when one is open.
+        XElement? revisionWrapper = null;
+        Run? revisionKey = null;
+
+        void FlushRevision()
+        {
+            if (revisionWrapper is not null)
+            {
+                p.Add(revisionWrapper);
+                revisionWrapper = null;
+                revisionKey = null;
+            }
+        }
+
+        // Route one run-level element (a w:r or w:hyperlink) through the active revision wrapper,
+        // (re)opening or closing it to match the run's revision mark before adding the element.
+        void Content(Run run, XElement element)
+        {
+            if (run.Revision == RevisionKind.None)
+            {
+                FlushRevision();
+                p.Add(element);
+                return;
+            }
+            if (revisionKey is null || !SameRevision(revisionKey, run))
+            {
+                FlushRevision();
+                revisionWrapper = NewRevisionWrapper(run);
+                revisionKey = run;
+            }
+            revisionWrapper!.Add(element);
+        }
+
         while (i < runs.Count)
         {
             // Update the open comment range to match this run before emitting it. The textless
@@ -528,6 +598,8 @@ public static class DocxWriter
             var coveringId = runs[i].IsCommentReference ? null : runs[i].CommentId;
             if (openCommentId != coveringId)
             {
+                // Comment range markers are paragraph-level siblings, not revision content.
+                FlushRevision();
                 if (openCommentId is { } closing)
                     p.Add(new XElement(W + "commentRangeEnd", new XAttribute(W + "id", closing)));
                 if (coveringId is { } opening)
@@ -540,24 +612,28 @@ public static class DocxWriter
             if (url is { Length: > 0 } && hyperlinks.TryGetValue(url, out var relationshipId))
             {
                 var hyperlink = new XElement(W + "hyperlink", new XAttribute(R + "id", relationshipId));
-                while (i < runs.Count && runs[i].HyperlinkUrl == url && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId)
+                var head = runs[i];
+                while (i < runs.Count && runs[i].HyperlinkUrl == url && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
                     hyperlink.Add(BuildRun(runs[i++], imagesByRun));
-                p.Add(hyperlink);
+                Content(head, hyperlink);
             }
             else if (anchor is { Length: > 0 })
             {
                 var hyperlink = new XElement(W + "hyperlink", new XAttribute(W + "anchor", anchor));
-                while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId)
+                var head = runs[i];
+                while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
                     hyperlink.Add(BuildRun(runs[i++], imagesByRun));
-                p.Add(hyperlink);
+                Content(head, hyperlink);
             }
             else
             {
-                p.Add(BuildRun(runs[i++], imagesByRun));
+                var run = runs[i++];
+                Content(run, BuildRun(run, imagesByRun));
             }
         }
 
-        // Close any still-open comment range at the end of the paragraph.
+        // Close any still-open revision wrapper, then any still-open comment range, at paragraph end.
+        FlushRevision();
         if (openCommentId is { } trailing)
             p.Add(new XElement(W + "commentRangeEnd", new XAttribute(W + "id", trailing)));
 
@@ -672,7 +748,12 @@ public static class DocxWriter
         if (run.Image is not null && imagesByRun.TryGetValue(run, out var part))
             r.Add(BuildDrawing(part));
         else
-            r.Add(new XElement(W + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), run.Text));
+        {
+            // A tracked deletion stores its text in w:delText (so Word renders it as deleted content);
+            // all other runs use the ordinary w:t element.
+            var textElement = run.Revision == RevisionKind.Deleted ? "delText" : "t";
+            r.Add(new XElement(W + textElement, new XAttribute(XNamespace.Xml + "space", "preserve"), run.Text));
+        }
         return r;
     }
 

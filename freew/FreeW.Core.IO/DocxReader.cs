@@ -278,6 +278,29 @@ public static class DocxReader
                 foreach (var r in child.Elements(W + "r"))
                     AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null, commentId: activeCommentId);
             }
+            else if (child.Name == W + "ins" || child.Name == W + "del")
+            {
+                // A tracked insertion (w:ins) or deletion (w:del) wraps one or more runs (and possibly
+                // hyperlinks). Recover the revision kind plus author/date and stamp every covered run.
+                var kind = child.Name == W + "del" ? RevisionKind.Deleted : RevisionKind.Inserted;
+                var author = child.Attribute(W + "author")?.Value;
+                var date = child.Attribute(W + "date")?.Value;
+                var revision = new RevisionInfo(kind, author, date);
+
+                foreach (var revChild in child.Elements())
+                {
+                    if (revChild.Name == W + "r")
+                        AddRun(paragraph, revChild, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, revision: revision);
+                    else if (revChild.Name == W + "hyperlink")
+                    {
+                        var hAnchor = revChild.Attribute(W + "anchor")?.Value;
+                        var hId = revChild.Attribute(R + "id")?.Value;
+                        var hUrl = hId is not null && hyperlinkRelationships.TryGetValue(hId, out var hTarget) ? hTarget : null;
+                        foreach (var r in revChild.Elements(W + "r"))
+                            AddRun(paragraph, r, archive, imageRelationships, hUrl, hUrl is null ? hAnchor : null, commentId: activeCommentId, revision: revision);
+                    }
+                }
+            }
             else if (child.Name == W + "fldSimple")
             {
                 AddSimpleField(paragraph, child);
@@ -316,6 +339,9 @@ public static class DocxReader
         }
     }
 
+    /// <summary>Carries a tracked-change kind plus its author/date while reading runs inside a w:ins/w:del.</summary>
+    private readonly record struct RevisionInfo(RevisionKind Kind, string? Author, string? DateXml);
+
     private static void AddRun(
         Paragraph paragraph,
         XElement r,
@@ -323,12 +349,24 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> imageRelationships,
         string? hyperlinkUrl,
         string? hyperlinkAnchor,
-        int? commentId = null)
+        int? commentId = null,
+        RevisionInfo revision = default)
     {
+        void ApplyRevision(Run run)
+        {
+            if (revision.Kind == RevisionKind.None)
+                return;
+            run.Revision = revision.Kind;
+            run.RevisionAuthor = revision.Author;
+            run.RevisionDateXml = revision.DateXml;
+        }
+
         var image = ReadImage(r, archive, imageRelationships);
         if (image is not null)
         {
-            paragraph.Runs.Add(new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId });
+            var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId };
+            ApplyRevision(imageRun);
+            paragraph.Runs.Add(imageRun);
             return;
         }
 
@@ -336,16 +374,22 @@ public static class DocxReader
         var footnoteRef = r.Element(W + "footnoteReference");
         if (footnoteRef is not null && int.TryParse(footnoteRef.Attribute(W + "id")?.Value, out var footnoteId))
         {
-            paragraph.Runs.Add(Run.FootnoteReference(footnoteId, ReadRunFormatting(r.Element(W + "rPr"))));
+            var footnoteRun = Run.FootnoteReference(footnoteId, ReadRunFormatting(r.Element(W + "rPr")));
+            ApplyRevision(footnoteRun);
+            paragraph.Runs.Add(footnoteRun);
             return;
         }
 
-        var text = string.Concat(r.Elements(W + "t").Select(t => t.Value));
+        // A tracked deletion stores its text in w:delText; ordinary/inserted runs use w:t.
+        var text = string.Concat(r.Elements(W + "t").Select(t => t.Value))
+            + string.Concat(r.Elements(W + "delText").Select(t => t.Value));
         if (r.Elements(W + "tab").Any())
             text += "\t";
         if (text.Length == 0)
             return;
-        paragraph.Runs.Add(new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId });
+        var textRun = new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId };
+        ApplyRevision(textRun);
+        paragraph.Runs.Add(textRun);
     }
 
     private static Table ReadTable(
