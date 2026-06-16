@@ -16,6 +16,7 @@
     <!-- Microsoft extensions -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
     <!-- Charting / rendering -->
     <PackageVersion Include="OxyPlot.Wpf" Version="2.2.0" />
     <PackageVersion Include="PDFsharp-WPF" Version="6.2.4" />
