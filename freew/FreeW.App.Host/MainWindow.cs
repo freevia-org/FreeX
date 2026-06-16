@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
@@ -15,6 +16,9 @@ namespace FreeW.App.Host;
 /// </summary>
 public sealed class MainWindow : Window
 {
+    private FileCommands _file = null!;
+    private TextBlock _titleText = null!;
+
     public MainWindow()
     {
         Title = "FreeW";
@@ -24,25 +28,16 @@ public sealed class MainWindow : Window
 
         var root = new DockPanel();
 
-        var titleBar = new Border
-        {
-            Background = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A)),
-            Padding = new Thickness(12, 6, 12, 6),
-            Child = new TextBlock
-            {
-                Text = "FreeW — a free word processor (scaffold on the Free.Shared.* tier)",
-                Foreground = Brushes.White,
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold
-            }
-        };
-        DockPanel.SetDock(titleBar, Dock.Top);
-        root.Children.Add(titleBar);
-
         var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
         editor.LoadModel(CreateSampleDocument());
         var stateStore = new RibbonStateStore();
         var commands = FreeWRibbonCommands.Build(editor, stateStore);
+        _file = new FileCommands(this, editor, UpdateTitle);
+        editor.TextChanged += (_, _) => _file.MarkDirty();
+
+        var titleBar = BuildTitleBar();
+        DockPanel.SetDock(titleBar, Dock.Top);
+        root.Children.Add(titleBar);
 
         var ribbon = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
         DockPanel.SetDock(ribbon, Dock.Top);
@@ -55,7 +50,54 @@ public sealed class MainWindow : Window
 
         root.Children.Add(editor);
 
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.New, (_, _) => _file.New()));
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, (_, _) => _file.Open()));
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Save, (_, _) => _file.Save()));
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.SaveAs, (_, _) => _file.SaveAs()));
+
+        UpdateTitle();
+
         Content = root;
+    }
+
+    private Border BuildTitleBar()
+    {
+        static Button FileButton(string label, System.Windows.Input.RoutedUICommand command) => new()
+        {
+            Content = label,
+            Margin = new Thickness(0, 0, 6, 0),
+            Padding = new Thickness(10, 2, 10, 2),
+            Command = command
+        };
+
+        var bar = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        bar.Children.Add(FileButton("New", ApplicationCommands.New));
+        bar.Children.Add(FileButton("Open", ApplicationCommands.Open));
+        bar.Children.Add(FileButton("Save", ApplicationCommands.Save));
+
+        _titleText = new TextBlock
+        {
+            Foreground = Brushes.White,
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 0, 0)
+        };
+        bar.Children.Add(_titleText);
+
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A)),
+            Padding = new Thickness(12, 6, 12, 6),
+            Child = bar
+        };
+    }
+
+    private void UpdateTitle()
+    {
+        var name = _file.DisplayName + (_file.IsDirty ? " *" : "");
+        Title = $"{name} — FreeW";
+        _titleText.Text = $"{name} — FreeW";
     }
 
     // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.
