@@ -94,6 +94,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-size", new ImageSizeCommand(editor));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
+        // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
+        registry.Register("freew.footnote", new InsertFootnoteCommand(editor));
 
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
@@ -578,6 +580,21 @@ internal static class FreeWRibbonCommands
             var text = DateTimeDialog.Prompt(Window.GetWindow(editor));
             if (!string.IsNullOrEmpty(text))
                 editor.InsertText(text);
+        }
+    }
+
+    // Insert > References > Footnote: prompt for the footnote text, then insert a footnote reference
+    // at the caret. The view allocates the next id, stores the content and drops a superscript marker.
+    private sealed class InsertFootnoteCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var text = TextPrompt.Ask(Window.GetWindow(editor), "Insert Footnote", "Footnote text:", string.Empty);
+            if (string.IsNullOrWhiteSpace(text))
+                return; // cancelled or empty — nothing to anchor a footnote to
+            editor.Focus();
+            editor.InsertFootnote(text.Trim());
         }
     }
 

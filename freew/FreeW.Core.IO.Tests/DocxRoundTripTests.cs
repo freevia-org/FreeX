@@ -750,4 +750,79 @@ public class DocxRoundTripTests
         var read = () => DocxReader.Read(stream);
         read.Should().Throw<InvalidDataException>();
     }
+
+    [Fact]
+    public void Footnote_Reference_And_Content_RoundTrip()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("See note"));
+        body.Runs.Add(Run.FootnoteReference(1));
+        doc.Blocks.Add(body);
+        doc.Footnotes[1] = new Footnote(1, "The footnote text.");
+
+        var result = RoundTrip(doc);
+
+        // The body reference run keeps its id and renders as a superscript marker.
+        var reference = result.Paragraphs.First().Runs.Single(r => r.FootnoteId is not null);
+        reference.FootnoteId.Should().Be(1);
+        reference.Formatting.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+
+        // The footnote content is recovered intact.
+        result.Footnotes.Should().ContainKey(1);
+        result.Footnotes[1].PlainText.Should().Be("The footnote text.");
+    }
+
+    [Fact]
+    public void Footnotes_Package_HasPartContentTypeAndRelationship()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Body"));
+        body.Runs.Add(Run.FootnoteReference(1));
+        doc.Blocks.Add(body);
+        doc.Footnotes[1] = new Footnote(1, "A footnote.");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/footnotes.xml").Should().NotBeNull();
+
+        using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+        var contentTypes = ctReader.ReadToEnd();
+        contentTypes.Should().Contain("/word/footnotes.xml");
+        contentTypes.Should().Contain("wordprocessingml.footnotes+xml");
+
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        var rels = relsReader.ReadToEnd();
+        rels.Should().Contain("relationships/footnotes");
+        rels.Should().Contain("footnotes.xml");
+
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = docReader.ReadToEnd();
+        documentXml.Should().Contain("footnoteReference");
+
+        using var footnotesReader = new StreamReader(zip.GetEntry("word/footnotes.xml")!.Open());
+        var footnotesXml = footnotesReader.ReadToEnd();
+        footnotesXml.Should().Contain("A footnote.");
+        footnotesXml.Should().Contain("w:id=\"1\"");
+    }
+
+    [Fact]
+    public void NoFootnotes_DoesNotEmitPart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/footnotes.xml").Should().BeNull();
+
+        DocxReader.Read(new MemoryStream(stream.ToArray())).Footnotes.Should().BeEmpty();
+    }
 }

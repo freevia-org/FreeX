@@ -560,6 +560,9 @@ public sealed class DocumentView : RichTextBox
             case InlineUIContainer { Child: Image { Tag: InlineImage modelImage } }:
                 modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl });
                 break;
+            case WpfRun { Tag: FootnoteMarker marker }:
+                modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
+                break;
             case WpfRun run when run.Text.Length > 0:
                 modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl });
                 break;
@@ -691,6 +694,9 @@ public sealed class DocumentView : RichTextBox
         if (run.Image is { } image)
             return BuildImageRun(image);
 
+        if (run.FootnoteId is { } footnoteId)
+            return BuildFootnoteReference(footnoteId, document);
+
         var fmt = Resolve(run, paragraph, document);
         var wpf = new WpfRun(run.Text)
         {
@@ -769,6 +775,27 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    /// <summary>
+    /// Renders a footnote reference as a small superscript marker showing the footnote number, tagged
+    /// with a <see cref="FootnoteMarker"/> so <see cref="ReadInline"/> can recover the id on commit.
+    /// A tooltip surfaces the footnote text when the document carries it.
+    /// </summary>
+    private static WpfRun BuildFootnoteReference(int footnoteId, TextDocument document)
+    {
+        var marker = new WpfRun(footnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture))
+        {
+            BaselineAlignment = BaselineAlignment.Superscript,
+            FontSize = (document.DefaultRun.FontSizePt ?? DefaultFontSizePt) * PxPerPoint * SuperSubScale,
+            Tag = new FootnoteMarker(footnoteId)
+        };
+        if (document.Footnotes.TryGetValue(footnoteId, out var footnote) && footnote.PlainText is { Length: > 0 } text)
+            marker.ToolTip = text;
+        return marker;
+    }
+
+    /// <summary>Carried on a footnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
+    private sealed record FootnoteMarker(int FootnoteId);
+
     /// <summary>Renders an inline image as an InlineUIContainer hosting a WPF Image (PNG-decoded).</summary>
     private static InlineUIContainer BuildImageRun(InlineImage image)
     {
@@ -836,6 +863,34 @@ public sealed class DocumentView : RichTextBox
         caret.InsertTextInRun(text);
         // Advance the caret past the inserted text so subsequent typing continues from there.
         CaretPosition = caret.GetPositionAtOffset(text.Length) ?? caret;
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Inserts a footnote at the caret: allocates the next footnote id, stores <paramref name="text"/>
+    /// as the footnote's content in the model, and drops a superscript reference marker at the caret.
+    /// Re-renders so the marker round-trips through the model on the next commit.
+    /// </summary>
+    public void InsertFootnote(string text)
+    {
+        CommitToModel();
+
+        var id = _model.NextFootnoteId();
+        var footnote = new Footnote(id);
+        footnote.Content.Add(new ModelParagraph(text));
+        _model.Footnotes[id] = footnote;
+
+        var marker = BuildFootnoteReference(id, _model);
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
+        if (paragraph is null)
+        {
+            paragraph = new WpfParagraph();
+            Document.Blocks.Add(paragraph);
+        }
+        paragraph.Inlines.Add(marker);
+
         CommitToModel();
         Render();
     }

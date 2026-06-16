@@ -25,6 +25,7 @@ public static class DocxWriter
 
     private const string HeaderRelationshipId = "rIdHeader1";
     private const string FooterRelationshipId = "rIdFooter1";
+    private const string FootnotesRelationshipId = "rIdFootnotes";
     private const string HeaderPartName = "word/header1.xml";
     private const string FooterPartName = "word/footer1.xml";
 
@@ -55,11 +56,14 @@ public static class DocxWriter
         var hasHeader = document.Header is { IsEmpty: false };
         var hasFooter = document.Footer is { IsEmpty: false };
 
+        // A footnotes part is emitted only when the document actually carries footnotes.
+        var hasFootnotes = document.Footnotes.Count > 0;
+
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes));
         WritePart(archive, "_rels/.rels", BuildPackageRels());
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks, hasHeader, hasFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         if (hasLists)
@@ -68,6 +72,8 @@ public static class DocxWriter
             WritePart(archive, HeaderPartName, BuildHeaderFooter(W + "hdr", document.Header!));
         if (hasFooter)
             WritePart(archive, FooterPartName, BuildHeaderFooter(W + "ftr", document.Footer!));
+        if (hasFootnotes)
+            WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document));
         foreach (var image in images)
             WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
     }
@@ -128,7 +134,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -153,6 +159,10 @@ public static class DocxWriter
             hasFooter
                 ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + FooterPartName),
                     new XAttribute("ContentType", FooterContentType))
+                : null,
+            hasFootnotes
+                ? new XElement(Ct + "Override", new XAttribute("PartName", FootnotesPartName),
+                    new XAttribute("ContentType", FootnotesContentType))
                 : null,
             new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
                 new XAttribute("ContentType", CorePropertiesContentType))));
@@ -209,7 +219,8 @@ public static class DocxWriter
         IReadOnlyDictionary<string, string> hyperlinks,
         bool includeNumbering,
         bool hasHeader,
-        bool hasFooter)
+        bool hasFooter,
+        bool hasFootnotes)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
@@ -231,6 +242,11 @@ public static class DocxWriter
                 new XAttribute("Id", FooterRelationshipId),
                 new XAttribute("Type", FooterRel),
                 new XAttribute("Target", "footer1.xml")));
+        if (hasFootnotes)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", FootnotesRelationshipId),
+                new XAttribute("Type", FootnotesRelType),
+                new XAttribute("Target", "footnotes.xml")));
         foreach (var image in images)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", image.RelationshipId),
@@ -290,6 +306,45 @@ public static class DocxWriter
                 root.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
 
         return new XDocument(root);
+    }
+
+    /// <summary>
+    /// Builds word/footnotes.xml (w:footnotes). Emits the two conventional separator footnotes
+    /// (w:footnoteSeparator id=-1, w:continuationSeparator id=0) for Word-friendliness, then one
+    /// w:footnote w:id="N" per modelled footnote (ascending id), each holding its paragraphs.
+    /// </summary>
+    private static XDocument BuildFootnotes(TextDocument document)
+    {
+        var footnotes = new XElement(W + "footnotes",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+
+        XElement Separator(int id, string type) =>
+            new(W + "footnote",
+                new XAttribute(W + "type", type),
+                new XAttribute(W + "id", id),
+                new XElement(W + "p",
+                    new XElement(W + "r", new XElement(W + type))));
+
+        footnotes.Add(Separator(-1, "separator"));
+        footnotes.Add(Separator(0, "continuationSeparator"));
+
+        // Footnote paragraphs carry no inline images or hyperlinks (those walks target the body).
+        var noImages = new Dictionary<Run, ImagePart>();
+        var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var footnote in document.Footnotes.Values.OrderBy(f => f.Id))
+        {
+            var element = new XElement(W + "footnote", new XAttribute(W + "id", footnote.Id));
+            if (footnote.Content.Count == 0)
+                element.Add(new XElement(W + "p"));
+            else
+                foreach (var paragraph in footnote.Content)
+                    element.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+            footnotes.Add(element);
+        }
+
+        return new XDocument(footnotes);
     }
 
     private static XElement BuildBlock(Block block, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks) => block switch
@@ -451,6 +506,14 @@ public static class DocxWriter
             return new XElement(W + "fldSimple",
                 new XAttribute(W + "instr", " PAGE "),
                 BuildTextRun(run, imagesByRun));
+
+        // A footnote reference is a superscript run carrying a w:footnoteReference (no literal text);
+        // the rPr forces vertAlign=superscript so field-unaware viewers still show a raised marker.
+        if (run.FootnoteId is { } footnoteId)
+            return new XElement(W + "r",
+                new XElement(W + "rPr",
+                    new XElement(W + "vertAlign", new XAttribute(W + "val", "superscript"))),
+                new XElement(W + "footnoteReference", new XAttribute(W + "id", footnoteId)));
 
         return BuildTextRun(run, imagesByRun);
     }
