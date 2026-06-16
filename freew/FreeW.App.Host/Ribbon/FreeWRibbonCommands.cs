@@ -16,22 +16,35 @@ namespace FreeW.App.Host;
 /// </summary>
 internal static class FreeWRibbonCommands
 {
-    public static RibbonCommandRegistry Build(DocumentView editor)
+    public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore)
     {
         var registry = new RibbonCommandRegistry();
+        var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
 
         void Routed(string id, RoutedCommand command) =>
             registry.Register(id, new RoutedEditCommand(editor, command));
 
-        registry.Register("freew.bold", new ToggleFormatCommand(
-            editor, EditingCommands.ToggleBold, TextElement.FontWeightProperty,
-            v => v is FontWeight w && w >= FontWeights.Bold));
-        registry.Register("freew.italic", new ToggleFormatCommand(
-            editor, EditingCommands.ToggleItalic, TextElement.FontStyleProperty,
-            v => v is FontStyle s && s == FontStyles.Italic));
-        registry.Register("freew.underline", new ToggleFormatCommand(
-            editor, EditingCommands.ToggleUnderline, Inline.TextDecorationsProperty,
-            v => v is TextDecorationCollection d && d.Count > 0));
+        void Toggle(string id, RoutedCommand command, DependencyProperty property, Func<object?, bool> isOn)
+        {
+            var cmd = new ToggleFormatCommand(editor, command, property, isOn);
+            registry.Register(id, cmd);
+            stateful.Add((id, cmd));
+        }
+
+        Toggle("freew.bold", EditingCommands.ToggleBold, TextElement.FontWeightProperty,
+            v => v is FontWeight w && w >= FontWeights.Bold);
+        Toggle("freew.italic", EditingCommands.ToggleItalic, TextElement.FontStyleProperty,
+            v => v is FontStyle s && s == FontStyles.Italic);
+        Toggle("freew.underline", EditingCommands.ToggleUnderline, Inline.TextDecorationsProperty,
+            v => v is TextDecorationCollection d && d.Count > 0);
+
+        // Live ribbon state: when the caret/selection moves, recompute the toggle states and push
+        // them into the shared RibbonStateStore, which the toggle buttons observe.
+        editor.SelectionChanged += (_, _) =>
+        {
+            foreach (var (id, command) in stateful)
+                stateStore.SetState(id, command.GetState());
+        };
 
         Routed("freew.grow-font", EditingCommands.IncreaseFontSize);
         Routed("freew.shrink-font", EditingCommands.DecreaseFontSize);

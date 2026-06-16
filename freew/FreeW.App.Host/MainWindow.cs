@@ -41,9 +41,10 @@ public sealed class MainWindow : Window
 
         var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
         editor.LoadModel(CreateSampleDocument());
-        var commands = FreeWRibbonCommands.Build(editor);
+        var stateStore = new RibbonStateStore();
+        var commands = FreeWRibbonCommands.Build(editor, stateStore);
 
-        var ribbon = BuildRibbon(FreeWRibbon.Build(), commands);
+        var ribbon = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
@@ -101,7 +102,7 @@ public sealed class MainWindow : Window
 
     // --- Minimal ribbon renderer over the shared RibbonDefinition model ---
 
-    private static UIElement BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry registry)
+    private static UIElement BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
         var tabs = new TabControl
         {
@@ -111,7 +112,7 @@ public sealed class MainWindow : Window
         };
 
         foreach (var tab in definition.Tabs)
-            tabs.Items.Add(new TabItem { Header = tab.Header, Content = BuildTab(tab, registry) });
+            tabs.Items.Add(new TabItem { Header = tab.Header, Content = BuildTab(tab, registry, stateStore) });
 
         if (tabs.Items.Count > 0)
             tabs.SelectedIndex = 0;
@@ -125,7 +126,7 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static UIElement BuildTab(RibbonTab tab, IRibbonCommandRegistry registry)
+    private static UIElement BuildTab(RibbonTab tab, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
         var lane = new StackPanel
         {
@@ -134,7 +135,7 @@ public sealed class MainWindow : Window
         };
 
         foreach (var group in tab.Groups)
-            lane.Children.Add(BuildGroup(group, registry));
+            lane.Children.Add(BuildGroup(group, registry, stateStore));
 
         return new ScrollViewer
         {
@@ -144,12 +145,12 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static UIElement BuildGroup(RibbonGroup group, IRibbonCommandRegistry registry)
+    private static UIElement BuildGroup(RibbonGroup group, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
         var controls = new WrapPanel { MaxWidth = 220, Margin = new Thickness(4, 2, 4, 2) };
         foreach (var control in group.Controls)
         {
-            var element = BuildControl(control, registry);
+            var element = BuildControl(control, registry, stateStore);
             if (element is not null)
                 controls.Children.Add(element);
         }
@@ -176,7 +177,7 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static UIElement? BuildControl(RibbonControl control, IRibbonCommandRegistry registry)
+    private static UIElement? BuildControl(RibbonControl control, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
         if (control is RibbonSeparator or RibbonRowBreak)
             return null;
@@ -189,9 +190,16 @@ public sealed class MainWindow : Window
 
         if (control is RibbonToggleButton)
         {
+            var id = control.CommandId;
             var toggle = new ToggleButton { Content = control.Label, Margin = thickness, Padding = padding, MinWidth = 60 };
             if (command is IRibbonStatefulCommand stateful)
                 toggle.IsChecked = stateful.GetState().IsChecked;
+            // Observe the shared state store so the toggle reflects the current selection live.
+            stateStore.StateChanged += (_, e) =>
+            {
+                if (e.Id == id)
+                    toggle.IsChecked = e.State.IsChecked;
+            };
             toggle.Click += (_, _) => Execute();
             toggle.IsEnabled = command is not null;
             return toggle;
