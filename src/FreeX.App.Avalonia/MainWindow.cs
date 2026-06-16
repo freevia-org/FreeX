@@ -562,6 +562,10 @@ public sealed class MainWindow : Window
     {
         var root = new DockPanel();
 
+        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build();
+        DockPanel.SetDock(ribbon, Dock.Top);
+        root.Children.Add(ribbon);
+
         var toolbar = BuildToolbar();
         DockPanel.SetDock(toolbar, Dock.Top);
         root.Children.Add(toolbar);

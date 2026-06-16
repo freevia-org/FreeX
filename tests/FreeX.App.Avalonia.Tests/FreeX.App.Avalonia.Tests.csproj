@@ -4,9 +4,12 @@
     <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Ribbon\FreeX.Ribbon.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Ribbon.Avalonia\FreeX.Ribbon.Avalonia.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
