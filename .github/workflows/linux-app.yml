@@ -120,11 +120,13 @@ jobs:
             --logger "trx;LogFileName=freex-${{ matrix.runtime }}-export-path-tests.trx" \
             --results-directory artifacts
 
-          # Validate the Skia-backed Unicode PDF exporter on Linux (Skia native loads here).
+          # Run the full Avalonia shell test suite on Linux. This is the cross-platform validator
+          # for the shared Avalonia surface (Skia PDF today; charts/conditional-formatting/ribbon/
+          # dialogs etc. as the macOS feature-parity work lands on the shared shell) — coverage the
+          # macOS-runner lane cannot provide. Headless (Avalonia.Headless + UseHeadlessDrawing).
           dotnet test tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj \
             --configuration Release \
-            --filter 'FullyQualifiedName~FreeX.App.Avalonia.Tests.SkiaPdfDocumentExporterTests' \
-            --logger "trx;LogFileName=freex-${{ matrix.runtime }}-skia-pdf-tests.trx" \
+            --logger "trx;LogFileName=freex-${{ matrix.runtime }}-avalonia-tests.trx" \
             --results-directory artifacts
 
       - name: Build app project
