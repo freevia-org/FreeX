@@ -17,12 +17,16 @@ public partial class MainWindow
 
         _keyTipHwndSource = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
         _keyTipHwndSource?.AddHook(MainWindow_WndProc);
+
+        // Pin the taskbar/title-bar icon so it cannot fall back to the generic default.
+        EnsureNativeWindowIcons();
     }
 
     protected override void OnClosed(EventArgs e)
     {
         _keyTipHwndSource?.RemoveHook(MainWindow_WndProc);
         _keyTipHwndSource = null;
+        ReleaseNativeWindowIcons();
 
         base.OnClosed(e);
     }
@@ -43,6 +47,13 @@ public partial class MainWindow
                 CompleteViewportResizeRefresh();
             else
                 SheetGrid.IsLiveResizing = false;
+        }
+
+        else if (msg == WM_DPICHANGED)
+        {
+            // A DPI/monitor change is the most common moment the shell drops back to the generic
+            // taskbar icon; re-pin the correctly-sized icons after the window has moved.
+            Dispatcher.BeginInvoke(new Action(EnsureNativeWindowIcons), System.Windows.Threading.DispatcherPriority.Background);
         }
 
         if (msg is WM_KEYDOWN or WM_SYSKEYDOWN &&
