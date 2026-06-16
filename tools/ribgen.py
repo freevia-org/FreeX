@@ -1,8 +1,22 @@
 import re
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 
-XAML = "src/FreeX.App.Host/MainWindow.xaml"
+# The live MainWindow.xaml ribbon was deleted in the declarative cutover; regenerate from the
+# pre-deletion ribbon preserved in git (write it with: git show <pre-cutover>:.../MainWindow.xaml).
+XAML = "tools/_old_mainwindow.xaml"
 OUT = "src/FreeX.App.Host/Ribbon/FreeXRibbonDefinition.cs"
+RESX = "src/FreeX.App.Host/Resources/Strings.resx"
+
+# Resolve {local:Loc Key=X} headers to their en-US display strings so dropdown items read like Excel
+# ("More Functions...", "Goal Seek...", "Error Checking..."); the keytip tests look menu items up by
+# their resolved header. WPF strips the leading "_" access-key mnemonic at runtime, so strip it too.
+_loc = {}
+for _data in ET.parse(RESX).getroot().findall("data"):
+    _loc[_data.get("name")] = (_data.findtext("value") or "").replace("_", "")
+
+def resolve(s):
+    return _loc.get(s, s) if s else s
 
 src = open(XAML, encoding="utf-8").read()
 src2 = re.sub(r"\{local:Loc Key=([A-Za-z0-9_]+)\}", r"\1", src)
@@ -48,25 +62,107 @@ for e in root.iter():
 data = {}
 order = []
 curtab = None
+
+# A single CommandName can be reused by unrelated controls across tabs (e.g. "Normal" is a Home
+# cell-style menu item AND the View workbook-view toggle, with different handlers). A flat
+# CommandName -> handler map silently drops one, so a keytip fires the wrong command. We therefore
+# resolve handlers per (tab, CommandName): controls win over their own menu items, and any
+# CommandName that resolves to MORE THAN ONE distinct handler across tabs is "ambiguous" and gets a
+# tab-qualified command id ("ViewTab/Normal") in both the definition and the handler map.
+def event_handler(d):
+    # Toggles/checkboxes route through Checked/Unchecked, not Click (e.g. ViewGridlinesChk_Changed).
+    return d.get("Click") or d.get("Checked") or d.get("Unchecked")
+
+# name_handlers[name] = set of distinct handlers ever seen for this CommandName (controls + menu
+# items, across all tabs). A name bound to MORE THAN ONE handler is ambiguous and needs a unique id
+# per handler so the keytip fires the right command.
+name_handlers = defaultdict(set)
+
+# home_handlers[name] = handler chosen for the hand-authored Home tab (controls preferred over their
+# own menu items). HomeRibbonDefinition.cs uses PLAIN command ids, so these must map plainly.
+home_handlers = {}
+
+def record(tab, name, handler, is_control):
+    if not handler:
+        return
+    name_handlers[name].add(handler)
+    if tab == "HomeTab" and (name not in home_handlers or is_control):
+        home_handlers[name] = handler
+
 for e in root.iter():
     cid = catid(e)
     if cid and cid.endswith("Tab"):
         curtab = cid
     if cid and cid.endswith("Group"):
-        ctrls = []
+        items = []
         for d in e.iter():
             tag = d.tag.split("}")[-1]
-            if tag in ("Button", "ToggleButton", "ComboBox", "CheckBox"):
-                if any(a.tag == P + "ContextMenu" for a in anc(d)):
-                    continue
+            ancestors = anc(d)
+            if any(a.tag == P + "ContextMenu" for a in ancestors):
+                continue
+            inside_ctrl = any(
+                a.tag.split("}")[-1] in ("Button", "ToggleButton", "ComboBox", "CheckBox")
+                for a in ancestors)
+            if tag == "Rectangle" and d.get("Width") == "1" and not inside_ctrl:
+                items.append(("sep",))
+            elif tag in ("Button", "ToggleButton", "ComboBox", "CheckBox") and not inside_ctrl:
                 cn = cmdname(d)
                 if not cn:
                     continue
-                ctrls.append((tag, cn, keytip(d) or ""))
+                style = re.sub(r"\{StaticResource (\w+)\}", r"\1", d.get("Style") or "")
+                ch_handler = event_handler(d)
+                record(curtab, cn, ch_handler, is_control=True)
+                menu = []
+                for ch in list(d):
+                    if not ch.tag.split("}")[-1].endswith(".ContextMenu"):
+                        continue
+                    cm = ch.find(P + "ContextMenu")
+                    if cm is None:
+                        continue
+                    for mi in list(cm):
+                        mt = mi.tag.split("}")[-1]
+                        if mt == "Separator":
+                            menu.append(("sep",))
+                        elif mt == "MenuItem":
+                            mcn = mi.get(LK + "RibbonMetadata.CommandName") or resolve(mi.get("Header")) or ""
+                            if mcn:
+                                mi_handler = event_handler(mi)
+                                # id binds to a handler (CommandName); label is the resolved header so
+                                # it reads like Excel. Fall back to the id when there is no header.
+                                mlabel = resolve(mi.get("Header")) or mcn
+                                record(curtab, mcn, mi_handler, is_control=False)
+                                menu.append(("item", mcn, mi.get(LK + "RibbonTooltip.KeyTip") or "",
+                                             mi.get("InputGestureText") or "", mi_handler, mlabel))
+                has_drop = d.get(LK + "RibbonMetadata.DropdownMenuButton") == "true" or len(menu) > 0
+                items.append(("ctrl", tag, cn, keytip(d) or "", style, has_drop, menu, ch_handler))
         if curtab not in data:
             data[curtab] = []
             order.append(curtab)
-        data[curtab].append((cid, ctrls))
+        data[curtab].append((cid, items))
+
+# A CommandName is ambiguous when distinct controls bind it to more than one handler (e.g. the View
+# "Freeze Panes" picker button -> FreezePanesPickerBtn_Click vs its "Freeze Panes" menu item ->
+# FreezeAtSelectionMenuItem_Click; or the Home cell-style "Normal" vs the View "Normal" toggle). A
+# flat name->handler map silently drops all but one, firing the wrong command. For ambiguous names we
+# mint a unique id per handler ("name#Handler") so each rendered control/menu item binds to exactly
+# its own handler. Unambiguous names keep their plain id (so the hand-authored Home tab, which uses
+# plain ids, still resolves through the same handler map).
+ambiguous_names = {name for name, hs in name_handlers.items() if len(hs) > 1}
+
+def command_id(name, handler):
+    if handler and name in ambiguous_names:
+        return f"{name}#{handler}"
+    return name
+
+# Build the final id -> handler map (one entry per distinct id; ambiguous ids are 1:1 with handlers).
+handler_map = {}
+for name, handlers in name_handlers.items():
+    for handler in handlers:
+        handler_map[command_id(name, handler)] = handler
+# The hand-authored Home tab uses plain ids; ensure each resolves to Home's own handler even when the
+# name is ambiguous (and thus only minted as "name#handler" by the generated tabs above).
+for name, handler in home_handlers.items():
+    handler_map.setdefault(name, handler)
 
 ctxkey = {
     "ShapeFormatTab": "shape.selected",
@@ -153,6 +249,87 @@ def icon(cn):
     return "Generic"
 
 
+# Mirrors RibbonCommandPresentationPlanner.IsLargeRibbonCommand (the authoritative hero-button list).
+LARGE_EQ = {
+    "paste", "table", "pivottable", "3d map", "insert picture", "pictures", "shapes",
+    "insert link", "comment", "symbol", "line", "rotate object", "object size",
+    "sort ascending", "sort descending", "filter", "group", "ungroup", "zoom", "100%", "macros", "feedback",
+}
+LARGE_CONTAINS = [
+    "conditional formatting", "format as table", "cell styles", "add-ins", "recommended chart",
+    "recommended pivottable", "insert symbol", "insert slicer", "insert timeline", "header", "equation",
+    "text box", "rectangle", "ellipse", "bring forward", "send backward", "selection pane", "themes",
+    "margins", "orientation", "paper size", "print area", "breaks", "background", "print titles",
+    "theme colors", "theme fonts", "theme effects", "scale to fit", "insert function", "autosum",
+    "name manager", "define name", "use in formula", "create from selection", "calculation options",
+    "calculate now", "calculate sheet", "get data", "refresh all", "text to columns", "flash fill",
+    "remove duplicates", "data validation", "consolidate", "data model", "analyze data", "what-if",
+    "forecast sheet", "collapse group", "expand group", "subtotal", "spelling", "workbook statistics",
+    "check accessibility", "show changes", "new comment", "show comments", "protect sheet",
+    "protect workbook", "allow edit", "normal", "page break preview", "page layout", "custom views",
+    "zoom to 100", "zoom to selection", "help online", "copy diagnostics", "check for updates",
+    "about freex", "legal notices",
+]
+ICON_STYLES = {"RibbonIconButton", "RibbonIconToggleButton"}
+
+
+def is_large(name):
+    n = name.strip().lower()
+    if n in LARGE_EQ:
+        return True
+    return any(s in n for s in LARGE_CONTAINS)
+
+
+# Mirrors RibbonCommandPresentationPlanner.ShouldHideFromInsertRibbon: keep only the primary chart
+# types + recommended/sparklines on the Insert tab; the rest are chart-formatting commands surfaced
+# through the chart contextual tabs, not as Insert buttons.
+_PRIMARY_INSERT_CHARTS = {
+    "column chart", "stacked column chart", "100% stacked column chart", "line chart", "pie chart",
+    "doughnut chart", "bar chart", "stacked bar chart", "100% stacked bar chart", "scatter chart",
+    "bubble chart", "area chart", "radar chart", "stock chart",
+}
+
+
+def should_hide_from_insert(title):
+    n = (title or "").strip().lower()
+    if not any(k in n for k in ("chart", "axis", "legend", "trendline", "series", "plot",
+                                "label", "slice", "doughnut hole", "secondary")):
+        return False
+    return (n not in _PRIMARY_INSERT_CHARTS
+            and "sparkline" not in n
+            and "recommended chart" not in n)
+
+
+# Per-group collapse priority: HIGHER stays expanded longer; LOWER collapses to an overflow button
+# first. Tuned to read like Excel — the primary action group of each tab is protected (high), large
+# secondary galleries (Charts) collapse early, and small utility groups (Symbols, Comments, Links)
+# collapse first. Keyed by the group's display header; unlisted groups fall back to left-to-right
+# descending order so earlier (more important) groups outlast later ones.
+GROUP_PRIORITY = {
+    # Insert: Tables is the protected primary; Charts is large and collapses before the small groups.
+    "Tables": 200, "Charts": 60, "Sparklines": 120, "Filters": 110, "Links": 100,
+    "Comments": 90, "Text": 80, "Symbols": 70,
+    # Page Layout: Page Setup is primary; Themes/Scale collapse earlier.
+    "Page Setup": 200, "Scale To Fit": 90, "Sheet Options": 80, "Themes": 110, "Arrange": 70,
+    # Formulas: Function Library primary; Calculation/Defined Names mid; Formula Auditing collapses.
+    "Function Library": 200, "Defined Names": 130, "Formula Auditing": 90, "Calculation": 120,
+    # Data: Get & Transform / Sort & Filter primary; What-If/Outline collapse.
+    "Get & Transform Data": 200, "Queries & Connections": 90, "Sort & Filter": 180,
+    "Data Tools": 130, "Forecast": 80, "Outline": 70, "Data Types": 100,
+    # Review: Proofing primary; Notes/Protect collapse first.
+    "Proofing": 200, "Accessibility": 120, "Comments ": 110, "Notes": 80, "Protect": 70, "Changes": 90,
+    # View: Workbook Views / Show primary; Zoom/Window collapse.
+    "Workbook Views": 200, "Show": 180, "Zoom": 110, "Window": 90,
+}
+
+
+def group_priority(tab, cid, header, index):
+    if header in GROUP_PRIORITY:
+        return GROUP_PRIORITY[header]
+    # Fallback: descending left-to-right so the leftmost (primary) group outlasts the rest.
+    return max(40, 180 - index * 10)
+
+
 def grouphdr(cid, tab):
     s = cid[:-5] if cid.endswith("Group") else cid
     tp = tab[:-3]
@@ -171,8 +348,36 @@ def method(kind):
     return {"Button": "Button", "ToggleButton": "Toggle", "CheckBox": "CheckBox", "ComboBox": "ComboBox"}[kind]
 
 
+def menu_expr(menu):
+    parts = []
+    n = 0
+    for m in menu:
+        if m[0] == "sep":
+            if parts and not parts[-1].endswith("Separator()"):
+                parts.append(".Separator()")
+            continue
+        if n >= 14:
+            break
+        mkt, mg, mhandler = esc(m[2]), esc(m[3]), m[4]
+        mlabel = esc(m[5] if len(m) > 5 else m[1])
+        mid = esc(command_id(m[1], mhandler))
+        args = f'"{mid}", "{mlabel}"'
+        if mkt or mg:
+            args += f', "{mkt}"'
+        if mg:
+            args += f', "{mg}"'
+        parts.append(f".Item({args})")
+        n += 1
+    while parts and parts[0].endswith("Separator()"):
+        parts.pop(0)
+    while parts and parts[-1].endswith("Separator()"):
+        parts.pop()
+    return "".join(parts)
+
+
 out = []
 out.append("using FreeX.Ribbon;")
+out.append("using Ico = FreeX.Ribbon.RibbonCommandIconKind;")
 out.append("")
 out.append("namespace FreeX.App.Host;")
 out.append("")
@@ -191,6 +396,8 @@ ctxorder = ["ChartDesignTab", "ChartFormatTab", "PictureFormatTab", "ShapeFormat
 for tab in mainorder + ctxorder:
     if tab not in data:
         continue
+    if tab == "HomeTab":
+        continue  # Home is hand-authored in HomeRibbonDefinition for full fidelity.
     meta = tabmeta.get(tab, dict(header=tab, keytip="", contextual=tab in ctxkey))
     raw_hdr = meta["header"]
     if raw_hdr.startswith("MainWindow_Header_"):
@@ -200,7 +407,7 @@ for tab in mainorder + ctxorder:
         raw_hdr = ctxlabel[tab]
     hdr = esc(raw_hdr)
     kt = esc(meta["keytip"])
-    groups = [g for g in data[tab] if g[1]]
+    groups = [g for g in data[tab] if any(it[0] == "ctrl" for it in g[1])]
     if not groups:
         continue
     if tab in ctxkey:
@@ -211,47 +418,115 @@ for tab in mainorder + ctxorder:
     else:
         out.append(f'        .Tab("{tab}", "{hdr}", "{kt}", tab => tab')
     gp = 180
-    for cid, ctrls in groups:
+    for gi, (cid, items) in enumerate(groups):
         ghdr = esc(grouphdr(cid, tab))
-        ctrls = ctrls[:16]
+        gp = group_priority(tab, cid, grouphdr(cid, tab), gi)
+        # Cap control count (keep separators), and drop leading/trailing/duplicate separators.
+        kept = []
+        ctrl_count = 0
+        for it in items:
+            if it[0] == "sep":
+                if kept and kept[-1][0] != "sep":
+                    kept.append(it)
+                continue
+            if tab == "InsertTab" and should_hide_from_insert(it[2]):
+                continue
+            if ctrl_count >= 16:
+                continue
+            kept.append(it)
+            ctrl_count += 1
+        while kept and kept[-1][0] == "sep":
+            kept.pop()
+
         cl = []
-        for i, (kind, cn, k) in enumerate(ctrls):
-            m = method(kind)
+        for it in kept:
+            if it[0] == "sep":
+                cl.append("                .Separator()")
+                continue
+            _, kind, cn, k, style, has_drop, menu, ch_handler = it
             ic = icon(cn)
-            cesc = esc(cn)
+            cesc = esc(cn)               # label (display text)
+            idesc = esc(command_id(cn, ch_handler))  # command id (handler-qualified when ambiguous)
             kk = esc(k)
-            large = (i == 0 and kind == "Button" and len(ctrls) >= 2)
-            if m == "ComboBox":
+            mx = menu_expr(menu) if menu else ""
+            if mx:
+                drop = f", menu: m => m{mx}"
+            elif has_drop:
+                drop = ", dropdown: true"
+            else:
+                drop = ""
+            if kind == "ComboBox":
                 low = cn.lower()
                 if "font size" in low:
-                    items = '"8", "9", "10", "11", "12", "14", "16", "18", "20", "24"'
+                    citems = '"8", "9", "10", "11", "12", "14", "16", "18", "20", "24"'
+                    width = "44"
                 elif "font" in low:
-                    items = '"Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana"'
+                    citems = '"Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana"'
+                    width = "120"
                 elif "number" in low:
-                    items = '"General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text"'
+                    citems = '"General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text"'
+                    width = "120"
                 elif "width" in low or "height" in low:
-                    items = '"Automatic", "1 page", "2 pages"'
+                    citems = '"Automatic", "1 page", "2 pages"'
+                    width = "96"
                 elif "percent" in low or "scale" in low:
-                    items = '"100%", "90%", "80%", "75%", "50%"'
+                    citems = '"100%", "90%", "80%", "75%", "50%"'
+                    width = "70"
                 else:
-                    items = ""
-                itemexpr = (", Items = new[] { " + items + " }") if items else ""
-                cl.append(f'                .ComboBox("{cesc}", "{cesc}", c => c with {{ Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}){itemexpr} }})')
-            elif large:
-                cl.append(f'                .Button("{cesc}", "{cesc}", b => b with {{ PreferredLayout = RibbonCommandLayoutKind.Large, Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}), KeyTip = "{kk}" }})')
+                    citems = ""
+                    width = ""
+                parts = [f"Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic})"]
+                if width:
+                    parts.append(f"Width = {width}")
+                if citems:
+                    parts.append("Items = new[] { " + citems + " }")
+                if kk:
+                    parts.append(f'KeyTip = "{kk}"')
+                cl.append(f'                .ComboBox("{idesc}", "{cesc}", c => c with {{ {", ".join(parts)} }})')
+            elif kind == "CheckBox":
+                cb_parts = [f"Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic})"]
+                if kk:
+                    cb_parts.append(f'KeyTip = "{kk}"')
+                cl.append(f'                .CheckBox("{idesc}", "{cesc}", b => b with {{ {", ".join(cb_parts)} }})')
+            elif is_large(cn):
+                cl.append(f'                .Large("{idesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
+            elif style in ICON_STYLES or kind == "ToggleButton":
+                if kind == "ToggleButton":
+                    cl.append(f'                .IconToggle("{idesc}", "{cesc}", Ico.{ic}, "{kk}")')
+                else:
+                    cl.append(f'                .Icon("{idesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
             else:
-                cl.append(f'                .{m}("{cesc}", "{cesc}", b => b with {{ Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}), KeyTip = "{kk}" }})')
+                cl.append(f'                .Medium("{idesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
         body = "\n".join(cl)
-        out.append(f'            .Group("{cid}", "{ghdr}", null, priority: {gp},')
+        out.append(f'            .Group("{cid}", "{ghdr}", null, priority: {int(gp)},')
         out.append("                g => g")
         out.append(body + ")")
-        gp -= 10
     out.append("        )")
 out.append("        .Build();")
 out.append("}")
 
 open(OUT, "w", encoding="utf-8").write("\n".join(out) + "\n")
 print("wrote", OUT)
+
+# Emit the CommandName -> Click-handler-method map for the native command registry.
+HMAP = "src/FreeX.App.Host/Ribbon/FreeXRibbonHandlerMap.g.cs"
+hm = []
+hm.append("using System.Collections.Generic;")
+hm.append("")
+hm.append("namespace FreeX.App.Host;")
+hm.append("")
+hm.append("/// <summary>Generated map: ribbon CommandName -> the MainWindow Click-handler method name.</summary>")
+hm.append("public static class FreeXRibbonHandlerMap")
+hm.append("{")
+hm.append("    public static readonly IReadOnlyDictionary<string, string> Handlers =")
+hm.append("        new Dictionary<string, string>(System.StringComparer.Ordinal)")
+hm.append("        {")
+for cmd in sorted(handler_map):
+    hm.append(f'            ["{esc(cmd)}"] = "{esc(handler_map[cmd])}",')
+hm.append("        };")
+hm.append("}")
+open(HMAP, "w", encoding="utf-8").write("\n".join(hm) + "\n")
+print("wrote", HMAP, "with", len(handler_map), "handlers")
 print("tabs:", sum(1 for t in (mainorder + ctxorder) if t in data and any(g[1] for g in data[t])))
 print("groups:", sum(1 for t in data for g in data[t] if g[1]))
 print("controls:", sum(len(g[1][:16]) for t in data for g in data[t] if g[1]))

@@ -5,26 +5,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class TableDesignCommandSourceTests
 {
-    [Theory]
-    [InlineData("Table Name", "Table Name", "N", "TableDesignTableNameBtn_Click")]
-    [InlineData("Resize Table", "Resize Table", "Z", "TableDesignResizeTableBtn_Click")]
-    [InlineData("Summarize with PivotTable", "Summarize with PivotTable", "S", "TableDesignSummarizeWithPivotTableBtn_Click")]
-    [InlineData("Convert to Range", "Convert to Range", "V", "TableDesignConvertToRangeBtn_Click")]
-    public void TableDesignDeferredSliceCommands_AreEnabledAndRouted(
-        string title,
-        string content,
-        string keyTip,
-        string handler)
-    {
-        var button = ReadTableDesignTabXaml().ExtractButtonElementByInvariantCommandName(title);
-
-        button.ShouldContainLocalizedAttribute("Content", content);
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().Contain($"Click=\"{handler}\"");
-        button.Should().NotContain("IsEnabled=\"False\"");
-        button.Should().NotContain("Deferred");
-    }
 
     [Fact]
     public void TableDesignHeaderRow_IsHiddenUntilARealHeaderRowCommandExists()

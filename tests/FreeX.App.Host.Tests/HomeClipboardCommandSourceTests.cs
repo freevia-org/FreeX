@@ -5,57 +5,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class HomeClipboardCommandSourceTests
 {
-    [Theory]
-    [InlineData("Paste", "V", "PasteBtn_Click")]
-    [InlineData("Cut", "X", "CutBtn_Click")]
-    [InlineData("Copy", "C", "CopyBtn_Click")]
-    [InlineData("Format Painter", "FP", "FormatPainterBtn_Click")]
-    public void ClipboardCommandButtons_ExposeExpectedKeyTipsAndHandlers(
-        string title,
-        string keyTip,
-        string handler)
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var button = xaml.ExtractButtonElementByClickHandler(handler);
-
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().Contain($"Click=\"{handler}\"");
-    }
-
-    [Theory]
-    [InlineData("Paste", "P", "PasteMenuItem_Click")]
-    [InlineData("Values", "V", "PasteValuesMenuItem_Click")]
-    [InlineData("Formulas", "F", "PasteFormulasMenuItem_Click")]
-    [InlineData("Formatting", "R", "PasteFormattingMenuItem_Click")]
-    [InlineData("Keep Source Column Widths", "W", "PasteKeepSourceColumnWidthsMenuItem_Click")]
-    [InlineData("Values & Source Formatting", "A", "PasteValuesAndSourceFormattingMenuItem_Click")]
-    [InlineData("Transpose", "T", "PasteTransposeMenuItem_Click")]
-    [InlineData("Paste Link", "L", "PasteLinkMenuItem_Click")]
-    [InlineData("Picture", "I", "PastePictureMenuItem_Click")]
-    [InlineData("Linked Picture", "K", "PasteLinkedPictureMenuItem_Click")]
-    [InlineData("Paste Special...", "S", "PasteSpecialBtn_Click")]
-    public void PasteMenuItems_ExposeExpectedKeyTipsAndHandlers(
-        string header,
-        string keyTip,
-        string handler)
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var menuItem = xaml.ExtractMenuItemElementByClickHandler(handler);
-
-        ShouldContainLocalizedMenuHeader(menuItem, header);
-        menuItem.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        menuItem.Should().Contain($"Click=\"{handler}\"");
-    }
-
-    [Fact]
-    public void FormatPainterButton_ExposesDoubleClickPersistentHandler()
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var button = xaml.ExtractButtonElementByClickHandler("FormatPainterBtn_Click");
-
-        button.Should().Contain("PreviewMouseLeftButtonDown=\"FormatPainterBtn_PreviewMouseLeftButtonDown\"");
-    }
 
     [Fact]
     public void ClipboardCommandHandlers_RouteThroughCopyPasteModesAndPasteSpecialPlanner()

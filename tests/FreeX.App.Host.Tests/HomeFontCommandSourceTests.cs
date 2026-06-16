@@ -4,80 +4,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class HomeFontCommandSourceTests
 {
-    [Theory]
-    [InlineData("FontNameBox", "Font", "FF", "FontNameBox_SelectionChanged", "FontNameBox_KeyDown", "FontNameBox_LostKeyboardFocus")]
-    [InlineData("FontSizeBox", "Font Size", "FS", "FontSizeBox_SelectionChanged", "FontSizeBox_KeyDown", "FontSizeBox_LostKeyboardFocus")]
-    public void FontEditableSelectors_ExposeExpectedKeyTipsAndCommitHandlers(
-        string name,
-        string title,
-        string keyTip,
-        string selectionHandler,
-        string keyHandler,
-        string lostFocusHandler)
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var selector = xaml.ExtractElementByName("ComboBox", name);
-
-        selector.Should().Contain("IsEditable=\"True\"");
-        selector.ShouldContainInvariantCommandName(title);
-        selector.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        selector.Should().Contain($"SelectionChanged=\"{selectionHandler}\"");
-        selector.Should().Contain($"KeyDown=\"{keyHandler}\"");
-        selector.Should().Contain($"LostKeyboardFocus=\"{lostFocusHandler}\"");
-    }
-
-    [Theory]
-    [InlineData("Increase Font Size", "FG", "IncreaseFontSizeBtn_Click")]
-    [InlineData("Decrease Font Size", "FK", "DecreaseFontSizeBtn_Click")]
-    [InlineData("Fill Color", "H", "FillColorBtn_Click")]
-    [InlineData("Font Color", "FC", "FontColorBtn_Click")]
-    public void FontCommandButtons_ExposeExpectedKeyTipsAndHandlers(
-        string title,
-        string keyTip,
-        string handler)
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var button = xaml.ExtractButtonElementByClickHandler(handler);
-
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().Contain($"Click=\"{handler}\"");
-    }
-
-    [Theory]
-    [InlineData("FillColorBtn_Click", "FillColorPickerBtn_Click", "HomeFillColorButton")]
-    [InlineData("FontColorBtn_Click", "FontColorPickerBtn_Click", "HomeFontColorButton")]
-    public void FontColorCommandButtons_AreSplitButtonsWithPickerDropdowns(
-        string applyHandler,
-        string pickerHandler,
-        string automationId)
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var button = xaml.ExtractButtonElementByClickHandler(applyHandler);
-
-        button.Should().Contain("local:RibbonMetadata.DropdownMenuButton=\"True\"");
-        button.Should().Contain($"local:RibbonMetadata.DropdownClick=\"{pickerHandler}\"");
-        button.Should().Contain($"AutomationProperties.AutomationId=\"{automationId}\"");
-    }
-
-    [Theory]
-    [InlineData("BoldButton", "Bold", "1", "BoldButton_Click")]
-    [InlineData("ItalicButton", "Italic", "2", "ItalicButton_Click")]
-    [InlineData("UnderlineButton", "Underline", "3", "UnderlineButton_Click")]
-    [InlineData("StrikeButton", "Strikethrough", "4", "StrikeButton_Click")]
-    public void FontToggleButtons_ExposeExpectedKeyTipsAndHandlers(
-        string name,
-        string title,
-        string keyTip,
-        string handler)
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var toggle = xaml.ExtractElementByName("ToggleButton", name);
-
-        toggle.ShouldContainInvariantCommandName(title);
-        toggle.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        toggle.Should().Contain($"Click=\"{handler}\"");
-    }
 
     [Fact]
     public void FontCommandHandlers_RouteThroughStyleDiffsAndPlanners()
@@ -105,24 +31,6 @@ public sealed class HomeFontCommandSourceTests
     }
 
     [Fact]
-    public void FontFamilyDropdown_UsesScrollableOfficeStyleFontItems()
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var resources = DialogSourceTestSupport.ReadHostSources("Resources\\MainWindowResources.xaml");
-        var selector = xaml.ExtractElementByName("ComboBox", "FontNameBox");
-
-        selector.Should().Contain("MaxDropDownHeight=\"260\"");
-        selector.Should().Contain("ItemTemplate=\"{StaticResource FontNameComboBoxItemTemplate}\"");
-        selector.Should().Contain("ItemContainerStyle=\"{StaticResource FontNameComboBoxItemStyle}\"");
-        resources.Should().Contain("x:Key=\"FontNameComboBoxItemTemplate\"");
-        resources.Should().Contain("FontFamily=\"{Binding}\"");
-        resources.Should().Contain("x:Key=\"FontNameComboBoxItemStyle\"");
-        resources.Should().Contain("Property=\"IsHighlighted\" Value=\"True\"");
-        resources.Should().Contain("Property=\"IsSelected\" Value=\"True\"");
-        resources.Should().Contain("SelectionMarker");
-    }
-
-    [Fact]
     public void SharedComboBoxDropdownStyle_ProvidesWheelHoverAndSelectionBehavior()
     {
         var appXaml = DialogSourceTestSupport.ReadHostSources("App.xaml");
@@ -139,19 +47,4 @@ public sealed class HomeFontCommandSourceTests
         behaviorSource.Should().Contain("ScrollDropDown(scrollViewer, wheelArgs)");
     }
 
-    [Fact]
-    public void FontColorButtons_ExposeStableAutomationMetadata()
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var fillButton = xaml.ExtractButtonElementByClickHandler("FillColorBtn_Click");
-        var fontButton = xaml.ExtractButtonElementByClickHandler("FontColorBtn_Click");
-
-        fillButton.ShouldContainLocalizedAttribute("AutomationProperties.Name", "Fill Color");
-        fillButton.Should().Contain("AutomationProperties.AutomationId=\"HomeFillColorButton\"");
-        fillButton.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Color the background of the selected cells.");
-
-        fontButton.ShouldContainLocalizedAttribute("AutomationProperties.Name", "Font Color");
-        fontButton.Should().Contain("AutomationProperties.AutomationId=\"HomeFontColorButton\"");
-        fontButton.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Change the color of the text.");
-    }
 }

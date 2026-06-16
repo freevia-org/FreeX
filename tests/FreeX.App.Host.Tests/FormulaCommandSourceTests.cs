@@ -30,46 +30,6 @@ public sealed class FormulaCommandSourceTests
     }
 
     [Theory]
-    [InlineData("Name Manager", "N", "NamedRangesButton_Click")]
-    [InlineData("Define Name", "DN", "DefineNameBtn_Click")]
-    [InlineData("Use in Formula", "I", "UseInFormulaBtn_Click")]
-    [InlineData("Create from Selection", "CS", "CreateNamesFromSelectionBtn_Click")]
-    public void DefinedNameCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
-        string title,
-        string keyTip,
-        string handler)
-    {
-        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
-            .ExtractButtonElementByInvariantCommandName(title);
-
-        button.ShouldContainLocalizedAttribute("Content", title);
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().Contain($"Click=\"{handler}\"");
-    }
-
-    [Theory]
-    [InlineData("Sum", "S", "AutoSumSumMenuItem_Click")]
-    [InlineData("Average", "A", "AutoSumAvgMenuItem_Click")]
-    [InlineData("Count Numbers", "C", "AutoSumCountMenuItem_Click")]
-    [InlineData("Count All", "T", "AutoSumCountAllMenuItem_Click")]
-    [InlineData("Max", "X", "AutoSumMaxMenuItem_Click")]
-    [InlineData("Min", "M", "AutoSumMinMenuItem_Click")]
-    [InlineData("More Functions...", "F", "AutoSumMoreMenuItem_Click")]
-    public void FormulaAutoSumMenuItems_ExposeExpectedKeyTipsAndHandlers(
-        string header,
-        string keyTip,
-        string handler)
-    {
-        var item = LocalizedXamlTestSupport.ReadMainWindowXaml()
-            .ExtractElementByLocalizedAttributeValue("MenuItem", "Header", header);
-
-        item.ShouldContainLocalizedAttribute("Header", header);
-        item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        item.Should().Contain($"Click=\"{handler}\"");
-    }
-
-    [Theory]
     [InlineData("Trace Precedents", "TP", "TracePrecedentsBtn_Click")]
     [InlineData("Trace Dependents", "TD", "TraceDependentsBtn_Click")]
     [InlineData("Remove Arrows", "RA", "RemoveArrowsBtn_Click")]
@@ -85,23 +45,6 @@ public sealed class FormulaCommandSourceTests
         var elementName = title == "Show Formulas" ? "ToggleButton" : "Button";
         var button = ReadFormulasTabXaml()
             .ExtractElementByInvariantCommandName(elementName, title, $"Click=\"{handler}\"");
-
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().Contain($"Click=\"{handler}\"");
-    }
-
-    [Theory]
-    [InlineData("Calculate Now", "CN", "CalcNowBtn_Click")]
-    [InlineData("Calculate Sheet", "SC", "CalcSheetBtn_Click")]
-    [InlineData("Calculation Options", "O", "CalcOptionsBtn_Click")]
-    public void FormulaCalculationCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
-        string title,
-        string keyTip,
-        string handler)
-    {
-        var button = ReadFormulasTabXaml()
-            .ExtractButtonElementByInvariantCommandName(title, $"Click=\"{handler}\"");
 
         button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");

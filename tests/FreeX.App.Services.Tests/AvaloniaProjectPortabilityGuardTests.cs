@@ -22,7 +22,9 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         "FreeX.Core.Calc",
         "FreeX.Core.Commands",
         "FreeX.Core.IO",
-        "FreeX.Core.Model"
+        "FreeX.Core.Model",
+        "Free.Shared.Ribbon",
+        "FreeX.Ribbon.Avalonia"
     ];
 
     private static readonly (string Description, Regex Pattern)[] PortableForbiddenPatterns =

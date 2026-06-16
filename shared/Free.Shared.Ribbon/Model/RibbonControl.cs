@@ -31,6 +31,9 @@ public sealed record RibbonComboBox(RibbonCommandId CommandId, string Label)
     : RibbonControl(CommandId, Label)
 {
     public IReadOnlyList<string> Items { get; init; } = Array.Empty<string>();
+
+    /// <summary>Explicit width in DIPs (e.g. a narrow font-size box). Null = renderer default.</summary>
+    public double? Width { get; init; }
 }
 
 public sealed record RibbonSplitButton(RibbonCommandId CommandId, string Label, RibbonMenu Menu)
@@ -42,5 +45,10 @@ public sealed record RibbonDropdown(RibbonCommandId CommandId, string Label, Rib
 public sealed record RibbonGallery(RibbonCommandId CommandId, string Label)
     : RibbonControl(CommandId, Label);
 
+/// <summary>A thin vertical divider between controls within a group row.</summary>
 public sealed record RibbonSeparator()
+    : RibbonControl(new RibbonCommandId(""), "");
+
+/// <summary>Starts a new horizontal row within a group (Office-style multi-row groups).</summary>
+public sealed record RibbonRowBreak()
     : RibbonControl(new RibbonCommandId(""), "");

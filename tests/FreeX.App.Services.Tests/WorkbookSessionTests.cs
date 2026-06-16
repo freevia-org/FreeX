@@ -2023,9 +2023,16 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
-    public void CopySelectedRangeText_RejectsMultipleSelectedRanges()
+    public void CopySelectedRangeText_RejectsNonCongruentMultipleSelectedRanges()
     {
-        var (session, _, a1, c1) = CreateSessionWithMultipleSelectedRanges();
+        // Excel can copy a multiple selection only when its areas share the same rows or the
+        // same columns. Areas that differ in both rows and columns stay rejected. (Congruent
+        // same-row/same-column multi-area copy is covered by WorkbookSessionMultiRangeCopyTests.)
+        var (session, sheet, a1, _) = CreateSessionWithMultipleSelectedRanges();
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        var areaA1 = new GridRange(a1, a1);
+        var areaC3 = new GridRange(c3, c3);
+        session.SelectRanges(areaA1, new[] { areaA1, areaC3 });
 
         var result = session.TryCopySelectedRangeText();
         Action copy = () => session.CopySelectedRangeText();
@@ -2036,7 +2043,7 @@ public sealed class WorkbookSessionTests
         copy.Should()
             .Throw<InvalidOperationException>()
             .WithMessage("Copy does not support multiple selected ranges yet.");
-        session.SelectedRanges.Should().Equal(new GridRange(a1, a1), new GridRange(c1, c1));
+        session.SelectedRanges.Should().Equal(areaA1, areaC3);
     }
 
     [Fact]

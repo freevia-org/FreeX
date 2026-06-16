@@ -4,59 +4,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class HomeCellsCommandSourceTests
 {
-    [Theory]
-    [InlineData("Insert", "I", "InsertPickerBtn_Click")]
-    [InlineData("Delete", "D", "DeletePickerBtn_Click")]
-    [InlineData("Format", "O", "FormatPickerBtn_Click")]
-    public void CellsCommandButtons_ExposeExpectedKeyTipsAndHandlers(
-        string title,
-        string keyTip,
-        string handler)
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var button = xaml.ExtractButtonElementByClickHandler(handler);
-
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().Contain($"Click=\"{handler}\"");
-    }
-
-    [Theory]
-    [InlineData("Insert Cells...", "C", "InsertCellsMenuItem_Click")]
-    [InlineData("Insert Sheet Rows", "R", "InsertRowBtn_Click")]
-    [InlineData("Insert Sheet Columns", "O", "InsertColBtn_Click")]
-    [InlineData("Insert Sheet", "S", "InsertSheetMenuItem_Click")]
-    [InlineData("Delete Cells...", "C", "DeleteCellsMenuItem_Click")]
-    [InlineData("Delete Sheet Rows", "R", "DeleteRowBtn_Click")]
-    [InlineData("Delete Sheet Columns", "O", "DeleteColBtn_Click")]
-    [InlineData("Delete Sheet", "S", "DeleteSheetMenuItem_Click")]
-    [InlineData("Row Height...", "R", "FormatRowHeightMenuItem_Click")]
-    [InlineData("AutoFit Row Height", "A", "FormatAutoRowMenuItem_Click")]
-    [InlineData("Column Width...", "C", "FormatColWidthMenuItem_Click")]
-    [InlineData("AutoFit Column Width", "W", "FormatAutoColMenuItem_Click")]
-    [InlineData("Hide Rows", "H", "FormatHideRowMenuItem_Click")]
-    [InlineData("Unhide Rows", "U", "FormatUnhideRowMenuItem_Click")]
-    [InlineData("Hide Columns", "D", "FormatHideColMenuItem_Click")]
-    [InlineData("Unhide Columns", "N", "FormatUnhideColMenuItem_Click")]
-    [InlineData("Rename Sheet", "E", "FormatRenameSheetMenuItem_Click")]
-    [InlineData("Tab Color", "TC", "FormatTabColorMenuItem_Click")]
-    [InlineData("Hide Sheet", "S", "FormatHideSheetMenuItem_Click")]
-    [InlineData("Unhide Sheet...", "Y", "FormatUnhideSheetMenuItem_Click")]
-    [InlineData("Protect Sheet...", "P", "FormatProtectSheetMenuItem_Click")]
-    [InlineData("Lock Cell", "L", "FormatLockCellMenuItem_Click")]
-    [InlineData("Format Cells...", "F", "FormatCellsMenuItem_Click")]
-    public void CellsMenuItems_ExposeExpectedKeyTipsAndHandlers(
-        string header,
-        string keyTip,
-        string handler)
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var menuItem = xaml.ExtractMenuItemElementByClickHandler(handler);
-
-        menuItem.ShouldContainLocalizedAttribute("Header", header);
-        menuItem.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        menuItem.Should().Contain($"Click=\"{handler}\"");
-    }
 
     [Fact]
     public void CellsCommandHandlers_RouteThroughInsertDeleteDimensionAndFormatCellsCommands()

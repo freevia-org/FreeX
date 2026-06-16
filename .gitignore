@@ -47,3 +47,4 @@ enum_tabs.ps1
 
 # Test run artifacts
 TestResults/
+tools/_old_mainwindow.xaml

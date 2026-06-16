@@ -10,6 +10,7 @@ param(
     [switch]$AccessibilityX11,
     [switch]$AccessibilityWayland,
     [switch]$AccessibilityKnownIssuesReviewed,
+    [string]$ChecklistPath,
     [string]$ManifestPath = "artifacts/linux-preview-promotion-manifest.json"
 )
 
@@ -83,6 +84,24 @@ if ($PublicPreviewCandidate) {
     foreach ($key in $accessibility.Keys) {
         if (-not $accessibility[$key]) {
             Add-ValidationError "Public-preview candidate requires accessibility evidence: $key was not recorded."
+        }
+    }
+
+    # When a completed human-validation checklist is supplied, it must validate too.
+    if ($ChecklistPath) {
+        $checklistScript = Join-Path $PSScriptRoot "Test-LinuxHumanValidationChecklist.ps1"
+        if (-not (Test-Path -LiteralPath $checklistScript)) {
+            Add-ValidationError "Human-validation script '$checklistScript' was not found."
+        }
+        else {
+            $checklistArgs = @{ ChecklistPath = $ChecklistPath }
+            if ($ExpectedRunId) { $checklistArgs.ExpectedRunId = $ExpectedRunId }
+            if ($ExpectedRunAttempt) { $checklistArgs.ExpectedRunAttempt = $ExpectedRunAttempt }
+            $global:LASTEXITCODE = 0
+            & $checklistScript @checklistArgs
+            if ($LASTEXITCODE -ne 0) {
+                Add-ValidationError "Human-validation checklist failed; public-preview promotion cannot proceed."
+            }
         }
     }
 }

@@ -493,14 +493,12 @@ public partial class MainWindow
 
     private void UpdateFontColorButtonSwatch()
     {
-        FontColorBar.Fill = CreateCellColorBrush(_selectedFontColor);
+        // The declarative ribbon renders the Font Color command as an icon without the old swatch bar.
     }
 
     private void UpdateFillColorButtonSwatch()
     {
-        FillColorBar.Fill = _selectedFillColor is { } color
-            ? CreateCellColorBrush(color)
-            : Brushes.Transparent;
+        // The declarative ribbon renders the Fill Color command as an icon without the old swatch bar.
     }
 
     private static SolidColorBrush CreateCellColorBrush(CellColor color)

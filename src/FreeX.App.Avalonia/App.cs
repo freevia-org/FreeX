@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
+using FreeX.App.Services.Updates;
 
 namespace FreeX.App.Avalonia;
 
@@ -28,6 +29,14 @@ public sealed class App : Application
                 ["scope"] = "app",
                 ["status"] = "ready"
             });
+
+            // Self-update is best-effort: when the app is not Velopack-installed the service
+            // degrades to Unavailable and the indicator simply never appears.
+            var updateService = VelopackUpdateService.CreateForGitHub(
+                repoUrl: UpdateFeed.GitHubRepoUrl,
+                prerelease: UpdateFeed.AllowPrereleases("test"),
+                releasesPageUrl: "https://github.com/tony-xmelon/FreeX/releases/latest");
+            mainWindow.AttachUpdateService(updateService);
 
             if (this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime)
                 activatableLifetime.Activated += async (_, args) => await MainWindow_ActivatedAsync(mainWindow, args);

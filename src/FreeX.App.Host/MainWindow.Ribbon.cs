@@ -843,12 +843,9 @@ public partial class MainWindow
     {
         foreach (var button in surface.ButtonBases)
         {
-            if (TryNormalizeHomeCompactIconButton(button))
-                continue;
-
-            if (TryNormalizeHomeSmallCommandButton(button))
-                continue;
-
+            // The Home-panel compact normalizers are dead under the declarative ribbon: Home is now
+            // rendered by RibbonWpfRenderer with final sizing, so no live button is a descendant of the
+            // (detached, hidden) HomeRibbonPanel backplane stub. Only the static-surface normalizer runs.
             if (TryNormalizeStaticRibbonCommandButton(button))
                 continue;
 
@@ -890,77 +887,6 @@ public partial class MainWindow
                 textBlock.TextAlignment = TextAlignment.Center;
             }
         }
-    }
-
-    private bool TryNormalizeHomeCompactIconButton(ButtonBase button)
-    {
-        if (HomeRibbonPanel is null ||
-            !ReferenceEquals(FindHomeRibbonAncestor(button), HomeRibbonPanel) ||
-            button is not FrameworkElement element ||
-            element.Width > 46 ||
-            element.Height > 32)
-        {
-            return false;
-        }
-
-        var commandName = GetRibbonButtonCommandName(button);
-        if (string.IsNullOrWhiteSpace(commandName))
-            return false;
-
-        element.Width = 26;
-        element.Height = 26;
-        SetRibbonCompactWidths(button, 26, 24);
-        element.Margin = new Thickness(1, 0, 1, 0);
-        if (button is Control control)
-            control.Padding = new Thickness(1);
-
-        button.Content = CreateRibbonIconOnlyContent(commandName, 22);
-        button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
-        button.VerticalContentAlignment = System.Windows.VerticalAlignment.Center;
-        return true;
-    }
-
-    private bool TryNormalizeHomeSmallCommandButton(ButtonBase button)
-    {
-        if (HomeRibbonPanel is null ||
-            !ReferenceEquals(FindHomeRibbonAncestor(button), HomeRibbonPanel) ||
-            button.Content is string ||
-            ContainsUnreplacedRibbonIcon(button.Content) ||
-            button is not FrameworkElement element ||
-            element.Height > 34)
-        {
-            return false;
-        }
-
-        var commandName = GetRibbonButtonCommandName(button);
-        if (string.IsNullOrWhiteSpace(commandName))
-            return false;
-
-        var label = GetRibbonButtonDisplayLabel(button);
-        element.Width = Math.Max(element.Width is > 0 ? element.Width : 0, GetSmallRibbonCommandWidth(label));
-        element.Height = 24;
-        SetRibbonCompactWidths(button, element.Width, 24);
-        if (button is Control control)
-            control.Padding = new Thickness(4, 2, 4, 2);
-        button.Content = CreateRibbonCommandContent(commandName, label, RibbonCommandLayoutKind.Small);
-        button.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
-        button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
-        button.VerticalContentAlignment = System.Windows.VerticalAlignment.Center;
-        return true;
-    }
-
-    private static StackPanel? FindHomeRibbonAncestor(DependencyObject element)
-    {
-        var current = element;
-        while (current is not null)
-        {
-            if (current is StackPanel { Name: "HomeRibbonPanel" } stack)
-                return stack;
-
-            current = VisualTreeHelper.GetParent(current) ?? LogicalTreeHelper.GetParent(current);
-        }
-
-        return null;
     }
 
     private bool TryNormalizeStaticRibbonCommandButton(ButtonBase button)

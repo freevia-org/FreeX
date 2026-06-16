@@ -1,0 +1,99 @@
+using Microsoft.Extensions.Logging;
+using Velopack;
+using Velopack.Sources;
+
+namespace FreeX.App.Services.Updates;
+
+/// <summary>A downloaded, staged update awaiting restart.</summary>
+public sealed record DownloadedUpdate(string Version);
+
+/// <summary>
+/// Velopack-backed <see cref="IUpdateService"/>. The check/download work is injected as a
+/// delegate (<paramref name="downloadProbe"/>) so the decision logic is unit-testable; the
+/// production factory wires the delegate to a real <see cref="UpdateManager"/>.
+/// When no manager is available (e.g. unpacked dev build) the service degrades to Unavailable
+/// and callers fall back to opening <see cref="ReleasesPageUrl"/>.
+/// </summary>
+public sealed class VelopackUpdateService : IUpdateService
+{
+    private readonly Func<CancellationToken, Task<DownloadedUpdate?>> _downloadProbe;
+    private readonly Action? _applyAndRestart;
+    private readonly ILogger? _logger;
+
+    public string ReleasesPageUrl { get; }
+
+    public VelopackUpdateService(
+        string releasesPageUrl,
+        Func<CancellationToken, Task<DownloadedUpdate?>> downloadProbe,
+        Action? applyAndRestart = null,
+        ILogger? logger = null)
+    {
+        ReleasesPageUrl = releasesPageUrl;
+        _downloadProbe = downloadProbe;
+        _applyAndRestart = applyAndRestart;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Production factory: builds a service backed by a real Velopack <see cref="UpdateManager"/>
+    /// pointed at the GitHub repo. Returns a service whose probe yields null/Unavailable if the
+    /// app is not Velopack-installed.
+    /// </summary>
+    public static VelopackUpdateService CreateForGitHub(string repoUrl, bool prerelease, string releasesPageUrl, ILogger? logger = null)
+    {
+        UpdateManager? manager;
+        try
+        {
+            manager = new UpdateManager(new GithubSource(repoUrl, accessToken: null, prerelease: prerelease));
+        }
+        catch (Exception ex)
+        {
+            logger?.LogDebug(ex, "Velopack UpdateManager unavailable; self-update disabled.");
+            manager = null;
+        }
+
+        async Task<DownloadedUpdate?> Probe(CancellationToken ct)
+        {
+            if (manager is null || !manager.IsInstalled)
+                return null;
+            var info = await manager.CheckForUpdatesAsync().ConfigureAwait(false);
+            if (info is null)
+                return null;
+            await manager.DownloadUpdatesAsync(info, progress: null, ct).ConfigureAwait(false);
+            return new DownloadedUpdate(info.TargetFullRelease.Version.ToString());
+        }
+
+        void Apply()
+        {
+            if (manager is null || !manager.IsInstalled)
+                return;
+            var info = manager.CheckForUpdates();
+            if (info is not null)
+                manager.ApplyUpdatesAndRestart(info.TargetFullRelease, restartArgs: null);
+        }
+
+        return new VelopackUpdateService(releasesPageUrl, Probe, Apply, logger);
+    }
+
+    public async Task<UpdateCheckResult> CheckAndDownloadAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var update = await _downloadProbe(cancellationToken).ConfigureAwait(false);
+            return update is null
+                ? UpdateCheckResult.UpToDate
+                : new UpdateCheckResult(UpdateState.ReadyToApply, update.Version);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "Update check failed; reporting Unavailable.");
+            return UpdateCheckResult.Unavailable;
+        }
+    }
+
+    public void ApplyAndRestart()
+    {
+        try { _applyAndRestart?.Invoke(); }
+        catch (Exception ex) { _logger?.LogWarning(ex, "ApplyAndRestart failed."); }
+    }
+}
