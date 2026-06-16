@@ -456,21 +456,16 @@ public partial class MainWindow
         _suppressViewOptionSync = true;
         try
         {
-            if (ViewGridlinesChk is not null)
-                ViewGridlinesChk.IsChecked = SheetGrid.ShowGridLines;
-            if (PageLayoutViewGridlinesChk is not null)
-                PageLayoutViewGridlinesChk.IsChecked = SheetGrid.ShowGridLines;
-            if (ViewHeadersChk is not null)
-                ViewHeadersChk.IsChecked = SheetGrid.ShowHeaders;
-            if (PageLayoutViewHeadingsChk is not null)
-                PageLayoutViewHeadingsChk.IsChecked = SheetGrid.ShowHeaders;
-            if (ViewRulerChk is not null)
-            {
-                ViewRulerChk.IsChecked = SheetGrid.ShowRulers;
-                ViewRulerChk.IsEnabled = sheet?.ViewMode == WorksheetViewMode.PageLayout;
-            }
-            if (SplitViewBtn is not null)
-                SplitViewBtn.IsChecked = sheet?.SplitRow is not null || sheet?.SplitColumn is not null;
+            // Push the worksheet's view options into the neutral state store; the renderer-bound
+            // View / Page Layout check boxes update from it. ("Gridlines"/"Headings"/"Ruler" live on
+            // the View tab; "View Gridlines"/"View Headings" on the Page Layout tab.)
+            _ribbonState.SetChecked("Gridlines", SheetGrid.ShowGridLines);
+            _ribbonState.SetChecked("View Gridlines", SheetGrid.ShowGridLines);
+            _ribbonState.SetChecked("Headings", SheetGrid.ShowHeaders);
+            _ribbonState.SetChecked("View Headings", SheetGrid.ShowHeaders);
+            _ribbonState.SetChecked("Ruler", SheetGrid.ShowRulers);
+            _ribbonState.SetEnabled("Ruler", sheet?.ViewMode == WorksheetViewMode.PageLayout);
+            _ribbonState.SetChecked("Split", sheet?.SplitRow is not null || sheet?.SplitColumn is not null);
             SyncWorkbookViewModeToggleState(SheetGrid.WorksheetViewMode);
             RefreshViewWindowCommandState();
         }
@@ -478,10 +473,8 @@ public partial class MainWindow
         {
             _suppressViewOptionSync = false;
         }
-        if (PageLayoutPrintGridlinesChk is not null)
-            PageLayoutPrintGridlinesChk.IsChecked = sheet?.PrintGridlines ?? false;
-        if (PageLayoutPrintHeadingsChk is not null)
-            PageLayoutPrintHeadingsChk.IsChecked = sheet?.PrintHeadings ?? false;
+        _ribbonState.SetChecked("Print Gridlines", sheet?.PrintGridlines ?? false);
+        _ribbonState.SetChecked("Print Headings", sheet?.PrintHeadings ?? false);
         SheetGrid.RowPageBreaks = sheet?.RowPageBreaks;
         SheetGrid.ColumnPageBreaks = sheet?.ColumnPageBreaks;
         SheetGrid.PrintArea = sheet?.PrintArea;
@@ -597,9 +590,9 @@ public partial class MainWindow
             _navigationCacheRevision,
             ShapeFormatTab?.Visibility ?? Visibility.Collapsed,
             PictureFormatTab?.Visibility ?? Visibility.Collapsed,
-            ShapeFormatGradientButton?.IsEnabled == true,
-            ShapeFormatEffectsButton?.IsEnabled == true,
-            PictureFormatCropButton?.IsEnabled == true);
+            _ribbonState.GetState("Shape Gradient").IsEnabled,
+            _ribbonState.GetState("Shape Effects").IsEnabled,
+            _ribbonState.GetState("Crop Picture").IsEnabled);
 
     private void RefreshViewportPivotFieldListPane(Sheet? sheet)
     {

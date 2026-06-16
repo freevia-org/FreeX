@@ -26,12 +26,12 @@ public partial class MainWindow
         var selectedShape = selectedTarget?.Kind == DrawingObjectTargetKind.Shape;
         var canCropPicture = picture?.Kind == PictureKind.Image;
 
-        if (ShapeFormatGradientButton is not null)
-            ShapeFormatGradientButton.IsEnabled = selectedShape;
-        if (ShapeFormatEffectsButton is not null)
-            ShapeFormatEffectsButton.IsEnabled = selectedShape;
-        if (PictureFormatCropButton is not null)
-            PictureFormatCropButton.IsEnabled = canCropPicture;
+        // Enablement of the contextual Shape/Picture ribbon buttons flows through the neutral state
+        // store, which drives the rendered controls. (Picture crop is exposed both as a ribbon button
+        // and as menu items; the menu items live on a context menu and keep their direct IsEnabled.)
+        _ribbonState.SetEnabled("Shape Gradient", selectedShape);
+        _ribbonState.SetEnabled("Shape Effects", selectedShape);
+        _ribbonState.SetEnabled("Crop Picture", canCropPicture);
         if (PictureFormatCropMenuItem is not null)
             PictureFormatCropMenuItem.IsEnabled = canCropPicture;
         if (PictureFormatResetCropMenuItem is not null)

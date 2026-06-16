@@ -18,8 +18,9 @@ public partial class MainWindow
         _suppressAppViewOptionSync = true;
         try
         {
-            if (ViewFormulaBarChk is not null)
-                ViewFormulaBarChk.IsChecked = _options.ShowFormulaBar;
+            // The Formula Bar toggle's checked state follows the app option via the neutral store,
+            // which drives the rendered View > Formula Bar check box.
+            _ribbonState.SetChecked("Formula Bar", _options.ShowFormulaBar);
             if (FormulaBarBorder is not null)
                 FormulaBarBorder.Visibility = _options.ShowFormulaBar ? Visibility.Visible : Visibility.Collapsed;
             _formulaBarExpanded = _options.FormulaBarExpanded;
@@ -210,19 +211,21 @@ public partial class MainWindow
         _suppressToolbarSync = true;
         try
         {
-            SetToggleCheckedIfChanged(BoldButton, state.Bold);
-            SetToggleCheckedIfChanged(ItalicButton, state.Italic);
-            SetToggleCheckedIfChanged(UnderlineButton, state.Underline);
-            SetToggleCheckedIfChanged(StrikeButton, state.Strikethrough);
-            SetToggleCheckedIfChanged(AlignTopBtn, state.VerticalAlignment == CellVAlign.Top);
-            SetToggleCheckedIfChanged(AlignMiddleBtn, state.VerticalAlignment == CellVAlign.Center);
-            SetToggleCheckedIfChanged(AlignBottomBtn, state.VerticalAlignment == CellVAlign.Bottom);
-            SetToggleCheckedIfChanged(AlignLeftBtn, state.HorizontalAlignment == CellHAlign.Left);
-            SetToggleCheckedIfChanged(AlignCenterBtn, state.HorizontalAlignment == CellHAlign.Center);
-            SetToggleCheckedIfChanged(AlignRightBtn, state.HorizontalAlignment == CellHAlign.Right);
-            SetToggleCheckedIfChanged(WrapTextBtn, state.WrapText);
-            SetSelectedItemIfChanged(FontNameBox, state.FontName);
-            SetSelectedItemIfChanged(FontSizeBox, state.FontSizeText);
+            // Write the neutral state store (the source of truth); the renderer binds each rendered
+            // control to it. The store dedups no-op writes, so this never churns bound controls.
+            _ribbonState.SetChecked("Bold", state.Bold);
+            _ribbonState.SetChecked("Italic", state.Italic);
+            _ribbonState.SetChecked("Underline", state.Underline);
+            _ribbonState.SetChecked("Strikethrough", state.Strikethrough);
+            _ribbonState.SetChecked("Top Align", state.VerticalAlignment == CellVAlign.Top);
+            _ribbonState.SetChecked("Middle Align", state.VerticalAlignment == CellVAlign.Center);
+            _ribbonState.SetChecked("Bottom Align", state.VerticalAlignment == CellVAlign.Bottom);
+            _ribbonState.SetChecked("Align Left", state.HorizontalAlignment == CellHAlign.Left);
+            _ribbonState.SetChecked("Center", state.HorizontalAlignment == CellHAlign.Center);
+            _ribbonState.SetChecked("Align Right", state.HorizontalAlignment == CellHAlign.Right);
+            _ribbonState.SetChecked("Wrap Text", state.WrapText);
+            SetRibbonComboValue("Font", state.FontName, FontNameBox);
+            SetRibbonComboValue("Font Size", state.FontSizeText, FontSizeBox);
             _lastToolbarVisualState = state;
         }
         finally
@@ -252,13 +255,17 @@ public partial class MainWindow
             state == _lastToolbarVisualState;
     }
 
-    private static void SetToggleCheckedIfChanged(ToggleButton button, bool? value)
+    /// <summary>Pushes a combo's display value into the neutral state store (which drives the rendered
+    /// ribbon combo) and mirrors it onto the legacy <paramref name="backplaneBox"/> that handlers still
+    /// read via <c>SelectedItem</c>/<c>Text</c>. The store dedups, so unchanged values are no-ops.</summary>
+    private void SetRibbonComboValue(string commandId, object? value, ComboBox backplaneBox)
     {
-        if (button.IsChecked != value)
-            button.IsChecked = value;
+        var text = value?.ToString() ?? string.Empty;
+        _ribbonState.SetValue(commandId, text);
+        SetSelectedItemIfChanged(backplaneBox, value);
     }
 
-    private static void SetSelectedItemIfChanged(ComboBox comboBox, object value)
+    private static void SetSelectedItemIfChanged(ComboBox comboBox, object? value)
     {
         var textValue = value?.ToString() ?? string.Empty;
         if (Equals(comboBox.SelectedItem, value) ||

@@ -48,19 +48,19 @@ public partial class MainWindow
     private void BoldButton_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        ApplyStyleDiff(new StyleDiff(Bold: BoldButton.IsChecked == true));
+        ApplyStyleDiff(new StyleDiff(Bold: IsRibbonCommandChecked("Bold")));
     }
 
     private void ItalicButton_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        ApplyStyleDiff(new StyleDiff(Italic: ItalicButton.IsChecked == true));
+        ApplyStyleDiff(new StyleDiff(Italic: IsRibbonCommandChecked("Italic")));
     }
 
     private void UnderlineButton_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        var enabled = UnderlineButton.IsChecked == true;
+        var enabled = IsRibbonCommandChecked("Underline");
         SetToolbarToggleStates(strike: enabled ? false : null);
         ApplyStyleDiff(CellStyleDiffPlanner.UnderlineDiff(enabled));
     }
@@ -74,7 +74,7 @@ public partial class MainWindow
     private void StrikeButton_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        var enabled = StrikeButton.IsChecked == true;
+        var enabled = IsRibbonCommandChecked("Strikethrough");
         SetToolbarToggleStates(underline: enabled ? false : null);
         ApplyStyleDiff(CellStyleDiffPlanner.StrikethroughDiff(enabled));
     }
@@ -131,14 +131,14 @@ public partial class MainWindow
         _suppressToolbarSync = true;
         try
         {
-            if (underline.HasValue) UnderlineButton.IsChecked = underline.Value;
-            if (strike.HasValue) StrikeButton.IsChecked = strike.Value;
-            if (left.HasValue) AlignLeftBtn.IsChecked = left.Value;
-            if (center.HasValue) AlignCenterBtn.IsChecked = center.Value;
-            if (right.HasValue) AlignRightBtn.IsChecked = right.Value;
-            if (top.HasValue) AlignTopBtn.IsChecked = top.Value;
-            if (middle.HasValue) AlignMiddleBtn.IsChecked = middle.Value;
-            if (bottom.HasValue) AlignBottomBtn.IsChecked = bottom.Value;
+            if (underline.HasValue) _ribbonState.SetChecked("Underline", underline.Value);
+            if (strike.HasValue) _ribbonState.SetChecked("Strikethrough", strike.Value);
+            if (left.HasValue) _ribbonState.SetChecked("Align Left", left.Value);
+            if (center.HasValue) _ribbonState.SetChecked("Center", center.Value);
+            if (right.HasValue) _ribbonState.SetChecked("Align Right", right.Value);
+            if (top.HasValue) _ribbonState.SetChecked("Top Align", top.Value);
+            if (middle.HasValue) _ribbonState.SetChecked("Middle Align", middle.Value);
+            if (bottom.HasValue) _ribbonState.SetChecked("Bottom Align", bottom.Value);
         }
         finally
         {
@@ -149,7 +149,7 @@ public partial class MainWindow
     private void WrapTextBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        ApplyStyleDiff(new StyleDiff(WrapText: WrapTextBtn.IsChecked == true));
+        ApplyStyleDiff(new StyleDiff(WrapText: IsRibbonCommandChecked("Wrap Text")));
     }
 
     private void MergeCenterBtn_Click(object sender, RoutedEventArgs e)

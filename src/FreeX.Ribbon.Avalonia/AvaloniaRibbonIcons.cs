@@ -1,172 +1,201 @@
+using Avalonia;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Ribbon.Icons;
+using AvaloniaPath = Avalonia.Controls.Shapes.Path;
+using AvaloniaLine = Avalonia.Controls.Shapes.Line;
+using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
+using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;
 
 namespace FreeX.Ribbon.Avalonia;
 
 /// <summary>
-/// Minimal but recognizable Avalonia icon set for <see cref="RibbonCommandIconKind"/>.
-/// Each kind maps to a glyph rendered as a <see cref="TextBlock"/>. This is intentionally
-/// lightweight (no SVG paths) — the WPF renderer owns the full vector set; here we only need
-/// the cross-platform ribbon to read recognizably.
+/// Avalonia ribbon icon renderer. Draws the SAME shapes as the WPF renderer by consuming the
+/// shared, platform-neutral <see cref="RibbonIconDefinitions"/> (the cross-platform source of truth)
+/// and translating each <see cref="RibbonIconElement"/> into native Avalonia shapes laid out on a
+/// 24×24 <see cref="Canvas"/>, scaled to the requested size by a <see cref="Viewbox"/>.
 /// </summary>
 internal static class AvaloniaRibbonIcons
 {
-    /// <summary>Builds an icon glyph control for the given kind at the requested pixel size.</summary>
-    public static Control Build(RibbonCommandIconKind kind, double size)
+    private const double Artboard = RibbonIconGeometry.Artboard;
+
+    /// <summary>Builds an icon control for the given kind at the requested pixel size.</summary>
+    public static Control Build(RibbonCommandIconKind kind, double size) =>
+        Build(new RibbonCommandIcon(kind), size, foreground: null);
+
+    /// <summary>
+    /// Builds an icon control for the given command icon (kind + accent) at the requested pixel size.
+    /// <paramref name="foreground"/> overrides the glyph color; when null a default is used.
+    /// </summary>
+    public static Control Build(RibbonCommandIcon icon, double size, IBrush? foreground)
     {
-        return new TextBlock
+        var geometry = RibbonIconDefinitions.Resolve(icon.Kind);
+        var brush = ResolveAccentBrush(icon.Accent, foreground);
+
+        var canvas = new Canvas
         {
-            Text = Glyph(kind),
-            FontSize = size,
+            Width = Artboard,
+            Height = Artboard,
+        };
+
+        foreach (var element in geometry.Elements)
+        {
+            if (CreateElement(element, brush) is { } control)
+                canvas.Children.Add(control);
+        }
+
+        return new Viewbox
+        {
+            Width = size,
+            Height = size,
+            Stretch = Stretch.Uniform,
+            Child = canvas,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            TextAlignment = TextAlignment.Center,
         };
     }
 
-    /// <summary>Maps an icon kind to a recognizable glyph. Exposed for tests.</summary>
-    public static string Glyph(RibbonCommandIconKind kind) => kind switch
+    private static IBrush ResolveAccentBrush(RibbonCommandIconAccent accent, IBrush? foreground)
     {
-        RibbonCommandIconKind.Accessibility => "♿",
-        RibbonCommandIconKind.Align => "≡",
-        RibbonCommandIconKind.Book => "\U0001F4D6",
-        RibbonCommandIconKind.Border => "□",
-        RibbonCommandIconKind.Bold => "B",
-        RibbonCommandIconKind.BringForward => "⬆",
-        RibbonCommandIconKind.ChartArea => "◢",
-        RibbonCommandIconKind.PivotTable => "⊞",
-        RibbonCommandIconKind.Table => "⊞",
-        RibbonCommandIconKind.ChartColumn => "ὌA",
-        RibbonCommandIconKind.ChartLine => "↗",
-        RibbonCommandIconKind.ChartPie => "◕",
-        RibbonCommandIconKind.ChartScatter => "⋯",
-        RibbonCommandIconKind.ChevronDown => "▾",
-        RibbonCommandIconKind.Collapse => "−",
-        RibbonCommandIconKind.Color => "\U0001F3A8",
-        RibbonCommandIconKind.Comma => ",",
-        RibbonCommandIconKind.Comment => "\U0001F4AC",
-        RibbonCommandIconKind.Consolidate => "⊕",
-        RibbonCommandIconKind.Copy => "⧉",
-        RibbonCommandIconKind.Clear => "⌫",
-        RibbonCommandIconKind.Currency => "$",
-        RibbonCommandIconKind.Cut => "✂",
-        RibbonCommandIconKind.Date => "\U0001F4C5",
-        RibbonCommandIconKind.Decimal => ".0",
-        RibbonCommandIconKind.Delete => "✖",
-        RibbonCommandIconKind.Effects => "✨",
-        RibbonCommandIconKind.Ellipse => "◯",
-        RibbonCommandIconKind.Expand => "+",
-        RibbonCommandIconKind.Feedback => "✍",
-        RibbonCommandIconKind.Fill => "\U0001F58C",
-        RibbonCommandIconKind.Filter => "⯇",
-        RibbonCommandIconKind.FormatPainter => "\U0001F58C",
-        RibbonCommandIconKind.Financial => "¤",
-        RibbonCommandIconKind.Flash => "⚡",
-        RibbonCommandIconKind.Font => "A",
-        RibbonCommandIconKind.Freeze => "❄",
-        RibbonCommandIconKind.Function => "ƒ",
-        RibbonCommandIconKind.GetData => "⤓",
-        RibbonCommandIconKind.Grid => "▦",
-        RibbonCommandIconKind.Group => "▣",
-        RibbonCommandIconKind.HeaderFooter => "☰",
-        RibbonCommandIconKind.Help => "?",
-        RibbonCommandIconKind.History => "↺",
-        RibbonCommandIconKind.Insert => "➕",
-        RibbonCommandIconKind.Info => "ℹ",
-        RibbonCommandIconKind.Italic => "I",
-        RibbonCommandIconKind.Label => "\U0001F3F7",
-        RibbonCommandIconKind.Line => "─",
-        RibbonCommandIconKind.Link => "\U0001F517",
-        RibbonCommandIconKind.List => "☰",
-        RibbonCommandIconKind.Logical => "⊨",
-        RibbonCommandIconKind.Margins => "⤢",
-        RibbonCommandIconKind.Math => "∑",
-        RibbonCommandIconKind.Merge => "⇹",
-        RibbonCommandIconKind.More => "⋯",
-        RibbonCommandIconKind.Next => "▶",
-        RibbonCommandIconKind.Number => "#",
-        RibbonCommandIconKind.Orientation => "↻",
-        RibbonCommandIconKind.Page => "\U0001F4C4",
-        RibbonCommandIconKind.PageBreak => "✂",
-        RibbonCommandIconKind.Paste => "\U0001F4CB",
-        RibbonCommandIconKind.Percent => "%",
-        RibbonCommandIconKind.Picture => "\U0001F5BC",
-        RibbonCommandIconKind.Pin => "\U0001F4CC",
-        RibbonCommandIconKind.Previous => "◀",
-        RibbonCommandIconKind.Print => "\U0001F5A8",
-        RibbonCommandIconKind.Protect => "\U0001F512",
-        RibbonCommandIconKind.Recent => "⏱",
-        RibbonCommandIconKind.Rectangle => "▭",
-        RibbonCommandIconKind.Connector => "—",
-        RibbonCommandIconKind.Triangle => "△",
-        RibbonCommandIconKind.Diamond => "◇",
-        RibbonCommandIconKind.Parallelogram => "▱",
-        RibbonCommandIconKind.Trapezoid => "⏢",
-        RibbonCommandIconKind.Pentagon => "⬠",
-        RibbonCommandIconKind.Hexagon => "⬡",
-        RibbonCommandIconKind.Octagon => "⬢",
-        RibbonCommandIconKind.Cross => "✚",
-        RibbonCommandIconKind.ArrowRight => "→",
-        RibbonCommandIconKind.ArrowLeft => "←",
-        RibbonCommandIconKind.ArrowUp => "↑",
-        RibbonCommandIconKind.ArrowDown => "↓",
-        RibbonCommandIconKind.ArrowLeftRight => "↔",
-        RibbonCommandIconKind.ArrowUpDown => "↕",
-        RibbonCommandIconKind.PlusSign => "+",
-        RibbonCommandIconKind.MinusSign => "−",
-        RibbonCommandIconKind.MultiplySign => "×",
-        RibbonCommandIconKind.DivideSign => "÷",
-        RibbonCommandIconKind.EqualSign => "=",
-        RibbonCommandIconKind.NotEqualSign => "≠",
-        RibbonCommandIconKind.FlowchartProcess => "▭",
-        RibbonCommandIconKind.FlowchartDecision => "◇",
-        RibbonCommandIconKind.FlowchartData => "▱",
-        RibbonCommandIconKind.FlowchartDocument => "\U0001F4C4",
-        RibbonCommandIconKind.FlowchartTerminator => "⬭",
-        RibbonCommandIconKind.Star => "★",
-        RibbonCommandIconKind.Explosion => "\U0001F4A5",
-        RibbonCommandIconKind.RibbonShape => "\U0001F397",
-        RibbonCommandIconKind.Wave => "〰",
-        RibbonCommandIconKind.Callout => "\U0001F5E8",
-        RibbonCommandIconKind.LineCallout => "\U0001F5E8",
-        RibbonCommandIconKind.Redo => "↻",
-        RibbonCommandIconKind.Refresh => "↻",
-        RibbonCommandIconKind.Rotate => "⟳",
-        RibbonCommandIconKind.Ruler => "\U0001F4CF",
-        RibbonCommandIconKind.Save => "\U0001F4BE",
-        RibbonCommandIconKind.Scale => "⇲",
-        RibbonCommandIconKind.Search => "\U0001F50D",
-        RibbonCommandIconKind.SendBackward => "⬇",
-        RibbonCommandIconKind.Share => "↪",
-        RibbonCommandIconKind.Size => "⤢",
-        RibbonCommandIconKind.Sort => "⇅",
-        RibbonCommandIconKind.SortAscending => "↑",
-        RibbonCommandIconKind.SortDescending => "↓",
-        RibbonCommandIconKind.Sparkline => "≈",
-        RibbonCommandIconKind.Spelling => "✓",
-        RibbonCommandIconKind.Strikethrough => "S̶",
-        RibbonCommandIconKind.Sum => "∑",
-        RibbonCommandIconKind.Symbol => "Ω",
-        RibbonCommandIconKind.Target => "◎",
-        RibbonCommandIconKind.TextBox => "Ⓣ",
-        RibbonCommandIconKind.TextColumns => "‖",
-        RibbonCommandIconKind.TextFunction => "ƒ",
-        RibbonCommandIconKind.Theme => "\U0001F3A8",
-        RibbonCommandIconKind.Translate => "文",
-        RibbonCommandIconKind.Underline => "U",
-        RibbonCommandIconKind.Undo => "↺",
-        RibbonCommandIconKind.Ungroup => "□",
-        RibbonCommandIconKind.View => "\U0001F441",
-        RibbonCommandIconKind.Warning => "⚠",
-        RibbonCommandIconKind.Watch => "⏲",
-        RibbonCommandIconKind.Window => "▢",
-        RibbonCommandIconKind.WindowClose => "✕",
-        RibbonCommandIconKind.WindowMaximize => "□",
-        RibbonCommandIconKind.WindowRestore => "▧",
-        RibbonCommandIconKind.WindowMinimize => "–",
-        RibbonCommandIconKind.Wrap => "↵",
-        RibbonCommandIconKind.Zoom => "\U0001F50E",
-        _ => "■",
+        if (RibbonIconAccents.Resolve(accent) is { } color)
+            return new SolidColorBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
+
+        return foreground ?? Brushes.Black;
+    }
+
+    private static Control? CreateElement(RibbonIconElement element, IBrush brush) => element.Kind switch
+    {
+        RibbonIconElementKind.Path => BuildPath(element, brush),
+        RibbonIconElementKind.Line => BuildLine(element, brush),
+        RibbonIconElementKind.Rectangle => BuildRectangle(element, brush),
+        RibbonIconElementKind.FilledRectangle => BuildFilledRectangle(element, brush),
+        RibbonIconElementKind.Ellipse => BuildEllipse(element, brush),
+        RibbonIconElementKind.FilledCircle => BuildFilledCircle(element, brush),
+        RibbonIconElementKind.Text => BuildText(element, brush),
+        _ => null,
+    };
+
+    private static Control BuildPath(RibbonIconElement element, IBrush brush)
+    {
+        var path = new AvaloniaPath
+        {
+            Data = Geometry.Parse(element.PathData!),
+            Stroke = brush,
+            StrokeThickness = element.StrokeThickness,
+            StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round,
+        };
+
+        if (element.FillOpacity > 0)
+        {
+            // Mirror the WPF behaviour: a filled shape path is stroked + faintly filled, with the
+            // whole element dimmed by the fill opacity.
+            path.Fill = brush;
+            path.Opacity = element.FillOpacity;
+        }
+
+        return path;
+    }
+
+    private static Control BuildLine(RibbonIconElement element, IBrush brush)
+    {
+        var line = new AvaloniaLine
+        {
+            StartPoint = new Point(element.X1, element.Y1),
+            EndPoint = new Point(element.X2, element.Y2),
+            Stroke = brush,
+            StrokeThickness = element.StrokeThickness,
+            StrokeLineCap = PenLineCap.Round,
+        };
+        if (element.Dashed)
+            line.StrokeDashArray = new AvaloniaList<double> { 2, 2 };
+        return line;
+    }
+
+    private static Control BuildRectangle(RibbonIconElement element, IBrush brush)
+    {
+        var rect = new AvaloniaRectangle
+        {
+            Width = element.Width,
+            Height = element.Height,
+            RadiusX = element.Radius,
+            RadiusY = element.Radius,
+            Stroke = brush,
+            StrokeThickness = element.StrokeThickness,
+            Fill = Brushes.Transparent,
+        };
+        Canvas.SetLeft(rect, element.X1);
+        Canvas.SetTop(rect, element.Y1);
+        return rect;
+    }
+
+    private static Control BuildFilledRectangle(RibbonIconElement element, IBrush brush)
+    {
+        var rect = new AvaloniaRectangle
+        {
+            Width = element.Width,
+            Height = element.Height,
+            Fill = brush,
+        };
+        Canvas.SetLeft(rect, element.X1);
+        Canvas.SetTop(rect, element.Y1);
+        return rect;
+    }
+
+    private static Control BuildEllipse(RibbonIconElement element, IBrush brush)
+    {
+        var ellipse = new AvaloniaEllipse
+        {
+            Width = element.Width,
+            Height = element.Height,
+            Stroke = brush,
+            StrokeThickness = element.StrokeThickness,
+            Fill = Brushes.Transparent,
+        };
+        Canvas.SetLeft(ellipse, element.X1);
+        Canvas.SetTop(ellipse, element.Y1);
+        return ellipse;
+    }
+
+    private static Control BuildFilledCircle(RibbonIconElement element, IBrush brush)
+    {
+        var diameter = element.Width;
+        var ellipse = new AvaloniaEllipse
+        {
+            Width = diameter,
+            Height = diameter,
+            Fill = brush,
+        };
+        Canvas.SetLeft(ellipse, element.X1 - diameter / 2);
+        Canvas.SetTop(ellipse, element.Y1 - diameter / 2);
+        return ellipse;
+    }
+
+    private static Control BuildText(RibbonIconElement element, IBrush brush)
+    {
+        var block = new TextBlock
+        {
+            Text = element.Text,
+            Foreground = brush,
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = element.Width,
+            FontWeight = ToFontWeight(element.TextWeight),
+            Width = Artboard - element.X1,
+            Height = Artboard - element.Y1,
+            TextAlignment = TextAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Canvas.SetLeft(block, element.X1);
+        Canvas.SetTop(block, element.Y1);
+        return block;
+    }
+
+    private static FontWeight ToFontWeight(RibbonIconTextWeight weight) => weight switch
+    {
+        RibbonIconTextWeight.Bold => FontWeight.Bold,
+        RibbonIconTextWeight.SemiBold => FontWeight.SemiBold,
+        _ => FontWeight.Normal,
     };
 }

@@ -551,11 +551,14 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
         var refreshToolbar = ExtractMethodSource(source, "private void RefreshToolbarVisualState()");
 
-        source.Should().Contain("private static void SetToggleCheckedIfChanged(");
+        // Toolbar visual state now flows through the platform-neutral RibbonStateStore, which dedups
+        // no-op writes internally (so it never churns the renderer-bound controls). Font combos still
+        // mirror onto the legacy backplane combo via SetRibbonComboValue for handler reads.
+        source.Should().Contain("private void SetRibbonComboValue(");
         source.Should().Contain("private static void SetSelectedItemIfChanged(");
         source.Should().Contain("private void RefreshToolbarAfterSelectionChange()");
-        refreshToolbar.Should().Contain("SetToggleCheckedIfChanged(BoldButton, state.Bold)");
-        refreshToolbar.Should().Contain("SetSelectedItemIfChanged(FontNameBox, state.FontName)");
+        refreshToolbar.Should().Contain("_ribbonState.SetChecked(\"Bold\", state.Bold)");
+        refreshToolbar.Should().Contain("SetRibbonComboValue(\"Font\", state.FontName, FontNameBox)");
         refreshToolbar.Should().NotContain("BoldButton.IsChecked = state.Bold");
         refreshToolbar.Should().NotContain("FontNameBox.SelectedItem = state.FontName");
     }
@@ -994,7 +997,7 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.Should().Contain("x:Name=\"FontNameBox\"");
         xaml.Should().Contain("SelectionChanged=\"FontNameBox_SelectionChanged\"");
         formattingSource.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name))");
-        uiStateSource.Should().Contain("SetSelectedItemIfChanged(FontNameBox, state.FontName)");
+        uiStateSource.Should().Contain("SetRibbonComboValue(\"Font\", state.FontName, FontNameBox)");
         renderSource.Should().Contain("ResolveCellFontNameForDisplay(style?.FontName)");
         renderSource.Should().Contain("AvailableCellFontNames.Value.Contains");
         renderSource.Should().Contain("new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true)");
