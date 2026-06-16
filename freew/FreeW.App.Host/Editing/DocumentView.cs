@@ -68,6 +68,12 @@ public sealed class DocumentView : RichTextBox
 
     public TextDocument Model => _model;
 
+    /// <summary>
+    /// When true (the default), as-you-type smart typing corrections (smart quotes, dashes, symbols,
+    /// ellipsis, sentence capitalization) are applied via <see cref="AutoCorrect"/> on each keystroke.
+    /// </summary>
+    public bool AutoCorrectEnabled { get; set; } = true;
+
     /// <summary>Raised whenever <see cref="ZoomLevel"/> changes; carries the new factor (1.0 == 100%).</summary>
     public event EventHandler<double>? ZoomChanged;
 
@@ -102,6 +108,63 @@ public sealed class DocumentView : RichTextBox
             return;
         }
         base.OnPreviewMouseWheel(e);
+    }
+
+    /// <summary>
+    /// As-you-type smart typing. Before the RichTextBox inserts the typed character, ask
+    /// <see cref="AutoCorrect"/> (using the text immediately before the caret in the current paragraph)
+    /// whether this keystroke triggers a correction. If so, apply the replacement through the normal
+    /// edit path (so it is captured by the editor's own undo stack) and mark the event handled so the
+    /// raw character is not also inserted. Otherwise let the keystroke proceed unchanged.
+    /// </summary>
+    protected override void OnPreviewTextInput(TextCompositionEventArgs e)
+    {
+        if (AutoCorrectEnabled
+            && !string.IsNullOrEmpty(e.Text)
+            && e.Text.Length == 1
+            && Selection.IsEmpty
+            && TryAutoCorrect(e.Text[0]))
+        {
+            e.Handled = true;
+            return;
+        }
+        base.OnPreviewTextInput(e);
+    }
+
+    // Read the text before the caret (within the current paragraph), evaluate the AutoCorrect rules for
+    // the just-typed char, and if one fires, delete back N chars and insert the replacement at the caret.
+    // Returns true when a correction was applied (the raw keystroke should be suppressed).
+    private bool TryAutoCorrect(char justTyped)
+    {
+        var caret = CaretPosition?.GetInsertionPosition(LogicalDirection.Backward);
+        if (caret?.Paragraph is null)
+            return false;
+
+        // Text from the start of the current paragraph up to the caret. AutoCorrect only inspects a few
+        // trailing characters, but the paragraph-relative text is enough to detect a paragraph start.
+        var start = caret.Paragraph.ContentStart;
+        var textBefore = new TextRange(start, caret).Text;
+
+        var result = AutoCorrect.Evaluate(textBefore, justTyped);
+        if (!result.Applies)
+            return false;
+
+        // Walk back DeleteBefore characters (caret-relative) to find the start of the range to replace.
+        var deleteStart = caret;
+        for (var i = 0; i < result.DeleteBefore; i++)
+        {
+            var prev = deleteStart?.GetNextInsertionPosition(LogicalDirection.Backward);
+            if (prev is null)
+                return false; // not enough room (e.g. crossed a run/paragraph boundary) — bail safely
+            deleteStart = prev;
+        }
+        if (deleteStart is null)
+            return false;
+
+        // Replace [deleteStart, caret) with the insertion text in one edit so it is a single undo unit.
+        var range = new TextRange(deleteStart, caret) { Text = result.Insert };
+        CaretPosition = range.End;
+        return true;
     }
 
     /// <summary>Undo/redo command bus over this view's model (backed by the shared UndoRedoStack).</summary>
