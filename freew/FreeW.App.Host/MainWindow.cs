@@ -39,7 +39,11 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(titleBar, Dock.Top);
         root.Children.Add(titleBar);
 
-        var ribbon = BuildRibbon(FreeWRibbon.Build());
+        var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
+        editor.LoadModel(CreateSampleDocument());
+        var commands = FreeWRibbonCommands.Build(editor);
+
+        var ribbon = BuildRibbon(FreeWRibbon.Build(), commands);
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
@@ -48,8 +52,6 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(status, Dock.Bottom);
         root.Children.Add(status);
 
-        var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
-        editor.LoadModel(CreateSampleDocument());
         root.Children.Add(editor);
 
         Content = root;
@@ -99,7 +101,7 @@ public sealed class MainWindow : Window
 
     // --- Minimal ribbon renderer over the shared RibbonDefinition model ---
 
-    private static UIElement BuildRibbon(RibbonDefinition definition)
+    private static UIElement BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry registry)
     {
         var tabs = new TabControl
         {
@@ -109,7 +111,7 @@ public sealed class MainWindow : Window
         };
 
         foreach (var tab in definition.Tabs)
-            tabs.Items.Add(new TabItem { Header = tab.Header, Content = BuildTab(tab) });
+            tabs.Items.Add(new TabItem { Header = tab.Header, Content = BuildTab(tab, registry) });
 
         if (tabs.Items.Count > 0)
             tabs.SelectedIndex = 0;
@@ -123,7 +125,7 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static UIElement BuildTab(RibbonTab tab)
+    private static UIElement BuildTab(RibbonTab tab, IRibbonCommandRegistry registry)
     {
         var lane = new StackPanel
         {
@@ -132,7 +134,7 @@ public sealed class MainWindow : Window
         };
 
         foreach (var group in tab.Groups)
-            lane.Children.Add(BuildGroup(group));
+            lane.Children.Add(BuildGroup(group, registry));
 
         return new ScrollViewer
         {
@@ -142,12 +144,12 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static UIElement BuildGroup(RibbonGroup group)
+    private static UIElement BuildGroup(RibbonGroup group, IRibbonCommandRegistry registry)
     {
         var controls = new WrapPanel { MaxWidth = 220, Margin = new Thickness(4, 2, 4, 2) };
         foreach (var control in group.Controls)
         {
-            var element = BuildControl(control);
+            var element = BuildControl(control, registry);
             if (element is not null)
                 controls.Children.Add(element);
         }
@@ -174,22 +176,30 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static UIElement? BuildControl(RibbonControl control) => control switch
+    private static UIElement? BuildControl(RibbonControl control, IRibbonCommandRegistry registry)
     {
-        RibbonSeparator or RibbonRowBreak => null,
-        RibbonToggleButton toggle => new ToggleButton
+        if (control is RibbonSeparator or RibbonRowBreak)
+            return null;
+
+        var thickness = new Thickness(2);
+        var padding = new Thickness(8, 4, 8, 4);
+        registry.TryGet(control.CommandId, out var command);
+
+        void Execute() => command?.Execute(RibbonCommandContext.Empty);
+
+        if (control is RibbonToggleButton)
         {
-            Content = toggle.Label,
-            Margin = new Thickness(2),
-            Padding = new Thickness(8, 4, 8, 4),
-            MinWidth = 60
-        },
-        _ => new Button
-        {
-            Content = control.Label,
-            Margin = new Thickness(2),
-            Padding = new Thickness(8, 4, 8, 4),
-            MinWidth = 60
+            var toggle = new ToggleButton { Content = control.Label, Margin = thickness, Padding = padding, MinWidth = 60 };
+            if (command is IRibbonStatefulCommand stateful)
+                toggle.IsChecked = stateful.GetState().IsChecked;
+            toggle.Click += (_, _) => Execute();
+            toggle.IsEnabled = command is not null;
+            return toggle;
         }
-    };
+
+        var button = new Button { Content = control.Label, Margin = thickness, Padding = padding, MinWidth = 60 };
+        button.Click += (_, _) => Execute();
+        button.IsEnabled = command is not null;
+        return button;
+    }
 }
