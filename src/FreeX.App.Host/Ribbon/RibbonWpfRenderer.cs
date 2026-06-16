@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -356,13 +357,23 @@ public static class RibbonWpfRenderer
         }
         else
         {
-            buttonBase.Click += (_, _) =>
+            buttonBase.Click += (sender, _) =>
             {
                 if (registry.TryGet(control.CommandId, out var command) && command is not null)
-                    command.Execute(RibbonCommandContext.Empty);
+                    command.Execute(SenderContext(sender));
             };
         }
     }
+
+    // Passes the actual clicked WPF element to the command so host handlers that inspect their sender
+    // (MenuItem.Tag/Header, ToggleButton.IsChecked) see the real rendered control. ReflectiveHandlerCommand
+    // prefers this over its backplane sender when present.
+    public const string SenderKey = "wpf.sender";
+
+    private static RibbonCommandContext SenderContext(object? sender) =>
+        sender is null
+            ? RibbonCommandContext.Empty
+            : new RibbonCommandContext(new Dictionary<string, object?> { [SenderKey] = sender });
 
     private static RibbonMenu? GetMenu(RibbonControl control) => control switch
     {
@@ -404,10 +415,14 @@ public static class RibbonWpfRenderer
             else if (item.CommandId is { } commandId)
             {
                 menuItem.IsEnabled = registry.TryGet(commandId, out _);
-                menuItem.Click += (_, _) =>
+                // Some menu-item handlers read state off their sender (e.g. ArrangeAllMenuItem_Click
+                // reads MenuItem.Tag, ZoomPresetMenuItem_Click reads the header). Carry the values the
+                // original XAML set as Tag so those handlers resolve against the rendered menu item.
+                menuItem.Tag = item.Header;
+                menuItem.Click += (sender, _) =>
                 {
                     if (registry.TryGet(commandId, out var command) && command is not null)
-                        command.Execute(RibbonCommandContext.Empty);
+                        command.Execute(SenderContext(sender));
                 };
             }
 

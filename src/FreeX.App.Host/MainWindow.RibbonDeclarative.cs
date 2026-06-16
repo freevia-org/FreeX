@@ -162,9 +162,25 @@ public partial class MainWindow
 
         public void Execute(RibbonCommandContext context)
         {
+            // Many toggle handlers read their checked state off the BACKPLANE field by name (e.g.
+            // BoldButton_Click reads BoldButton.IsChecked; ViewGridlinesChk_Changed reads its sender,
+            // which is the backplane chk). A real click flips IsChecked before raising the event, so
+            // mirror that here on the backplane toggle so field-reading handlers observe the new state.
+            // (The rendered toggle was already flipped by the keytip path; the backplane is a separate
+            // control, so this is not a double-flip.)
+            if (_sender is ToggleButton backplaneToggle)
+                backplaneToggle.IsChecked = backplaneToggle.IsChecked != true;
+
+            // For sender-reading handlers (MenuItem.Tag/Header), prefer the actual clicked WPF element
+            // the renderer supplies; otherwise use the backplane control, then the window.
+            var sender = (context.Parameters.TryGetValue(RibbonWpfRenderer.SenderKey, out var wpfSender)
+                    ? wpfSender
+                    : null)
+                ?? _sender ?? _window;
+
             var args = _method.GetParameters().Length == 0
                 ? System.Array.Empty<object?>()
-                : new object?[] { _sender ?? _window, new RoutedEventArgs() };
+                : new object?[] { sender, new RoutedEventArgs() };
             try
             {
                 _method.Invoke(_window, args);
