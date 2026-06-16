@@ -5,7 +5,7 @@ namespace FreeX.App.Host;
 internal static class RibbonCollapsedGroupPresentationPlanner
 {
     public static IReadOnlyList<double> BreakpointThresholds =>
-        FreeX.Ribbon.RibbonCollapsedGroupBreakpoints.Thresholds;
+        Free.Shared.Ribbon.RibbonCollapsedGroupBreakpoints.Thresholds;
 
     private static readonly RibbonCollapsedGroupFootprint NormalFootprint = CreateCachedFootprint(
         RibbonCollapsedGroupFootprintMode.Normal,
@@ -45,10 +45,10 @@ internal static class RibbonCollapsedGroupPresentationPlanner
     }
 
     public static double GetPlannedWidth(double measuredCollapsedWidth, double availableWidth) =>
-        FreeX.Ribbon.RibbonCollapsedGroupBreakpoints.GetPlannedWidth(measuredCollapsedWidth, availableWidth);
+        Free.Shared.Ribbon.RibbonCollapsedGroupBreakpoints.GetPlannedWidth(measuredCollapsedWidth, availableWidth);
 
     public static string GetCacheKey(double availableWidth) =>
-        FreeX.Ribbon.RibbonCollapsedGroupBreakpoints.GetCacheKey(availableWidth);
+        Free.Shared.Ribbon.RibbonCollapsedGroupBreakpoints.GetCacheKey(availableWidth);
 
     private static RibbonCollapsedGroupFootprint CreateCachedFootprint(
         RibbonCollapsedGroupFootprintMode mode,

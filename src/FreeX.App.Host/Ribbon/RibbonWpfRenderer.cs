@@ -3,7 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Shapes;
-using FreeX.Ribbon;
+using Free.Shared.Ribbon;
 
 namespace FreeX.App.Host;
 

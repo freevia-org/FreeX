@@ -44,3 +44,6 @@ src/FreeX.App.Host/Resources/CommandIcons/
 capture_*.ps1
 enum_tabs.ps1
 *.png
+
+# Test run artifacts
+TestResults/

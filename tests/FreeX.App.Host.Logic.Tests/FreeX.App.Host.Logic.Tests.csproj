@@ -19,7 +19,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
-    <Using Include="FreeX.Ribbon" />
+    <Using Include="Free.Shared.Ribbon" />
   </ItemGroup>
 
   <ItemGroup>

@@ -4,7 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using FluentAssertions;
-using FreeX.Ribbon;
+using Free.Shared.Ribbon;
 
 namespace FreeX.App.Host.Tests;
 

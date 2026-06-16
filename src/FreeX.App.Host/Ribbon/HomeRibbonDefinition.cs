@@ -1,4 +1,4 @@
-using FreeX.Ribbon;
+using Free.Shared.Ribbon;
 
 namespace FreeX.App.Host;
 

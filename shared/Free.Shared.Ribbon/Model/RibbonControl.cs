@@ -1,0 +1,46 @@
+namespace Free.Shared.Ribbon;
+
+/// <summary>
+/// Base for every ribbon control. Structure only — behavior lives in the command
+/// registry, keyed by <see cref="CommandId"/>.
+/// </summary>
+public abstract record RibbonControl(
+    RibbonCommandId CommandId,
+    string Label)
+{
+    public string? KeyTip { get; init; }
+    public RibbonCommandIcon? Icon { get; init; }
+    public RibbonCommandLayoutKind PreferredLayout { get; init; } = RibbonCommandLayoutKind.Medium;
+    public string? TooltipTitle { get; init; }
+    public string? TooltipDescription { get; init; }
+}
+
+public sealed record RibbonButton(RibbonCommandId CommandId, string Label)
+    : RibbonControl(CommandId, Label);
+
+public sealed record RibbonToggleButton(RibbonCommandId CommandId, string Label)
+    : RibbonControl(CommandId, Label);
+
+public sealed record RibbonCheckBox(RibbonCommandId CommandId, string Label)
+    : RibbonControl(CommandId, Label);
+
+public sealed record RibbonLabel(RibbonCommandId CommandId, string Label)
+    : RibbonControl(CommandId, Label);
+
+public sealed record RibbonComboBox(RibbonCommandId CommandId, string Label)
+    : RibbonControl(CommandId, Label)
+{
+    public IReadOnlyList<string> Items { get; init; } = Array.Empty<string>();
+}
+
+public sealed record RibbonSplitButton(RibbonCommandId CommandId, string Label, RibbonMenu Menu)
+    : RibbonControl(CommandId, Label);
+
+public sealed record RibbonDropdown(RibbonCommandId CommandId, string Label, RibbonMenu Menu)
+    : RibbonControl(CommandId, Label);
+
+public sealed record RibbonGallery(RibbonCommandId CommandId, string Label)
+    : RibbonControl(CommandId, Label);
+
+public sealed record RibbonSeparator()
+    : RibbonControl(new RibbonCommandId(""), "");
