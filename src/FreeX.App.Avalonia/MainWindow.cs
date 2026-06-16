@@ -10808,7 +10808,14 @@ public sealed class MainWindow : Window
         }
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
-        await clipboard.SetTextAsync(_session.CutSelectedRangeText());
+        var cutResult = _session.TryCutSelectedRangeText();
+        if (!cutResult.Success)
+        {
+            ShowEditIssue(cutResult.ErrorMessage ?? "Cut failed.");
+            return;
+        }
+
+        await clipboard.SetTextAsync(cutResult.Text);
         RefreshShell($"Cut {rangeReference}");
     }
 
@@ -10828,7 +10835,14 @@ public sealed class MainWindow : Window
         }
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
-        await clipboard.SetTextAsync(_session.CopySelectedRangeText());
+        var copyResult = _session.TryCopySelectedRangeText();
+        if (!copyResult.Success)
+        {
+            ShowEditIssue(copyResult.ErrorMessage ?? "Copy failed.");
+            return;
+        }
+
+        await clipboard.SetTextAsync(copyResult.Text);
         RefreshShell($"Copied {rangeReference}");
     }
 

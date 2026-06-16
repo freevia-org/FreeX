@@ -1408,8 +1408,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("using Avalonia.Input.Platform;");
         source.Should().Contain("using FreeX.Core.Commands;");
         source.Should().Contain("TopLevel.GetTopLevel(this)?.Clipboard");
-        source.Should().Contain("await clipboard.SetTextAsync(_session.CutSelectedRangeText());");
-        source.Should().Contain("await clipboard.SetTextAsync(_session.CopySelectedRangeText());");
+        source.Should().Contain("var cutResult = _session.TryCutSelectedRangeText();");
+        source.Should().Contain("await clipboard.SetTextAsync(cutResult.Text);");
+        source.Should().Contain("var copyResult = _session.TryCopySelectedRangeText();");
+        source.Should().Contain("await clipboard.SetTextAsync(copyResult.Text);");
         source.Should().Contain("var text = await clipboard.TryGetTextAsync();");
         source.Should().Contain("_session.ShouldPreferExternalClipboardImage(text)");
         source.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)");
