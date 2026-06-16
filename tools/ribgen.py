@@ -6,6 +6,17 @@ from collections import defaultdict
 # pre-deletion ribbon preserved in git (write it with: git show <pre-cutover>:.../MainWindow.xaml).
 XAML = "tools/_old_mainwindow.xaml"
 OUT = "src/FreeX.App.Host/Ribbon/FreeXRibbonDefinition.cs"
+RESX = "src/FreeX.App.Host/Resources/Strings.resx"
+
+# Resolve {local:Loc Key=X} headers to their en-US display strings so dropdown items read like Excel
+# ("More Functions...", "Goal Seek...", "Error Checking..."); the keytip tests look menu items up by
+# their resolved header. WPF strips the leading "_" access-key mnemonic at runtime, so strip it too.
+_loc = {}
+for _data in ET.parse(RESX).getroot().findall("data"):
+    _loc[_data.get("name")] = (_data.findtext("value") or "").replace("_", "")
+
+def resolve(s):
+    return _loc.get(s, s) if s else s
 
 src = open(XAML, encoding="utf-8").read()
 src2 = re.sub(r"\{local:Loc Key=([A-Za-z0-9_]+)\}", r"\1", src)
@@ -113,12 +124,15 @@ for e in root.iter():
                         if mt == "Separator":
                             menu.append(("sep",))
                         elif mt == "MenuItem":
-                            mcn = mi.get(LK + "RibbonMetadata.CommandName") or mi.get("Header") or ""
+                            mcn = mi.get(LK + "RibbonMetadata.CommandName") or resolve(mi.get("Header")) or ""
                             if mcn:
                                 mi_handler = event_handler(mi)
+                                # id binds to a handler (CommandName); label is the resolved header so
+                                # it reads like Excel. Fall back to the id when there is no header.
+                                mlabel = resolve(mi.get("Header")) or mcn
                                 record(curtab, mcn, mi_handler, is_control=False)
                                 menu.append(("item", mcn, mi.get(LK + "RibbonTooltip.KeyTip") or "",
-                                             mi.get("InputGestureText") or "", mi_handler))
+                                             mi.get("InputGestureText") or "", mi_handler, mlabel))
                 has_drop = d.get(LK + "RibbonMetadata.DropdownMenuButton") == "true" or len(menu) > 0
                 items.append(("ctrl", tag, cn, keytip(d) or "", style, has_drop, menu, ch_handler))
         if curtab not in data:
@@ -314,7 +328,8 @@ def menu_expr(menu):
             continue
         if n >= 14:
             break
-        mlabel, mkt, mg, mhandler = esc(m[1]), esc(m[2]), esc(m[3]), m[4]
+        mkt, mg, mhandler = esc(m[2]), esc(m[3]), m[4]
+        mlabel = esc(m[5] if len(m) > 5 else m[1])
         mid = esc(command_id(m[1], mhandler))
         args = f'"{mid}", "{mlabel}"'
         if mkt or mg:

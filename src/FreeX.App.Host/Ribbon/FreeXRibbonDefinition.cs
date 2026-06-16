@@ -72,25 +72,25 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Medium("Shape Fill", "Shape Fill", Ico.RibbonShape, "OF")
                 .Medium("Object Outline", "Object Outline", Ico.Border, "OO")
-                .Medium("Crop Picture", "Crop Picture", Ico.Picture, "C", menu: m => m.Item("Crop", "Crop", "C").Item("Reset Crop", "Reset Crop", "R"))
+                .Medium("Crop Picture", "Crop Picture", Ico.Picture, "C", menu: m => m.Item("Crop", "Crop...", "C").Item("Reset Crop", "Reset Crop", "R"))
                 .Medium("Shape Gradient", "Shape Gradient", Ico.RibbonShape, "G")
                 .Medium("Shape Effects", "Shape Effects", Ico.RibbonShape, "FX", menu: m => m.Item("No Effect", "No Effect", "N").Separator().Item("Shadow", "Shadow", "S").Item("Inner Shadow", "Inner Shadow", "I").Item("Reflection", "Reflection", "R").Item("Glow", "Glow", "G").Item("Soft Edges", "Soft Edges", "E").Item("Bevel", "Bevel", "B").Item("3-D Rotation", "3-D Rotation", "D")))
         )
         .Tab("PageLayoutTab", "Page Layout", "P", tab => tab
             .Group("PageLayoutThemesGroup", "Themes", null, priority: 180,
                 g => g
-                .Large("Themes", "Themes", Ico.Theme, "TH", menu: m => m.Item("Office#ThemeOfficeMenuItem_Click", "Office", "O").Item("FreeX Colorful#ThemeColorfulMenuItem_Click", "FreeX Colorful", "C").Item("Grayscale#ThemeGrayscaleMenuItem_Click", "Grayscale", "G").Item("Customize", "Customize", "U"))
-                .Large("Theme Colors", "Theme Colors", Ico.Theme, "TC", menu: m => m.Item("Office#ThemeColorsOfficeMenuItem_Click", "Office", "O").Item("FreeX Colorful#ThemeColorsColorfulMenuItem_Click", "FreeX Colorful", "C").Item("Grayscale#ThemeColorsGrayscaleMenuItem_Click", "Grayscale", "G").Item("Customize Colors", "Customize Colors", "U"))
-                .Large("Theme Fonts", "Theme Fonts", Ico.Font, "TF", menu: m => m.Item("Office#ThemeFontsOfficeMenuItem_Click", "Office", "O").Item("Arial", "Arial", "A").Item("Times New Roman", "Times New Roman", "T").Item("Customize Fonts", "Customize Fonts", "U"))
-                .Large("Theme Effects", "Theme Effects", Ico.Effects, "TE", menu: m => m.Item("Office#ThemeEffectsOfficeMenuItem_Click", "Office", "O").Item("Subtle", "Subtle", "S").Item("Refined", "Refined", "R").Item("Customize Effects", "Customize Effects", "U")))
+                .Large("Themes", "Themes", Ico.Theme, "TH", menu: m => m.Item("Office#ThemeOfficeMenuItem_Click", "Office", "O").Item("FreeX Colorful#ThemeColorfulMenuItem_Click", "FreeX Colorful", "C").Item("Grayscale#ThemeGrayscaleMenuItem_Click", "Grayscale", "G").Item("Customize", "Customize...", "U"))
+                .Large("Theme Colors", "Theme Colors", Ico.Theme, "TC", menu: m => m.Item("Office#ThemeColorsOfficeMenuItem_Click", "Office", "O").Item("FreeX Colorful#ThemeColorsColorfulMenuItem_Click", "FreeX Colorful", "C").Item("Grayscale#ThemeColorsGrayscaleMenuItem_Click", "Grayscale", "G").Item("Customize Colors", "Customize Colors...", "U"))
+                .Large("Theme Fonts", "Theme Fonts", Ico.Font, "TF", menu: m => m.Item("Office#ThemeFontsOfficeMenuItem_Click", "Office", "O").Item("Arial", "Arial", "A").Item("Times New Roman", "Times New Roman", "T").Item("Customize Fonts", "Customize Fonts...", "U"))
+                .Large("Theme Effects", "Theme Effects", Ico.Effects, "TE", menu: m => m.Item("Office#ThemeEffectsOfficeMenuItem_Click", "Office", "O").Item("Subtle", "Subtle", "S").Item("Refined", "Refined", "R").Item("Customize Effects", "Customize Effects...", "U")))
             .Group("PageLayoutPageSetupGroup", "Page Setup", null, priority: 170,
                 g => g
-                .Large("Margins", "Margins", Ico.Margins, "M", menu: m => m.Item("Normal#MarginNormalMenuItem_Click", "Normal", "N").Item("Wide", "Wide", "W").Item("Narrow", "Narrow", "A").Item("Custom Margins", "Custom Margins", "C"))
+                .Large("Margins", "Margins", Ico.Margins, "M", menu: m => m.Item("Normal#MarginNormalMenuItem_Click", "Normal", "N").Item("Wide", "Wide", "W").Item("Narrow", "Narrow", "A").Item("Custom Margins", "Custom Margins...", "C"))
                 .Large("Page Orientation", "Page Orientation", Ico.Orientation, "OR", menu: m => m.Item("Portrait", "Portrait", "P").Item("Landscape", "Landscape", "L"))
                 .Large("Paper Size", "Paper Size", Ico.Page, "SZ", menu: m => m.Item("Letter", "Letter", "L").Item("Legal", "Legal", "G").Item("Executive", "Executive", "E").Item("Statement", "Statement", "S").Item("Tabloid", "Tabloid", "T").Item("A4", "A4", "A").Item("A3", "A3", "3").Item("A5", "A5", "5").Item("B4 (JIS)", "B4 (JIS)", "B4").Item("B5 (JIS)", "B5 (JIS)", "B5"))
                 .Large("Print Area", "Print Area", Ico.Print, "PA", menu: m => m.Item("Set Print Area", "Set Print Area", "S").Item("Clear Print Area", "Clear Print Area", "C"))
                 .Large("Breaks", "Breaks", Ico.PageBreak, "BK", menu: m => m.Item("Insert Page Break", "Insert Page Break", "I").Item("Remove Page Break", "Remove Page Break", "R").Item("Reset All Page Breaks", "Reset All Page Breaks", "A"))
-                .Large("Background", "Background", Ico.Picture, "BG", menu: m => m.Item("Choose Background", "Choose Background", "C").Item("Delete Background", "Delete Background", "D"))
+                .Large("Background", "Background", Ico.Picture, "BG", menu: m => m.Item("Choose Background", "Choose Background...", "C").Item("Delete Background", "Delete Background", "D"))
                 .Large("Print Titles", "Print Titles", Ico.Print, "PT")
                 .Medium("Page Setup", "Page Setup", Ico.Page, "PS")
                 .Medium("Page Setup dialog", "Page Setup dialog", Ico.Page, "PD"))
@@ -110,7 +110,7 @@ public static class FreeXRibbonDefinition
         .Tab("FormulasTab", "Formulas", "M", tab => tab
             .Group("FormulasFunctionLibraryGroup", "Function Library", null, priority: 180,
                 g => g
-                .Large("AutoSum#FormulasAutoSumPickerBtn_Click", "AutoSum", Ico.Sum, "U", menu: m => m.Item("Sum", "Sum", "S").Item("Average", "Average", "A").Item("Count Numbers", "Count Numbers", "C").Item("Count All", "Count All", "T").Item("Max", "Max", "X").Item("Min", "Min", "M").Item("More Functions#AutoSumMoreMenuItem_Click", "More Functions", "F"))
+                .Large("AutoSum#FormulasAutoSumPickerBtn_Click", "AutoSum", Ico.Sum, "U", menu: m => m.Item("Sum", "Sum", "S").Item("Average", "Average", "A").Item("Count Numbers", "Count Numbers", "C").Item("Count All", "Count All", "T").Item("Max", "Max", "X").Item("Min", "Min", "M").Item("More Functions#AutoSumMoreMenuItem_Click", "More Functions...", "F"))
                 .Medium("Recently Used", "Recently Used", Ico.Generic, "RU")
                 .Medium("Financial", "Financial", Ico.Financial, "Y")
                 .Medium("Logical Functions", "Logical Functions", Ico.Logical, "L")
@@ -131,7 +131,7 @@ public static class FreeXRibbonDefinition
                 .Medium("Trace Dependents", "Trace Dependents", Ico.Link, "TD")
                 .Medium("Remove Arrows#RemoveArrowsBtn_Click", "Remove Arrows", Ico.Clear, "RA", menu: m => m.Item("Remove Arrows#RemoveAllArrowsMenuItem_Click", "Remove Arrows", "A").Item("Remove Precedent Arrows", "Remove Precedent Arrows", "P").Item("Remove Dependent Arrows", "Remove Dependent Arrows", "D"))
                 .IconToggle("Show Formulas", "Show Formulas", Ico.Function, "SF")
-                .Medium("Error Checking", "Error Checking", Ico.Warning, "EC", menu: m => m.Item("Error Checking", "Error Checking", "E").Item("Error Checking Options", "Error Checking Options", "O"))
+                .Medium("Error Checking", "Error Checking", Ico.Warning, "EC", menu: m => m.Item("Error Checking", "Error Checking...", "E").Item("Error Checking Options", "Error Checking Options...", "O"))
                 .Medium("Evaluate Formula", "Evaluate Formula", Ico.Function, "V")
                 .Medium("Watch Window", "Watch Window", Ico.Watch, "W"))
             .Group("FormulasCalculationGroup", "Calculation", null, priority: 150,
@@ -161,11 +161,11 @@ public static class FreeXRibbonDefinition
                 .Large("Text to Columns", "Text to Columns", Ico.TextColumns, "E")
                 .Large("Flash Fill", "Flash Fill", Ico.Flash, "FF")
                 .Large("Remove Duplicates#RemoveDuplicatesBtn_Click", "Remove Duplicates", Ico.Delete, "M")
-                .Large("Data Validation#ValidationButton_Click", "Data Validation", Ico.List, "V", menu: m => m.Item("Data Validation#ValidationButton_Click", "Data Validation", "V").Item("Circle Invalid Data", "Circle Invalid Data", "I").Item("Clear Validation Circles", "Clear Validation Circles", "C"))
+                .Large("Data Validation#ValidationButton_Click", "Data Validation", Ico.List, "V", menu: m => m.Item("Data Validation#ValidationButton_Click", "Data Validation...", "V").Item("Circle Invalid Data", "Circle Invalid Data", "I").Item("Clear Validation Circles", "Clear Validation Circles", "C"))
                 .Large("Consolidate", "Consolidate", Ico.Date, "N"))
             .Group("DataForecastGroup", "Forecast", null, priority: 140,
                 g => g
-                .Large("What-If Analysis", "What-If Analysis", Ico.Function, "W", menu: m => m.Item("Goal Seek", "Goal Seek", "G").Item("Scenario Manager", "Scenario Manager", "S").Item("Data Table", "Data Table", "D"))
+                .Large("What-If Analysis", "What-If Analysis", Ico.Function, "W", menu: m => m.Item("Goal Seek", "Goal Seek...", "G").Item("Scenario Manager", "Scenario Manager...", "S").Item("Data Table", "Data Table...", "D"))
                 .Large("Forecast Sheet", "Forecast Sheet", Ico.ChartLine, "FS"))
             .Group("DataOutlineGroup", "Outline", null, priority: 130,
                 g => g
@@ -221,7 +221,7 @@ public static class FreeXRibbonDefinition
                 .CheckBox("Formula Bar", "Formula Bar", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Function), KeyTip = "VF" }))
             .Group("ViewZoomGroup", "Zoom", null, priority: 160,
                 g => g
-                .Large("Zoom", "Zoom", Ico.Zoom, "Q", menu: m => m.Item("200%", "200%", "2").Item("100%#ZoomPresetMenuItem_Click", "100%", "1").Item("75%", "75%", "7").Item("50%", "50%", "5").Item("25%", "25%", "3").Separator().Item("More", "More", "C"))
+                .Large("Zoom", "Zoom", Ico.Zoom, "Q", menu: m => m.Item("200%", "200%", "2").Item("100%#ZoomPresetMenuItem_Click", "100%", "1").Item("75%", "75%", "7").Item("50%", "50%", "5").Item("25%", "25%", "3").Separator().Item("More", "Custom...", "C"))
                 .Large("100%#Zoom100Btn_Click", "100%", Ico.Generic, "Z1")
                 .Large("Zoom to Selection", "Zoom to Selection", Ico.Zoom, "ZS"))
             .Group("ViewWindowGroup", "Window", null, priority: 150,
@@ -303,7 +303,7 @@ public static class FreeXRibbonDefinition
             .Group("PictureFormatFormatGroup", "Format", null, priority: 180,
                 g => g
                 .Medium("Format Picture", "Format Picture", Ico.Picture, "FP")
-                .Medium("Crop Picture", "Crop Picture", Ico.Picture, "C", menu: m => m.Item("Crop", "Crop", "C").Item("Reset Crop", "Reset Crop", "R")))
+                .Medium("Crop Picture", "Crop Picture", Ico.Picture, "C", menu: m => m.Item("Crop", "Crop...", "C").Item("Reset Crop", "Reset Crop", "R")))
             .Group("PictureFormatArrangeGroup", "Arrange", null, priority: 170,
                 g => g
                 .Large("Bring Forward", "Bring Forward", Ico.BringForward, "BF")
