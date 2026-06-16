@@ -38,6 +38,27 @@ public sealed class SkiaPdfDocumentExporterTests
     }
 
     [Fact]
+    public void Save_RendersCjkTextViaFontFallbackWithoutError()
+    {
+        var workbook = new Workbook("CJK");
+        var sheet = workbook.AddSheet("表");
+        // CJK is outside any Latin default typeface; the exporter's per-codepoint font fallback
+        // must resolve a system CJK face and still produce a valid embedded-font PDF.
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("日本語"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("中文测试"));
+
+        var exportPlan = CreateExportPlan(workbook, sheet, GridRange.Parse("A1:B1", sheet.Id));
+
+        using var stream = new MemoryStream();
+        var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream);
+
+        result.PageCount.Should().BeGreaterThan(0);
+        var content = Encoding.Latin1.GetString(stream.ToArray());
+        content.Should().StartWith("%PDF-");
+        content.Should().Contain("FontFile");
+    }
+
+    [Fact]
     public void Save_RejectsNonWritableStream()
     {
         var workbook = new Workbook("Book");

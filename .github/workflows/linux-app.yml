@@ -73,7 +73,8 @@ jobs:
             libegl1 \
             desktop-file-utils \
             shared-mime-info \
-            appstream
+            appstream \
+            fonts-noto-cjk
 
       - name: Capture runner toolchain evidence
         shell: bash

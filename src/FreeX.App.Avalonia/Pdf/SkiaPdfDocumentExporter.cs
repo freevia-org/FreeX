@@ -45,6 +45,7 @@ public static class SkiaPdfDocumentExporter
             ?? regular;
 
         var pageCount = 0;
+        using var textRenderer = new FallbackTextRenderer();
         using (var document = SKDocument.CreatePdf(stream))
         {
             foreach (var request in exportPlan.PageRequests)
@@ -57,7 +58,7 @@ public static class SkiaPdfDocumentExporter
                     (float)options.PageWidthPoints,
                     (float)options.PageHeightPoints);
                 canvas.Clear(SKColors.White);
-                RenderPage(canvas, workbook, exportPlan, request, contentPlan, options, regular, bold);
+                RenderPage(canvas, workbook, exportPlan, request, contentPlan, options, regular, bold, textRenderer);
                 document.EndPage();
                 pageCount++;
             }
@@ -81,7 +82,8 @@ public static class SkiaPdfDocumentExporter
         PortablePdfPageContentPlan contentPlan,
         PortablePdfDocumentOptions options,
         SKTypeface regular,
-        SKTypeface bold)
+        SKTypeface bold,
+        FallbackTextRenderer textRenderer)
     {
         var margin = (float)options.MarginPoints;
         using var fillPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
@@ -96,18 +98,12 @@ public static class SkiaPdfDocumentExporter
 
         // Header (title) and footer use a Skia (top-left, y-down) coordinate system.
         var title = string.IsNullOrWhiteSpace(workbook.Name) ? "FreeX Workbook" : workbook.Name.Trim();
-        using (var titleFont = new SKFont(bold, 14f))
-        {
-            textPaint.Color = SKColors.Black;
-            canvas.DrawText(title, margin, margin + 12f, titleFont, textPaint);
-        }
+        textPaint.Color = SKColors.Black;
+        textRenderer.DrawText(canvas, title, margin, margin + 12f, bold, 14f, textPaint);
 
-        using (var footerFont = new SKFont(regular, 9f))
-        {
-            textPaint.Color = new SKColor(0x66, 0x66, 0x66);
-            var footer = $"{request.SheetName} - sheet page {request.SheetPageNumber} - export page {request.ExportPageNumber} of {exportPlan.TotalPageCount}";
-            canvas.DrawText(footer, margin, margin + 30f, footerFont, textPaint);
-        }
+        textPaint.Color = new SKColor(0x66, 0x66, 0x66);
+        var footer = $"{request.SheetName} - sheet page {request.SheetPageNumber} - export page {request.ExportPageNumber} of {exportPlan.TotalPageCount}";
+        textRenderer.DrawText(canvas, footer, margin, margin + 30f, regular, 9f, textPaint);
 
         var columnCount = Math.Max(1, contentPlan.ColumnCount);
         var availableWidth = options.PageWidthPoints - (options.MarginPoints * 2);
@@ -143,13 +139,13 @@ public static class SkiaPdfDocumentExporter
                 continue;
 
             var fontSize = (float)Math.Clamp(style.FontSize, 7, 10);
-            using var cellFont = new SKFont(cell.IsTitle || style.Bold ? bold : regular, fontSize);
+            var cellTypeface = cell.IsTitle || style.Bold ? bold : regular;
             var fontColor = style.ResolveFontColor(workbook.Theme);
             textPaint.Color = fontColor is { } fc ? new SKColor(fc.R, fc.G, fc.B) : SKColors.Black;
             var baseline = yTop + rowHeight - 6f;
             canvas.Save();
             canvas.ClipRect(rect);
-            canvas.DrawText(cell.DisplayText, x + 4f, baseline, cellFont, textPaint);
+            textRenderer.DrawText(canvas, cell.DisplayText, x + 4f, baseline, cellTypeface, fontSize, textPaint);
             canvas.Restore();
         }
     }
@@ -177,5 +173,87 @@ public static class SkiaPdfDocumentExporter
             if (columns[i].Column == column)
                 return i;
         return -1;
+    }
+
+    /// <summary>
+    /// Draws text with per-codepoint font fallback: characters the base typeface cannot render
+    /// (e.g. CJK with a Latin default font) are drawn with a system typeface resolved via
+    /// <see cref="SKFontManager.MatchCharacter(string, int)"/>. Skia embeds whatever it draws, so
+    /// the fallback glyphs are subset into the PDF too. Fallback typefaces are cached by family
+    /// and disposed with the renderer.
+    /// </summary>
+    private sealed class FallbackTextRenderer : IDisposable
+    {
+        private readonly SKFontManager _fontManager = SKFontManager.Default;
+        private readonly Dictionary<string, SKTypeface> _fallbackByFamily = new(StringComparer.Ordinal);
+
+        public void DrawText(
+            SKCanvas canvas,
+            string text,
+            float x,
+            float baseline,
+            SKTypeface baseTypeface,
+            float sizePoints,
+            SKPaint paint)
+        {
+            if (string.IsNullOrEmpty(text))
+                return;
+
+            var cursorX = x;
+            var index = 0;
+            while (index < text.Length)
+            {
+                var runTypeface = Resolve(baseTypeface, CodepointAt(text, index));
+                var runStart = index;
+                index += AdvanceLength(text, index);
+                while (index < text.Length &&
+                       ReferenceEquals(Resolve(baseTypeface, CodepointAt(text, index)), runTypeface))
+                {
+                    index += AdvanceLength(text, index);
+                }
+
+                var run = text.Substring(runStart, index - runStart);
+                using var font = new SKFont(runTypeface, sizePoints);
+                canvas.DrawText(run, cursorX, baseline, font, paint);
+                cursorX += font.MeasureText(run);
+            }
+        }
+
+        private SKTypeface Resolve(SKTypeface baseTypeface, int codepoint)
+        {
+            if (baseTypeface.GetGlyph(codepoint) != 0)
+                return baseTypeface;
+
+            var match = _fontManager.MatchCharacter(baseTypeface.FamilyName, codepoint);
+            if (match is null)
+                return baseTypeface;
+
+            if (_fallbackByFamily.TryGetValue(match.FamilyName, out var cached))
+            {
+                if (!ReferenceEquals(cached, match))
+                    match.Dispose();
+                return cached;
+            }
+
+            _fallbackByFamily[match.FamilyName] = match;
+            return match;
+        }
+
+        private static int CodepointAt(string text, int index) =>
+            char.IsHighSurrogate(text[index]) && index + 1 < text.Length && char.IsLowSurrogate(text[index + 1])
+                ? char.ConvertToUtf32(text[index], text[index + 1])
+                : text[index];
+
+        private static int AdvanceLength(string text, int index) =>
+            char.IsHighSurrogate(text[index]) && index + 1 < text.Length && char.IsLowSurrogate(text[index + 1])
+                ? 2
+                : 1;
+
+        public void Dispose()
+        {
+            foreach (var typeface in _fallbackByFamily.Values)
+                typeface.Dispose();
+            _fallbackByFamily.Clear();
+        }
     }
 }
