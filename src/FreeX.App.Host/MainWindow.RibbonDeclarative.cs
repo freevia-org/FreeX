@@ -58,6 +58,7 @@ public partial class MainWindow
             var renderedByName = CollectControlsByName();
             WireDeclarativeStateSync(originals, renderedByName);
             RepointBackplaneNamesToRenderedControls(renderedByName);
+            WireRenderedMenuOpenedHandlers(renderedByName);
 
             if (Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_CAPTURE") == "1")
                 Dispatcher.BeginInvoke(new Action(CaptureDeclarativeRibbon), DispatcherPriority.ContextIdle);
@@ -267,6 +268,20 @@ public partial class MainWindow
                 sourceCombo.LostFocus += (_, _) => Sync();
                 Sync();
             }
+        }
+    }
+
+    /// <summary>
+    /// Wires the on-open refresh for rendered dropdowns whose menu reflects live state (e.g. Arrange
+    /// All check-marks the current window arrangement). The declarative menu model is static, so the
+    /// host attaches the same Opened handler the original XAML used.
+    /// </summary>
+    private void WireRenderedMenuOpenedHandlers(IReadOnlyDictionary<string, Control> rendered)
+    {
+        if (rendered.TryGetValue("Arrange All", out var arrangeAll) &&
+            arrangeAll is ButtonBase { ContextMenu: { } arrangeMenu })
+        {
+            arrangeMenu.Opened += ArrangeAllContextMenu_Opened;
         }
     }
 
