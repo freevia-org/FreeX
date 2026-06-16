@@ -213,6 +213,21 @@ public sealed class DocumentView : RichTextBox
         ApplyPageSettings(page => page.Watermark = string.IsNullOrWhiteSpace(text) ? null : text.Trim());
 
     /// <summary>
+    /// Apply a document theme (colour/font scheme) to the model's style catalog and re-render so the
+    /// new heading colours/fonts and body face show immediately. This is a document-wide style change
+    /// to the catalog (not the per-paragraph runs), so it is applied directly rather than through the
+    /// undo/redo bus: pending in-progress edits are committed first so the re-render does not drop them,
+    /// then <see cref="DocumentTheme.Apply"/> rewrites the relevant styles and the surface re-renders.
+    /// Used by the Design ribbon's theme dropdown.
+    /// </summary>
+    public void ApplyTheme(DocumentTheme theme)
+    {
+        CommitToModel();
+        DocumentTheme.Apply(_model, theme);
+        Render();
+    }
+
+    /// <summary>
     /// Insert a table at the caret (after the block the caret sits in, else at the end), routing
     /// through the undo/redo command bus so the insert is reversible. Re-renders the surface.
     /// </summary>

@@ -182,6 +182,11 @@ internal static class FreeWRibbonCommands
         // (reversible via the bus), then re-renders so the style's run/paragraph formatting resolves.
         registry.Register("freew.style", new ApplyParagraphStyleCommand(editor));
 
+        // Design > Document Formatting: the Themes dropdown. Picking a theme name applies that built-in
+        // colour/font scheme to the document's style catalog (rewriting heading/title colours + fonts and
+        // the body face) and re-renders so the change is visible at once.
+        registry.Register("freew.theme", new ApplyThemeCommand(editor));
+
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
         registry.Register("freew.orientation", new PageCommand(editor, page =>
         {
@@ -383,6 +388,23 @@ internal static class FreeWRibbonCommands
         }
 
         private static string Compact(string value) => value.Replace(" ", string.Empty);
+    }
+
+    // Design > Document Formatting: apply a built-in document theme. The dropdown's value is a theme
+    // name (e.g. "Slate"); this resolves it to a DocumentTheme in the catalog and asks the view to
+    // rewrite the style catalog + re-render so the new heading colours/fonts and body face show at once.
+    private sealed class ApplyThemeCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value || value.Length == 0)
+                return;
+            if (DocumentTheme.FindByName(value) is not { } theme)
+                return;
+
+            editor.Focus();
+            editor.ApplyTheme(theme);
+        }
     }
 
     // Home > Font: pick a colour from a small fixed palette and apply it to the selection. When

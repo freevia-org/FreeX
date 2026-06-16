@@ -1,3 +1,6 @@
+using System.Linq;
+using FreeW.Core.Model;
+
 namespace FreeW.App.Host;
 
 /// <summary>
@@ -140,6 +143,17 @@ internal static class FreeWRibbon
                 tab.Group("preview", "Preview", "V", 90, g =>
                 {
                     g.Button("freew.print-preview", "Print Preview");
+                });
+            })
+            .Tab("design", "Design", "G", tab =>
+            {
+                tab.Group("themes", "Document Formatting", "T", 100, g =>
+                {
+                    g.ComboBox("freew.theme", "Themes", c => c with
+                    {
+                        Items = DocumentTheme.Catalog.Select(t => t.Name).ToArray(),
+                        Width = 140
+                    });
                 });
             })
             .Tab("view", "View", "W", tab =>
