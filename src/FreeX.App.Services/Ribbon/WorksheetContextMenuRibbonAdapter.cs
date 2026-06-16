@@ -1,4 +1,6 @@
-namespace FreeX.App.Host;
+using Free.Shared.Ribbon;
+
+namespace FreeX.App.Services.Ribbon;
 
 /// <summary>
 /// Bridges the platform-neutral <see cref="WorksheetContextMenuPlanner"/> output into the shared
