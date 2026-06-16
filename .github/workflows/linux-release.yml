@@ -300,6 +300,7 @@ jobs:
           - Verify with: \`sha256sum -c <asset>.sha256\`
           - Tarball: extract and run \`install.sh\` (installs to ~/.local), then launch \`freex\`.
           - AppImage: \`chmod +x FreeX-$version-<arch>.AppImage && ./FreeX-$version-<arch>.AppImage\`
+          - Debian/Ubuntu: \`sudo apt install ./freex_${version}_<arch>.deb\` (amd64 or arm64), then launch \`freex\`.
 
           A desktop session with X11 or Wayland is required; no system .NET install is needed.
 
