@@ -7,8 +7,16 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public RunFormatting Formatting { get; set; } = formatting ?? RunFormatting.Default;
 }
 
+/// <summary>
+/// A top-level document block. The document body is an ordered sequence of blocks; today that is
+/// paragraphs and tables, mirroring how WordprocessingML interleaves w:p and w:tbl inside w:body.
+/// </summary>
+public abstract class Block
+{
+}
+
 /// <summary>A paragraph: an ordered sequence of runs plus paragraph formatting and an optional style.</summary>
-public sealed class Paragraph
+public sealed class Paragraph : Block
 {
     public List<Run> Runs { get; } = [];
     public ParagraphFormatting Formatting { get; set; } = ParagraphFormatting.Default;
@@ -23,6 +31,59 @@ public sealed class Paragraph
     }
 
     public string PlainText => string.Concat(Runs.Select(r => r.Text));
+}
+
+/// <summary>A single table cell: a list of paragraphs (matching w:tc, which holds block content).</summary>
+public sealed class TableCell
+{
+    public List<Paragraph> Paragraphs { get; } = [];
+
+    public TableCell() { }
+
+    public TableCell(string text) => Paragraphs.Add(new Paragraph(text));
+
+    public string PlainText => string.Join("\n", Paragraphs.Select(p => p.PlainText));
+}
+
+/// <summary>A table row: an ordered sequence of cells (w:tr).</summary>
+public sealed class TableRow
+{
+    public List<TableCell> Cells { get; } = [];
+}
+
+/// <summary>Minimal table-level formatting. Currently just whether cell borders are drawn.</summary>
+public sealed record TableFormatting
+{
+    public bool Borders { get; init; } = true;
+
+    public static readonly TableFormatting Default = new();
+}
+
+/// <summary>A table block: rows of cells, each cell holding paragraphs (w:tbl / w:tr / w:tc).</summary>
+public sealed class Table : Block
+{
+    public List<TableRow> Rows { get; } = [];
+    public TableFormatting Formatting { get; set; } = TableFormatting.Default;
+
+    public Table() { }
+
+    /// <summary>Create a uniform <paramref name="rows"/>x<paramref name="columns"/> table of empty cells.</summary>
+    public static Table Create(int rows, int columns)
+    {
+        var table = new Table();
+        for (var r = 0; r < rows; r++)
+        {
+            var row = new TableRow();
+            for (var c = 0; c < columns; c++)
+                row.Cells.Add(new TableCell(string.Empty));
+            table.Rows.Add(row);
+        }
+        return table;
+    }
+
+    public int RowCount => Rows.Count;
+
+    public int ColumnCount => Rows.Count == 0 ? 0 : Rows.Max(r => r.Cells.Count);
 }
 
 /// <summary>Page geometry for a section (points; US Letter with 1in margins by default).</summary>
@@ -44,21 +105,32 @@ public sealed class PageSettings
 /// </summary>
 public sealed class TextDocument
 {
-    public List<Paragraph> Paragraphs { get; } = [];
+    /// <summary>The document body: an ordered sequence of blocks (paragraphs and tables).</summary>
+    public List<Block> Blocks { get; } = [];
     public Dictionary<string, DocumentStyle> Styles { get; } = [];
     public RunFormatting DefaultRun { get; set; } = new() { FontFamily = "Calibri", FontSizePt = 11 };
     public ParagraphFormatting DefaultParagraph { get; set; } = ParagraphFormatting.Default;
     public PageSettings Page { get; } = new();
 
+    /// <summary>The body's paragraphs (top-level only; table cell paragraphs are not included).</summary>
+    public IEnumerable<Paragraph> Paragraphs => Blocks.OfType<Paragraph>();
+
     public static TextDocument CreateEmpty()
     {
         var doc = new TextDocument();
         doc.AddBuiltInStyles();
-        doc.Paragraphs.Add(new Paragraph());
+        doc.Blocks.Add(new Paragraph());
         return doc;
     }
 
-    public string PlainText => string.Join("\n", Paragraphs.Select(p => p.PlainText));
+    public string PlainText => string.Join("\n", Blocks.Select(BlockPlainText));
+
+    private static string BlockPlainText(Block block) => block switch
+    {
+        Paragraph p => p.PlainText,
+        Table t => string.Join("\n", t.Rows.Select(r => string.Join("\t", r.Cells.Select(c => c.PlainText)))),
+        _ => string.Empty
+    };
 
     private void AddBuiltInStyles()
     {

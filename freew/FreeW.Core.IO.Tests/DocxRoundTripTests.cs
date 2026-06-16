@@ -17,8 +17,8 @@ public class DocxRoundTripTests
     public void Paragraphs_And_Text_RoundTrip()
     {
         var doc = new TextDocument();
-        doc.Paragraphs.Add(new Paragraph("Hello world"));
-        doc.Paragraphs.Add(new Paragraph("Second paragraph"));
+        doc.Blocks.Add(new Paragraph("Hello world"));
+        doc.Blocks.Add(new Paragraph("Second paragraph"));
 
         var result = RoundTrip(doc);
 
@@ -40,9 +40,9 @@ public class DocxRoundTripTests
             FontSizePt = 14,
             ColorHex = "#C0504D"
         }));
-        doc.Paragraphs.Add(paragraph);
+        doc.Blocks.Add(paragraph);
 
-        var formatting = RoundTrip(doc).Paragraphs[0].Runs[0].Formatting;
+        var formatting = RoundTrip(doc).Paragraphs.First().Runs[0].Formatting;
 
         formatting.Bold.Should().BeTrue();
         formatting.Italic.Should().BeTrue();
@@ -57,7 +57,7 @@ public class DocxRoundTripTests
     public void ParagraphFormatting_RoundTrips()
     {
         var doc = new TextDocument();
-        doc.Paragraphs.Add(new Paragraph("p")
+        doc.Blocks.Add(new Paragraph("p")
         {
             Formatting = ParagraphFormatting.Default with
             {
@@ -67,7 +67,7 @@ public class DocxRoundTripTests
             }
         });
 
-        var formatting = RoundTrip(doc).Paragraphs[0].Formatting;
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
 
         formatting.Alignment.Should().Be(TextAlignment.Center);
         formatting.SpaceBeforePt.Should().Be(12);
@@ -78,14 +78,59 @@ public class DocxRoundTripTests
     public void Styles_And_StyleReference_RoundTrip()
     {
         var doc = TextDocument.CreateEmpty();
-        doc.Paragraphs.Clear();
-        doc.Paragraphs.Add(new Paragraph("Title") { StyleId = "Title" });
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Title") { StyleId = "Title" });
 
         var result = RoundTrip(doc);
 
         result.Styles.Should().ContainKey("Title");
         result.Styles["Title"].Run.Bold.Should().BeTrue();
-        result.Paragraphs[0].StyleId.Should().Be("Title");
+        result.Paragraphs.First().StyleId.Should().Be("Title");
+    }
+
+    [Fact]
+    public void Table_RoundTrips_RowsColumnsAndCellText()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Before table"));
+        var table = new Table();
+        for (var r = 0; r < 2; r++)
+        {
+            var row = new TableRow();
+            for (var c = 0; c < 3; c++)
+                row.Cells.Add(new TableCell($"r{r}c{c}"));
+            table.Rows.Add(row);
+        }
+        doc.Blocks.Add(table);
+        doc.Blocks.Add(new Paragraph("After table"));
+
+        var result = RoundTrip(doc);
+
+        result.Blocks.Should().HaveCount(3);
+        result.Blocks[0].Should().BeOfType<Paragraph>();
+        result.Blocks[2].Should().BeOfType<Paragraph>();
+
+        var readTable = result.Blocks[1].Should().BeOfType<Table>().Subject;
+        readTable.RowCount.Should().Be(2);
+        readTable.ColumnCount.Should().Be(3);
+        readTable.Rows[0].Cells.Select(c => c.PlainText).Should().Equal("r0c0", "r0c1", "r0c2");
+        readTable.Rows[1].Cells.Select(c => c.PlainText).Should().Equal("r1c0", "r1c1", "r1c2");
+    }
+
+    [Fact]
+    public void Table_BorderlessFormatting_RoundTrips()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(1, 1);
+        table.Formatting = TableFormatting.Default with { Borders = false };
+        table.Rows[0].Cells[0] = new TableCell("x");
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.Formatting.Borders.Should().BeFalse();
+        readTable.Rows[0].Cells[0].PlainText.Should().Be("x");
     }
 
     [Fact]

@@ -5,9 +5,16 @@ using System.Windows.Media;
 using FreeW.Core.Model;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun = System.Windows.Documents.Run;
+using WpfTable = System.Windows.Documents.Table;
+using WpfTableRow = System.Windows.Documents.TableRow;
+using WpfTableCell = System.Windows.Documents.TableCell;
 using WpfTextAlignment = System.Windows.TextAlignment;
+using ModelBlock = FreeW.Core.Model.Block;
 using ModelParagraph = FreeW.Core.Model.Paragraph;
 using ModelRun = FreeW.Core.Model.Run;
+using ModelTable = FreeW.Core.Model.Table;
+using ModelTableRow = FreeW.Core.Model.TableRow;
+using ModelTableCell = FreeW.Core.Model.TableCell;
 using ModelTextAlignment = FreeW.Core.Model.TextAlignment;
 
 namespace FreeW.App.Host.Editing;
@@ -52,14 +59,43 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    /// <summary>
+    /// Insert a table at the caret (after the block the caret sits in, else at the end), routing
+    /// through the undo/redo command bus so the insert is reversible. Re-renders the surface.
+    /// </summary>
+    public void InsertTable(int rows, int columns)
+    {
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+        _commands.Execute(new InsertBlockCommand(index, ModelTable.Create(rows, columns)));
+    }
+
+    // The index of the model block containing the caret, or the last block (-1 when the body is empty).
+    private int CaretBlockIndex()
+    {
+        TextElement? caretBlock = CaretPosition?.Paragraph
+            ?? CaretPosition?.Parent as TextElement;
+        // Walk up to the block hosted directly by the FlowDocument (its parent is not a TextElement).
+        while (caretBlock?.Parent is TextElement parent)
+            caretBlock = parent;
+
+        var viewIndex = caretBlock is System.Windows.Documents.Block b
+            ? new List<System.Windows.Documents.Block>(Document.Blocks).IndexOf(b)
+            : -1;
+        return viewIndex >= 0 ? viewIndex : _model.Blocks.Count - 1;
+    }
+
     private void Render()
     {
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
 
-        foreach (var paragraph in _model.Paragraphs)
-            flow.Blocks.Add(BuildParagraph(paragraph, _model));
+        foreach (var block in _model.Blocks)
+            flow.Blocks.Add(BuildBlock(block, _model));
 
         Document = flow;
     }
@@ -69,32 +105,121 @@ public sealed class DocumentView : RichTextBox
         public TextDocument Document => view._model;
     }
 
-    /// <summary>Read the edited FlowDocument back into the model (text + run formatting).</summary>
+    /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
     {
-        _model.Paragraphs.Clear();
+        _model.Blocks.Clear();
         foreach (var block in Document.Blocks)
         {
-            if (block is not WpfParagraph wpfParagraph)
-                continue;
-
-            var modelParagraph = new ModelParagraph
+            switch (block)
             {
-                Formatting = ReadParagraphFormatting(wpfParagraph)
-            };
-            foreach (var inline in wpfParagraph.Inlines)
-            {
-                if (inline is WpfRun run && run.Text.Length > 0)
-                    modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)));
+                case WpfParagraph wpfParagraph:
+                    _model.Blocks.Add(ReadParagraph(wpfParagraph));
+                    break;
+                case WpfTable wpfTable:
+                    _model.Blocks.Add(ReadTable(wpfTable));
+                    break;
             }
-            _model.Paragraphs.Add(modelParagraph);
         }
 
-        if (_model.Paragraphs.Count == 0)
-            _model.Paragraphs.Add(new ModelParagraph());
+        if (_model.Blocks.Count == 0)
+            _model.Blocks.Add(new ModelParagraph());
+    }
+
+    private static ModelParagraph ReadParagraph(WpfParagraph wpfParagraph)
+    {
+        var modelParagraph = new ModelParagraph
+        {
+            Formatting = ReadParagraphFormatting(wpfParagraph)
+        };
+        foreach (var inline in wpfParagraph.Inlines)
+        {
+            if (inline is WpfRun run && run.Text.Length > 0)
+                modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)));
+        }
+        return modelParagraph;
+    }
+
+    private static ModelTable ReadTable(WpfTable wpfTable)
+    {
+        var table = new ModelTable();
+        foreach (var rowGroup in wpfTable.RowGroups)
+        {
+            foreach (var wpfRow in rowGroup.Rows)
+            {
+                var row = new ModelTableRow();
+                foreach (var wpfCell in wpfRow.Cells)
+                {
+                    var cell = new ModelTableCell();
+                    foreach (var cellBlock in wpfCell.Blocks)
+                    {
+                        if (cellBlock is WpfParagraph cellParagraph)
+                            cell.Paragraphs.Add(ReadParagraph(cellParagraph));
+                    }
+                    if (cell.Paragraphs.Count == 0)
+                        cell.Paragraphs.Add(new ModelParagraph());
+                    row.Cells.Add(cell);
+                }
+                table.Rows.Add(row);
+            }
+        }
+        return table;
     }
 
     // --- model -> view ---
+
+    private static System.Windows.Documents.Block BuildBlock(ModelBlock block, TextDocument document) => block switch
+    {
+        ModelTable table => BuildTable(table, document),
+        ModelParagraph paragraph => BuildParagraph(paragraph, document),
+        _ => BuildParagraph(new ModelParagraph(), document)
+    };
+
+    private static WpfTable BuildTable(ModelTable table, TextDocument document)
+    {
+        var wpf = new WpfTable();
+        var columns = table.ColumnCount;
+        for (var c = 0; c < columns; c++)
+            wpf.Columns.Add(new TableColumn());
+
+        var borderBrush = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A));
+        if (table.Formatting.Borders)
+        {
+            wpf.BorderBrush = borderBrush;
+            wpf.BorderThickness = new Thickness(0.5);
+        }
+
+        var group = new TableRowGroup();
+        foreach (var modelRow in table.Rows)
+        {
+            var wpfRow = new WpfTableRow();
+            foreach (var modelCell in modelRow.Cells)
+            {
+                var wpfCell = new WpfTableCell
+                {
+                    Padding = new Thickness(4, 2, 4, 2)
+                };
+                if (table.Formatting.Borders)
+                {
+                    wpfCell.BorderBrush = borderBrush;
+                    wpfCell.BorderThickness = new Thickness(0.5);
+                }
+                if (modelCell.Paragraphs.Count == 0)
+                {
+                    wpfCell.Blocks.Add(BuildParagraph(new ModelParagraph(), document));
+                }
+                else
+                {
+                    foreach (var cellParagraph in modelCell.Paragraphs)
+                        wpfCell.Blocks.Add(BuildParagraph(cellParagraph, document));
+                }
+                wpfRow.Cells.Add(wpfCell);
+            }
+            group.Rows.Add(wpfRow);
+        }
+        wpf.RowGroups.Add(group);
+        return wpf;
+    }
 
     private static WpfParagraph BuildParagraph(ModelParagraph paragraph, TextDocument document)
     {

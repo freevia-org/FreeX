@@ -11,8 +11,9 @@ namespace FreeW.Core.IO;
 /// <summary>
 /// Reads a WordprocessingML (.docx) package into a <see cref="TextDocument"/>. Uses ZipArchive for
 /// the OPC container and the shared <see cref="SecureXmlReaderSettings"/> for hardened XML parsing.
-/// Covers the common subset: paragraphs/runs, run formatting (bold/italic/underline/strike, size,
-/// colour, font), paragraph formatting (alignment, spacing, indents, style ref) and styles.xml.
+/// Covers the common subset: paragraphs/runs, tables (w:tbl/w:tr/w:tc with paragraph cell content),
+/// run formatting (bold/italic/underline/strike, size, colour, font), paragraph formatting
+/// (alignment, spacing, indents, style ref) and styles.xml.
 /// </summary>
 public static class DocxReader
 {
@@ -34,12 +35,17 @@ public static class DocxReader
         var body = documentXml.Root?.Element(W + "body");
         if (body is not null)
         {
-            foreach (var p in body.Elements(W + "p"))
-                document.Paragraphs.Add(ReadParagraph(p));
+            foreach (var element in body.Elements())
+            {
+                if (element.Name == W + "p")
+                    document.Blocks.Add(ReadParagraph(element));
+                else if (element.Name == W + "tbl")
+                    document.Blocks.Add(ReadTable(element));
+            }
         }
 
-        if (document.Paragraphs.Count == 0)
-            document.Paragraphs.Add(new Paragraph());
+        if (document.Blocks.Count == 0)
+            document.Blocks.Add(new Paragraph());
 
         return document;
     }
@@ -75,6 +81,40 @@ public static class DocxReader
         }
 
         return paragraph;
+    }
+
+    private static Table ReadTable(XElement tbl)
+    {
+        var table = new Table();
+
+        var borders = tbl.Element(W + "tblPr")?.Element(W + "tblBorders");
+        table.Formatting = TableFormatting.Default with { Borders = ReadBorders(borders) };
+
+        foreach (var tr in tbl.Elements(W + "tr"))
+        {
+            var row = new TableRow();
+            foreach (var tc in tr.Elements(W + "tc"))
+            {
+                var cell = new TableCell();
+                foreach (var p in tc.Elements(W + "p"))
+                    cell.Paragraphs.Add(ReadParagraph(p));
+                if (cell.Paragraphs.Count == 0)
+                    cell.Paragraphs.Add(new Paragraph());
+                row.Cells.Add(cell);
+            }
+            table.Rows.Add(row);
+        }
+
+        return table;
+    }
+
+    private static bool ReadBorders(XElement? tblBorders)
+    {
+        if (tblBorders is null)
+            return false;
+        // Borders are "on" unless every edge is explicitly "none"/"nil".
+        var edges = tblBorders.Elements();
+        return edges.Any(e => (e.Attribute(W + "val")?.Value ?? "single") is not ("none" or "nil"));
     }
 
     internal static ParagraphFormatting ReadParagraphFormatting(XElement pPr)

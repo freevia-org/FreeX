@@ -17,8 +17,8 @@ public class DocumentModelTests
     public void PlainText_JoinsParagraphsWithNewlines()
     {
         var doc = new TextDocument();
-        doc.Paragraphs.Add(new Paragraph("Hello"));
-        doc.Paragraphs.Add(new Paragraph("World"));
+        doc.Blocks.Add(new Paragraph("Hello"));
+        doc.Blocks.Add(new Paragraph("World"));
 
         doc.PlainText.Should().Be("Hello\nWorld");
     }

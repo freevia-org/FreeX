@@ -66,6 +66,9 @@ internal static class FreeWRibbonCommands
                 selection.ApplyPropertyValue(TextElement.FontSizeProperty, points * 96.0 / 72.0);
         }));
 
+        // Insert tab — insert a small 2x2 table at the caret (routes through the undo/redo bus).
+        registry.Register("freew.table", new InsertTableCommand(editor, rows: 2, columns: 2));
+
         registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
         registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
         registry.Register("freew.style-title", new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
@@ -110,6 +113,16 @@ internal static class FreeWRibbonCommands
     private sealed class PageCommand(DocumentView editor, Action<PageSettings> apply) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => apply(editor.Model.Page);
+    }
+
+    // Inserts a table at the caret. Delegates to the view, which routes through the undo/redo bus.
+    private sealed class InsertTableCommand(DocumentView editor, int rows, int columns) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.InsertTable(rows, columns);
+        }
     }
 
     // Applies a value chosen from a ribbon combo (font family/size) to the current selection.

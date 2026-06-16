@@ -23,7 +23,7 @@ public class DocumentCommandBusTests
         bus.CanUndo.Should().BeTrue();
 
         bus.Undo().Should().BeTrue();
-        doc.Paragraphs.Should().BeEmpty();
+        doc.Blocks.Should().BeEmpty();
         bus.CanRedo.Should().BeTrue();
 
         bus.Redo().Should().BeTrue();
@@ -49,13 +49,13 @@ public class DocumentCommandBusTests
     {
         var (doc, bus) = New();
         var p = new Paragraph("keep");
-        doc.Paragraphs.Add(p);
+        doc.Blocks.Add(p);
 
         bus.Execute(new DeleteParagraphCommand(0));
-        doc.Paragraphs.Should().BeEmpty();
+        doc.Blocks.Should().BeEmpty();
 
         bus.Undo();
-        doc.Paragraphs.Should().ContainSingle().Which.Should().BeSameAs(p);
+        doc.Blocks.Should().ContainSingle().Which.Should().BeSameAs(p);
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class DocumentCommandBusTests
         var p = new Paragraph();
         p.Runs.Add(new Run("x"));
         p.Runs.Add(new Run("y"));
-        doc.Paragraphs.Add(p);
+        doc.Blocks.Add(p);
 
         bus.Execute(new FormatParagraphRunsCommand(0, f => f with { Bold = true }));
         p.Runs.Should().OnlyContain(r => r.Formatting.Bold);
@@ -78,14 +78,32 @@ public class DocumentCommandBusTests
     public void SetParagraphFormatting_Applies_AndReverts()
     {
         var (doc, bus) = New();
-        doc.Paragraphs.Add(new Paragraph("p"));
+        doc.Blocks.Add(new Paragraph("p"));
         var centered = ParagraphFormatting.Default with { Alignment = TextAlignment.Center };
 
         bus.Execute(new SetParagraphFormattingCommand(0, centered));
-        doc.Paragraphs[0].Formatting.Alignment.Should().Be(TextAlignment.Center);
+        doc.Paragraphs.First().Formatting.Alignment.Should().Be(TextAlignment.Center);
 
         bus.Undo();
-        doc.Paragraphs[0].Formatting.Alignment.Should().Be(TextAlignment.Left);
+        doc.Paragraphs.First().Formatting.Alignment.Should().Be(TextAlignment.Left);
+    }
+
+    [Fact]
+    public void InsertBlock_Table_Execute_Undo_Redo()
+    {
+        var (doc, bus) = New();
+        doc.Blocks.Add(new Paragraph("p"));
+        var table = Table.Create(2, 2);
+
+        bus.Execute(new InsertBlockCommand(1, table));
+        doc.Blocks.Should().HaveCount(2);
+        doc.Blocks[1].Should().BeSameAs(table);
+
+        bus.Undo();
+        doc.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>();
+
+        bus.Redo();
+        doc.Blocks[1].Should().BeSameAs(table);
     }
 
     [Fact]

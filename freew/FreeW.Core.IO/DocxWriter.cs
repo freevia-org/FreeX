@@ -67,12 +67,68 @@ public static class DocxWriter
     private static XDocument BuildDocument(TextDocument document)
     {
         var body = new XElement(W + "body");
-        foreach (var paragraph in document.Paragraphs)
-            body.Add(BuildParagraph(paragraph));
+        foreach (var block in document.Blocks)
+            body.Add(BuildBlock(block));
         body.Add(BuildSectionProperties(document.Page));
 
         return new XDocument(
             new XElement(W + "document", new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName), body));
+    }
+
+    private static XElement BuildBlock(Block block) => block switch
+    {
+        Table table => BuildTable(table),
+        Paragraph paragraph => BuildParagraph(paragraph),
+        _ => new XElement(W + "p")
+    };
+
+    private static XElement BuildTable(Table table)
+    {
+        var tbl = new XElement(W + "tbl", BuildTableProperties(table));
+        foreach (var row in table.Rows)
+        {
+            var tr = new XElement(W + "tr");
+            foreach (var cell in row.Cells)
+            {
+                var tc = new XElement(W + "tc");
+                if (cell.Paragraphs.Count == 0)
+                    tc.Add(new XElement(W + "p"));
+                else
+                    foreach (var paragraph in cell.Paragraphs)
+                        tc.Add(BuildParagraph(paragraph));
+                tr.Add(tc);
+            }
+            tbl.Add(tr);
+        }
+        return tbl;
+    }
+
+    private static XElement BuildTableProperties(Table table)
+    {
+        var tblPr = new XElement(W + "tblPr",
+            new XElement(W + "tblW", new XAttribute(W + "w", 0), new XAttribute(W + "type", "auto")));
+        if (table.Formatting.Borders)
+        {
+            XElement Border(string name) => new(W + name,
+                new XAttribute(W + "val", "single"),
+                new XAttribute(W + "sz", 4),
+                new XAttribute(W + "space", 0),
+                new XAttribute(W + "color", "auto"));
+            tblPr.Add(new XElement(W + "tblBorders",
+                Border("top"), Border("left"), Border("bottom"), Border("right"),
+                Border("insideH"), Border("insideV")));
+        }
+        else
+        {
+            tblPr.Add(new XElement(W + "tblBorders",
+                new XElement(W + "top", new XAttribute(W + "val", "none")),
+                new XElement(W + "left", new XAttribute(W + "val", "none")),
+                new XElement(W + "bottom", new XAttribute(W + "val", "none")),
+                new XElement(W + "right", new XAttribute(W + "val", "none")),
+                new XElement(W + "insideH", new XAttribute(W + "val", "none")),
+                new XElement(W + "insideV", new XAttribute(W + "val", "none"))));
+        }
+        return tblPr;
     }
 
     private static XElement BuildParagraph(Paragraph paragraph)

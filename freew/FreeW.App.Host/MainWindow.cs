@@ -191,10 +191,10 @@ public sealed class MainWindow : Window
     private static TextDocument CreateSampleDocument()
     {
         var doc = TextDocument.CreateEmpty();
-        doc.Paragraphs.Clear();
+        doc.Blocks.Clear();
 
-        doc.Paragraphs.Add(new Paragraph("Welcome to FreeW") { StyleId = "Title" });
-        doc.Paragraphs.Add(new Paragraph("A free word processor") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Welcome to FreeW") { StyleId = "Title" });
+        doc.Blocks.Add(new Paragraph("A free word processor") { StyleId = "Heading1" });
 
         var intro = new Paragraph();
         intro.Runs.Add(new Run("This document is rendered from the FreeW model. Formatting like "));
@@ -206,9 +206,9 @@ public sealed class MainWindow : Window
         intro.Runs.Add(new Run(" and "));
         intro.Runs.Add(new Run("colour", new RunFormatting { ColorHex = "#C0504D", Bold = true }));
         intro.Runs.Add(new Run(" resolves through styles and document defaults. Edit freely — the surface is a live RichTextBox; CommitToModel() maps your edits back."));
-        doc.Paragraphs.Add(intro);
+        doc.Blocks.Add(intro);
 
-        doc.Paragraphs.Add(new Paragraph("Centered paragraph.")
+        doc.Blocks.Add(new Paragraph("Centered paragraph.")
         {
             Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
         });
