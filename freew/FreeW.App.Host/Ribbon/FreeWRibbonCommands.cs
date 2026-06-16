@@ -137,13 +137,26 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.bibliography", new ActionCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
         // Insert tab — References: insert a numbered figure/table caption under the caret's block.
         registry.Register("freew.caption", new InsertCaptionCommand(editor));
+        // Insert tab — References: insert a cross-reference (heading/bookmark/caption/footnote) at the caret.
+        registry.Register("freew.cross-reference", new InsertCrossReferenceCommand(editor));
         // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
         registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
         registry.Register("freew.link-bookmark", new LinkToBookmarkCommand(editor));
 
+        // Insert tab — Quick Parts (AutoText): a shared snippet library persisted under FreeW's data
+        // folder. "Save Selection" captures the selection's text and stores it under a prompted name;
+        // "Insert Quick Part" picks a saved snippet and drops its text at the caret (reversibly).
+        var quickParts = QuickPartLibrary.Load();
+        registry.Register("freew.save-quickpart", new SaveQuickPartCommand(editor, quickParts));
+        registry.Register("freew.insert-quickpart", new InsertQuickPartCommand(editor, quickParts));
+
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
         registry.Register("freew.new-comment", new NewCommentCommand(editor));
+
+        // Review tab — Proofing: open the read-only Word Count / Statistics dialog. Commits pending
+        // edits first so the counts reflect the current text, then computes from the model.
+        registry.Register("freew.statistics", new StatisticsCommand(editor));
 
         // Review tab — Tracking: toggle Track Changes mode (stateful so the ribbon reflects it). When
         // ON, marking the current selection as a tracked insertion/deletion is offered; turning it on
@@ -955,6 +968,19 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Review > Proofing > Word Count: commit pending edits, compute the document statistics with the
+    // pure DocumentStatistics helper, and show them in a read-only modal.
+    private sealed class StatisticsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.CommitToModel();
+            var stats = DocumentStatistics.Compute(editor.Model);
+            var dialog = new StatisticsDialog(Window.GetWindow(editor)!, stats);
+            dialog.ShowDialog();
+        }
+    }
+
     // Review > Tracking > Track Changes: a stateful toggle over the editor's Track Changes mode. Live
     // keystroke tracking is out of scope in a RichTextBox, so as a pragmatic gesture, turning the toggle
     // ON with a non-empty selection marks that selection as a tracked insertion (so the feature does
@@ -1063,6 +1089,228 @@ internal static class FreeWRibbonCommands
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
             panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Bookmark:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(list);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // Insert > References > Cross-reference: pick a reference type (Heading/Bookmark/Caption/Footnote)
+    // and a target, then insert it. Anchored targets (bookmarks, or headings/captions that carry a
+    // bookmark) are inserted as a clickable internal link; the rest as plain reference text.
+    private sealed class InsertCrossReferenceCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var doc = editor.Model;
+
+            var pick = CrossReferencePicker.Ask(owner, doc);
+            if (pick is null)
+                return; // cancelled or nothing to reference
+
+            var text = CrossReferences.ReferenceText(pick.Value);
+            editor.Focus();
+            if (!string.IsNullOrWhiteSpace(pick.Value.Anchor))
+                editor.InsertInternalLink(text, pick.Value.Anchor!);
+            else
+                editor.InsertText(text);
+        }
+    }
+
+    // A modal dialog letting the user choose a cross-reference type and target. Returns the chosen
+    // target, or null if cancelled (or if there is nothing to reference).
+    private static class CrossReferencePicker
+    {
+        public static CrossRefTarget? Ask(Window? owner, TextDocument doc)
+        {
+            var typeList = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 150,
+                MinHeight = 150,
+                Margin = new Thickness(0, 0, 12, 0)
+            };
+            foreach (var t in new[] { CrossRefType.Heading, CrossRefType.Bookmark, CrossRefType.Caption, CrossRefType.Footnote })
+                typeList.Items.Add(t);
+            typeList.SelectedIndex = 0;
+
+            var targetList = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 320,
+                MinHeight = 150
+            };
+
+            var targets = new List<CrossRefTarget>();
+            void ReloadTargets()
+            {
+                targets.Clear();
+                targetList.Items.Clear();
+                if (typeList.SelectedItem is CrossRefType type)
+                {
+                    foreach (var target in CrossReferences.Targets(doc, type))
+                    {
+                        targets.Add(target);
+                        targetList.Items.Add(target.Display);
+                    }
+                }
+                targetList.SelectedIndex = targetList.Items.Count > 0 ? 0 : -1;
+            }
+            typeList.SelectionChanged += (_, _) => ReloadTargets();
+            ReloadTargets();
+
+            CrossRefTarget? result = null;
+            var dialog = new Window
+            {
+                Title = "Cross-reference",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "Insert", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            void Commit()
+            {
+                var index = targetList.SelectedIndex;
+                if (index >= 0 && index < targets.Count)
+                {
+                    result = targets[index];
+                    dialog.DialogResult = true;
+                }
+            }
+            ok.Click += (_, _) => Commit();
+            targetList.MouseDoubleClick += (_, _) => Commit();
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var lists = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+            var typeColumn = new System.Windows.Controls.StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+            typeColumn.Children.Add(new System.Windows.Controls.TextBlock { Text = "Reference type:", Margin = new Thickness(0, 0, 0, 4) });
+            typeColumn.Children.Add(typeList);
+            var targetColumn = new System.Windows.Controls.StackPanel();
+            targetColumn.Children.Add(new System.Windows.Controls.TextBlock { Text = "Insert reference to:", Margin = new Thickness(0, 0, 0, 4) });
+            targetColumn.Children.Add(targetList);
+            lists.Children.Add(typeColumn);
+            lists.Children.Add(targetColumn);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(lists);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // Insert > Quick Parts > Save Selection to Quick Parts: capture the current selection's text, prompt
+    // for an entry name, and store it in the shared library (persisted under FreeW's data folder). An
+    // empty selection or a blank/cancelled name is a no-op. Saving under an existing name overwrites it.
+    private sealed class SaveQuickPartCommand(DocumentView editor, QuickPartLibrary library) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var text = editor.Selection.Text;
+            if (string.IsNullOrEmpty(text))
+            {
+                MessageBox.Show(Window.GetWindow(editor),
+                    "Select some text first, then choose Save Selection to Quick Parts.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var name = TextPrompt.Ask(Window.GetWindow(editor), "Save to Quick Parts", "Name:", string.Empty);
+            if (string.IsNullOrWhiteSpace(name))
+                return; // cancelled or blank — nothing to store under
+
+            library.Save(QuickPart.FromText(name.Trim(), text));
+            editor.Focus();
+        }
+    }
+
+    // Insert > Quick Parts > Insert Quick Part: pick a saved snippet from the library and insert its text
+    // at the caret (through the editor's normal edit/undo path, so it is reversible). Reports when the
+    // library is empty so the user knows to save one first.
+    private sealed class InsertQuickPartCommand(DocumentView editor, QuickPartLibrary library) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (library.IsEmpty)
+            {
+                MessageBox.Show(Window.GetWindow(editor),
+                    "No Quick Parts saved yet. Select some text and choose Save Selection to Quick Parts first.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var chosen = QuickPartPicker.Ask(Window.GetWindow(editor), library.Names);
+            if (chosen is null)
+                return; // cancelled
+
+            var part = library.Get(chosen);
+            if (part is null)
+                return; // removed between listing and picking — nothing to insert
+
+            editor.Focus();
+            editor.InsertText(part.Text);
+        }
+    }
+
+    // A tiny modal dialog to pick one of the saved Quick Part names. Returns the chosen name, or null if
+    // cancelled. Mirrors BookmarkPicker.
+    private static class QuickPartPicker
+    {
+        public static string? Ask(Window? owner, IReadOnlyList<string> names)
+        {
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 280,
+                MinHeight = 120,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            foreach (var name in names)
+                list.Items.Add(name);
+            list.SelectedIndex = 0;
+
+            string? result = null;
+            var dialog = new Window
+            {
+                Title = "Insert Quick Part",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "Insert", IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
+            list.MouseDoubleClick += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Quick Part:", Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(list);
             panel.Children.Add(buttons);
             dialog.Content = panel;

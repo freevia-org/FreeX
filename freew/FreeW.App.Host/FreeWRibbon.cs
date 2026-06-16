@@ -105,6 +105,11 @@ internal static class FreeWRibbon
                     g.Button("freew.bookmark", "Bookmark");
                     g.Button("freew.link-bookmark", "Link to Bookmark");
                 });
+                tab.Group("quick-parts", "Quick Parts", "Q", 67, g =>
+                {
+                    g.Button("freew.save-quickpart", "Save Selection");
+                    g.Button("freew.insert-quickpart", "Insert Quick Part");
+                });
                 tab.Group("references", "References", "R", 65, g =>
                 {
                     g.Button("freew.footnote", "Footnote");
@@ -113,6 +118,7 @@ internal static class FreeWRibbon
                     g.Button("freew.citation", "Citation");
                     g.Button("freew.bibliography", "Bibliography");
                     g.Button("freew.caption", "Caption");
+                    g.Button("freew.cross-reference", "Cross-reference");
                 });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {
@@ -169,6 +175,10 @@ internal static class FreeWRibbon
             })
             .Tab("review", "Review", "R", tab =>
             {
+                tab.Group("proofing", "Proofing", "P", 100, g =>
+                {
+                    g.Button("freew.statistics", "Word Count");
+                });
                 tab.Group("comments", "Comments", "C", 100, g =>
                 {
                     g.Button("freew.new-comment", "New Comment");

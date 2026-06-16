@@ -2159,6 +2159,38 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    /// <summary>
+    /// Inserts <paramref name="display"/> at the caret as a clickable internal link to the bookmark
+    /// <paramref name="anchor"/> (used by Insert &gt; Cross-reference for anchored targets). Mirrors the
+    /// empty-selection branch of <see cref="ApplyInternalLink"/> but lets the visible text differ from
+    /// the anchor name. Re-renders so the link is styled and round-trips on the next commit.
+    /// </summary>
+    public void InsertInternalLink(string display, string anchor)
+    {
+        if (string.IsNullOrEmpty(display) || string.IsNullOrWhiteSpace(anchor))
+            return;
+        anchor = anchor.Trim();
+
+        Focus();
+        var selection = Selection;
+        if (!selection.IsEmpty)
+            selection.Text = string.Empty;
+
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
+        if (paragraph is null)
+        {
+            paragraph = new WpfParagraph();
+            Document.Blocks.Add(paragraph);
+        }
+        var link = new WpfHyperlink(new WpfRun(display));
+        StyleInternalLink(link, anchor);
+        paragraph.Inlines.Add(link);
+
+        CommitToModel();
+        Render();
+    }
+
     private static void StyleLink(WpfHyperlink link, string url)
     {
         link.ToolTip = url;
