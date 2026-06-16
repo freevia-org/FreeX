@@ -16,6 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Velopack" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="FreeX.App.Services.Tests" />
   </ItemGroup>
 
