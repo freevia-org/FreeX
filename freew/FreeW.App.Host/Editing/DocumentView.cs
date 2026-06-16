@@ -9,6 +9,8 @@ using System.Diagnostics;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun = System.Windows.Documents.Run;
 using WpfHyperlink = System.Windows.Documents.Hyperlink;
+using WpfList = System.Windows.Documents.List;
+using WpfListItem = System.Windows.Documents.ListItem;
 using WpfTable = System.Windows.Documents.Table;
 using WpfTableRow = System.Windows.Documents.TableRow;
 using WpfTableCell = System.Windows.Documents.TableCell;
@@ -112,6 +114,72 @@ public sealed class DocumentView : RichTextBox
     /// <summary>The inline image targeted by the current selection/caret, or null if none is selected.</summary>
     public InlineImage? SelectedImage() => SelectedImageLocation().Image;
 
+    /// <summary>
+    /// Toggle a box border on every paragraph touched by the current selection/caret. If any selected
+    /// paragraph lacks a border, all get one (<paramref name="colorHex"/>/<paramref name="widthPt"/>);
+    /// otherwise the border is cleared. Re-renders so it round-trips through the model on the next commit.
+    /// </summary>
+    public void ToggleParagraphBorder(string colorHex = "#000000", double widthPt = 0.5) =>
+        MutateSelectedParagraphs(paragraphs =>
+        {
+            var enable = paragraphs.Any(p => p.BorderThickness.Top <= 0);
+            foreach (var p in paragraphs)
+            {
+                if (enable)
+                {
+                    p.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
+                    p.BorderThickness = new Thickness(widthPt * PxPerPoint);
+                    p.Padding = new Thickness(2);
+                }
+                else
+                {
+                    p.BorderBrush = null;
+                    p.BorderThickness = new Thickness(0);
+                    p.Padding = new Thickness(0);
+                }
+            }
+        });
+
+    /// <summary>
+    /// Toggle paragraph shading over the selection. A null/empty <paramref name="colorHex"/> clears
+    /// shading; otherwise each touched paragraph is filled with that colour. Re-renders the surface.
+    /// </summary>
+    public void ToggleParagraphShading(string? colorHex) =>
+        MutateSelectedParagraphs(paragraphs =>
+        {
+            var clear = string.IsNullOrEmpty(colorHex)
+                || paragraphs.All(p => p.Background is SolidColorBrush b && ToHex(b.Color) == colorHex);
+            foreach (var p in paragraphs)
+                p.Background = clear
+                    ? null
+                    : new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex!));
+        });
+
+    // Apply a mutation to the WPF paragraphs spanned by the selection (or the caret's paragraph),
+    // then commit + re-render so the change lands in the model and round-trips on save.
+    private void MutateSelectedParagraphs(Action<IReadOnlyList<WpfParagraph>> mutate)
+    {
+        Focus();
+        var start = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
+        var end = Selection.End.Paragraph ?? start;
+        if (start is null)
+            return;
+
+        var paragraphs = new List<WpfParagraph>();
+        for (WpfParagraph? p = start; p is not null; p = p.NextBlock as WpfParagraph)
+        {
+            paragraphs.Add(p);
+            if (ReferenceEquals(p, end))
+                break;
+        }
+        if (paragraphs.Count == 0)
+            return;
+
+        mutate(paragraphs);
+        CommitToModel();
+        Render();
+    }
+
     // Commit pending edits, locate the caret's table + cell, build a command for it, run it through the bus.
     private void MutateCaretTable(Func<int, int, int, IDocumentCommand> build)
     {
@@ -203,11 +271,37 @@ public sealed class DocumentView : RichTextBox
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
 
-        foreach (var block in _model.Blocks)
-            flow.Blocks.Add(BuildBlock(block, _model));
+        // Coalesce consecutive list paragraphs of the same kind into one WPF List so they render with
+        // shared bullet/number decoration; everything else maps one-to-one via BuildBlock.
+        var blocks = _model.Blocks;
+        var i = 0;
+        while (i < blocks.Count)
+        {
+            if (blocks[i] is ModelParagraph { Formatting.ListKind: not ListKind.None } first)
+            {
+                var kind = first.Formatting.ListKind;
+                var list = new WpfList { MarkerStyle = ToMarkerStyle(kind) };
+                while (i < blocks.Count
+                    && blocks[i] is ModelParagraph { Formatting.ListKind: var k } listParagraph
+                    && k == kind)
+                {
+                    list.ListItems.Add(new WpfListItem(BuildParagraph(listParagraph, _model)));
+                    i++;
+                }
+                flow.Blocks.Add(list);
+            }
+            else
+            {
+                flow.Blocks.Add(BuildBlock(blocks[i], _model));
+                i++;
+            }
+        }
 
         Document = flow;
     }
+
+    private static TextMarkerStyle ToMarkerStyle(ListKind kind) =>
+        kind == ListKind.Number ? TextMarkerStyle.Decimal : TextMarkerStyle.Disc;
 
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
     {
@@ -222,6 +316,9 @@ public sealed class DocumentView : RichTextBox
         {
             switch (block)
             {
+                case WpfList wpfList:
+                    ReadList(_model.Blocks, wpfList);
+                    break;
                 case WpfParagraph wpfParagraph:
                     _model.Blocks.Add(ReadParagraph(wpfParagraph));
                     break;
@@ -245,6 +342,41 @@ public sealed class DocumentView : RichTextBox
             ReadInline(modelParagraph, inline, hyperlinkUrl: null);
         return modelParagraph;
     }
+
+    // Flatten a WPF List into model paragraphs, stamping each with the list's kind and the nesting
+    // depth as ListLevel. ListItems may hold nested Lists (deeper levels) alongside paragraphs.
+    private static void ReadList(IList<ModelBlock> target, WpfList wpfList, int level = 0)
+    {
+        var kind = FromMarkerStyle(wpfList.MarkerStyle);
+        foreach (var item in wpfList.ListItems)
+        {
+            foreach (var itemBlock in item.Blocks)
+            {
+                switch (itemBlock)
+                {
+                    case WpfList nested:
+                        ReadList(target, nested, level + 1);
+                        break;
+                    case WpfParagraph paragraph:
+                        var model = ReadParagraph(paragraph);
+                        model.Formatting = model.Formatting with { ListKind = kind, ListLevel = level };
+                        target.Add(model);
+                        break;
+                    case WpfTable table:
+                        target.Add(ReadTable(table));
+                        break;
+                }
+            }
+        }
+    }
+
+    private static ListKind FromMarkerStyle(TextMarkerStyle marker) => marker switch
+    {
+        TextMarkerStyle.Decimal or TextMarkerStyle.LowerLatin or TextMarkerStyle.UpperLatin
+            or TextMarkerStyle.LowerRoman or TextMarkerStyle.UpperRoman => ListKind.Number,
+        TextMarkerStyle.None => ListKind.Bullet,
+        _ => ListKind.Bullet
+    };
 
     // Maps one FlowDocument inline to model run(s). A Hyperlink is a Span of inlines, so we recurse
     // into it carrying its NavigateUri, which lands on each produced run as its HyperlinkUrl.
@@ -363,6 +495,15 @@ public sealed class DocumentView : RichTextBox
                 ? paraFmt.LineSpacing * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
                 : double.NaN
         };
+
+        if (paraFmt.Border is { } border && TryParseColor(border.ColorHex, out var borderColor))
+        {
+            wpf.BorderBrush = new SolidColorBrush(borderColor);
+            wpf.BorderThickness = new Thickness(border.WidthPt * PxPerPoint);
+            wpf.Padding = new Thickness(2);
+        }
+        if (TryParseColor(paraFmt.ShadingColorHex, out var shading))
+            wpf.Background = new SolidColorBrush(shading);
 
         foreach (var run in paragraph.Runs)
             wpf.Inlines.Add(BuildRun(run, paragraph, document));
@@ -560,7 +701,11 @@ public sealed class DocumentView : RichTextBox
             SpaceAfterPt = paragraph.Margin.Bottom / PxPerPoint,
             IndentLeftPt = paragraph.Margin.Left / PxPerPoint,
             IndentRightPt = paragraph.Margin.Right / PxPerPoint,
-            FirstLineIndentPt = paragraph.TextIndent / PxPerPoint
+            FirstLineIndentPt = paragraph.TextIndent / PxPerPoint,
+            Border = paragraph.BorderBrush is SolidColorBrush bb && paragraph.BorderThickness.Top > 0
+                ? new ParagraphBorder(ToHex(bb.Color), paragraph.BorderThickness.Top / PxPerPoint)
+                : null,
+            ShadingColorHex = paragraph.Background is SolidColorBrush shading ? ToHex(shading.Color) : null
         };
 
     // --- formatting resolution (run/paragraph -> style -> document default) ---

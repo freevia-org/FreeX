@@ -27,6 +27,10 @@ internal static class Ooxml
     public const string CorePropertiesRelType = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
     public const string CorePropertiesPartName = "/docProps/core.xml";
 
+    public const string NumberingContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml";
+    public const string NumberingRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering";
+    public const string NumberingPartName = "/word/numbering.xml";
+
     /// <summary>W3CDTF as used by dcterms:created/modified (UTC, second precision, trailing 'Z').</summary>
     public static string ToW3CDtf(DateTimeOffset value) =>
         value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
@@ -52,6 +56,11 @@ internal static class Ooxml
     public static double? HalfPointsToPoints(string? value) => ParseInt(value) is var v && v != 0 ? v / 2.0 : null;
 
     public static int PointsToHalfPoints(double points) => (int)Math.Round(points * 2.0);
+
+    /// <summary>Border widths (w:sz on w:pBdr / w:tblBorders edges) are in eighths of a point.</summary>
+    public static double EighthPointsToPoints(string? value) => ParseInt(value) / 8.0;
+
+    public static int PointsToEighthPoints(double points) => Math.Max(1, (int)Math.Round(points * 8.0));
 
     public static int ParseInt(string? value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;

@@ -34,6 +34,7 @@ public static class DocxReader
         ReadStyles(archive, document);
         var imageRelationships = ReadImageRelationships(archive);
         var hyperlinkRelationships = ReadHyperlinkRelationships(archive);
+        var numbering = ReadNumbering(archive);
 
         var body = documentXml.Root?.Element(W + "body");
         if (body is not null)
@@ -41,9 +42,9 @@ public static class DocxReader
             foreach (var element in body.Elements())
             {
                 if (element.Name == W + "p")
-                    document.Blocks.Add(ReadParagraph(element, archive, imageRelationships, hyperlinkRelationships));
+                    document.Blocks.Add(ReadParagraph(element, archive, imageRelationships, hyperlinkRelationships, numbering));
                 else if (element.Name == W + "tbl")
-                    document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships));
+                    document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering));
             }
         }
 
@@ -67,14 +68,15 @@ public static class DocxReader
         XElement p,
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
-        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
     {
         var paragraph = new Paragraph();
         var pPr = p.Element(W + "pPr");
         if (pPr is not null)
         {
             paragraph.StyleId = pPr.Element(W + "pStyle")?.Attribute(W + "val")?.Value;
-            paragraph.Formatting = ReadParagraphFormatting(pPr);
+            paragraph.Formatting = ReadParagraphFormatting(pPr, numbering);
         }
 
         // Iterate in document order so runs nested inside a w:hyperlink keep their position; a
@@ -123,7 +125,8 @@ public static class DocxReader
         XElement tbl,
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
-        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
     {
         var table = new Table();
 
@@ -137,7 +140,7 @@ public static class DocxReader
             {
                 var cell = new TableCell();
                 foreach (var p in tc.Elements(W + "p"))
-                    cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships));
+                    cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, numbering));
                 if (cell.Paragraphs.Count == 0)
                     cell.Paragraphs.Add(new Paragraph());
                 row.Cells.Add(cell);
@@ -232,14 +235,35 @@ public static class DocxReader
         return buffer.ToArray();
     }
 
-    internal static ParagraphFormatting ReadParagraphFormatting(XElement pPr)
+    internal static ParagraphFormatting ReadParagraphFormatting(XElement pPr) =>
+        ReadParagraphFormatting(pPr, new Dictionary<int, ListKind>());
+
+    internal static ParagraphFormatting ReadParagraphFormatting(XElement pPr, IReadOnlyDictionary<int, ListKind> numbering)
     {
         var spacing = pPr.Element(W + "spacing");
         var indent = pPr.Element(W + "ind");
         var jc = pPr.Element(W + "jc")?.Attribute(W + "val")?.Value;
+        var shading = pPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
+
+        // A list paragraph references a numbering definition via pPr/w:numPr (w:numId + w:ilvl).
+        // Resolve the numId to a ListKind through numbering.xml; the ilvl becomes the ListLevel.
+        var listKind = ListKind.None;
+        var listLevel = 0;
+        var numPr = pPr.Element(W + "numPr");
+        if (numPr is not null)
+        {
+            var numId = ParseInt(numPr.Element(W + "numId")?.Attribute(W + "val")?.Value);
+            if (numbering.TryGetValue(numId, out var kind) && kind != ListKind.None)
+            {
+                listKind = kind;
+                listLevel = ParseInt(numPr.Element(W + "ilvl")?.Attribute(W + "val")?.Value);
+            }
+        }
 
         return ParagraphFormatting.Default with
         {
+            Border = ReadParagraphBorder(pPr.Element(W + "pBdr")),
+            ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
             Alignment = jc switch
             {
                 "center" => TextAlignment.Center,
@@ -251,8 +275,62 @@ public static class DocxReader
             SpaceAfterPt = DxaToPoints(spacing?.Attribute(W + "after")?.Value),
             IndentLeftPt = DxaToPoints(indent?.Attribute(W + "left")?.Value ?? indent?.Attribute(W + "start")?.Value),
             IndentRightPt = DxaToPoints(indent?.Attribute(W + "right")?.Value ?? indent?.Attribute(W + "end")?.Value),
-            FirstLineIndentPt = DxaToPoints(indent?.Attribute(W + "firstLine")?.Value)
+            FirstLineIndentPt = DxaToPoints(indent?.Attribute(W + "firstLine")?.Value),
+            ListKind = listKind,
+            ListLevel = listLevel
         };
+    }
+
+    /// <summary>Reads a paragraph box border (w:pBdr) into a <see cref="ParagraphBorder"/>, or null if absent/off.</summary>
+    private static ParagraphBorder? ReadParagraphBorder(XElement? pBdr)
+    {
+        if (pBdr is null)
+            return null;
+        // Take the first edge that is actually drawn (val not none/nil); paragraphs use a uniform box.
+        var edge = pBdr.Elements().FirstOrDefault(e =>
+            (e.Attribute(W + "val")?.Value ?? "single") is not ("none" or "nil"));
+        if (edge is null)
+            return null;
+
+        var color = edge.Attribute(W + "color")?.Value;
+        var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+        return new ParagraphBorder(
+            color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
+            width > 0 ? width : 0.5);
+    }
+
+    /// <summary>
+    /// Maps each w:num id in word/numbering.xml to a <see cref="ListKind"/> by following its
+    /// abstractNumId to the abstract definition's level-0 w:numFmt (bullet -> Bullet, else Number).
+    /// </summary>
+    private static Dictionary<int, ListKind> ReadNumbering(ZipArchive archive)
+    {
+        var map = new Dictionary<int, ListKind>();
+        var numberingXml = LoadPart(archive, "word/numbering.xml");
+        var root = numberingXml?.Root;
+        if (root is null)
+            return map;
+
+        // abstractNumId -> ListKind, taken from the format of its lowest level.
+        var abstractKinds = new Dictionary<int, ListKind>();
+        foreach (var abstractNum in root.Elements(W + "abstractNum"))
+        {
+            var abstractNumId = ParseInt(abstractNum.Attribute(W + "abstractNumId")?.Value);
+            var level0 = abstractNum.Elements(W + "lvl")
+                .OrderBy(l => ParseInt(l.Attribute(W + "ilvl")?.Value))
+                .FirstOrDefault();
+            var numFmt = level0?.Element(W + "numFmt")?.Attribute(W + "val")?.Value;
+            abstractKinds[abstractNumId] = numFmt == "bullet" ? ListKind.Bullet : ListKind.Number;
+        }
+
+        foreach (var num in root.Elements(W + "num"))
+        {
+            var numId = ParseInt(num.Attribute(W + "numId")?.Value);
+            var abstractNumId = ParseInt(num.Element(W + "abstractNumId")?.Attribute(W + "val")?.Value);
+            if (abstractKinds.TryGetValue(abstractNumId, out var kind))
+                map[numId] = kind;
+        }
+        return map;
     }
 
     internal static RunFormatting ReadRunFormatting(XElement? rPr)

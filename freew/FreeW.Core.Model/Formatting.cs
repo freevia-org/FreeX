@@ -7,6 +7,15 @@ public enum TextAlignment { Left, Center, Right, Justify }
 public enum ListKind { None, Bullet, Number }
 
 /// <summary>
+/// Immutable paragraph box border (pPr/w:pBdr). When present, all four edges are drawn with the
+/// given colour and width. Round-trips to docx as <c>w:top</c>/<c>w:bottom</c>/<c>w:left</c>/<c>w:right</c>
+/// (each <c>w:val="single"</c>), mirroring how table borders map to <c>w:tblBorders</c>.
+/// </summary>
+/// <param name="ColorHex">Border colour as an RRGGBB hex (e.g. <c>"#000000"</c>).</param>
+/// <param name="WidthPt">Border width in points (docx stores this as eighths of a point in <c>w:sz</c>).</param>
+public sealed record ParagraphBorder(string ColorHex = "#000000", double WidthPt = 0.5);
+
+/// <summary>
 /// Immutable character formatting for a run. Null members inherit from the paragraph style /
 /// document default, mirroring how Word resolves run properties (rPr).
 /// </summary>
@@ -44,6 +53,19 @@ public sealed record ParagraphFormatting
     public double FirstLineIndentPt { get; init; }
     public ListKind ListKind { get; init; } = ListKind.None;
     public int ListLevel { get; init; }
+
+    /// <summary>
+    /// Box border around the paragraph (pPr/w:pBdr), or null for no border. Mirrors how table
+    /// borders are modelled; round-trips to docx as the four <c>w:pBdr</c> edges.
+    /// </summary>
+    public ParagraphBorder? Border { get; init; }
+
+    /// <summary>
+    /// Paragraph shading (background fill) as an RRGGBB hex (e.g. <c>"#FFFF00"</c>). Null means no
+    /// shading. Round-trips to docx as paragraph shading (<c>pPr/w:shd w:fill</c>), mirroring run
+    /// <see cref="RunFormatting.HighlightColorHex"/>.
+    /// </summary>
+    public string? ShadingColorHex { get; init; }
 
     public static readonly ParagraphFormatting Default = new();
 }
