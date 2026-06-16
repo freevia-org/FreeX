@@ -52,6 +52,7 @@ mkdir -p "$appdir/usr/bin"
 mkdir -p "$appdir/usr/share/applications"
 mkdir -p "$appdir/usr/share/icons/hicolor/scalable/apps"
 mkdir -p "$appdir/usr/share/mime/packages"
+mkdir -p "$appdir/usr/share/metainfo"
 
 cp -a "$published/." "$appdir/usr/lib/freex/"
 chmod +x "$appdir/usr/lib/freex/FreeX"
@@ -71,6 +72,7 @@ cp "$script_dir/$app_id.svg" "$appdir/usr/share/icons/hicolor/scalable/apps/$app
 cp "$script_dir/$app_id.svg" "$appdir/$app_id.svg"
 ln -sf "$app_id.svg" "$appdir/.DirIcon"
 cp "$script_dir/$app_id.xml" "$appdir/usr/share/mime/packages/$app_id.xml"
+cp "$script_dir/$app_id.metainfo.xml" "$appdir/usr/share/metainfo/$app_id.metainfo.xml"
 
 cat > "$appdir/AppRun" <<'APPRUN'
 #!/usr/bin/env bash

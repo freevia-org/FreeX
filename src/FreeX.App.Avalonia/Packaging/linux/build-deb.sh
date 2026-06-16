@@ -49,6 +49,7 @@ mkdir -p "$pkg_root/usr/bin"
 mkdir -p "$pkg_root/usr/share/applications"
 mkdir -p "$pkg_root/usr/share/icons/hicolor/scalable/apps"
 mkdir -p "$pkg_root/usr/share/mime/packages"
+mkdir -p "$pkg_root/usr/share/metainfo"
 
 cp -a "$published/." "$pkg_root/usr/lib/freex/"
 chmod +x "$pkg_root/usr/lib/freex/FreeX"
@@ -63,6 +64,7 @@ chmod +x "$pkg_root/usr/bin/freex"
 cp "$script_dir/$app_id.desktop" "$pkg_root/usr/share/applications/$app_id.desktop"
 cp "$script_dir/$app_id.svg" "$pkg_root/usr/share/icons/hicolor/scalable/apps/$app_id.svg"
 cp "$script_dir/$app_id.xml" "$pkg_root/usr/share/mime/packages/$app_id.xml"
+cp "$script_dir/$app_id.metainfo.xml" "$pkg_root/usr/share/metainfo/$app_id.metainfo.xml"
 
 installed_size_kb="$(du -sk "$pkg_root/usr" | cut -f1)"
 

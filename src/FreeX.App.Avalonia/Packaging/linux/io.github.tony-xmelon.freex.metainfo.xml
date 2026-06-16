@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.tony-xmelon.freex</id>
+  <metadata_license>LicenseRef-proprietary</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>FreeX</name>
+  <summary>Open, edit, and save spreadsheets</summary>
+  <description>
+    <p>
+      FreeX is a spreadsheet application: open, edit, and save workbooks, with formulas,
+      formatting, charts, and PivotTables. This is the self-contained Linux build of the
+      cross-platform FreeX app; no system .NET runtime is required.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.tony-xmelon.freex.desktop</launchable>
+  <provides>
+    <binary>freex</binary>
+  </provides>
+  <categories>
+    <category>Office</category>
+    <category>Spreadsheet</category>
+  </categories>
+  <url type="homepage">https://github.com/tony-xmelon/FreeX</url>
+  <url type="bugtracker">https://github.com/tony-xmelon/FreeX/issues</url>
+  <content_rating type="oars-1.1"/>
+  <developer id="io.github.tony-xmelon">
+    <name>FreeX contributors</name>
+  </developer>
+  <releases>
+    <release version="0.1.0" date="2026-06-16"/>
+  </releases>
+</component>

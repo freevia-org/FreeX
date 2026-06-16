@@ -85,6 +85,28 @@ public sealed class LinuxPackagingMetadataTests
     }
 
     [Fact]
+    public void MetainfoXml_DeclaresAppStreamComponentAndIsPackaged()
+    {
+        var doc = XDocument.Load(PackagingFile($"{AppId}.metainfo.xml"));
+        var root = doc.Root!;
+
+        root.Name.LocalName.Should().Be("component");
+        root.Attribute("type")!.Value.Should().Be("desktop-application");
+        root.Element("id")!.Value.Should().Be(AppId);
+        root.Element("name")!.Value.Should().Be("FreeX");
+        root.Element("project_license").Should().NotBeNull();
+        var launchable = root.Element("launchable")!;
+        launchable.Attribute("type")!.Value.Should().Be("desktop-id");
+        launchable.Value.Should().Be($"{AppId}.desktop");
+        root.Element("categories")!.Elements("category").Select(c => c.Value)
+            .Should().Contain("Office").And.Contain("Spreadsheet");
+
+        // All three packagers install the metainfo under share/metainfo.
+        foreach (var script in new[] { "package-linux-app.sh", "build-appimage.sh", "build-deb.sh" })
+            File.ReadAllText(PackagingFile(script)).Should().Contain("share/metainfo");
+    }
+
+    [Fact]
     public void PackagingScripts_AssembleRelocatableLayout()
     {
         var packageScript = File.ReadAllText(PackagingFile("package-linux-app.sh"));

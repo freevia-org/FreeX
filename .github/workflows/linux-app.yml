@@ -72,7 +72,8 @@ jobs:
             libglu1-mesa \
             libegl1 \
             desktop-file-utils \
-            shared-mime-info
+            shared-mime-info \
+            appstream
 
       - name: Capture runner toolchain evidence
         shell: bash
@@ -166,19 +167,35 @@ jobs:
           file "$published/FreeX" | tee -a "$evidence_path"
 
           # Validate desktop integration assets before packaging.
-          desktop_file="src/FreeX.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freex.desktop"
-          mime_file="src/FreeX.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freex.xml"
-          icon_file="src/FreeX.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freex.svg"
+          packaging_dir="src/FreeX.App.Avalonia/Packaging/linux"
+          desktop_file="$packaging_dir/io.github.tony-xmelon.freex.desktop"
+          mime_file="$packaging_dir/io.github.tony-xmelon.freex.xml"
+          icon_file="$packaging_dir/io.github.tony-xmelon.freex.svg"
+          metainfo_file="$packaging_dir/io.github.tony-xmelon.freex.metainfo.xml"
           desktop-file-validate "$desktop_file"
           test -f "$mime_file"
           test -f "$icon_file"
+          test -f "$metainfo_file"
           grep -q "application/vnd.freex.workbook+json" "$desktop_file"
           grep -q "<glob pattern=\"\*.fxl\"/>" "$mime_file"
           {
             echo "desktop_entry_valid=true"
             echo "mime_definition_present=true"
             echo "icon_present=true"
+            echo "metainfo_present=true"
           } >> "$evidence_path"
+
+          # AppStream metainfo validation (non-fatal evidence; pedantic license warnings on a
+          # proprietary component must not block the lane).
+          metainfo_status="skipped"
+          if command -v appstreamcli >/dev/null 2>&1; then
+            if appstreamcli validate --no-net "$metainfo_file"; then
+              metainfo_status="valid"
+            else
+              metainfo_status="warnings"
+            fi
+          fi
+          echo "metainfo_validation=$metainfo_status" >> "$evidence_path"
 
           # Tarball with installer.
           chmod +x src/FreeX.App.Avalonia/Packaging/linux/package-linux-app.sh
