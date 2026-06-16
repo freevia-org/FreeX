@@ -289,6 +289,83 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Hyperlink_RoundTrips_WithUrlIntact()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("see "));
+        paragraph.Runs.Add(new Run("the docs") { HyperlinkUrl = "https://example.com/docs" });
+        paragraph.Runs.Add(new Run(" now"));
+        doc.Blocks.Add(paragraph);
+
+        var runs = RoundTrip(doc).Paragraphs.First().Runs;
+
+        runs.Select(r => r.Text).Should().Equal("see ", "the docs", " now");
+        runs[0].HyperlinkUrl.Should().BeNull();
+        runs[1].HyperlinkUrl.Should().Be("https://example.com/docs");
+        runs[2].HyperlinkUrl.Should().BeNull();
+    }
+
+    [Fact]
+    public void Hyperlink_PreservesRunFormatting()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("bold link", new RunFormatting { Bold = true })
+        {
+            HyperlinkUrl = "https://example.com"
+        });
+        doc.Blocks.Add(paragraph);
+
+        var run = RoundTrip(doc).Paragraphs.First().Runs.Single();
+
+        run.Text.Should().Be("bold link");
+        run.HyperlinkUrl.Should().Be("https://example.com");
+        run.Formatting.Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Hyperlink_WritesExternalRelationship()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("link") { HyperlinkUrl = "https://example.com/page" });
+        doc.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        var rels = relsReader.ReadToEnd();
+        rels.Should().Contain("https://example.com/page");
+        rels.Should().Contain("TargetMode=\"External\"");
+        rels.Should().Contain("/hyperlink");
+
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        docReader.ReadToEnd().Should().Contain("hyperlink");
+    }
+
+    [Fact]
+    public void Hyperlink_SharedUrl_UsesSingleRelationship()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("a") { HyperlinkUrl = "https://example.com" });
+        paragraph.Runs.Add(new Run("plain"));
+        paragraph.Runs.Add(new Run("b") { HyperlinkUrl = "https://example.com" });
+        doc.Blocks.Add(paragraph);
+
+        var runs = RoundTrip(doc).Paragraphs.First().Runs;
+
+        runs.Where(r => r.HyperlinkUrl is not null)
+            .Select(r => r.HyperlinkUrl)
+            .Should().AllBe("https://example.com");
+        runs.Single(r => r.Text == "plain").HyperlinkUrl.Should().BeNull();
+    }
+
+    [Fact]
     public void Read_NonWordZip_Throws()
     {
         using var stream = new MemoryStream();

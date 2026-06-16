@@ -16,6 +16,7 @@ public static class DocxWriter
     private const string OfficeDocumentRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
     private const string StylesRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
     private const string ImageRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+    private const string HyperlinkRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
 
     public static void Write(TextDocument document, string path)
     {
@@ -28,13 +29,15 @@ public static class DocxWriter
         // Assign a relationship + media id to every inline image up front so document.xml, the
         // document relationships and the media parts all agree on rId/imageN.png.
         var images = CollectImages(document);
+        // Assign an external relationship id to every distinct hyperlink target the same way.
+        var hyperlinks = CollectHyperlinks(document);
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
         WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0));
         WritePart(archive, "_rels/.rels", BuildPackageRels());
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         foreach (var image in images)
             WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
@@ -46,7 +49,7 @@ public static class DocxWriter
     private static List<ImagePart> CollectImages(TextDocument document)
     {
         var images = new List<ImagePart>();
-        foreach (var paragraph in document.Paragraphs)
+        foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
                 if (run.Image is { } image)
                 {
@@ -54,6 +57,32 @@ public static class DocxWriter
                     images.Add(new ImagePart(image, $"rIdImg{index}", $"image{index}.png", (uint)index));
                 }
         return images;
+    }
+
+    /// <summary>Maps each distinct hyperlink URL to one external relationship id (rIdLinkN).</summary>
+    private static Dictionary<string, string> CollectHyperlinks(TextDocument document)
+    {
+        var byUrl = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var paragraph in EnumerateParagraphs(document))
+            foreach (var run in paragraph.Runs)
+                if (run.HyperlinkUrl is { Length: > 0 } url && !byUrl.ContainsKey(url))
+                    byUrl[url] = $"rIdLink{byUrl.Count + 1}";
+        return byUrl;
+    }
+
+    /// <summary>All paragraphs, including those nested inside table cells (where runs can also live).</summary>
+    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
+    {
+        foreach (var block in document.Blocks)
+        {
+            if (block is Paragraph paragraph)
+                yield return paragraph;
+            else if (block is Table table)
+                foreach (var row in table.Rows)
+                    foreach (var cell in row.Cells)
+                        foreach (var cellParagraph in cell.Paragraphs)
+                            yield return cellParagraph;
+        }
     }
 
     private static void WritePart(ZipArchive archive, string entryPath, XDocument content)
@@ -134,7 +163,7 @@ public static class DocxWriter
         }
     }
 
-    private static XDocument BuildDocumentRels(IReadOnlyList<ImagePart> images)
+    private static XDocument BuildDocumentRels(IReadOnlyList<ImagePart> images, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
@@ -146,22 +175,28 @@ public static class DocxWriter
                 new XAttribute("Id", image.RelationshipId),
                 new XAttribute("Type", ImageRel),
                 new XAttribute("Target", "media/" + image.FileName)));
+        foreach (var (url, relationshipId) in hyperlinks)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", relationshipId),
+                new XAttribute("Type", HyperlinkRel),
+                new XAttribute("Target", url),
+                new XAttribute("TargetMode", "External")));
         return new XDocument(relationships);
     }
 
-    private static XDocument BuildDocument(TextDocument document, IReadOnlyList<ImagePart> images)
+    private static XDocument BuildDocument(TextDocument document, IReadOnlyList<ImagePart> images, IReadOnlyDictionary<string, string> hyperlinks)
     {
         // Map each image run to its assigned relationship id by replaying the same walk order.
         var imagesByRun = new Dictionary<Run, ImagePart>();
         var next = 0;
-        foreach (var paragraph in document.Paragraphs)
+        foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
                 if (run.Image is not null)
                     imagesByRun[run] = images[next++];
 
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
-            body.Add(BuildBlock(block, imagesByRun));
+            body.Add(BuildBlock(block, imagesByRun, hyperlinks));
         body.Add(BuildSectionProperties(document.Page));
 
         return new XDocument(
@@ -171,14 +206,14 @@ public static class DocxWriter
                 body));
     }
 
-    private static XElement BuildBlock(Block block, IReadOnlyDictionary<Run, ImagePart> imagesByRun) => block switch
+    private static XElement BuildBlock(Block block, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks) => block switch
     {
-        Table table => BuildTable(table, imagesByRun),
-        Paragraph paragraph => BuildParagraph(paragraph, imagesByRun),
+        Table table => BuildTable(table, imagesByRun, hyperlinks),
+        Paragraph paragraph => BuildParagraph(paragraph, imagesByRun, hyperlinks),
         _ => new XElement(W + "p")
     };
 
-    private static XElement BuildTable(Table table, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
+    private static XElement BuildTable(Table table, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var tbl = new XElement(W + "tbl", BuildTableProperties(table));
         foreach (var row in table.Rows)
@@ -191,7 +226,7 @@ public static class DocxWriter
                     tc.Add(new XElement(W + "p"));
                 else
                     foreach (var paragraph in cell.Paragraphs)
-                        tc.Add(BuildParagraph(paragraph, imagesByRun));
+                        tc.Add(BuildParagraph(paragraph, imagesByRun, hyperlinks));
                 tr.Add(tc);
             }
             tbl.Add(tr);
@@ -227,14 +262,32 @@ public static class DocxWriter
         return tblPr;
     }
 
-    private static XElement BuildParagraph(Paragraph paragraph, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
+    private static XElement BuildParagraph(Paragraph paragraph, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var p = new XElement(W + "p");
         var pPr = BuildParagraphProperties(paragraph);
         if (pPr is not null)
             p.Add(pPr);
-        foreach (var run in paragraph.Runs)
-            p.Add(BuildRun(run, imagesByRun));
+
+        // Wrap maximal spans of consecutive runs sharing the same hyperlink URL in a single
+        // w:hyperlink referencing the URL's external relationship id.
+        var i = 0;
+        var runs = paragraph.Runs;
+        while (i < runs.Count)
+        {
+            var url = runs[i].HyperlinkUrl;
+            if (url is { Length: > 0 } && hyperlinks.TryGetValue(url, out var relationshipId))
+            {
+                var hyperlink = new XElement(W + "hyperlink", new XAttribute(R + "id", relationshipId));
+                while (i < runs.Count && runs[i].HyperlinkUrl == url)
+                    hyperlink.Add(BuildRun(runs[i++], imagesByRun));
+                p.Add(hyperlink);
+            }
+            else
+            {
+                p.Add(BuildRun(runs[i++], imagesByRun));
+            }
+        }
         return p;
     }
 

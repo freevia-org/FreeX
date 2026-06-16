@@ -5,8 +5,10 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeW.Core.Model;
+using System.Diagnostics;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun = System.Windows.Documents.Run;
+using WpfHyperlink = System.Windows.Documents.Hyperlink;
 using WpfTable = System.Windows.Documents.Table;
 using WpfTableRow = System.Windows.Documents.TableRow;
 using WpfTableCell = System.Windows.Documents.TableCell;
@@ -240,13 +242,28 @@ public sealed class DocumentView : RichTextBox
             Formatting = ReadParagraphFormatting(wpfParagraph)
         };
         foreach (var inline in wpfParagraph.Inlines)
-        {
-            if (inline is InlineUIContainer { Child: Image { Tag: InlineImage modelImage } })
-                modelParagraph.Runs.Add(ModelRun.FromImage(modelImage));
-            else if (inline is WpfRun run && run.Text.Length > 0)
-                modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)));
-        }
+            ReadInline(modelParagraph, inline, hyperlinkUrl: null);
         return modelParagraph;
+    }
+
+    // Maps one FlowDocument inline to model run(s). A Hyperlink is a Span of inlines, so we recurse
+    // into it carrying its NavigateUri, which lands on each produced run as its HyperlinkUrl.
+    private static void ReadInline(ModelParagraph modelParagraph, Inline inline, string? hyperlinkUrl)
+    {
+        switch (inline)
+        {
+            case WpfHyperlink link:
+                var url = link.NavigateUri?.ToString() ?? hyperlinkUrl;
+                foreach (var child in link.Inlines)
+                    ReadInline(modelParagraph, child, url);
+                break;
+            case InlineUIContainer { Child: Image { Tag: InlineImage modelImage } }:
+                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl });
+                break;
+            case WpfRun run when run.Text.Length > 0:
+                modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl });
+                break;
+        }
     }
 
     private static ModelTable ReadTable(WpfTable wpfTable)
@@ -381,7 +398,39 @@ public sealed class DocumentView : RichTextBox
         if (decorations.Count > 0)
             wpf.TextDecorations = decorations;
 
+        if (run.HyperlinkUrl is { Length: > 0 } url)
+            return BuildHyperlink(wpf, url);
+
         return wpf;
+    }
+
+    // Wraps a styled run in a WPF Hyperlink (blue + underlined, with NavigateUri) so the link reads
+    // back on commit and can be opened. Falls back to a plain run if the URL is not a valid Uri.
+    private static Inline BuildHyperlink(WpfRun content, string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return content;
+
+        var link = new WpfHyperlink(content) { NavigateUri = uri };
+        StyleLink(link, url);
+        return link;
+    }
+
+    // Opens the link target in the default handler. Only http/https are launched (safe + simple).
+    private static void OnHyperlinkRequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        e.Handled = true;
+        var uri = e.Uri;
+        if (uri is null || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch
+        {
+            // Ignore launch failures (no handler, blocked, etc.) — opening a link must never crash the editor.
+        }
     }
 
     /// <summary>Renders an inline image as an InlineUIContainer hosting a WPF Image (PNG-decoded).</summary>
@@ -426,6 +475,67 @@ public sealed class DocumentView : RichTextBox
         }
         CommitToModel();
         Render();
+    }
+
+    /// <summary>
+    /// Applies an external hyperlink to the current selection. If the selection is non-empty its text
+    /// becomes the link; if it is empty the URL itself is inserted as a linked run. Re-renders so the
+    /// link is styled and round-trips through the model on the next commit.
+    /// </summary>
+    public void ApplyHyperlink(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return;
+
+        Focus();
+        var selection = Selection;
+        if (selection.IsEmpty)
+        {
+            // No selection: drop the URL as its own linked run at the caret.
+            var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+            var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
+            if (paragraph is null)
+            {
+                paragraph = new WpfParagraph();
+                Document.Blocks.Add(paragraph);
+            }
+            paragraph.Inlines.Add(NewLink(new WpfRun(url), uri, url));
+        }
+        else
+        {
+            // Wrap the selected text range in a hyperlink (WPF splits runs at the range boundaries).
+            try
+            {
+                var link = new WpfHyperlink(selection.Start, selection.End)
+                {
+                    NavigateUri = uri,
+                    ToolTip = url
+                };
+                StyleLink(link, url);
+            }
+            catch (ArgumentException)
+            {
+                // Selection spanned a non-text boundary (e.g. a table); ignore rather than crash.
+                return;
+            }
+        }
+
+        CommitToModel();
+        Render();
+    }
+
+    private static WpfHyperlink NewLink(WpfRun content, Uri uri, string url)
+    {
+        var link = new WpfHyperlink(content) { NavigateUri = uri, ToolTip = url };
+        StyleLink(link, url);
+        return link;
+    }
+
+    private static void StyleLink(WpfHyperlink link, string url)
+    {
+        link.ToolTip = url;
+        link.Foreground = new SolidColorBrush(Color.FromRgb(0x05, 0x63, 0xC1));
+        link.RequestNavigate += OnHyperlinkRequestNavigate;
     }
 
     // --- view -> model ---
