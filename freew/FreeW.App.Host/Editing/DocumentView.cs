@@ -814,6 +814,33 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Insert plain text at the caret through the RichTextBox's own edit path, so it joins the run the
+    /// caret sits in (inheriting its formatting), replaces any active selection, and is captured by the
+    /// existing undo stack. A no-op for null/empty text. Used by Insert &gt; Symbol and Date &amp; Time,
+    /// which just drop ordinary text runs at the caret — no model or docx changes.
+    /// </summary>
+    public void InsertText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        Focus();
+        var selection = Selection;
+        if (!selection.IsEmpty)
+        {
+            // Typing over a selection replaces it: clear it first, then insert at the resulting caret.
+            selection.Text = string.Empty;
+        }
+
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        caret.InsertTextInRun(text);
+        // Advance the caret past the inserted text so subsequent typing continues from there.
+        CaretPosition = caret.GetPositionAtOffset(text.Length) ?? caret;
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
     /// Applies an external hyperlink to the current selection. If the selection is non-empty its text
     /// becomes the link; if it is empty the URL itself is inserted as a linked run. Re-renders so the
     /// link is styled and round-trips through the model on the next commit.
