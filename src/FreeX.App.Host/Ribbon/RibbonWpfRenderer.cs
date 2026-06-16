@@ -393,6 +393,9 @@ public static class RibbonWpfRenderer
                 Header = item.Header,
                 InputGestureText = item.InputGesture ?? string.Empty
             };
+            // Keytip navigation only enters a menu whose items carry keytips, so propagate them.
+            if (!string.IsNullOrEmpty(item.KeyTip))
+                RibbonTooltip.SetKeyTip(menuItem, item.KeyTip);
 
             if (item.Children.Count > 0)
             {

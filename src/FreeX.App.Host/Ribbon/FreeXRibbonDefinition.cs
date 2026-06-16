@@ -26,14 +26,28 @@ public static class FreeXRibbonDefinition
                 .Medium("Stacked Bar Chart", "Stacked Bar Chart", Ico.ChartColumn, "SB")
                 .Medium("100% Stacked Bar Chart", "100% Stacked Bar Chart", Ico.ChartColumn, "PB")
                 .Medium("Line Chart", "Line Chart", Ico.ChartLine, "LC")
-                .Medium("3D Line Chart", "3D Line Chart", Ico.ChartLine, "3L")
                 .Medium("Area Chart", "Area Chart", Ico.ChartArea, "AC")
-                .Medium("3D Area Chart", "3D Area Chart", Ico.ChartArea, "3A")
                 .Medium("Stock Chart", "Stock Chart", Ico.ChartLine, "ST")
                 .Medium("Pie Chart", "Pie Chart", Ico.ChartPie, "PY")
-                .Medium("3D Pie Chart", "3D Pie Chart", Ico.ChartPie, "3P")
                 .Medium("Doughnut Chart", "Doughnut Chart", Ico.ChartPie, "DO")
-                .Medium("Scatter Chart", "Scatter Chart", Ico.ChartScatter, "SX"))
+                .Medium("Scatter Chart", "Scatter Chart", Ico.ChartScatter, "SX")
+                .Medium("Bubble Chart", "Bubble Chart", Ico.ChartScatter, "BU")
+                .Medium("Radar Chart", "Radar Chart", Ico.ChartArea, "RD")
+                .Medium("Select Data Source", "Select Data Source", Ico.Search, "DS")
+                .Medium("Format Bar/Column", "Format Bar/Column", Ico.Size, "BF")
+                .Medium("Format Pie/Doughnut", "Format Pie/Doughnut", Ico.ChartPie, "PI")
+                .Medium("Category Name", "Category Name", Ico.Generic, "CN")
+                .Medium("Percentage", "Percentage", Ico.Percent, "PE")
+                .Medium("Data Callout", "Data Callout", Ico.Generic, "CA")
+                .Medium("Moving Average Period", "Moving Average Period", Ico.Generic, "TM")
+                .Medium("Polynomial Order", "Polynomial Order", Ico.Generic, "TO")
+                .Medium("R-squared", "R-squared", Ico.Generic, "RS")
+                .Medium("Error Bars", "Error Bars", Ico.ChartLine, "EB")
+                .Medium("X Log Scale", "X Log Scale", Ico.Scale, "XL")
+                .Medium("Y Log Scale", "Y Log Scale", Ico.Scale, "YL")
+                .Medium("X Gridline Style", "X Gridline Style", Ico.Generic, "XS")
+                .Medium("Y Gridline Style", "Y Gridline Style", Ico.Generic, "YS")
+                .Medium("Marker Size", "Marker Size", Ico.ChartScatter, "MS"))
             .Group("InsertSparklinesGroup", "Sparklines", null, priority: 160,
                 g => g
                 .Medium("Line Sparkline", "Line Sparkline", Ico.Sparkline, "SL")
@@ -41,7 +55,6 @@ public static class FreeXRibbonDefinition
                 .Medium("Win/Loss Sparkline", "Win/Loss Sparkline", Ico.Sparkline, "SW"))
             .Group("InsertFiltersGroup", "Filters", null, priority: 150,
                 g => g
-                .Large("Insert Slicer", "Insert Slicer", Ico.Filter, "SF")
                 .Large("Insert Timeline", "Insert Timeline", Ico.Date, "IT"))
             .Group("InsertLinksGroup", "Links", null, priority: 140,
                 g => g

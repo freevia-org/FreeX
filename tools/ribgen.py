@@ -1,7 +1,9 @@
 import re
 import xml.etree.ElementTree as ET
 
-XAML = "src/FreeX.App.Host/MainWindow.xaml"
+# The live MainWindow.xaml ribbon was deleted in the declarative cutover; regenerate from the
+# pre-deletion ribbon preserved in git (write it with: git show <pre-cutover>:.../MainWindow.xaml).
+XAML = "tools/_old_mainwindow.xaml"
 OUT = "src/FreeX.App.Host/Ribbon/FreeXRibbonDefinition.cs"
 
 src = open(XAML, encoding="utf-8").read()
@@ -213,6 +215,26 @@ def is_large(name):
     return any(s in n for s in LARGE_CONTAINS)
 
 
+# Mirrors RibbonCommandPresentationPlanner.ShouldHideFromInsertRibbon: keep only the primary chart
+# types + recommended/sparklines on the Insert tab; the rest are chart-formatting commands surfaced
+# through the chart contextual tabs, not as Insert buttons.
+_PRIMARY_INSERT_CHARTS = {
+    "column chart", "stacked column chart", "100% stacked column chart", "line chart", "pie chart",
+    "doughnut chart", "bar chart", "stacked bar chart", "100% stacked bar chart", "scatter chart",
+    "bubble chart", "area chart", "radar chart", "stock chart",
+}
+
+
+def should_hide_from_insert(title):
+    n = (title or "").strip().lower()
+    if not any(k in n for k in ("chart", "axis", "legend", "trendline", "series", "plot",
+                                "label", "slice", "doughnut hole", "secondary")):
+        return False
+    return (n not in _PRIMARY_INSERT_CHARTS
+            and "sparkline" not in n
+            and "recommended chart" not in n)
+
+
 def grouphdr(cid, tab):
     s = cid[:-5] if cid.endswith("Group") else cid
     tp = tab[:-3]
@@ -309,7 +331,9 @@ for tab in mainorder + ctxorder:
                 if kept and kept[-1][0] != "sep":
                     kept.append(it)
                 continue
-            if ctrl_count >= 16:
+            if tab == "InsertTab" and should_hide_from_insert(it[2]):
+                continue
+            if ctrl_count >= 40:
                 continue
             kept.append(it)
             ctrl_count += 1

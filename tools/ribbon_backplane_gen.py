@@ -5,7 +5,7 @@ import re
 import xml.etree.ElementTree as ET
 import glob
 
-XAML = "src/FreeX.App.Host/MainWindow.xaml"
+XAML = "tools/_old_mainwindow.xaml"
 OUT = "src/FreeX.App.Host/MainWindow.RibbonBackplane.g.cs"
 
 src = open(XAML, encoding="utf-8").read()
@@ -76,7 +76,9 @@ out.append("")
 out.append("    private void InitializeRibbonControlBackplane()")
 out.append("    {")
 for n, t, c in referenced:
-    if c and TYPE[t].endswith(("Button", "ComboBox", "CheckBox", "MenuItem")) or (c and t in ("ToggleButton", "Button", "ComboBox", "CheckBox", "MenuItem", "AutomationInvokeButton")):
+    # Register under the original x:Name so FindName-based code/tests resolve the control.
+    out.append(f"        try {{ RegisterName(\"{n}\", {n}); }} catch (System.ArgumentException) {{ }}")
+    if c and t in ("ToggleButton", "Button", "ComboBox", "CheckBox", "MenuItem", "AutomationInvokeButton"):
         out.append(f'        RibbonMetadata.SetCommandName({n}, "{c}");')
         out.append(f'        RibbonBackplaneControls["{c}"] = {n};')
 out.append("    }")
