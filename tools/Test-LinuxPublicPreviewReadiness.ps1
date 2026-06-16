@@ -161,3 +161,4 @@ if ($validationErrors.Count -gt 0) {
 }
 
 Write-Host "Linux public-preview readiness PASSED for runtimes: $($Runtimes -join ', ')."
+exit 0
