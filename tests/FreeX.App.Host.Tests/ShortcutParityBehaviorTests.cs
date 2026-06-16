@@ -441,7 +441,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void WorksheetContextMenu_IncludesPasteSpecialInsertDeleteAndFormatCellsItems()
     {
-        var plannerSource = DialogSourceTestSupport.ReadHostSources("WorksheetContextMenuPlanner.cs");
+        var plannerSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("WorksheetContextMenuPlanner.cs");
 
         plannerSource.Should().ContainAll(
             "Paste Special",
