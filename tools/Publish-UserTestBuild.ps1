@@ -344,7 +344,14 @@ if ($PublishMode -eq "Velopack") {
         if ($null -eq $vpk) { throw "vpk not found on PATH after install; ensure the dotnet global tools dir is on PATH." }
     }
 
+    # Clean the output directory first so local re-runs of the same version do not fail with
+    # "there is a release ... equal or greater to the current version". CI starts from an empty
+    # workspace, so this only matters for repeated local packs. (Delta packages would require
+    # seeding prior releases here; not wired yet — full packages only.)
     $vpkOut = Join-Path $artifactRoot "velopack-$RuntimeIdentifier"
+    if (Test-Path -LiteralPath $vpkOut) {
+        Remove-Item -LiteralPath $vpkOut -Recurse -Force
+    }
     New-Item -ItemType Directory -Force -Path $vpkOut | Out-Null
 
     & vpk pack `

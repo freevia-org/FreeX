@@ -21,6 +21,13 @@
     <Resource Include="Resources\FreeX.ico" />
   </ItemGroup>
 
+  <!-- Compile App.xaml as a Page so the WPF SDK does not generate its own Main; the explicit
+       entry point in Program.cs runs Velopack before WPF initializes. -->
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(FreeXTesterReleaseEnglishOnly)' == 'true'">
     <EmbeddedResource Remove="Resources\Strings.*.resx" />
   </ItemGroup>
@@ -53,6 +60,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <StartupObject>FreeX.App.Host.Program</StartupObject>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -25,9 +25,8 @@ public partial class App : Application
 
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
-        // Must precede all UI/init so Velopack can service install/update/uninstall hooks and exit fast.
-        VelopackBootstrap.Run();
-
+        // Velopack is invoked earlier, from Program.Main, before the WPF Application is created,
+        // so install/update/uninstall hooks are serviced before any UI initializes.
         var options = FreeXOptions.Load();
         AppLocalization.ApplyAppLanguage(options.AppLanguage);
         AppLocalization.ApplyCurrentCultureToWpf();
