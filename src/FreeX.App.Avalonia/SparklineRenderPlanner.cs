@@ -1,0 +1,143 @@
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Sparklines;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Avalonia;
+
+/// <summary>
+/// One sparkline ready to draw in a cell: its location, kind, the numeric series read from the
+/// source range, and the cell-local rectangle the geometry is laid out inside. Produced by
+/// <see cref="SparklineRenderPlanner"/> from the active sheet, with no Avalonia types, so the
+/// non-UI glue (sheet -&gt; series -&gt; layout) is unit-testable without a running shell.
+/// </summary>
+public readonly record struct SparklineRenderInstruction(
+    Guid Id,
+    CellAddress Location,
+    SparklineKind Kind,
+    IReadOnlyList<double> Values,
+    LayoutRect CellRect);
+
+/// <summary>
+/// Pure, UI-free glue that mirrors the Windows host's sparkline pipeline for the Avalonia shell:
+/// reads each <see cref="SparklineModel"/>'s data range off the sheet into a numeric series
+/// (number / date / bool, hidden rows and columns skipped), then dispatches the series through the
+/// portable <see cref="SparklineLayoutEngine"/>. The shell turns the returned geometry into
+/// Avalonia primitives; the tests exercise the value read + layout selection without any UI.
+/// </summary>
+public static class SparklineRenderPlanner
+{
+    // Matches the Windows GridView's per-cell sparkline inset (3px on every side, unzoomed).
+    public const double CellInset = 3;
+
+    /// <summary>
+    /// Reads every sparkline on <paramref name="sheet"/> into its numeric series, keyed by id.
+    /// Mirrors the Windows host's <c>SparklineValuePlanner.BuildValues</c>: data ranges over the
+    /// supported cell cap are reported as empty, and only number / date / bool cells contribute.
+    /// </summary>
+    public static IReadOnlyDictionary<Guid, IReadOnlyList<double>> BuildValues(Sheet sheet)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        var values = new Dictionary<Guid, IReadOnlyList<double>>();
+        foreach (var sparkline in sheet.Sparklines)
+            values[sparkline.Id] = ReadSeries(sheet, sparkline);
+
+        return values;
+    }
+
+    /// <summary>
+    /// Reads a single sparkline's data range into its numeric series. Hidden rows and columns are
+    /// skipped; non-numeric cells are ignored.
+    /// </summary>
+    public static IReadOnlyList<double> ReadSeries(Sheet sheet, SparklineModel sparkline)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        ArgumentNullException.ThrowIfNull(sparkline);
+
+        if (!SparklineRangeLimits.IsSupportedDataRange(sparkline.DataRange))
+            return [];
+
+        var series = new List<double>();
+        var range = sparkline.DataRange;
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            if (sheet.IsRowEffectivelyHidden(row))
+                continue;
+
+            for (var col = range.Start.Col; col <= range.End.Col; col++)
+            {
+                if (sheet.IsColEffectivelyHidden(col))
+                    continue;
+
+                switch (sheet.GetValue(row, col))
+                {
+                    case NumberValue number:
+                        series.Add(number.Value);
+                        break;
+                    case DateTimeValue date:
+                        series.Add(date.Value);
+                        break;
+                    case BoolValue boolean:
+                        series.Add(boolean.Value ? 1 : 0);
+                        break;
+                }
+            }
+        }
+
+        return series;
+    }
+
+    /// <summary>
+    /// Builds the cell-local draw instructions for every sparkline whose <see cref="SparklineModel.Location"/>
+    /// resolves to a rectangle via <paramref name="cellRectLookup"/> and whose series is non-empty.
+    /// The lookup hands back the cell's pixel rectangle in shell coordinates; the inset is applied
+    /// here so the geometry sits inside the cell exactly as the Windows renderer draws it.
+    /// </summary>
+    public static IReadOnlyList<SparklineRenderInstruction> Plan(
+        Sheet sheet,
+        IReadOnlyDictionary<Guid, IReadOnlyList<double>> values,
+        CellRectLookup cellRectLookup,
+        double inset = CellInset)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        ArgumentNullException.ThrowIfNull(values);
+        ArgumentNullException.ThrowIfNull(cellRectLookup);
+
+        var instructions = new List<SparklineRenderInstruction>(sheet.Sparklines.Count);
+        foreach (var sparkline in sheet.Sparklines)
+        {
+            if (!values.TryGetValue(sparkline.Id, out var series) || series.Count == 0)
+                continue;
+            if (!cellRectLookup(sparkline.Location, out var cellRect))
+                continue;
+
+            var rect = new LayoutRect(
+                cellRect.X + inset,
+                cellRect.Y + inset,
+                Math.Max(1, cellRect.Width - (inset * 2)),
+                Math.Max(1, cellRect.Height - (inset * 2)));
+            instructions.Add(new SparklineRenderInstruction(
+                sparkline.Id,
+                sparkline.Location,
+                sparkline.Kind,
+                series,
+                rect));
+        }
+
+        return instructions;
+    }
+
+    /// <summary>Lays out a line sparkline's geometry from a render instruction.</summary>
+    public static SparklineLineLayout LayoutLine(SparklineRenderInstruction instruction) =>
+        SparklineLayoutEngine.CalculateLineLayout(instruction.Values, instruction.CellRect);
+
+    /// <summary>Lays out a column / win-loss sparkline's geometry from a render instruction.</summary>
+    public static SparklineColumnLayout LayoutColumn(SparklineRenderInstruction instruction) =>
+        SparklineLayoutEngine.CalculateColumnLayout(instruction.Values, instruction.CellRect, instruction.Kind);
+
+    /// <summary>
+    /// Resolves a cell's pixel rectangle (in shell coordinates) for a sparkline location, returning
+    /// false when the cell is not currently laid out (e.g. scrolled out of the viewport).
+    /// </summary>
+    public delegate bool CellRectLookup(CellAddress location, out LayoutRect cellRect);
+}

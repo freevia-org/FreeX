@@ -525,6 +525,8 @@ public sealed partial class MainWindow : Window
     private WorkbookSession _session;
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
+    private IReadOnlyDictionary<(uint Row, uint Col), (IReadOnlyList<double> Values, SparklineKind Kind)> _sparklinesByCell =
+        new Dictionary<(uint Row, uint Col), (IReadOnlyList<double>, SparklineKind)>();
     private string? _formulaBoxEditOriginalText;
     private bool _isOpening;
     private bool _isSaving;
@@ -2316,6 +2318,7 @@ public sealed partial class MainWindow : Window
         var zoomFactor = GetActiveZoomFactor();
         var headerOffset = showHeadings ? 1 : 0;
         var cellsByAddress = viewport.Cells.ToDictionary(cell => (cell.Row, cell.Col));
+        _sparklinesByCell = BuildSparklineCellLookup(_session.ActiveSheet);
         var grid = new AvaloniaGrid
         {
             Background = Brushes.White,
@@ -2394,6 +2397,11 @@ public sealed partial class MainWindow : Window
         // Charts live on the sheet (not projected into viewport.DrawingObjects), so paint them first —
         // before the drawing-object early-out — so a chart renders even when no other objects exist.
         AddChartOverlays(overlay, viewport);
+
+        // Slicers and timelines are positioned drawing objects connected at the workbook level
+        // (not projected into viewport.DrawingObjects), so paint them here — before the
+        // drawing-object early-out — so they render even when no other objects exist.
+        AddSlicerTimelineOverlays(overlay, viewport);
 
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;
@@ -3027,6 +3035,30 @@ public sealed partial class MainWindow : Window
             selected: false,
             zoomFactor: zoomFactor);
 
+    /// <summary>
+    /// Reads every sparkline on <paramref name="sheet"/> into a per-cell lookup keyed by its anchor
+    /// <see cref="SparklineModel.Location"/>, using the same numeric series read as the Windows host
+    /// (<see cref="SparklineRenderPlanner.BuildValues"/>). Empty series are dropped so cells without
+    /// drawable data don't get an empty panel.
+    /// </summary>
+    private static IReadOnlyDictionary<(uint Row, uint Col), (IReadOnlyList<double> Values, SparklineKind Kind)> BuildSparklineCellLookup(Sheet sheet)
+    {
+        var lookup = new Dictionary<(uint Row, uint Col), (IReadOnlyList<double>, SparklineKind)>();
+        if (sheet.Sparklines.Count == 0)
+            return lookup;
+
+        var values = SparklineRenderPlanner.BuildValues(sheet);
+        foreach (var sparkline in sheet.Sparklines)
+        {
+            if (!values.TryGetValue(sparkline.Id, out var series) || series.Count == 0)
+                continue;
+
+            lookup[(sparkline.Location.Row, sparkline.Location.Col)] = (series, sparkline.Kind);
+        }
+
+        return lookup;
+    }
+
     private Border CreateCell(DisplayCell cell, uint row, uint col, double zoomFactor, double cellWidth, double cellHeight)
     {
         var hasCell = cell.Row != 0 && cell.Col != 0;
@@ -3078,6 +3110,12 @@ public sealed partial class MainWindow : Window
         var dataBar = ConditionalFormatCellRenderPlanner.PlanDataBar(cell.ConditionalDataBar);
         var icon = ConditionalFormatCellRenderPlanner.PlanIcon(cell.ConditionalIcon);
 
+        // Sparklines live per-cell on the sheet (keyed by Location). When one anchors here, build a
+        // binding-free panel that paints the series geometry behind the cell text.
+        var sparklineLayer = _sparklinesByCell.TryGetValue((row, col), out var sparkline)
+            ? new SparklineCellPanel(sparkline.Values, sparkline.Kind)
+            : null;
+
         return CreateInteractiveCellBorder(
             cell.DisplayText,
             background,
@@ -3101,7 +3139,8 @@ public sealed partial class MainWindow : Window
             verticalAlignmentModel,
             isNumeric,
             dataBar,
-            icon);
+            icon,
+            sparklineLayer);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -3127,7 +3166,8 @@ public sealed partial class MainWindow : Window
         CellVAlign? verticalAlignmentModel = null,
         bool isNumeric = false,
         CfDataBarRenderInstruction? conditionalDataBar = null,
-        CfIconRenderInstruction? conditionalIcon = null)
+        CfIconRenderInstruction? conditionalIcon = null,
+        Control? sparklineLayer = null)
     {
         var border = CreateCellBorder(
             text,
@@ -3152,7 +3192,8 @@ public sealed partial class MainWindow : Window
             verticalAlignmentModel,
             isNumeric,
             conditionalDataBar,
-            conditionalIcon);
+            conditionalIcon,
+            sparklineLayer);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -3275,7 +3316,8 @@ public sealed partial class MainWindow : Window
         CellVAlign? verticalAlignmentModel = null,
         bool isNumeric = false,
         CfDataBarRenderInstruction? conditionalDataBar = null,
-        CfIconRenderInstruction? conditionalIcon = null)
+        CfIconRenderInstruction? conditionalIcon = null,
+        Control? sparklineLayer = null)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -3311,7 +3353,7 @@ public sealed partial class MainWindow : Window
                 textRotation,
                 effectiveTextWrapping,
                 style)
-            : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding);
+            : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding, sparklineLayer);
 
         return new Border
         {
@@ -3329,9 +3371,15 @@ public sealed partial class MainWindow : Window
         CfDataBarRenderInstruction? conditionalDataBar = null,
         CfIconRenderInstruction? conditionalIcon = null,
         double zoomFactor = 1,
-        double scaledIndentPadding = 0)
+        double scaledIndentPadding = 0,
+        Control? sparklineLayer = null)
     {
         var content = new AvaloniaGrid { ClipToBounds = true };
+
+        // Sparklines and data bars render behind the text; add them first so they sit at the bottom
+        // of the z-order.
+        if (sparklineLayer is not null)
+            content.Children.Add(sparklineLayer);
 
         // Data bars render behind the text; add them first so they sit at the bottom of the z-order.
         if (conditionalDataBar is { } bar)
