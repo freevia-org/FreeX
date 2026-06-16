@@ -1,0 +1,559 @@
+using static FreeX.Ribbon.Icons.RibbonIconElement;
+
+namespace FreeX.Ribbon.Icons;
+
+/// <summary>
+/// The single platform-neutral source of icon shapes for every <see cref="RibbonCommandIconKind"/>.
+/// Geometry is transcribed 1:1 from the WPF source-of-truth drawings (RibbonIconFactory). Both the
+/// WPF and Avalonia renderers consume these definitions so the two platforms draw identical icons.
+/// </summary>
+public static class RibbonIconDefinitions
+{
+    private static readonly IReadOnlyDictionary<RibbonCommandIconKind, IReadOnlyList<RibbonIconElement>> Map = Build();
+
+    /// <summary>
+    /// Resolves the neutral geometry for an icon kind. Every <see cref="RibbonCommandIconKind"/> resolves to a
+    /// definition; kinds without a dedicated shape fall back to the generic glyph.
+    /// </summary>
+    public static RibbonIconGeometry Resolve(RibbonCommandIconKind kind)
+    {
+        if (Map.TryGetValue(kind, out var elements))
+            return new RibbonIconGeometry(kind, elements);
+
+        return new RibbonIconGeometry(kind, Map[RibbonCommandIconKind.Generic]);
+    }
+
+    /// <summary>True when this kind has its own dedicated shape (i.e. it is not falling back to the generic glyph).</summary>
+    public static bool HasDedicatedShape(RibbonCommandIconKind kind) => Map.ContainsKey(kind);
+
+    /// <summary>All kinds that resolve to a definition (every enum member, by construction of <see cref="Resolve"/>).</summary>
+    public static IReadOnlyCollection<RibbonCommandIconKind> KnownKinds =>
+        (RibbonCommandIconKind[])Enum.GetValues(typeof(RibbonCommandIconKind));
+
+    private static Dictionary<RibbonCommandIconKind, IReadOnlyList<RibbonIconElement>> Build()
+    {
+        var map = new Dictionary<RibbonCommandIconKind, IReadOnlyList<RibbonIconElement>>();
+
+        void Add(RibbonCommandIconKind kind, params RibbonIconElement[] elements) => map[kind] = elements;
+
+        // ---- Generic fallback (DrawGeneric) ----
+        Add(RibbonCommandIconKind.Generic,
+            Rectangle(6, 6, 12, 12, radius: 2),
+            Line(9, 12, 15, 12, 1.5));
+
+        // ---- Save (DrawSave) ----
+        Add(RibbonCommandIconKind.Save,
+            Line(6, 4, 17, 4, 1.9),
+            Line(17, 4, 20, 7, 1.9),
+            Line(20, 7, 20, 20, 1.9),
+            Line(20, 20, 6, 20, 1.9),
+            Line(6, 20, 6, 4, 1.9),
+            Line(9, 4, 9, 10, 1.7),
+            Line(9, 10, 16, 10, 1.7),
+            Line(16, 10, 16, 4, 1.7),
+            Line(10, 15, 17, 15, 1.7),
+            Line(10, 18, 15, 18, 1.7));
+
+        // ---- Undo / Redo (DrawCurvedArrow) ----
+        Add(RibbonCommandIconKind.Undo,
+            Path("M10,7 L5,12 L10,17", 2.2),
+            Path("M6,12 L15,12 C19,12 21,15 19,19", 2.2));
+        Add(RibbonCommandIconKind.Redo,
+            Path("M14,7 L19,12 L14,17", 2.2),
+            Path("M18,12 L9,12 C5,12 3,15 5,19", 2.2));
+
+        // ---- Cut (DrawCut) ----
+        Add(RibbonCommandIconKind.Cut,
+            Line(7, 5, 17, 19, 1.5),
+            Line(17, 5, 7, 19, 1.5),
+            Ellipse(4, 4, 5, 5, 1.4),
+            Ellipse(4, 15, 5, 5, 1.4));
+
+        // ---- Copy (DrawCopy) ----
+        Add(RibbonCommandIconKind.Copy,
+            Rectangle(7, 5, 10, 12, radius: 1),
+            Rectangle(4, 8, 10, 12, radius: 1));
+
+        // ---- Format Painter (DrawFormatPainter) ----
+        Add(RibbonCommandIconKind.FormatPainter,
+            Rectangle(5, 5, 10, 6, radius: 1),
+            Line(15, 8, 19, 8, 1.6),
+            Rectangle(8, 11, 6, 3, radius: 0.5),
+            Path("M10,14 L13,14 L12,20 L9,20 Z", 1.4));
+
+        // ---- Text glyphs ----
+        Add(RibbonCommandIconKind.Bold, TextRun("B", 17, RibbonIconTextWeight.Bold));
+        Add(RibbonCommandIconKind.Italic, TextRun("I", 17, RibbonIconTextWeight.SemiBold));
+        Add(RibbonCommandIconKind.Underline,
+            TextRun("U", 16, RibbonIconTextWeight.SemiBold),
+            Line(8, 19, 16, 19, 1.4));
+        Add(RibbonCommandIconKind.Strikethrough,
+            TextRun("S", 16, RibbonIconTextWeight.SemiBold),
+            Line(7, 12, 17, 12, 1.4));
+
+        // ---- Merge (DrawMerge) ----
+        Add(RibbonCommandIconKind.Merge,
+            Rectangle(4, 7, 16, 10),
+            Line(12, 7, 12, 17, 1.2),
+            Path("M7,12 L11,12 M9,10 L7,12 L9,14", 1.4),
+            Path("M17,12 L13,12 M15,10 L17,12 L15,14", 1.4));
+
+        // ---- Wrap (DrawWrap) ----
+        Add(RibbonCommandIconKind.Wrap,
+            Line(4, 6, 19, 6, 1),
+            Line(4, 10, 17, 10, 1),
+            Line(4, 18, 14, 18, 1),
+            Path("M17,10 C21,10 21,18 16,18 L12,18", 1.2),
+            Path("M14,15 L11,18 L14,21", 1.2));
+
+        // ---- Number format text glyphs ----
+        Add(RibbonCommandIconKind.Currency, TextRun("$", 16, RibbonIconTextWeight.Bold));
+        Add(RibbonCommandIconKind.Percent, TextRun("%", 16, RibbonIconTextWeight.Bold));
+        Add(RibbonCommandIconKind.Comma, TextRun(",", 18, RibbonIconTextWeight.Bold));
+        Add(RibbonCommandIconKind.Decimal, TextRun(".0", 12, RibbonIconTextWeight.Bold));
+
+        // ---- ChevronDown ----
+        Add(RibbonCommandIconKind.ChevronDown, Path("M7,9 L12,14 L17,9", 1.8));
+
+        // ---- Window glyphs ----
+        Add(RibbonCommandIconKind.WindowClose,
+            Line(6, 6, 18, 18, 2.1),
+            Line(18, 6, 6, 18, 2.1));
+        Add(RibbonCommandIconKind.WindowMaximize,
+            Path("M6,6 H18 V18 H6 Z", 1.33));
+        Add(RibbonCommandIconKind.WindowRestore,
+            Path("M9,6 H18 V15 H15", 1.33),
+            Path("M6,9 H15 V18 H6 Z", 1.33));
+        Add(RibbonCommandIconKind.WindowMinimize,
+            Line(5, 18, 19, 18, 2.1));
+
+        // ---- Insert (DrawInsert) ----
+        Add(RibbonCommandIconKind.Insert,
+            Rectangle(5, 5, 14, 14, radius: 1),
+            Line(12, 8, 12, 16, 1.6),
+            Line(8, 12, 16, 12, 1.6));
+
+        // ---- Pin (DrawPin) ----
+        Add(RibbonCommandIconKind.Pin,
+            Path("M9,4 L17,12 L14,15 L20,21 L18,23 L12,17 L9,20 L7,18 L10,15 L3,8 Z", 1.4));
+
+        // ---- Align (DrawAlign) ----
+        Add(RibbonCommandIconKind.Align,
+            Line(5, 7, 19, 7, 1.3),
+            Line(5, 11, 16, 11, 1.3),
+            Line(5, 15, 19, 15, 1.3),
+            Line(5, 19, 14, 19, 1.3));
+
+        // ---- Table / PivotTable (DrawTable) ----
+        var table = new[]
+        {
+            Rectangle(4, 4, 16, 16),
+            Line(4, 9, 20, 9),
+            Line(4, 14, 20, 14),
+            Line(9, 4, 9, 20),
+            Line(15, 4, 15, 20),
+        };
+        map[RibbonCommandIconKind.Table] = table;
+        map[RibbonCommandIconKind.PivotTable] = table;
+
+        // ---- Charts ----
+        var lineChart = new[]
+        {
+            Line(4, 19, 20, 19),
+            Line(4, 19, 4, 6),
+            Path("M6,16 L10,12 L13,14 L18,7", 1.9),
+            Ellipse(9.2, 11.2, 1.6, 1.6, 1.4),
+            Ellipse(17.2, 6.2, 1.6, 1.6, 1.4),
+        };
+        map[RibbonCommandIconKind.ChartLine] = lineChart;
+        map[RibbonCommandIconKind.Sparkline] = lineChart;
+
+        Add(RibbonCommandIconKind.ChartPie,
+            Ellipse(5, 5, 14, 14, 1.7),
+            Line(12, 12, 12, 5),
+            Line(12, 12, 18, 15));
+
+        Add(RibbonCommandIconKind.ChartScatter,
+            Line(4, 19, 20, 19),
+            Line(4, 19, 4, 5),
+            FilledCircle(8, 14, 2.2),
+            FilledCircle(11, 9, 2.2),
+            FilledCircle(15, 12, 2.2),
+            FilledCircle(18, 7, 2.2));
+
+        Add(RibbonCommandIconKind.ChartArea,
+            Path("M5,19 L5,15 L10,10 L14,13 L19,6 L19,19 Z", 1.6, fillOpacity: 0.16));
+
+        var columnChart = new[]
+        {
+            Line(5, 19, 20, 19),
+            Line(5, 19, 5, 5),
+            FilledRectangle(8, 12, 3, 7),
+            FilledRectangle(13, 8, 3, 11),
+            FilledRectangle(18, 5, 3, 14),
+        };
+        map[RibbonCommandIconKind.ChartColumn] = columnChart;
+        map[RibbonCommandIconKind.Financial] = columnChart;
+
+        // ---- Picture (DrawPicture) ----
+        Add(RibbonCommandIconKind.Picture,
+            Rectangle(4, 5, 16, 14),
+            Path("M6,17 L10,12 L13,15 L15,12 L19,17", 1.6),
+            FilledCircle(15, 8, 2));
+
+        // ---- Link (DrawLink) ----
+        Add(RibbonCommandIconKind.Link,
+            Ellipse(5, 8, 8, 6, 1.7),
+            Ellipse(11, 10, 8, 6, 1.7),
+            Line(10, 12, 14, 12, 1.7));
+
+        // ---- Comment / Feedback (DrawComment) ----
+        var comment = new[]
+        {
+            Rectangle(4, 5, 16, 11, radius: 2),
+            Path("M9,16 L8,20 L13,16", 1.5),
+            Line(7, 9, 17, 9, 1.4),
+            Line(7, 12, 14, 12, 1.4),
+        };
+        map[RibbonCommandIconKind.Comment] = comment;
+        map[RibbonCommandIconKind.Feedback] = comment;
+
+        // ---- Protect (DrawShield) ----
+        Add(RibbonCommandIconKind.Protect,
+            Path("M12,4 L19,7 L18,13 C17,17 15,19 12,21 C9,19 7,17 6,13 L5,7 Z", 1.6),
+            Path("M8,12 L11,15 L16,9", 1.8));
+
+        // ---- Warning / Accessibility (DrawWarning) ----
+        var warning = new[]
+        {
+            Path("M12,4 L21,20 L3,20 Z", 1.7),
+            Line(12, 9, 12, 15, 1.8),
+            FilledCircle(12, 18, 1.2),
+        };
+        map[RibbonCommandIconKind.Warning] = warning;
+        map[RibbonCommandIconKind.Accessibility] = warning;
+
+        // ---- Filter (DrawFilter) ----
+        Add(RibbonCommandIconKind.Filter,
+            Path("M5,5 L19,5 L14,12 L14,19 L10,17 L10,12 Z", 1.6));
+
+        // ---- Sort (DrawSort / DrawSortLines) ----
+        Add(RibbonCommandIconKind.SortAscending,
+            TextRun("AZ", 8.5, RibbonIconTextWeight.SemiBold),
+            Line(18, 6, 18, 18, 1.5),
+            Path("M15,15 L18,18 L21,15", 1.5));
+        Add(RibbonCommandIconKind.SortDescending,
+            TextRun("ZA", 8.5, RibbonIconTextWeight.SemiBold),
+            Line(18, 6, 18, 18, 1.5),
+            Path("M15,15 L18,18 L21,15", 1.5));
+        Add(RibbonCommandIconKind.Sort,
+            TextRun("A", 8.5, RibbonIconTextWeight.SemiBold, x: 2, y: 1),
+            TextRun("Z", 8.5, RibbonIconTextWeight.SemiBold, x: 2, y: 10),
+            Path("M17,5 L17,18 M14,15 L17,18 L20,15", 1.2));
+
+        // ---- Refresh (DrawRefresh) ----
+        Add(RibbonCommandIconKind.Refresh,
+            Path("M18,9 C17,6 14,4 11,5 C8,5 6,7 5,10", 1.7),
+            Path("M6,7 L5,10 L8,10", 1.7),
+            Path("M6,15 C7,18 10,20 13,19 C16,19 18,17 19,14", 1.7),
+            Path("M18,17 L19,14 L16,14", 1.7));
+
+        // ---- Database (DrawDatabase) GetData / Consolidate ----
+        var database = new[]
+        {
+            Ellipse(5, 4, 14, 5, 1.6),
+            Line(5, 6.5, 5, 17),
+            Line(19, 6.5, 19, 17),
+            Ellipse(5, 14, 14, 5, 1.6),
+            Path("M5,10 C8,13 16,13 19,10", 1.4),
+        };
+        map[RibbonCommandIconKind.GetData] = database;
+        map[RibbonCommandIconKind.Consolidate] = database;
+
+        // ---- Function / Sum text glyphs ----
+        Add(RibbonCommandIconKind.Function, TextRun("fx", 15, RibbonIconTextWeight.SemiBold));
+        Add(RibbonCommandIconKind.Sum, TextRun("SUM", 8.5, RibbonIconTextWeight.Bold));
+
+        // ---- Spelling (DrawSpelling) ----
+        Add(RibbonCommandIconKind.Spelling,
+            TextRun("abc", 8.5, RibbonIconTextWeight.SemiBold, x: 2, y: 4),
+            Path("M12,17 L15,20 L21,11", 1.8));
+
+        // ---- Magnifier (DrawMagnifier) Search / Zoom ----
+        var magnifier = new[]
+        {
+            Ellipse(5, 5, 10, 10, 1.7),
+            Line(13, 13, 20, 20, 1.8),
+        };
+        map[RibbonCommandIconKind.Search] = magnifier;
+        map[RibbonCommandIconKind.Zoom] = magnifier;
+
+        // ---- Help / Info (text + circle) ----
+        Add(RibbonCommandIconKind.Help,
+            TextRun("?", 18, RibbonIconTextWeight.SemiBold),
+            Ellipse(3.5, 3.5, 17, 17, 1.5));
+        Add(RibbonCommandIconKind.Info,
+            TextRun("i", 17, RibbonIconTextWeight.Bold),
+            Ellipse(3.5, 3.5, 17, 17, 1.5));
+
+        // ---- Page (DrawPage) Page / Print / HeaderFooter ----
+        var page = new[]
+        {
+            Path("M7,3 L16,3 L20,7 L20,21 L7,21 Z", 1.5),
+            Path("M16,3 L16,8 L20,8", 1.5),
+            Line(10, 12, 17, 12, 1.2),
+            Line(10, 16, 17, 16, 1.2),
+        };
+        map[RibbonCommandIconKind.Page] = page;
+        map[RibbonCommandIconKind.Print] = page;
+        map[RibbonCommandIconKind.HeaderFooter] = page;
+
+        // ---- PageBreak (DrawPageBreak) ----
+        Add(RibbonCommandIconKind.PageBreak,
+            Rectangle(5, 4, 14, 16),
+            Line(5, 12, 19, 12, 1.4, dashed: true));
+
+        // ---- Grid (DrawGrid) Grid / Freeze ----
+        var grid = new[]
+        {
+            Rectangle(4, 4, 16, 16),
+            Line(4, 10, 20, 10),
+            Line(4, 15, 20, 15),
+            Line(10, 4, 10, 20),
+            Line(15, 4, 15, 20),
+        };
+        map[RibbonCommandIconKind.Grid] = grid;
+        map[RibbonCommandIconKind.Freeze] = grid;
+
+        // ---- Window (DrawWindow) Window / View ----
+        var window = new[]
+        {
+            Rectangle(4, 6, 16, 12, radius: 1.5),
+            Line(4, 10, 20, 10),
+        };
+        map[RibbonCommandIconKind.Window] = window;
+        map[RibbonCommandIconKind.View] = window;
+
+        // ---- Paste (DrawClipboard) ----
+        Add(RibbonCommandIconKind.Paste,
+            Rectangle(6, 6, 13, 15, radius: 1.5),
+            Rectangle(9, 3, 7, 5, radius: 1.5));
+
+        // ---- Fill (DrawFill) ----
+        Add(RibbonCommandIconKind.Fill,
+            Rectangle(7, 4, 9, 16),
+            Line(7, 8, 16, 8, 1),
+            Line(7, 12, 16, 12, 1),
+            Path("M17,5 L13,13 L17,13 L14,20 L21,10 L17,10 Z", 1.1, fillOpacity: 0.18));
+
+        // ---- Border (DrawBorder) ----
+        Add(RibbonCommandIconKind.Border,
+            Rectangle(5, 5, 14, 14),
+            Line(5, 12, 19, 12),
+            Line(12, 5, 12, 19));
+
+        // ---- Palette (DrawPalette) Color / Theme / Effects ----
+        var palette = new[]
+        {
+            Path("M12,4 C7,4 4,7 4,12 C4,17 8,20 13,20 L15,18 C13,17 14,14 17,14 L20,14 C21,8 17,4 12,4 Z", 1.5),
+            FilledCircle(8, 10, 1.4),
+            FilledCircle(12, 8, 1.4),
+            FilledCircle(16, 10, 1.4),
+        };
+        map[RibbonCommandIconKind.Color] = palette;
+        map[RibbonCommandIconKind.Theme] = palette;
+        map[RibbonCommandIconKind.Effects] = palette;
+
+        // ---- Font / TextFunction text glyph ----
+        var fontGlyph = new[] { TextRun("A", 17, RibbonIconTextWeight.SemiBold) };
+        map[RibbonCommandIconKind.Font] = fontGlyph;
+        map[RibbonCommandIconKind.TextFunction] = fontGlyph;
+
+        // ---- TextBox / Label (DrawTextBox) ----
+        var textBox = new[]
+        {
+            Rectangle(4, 6, 16, 12),
+            Line(8, 10, 16, 10, 1.3),
+            Line(8, 14, 14, 14, 1.3),
+        };
+        map[RibbonCommandIconKind.TextBox] = textBox;
+        map[RibbonCommandIconKind.Label] = textBox;
+
+        // ---- TextColumns (DrawTextColumns) ----
+        Add(RibbonCommandIconKind.TextColumns,
+            Rectangle(4, 5, 16, 14),
+            Line(12, 5, 12, 19),
+            Line(7, 9, 10, 9, 1.2),
+            Line(14, 9, 17, 9, 1.2));
+
+        // ---- Previous / Next (DrawArrow) ----
+        Add(RibbonCommandIconKind.Previous, Path("M15,6 L9,12 L15,18 M10,12 L20,12", 1.8));
+        Add(RibbonCommandIconKind.Next, Path("M9,6 L15,12 L9,18 M4,12 L14,12", 1.8));
+
+        // ---- Delete (DrawDelete) ----
+        Add(RibbonCommandIconKind.Delete,
+            Line(7, 7, 17, 17, 1.8),
+            Line(17, 7, 7, 17, 1.8));
+
+        // ---- Clear (DrawClear) ----
+        Add(RibbonCommandIconKind.Clear,
+            Path("M7,14 L14,7 L20,13 L13,20 Z", 1.4),
+            Line(5, 20, 20, 20, 1.2),
+            Line(11, 10, 17, 16, 1));
+
+        // ---- Group / Ungroup / Expand / Collapse (DrawOutlineGroup) ----
+        var outlineGroup = new[]
+        {
+            Rectangle(5, 6, 5, 5),
+            Rectangle(14, 6, 5, 5),
+            Rectangle(5, 15, 5, 5),
+            Rectangle(14, 15, 5, 5),
+            Line(10, 8.5, 14, 8.5, 1.2),
+            Line(10, 17.5, 14, 17.5, 1.2),
+        };
+        map[RibbonCommandIconKind.Group] = outlineGroup;
+        map[RibbonCommandIconKind.Ungroup] = outlineGroup;
+        map[RibbonCommandIconKind.Expand] = outlineGroup;
+        map[RibbonCommandIconKind.Collapse] = outlineGroup;
+
+        // ---- Rectangle ----
+        Add(RibbonCommandIconKind.Rectangle, Rectangle(5, 7, 14, 10));
+
+        // ---- Connector (DrawConnector) ----
+        Add(RibbonCommandIconKind.Connector,
+            Path("M5,7 L11,7 L11,16 L18,16", 1.8),
+            FilledCircle(5, 7, 2.2),
+            FilledCircle(18, 16, 2.2));
+
+        // ---- Ellipse ----
+        Add(RibbonCommandIconKind.Ellipse, Ellipse(5, 6, 14, 12, 1.6));
+
+        // ---- Line ----
+        Add(RibbonCommandIconKind.Line, Line(5, 17, 19, 7, 1.8));
+
+        // ---- Shape paths (DrawShapePath: stroked + faint fill) ----
+        Add(RibbonCommandIconKind.Triangle, ShapePath("M12,5 L20,19 L4,19 Z"));
+        Add(RibbonCommandIconKind.Diamond, ShapePath("M12,4 L20,12 L12,20 L4,12 Z"));
+        Add(RibbonCommandIconKind.Parallelogram, ShapePath("M8,6 L20,6 L16,18 L4,18 Z"));
+        Add(RibbonCommandIconKind.Trapezoid, ShapePath("M8,6 L16,6 L20,18 L4,18 Z"));
+        Add(RibbonCommandIconKind.Pentagon, ShapePath("M12,4 L20,10 L17,20 L7,20 L4,10 Z"));
+        Add(RibbonCommandIconKind.Hexagon, ShapePath("M8,5 L16,5 L21,12 L16,19 L8,19 L3,12 Z"));
+        Add(RibbonCommandIconKind.Octagon, ShapePath("M8,4 L16,4 L20,8 L20,16 L16,20 L8,20 L4,16 L4,8 Z"));
+        Add(RibbonCommandIconKind.Cross, ShapePath("M9,4 L15,4 L15,9 L20,9 L20,15 L15,15 L15,20 L9,20 L9,15 L4,15 L4,9 L9,9 Z"));
+
+        // ---- Block arrows (DrawBlockArrow) ----
+        Add(RibbonCommandIconKind.ArrowRight, ShapePath("M20,12 L14,6 L14,10 L4,10 L4,14 L14,14 L14,18 Z"));
+        Add(RibbonCommandIconKind.ArrowLeft, ShapePath("M4,12 L10,6 L10,10 L20,10 L20,14 L10,14 L10,18 Z"));
+        Add(RibbonCommandIconKind.ArrowUp, ShapePath("M12,4 L18,10 L14,10 L14,20 L10,20 L10,10 L6,10 Z"));
+        Add(RibbonCommandIconKind.ArrowDown, ShapePath("M12,20 L6,14 L10,14 L10,4 L14,4 L14,14 L18,14 Z"));
+        Add(RibbonCommandIconKind.ArrowLeftRight, ShapePath("M4,12 L9,7 L9,10 L15,10 L15,7 L20,12 L15,17 L15,14 L9,14 L9,17 Z"));
+        Add(RibbonCommandIconKind.ArrowUpDown, ShapePath("M12,4 L17,9 L14,9 L14,15 L17,15 L12,20 L7,15 L10,15 L10,9 L7,9 Z"));
+
+        // ---- Operator signs ----
+        Add(RibbonCommandIconKind.PlusSign, TextRun("+", 18, RibbonIconTextWeight.SemiBold));
+        Add(RibbonCommandIconKind.MinusSign, Line(6, 12, 18, 12, 2.4));
+        Add(RibbonCommandIconKind.MultiplySign, TextRun("x", 17, RibbonIconTextWeight.SemiBold));
+        Add(RibbonCommandIconKind.DivideSign,
+            TextRun("/", 18, RibbonIconTextWeight.SemiBold),
+            FilledCircle(15, 8, 1.8),
+            FilledCircle(9, 16, 1.8));
+        Add(RibbonCommandIconKind.EqualSign,
+            Line(6, 10, 18, 10, 2),
+            Line(6, 15, 18, 15, 2));
+        Add(RibbonCommandIconKind.NotEqualSign,
+            Line(6, 9, 18, 9, 1.8),
+            Line(6, 15, 18, 15, 1.8),
+            Line(15, 5, 9, 19, 1.8));
+
+        // ---- Flowchart ----
+        Add(RibbonCommandIconKind.FlowchartProcess,
+            Rectangle(5, 7, 14, 10),
+            Line(8, 10, 16, 10, 1),
+            Line(8, 14, 14, 14, 1));
+        Add(RibbonCommandIconKind.FlowchartDecision,
+            ShapePath("M12,4 L20,12 L12,20 L4,12 Z"),
+            Line(9, 12, 15, 12, 1));
+        Add(RibbonCommandIconKind.FlowchartData,
+            ShapePath("M8,6 L20,6 L16,18 L4,18 Z"),
+            Line(8, 12, 16, 12, 1));
+        Add(RibbonCommandIconKind.FlowchartDocument,
+            ShapePath("M5,5 L19,5 L19,16 C15,19 9,13 5,16 Z"));
+        Add(RibbonCommandIconKind.FlowchartTerminator,
+            Ellipse(4, 7, 16, 10, 1.5),
+            Line(9, 12, 15, 12, 1));
+
+        // ---- Star / Explosion / RibbonShape (DrawShapePath) ----
+        Add(RibbonCommandIconKind.Star, ShapePath("M12,4 L14,10 L20,10 L15,13 L17,20 L12,16 L7,20 L9,13 L4,10 L10,10 Z"));
+        Add(RibbonCommandIconKind.Explosion, ShapePath("M12,4 L14,9 L20,7 L17,12 L21,16 L15,15 L13,20 L10,15 L4,18 L7,12 L4,7 L10,9 Z"));
+        Add(RibbonCommandIconKind.RibbonShape, ShapePath("M5,6 L19,6 L16,12 L19,18 L5,18 L8,12 Z"));
+
+        // ---- Wave ----
+        Add(RibbonCommandIconKind.Wave,
+            Path("M4,14 C7,8 11,20 14,14 C16,10 18,10 20,13", 1.9),
+            Path("M4,18 C7,12 11,22 14,18 C16,15 18,15 20,17", 1.2));
+
+        // ---- Callout / LineCallout ----
+        Add(RibbonCommandIconKind.Callout,
+            Rectangle(5, 5, 14, 10, radius: 1.5),
+            Path("M10,15 L8,20 L14,15", 1.5));
+        Add(RibbonCommandIconKind.LineCallout,
+            Rectangle(8, 5, 11, 8, radius: 1),
+            Line(8, 13, 4, 19, 1.5));
+
+        // ---- Share (DrawShare) ----
+        Add(RibbonCommandIconKind.Share,
+            FilledCircle(7, 12, 2),
+            FilledCircle(17, 7, 2),
+            FilledCircle(17, 17, 2),
+            Line(9, 11, 15, 8, 1.4),
+            Line(9, 13, 15, 16, 1.4));
+
+        // ---- Target (DrawTarget) ----
+        Add(RibbonCommandIconKind.Target,
+            Ellipse(5, 5, 14, 14, 1.5),
+            Ellipse(9, 9, 6, 6, 1.4),
+            Line(12, 3, 12, 7, 1.2),
+            Line(12, 17, 12, 21, 1.2));
+
+        // ---- Date (DrawCalendar) ----
+        Add(RibbonCommandIconKind.Date,
+            Rectangle(5, 6, 14, 13, radius: 1.5),
+            Line(5, 10, 19, 10),
+            Line(9, 4, 9, 8),
+            Line(15, 4, 15, 8));
+
+        // ---- Ruler / Scale / Size (DrawRuler) ----
+        var ruler = new List<RibbonIconElement> { Rectangle(4, 8, 16, 8) };
+        for (var x = 7; x <= 17; x += 3)
+            ruler.Add(Line(x, 8, x, x % 2 == 0 ? 14 : 12, 1.1));
+        var rulerArr = ruler.ToArray();
+        map[RibbonCommandIconKind.Ruler] = rulerArr;
+        map[RibbonCommandIconKind.Scale] = rulerArr;
+        map[RibbonCommandIconKind.Size] = rulerArr;
+
+        // ---- Rotate (DrawRotate) ----
+        Add(RibbonCommandIconKind.Rotate,
+            Path("M17,8 C15,5 10,5 8,8 C6,11 7,16 11,18 C14,20 18,18 19,15", 1.7),
+            Path("M17,5 L17,9 L13,9", 1.7));
+
+        // ---- Flash (DrawFlash) ----
+        Add(RibbonCommandIconKind.Flash,
+            Path("M13,3 L5,14 L12,14 L10,21 L19,10 L12,10 Z", 1.5));
+
+        // ---- Book / Translate (DrawBook) ----
+        var book = new[]
+        {
+            Path("M5,5 C8,4 10,5 12,7 L12,19 C10,17 8,16 5,17 Z", 1.5),
+            Path("M19,5 C16,4 14,5 12,7 L12,19 C14,17 16,16 19,17 Z", 1.5),
+        };
+        map[RibbonCommandIconKind.Book] = book;
+        map[RibbonCommandIconKind.Translate] = book;
+
+        // The remaining kinds have no dedicated drawing in the WPF source-of-truth and render via
+        // DrawGeneric there. They are intentionally NOT added here: Resolve() falls them back to the
+        // shared Generic glyph, so WPF and Avalonia stay identical. These are:
+        //   Number, History, Recent, Watch, Orientation, Margins, More, Symbol, Logical, Math, List.
+
+        return map;
+    }
+}
