@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace FreeX.App.Host;
+namespace Free.Shared.Shell;
 
 internal static class DialogSizing
 {

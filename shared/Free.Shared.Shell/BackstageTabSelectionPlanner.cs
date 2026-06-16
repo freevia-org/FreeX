@@ -1,4 +1,4 @@
-namespace FreeX.App.Host;
+namespace Free.Shared.Shell;
 
 public enum BackstageRecentTab
 {
