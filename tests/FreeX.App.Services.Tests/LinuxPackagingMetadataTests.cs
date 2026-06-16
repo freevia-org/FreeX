@@ -85,6 +85,28 @@ public sealed class LinuxPackagingMetadataTests
     }
 
     [Fact]
+    public void MetainfoXml_DeclaresAppStreamComponentAndIsPackaged()
+    {
+        var doc = XDocument.Load(PackagingFile($"{AppId}.metainfo.xml"));
+        var root = doc.Root!;
+
+        root.Name.LocalName.Should().Be("component");
+        root.Attribute("type")!.Value.Should().Be("desktop-application");
+        root.Element("id")!.Value.Should().Be(AppId);
+        root.Element("name")!.Value.Should().Be("FreeX");
+        root.Element("project_license").Should().NotBeNull();
+        var launchable = root.Element("launchable")!;
+        launchable.Attribute("type")!.Value.Should().Be("desktop-id");
+        launchable.Value.Should().Be($"{AppId}.desktop");
+        root.Element("categories")!.Elements("category").Select(c => c.Value)
+            .Should().Contain("Office").And.Contain("Spreadsheet");
+
+        // All three packagers install the metainfo under share/metainfo.
+        foreach (var script in new[] { "package-linux-app.sh", "build-appimage.sh", "build-deb.sh" })
+            File.ReadAllText(PackagingFile(script)).Should().Contain("share/metainfo");
+    }
+
+    [Fact]
     public void PackagingScripts_AssembleRelocatableLayout()
     {
         var packageScript = File.ReadAllText(PackagingFile("package-linux-app.sh"));
@@ -102,6 +124,32 @@ public sealed class LinuxPackagingMetadataTests
         appImageScript.Should().Contain("appimagetool");
         appImageScript.Should().Contain("x86_64");
         appImageScript.Should().Contain("aarch64");
+    }
+
+    [Fact]
+    public void DebBuilder_DeclaresControlMaintainerScriptsAndArchMapping()
+    {
+        var deb = File.ReadAllText(PackagingFile("build-deb.sh"));
+
+        deb.Should().Contain("dpkg-deb");
+        deb.Should().Contain("DEBIAN/control");
+        deb.Should().Contain("Package: freex");
+        deb.Should().Contain("Architecture: $deb_arch");
+        deb.Should().Contain("linux-x64) deb_arch=\"amd64\"");
+        deb.Should().Contain("linux-arm64) deb_arch=\"arm64\"");
+        // Maintainer scripts refresh the desktop/MIME/icon caches on install and removal.
+        deb.Should().Contain("DEBIAN/postinst");
+        deb.Should().Contain("DEBIAN/postrm");
+        deb.Should().Contain("update-desktop-database");
+        deb.Should().Contain("update-mime-database");
+        deb.Should().Contain("usr/share/applications");
+        deb.Should().Contain("usr/share/mime/packages");
+
+        // The release workflow builds and publishes the .deb (non-fatal evidence).
+        var release = File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "linux-release.yml"));
+        release.Should().Contain("build-deb.sh");
+        release.Should().Contain("deb_status=");
+        release.Should().Contain("freex_${{ inputs.release_version }}_*.deb");
     }
 
     [Fact]

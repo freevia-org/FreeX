@@ -13925,7 +13925,21 @@ public sealed class MainWindow : Window
                     return;
                 }
 
-                var result = PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path);
+                PortablePdfDocumentExportResult result;
+                try
+                {
+                    // Skia shapes and automatically embeds/subsets fonts, so Unicode (non-WinAnsi)
+                    // text exports correctly. Fall back to the dependency-free WinAnsi writer if Skia
+                    // is unavailable so export still works for ASCII/WinAnsi content.
+                    using var pdfBuffer = new MemoryStream();
+                    result = Pdf.SkiaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+                }
+                catch (Exception)
+                {
+                    result = PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path);
+                }
+
                 RefreshShell($"{result.StatusText} {Path.GetFileName(path)}");
             }
             catch (Exception ex)

@@ -47,6 +47,7 @@ mkdir -p "$stage/bin"
 mkdir -p "$stage/share/applications"
 mkdir -p "$stage/share/icons/hicolor/scalable/apps"
 mkdir -p "$stage/share/mime/packages"
+mkdir -p "$stage/share/metainfo"
 
 # Runtime payload.
 cp -a "$published/." "$stage/lib/freex/"
@@ -66,6 +67,7 @@ chmod +x "$stage/bin/freex"
 cp "$script_dir/$app_id.desktop" "$stage/share/applications/$app_id.desktop"
 cp "$script_dir/$app_id.svg" "$stage/share/icons/hicolor/scalable/apps/$app_id.svg"
 cp "$script_dir/$app_id.xml" "$stage/share/mime/packages/$app_id.xml"
+cp "$script_dir/$app_id.metainfo.xml" "$stage/share/metainfo/$app_id.metainfo.xml"
 
 # install.sh — register into a prefix (default per-user).
 cat > "$stage/install.sh" <<'INSTALL'
@@ -78,7 +80,8 @@ app_id="io.github.tony-xmelon.freex"
 mkdir -p "$prefix/lib/freex" "$prefix/bin" \
   "$prefix/share/applications" \
   "$prefix/share/icons/hicolor/scalable/apps" \
-  "$prefix/share/mime/packages"
+  "$prefix/share/mime/packages" \
+  "$prefix/share/metainfo"
 
 cp -a "$here/lib/freex/." "$prefix/lib/freex/"
 chmod +x "$prefix/lib/freex/FreeX"
@@ -86,6 +89,7 @@ ln -sf "$prefix/lib/freex/FreeX" "$prefix/bin/freex"
 cp "$here/share/applications/$app_id.desktop" "$prefix/share/applications/$app_id.desktop"
 cp "$here/share/icons/hicolor/scalable/apps/$app_id.svg" "$prefix/share/icons/hicolor/scalable/apps/$app_id.svg"
 cp "$here/share/mime/packages/$app_id.xml" "$prefix/share/mime/packages/$app_id.xml"
+cp "$here/share/metainfo/$app_id.metainfo.xml" "$prefix/share/metainfo/$app_id.metainfo.xml"
 
 update-desktop-database "$prefix/share/applications" >/dev/null 2>&1 || true
 update-mime-database "$prefix/share/mime" >/dev/null 2>&1 || true
@@ -107,6 +111,7 @@ rm -f "$prefix/bin/freex"
 rm -f "$prefix/share/applications/$app_id.desktop"
 rm -f "$prefix/share/icons/hicolor/scalable/apps/$app_id.svg"
 rm -f "$prefix/share/mime/packages/$app_id.xml"
+rm -f "$prefix/share/metainfo/$app_id.metainfo.xml"
 
 update-desktop-database "$prefix/share/applications" >/dev/null 2>&1 || true
 update-mime-database "$prefix/share/mime" >/dev/null 2>&1 || true

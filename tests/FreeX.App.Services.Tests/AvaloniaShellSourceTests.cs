@@ -261,6 +261,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookExportPrintSurface.MacOs");
         source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan)");
         source.Should().Contain("PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path)");
+        // Unicode-capable export goes through Skia (auto font embedding); portable WinAnsi is the fallback.
+        source.Should().Contain("Pdf.SkiaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer)");
         source.Should().Contain("HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, \"Export to PDF...\", requireGesture: false)");
 
         smokeSource.Should().Contain("bool HasNativeExportPdfMenuItem,");
