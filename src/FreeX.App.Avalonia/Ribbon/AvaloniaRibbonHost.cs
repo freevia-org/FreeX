@@ -1,5 +1,7 @@
 using Avalonia.Controls;
 using Free.Shared.Ribbon;
+using FreeX.App.Services;
+using FreeX.App.Services.Ribbon;
 using FreeX.Ribbon.Avalonia;
 
 namespace FreeX.App.Avalonia.Ribbon;
@@ -7,15 +9,18 @@ namespace FreeX.App.Avalonia.Ribbon;
 /// <summary>
 /// Builds the FreeX Avalonia ribbon: a representative multi-tab <see cref="RibbonDefinition"/>
 /// (the Avalonia app cannot reference the WPF host that owns the real definition) rendered via
-/// <see cref="AvaloniaRibbonRenderer"/>, with a registry of no-op commands so dropdowns and clicks
-/// route without throwing.
+/// <see cref="AvaloniaRibbonRenderer"/>. Most controls route to no-op commands, but the Bold / Italic /
+/// Underline toggles bind to the shared, platform-neutral <see cref="WorkbookFormatRibbonCommands"/> —
+/// the same command logic the WPF host uses — so clicking them formats the live selection.
 /// </summary>
 internal static class AvaloniaRibbonHost
 {
     /// <summary>Builds the ribbon control to dock at the top of the main window.</summary>
-    public static Control Build()
+    /// <param name="session">Accessor for the live workbook session the format commands act on.</param>
+    /// <param name="setStatus">Host refresh hook (redraws the grid and reports a status line).</param>
+    public static Control Build(Func<WorkbookSession?> session, Action<string> setStatus)
     {
-        var registry = SampleRibbon.BuildRegistry();
+        var registry = SampleRibbon.BuildRegistry(session, setStatus);
         var definition = SampleRibbon.BuildDefinition();
         return AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
     }
@@ -258,13 +263,25 @@ internal static class SampleRibbon
             .Build();
     }
 
-    public static IRibbonCommandRegistry BuildRegistry()
+    public static IRibbonCommandRegistry BuildRegistry(Func<WorkbookSession?> session, Action<string> setStatus)
     {
         var registry = new RibbonCommandRegistry();
         foreach (var id in EnumerateCommandIds(BuildDefinition()))
             registry.Register(id, NoOpRibbonCommand.Instance);
+
+        // Override the representative formatting toggles with the shared, platform-neutral commands so
+        // the Avalonia ribbon performs real edits (the same WorkbookSession logic the WPF host runs).
+        registry.Register("home.bold", WorkbookFormatRibbonCommands.Bold(session, ApplyStatus(setStatus, "Bold")));
+        registry.Register("home.italic", WorkbookFormatRibbonCommands.Italic(session, ApplyStatus(setStatus, "Italic")));
+        registry.Register("home.underline", WorkbookFormatRibbonCommands.Underline(session, ApplyStatus(setStatus, "Underline")));
         return registry;
     }
+
+    /// <summary>Builds a post-apply callback that redraws the shell and reports the outcome on the status bar.</summary>
+    private static Action<WorkbookCellEditResult, bool> ApplyStatus(Action<string> setStatus, string label) =>
+        (result, on) => setStatus(result.Success
+            ? $"{label} {(on ? "on" : "off")}"
+            : result.ErrorMessage ?? $"{label} failed.");
 
     private static IEnumerable<RibbonCommandId> EnumerateCommandIds(RibbonDefinition definition)
     {
