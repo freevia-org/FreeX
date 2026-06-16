@@ -1533,8 +1533,20 @@ public sealed class WorkbookSession
 
     public WorkbookClipboardTextResult TryCopySelectedRangeText()
     {
-        if (TryCreateMultiRangeClipboardTextResult("Copy", out var result))
-            return result;
+        if (SelectedRanges.Count > 1)
+        {
+            // Excel copies a multiple selection only when its areas share the same rows or the
+            // same columns; otherwise the command is rejected.
+            if (!MultiRangeCopyPlanner.TryPlan(SelectedRanges, out var layout) || layout is null)
+                return WorkbookClipboardTextResult.Failed(CreateMultiRangeClipboardError("Copy"));
+
+            var blockText = SerializeMultiRangeCopy(layout);
+            // The combined block is copied as concatenated values through the text path; clear any
+            // FreeX-owned single-range clipboard so paste does not reuse a stale payload whose
+            // formula/format rebasing would not match the gap-collapsed block.
+            _internalClipboard = null;
+            return WorkbookClipboardTextResult.Succeeded(blockText);
+        }
 
         var text = ClipboardSerializer.Serialize(Viewport, SelectedRange);
         _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: false);
@@ -3898,6 +3910,86 @@ public sealed class WorkbookSession
 
         ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
         return result;
+    }
+
+    private string SerializeMultiRangeCopy(MultiRangeCopyLayout layout)
+    {
+        var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>(Viewport.Cells.Count);
+        foreach (var cell in Viewport.Cells)
+            lookup[(cell.Row, cell.Col)] = cell;
+
+        var areas = layout.OrderedAreas;
+        var sheet = areas[0].Start.Sheet;
+
+        uint blockRows;
+        uint blockColumns;
+        if (layout.Orientation == MultiRangeCopyOrientation.SideBySideColumns)
+        {
+            blockRows = areas[0].End.Row - areas[0].Start.Row + 1;
+            blockColumns = 0;
+            foreach (var area in areas)
+                blockColumns += area.End.Col - area.Start.Col + 1;
+        }
+        else
+        {
+            blockColumns = areas[0].End.Col - areas[0].Start.Col + 1;
+            blockRows = 0;
+            foreach (var area in areas)
+                blockRows += area.End.Row - area.Start.Row + 1;
+        }
+
+        var blockCells = new List<DisplayCell>(checked((int)((long)blockRows * blockColumns)));
+        for (uint blockRow = 0; blockRow < blockRows; blockRow++)
+        {
+            for (uint blockColumn = 0; blockColumn < blockColumns; blockColumn++)
+            {
+                var (sourceRow, sourceColumn) = MapBlockToSource(layout, blockRow, blockColumn);
+                if (lookup.TryGetValue((sourceRow, sourceColumn), out var displayCell))
+                    blockCells.Add(displayCell with { Row = blockRow, Col = blockColumn });
+                else
+                    blockCells.Add(new DisplayCell(blockRow, blockColumn, null, string.Empty, null, default, null));
+            }
+        }
+
+        var blockViewport = Viewport with { Cells = blockCells };
+        var blockRange = new GridRange(
+            new CellAddress(sheet, 0, 0),
+            new CellAddress(sheet, blockRows - 1, blockColumns - 1));
+        return ClipboardSerializer.Serialize(blockViewport, blockRange);
+    }
+
+    private static (uint Row, uint Col) MapBlockToSource(
+        MultiRangeCopyLayout layout,
+        uint blockRow,
+        uint blockColumn)
+    {
+        var areas = layout.OrderedAreas;
+        if (layout.Orientation == MultiRangeCopyOrientation.SideBySideColumns)
+        {
+            var sourceRow = areas[0].Start.Row + blockRow;
+            uint cursor = 0;
+            foreach (var area in areas)
+            {
+                var width = area.End.Col - area.Start.Col + 1;
+                if (blockColumn < cursor + width)
+                    return (sourceRow, area.Start.Col + (blockColumn - cursor));
+                cursor += width;
+            }
+
+            return (sourceRow, areas[^1].End.Col);
+        }
+
+        var sourceColumn = areas[0].Start.Col + blockColumn;
+        uint rowCursor = 0;
+        foreach (var area in areas)
+        {
+            var height = area.End.Row - area.Start.Row + 1;
+            if (blockRow < rowCursor + height)
+                return (area.Start.Row + (blockRow - rowCursor), sourceColumn);
+            rowCursor += height;
+        }
+
+        return (areas[^1].End.Row, sourceColumn);
     }
 
     private InternalClipboard CaptureInternalClipboard(GridRange range, string text, bool isCut)
