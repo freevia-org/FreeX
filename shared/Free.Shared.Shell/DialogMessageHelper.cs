@@ -1,10 +1,10 @@
 using System.Windows;
 
-namespace FreeX.App.Host;
+namespace Free.Shared.Shell;
 
 /// <summary>
 /// Thin wrapper around <see cref="MessageBox.Show"/> for use inside dialog windows.
-/// Provides the same surface as <see cref="FreeX.App.UI.IUserMessageService"/> but takes
+/// Provides the same surface as <see cref="Free.Shared.AppServices.IUserMessageService"/> but takes
 /// the dialog's own window as owner so messages appear centred on it.
 /// This is the only legitimate call site for <see cref="MessageBox.Show"/> in dialog classes.
 /// </summary>
@@ -19,7 +19,7 @@ internal static class DialogMessageHelper
         MessageBox.Show(
             owner,
             message ?? string.Empty,
-            ResolveDefaultTitle(title, DefaultErrorTitle, UiText.ErrorTitle),
+            ResolveDefaultTitle(title, DefaultErrorTitle, ShellStrings.Current.ErrorTitle),
             MessageBoxButton.OK,
             MessageBoxImage.Error);
 
@@ -27,7 +27,7 @@ internal static class DialogMessageHelper
         MessageBox.Show(
             owner,
             message ?? string.Empty,
-            ResolveDefaultTitle(title, DefaultWarningTitle, UiText.WarningTitle),
+            ResolveDefaultTitle(title, DefaultWarningTitle, ShellStrings.Current.WarningTitle),
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
 
@@ -35,7 +35,7 @@ internal static class DialogMessageHelper
         MessageBox.Show(
             owner,
             message ?? string.Empty,
-            ResolveDefaultTitle(title, DefaultInformationTitle, UiText.InformationTitle),
+            ResolveDefaultTitle(title, DefaultInformationTitle, ShellStrings.Current.InformationTitle),
             MessageBoxButton.OK,
             MessageBoxImage.Information);
 
@@ -43,7 +43,7 @@ internal static class DialogMessageHelper
         MessageBox.Show(
             owner,
             message ?? string.Empty,
-            ResolveDefaultTitle(title, DefaultConfirmTitle, UiText.ConfirmTitle),
+            ResolveDefaultTitle(title, DefaultConfirmTitle, ShellStrings.Current.ConfirmTitle),
             MessageBoxButton.YesNo,
             MessageBoxImage.Question)
             == MessageBoxResult.Yes;

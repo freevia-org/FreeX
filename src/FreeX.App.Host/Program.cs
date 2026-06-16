@@ -25,6 +25,13 @@ public static class Program
         // recognizes it; hook configuration lives in VelopackBootstrap.Configure().
         VelopackBootstrap.Configure().Run();
 
+        // Install FreeX's product identity before any App code runs, so the shared storage
+        // helpers resolve %LOCALAPPDATA%\FreeX (settings, recent files, autosave, diagnostics)
+        // and never fall back to the neutral default. Must precede the first storage-path read,
+        // which happens in App startup's FreeXOptions.Load().
+        Free.Shared.AppServices.AppProduct.Current =
+            new Free.Shared.AppServices.AppProductIdentity("FreeX", "FREEX_DIAGNOSTICS", "FreeX");
+
         var app = new App();
         app.InitializeComponent();
         app.Run();

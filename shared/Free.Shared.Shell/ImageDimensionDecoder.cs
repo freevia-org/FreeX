@@ -1,7 +1,7 @@
 using System.IO;
 using System.Windows.Media.Imaging;
 
-namespace FreeX.App.Host;
+namespace Free.Shared.Shell;
 
 public readonly record struct DecodedImageDimensions(double Width, double Height);
 

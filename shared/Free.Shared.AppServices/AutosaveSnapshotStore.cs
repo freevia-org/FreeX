@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace FreeX.App.Services;
+namespace Free.Shared.AppServices;
 
 /// <summary>
 /// Sidecar metadata saved alongside every autosave snapshot.

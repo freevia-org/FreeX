@@ -1,11 +1,14 @@
-namespace FreeX.App.Services;
+namespace Free.Shared.AppServices;
 
 public static class AppStoragePathPlanner
 {
-    public const string ProductDirectoryName = "FreeX";
+    /// <summary>App-specific data folder name, sourced from the ambient <see cref="AppProduct"/>.</summary>
+    public static string ProductDirectoryName => AppProduct.Current.ProductDirectoryName;
     public const string DiagnosticsDirectoryName = "Diagnostics";
     public const string OptionsFileName = "options.json";
-    public const string DisableDiagnosticsEnvironmentVariable = "FREEX_DIAGNOSTICS";
+
+    /// <summary>App-specific env var that disables local diagnostics, from the ambient <see cref="AppProduct"/>.</summary>
+    public static string DisableDiagnosticsEnvironmentVariable => AppProduct.Current.DiagnosticsEnvironmentVariable;
 
     public static string GetDiagnosticsDirectory(IAppDiagnosticsPathProvider pathProvider)
     {
@@ -41,6 +44,7 @@ public static class AppStoragePathPlanner
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(diagnosticsDirectory);
 
-        return $"FreeX writes local usage events and crash files to {diagnosticsDirectory}. These files stay on this computer unless you attach them to an issue. Crash exception messages and stack traces can occasionally contain sensitive values, so review files before sharing them. Start FreeX with {DisableDiagnosticsEnvironmentVariable}=0 to disable local diagnostics for that run.";
+        var productName = AppProduct.Current.ProductName;
+        return $"{productName} writes local usage events and crash files to {diagnosticsDirectory}. These files stay on this computer unless you attach them to an issue. Crash exception messages and stack traces can occasionally contain sensitive values, so review files before sharing them. Start {productName} with {DisableDiagnosticsEnvironmentVariable}=0 to disable local diagnostics for that run.";
     }
 }

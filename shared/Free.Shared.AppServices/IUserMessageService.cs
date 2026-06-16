@@ -1,4 +1,4 @@
-namespace FreeX.App.UI;
+namespace Free.Shared.AppServices;
 
 /// <summary>
 /// Abstracts modal message dialogs so that callers remain testable

@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace FreeX.App.Host;
+namespace Free.Shared.Shell;
 
 internal static class PlannerPathHelpers
 {

@@ -762,7 +762,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         }
     }
 
-    private sealed class RecordingUserMessageService : FreeX.App.UI.IUserMessageService
+    private sealed class RecordingUserMessageService : Free.Shared.AppServices.IUserMessageService
     {
         private readonly List<(string Kind, string Title, string Message)> _messages = [];
 

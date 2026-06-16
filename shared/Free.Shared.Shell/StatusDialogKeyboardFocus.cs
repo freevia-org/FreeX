@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 
-namespace FreeX.App.Host;
+namespace Free.Shared.Shell;
 
 internal static class StatusDialogKeyboardFocus
 {
