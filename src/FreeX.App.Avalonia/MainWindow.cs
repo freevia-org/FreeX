@@ -518,6 +518,9 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _freezeFirstColumnMenuItem = new();
     private readonly NativeMenuItem _unfreezePanesMenuItem = new();
     private readonly NativeMenuItem _showFormulasMenuItem = new();
+    private readonly NativeMenuItem _pageSetupMenuItem = new();
+    private readonly NativeMenuItem _printPreviewMenuItem = new();
+    private readonly NativeMenuItem _pageBreakPreviewMenuItem = new();
     private readonly NativeMenuItem _minimizeWindowMenuItem = new();
     private readonly NativeMenuItem _zoomWindowMenuItem = new();
     private readonly NativeMenuItem _bringAllToFrontMenuItem = new();
@@ -783,6 +786,13 @@ public sealed partial class MainWindow : Window
 
         _exportPdfMenuItem.Header = "Export to PDF...";
         _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
+
+        _pageSetupMenuItem.Header = "Page Setup...";
+        _pageSetupMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
+
+        _printPreviewMenuItem.Header = "Print Preview...";
+        _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
+        _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
 
         _shareWorkbookMenuItem.Header = "Share Workbook...";
         _shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();
@@ -1192,6 +1202,10 @@ public sealed partial class MainWindow : Window
         _showFormulasMenuItem.ToggleType = MenuItemToggleType.CheckBox;
         _showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();
 
+        _pageBreakPreviewMenuItem.Header = "Page Break Preview";
+        _pageBreakPreviewMenuItem.ToggleType = MenuItemToggleType.CheckBox;
+        _pageBreakPreviewMenuItem.Click += (_, _) => TogglePageBreakPreview();
+
         _helpOnlineMenuItem.Header = "Help Online";
         _helpOnlineMenuItem.Gesture = new KeyGesture(Key.F1, default);
         _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
@@ -1238,6 +1252,9 @@ public sealed partial class MainWindow : Window
         fileMenu.Items.Add(_exportPdfMenuItem);
         fileMenu.Items.Add(_shareWorkbookMenuItem);
         fileMenu.Items.Add(_workbookStatisticsMenuItem);
+        fileMenu.Items.Add(new NativeMenuItemSeparator());
+        fileMenu.Items.Add(_pageSetupMenuItem);
+        fileMenu.Items.Add(_printPreviewMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_closeWorkbookMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
@@ -1365,6 +1382,7 @@ public sealed partial class MainWindow : Window
         viewMenu.Items.Add(_unfreezePanesMenuItem);
         viewMenu.Items.Add(new NativeMenuItemSeparator());
         viewMenu.Items.Add(_showFormulasMenuItem);
+        viewMenu.Items.Add(_pageBreakPreviewMenuItem);
 
         var sheetMenu = new NativeMenu();
         sheetMenu.Items.Add(_newSheetMenuItem);
@@ -2170,6 +2188,10 @@ public sealed partial class MainWindow : Window
         _unfreezePanesMenuItem.IsEnabled = isIdle;
         _showFormulasMenuItem.IsEnabled = isIdle;
         _showFormulasMenuItem.IsChecked = _session.IsShowingFormulas;
+        _pageSetupMenuItem.IsEnabled = isIdle;
+        _printPreviewMenuItem.IsEnabled = isIdle;
+        _pageBreakPreviewMenuItem.IsEnabled = isIdle;
+        _pageBreakPreviewMenuItem.IsChecked = _isPageBreakPreviewActive;
     }
 
     private int FindActiveSheetTabIndex()
@@ -2418,18 +2440,25 @@ public sealed partial class MainWindow : Window
 
         var overlay = BuildDrawingObjectOverlay(viewport);
         AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
-        if (overlay.Children.Count == 0)
+
+        var pageBreakOverlay = _isPageBreakPreviewActive
+            ? BuildPageBreakPreviewOverlay(viewport, showHeadings, zoomFactor)
+            : null;
+
+        if (overlay.Children.Count == 0 && pageBreakOverlay is null)
             return grid;
 
-        return new AvaloniaGrid
+        var composite = new AvaloniaGrid
         {
             ClipToBounds = true,
-            Children =
-            {
-                grid,
-                overlay,
-            },
+            Children = { grid },
         };
+        if (pageBreakOverlay is not null)
+            composite.Children.Add(pageBreakOverlay);
+        if (overlay.Children.Count > 0)
+            composite.Children.Add(overlay);
+
+        return composite;
     }
 
     private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)
