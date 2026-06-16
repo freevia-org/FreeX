@@ -308,6 +308,49 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_CellShadingAndColumnWidths_RoundTrip()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(2, 2);
+        table.Rows[0].Cells[0] = new TableCell("shaded") { ShadingColorHex = "#FFFF00", WidthPt = 120 };
+        table.Rows[0].Cells[1] = new TableCell("plain");
+        table.ColumnWidthsPt.Add(120);
+        table.ColumnWidthsPt.Add(180);
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.ColumnWidthsPt.Should().Equal(120, 180);
+
+        var shadedCell = readTable.Rows[0].Cells[0];
+        shadedCell.PlainText.Should().Be("shaded");
+        shadedCell.ShadingColorHex.Should().Be("#FFFF00");
+        shadedCell.WidthPt.Should().Be(120);
+
+        var plainCell = readTable.Rows[0].Cells[1];
+        plainCell.ShadingColorHex.Should().BeNull();
+        plainCell.WidthPt.Should().BeNull();
+    }
+
+    [Fact]
+    public void Table_WithoutShadingOrWidths_StillRoundTrips()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0] = new TableCell("a");
+        table.Rows[0].Cells[1] = new TableCell("b");
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.ColumnWidthsPt.Should().BeEmpty();
+        readTable.Rows[0].Cells.Select(c => c.PlainText).Should().Equal("a", "b");
+        readTable.Rows[0].Cells.Should().OnlyContain(c => c.ShadingColorHex == null && c.WidthPt == null);
+    }
+
+    [Fact]
     public void Table_BorderlessFormatting_RoundTrips()
     {
         var doc = new TextDocument();

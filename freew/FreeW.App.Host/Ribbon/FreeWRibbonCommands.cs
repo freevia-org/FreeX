@@ -87,6 +87,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.table-delete-row", new ActionCommand(() => { editor.Focus(); editor.DeleteTableRow(); }));
         registry.Register("freew.table-insert-col", new ActionCommand(() => { editor.Focus(); editor.InsertTableColumn(); }));
         registry.Register("freew.table-delete-col", new ActionCommand(() => { editor.Focus(); editor.DeleteTableColumn(); }));
+        // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
+        registry.Register("freew.cell-shading", new CellShadingCommand(editor));
 
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
         registry.Register("freew.picture", new InsertPictureCommand(editor));
@@ -415,6 +417,76 @@ internal static class FreeWRibbonCommands
             var window = new Window
             {
                 Title = "Paragraph Shading",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(8) };
+            var grid = new WrapPanel { Width = 6 * 26 };
+            foreach (var swatchHex in Palette)
+            {
+                var swatch = new Button
+                {
+                    Width = 22,
+                    Height = 22,
+                    Margin = new Thickness(2),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(swatchHex)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                    BorderThickness = new Thickness(1),
+                    ToolTip = swatchHex
+                };
+                swatch.Click += (_, _) => { chosen = true; hex = swatchHex; window.Close(); };
+                grid.Children.Add(swatch);
+            }
+            panel.Children.Add(grid);
+
+            var clear = new Button
+            {
+                Content = "No Color",
+                Margin = new Thickness(2, 6, 2, 0),
+                Padding = new Thickness(8, 2, 8, 2)
+            };
+            clear.Click += (_, _) => { chosen = true; hex = null; window.Close(); };
+            panel.Children.Add(clear);
+
+            window.Content = panel;
+            window.ShowDialog();
+            return (chosen, hex);
+        }
+    }
+
+    // Insert > Table Tools > Cell Shading: pick a fill colour from a small palette and apply it to the
+    // caret's table cell; "No Color" clears shading. Mirrors ParagraphShadingCommand's swatch picker.
+    private sealed class CellShadingCommand(DocumentView editor) : IRibbonCommand
+    {
+        private static readonly string[] Palette =
+        [
+            "#FFFF00", "#92D050", "#00B0F0", "#FFC000", "#FF0000", "#D9D9D9",
+            "#A6A6A6", "#FFF2CC", "#DEEBF7", "#E2EFDA", "#FCE4D6", "#EDEDED",
+        ];
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var (chosen, hex) = ShowPicker(owner);
+            if (!chosen)
+                return;
+            editor.SetCaretCellShading(hex);
+        }
+
+        private (bool Chosen, string? Hex) ShowPicker(Window? owner)
+        {
+            var chosen = false;
+            string? hex = null;
+            var window = new Window
+            {
+                Title = "Cell Shading",
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = owner is null

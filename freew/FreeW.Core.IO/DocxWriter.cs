@@ -360,12 +360,25 @@ public static class DocxWriter
     private static XElement BuildTable(Table table, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var tbl = new XElement(W + "tbl", BuildTableProperties(table));
+
+        // The table grid (one w:gridCol per column) follows w:tblPr when explicit widths are known.
+        if (table.ColumnWidthsPt.Count > 0)
+        {
+            var grid = new XElement(W + "tblGrid");
+            foreach (var widthPt in table.ColumnWidthsPt)
+                grid.Add(new XElement(W + "gridCol", new XAttribute(W + "w", PointsToDxa(widthPt))));
+            tbl.Add(grid);
+        }
+
         foreach (var row in table.Rows)
         {
             var tr = new XElement(W + "tr");
             foreach (var cell in row.Cells)
             {
                 var tc = new XElement(W + "tc");
+                var tcPr = BuildCellProperties(cell);
+                if (tcPr is not null)
+                    tc.Add(tcPr);
                 if (cell.Paragraphs.Count == 0)
                     tc.Add(new XElement(W + "p"));
                 else
@@ -404,6 +417,23 @@ public static class DocxWriter
                 new XElement(W + "insideV", new XAttribute(W + "val", "none"))));
         }
         return tblPr;
+    }
+
+    // Cell properties (w:tcPr): emitted only when the cell has an explicit width and/or shading, so
+    // plain cells stay unchanged. Width is w:tcW (dxa); shading mirrors paragraph w:shd (fill colour).
+    private static XElement? BuildCellProperties(TableCell cell)
+    {
+        var tcPr = new XElement(W + "tcPr");
+        if (cell.WidthPt is { } widthPt)
+            tcPr.Add(new XElement(W + "tcW",
+                new XAttribute(W + "w", PointsToDxa(widthPt)),
+                new XAttribute(W + "type", "dxa")));
+        if (cell.ShadingColorHex is { Length: > 0 } shading)
+            tcPr.Add(new XElement(W + "shd",
+                new XAttribute(W + "val", "clear"),
+                new XAttribute(W + "color", "auto"),
+                new XAttribute(W + "fill", shading.TrimStart('#'))));
+        return tcPr.HasElements ? tcPr : null;
     }
 
     // Bookmark ids are scoped to the whole document; one monotonically increasing counter keeps
