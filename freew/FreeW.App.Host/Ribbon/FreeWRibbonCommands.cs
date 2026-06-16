@@ -80,6 +80,10 @@ internal static class FreeWRibbonCommands
         Routed("freew.copy", ApplicationCommands.Copy);
         Routed("freew.paste", ApplicationCommands.Paste);
 
+        // Home > Clipboard > Format Painter: arm the painter from the current selection's run +
+        // paragraph formatting; the editor stamps it onto the user's next mouse selection and disarms.
+        registry.Register("freew.format-painter", new FormatPainterCommand(editor));
+
         registry.Register("freew.font-family", new SelectionValueCommand(editor,
             (selection, value) => selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(value))));
         registry.Register("freew.font-size", new SelectionValueCommand(editor, (selection, value) =>
@@ -287,6 +291,18 @@ internal static class FreeWRibbonCommands
     private sealed class ActionCommand(Action action) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => action();
+    }
+
+    // Home > Clipboard > Format Painter: arm the painter from the current selection (capture its run +
+    // paragraph formatting), then let the editor stamp it onto the user's next mouse selection and
+    // disarm — the classic capture-then-apply-to-next gesture. Clicking again while armed cancels it.
+    private sealed class FormatPainterCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.ArmFormatPainter();
+        }
     }
 
     // A stateful toggle command: executing runs the host action (e.g. show/hide a panel) and its
