@@ -574,6 +574,9 @@ public static class DocxWriter
             pPr.Add(new XElement(W + "pStyle", new XAttribute(W + "val", paragraph.StyleId)));
 
         var f = paragraph.Formatting;
+        // Force a page break before this paragraph (w:pageBreakBefore); Word honours it when paginating.
+        if (f.PageBreakBefore)
+            pPr.Add(new XElement(W + "pageBreakBefore"));
         if (f.ListKind != ListKind.None)
         {
             var numId = f.ListKind == ListKind.Number ? NumberNumId : BulletNumId;
@@ -612,7 +615,8 @@ public static class DocxWriter
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)),
                 new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
-        // Paragraph box border: all four edges share one colour/width (w:pBdr), analogous to w:tblBorders.
+        // Paragraph border (w:pBdr): a uniform box (all four edges) by default, or a bottom-only edge
+        // when the border is a horizontal rule. Each edge shares one colour/width, analogous to w:tblBorders.
         if (f.Border is { } border)
         {
             XElement Edge(string name) => new(W + name,
@@ -620,8 +624,9 @@ public static class DocxWriter
                 new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
                 new XAttribute(W + "space", 0),
                 new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
-            pPr.Add(new XElement(W + "pBdr",
-                Edge("top"), Edge("left"), Edge("bottom"), Edge("right")));
+            pPr.Add(border.BottomOnly
+                ? new XElement(W + "pBdr", Edge("bottom"))
+                : new XElement(W + "pBdr", Edge("top"), Edge("left"), Edge("bottom"), Edge("right")));
         }
         // Paragraph shading (background fill), mirroring run-level w:shd highlight.
         if (f.ShadingColorHex is { Length: > 0 } shading)

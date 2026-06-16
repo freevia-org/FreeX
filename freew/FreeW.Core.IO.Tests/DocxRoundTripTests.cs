@@ -238,6 +238,64 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void BottomOnlyParagraphBorder_RoundTrips_AsHorizontalRule()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                Border = new ParagraphBorder("#808080", 0.75, BottomOnly: true)
+            }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.Border.Should().NotBeNull();
+        formatting.Border!.BottomOnly.Should().BeTrue();
+        formatting.Border.ColorHex.Should().Be("#808080");
+        formatting.Border.WidthPt.Should().BeApproximately(0.75, 0.001);
+    }
+
+    [Fact]
+    public void BoxParagraphBorder_RoundTrips_AsBoxNotBottomOnly()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("boxed")
+        {
+            Formatting = ParagraphFormatting.Default with { Border = new ParagraphBorder("#000000", 1.0) }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.Border.Should().NotBeNull();
+        formatting.Border!.BottomOnly.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PageBreakBefore_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("after break")
+        {
+            Formatting = ParagraphFormatting.Default with { PageBreakBefore = true }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.PageBreakBefore.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlainParagraph_HasNoPageBreakBefore()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain"));
+
+        RoundTrip(doc).Paragraphs.First().Formatting.PageBreakBefore.Should().BeFalse();
+    }
+
+    [Fact]
     public void ParagraphShading_RoundTrips()
     {
         var doc = new TextDocument();

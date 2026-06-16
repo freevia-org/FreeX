@@ -191,6 +191,46 @@ public sealed class DocumentView : RichTextBox
         _commands.Execute(new InsertBlockCommand(index, ModelTable.Create(rows, columns)));
     }
 
+    /// <summary>
+    /// Prepend a simple cover page (a Title paragraph, an optional author Subtitle, and a spacer) at the
+    /// start of the document, routing each block insert through the undo/redo bus so it is reversible.
+    /// The title/author come from <see cref="TextDocument.Properties"/> (see
+    /// <see cref="DocumentOps.BuildCoverPage"/>). Re-renders the surface.
+    /// </summary>
+    public void InsertCoverPage()
+    {
+        CommitToModel();
+        var blocks = DocumentOps.BuildCoverPage(_model);
+        for (var i = 0; i < blocks.Count; i++)
+            _commands.Execute(new InsertBlockCommand(i, blocks[i]));
+    }
+
+    /// <summary>
+    /// Insert a horizontal rule (an empty paragraph with a bottom-only border) after the block the caret
+    /// sits in, routing through the undo/redo bus. Re-renders the surface.
+    /// </summary>
+    public void InsertHorizontalRule()
+    {
+        CommitToModel();
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreateHorizontalRule()));
+    }
+
+    /// <summary>
+    /// Insert a page break (an empty paragraph that forces a page break before it) after the block the
+    /// caret sits in, routing through the undo/redo bus. Re-renders the surface.
+    /// </summary>
+    public void InsertPageBreak()
+    {
+        CommitToModel();
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreatePageBreak()));
+    }
+
     /// <summary>Insert a blank row below the caret's row in the table containing the caret.</summary>
     public void InsertTableRow() => MutateCaretTable((index, rowIndex, _) =>
         new InsertTableRowCommand(index, rowIndex + 1));
@@ -562,10 +602,12 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Side-band paragraph data carried on a WPF <see cref="WpfParagraph.Tag"/> so it survives an
     /// edit/commit cycle even though the FlowDocument paragraph has no native slot for it. Holds the
-    /// model's tab stops (not representable in WPF) and the paragraph's bookmark name (an invisible
-    /// marker). Either field may be empty/null; the Tag is only stamped when at least one is set.
+    /// model's tab stops (not representable in WPF), the paragraph's bookmark name (an invisible
+    /// marker), and whether a page break is forced before the paragraph (rendered as a separator, but
+    /// otherwise invisible in the FlowDocument). Any field may be empty/null/false; the Tag is only
+    /// stamped when at least one is set.
     /// </summary>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false);
 
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
@@ -806,19 +848,37 @@ public sealed class DocumentView : RichTextBox
         if (paraFmt.Border is { } border && TryParseColor(border.ColorHex, out var borderColor))
         {
             wpf.BorderBrush = new SolidColorBrush(borderColor);
-            wpf.BorderThickness = new Thickness(border.WidthPt * PxPerPoint);
+            // A bottom-only border (horizontal rule) draws just the bottom edge; a box draws all four.
+            // ReadParagraphFormatting recovers BottomOnly from the same asymmetric thickness.
+            var w = border.WidthPt * PxPerPoint;
+            wpf.BorderThickness = border.BottomOnly ? new Thickness(0, 0, 0, w) : new Thickness(w);
             wpf.Padding = new Thickness(2);
         }
         if (TryParseColor(paraFmt.ShadingColorHex, out var shading))
             wpf.Background = new SolidColorBrush(shading);
 
+        // A forced page break before the paragraph (w:pageBreakBefore) has no FlowDocument equivalent,
+        // so render it as a dashed separator along the paragraph's top edge — a visible "page break"
+        // marker — and carry the flag on the Tag so it survives commit and round-trips to docx.
+        if (paraFmt.PageBreakBefore)
+        {
+            wpf.BorderBrush ??= new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A));
+            wpf.BorderThickness = new Thickness(
+                wpf.BorderThickness.Left,
+                Math.Max(wpf.BorderThickness.Top, 1),
+                wpf.BorderThickness.Right,
+                wpf.BorderThickness.Bottom);
+            if (wpf.Margin.Top < 6 * PxPerPoint)
+                wpf.Margin = new Thickness(wpf.Margin.Left, 6 * PxPerPoint, wpf.Margin.Right, wpf.Margin.Bottom);
+        }
+
         // WPF's FlowDocument Paragraph has no tab-stop API, so tab stops cannot be rendered with
         // custom positions/alignments (default tab rendering applies visually). A bookmark name is an
-        // invisible marker with no FlowDocument representation either. To avoid losing either on an
-        // edit/commit cycle, we carry both on the paragraph's Tag (a ParagraphTag) and read them back
-        // verbatim on commit; the docx round-trip remains exact.
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 })
-            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName);
+        // invisible marker with no FlowDocument representation either, and page-break-before has no
+        // native slot. To avoid losing any of them on an edit/commit cycle, we carry them on the
+        // paragraph's Tag (a ParagraphTag) and read them back verbatim on commit; the round-trip is exact.
+        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore)
+            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore);
 
         foreach (var run in paragraph.Runs)
             wpf.Inlines.Add(BuildRun(run, paragraph, document));
@@ -1476,8 +1536,10 @@ public sealed class DocumentView : RichTextBox
         };
     }
 
-    private static ParagraphFormatting ReadParagraphFormatting(WpfParagraph paragraph, TextDocument document) =>
-        ParagraphFormatting.Default with
+    private static ParagraphFormatting ReadParagraphFormatting(WpfParagraph paragraph, TextDocument document)
+    {
+        var pageBreakBefore = paragraph.Tag is ParagraphTag { PageBreakBefore: true };
+        return ParagraphFormatting.Default with
         {
             Alignment = FromWpfAlignment(paragraph.TextAlignment),
             SpaceBeforePt = paragraph.Margin.Top / PxPerPoint,
@@ -1486,14 +1548,32 @@ public sealed class DocumentView : RichTextBox
             IndentLeftPt = paragraph.Margin.Left / PxPerPoint,
             IndentRightPt = paragraph.Margin.Right / PxPerPoint,
             FirstLineIndentPt = paragraph.TextIndent / PxPerPoint,
-            Border = paragraph.BorderBrush is SolidColorBrush bb && paragraph.BorderThickness.Top > 0
-                ? new ParagraphBorder(ToHex(bb.Color), paragraph.BorderThickness.Top / PxPerPoint)
-                : null,
+            Border = ReadParagraphBorder(paragraph, pageBreakBefore),
+            PageBreakBefore = pageBreakBefore,
             ShadingColorHex = paragraph.Background is SolidColorBrush shading ? ToHex(shading.Color) : null,
             // Tab stops are not representable in the WPF FlowDocument Paragraph, so they are preserved
             // verbatim from the Tag stamped by BuildParagraph (see comment there); empty if none.
             TabStops = paragraph.Tag is ParagraphTag { TabStops: var tabStops } ? tabStops : []
         };
+    }
+
+    // Recover the model paragraph border from a WPF paragraph's BorderBrush/BorderThickness. A bottom-only
+    // thickness (top edge off, bottom edge on) is a horizontal rule; an all-edges thickness is a box.
+    // When the paragraph carries a forced page break we render a synthetic top edge for it (see
+    // BuildParagraph), so a top-only border is ignored here — it is page-break chrome, not a real border.
+    private static ParagraphBorder? ReadParagraphBorder(WpfParagraph paragraph, bool pageBreakBefore)
+    {
+        if (paragraph.BorderBrush is not SolidColorBrush bb)
+            return null;
+        var t = paragraph.BorderThickness;
+        var bottomOnly = t.Bottom > 0 && t.Top <= 0 && t.Left <= 0 && t.Right <= 0;
+        if (bottomOnly)
+            return new ParagraphBorder(ToHex(bb.Color), t.Bottom / PxPerPoint, BottomOnly: true);
+        // A page break renders as a top-only edge; that is not a user border, so drop it.
+        if (pageBreakBefore && t.Top > 0 && t.Bottom <= 0 && t.Left <= 0 && t.Right <= 0)
+            return null;
+        return t.Top > 0 ? new ParagraphBorder(ToHex(bb.Color), t.Top / PxPerPoint) : null;
+    }
 
     // Recover the line-spacing multiplier from a WPF paragraph's LineHeight, inverting the formula used
     // in BuildParagraph (LineHeight = LineSpacing * defaultFontSize * PxPerPoint). An unset LineHeight is

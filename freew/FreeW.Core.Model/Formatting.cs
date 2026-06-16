@@ -25,13 +25,19 @@ public sealed record TabStop(double PositionPt, TabStopAlignment Alignment = Tab
 public enum VerticalAlign { Baseline, Superscript, Subscript }
 
 /// <summary>
-/// Immutable paragraph box border (pPr/w:pBdr). When present, all four edges are drawn with the
-/// given colour and width. Round-trips to docx as <c>w:top</c>/<c>w:bottom</c>/<c>w:left</c>/<c>w:right</c>
-/// (each <c>w:val="single"</c>), mirroring how table borders map to <c>w:tblBorders</c>.
+/// Immutable paragraph box border (pPr/w:pBdr). By default all four edges are drawn with the given
+/// colour and width; when <paramref name="BottomOnly"/> is set only the bottom edge is drawn, which
+/// models a horizontal rule under the paragraph. Round-trips to docx as the <c>w:pBdr</c> edges (each
+/// <c>w:val="single"</c>) — all four for a box, or just <c>w:bottom</c> for a bottom-only rule —
+/// mirroring how table borders map to <c>w:tblBorders</c>.
 /// </summary>
 /// <param name="ColorHex">Border colour as an RRGGBB hex (e.g. <c>"#000000"</c>).</param>
 /// <param name="WidthPt">Border width in points (docx stores this as eighths of a point in <c>w:sz</c>).</param>
-public sealed record ParagraphBorder(string ColorHex = "#000000", double WidthPt = 0.5);
+/// <param name="BottomOnly">
+/// When true, only the bottom edge is drawn (a horizontal rule). Defaults to false so existing callers
+/// keep the full box and their docx round-trip is unchanged.
+/// </param>
+public sealed record ParagraphBorder(string ColorHex = "#000000", double WidthPt = 0.5, bool BottomOnly = false);
 
 /// <summary>
 /// Immutable character formatting for a run. Null members inherit from the paragraph style /
@@ -96,6 +102,14 @@ public sealed record ParagraphFormatting
     /// borders are modelled; round-trips to docx as the four <c>w:pBdr</c> edges.
     /// </summary>
     public ParagraphBorder? Border { get; init; }
+
+    /// <summary>
+    /// When true, a page break is forced before this paragraph (pPr/w:pageBreakBefore). Defaults to
+    /// false so existing paragraphs are unaffected. Round-trips to docx as <c>w:pageBreakBefore</c>,
+    /// which Word honours when paginating; FreeW's editor renders it as a visual separator above the
+    /// paragraph.
+    /// </summary>
+    public bool PageBreakBefore { get; init; }
 
     /// <summary>
     /// Paragraph shading (background fill) as an RRGGBB hex (e.g. <c>"#FFFF00"</c>). Null means no

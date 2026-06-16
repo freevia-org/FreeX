@@ -493,9 +493,13 @@ public static class DocxReader
             }
         }
 
+        // w:pageBreakBefore is a toggle: present (and not val="false"/"0") means a page break is forced.
+        var pageBreakBefore = ReadToggle(pPr, "pageBreakBefore");
+
         return ParagraphFormatting.Default with
         {
             Border = ReadParagraphBorder(pPr.Element(W + "pBdr")),
+            PageBreakBefore = pageBreakBefore,
             ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
             Alignment = jc switch
             {
@@ -555,9 +559,17 @@ public static class DocxReader
 
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+
+        // A bottom-only rule: the only drawn edge is w:bottom (top/left/right absent or off). This is how
+        // CreateHorizontalRule writes itself; recovering the flag keeps the round-trip lossless.
+        bool Drawn(string name) =>
+            (pBdr.Element(W + name)?.Attribute(W + "val")?.Value ?? "none") is not ("none" or "nil");
+        var bottomOnly = Drawn("bottom") && !Drawn("top") && !Drawn("left") && !Drawn("right");
+
         return new ParagraphBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
-            width > 0 ? width : 0.5);
+            width > 0 ? width : 0.5,
+            bottomOnly);
     }
 
     /// <summary>

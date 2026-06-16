@@ -76,6 +76,7 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.cover-page", "Cover Page");
                     g.Button("freew.blank-page", "Blank Page");
+                    g.Button("freew.horizontal-rule", "Horizontal Rule");
                     g.Button("freew.page-break", "Page Break");
                 });
                 tab.Group("tables", "Tables", "T", 90, g => g.Button("freew.table", "Table"));
