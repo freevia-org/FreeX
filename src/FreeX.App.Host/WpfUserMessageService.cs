@@ -1,5 +1,4 @@
 using System.Windows;
-using FreeX.App.UI;
 
 namespace FreeX.App.Host;
 

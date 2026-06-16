@@ -4,7 +4,7 @@ namespace FreeX.App.Host;
 
 /// <summary>
 /// Thin wrapper around <see cref="MessageBox.Show"/> for use inside dialog windows.
-/// Provides the same surface as <see cref="FreeX.App.UI.IUserMessageService"/> but takes
+/// Provides the same surface as <see cref="Free.Shared.AppServices.IUserMessageService"/> but takes
 /// the dialog's own window as owner so messages appear centred on it.
 /// This is the only legitimate call site for <see cref="MessageBox.Show"/> in dialog classes.
 /// </summary>
