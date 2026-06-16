@@ -32,6 +32,7 @@ public static class DocxWriter
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
         WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0));
         WritePart(archive, "_rels/.rels", BuildPackageRels());
+        WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images));
         WritePart(archive, "word/document.xml", BuildDocument(document, images));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
@@ -82,14 +83,56 @@ public static class DocxWriter
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/document.xml"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml")),
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/styles.xml"),
-                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"))));
+                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml")),
+            new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
+                new XAttribute("ContentType", CorePropertiesContentType))));
 
     private static XDocument BuildPackageRels() => new(
         new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rId1"),
                 new XAttribute("Type", OfficeDocumentRel),
-                new XAttribute("Target", "word/document.xml"))));
+                new XAttribute("Target", "word/document.xml")),
+            new XElement(Rel + "Relationship",
+                new XAttribute("Id", "rIdCore"),
+                new XAttribute("Type", CorePropertiesRelType),
+                new XAttribute("Target", "docProps/core.xml"))));
+
+    /// <summary>Builds docProps/core.xml from <see cref="DocumentProperties"/>, emitting only set values.</summary>
+    private static XDocument BuildCoreProperties(DocumentProperties properties)
+    {
+        var core = new XElement(Cp + "coreProperties",
+            new XAttribute(XNamespace.Xmlns + "cp", Cp.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "dc", Dc.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "dcterms", DcTerms.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "dcmitype", DcmiType.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "xsi", Xsi.NamespaceName));
+
+        AddIfSet(core, Dc + "title", properties.Title);
+        AddIfSet(core, Dc + "creator", properties.Author);
+        AddIfSet(core, Dc + "subject", properties.Subject);
+        AddIfSet(core, Cp + "keywords", properties.Keywords);
+        AddIfSet(core, Dc + "description", properties.Comments);
+        AddIfSet(core, Cp + "lastModifiedBy", properties.LastModifiedBy);
+        AddTimestamp(core, DcTerms + "created", properties.Created);
+        AddTimestamp(core, DcTerms + "modified", properties.Modified);
+
+        return new XDocument(core);
+
+        static void AddIfSet(XElement parent, XName name, string? value)
+        {
+            if (!string.IsNullOrEmpty(value))
+                parent.Add(new XElement(name, value));
+        }
+
+        static void AddTimestamp(XElement parent, XName name, DateTimeOffset? value)
+        {
+            if (value is { } v)
+                parent.Add(new XElement(name,
+                    new XAttribute(Xsi + "type", "dcterms:W3CDTF"),
+                    ToW3CDtf(v)));
+        }
+    }
 
     private static XDocument BuildDocumentRels(IReadOnlyList<ImagePart> images)
     {
