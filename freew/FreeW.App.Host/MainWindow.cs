@@ -24,6 +24,10 @@ public sealed class MainWindow : Window
     private Slider _zoomSlider = null!;
     private TextBlock _zoomLabel = null!;
     private FindReplaceDialog? _findDialog;
+    private RibbonStateStore _stateStore = null!;
+    private Border _navPane = null!;
+    private ListBox _navList = null!;
+    private bool _navPaneVisible;
 
     public MainWindow()
     {
@@ -38,9 +42,10 @@ public sealed class MainWindow : Window
         _editor = editor;
         editor.LoadModel(CreateSampleDocument());
         var stateStore = new RibbonStateStore();
-        var commands = FreeWRibbonCommands.Build(editor, stateStore, OpenPrintPreview);
+        _stateStore = stateStore;
+        var commands = FreeWRibbonCommands.Build(editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible);
         _file = new FileCommands(this, editor, UpdateTitle);
-        editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); };
+        editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); };
         _autosave = new AutosaveCoordinator(editor, _file);
         Loaded += (_, _) => { _autosave.OfferRecovery(this); _autosave.Start(); };
         Closing += (_, _) => _autosave.Stop();
@@ -62,6 +67,10 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(status, Dock.Bottom);
         root.Children.Add(status);
 
+        var navPane = BuildNavPane();
+        DockPanel.SetDock(navPane, Dock.Left);
+        root.Children.Add(navPane);
+
         root.Children.Add(editor);
 
         CommandBindings.Add(new CommandBinding(ApplicationCommands.New, (_, _) => _file.New()));
@@ -78,6 +87,7 @@ public sealed class MainWindow : Window
 
         UpdateTitle();
         UpdateCounts();
+        RefreshOutline();
 
         Content = root;
     }
@@ -137,6 +147,92 @@ public sealed class MainWindow : Window
         _editor.CommitToModel();
         var stats = WordCount.Of(_editor.Model);
         _countsText.Text = $"Words: {stats.Words}   Characters: {stats.CharactersWithSpaces}   Paragraphs: {stats.Paragraphs}";
+    }
+
+    // The left navigation pane: a header plus a ListBox of heading outline entries (indented by level).
+    // Collapsed by default; ToggleNavPane shows/hides it. Selecting an entry scrolls that heading into
+    // view in the editor and moves the caret there (see RefreshOutline / OnOutlineSelected).
+    private UIElement BuildNavPane()
+    {
+        _navList = new ListBox
+        {
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent
+        };
+        _navList.SelectionChanged += OnOutlineSelected;
+
+        var header = new TextBlock
+        {
+            Text = "Navigation",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 8, 10, 6)
+        };
+
+        var layout = new DockPanel { Width = 240 };
+        DockPanel.SetDock(header, Dock.Top);
+        layout.Children.Add(header);
+        layout.Children.Add(_navList);
+
+        _navPane = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
+            BorderThickness = new Thickness(0, 0, 1, 0),
+            Visibility = Visibility.Collapsed,
+            Child = layout
+        };
+        return _navPane;
+    }
+
+    // Show/hide the navigation pane and push the new checked-state into the ribbon state store so the
+    // View > Navigation Pane toggle button stays in sync. Refreshes the outline when the pane appears.
+    private void ToggleNavPane()
+    {
+        _navPaneVisible = !_navPaneVisible;
+        _navPane.Visibility = _navPaneVisible ? Visibility.Visible : Visibility.Collapsed;
+        _stateStore.SetChecked("freew.nav-pane", _navPaneVisible);
+        if (_navPaneVisible)
+            RefreshOutline();
+    }
+
+    // Recompute the heading outline from the editor's committed model and repopulate the nav list.
+    // Cheap, and skipped entirely while the pane is hidden. Each list item carries its OutlineEntry so
+    // a selection can map straight back to the model block index.
+    private void RefreshOutline()
+    {
+        if (_navList is null || !_navPaneVisible)
+            return;
+
+        _editor.CommitToModel();
+        var outline = DocumentOutline.Of(_editor.Model);
+
+        // Repopulate without triggering a navigation jump from the resulting selection reset.
+        _navList.SelectionChanged -= OnOutlineSelected;
+        _navList.Items.Clear();
+        foreach (var entry in outline)
+            _navList.Items.Add(new OutlineItem(entry));
+        _navList.SelectionChanged += OnOutlineSelected;
+    }
+
+    // Clicking an outline entry scrolls the matching heading into view and moves the caret there by
+    // mapping the entry's model block index onto the editor's FlowDocument (DocumentView.BringBlockIntoView).
+    private void OnOutlineSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (_navList.SelectedItem is OutlineItem item)
+            _editor.BringBlockIntoView(item.Entry.BlockIndex);
+    }
+
+    // A nav-list row: indents the heading text by its outline level and remembers the source entry
+    // (so a click can map back to the model block index). ToString drives the default ListBox display.
+    private sealed class OutlineItem(OutlineEntry entry)
+    {
+        public OutlineEntry Entry { get; } = entry;
+
+        public override string ToString()
+        {
+            var text = Entry.Text.Length > 0 ? Entry.Text : "(untitled)";
+            return new string(' ', Entry.Level * 4) + text;
+        }
     }
 
     // A status-bar zoom control: a [-] button, a 50%..200% slider, a [+] button, and a live percentage

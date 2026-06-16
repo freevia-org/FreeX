@@ -1072,6 +1072,73 @@ public sealed class DocumentView : RichTextBox
         return link;
     }
 
+    /// <summary>
+    /// Scrolls the body block at <paramref name="modelBlockIndex"/> (an index into
+    /// <see cref="TextDocument.Blocks"/>, e.g. an <see cref="OutlineEntry.BlockIndex"/>) into view and
+    /// moves the caret to its start, giving the editor focus. The model block order maps to the
+    /// FlowDocument by numbering "leaf" blocks (paragraphs, table-cell-flattened list items, and
+    /// tables) in document order — the same scheme <see cref="CommitToModel"/> reads back — so the
+    /// mapping stays correct across lists and tables. A no-op for an out-of-range or unmappable index.
+    /// </summary>
+    public void BringBlockIntoView(int modelBlockIndex)
+    {
+        if (modelBlockIndex < 0)
+            return;
+
+        var target = LeafBlockAtModelIndex(modelBlockIndex);
+        if (target is null)
+            return;
+
+        target.BringIntoView();
+        // Place the caret at the block's content start and focus so the user lands on the heading.
+        if (target.ContentStart is { } start)
+            CaretPosition = start.GetInsertionPosition(LogicalDirection.Forward) ?? start;
+        Focus();
+    }
+
+    // Find the FlowDocument leaf block whose model index equals modelBlockIndex, numbering leaf blocks
+    // in document order exactly as NumberLeafBlocks/CommitToModel do (lists flatten into their item
+    // paragraphs; a table counts as one leaf). Returns null if the index is past the last leaf block.
+    private System.Windows.Documents.Block? LeafBlockAtModelIndex(int modelBlockIndex)
+    {
+        var modelIndex = 0;
+        foreach (var block in Document.Blocks)
+        {
+            if (FindLeafBlock(block, modelBlockIndex, ref modelIndex) is { } found)
+                return found;
+        }
+        return null;
+    }
+
+    private static System.Windows.Documents.Block? FindLeafBlock(
+        System.Windows.Documents.Block block, int targetIndex, ref int modelIndex)
+    {
+        switch (block)
+        {
+            case WpfParagraph:
+                if (modelIndex == targetIndex)
+                    return block;
+                modelIndex++;
+                break;
+            case WpfList list:
+                foreach (var item in list.ListItems)
+                {
+                    foreach (var itemBlock in item.Blocks)
+                    {
+                        if (FindLeafBlock(itemBlock, targetIndex, ref modelIndex) is { } found)
+                            return found;
+                    }
+                }
+                break;
+            case WpfTable:
+                if (modelIndex == targetIndex)
+                    return block;
+                modelIndex++;
+                break;
+        }
+        return null;
+    }
+
     /// <summary>The names of every bookmark defined in the document (committed state), in document order.</summary>
     public IReadOnlyList<string> BookmarkNames()
     {
