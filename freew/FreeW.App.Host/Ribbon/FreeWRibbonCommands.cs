@@ -57,7 +57,27 @@ internal static class FreeWRibbonCommands
         Routed("freew.copy", ApplicationCommands.Copy);
         Routed("freew.paste", ApplicationCommands.Paste);
 
+        registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
+        registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
+        registry.Register("freew.style-title", new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
+
         return registry;
+    }
+
+    // Applies a named paragraph style's formatting (size/weight/colour) to the current selection.
+    private sealed class ApplyStyleCommand(DocumentView editor, double sizePt, bool bold, string? colorHex) : IRibbonCommand
+    {
+        private const double PxPerPoint = 96.0 / 72.0;
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var selection = editor.Selection;
+            selection.ApplyPropertyValue(TextElement.FontSizeProperty, sizePt * PxPerPoint);
+            selection.ApplyPropertyValue(TextElement.FontWeightProperty, bold ? FontWeights.Bold : FontWeights.Normal);
+            var brush = colorHex is null ? Brushes.Black : new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
+            selection.ApplyPropertyValue(TextElement.ForegroundProperty, brush);
+        }
     }
 
     private sealed class RoutedEditCommand(DocumentView editor, RoutedCommand command) : IRibbonCommand
