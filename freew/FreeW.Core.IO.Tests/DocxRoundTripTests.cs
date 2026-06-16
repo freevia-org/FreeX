@@ -54,6 +54,33 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void RunHighlight_RoundTrips()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("highlighted", new RunFormatting { HighlightColorHex = "#FFFF00" }));
+        doc.Blocks.Add(paragraph);
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Runs[0].Formatting;
+
+        formatting.HighlightColorHex.Should().Be("#FFFF00");
+    }
+
+    [Fact]
+    public void RunForegroundColor_RoundTrips()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("coloured", new RunFormatting { ColorHex = "#2F5496" }));
+        doc.Blocks.Add(paragraph);
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Runs[0].Formatting;
+
+        formatting.ColorHex.Should().Be("#2F5496");
+        formatting.HighlightColorHex.Should().BeNull();
+    }
+
+    [Fact]
     public void ParagraphFormatting_RoundTrips()
     {
         var doc = new TextDocument();

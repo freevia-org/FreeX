@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -77,6 +78,11 @@ internal static class FreeWRibbonCommands
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
         registry.Register("freew.picture", new InsertPictureCommand(editor));
 
+        // Home > Font > Text Colour / Highlight: pick a colour from a small palette and apply it to
+        // the selection (foreground reuses TextElement.Foreground; highlight uses TextElement.Background).
+        registry.Register("freew.font-color", new ColorPickCommand(editor, isHighlight: false));
+        registry.Register("freew.highlight", new ColorPickCommand(editor, isHighlight: true));
+
         registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
         registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
         registry.Register("freew.style-title", new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
@@ -125,6 +131,90 @@ internal static class FreeWRibbonCommands
             selection.ApplyPropertyValue(TextElement.FontWeightProperty, bold ? FontWeights.Bold : FontWeights.Normal);
             var brush = colorHex is null ? Brushes.Black : new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
             selection.ApplyPropertyValue(TextElement.ForegroundProperty, brush);
+        }
+    }
+
+    // Home > Font: pick a colour from a small fixed palette and apply it to the selection. When
+    // isHighlight is false it sets the text foreground; when true it sets the text background
+    // (highlight). "Automatic"/"No Color" clears the property back to its inherited value.
+    private sealed class ColorPickCommand(DocumentView editor, bool isHighlight) : IRibbonCommand
+    {
+        private static readonly string[] Palette =
+        [
+            "#000000", "#404040", "#7F7F7F", "#C00000", "#FF0000", "#FFC000",
+            "#FFFF00", "#92D050", "#00B050", "#00B0F0", "#0070C0", "#2F5496",
+            "#7030A0", "#FFFFFF",
+        ];
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var chosen = ShowPicker(owner);
+            if (chosen is null)
+                return;
+
+            var property = isHighlight ? TextElement.BackgroundProperty : TextElement.ForegroundProperty;
+            editor.Focus();
+            if (chosen == ColorChoice.Clear)
+                // Clear the override: foreground falls back to black, highlight to no background.
+                editor.Selection.ApplyPropertyValue(property, isHighlight ? null! : Brushes.Black);
+            else
+                editor.Selection.ApplyPropertyValue(property,
+                    new SolidColorBrush((Color)ColorConverter.ConvertFromString(chosen.Hex)));
+        }
+
+        private sealed record ColorChoice(string Hex)
+        {
+            public static readonly ColorChoice Clear = new(string.Empty);
+        }
+
+        private ColorChoice? ShowPicker(Window? owner)
+        {
+            ColorChoice? result = null;
+            var window = new Window
+            {
+                Title = isHighlight ? "Highlight Colour" : "Text Colour",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(8) };
+            var grid = new WrapPanel { Width = 7 * 26 };
+            foreach (var hex in Palette)
+            {
+                var swatch = new Button
+                {
+                    Width = 22,
+                    Height = 22,
+                    Margin = new Thickness(2),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                    BorderThickness = new Thickness(1),
+                    ToolTip = hex
+                };
+                swatch.Click += (_, _) => { result = new ColorChoice(hex); window.Close(); };
+                grid.Children.Add(swatch);
+            }
+            panel.Children.Add(grid);
+
+            var clear = new Button
+            {
+                Content = isHighlight ? "No Color" : "Automatic",
+                Margin = new Thickness(2, 6, 2, 0),
+                Padding = new Thickness(8, 2, 8, 2)
+            };
+            clear.Click += (_, _) => { result = ColorChoice.Clear; window.Close(); };
+            panel.Children.Add(clear);
+
+            window.Content = panel;
+            window.ShowDialog();
+            return result;
         }
     }
 

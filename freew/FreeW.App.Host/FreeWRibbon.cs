@@ -32,6 +32,8 @@ internal static class FreeWRibbon
                     g.Toggle("freew.bold", "Bold");
                     g.Toggle("freew.italic", "Italic");
                     g.Toggle("freew.underline", "Underline");
+                    g.Button("freew.font-color", "Text Colour");
+                    g.Button("freew.highlight", "Highlight");
                     g.Button("freew.grow-font", "Grow");
                     g.Button("freew.shrink-font", "Shrink");
                 });
