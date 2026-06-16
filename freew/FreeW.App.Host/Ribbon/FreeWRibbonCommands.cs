@@ -88,6 +88,12 @@ internal static class FreeWRibbonCommands
                 selection.ApplyPropertyValue(TextElement.FontSizeProperty, points * 96.0 / 72.0);
         }));
 
+        // Insert tab — Pages: prepend a cover page, or drop a horizontal rule / page break at the caret.
+        // Each mutates the model through the view's undo/redo bus and re-renders.
+        registry.Register("freew.cover-page", new ActionCommand(() => { editor.Focus(); editor.InsertCoverPage(); }));
+        registry.Register("freew.horizontal-rule", new ActionCommand(() => { editor.Focus(); editor.InsertHorizontalRule(); }));
+        registry.Register("freew.page-break", new ActionCommand(() => { editor.Focus(); editor.InsertPageBreak(); }));
+
         // Insert tab — insert a small 2x2 table at the caret (routes through the undo/redo bus).
         registry.Register("freew.table", new InsertTableCommand(editor, rows: 2, columns: 2));
         // Insert tab — Table Tools: structural edits to the table containing the caret (all undoable).
