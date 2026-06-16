@@ -462,13 +462,13 @@ public partial class MainWindow
                 FormatPainterBtn_Click(sender, args);
                 break;
             case QuickAccessToolbarCommandIds.Bold:
-                ExecuteToggleButtonQuickAccessCommand(BoldButton, BoldButton_Click);
+                ExecuteToggleQuickAccessCommand("Bold", BoldButton_Click);
                 break;
             case QuickAccessToolbarCommandIds.Italic:
-                ExecuteToggleButtonQuickAccessCommand(ItalicButton, ItalicButton_Click);
+                ExecuteToggleQuickAccessCommand("Italic", ItalicButton_Click);
                 break;
             case QuickAccessToolbarCommandIds.Underline:
-                ExecuteToggleButtonQuickAccessCommand(UnderlineButton, UnderlineButton_Click);
+                ExecuteToggleQuickAccessCommand("Underline", UnderlineButton_Click);
                 break;
             case QuickAccessToolbarCommandIds.FillColor:
                 FillColorBtn_Click(sender, args);
@@ -539,12 +539,15 @@ public partial class MainWindow
         }
     }
 
-    private static void ExecuteToggleButtonQuickAccessCommand(
-        ToggleButton button,
+    // The QAT runs a ribbon toggle command without the toggle's own Click: flip the command's checked
+    // state in the neutral store (as a real click would before raising Click), then invoke the handler,
+    // which reads the new state from the store.
+    private void ExecuteToggleQuickAccessCommand(
+        string commandId,
         Action<object, RoutedEventArgs> handler)
     {
-        button.IsChecked = button.IsChecked != true;
-        handler(button, new RoutedEventArgs(ButtonBase.ClickEvent, button));
+        _ribbonState.SetChecked(commandId, !IsRibbonCommandChecked(commandId));
+        handler(this, new RoutedEventArgs(ButtonBase.ClickEvent, this));
     }
 
     private readonly record struct QuickAccessToolbarStateTarget(

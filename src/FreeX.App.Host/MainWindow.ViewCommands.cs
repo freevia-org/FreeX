@@ -114,12 +114,9 @@ public partial class MainWindow
 
     private void SyncWorkbookViewModeToggleState(WorksheetViewMode viewMode)
     {
-        if (ViewNormalButton is not null)
-            ViewNormalButton.IsChecked = viewMode == WorksheetViewMode.Normal;
-        if (ViewPageLayoutButton is not null)
-            ViewPageLayoutButton.IsChecked = viewMode == WorksheetViewMode.PageLayout;
-        if (ViewPageBreakPreviewButton is not null)
-            ViewPageBreakPreviewButton.IsChecked = viewMode == WorksheetViewMode.PageBreakPreview;
+        _ribbonState.SetChecked("Normal", viewMode == WorksheetViewMode.Normal);
+        _ribbonState.SetChecked("Page Layout", viewMode == WorksheetViewMode.PageLayout);
+        _ribbonState.SetChecked("Page Break Preview", viewMode == WorksheetViewMode.PageBreakPreview);
 
         SyncStatusViewShortcutState(viewMode);
     }
@@ -196,13 +193,13 @@ public partial class MainWindow
     private void ApplyLiveWindowCommandState()
     {
         ApplyRibbonWindowCommandState(
-            ViewNewWindowBtn,
+            "New Window",
             isEnabled: true,
             UiText.Get("MainWindow_TooltipDescription_OpenAnotherLiveWindowForThisWorkbook"));
 
         var canSwitchWindows = (_windowRegistry?.Count ?? 1) > 1;
         ApplyRibbonWindowCommandState(
-            ViewSwitchWindowsBtn,
+            "Switch Windows",
             canSwitchWindows,
             UiText.Get(canSwitchWindows
                 ? "MainWindow_TooltipDescription_SwitchToAnotherVisibleWorkbookWindow"
@@ -211,7 +208,7 @@ public partial class MainWindow
         // Hide is available only while another window would remain visible.
         var canHide = (_windowRegistry?.VisibleCount ?? 1) > 1;
         ApplyRibbonWindowCommandState(
-            ViewHideWindowBtn,
+            "Hide",
             canHide,
             UiText.Get(canHide
                 ? "MainWindow_TooltipDescription_HideThisWorkbookWindowFromView"
@@ -220,7 +217,7 @@ public partial class MainWindow
         // Unhide is available only when at least one window is hidden.
         var canUnhide = (_windowRegistry?.HiddenWindows.Count ?? 0) > 0;
         ApplyRibbonWindowCommandState(
-            ViewUnhideWindowBtn,
+            "Unhide",
             canUnhide,
             UiText.Get(canUnhide
                 ? "MainWindow_TooltipDescription_RestoreAHiddenWorkbookWindow"
@@ -228,7 +225,7 @@ public partial class MainWindow
 
         // Reset Window Position is always available; it re-centers/cascades this window.
         ApplyRibbonWindowCommandState(
-            ViewResetWindowPositionBtn,
+            "Reset Window Position",
             isEnabled: true,
             UiText.Get("MainWindow_TooltipDescription_ResetThisWindowToAStandardSizeAndPosition"));
 
@@ -236,7 +233,7 @@ public partial class MainWindow
         var sideBySideActive = _windowRegistry?.IsSideBySideActive ?? false;
         var canSideBySide = sideBySideActive || (_windowRegistry?.VisibleCount ?? 1) > 1;
         ApplyRibbonWindowToggleState(
-            ViewSideBySideBtn,
+            "View Side by Side",
             canSideBySide,
             sideBySideActive,
             UiText.Get(canSideBySide
@@ -246,7 +243,7 @@ public partial class MainWindow
         // Synchronous Scrolling is only meaningful while side-by-side is active.
         var syncActive = _windowRegistry?.IsSynchronousScrollActive ?? false;
         ApplyRibbonWindowToggleState(
-            ViewSynchronousScrollingBtn,
+            "Synchronous Scrolling",
             sideBySideActive,
             syncActive,
             UiText.Get(sideBySideActive
@@ -257,32 +254,38 @@ public partial class MainWindow
     /// <summary>Reflects the registry's side-by-side state onto the toggle button without re-toggling it.</summary>
     private void SyncViewSideBySideToggleState() => ApplyLiveWindowCommandState();
 
-    private static void ApplyRibbonWindowCommandState(
-        System.Windows.Controls.Button? button,
+    // Window commands carry both enablement (store-driven) and a context-specific help/tooltip
+    // description. Enablement flows through the neutral store; the description (not part of
+    // RibbonCommandState) is set on the rendered control directly.
+    private void ApplyRibbonWindowCommandState(
+        string commandId,
         bool isEnabled,
         string description)
     {
-        if (button is null)
-            return;
-
-        button.IsEnabled = isEnabled;
-        RibbonTooltip.SetDescription(button, description);
-        AutomationProperties.SetHelpText(button, description);
+        _ribbonState.SetEnabled(commandId, isEnabled);
+        ApplyRibbonCommandDescription(commandId, description);
     }
 
-    private static void ApplyRibbonWindowToggleState(
-        System.Windows.Controls.Primitives.ToggleButton? button,
+    private void ApplyRibbonWindowToggleState(
+        string commandId,
         bool isEnabled,
         bool isChecked,
         string description)
     {
-        if (button is null)
+        _ribbonState.SetEnabled(commandId, isEnabled);
+        _ribbonState.SetChecked(commandId, isChecked);
+        ApplyRibbonCommandDescription(commandId, description);
+    }
+
+    /// <summary>Updates a rendered ribbon control's tooltip/help description (not part of
+    /// <see cref="Free.Shared.Ribbon.RibbonCommandState"/>) for the current command context.</summary>
+    private void ApplyRibbonCommandDescription(string commandId, string description)
+    {
+        if (FindRenderedRibbonControl(commandId) is not { } control)
             return;
 
-        button.IsEnabled = isEnabled;
-        button.IsChecked = isChecked;
-        RibbonTooltip.SetDescription(button, description);
-        AutomationProperties.SetHelpText(button, description);
+        RibbonTooltip.SetDescription(control, description);
+        AutomationProperties.SetHelpText(control, description);
     }
 
     private void FreezePanesPickerBtn_Click(object sender, RoutedEventArgs e)

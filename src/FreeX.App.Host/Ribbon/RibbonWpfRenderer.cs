@@ -27,7 +27,8 @@ public static class RibbonWpfRenderer
     public static FrameworkElement BuildTabContent(
         RibbonTab tab,
         FrameworkElement resourceHost,
-        IRibbonCommandRegistry? registry = null)
+        IRibbonCommandRegistry? registry = null,
+        IRibbonStateStore? stateStore = null)
     {
         var panel = new RibbonAdaptivePanel { MinHeight = 88 };
 
@@ -41,13 +42,13 @@ public static class RibbonWpfRenderer
             if (!first)
                 panel.Children.Add(BuildGroupDivider(resourceHost));
 
-            var full = (FrameworkElement)BuildGroup(group, resourceHost, registry);
+            var full = (FrameworkElement)BuildGroup(group, resourceHost, registry, stateStore);
             var captured = group;
             var collapsedKeyTip = DeriveGroupKeyTip(group.Header, usedGroupKeyTips);
             panel.Children.Add(new RibbonGroupHost(
                 group,
                 full,
-                () => (FrameworkElement)BuildGroup(captured, resourceHost, registry),
+                () => (FrameworkElement)BuildGroup(captured, resourceHost, registry, stateStore),
                 resourceHost,
                 collapsedKeyTip,
                 () => BuildCollapsedGroupMenu(captured, registry)));
@@ -131,7 +132,7 @@ public static class RibbonWpfRenderer
         return menu;
     }
 
-    private static FrameworkElement BuildGroup(RibbonGroup group, FrameworkElement resourceHost, IRibbonCommandRegistry? registry)
+    private static FrameworkElement BuildGroup(RibbonGroup group, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
         var grid = new Grid();
         ApplyStyle(grid, resourceHost, "RibbonGroupPanel");
@@ -139,7 +140,7 @@ public static class RibbonWpfRenderer
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(18) });
 
-        var content = BuildGroupContent(group, resourceHost, registry);
+        var content = BuildGroupContent(group, resourceHost, registry, stateStore);
         Grid.SetRow(content, 0);
         grid.Children.Add(content);
 
@@ -154,7 +155,7 @@ public static class RibbonWpfRenderer
         return grid;
     }
 
-    private static FrameworkElement BuildGroupContent(RibbonGroup group, FrameworkElement resourceHost, IRibbonCommandRegistry? registry)
+    private static FrameworkElement BuildGroupContent(RibbonGroup group, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
         var lane = new StackPanel
         {
@@ -169,7 +170,7 @@ public static class RibbonWpfRenderer
         // Leading large "hero" buttons each occupy their own full-height column.
         while (index < controls.Count && controls[index].PreferredLayout == RibbonCommandLayoutKind.Large)
         {
-            lane.Children.Add(BuildLargeControl(controls[index], resourceHost, registry));
+            lane.Children.Add(BuildLargeControl(controls[index], resourceHost, registry, stateStore));
             index++;
         }
 
@@ -178,15 +179,15 @@ public static class RibbonWpfRenderer
             return lane;
 
         if (rest.Any(c => c is RibbonRowBreak))
-            lane.Children.Add(BuildExplicitRows(rest, resourceHost, registry));
+            lane.Children.Add(BuildExplicitRows(rest, resourceHost, registry, stateStore));
         else
-            BuildAutoColumns(rest, lane, resourceHost, registry);
+            BuildAutoColumns(rest, lane, resourceHost, registry, stateStore);
 
         return lane;
     }
 
     // Groups that declare RowBreaks lay out as stacked horizontal rows (e.g. Font: combos row, then B/I/U row).
-    private static FrameworkElement BuildExplicitRows(IReadOnlyList<RibbonControl> controls, FrameworkElement resourceHost, IRibbonCommandRegistry? registry)
+    private static FrameworkElement BuildExplicitRows(IReadOnlyList<RibbonControl> controls, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
         var rows = new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Top };
         var current = NewRow(isFirst: true);
@@ -200,7 +201,7 @@ public static class RibbonWpfRenderer
                 continue;
             }
 
-            current.Children.Add(BuildInlineControl(control, resourceHost, registry));
+            current.Children.Add(BuildInlineControl(control, resourceHost, registry, stateStore));
         }
 
         rows.Children.Add(current);
@@ -214,7 +215,7 @@ public static class RibbonWpfRenderer
     };
 
     // Groups without explicit rows pack medium/small/combo controls into columns of up to three.
-    private static void BuildAutoColumns(IReadOnlyList<RibbonControl> controls, StackPanel lane, FrameworkElement resourceHost, IRibbonCommandRegistry? registry)
+    private static void BuildAutoColumns(IReadOnlyList<RibbonControl> controls, StackPanel lane, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
         StackPanel? column = null;
         var columnIsCombo = false;
@@ -238,7 +239,7 @@ public static class RibbonWpfRenderer
                     break;
                 case { PreferredLayout: RibbonCommandLayoutKind.Large }:
                     Flush();
-                    lane.Children.Add(BuildLargeControl(control, resourceHost, registry));
+                    lane.Children.Add(BuildLargeControl(control, resourceHost, registry, stateStore));
                     break;
                 default:
                     var isCombo = control is RibbonComboBox;
@@ -246,7 +247,7 @@ public static class RibbonWpfRenderer
                         Flush();
                     column ??= new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(1, 1, 1, 0) };
                     columnIsCombo = isCombo;
-                    column.Children.Add(BuildInlineControl(control, resourceHost, registry));
+                    column.Children.Add(BuildInlineControl(control, resourceHost, registry, stateStore));
                     if (column.Children.Count >= MaxRowsPerColumn)
                         Flush();
                     break;
@@ -256,18 +257,18 @@ public static class RibbonWpfRenderer
         Flush();
     }
 
-    private static FrameworkElement BuildInlineControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry) =>
+    private static FrameworkElement BuildInlineControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore) =>
         control switch
         {
             RibbonSeparator => BuildInlineDivider(),
-            RibbonComboBox combo => BuildComboControl(combo, resourceHost, registry),
-            RibbonCheckBox check => BuildCheckControl(check, registry),
-            { PreferredLayout: RibbonCommandLayoutKind.Large } => BuildLargeControl(control, resourceHost, registry),
-            { PreferredLayout: RibbonCommandLayoutKind.Small } => BuildIconControl(control, resourceHost, registry),
-            _ => BuildMediumControl(control, resourceHost, registry)
+            RibbonComboBox combo => BuildComboControl(combo, resourceHost, registry, stateStore),
+            RibbonCheckBox check => BuildCheckControl(check, registry, stateStore),
+            { PreferredLayout: RibbonCommandLayoutKind.Large } => BuildLargeControl(control, resourceHost, registry, stateStore),
+            { PreferredLayout: RibbonCommandLayoutKind.Small } => BuildIconControl(control, resourceHost, registry, stateStore),
+            _ => BuildMediumControl(control, resourceHost, registry, stateStore)
         };
 
-    private static FrameworkElement BuildCheckControl(RibbonCheckBox check, IRibbonCommandRegistry? registry)
+    private static FrameworkElement BuildCheckControl(RibbonCheckBox check, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
         var box = new CheckBox
         {
@@ -277,11 +278,11 @@ public static class RibbonWpfRenderer
             VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2, 1, 2, 1)
         };
-        WireMetadata(box, check, registry);
+        WireMetadata(box, check, registry, stateStore);
         return box;
     }
 
-    private static FrameworkElement BuildLargeControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry)
+    private static FrameworkElement BuildLargeControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
         var stack = new StackPanel();
         stack.Children.Add(NewIcon(control, LargeIconSize, HorizontalAlignment.Center));
@@ -302,11 +303,11 @@ public static class RibbonWpfRenderer
 
         var button = NewButton(control, resourceHost, "RibbonLargeButton");
         ((ContentControl)button).Content = stack;
-        WireMetadata(button, control, registry);
+        WireMetadata(button, control, registry, stateStore);
         return button;
     }
 
-    private static FrameworkElement BuildMediumControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry)
+    private static FrameworkElement BuildMediumControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal };
         content.Children.Add(NewIcon(control, MediumIconSize, HorizontalAlignment.Center, VerticalAlignment.Center));
@@ -325,11 +326,11 @@ public static class RibbonWpfRenderer
         button.MinWidth = 84;
         button.HorizontalContentAlignment = HorizontalAlignment.Left;
         ((ContentControl)button).Content = content;
-        WireMetadata(button, control, registry);
+        WireMetadata(button, control, registry, stateStore);
         return button;
     }
 
-    private static FrameworkElement BuildIconControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry)
+    private static FrameworkElement BuildIconControl(RibbonControl control, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
         var hasMenu = HasMenu(control);
         FrameworkElement content;
@@ -350,11 +351,11 @@ public static class RibbonWpfRenderer
         if (hasMenu)
             button.Width = 34;
         ((ContentControl)button).Content = content;
-        WireMetadata(button, control, registry);
+        WireMetadata(button, control, registry, stateStore);
         return button;
     }
 
-    private static FrameworkElement BuildComboControl(RibbonComboBox combo, FrameworkElement resourceHost, IRibbonCommandRegistry? registry)
+    private static FrameworkElement BuildComboControl(RibbonComboBox combo, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
         var box = new ComboBox
         {
@@ -368,7 +369,7 @@ public static class RibbonWpfRenderer
             box.Items.Add(item);
         if (combo.Items.Count > 0)
             box.SelectedIndex = 0;
-        WireMetadata(box, combo, registry);
+        WireMetadata(box, combo, registry, stateStore);
         return box;
     }
 
@@ -403,7 +404,7 @@ public static class RibbonWpfRenderer
         return button;
     }
 
-    private static void WireMetadata(Control element, RibbonControl control, IRibbonCommandRegistry? registry)
+    private static void WireMetadata(Control element, RibbonControl control, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
         if (!string.IsNullOrEmpty(control.CommandId.Value))
             RibbonMetadata.SetCommandName(element, control.CommandId.Value);
@@ -423,7 +424,13 @@ public static class RibbonWpfRenderer
 
         var menu = GetMenu(control);
         var hasMenuItems = menu is not null && menu.Items.Count > 0;
-        element.IsEnabled = hasMenuItems || registry.TryGet(control.CommandId, out _);
+        var commandIsLive = hasMenuItems || registry.TryGet(control.CommandId, out _);
+        element.IsEnabled = commandIsLive;
+
+        // Bind the control to the neutral state store: its checked-ness, combo value, and enablement
+        // now follow the store (the source of truth), replacing the old hidden-backplane mirroring.
+        // A control whose command has no handler stays disabled regardless of store state.
+        BindControlToStore(element, control.CommandId, stateStore, commandIsLive);
 
         if (element is not ButtonBase buttonBase)
             return;
@@ -438,12 +445,50 @@ public static class RibbonWpfRenderer
         }
         else
         {
+            var commandId = control.CommandId;
             buttonBase.Click += (sender, _) =>
             {
-                if (registry.TryGet(control.CommandId, out var command) && command is not null)
+                // A real/keytip click flips a toggle's IsChecked before raising Click; push that new
+                // state into the store first so field-reading handlers observe it, mirroring Excel.
+                if (sender is ToggleButton toggle && stateStore is not null)
+                    stateStore.SetChecked(commandId, toggle.IsChecked == true);
+                if (registry.TryGet(commandId, out var command) && command is not null)
                     command.Execute(SenderContext(sender));
             };
         }
+    }
+
+    // Subscribes a rendered control to the state store so its IsEnabled, toggle IsChecked, and combo
+    // value/Text follow the command's RibbonCommandState. Platform-neutral state in, WPF visuals out;
+    // an Avalonia renderer binds the same store the same way.
+    private static void BindControlToStore(Control element, RibbonCommandId commandId, IRibbonStateStore? stateStore, bool commandIsLive)
+    {
+        if (stateStore is null || string.IsNullOrEmpty(commandId.Value))
+            return;
+
+        void Apply(RibbonCommandState state)
+        {
+            element.IsEnabled = commandIsLive && state.IsEnabled;
+            switch (element)
+            {
+                case ToggleButton toggle:
+                    if (toggle.IsChecked != state.IsChecked)
+                        toggle.IsChecked = state.IsChecked;
+                    break;
+                case ComboBox combo when state.Value is { } value && !string.Equals(combo.Text, value, System.StringComparison.Ordinal):
+                    combo.Text = value;
+                    break;
+            }
+        }
+
+        stateStore.StateChanged += (_, e) =>
+        {
+            if (e.Id == commandId)
+                Apply(e.State);
+        };
+
+        // Apply any state already set before the control existed (e.g. an initial selection refresh).
+        Apply(stateStore.GetState(commandId));
     }
 
     // Passes the actual clicked WPF element to the command so host handlers that inspect their sender

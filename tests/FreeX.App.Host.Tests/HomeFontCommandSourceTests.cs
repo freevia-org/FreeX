@@ -10,8 +10,8 @@ public sealed class HomeFontCommandSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
-        source.Should().Contain("ApplyStyleDiff(new StyleDiff(Bold: BoldButton.IsChecked == true))");
-        source.Should().Contain("ApplyStyleDiff(new StyleDiff(Italic: ItalicButton.IsChecked == true))");
+        source.Should().Contain("ApplyStyleDiff(new StyleDiff(Bold: IsRibbonCommandChecked(\"Bold\")))");
+        source.Should().Contain("ApplyStyleDiff(new StyleDiff(Italic: IsRibbonCommandChecked(\"Italic\")))");
         source.Should().Contain("ApplyStyleDiff(CellStyleDiffPlanner.UnderlineDiff(enabled))");
         source.Should().Contain("ApplyStyleDiff(CellStyleDiffPlanner.StrikethroughDiff(enabled))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name))");

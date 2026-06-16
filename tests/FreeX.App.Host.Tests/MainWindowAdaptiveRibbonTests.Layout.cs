@@ -233,9 +233,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     {
         var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host/MainWindow.ViewCommands.cs");
 
-        source.Should().Contain("ViewNormalButton.IsChecked = viewMode == WorksheetViewMode.Normal;");
-        source.Should().Contain("ViewPageLayoutButton.IsChecked = viewMode == WorksheetViewMode.PageLayout;");
-        source.Should().Contain("ViewPageBreakPreviewButton.IsChecked = viewMode == WorksheetViewMode.PageBreakPreview;");
+        source.Should().Contain("_ribbonState.SetChecked(\"Normal\", viewMode == WorksheetViewMode.Normal);");
+        source.Should().Contain("_ribbonState.SetChecked(\"Page Layout\", viewMode == WorksheetViewMode.PageLayout);");
+        source.Should().Contain("_ribbonState.SetChecked(\"Page Break Preview\", viewMode == WorksheetViewMode.PageBreakPreview);");
         source.Should().Contain("StatusNormalViewButton.IsChecked = viewMode == WorksheetViewMode.Normal;");
         source.Should().Contain("StatusPageLayoutViewButton.IsChecked = viewMode == WorksheetViewMode.PageLayout;");
         source.Should().Contain("StatusPageBreakPreviewButton.IsChecked = viewMode == WorksheetViewMode.PageBreakPreview;");

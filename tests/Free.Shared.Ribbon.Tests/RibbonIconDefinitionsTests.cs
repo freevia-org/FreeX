@@ -1,6 +1,6 @@
 using Free.Shared.Ribbon.Icons;
 
-namespace FreeX.Ribbon.Tests;
+namespace Free.Shared.Ribbon.Tests;
 
 public class RibbonIconDefinitionsTests
 {

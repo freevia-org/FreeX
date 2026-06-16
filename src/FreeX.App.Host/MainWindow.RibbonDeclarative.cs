@@ -50,7 +50,7 @@ public partial class MainWindow
                 if (definition.FindTab(catalogId) is not { } definitionTab)
                     continue;
 
-                var content = RibbonWpfRenderer.BuildTabContent(definitionTab, this, registry);
+                var content = RibbonWpfRenderer.BuildTabContent(definitionTab, this, registry, _ribbonState);
 
                 // The Home tab keeps the HomeRibbonPanel backplane in its rendered subtree so commands
                 // injected into it at runtime (Excel add-ins / tests) still surface as keytip candidates.
@@ -64,9 +64,13 @@ public partial class MainWindow
                 tabItem.Content = content;
             }
 
-            // Mirror the original controls' visual state (toggles pressed, combo values) onto the
-            // rendered controls, so the declarative ribbon reflects the selection like the XAML one.
+            // Toggle/combo/enablement state now flows from the neutral RibbonStateStore to the rendered
+            // controls (bound in RibbonWpfRenderer), so there is no hidden control to mirror. We still
+            // capture the rendered controls by command name so the host can (a) share imperatively-built
+            // context menus (e.g. the Shapes gallery) and (b) update per-control help text/labels that
+            // are not part of RibbonCommandState.
             var renderedByName = CollectControlsByName();
+            _renderedRibbonControls = renderedByName;
             WireDeclarativeStateSync(originals, renderedByName);
             RepointBackplaneNamesToRenderedControls(renderedByName);
             WireRenderedMenuOpenedHandlers(renderedByName);
@@ -176,17 +180,14 @@ public partial class MainWindow
 
         public void Execute(RibbonCommandContext context)
         {
-            // Many toggle handlers read their checked state off the BACKPLANE field by name (e.g.
-            // BoldButton_Click reads BoldButton.IsChecked; ViewGridlinesChk_Changed reads its sender,
-            // which is the backplane chk). A real click flips IsChecked before raising the event, so
-            // mirror that here on the backplane toggle so field-reading handlers observe the new state.
-            // (The rendered toggle was already flipped by the keytip path; the backplane is a separate
-            // control, so this is not a double-flip.)
-            if (_sender is ToggleButton backplaneToggle)
-                backplaneToggle.IsChecked = backplaneToggle.IsChecked != true;
+            // Toggle checked-state now lives in the neutral RibbonStateStore: the renderer's click
+            // handler pushes the (already-flipped) rendered toggle state into the store before this
+            // runs, and toggle handlers read the store (BoldButton_Click) or their rendered sender
+            // (ViewGridlinesChk_Changed reads the CheckBox the renderer supplies as sender). No hidden
+            // backplane toggle is flipped here anymore.
 
-            // For sender-reading handlers (MenuItem.Tag/Header), prefer the actual clicked WPF element
-            // the renderer supplies; otherwise use the backplane control, then the window.
+            // For sender-reading handlers (MenuItem.Tag/Header, CheckBox.IsChecked), prefer the actual
+            // clicked WPF element the renderer supplies; otherwise use the legacy control, then the window.
             var sender = (context.Parameters.TryGetValue(RibbonWpfRenderer.SenderKey, out var wpfSender)
                     ? wpfSender
                     : null)
@@ -229,6 +230,22 @@ public partial class MainWindow
         return map;
     }
 
+    /// <summary>Rendered ribbon controls keyed by command name, captured at swap time. Used to share
+    /// imperatively-built context menus and to update per-control help text/labels that are not part
+    /// of the neutral <see cref="RibbonCommandState"/>.</summary>
+    private IReadOnlyDictionary<string, Control> _renderedRibbonControls =
+        new Dictionary<string, Control>(StringComparer.Ordinal);
+
+    /// <summary>Returns the visible rendered ribbon control for a command name, if the declarative
+    /// ribbon has been built.</summary>
+    private Control? FindRenderedRibbonControl(string commandName) =>
+        _renderedRibbonControls.TryGetValue(commandName, out var control) ? control : null;
+
+    /// <summary>
+    /// Shares imperatively-built context menus from the legacy backplane buttons onto the rendered
+    /// buttons. Toggle/combo/enablement state is no longer mirrored here — it flows from the
+    /// <see cref="RibbonStateStore"/> to the rendered controls via the renderer's store binding.
+    /// </summary>
     private static void WireDeclarativeStateSync(
         IReadOnlyDictionary<string, Control> originals,
         IReadOnlyDictionary<string, Control> rendered)
@@ -246,38 +263,6 @@ public partial class MainWindow
                 target is ButtonBase targetButton && targetButton.ContextMenu is null)
             {
                 targetButton.ContextMenu = sourceMenu;
-            }
-
-            // Mirror enablement and help text from the backplane control (which the app updates for
-            // context, e.g. multi-window commands disabled with an explanatory description in a
-            // lone-window host) onto the rendered control. Names are re-pointed to the rendered control,
-            // so the rendered one must carry both — a context-disabled command then exposes no keytip
-            // and reports the same help text. Help text is updated alongside IsEnabled by the app, so
-            // refreshing it on IsEnabledChanged keeps it live.
-            void SyncState()
-            {
-                target.IsEnabled = original.IsEnabled;
-                var help = System.Windows.Automation.AutomationProperties.GetHelpText(original);
-                if (!string.IsNullOrEmpty(help))
-                    System.Windows.Automation.AutomationProperties.SetHelpText(target, help);
-            }
-            original.IsEnabledChanged += (_, _) => SyncState();
-            SyncState();
-
-            if (original is ToggleButton sourceToggle && target is ToggleButton targetToggle)
-            {
-                void Sync() => targetToggle.IsChecked = sourceToggle.IsChecked;
-                sourceToggle.Checked += (_, _) => Sync();
-                sourceToggle.Unchecked += (_, _) => Sync();
-                sourceToggle.Indeterminate += (_, _) => Sync();
-                Sync();
-            }
-            else if (original is ComboBox sourceCombo && target is ComboBox targetCombo)
-            {
-                void Sync() => targetCombo.Text = sourceCombo.Text;
-                sourceCombo.SelectionChanged += (_, _) => Sync();
-                sourceCombo.LostFocus += (_, _) => Sync();
-                Sync();
             }
         }
     }
