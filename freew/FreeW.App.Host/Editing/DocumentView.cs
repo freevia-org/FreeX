@@ -22,6 +22,7 @@ using ModelRun = FreeW.Core.Model.Run;
 using ModelTable = FreeW.Core.Model.Table;
 using ModelTableRow = FreeW.Core.Model.TableRow;
 using ModelTableCell = FreeW.Core.Model.TableCell;
+using ModelContentControl = FreeW.Core.Model.ContentControl;
 using ModelTextAlignment = FreeW.Core.Model.TextAlignment;
 
 namespace FreeW.App.Host.Editing;
@@ -1115,6 +1116,21 @@ public sealed class DocumentView : RichTextBox
                     CommentId = covered.CommentId
                 });
                 break;
+            case WpfRun { Tag: ContentControlMarker ccMarker } controlRun when controlRun.Text.Length > 0:
+                // A content-control run: recover its formatting but drop the injected control shade
+                // (view-only chrome) and carry the control back onto the model run. For a checkbox the
+                // run text already holds the (possibly toggled) ☒/☐ glyph; keep the marker's control in
+                // sync with that glyph so a click that toggled the glyph round-trips its checked state.
+                var control = ccMarker.Control;
+                if (control.Kind == ContentControlKind.CheckBox)
+                    control = control with { Checked = controlRun.Text == ModelContentControl.CheckedGlyph };
+                modelParagraph.Runs.Add(new ModelRun(controlRun.Text, ReadRunFormatting(controlRun) with { HighlightColorHex = null })
+                {
+                    HyperlinkUrl = hyperlinkUrl,
+                    HyperlinkAnchor = hyperlinkAnchor,
+                    Control = control
+                });
+                break;
             case WpfRun { Tag: RevisionMarker marker } revisedRun when revisedRun.Text.Length > 0:
                 // A tracked-change run: recover its formatting but strip the injected revision colour and
                 // the kind's decoration (view-only chrome), carrying the revision mark back onto the model.
@@ -1371,6 +1387,12 @@ public sealed class DocumentView : RichTextBox
         if (run.CommentId is { } commentId)
             ApplyCommentMarker(wpf, commentId, document);
 
+        // A content control (w:sdt) run is given a subtle shaded background and bracket-style tooltip so
+        // it reads as a control, plus a ContentControlMarker tag so the control round-trips on commit
+        // (see ReadInline). A checkbox control toggles its glyph when clicked.
+        if (run.Control is { } control)
+            ApplyContentControlMarker(wpf, control);
+
         if (run.HyperlinkUrl is { Length: > 0 } url)
             return BuildHyperlink(wpf, url);
         if (run.HyperlinkAnchor is { Length: > 0 } anchor)
@@ -1416,6 +1438,63 @@ public sealed class DocumentView : RichTextBox
     /// otherwise it is a covered text run within the comment range.
     /// </summary>
     private sealed record CommentMarker(int CommentId, bool IsReference);
+
+    /// <summary>Subtle shaded background used to mark a content-control (w:sdt) region (a pale grey).</summary>
+    private static readonly Color ContentControlShade = Color.FromRgb(0xEC, 0xEC, 0xF4);
+
+    /// <summary>
+    /// Carried on a content-control WPF run's Tag so CommitToModel can round-trip the control (kind,
+    /// tag, alias, checked state). Mirrors how CommentMarker/RevisionMarker preserve their marks across
+    /// an edit/commit cycle.
+    /// </summary>
+    private sealed record ContentControlMarker(ModelContentControl Control);
+
+    /// <summary>
+    /// Marks a WPF run as the content of a content control (w:sdt): a subtle shaded background so the
+    /// control region is visible, a bracket-style tooltip, and a <see cref="ContentControlMarker"/> tag
+    /// so the control survives a commit/round-trip. A checkbox control toggles its glyph on click.
+    /// </summary>
+    private static void ApplyContentControlMarker(WpfRun wpf, ModelContentControl control)
+    {
+        wpf.Tag = new ContentControlMarker(control);
+        wpf.Background = new SolidColorBrush(ContentControlShade);
+        wpf.ToolTip = control.Kind == ContentControlKind.CheckBox
+            ? (control.Alias is { Length: > 0 } a ? $"Checkbox: {a}" : "Checkbox content control (click to toggle)")
+            : (control.Alias is { Length: > 0 } a2 ? $"Content control: {a2}" : "Plain-text content control");
+
+        if (control.Kind == ContentControlKind.CheckBox)
+        {
+            wpf.Cursor = System.Windows.Input.Cursors.Hand;
+            wpf.MouseLeftButtonUp += OnCheckBoxControlClicked;
+        }
+    }
+
+    /// <summary>
+    /// Toggles a checkbox content control when its glyph run is clicked: flips the checked state on the
+    /// run's <see cref="ContentControlMarker"/> and swaps the displayed ☒/☐ glyph in place. The owning
+    /// view re-commits so the new state round-trips on save.
+    /// </summary>
+    private static void OnCheckBoxControlClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not WpfRun { Tag: ContentControlMarker marker } wpf
+            || marker.Control.Kind != ContentControlKind.CheckBox)
+            return;
+
+        var toggled = marker.Control with { Checked = !marker.Control.Checked };
+        wpf.Tag = new ContentControlMarker(toggled);
+        wpf.Text = toggled.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
+        e.Handled = true;
+
+        // Persist the new state into the model so a subsequent save reflects the toggle.
+        FindOwnerView(wpf)?.CommitToModel();
+    }
+
+    /// <summary>Walks up from an inline to the hosting <see cref="DocumentView"/>, if any.</summary>
+    private static DocumentView? FindOwnerView(Inline inline)
+    {
+        var flow = FindFlowDocument(inline);
+        return flow?.Parent as DocumentView;
+    }
 
     // Wraps a styled run in a WPF Hyperlink that targets an internal bookmark. The bookmark name is
     // stored on the link's Tag (not NavigateUri, which is reserved for external URLs) so it reads back
@@ -1605,6 +1684,61 @@ public sealed class DocumentView : RichTextBox
             Document.Blocks.Add(paragraph);
         }
         paragraph.Inlines.Add(marker);
+
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Inserts a plain-text content control (w:sdt) at the caret. When the selection is non-empty its
+    /// text becomes the control's content; otherwise a placeholder ("Click to enter text") is used. The
+    /// control carries the optional <paramref name="tag"/> / <paramref name="alias"/> and renders as a
+    /// shaded region. Re-renders so the control round-trips on the next commit/save.
+    /// </summary>
+    public void InsertPlainTextControl(string? tag = null, string? alias = null)
+    {
+        Focus();
+
+        var selected = Selection?.Text;
+        var text = string.IsNullOrEmpty(selected) ? "Click to enter text" : selected;
+        if (Selection is { IsEmpty: false })
+            Selection.Text = string.Empty;
+
+        var run = BuildControlRun(ModelRun.PlainTextControl(text, tag, alias));
+        InsertInlineAtCaret(run);
+    }
+
+    /// <summary>
+    /// Inserts a checkbox content control (w:sdt) at the caret, initially unchecked. The control carries
+    /// the optional <paramref name="tag"/> / <paramref name="alias"/>; its run shows the ☐ glyph and
+    /// toggles to ☒ on click. Re-renders so the control round-trips on the next commit/save.
+    /// </summary>
+    public void InsertCheckBoxControl(string? tag = null, string? alias = null)
+    {
+        Focus();
+        var run = BuildControlRun(ModelRun.CheckBoxControl(@checked: false, tag, alias));
+        InsertInlineAtCaret(run);
+    }
+
+    /// <summary>Builds the WPF inline for a content-control model run (shaded region + marker tag).</summary>
+    private Inline BuildControlRun(ModelRun run) => BuildRun(run, new ModelParagraph(), _model);
+
+    /// <summary>
+    /// Inserts a freshly built inline at the caret (or appends to the last paragraph), then commits and
+    /// re-renders so the new run round-trips through the model. Shared by the content-control inserts.
+    /// </summary>
+    private void InsertInlineAtCaret(Inline inline)
+    {
+        CommitToModel();
+
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
+        if (paragraph is null)
+        {
+            paragraph = new WpfParagraph();
+            Document.Blocks.Add(paragraph);
+        }
+        paragraph.Inlines.Add(inline);
 
         CommitToModel();
         Render();

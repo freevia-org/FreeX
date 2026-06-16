@@ -305,6 +305,20 @@ public static class DocxReader
                     }
                 }
             }
+            else if (child.Name == W + "sdt")
+            {
+                // A content control (structured document tag): w:sdtPr describes the control (tag/alias +
+                // kind), w:sdtContent holds the wrapped run(s). Recover the control and stamp every content
+                // run with it (one shared instance so the writer re-coalesces them into one w:sdt).
+                var control = ReadContentControl(child.Element(W + "sdtPr"));
+                var sdtContent = child.Element(W + "sdtContent");
+                if (sdtContent is not null)
+                {
+                    foreach (var sdtChild in sdtContent.Elements(W + "r"))
+                        AddRun(paragraph, sdtChild, archive, imageRelationships,
+                            hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, control: control);
+                }
+            }
             else if (child.Name == W + "fldSimple")
             {
                 AddSimpleField(paragraph, child);
@@ -343,6 +357,35 @@ public static class DocxReader
         }
     }
 
+    /// <summary>
+    /// Reads a content control's w:sdtPr into a <see cref="ContentControl"/>: recovers the optional
+    /// w:tag / w:alias and the control kind. A w14:checkbox (or w:checkbox) marks a checkbox control,
+    /// whose checked state comes from the nested w14:checked/@val ("1"/"true"/"on"); anything else is a
+    /// plain-text control. A null/absent w:sdtPr yields a default plain-text control.
+    /// </summary>
+    private static ContentControl ReadContentControl(XElement? sdtPr)
+    {
+        var tag = sdtPr?.Element(W + "tag")?.Attribute(W + "val")?.Value;
+        var alias = sdtPr?.Element(W + "alias")?.Attribute(W + "val")?.Value;
+
+        var checkbox = sdtPr?.Element(W14 + "checkbox") ?? sdtPr?.Element(W + "checkbox");
+        if (checkbox is not null)
+        {
+            var val = (checkbox.Element(W14 + "checked") ?? checkbox.Element(W + "checked"))
+                ?.Attribute(W14 + "val")?.Value
+                ?? (checkbox.Element(W14 + "checked") ?? checkbox.Element(W + "checked"))?.Attribute(W + "val")?.Value;
+            var isChecked = val is "1" or "true" or "on";
+            return new ContentControl(ContentControlKind.CheckBox,
+                string.IsNullOrEmpty(tag) ? null : tag,
+                string.IsNullOrEmpty(alias) ? null : alias,
+                isChecked);
+        }
+
+        return new ContentControl(ContentControlKind.PlainText,
+            string.IsNullOrEmpty(tag) ? null : tag,
+            string.IsNullOrEmpty(alias) ? null : alias);
+    }
+
     /// <summary>Carries a tracked-change kind plus its author/date while reading runs inside a w:ins/w:del.</summary>
     private readonly record struct RevisionInfo(RevisionKind Kind, string? Author, string? DateXml);
 
@@ -354,7 +397,8 @@ public static class DocxReader
         string? hyperlinkUrl,
         string? hyperlinkAnchor,
         int? commentId = null,
-        RevisionInfo revision = default)
+        RevisionInfo revision = default,
+        ContentControl? control = null)
     {
         void ApplyRevision(Run run)
         {
@@ -391,7 +435,7 @@ public static class DocxReader
             text += "\t";
         if (text.Length == 0)
             return;
-        var textRun = new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId };
+        var textRun = new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId, Control = control };
         ApplyRevision(textRun);
         paragraph.Runs.Add(textRun);
     }

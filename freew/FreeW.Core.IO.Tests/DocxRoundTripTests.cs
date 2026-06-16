@@ -1312,4 +1312,94 @@ public class DocxRoundTripTests
         documentXml.Should().NotContain("<w:ins");
         documentXml.Should().NotContain("<w:del");
     }
+
+    [Fact]
+    public void PlainTextContentControl_RoundTrips_KindTagAndText()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Before "));
+        body.Runs.Add(Run.PlainTextControl("editable content", tag: "FullName", alias: "Full name"));
+        body.Runs.Add(new Run(" after"));
+        doc.Blocks.Add(body);
+
+        var result = RoundTrip(doc);
+
+        var paragraph = result.Paragraphs.First();
+        paragraph.PlainText.Should().Be("Before editable content after");
+
+        var control = paragraph.Runs.Single(r => r.Control is not null);
+        control.Text.Should().Be("editable content");
+        control.Control!.Kind.Should().Be(ContentControlKind.PlainText);
+        control.Control.Tag.Should().Be("FullName");
+        control.Control.Alias.Should().Be("Full name");
+        control.Control.Checked.Should().BeFalse();
+
+        // The surrounding text carries no control mark.
+        paragraph.Runs.Where(r => r.Text is "Before " or " after").Should().OnlyContain(r => r.Control == null);
+    }
+
+    [Theory]
+    [InlineData(true, "☒")]
+    [InlineData(false, "☐")]
+    public void CheckBoxContentControl_RoundTrips_CheckedState(bool isChecked, string glyph)
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Agree: "));
+        body.Runs.Add(Run.CheckBoxControl(isChecked, tag: "Agree", alias: "I agree"));
+        doc.Blocks.Add(body);
+
+        var result = RoundTrip(doc);
+
+        var control = result.Paragraphs.First().Runs.Single(r => r.Control is { Kind: ContentControlKind.CheckBox });
+        control.Control!.Checked.Should().Be(isChecked);
+        control.Text.Should().Be(glyph);
+        control.Control.Tag.Should().Be("Agree");
+        control.Control.Alias.Should().Be("I agree");
+    }
+
+    [Fact]
+    public void ContentControls_EmitSdtInDocumentXml()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(Run.PlainTextControl("text control", tag: "T1"));
+        body.Runs.Add(Run.CheckBoxControl(@checked: true, tag: "C1"));
+        doc.Blocks.Add(body);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = docReader.ReadToEnd();
+
+        // Each control wraps its run(s) in a w:sdt (w:sdtPr + w:sdtContent).
+        documentXml.Should().Contain("<w:sdt>");
+        documentXml.Should().Contain("<w:sdtPr>");
+        documentXml.Should().Contain("<w:sdtContent>");
+        // Plain-text control marker + tag, checkbox control marker + checked state.
+        documentXml.Should().Contain("<w:text");
+        documentXml.Should().Contain("w:val=\"T1\"");
+        documentXml.Should().Contain("w14:checkbox");
+        documentXml.Should().Contain("w14:val=\"1\"");
+    }
+
+    [Fact]
+    public void NoContentControls_DoesNotEmitSdt()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Plain body with no controls"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = docReader.ReadToEnd();
+        documentXml.Should().NotContain("<w:sdt");
+    }
 }

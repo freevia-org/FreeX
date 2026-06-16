@@ -8,6 +8,12 @@ internal static class Ooxml
 {
     public static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     public static readonly XNamespace R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+    /// <summary>
+    /// The Office 2010 WordprocessingML extension namespace (w14), used here for the checkbox content
+    /// control element (w14:checkbox) inside a content control's w:sdtPr.
+    /// </summary>
+    public static readonly XNamespace W14 = "http://schemas.microsoft.com/office/word/2010/wordml";
     public static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
     public static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
 
