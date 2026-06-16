@@ -47,6 +47,13 @@ public sealed class DocumentView : RichTextBox
     private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
     private double _zoomLevel = ZoomLevels.Default;
 
+    /// <summary>
+    /// Holds the run + paragraph formatting captured when Format Painter is armed (null when the
+    /// painter is idle). On the next selection the user makes, this is stamped onto that selection
+    /// and the painter disarms. See <see cref="ArmFormatPainter"/>.
+    /// </summary>
+    private FormatPainterClipboard? _formatPainter;
+
     public DocumentView()
     {
         AcceptsTab = true;
@@ -204,6 +211,21 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SetWatermark(string? text) =>
         ApplyPageSettings(page => page.Watermark = string.IsNullOrWhiteSpace(text) ? null : text.Trim());
+
+    /// <summary>
+    /// Apply a document theme (colour/font scheme) to the model's style catalog and re-render so the
+    /// new heading colours/fonts and body face show immediately. This is a document-wide style change
+    /// to the catalog (not the per-paragraph runs), so it is applied directly rather than through the
+    /// undo/redo bus: pending in-progress edits are committed first so the re-render does not drop them,
+    /// then <see cref="DocumentTheme.Apply"/> rewrites the relevant styles and the surface re-renders.
+    /// Used by the Design ribbon's theme dropdown.
+    /// </summary>
+    public void ApplyTheme(DocumentTheme theme)
+    {
+        CommitToModel();
+        DocumentTheme.Apply(_model, theme);
+        Render();
+    }
 
     /// <summary>
     /// Insert a table at the caret (after the block the caret sits in, else at the end), routing
@@ -505,6 +527,150 @@ public sealed class DocumentView : RichTextBox
             if (_model.Blocks[index] is ModelParagraph)
                 _commands.Execute(new FormatParagraphRunsCommand(index, _ => RunFormatting.Default));
         }
+    }
+
+    /// <summary>True while Format Painter is armed (captured formatting waiting to be stamped).</summary>
+    public bool FormatPainterActive => _formatPainter is not null;
+
+    /// <summary>
+    /// Arm the Format Painter: capture the run formatting under the caret/selection and the caret
+    /// paragraph's formatting, then wait for the user's next selection to stamp it (the classic
+    /// capture-then-apply-to-next gesture). Calling this while already armed disarms it (a toggle).
+    /// Returns true if the painter is now armed, false if it was disarmed.
+    /// </summary>
+    public bool ArmFormatPainter()
+    {
+        Focus();
+        if (_formatPainter is not null)
+        {
+            _formatPainter = null;
+            return false;
+        }
+
+        _formatPainter = FormatPainterClipboard.Capture(CaptureSelectionRunFormatting(), CaptureCaretParagraphFormatting());
+        return true;
+    }
+
+    /// <summary>
+    /// If the Format Painter is armed and the current selection is non-empty, stamp the captured run
+    /// and paragraph formatting onto it, then disarm. Called on mouse-up after the user drags out the
+    /// "next selection". A no-op (leaving the painter armed) when the selection is still empty, so a
+    /// stray click that places only a caret does not consume the gesture. Returns true if applied.
+    /// </summary>
+    private bool TryApplyFormatPainter()
+    {
+        if (_formatPainter is not { } clipboard || Selection.IsEmpty)
+            return false;
+
+        _formatPainter = null; // disarm first so a re-render mid-apply cannot re-trigger
+
+        // Run formatting: stamp the captured character formatting onto the selected text via WPF
+        // selection property values (covers partial-run selections), mirroring the inverse of
+        // ReadRunFormatting / BuildRun. Paragraph formatting then routes through the model bus.
+        ApplyRunFormattingToSelection(clipboard.ApplyTo(RunFormatting.Default));
+        var captured = clipboard.Paragraph;
+        FormatSelectedModelParagraphs(_ => captured);
+        return true;
+    }
+
+    // Read the run formatting of the current selection/caret straight from WPF selection property
+    // values (so a partial selection or a bare caret both yield a sensible capture), decoding the same
+    // way ReadRunFormatting does for a single run.
+    private RunFormatting CaptureSelectionRunFormatting()
+    {
+        var selection = Selection;
+        var fontSizePx = selection.GetPropertyValue(TextElement.FontSizeProperty) is double px && px > 0
+            ? px
+            : DefaultFontSizePt * PxPerPoint;
+
+        var baseline = selection.GetPropertyValue(Inline.BaselineAlignmentProperty);
+        var verticalAlign = baseline switch
+        {
+            BaselineAlignment.Superscript => VerticalAlign.Superscript,
+            BaselineAlignment.Subscript => VerticalAlign.Subscript,
+            _ => VerticalAlign.Baseline
+        };
+        var fontSizePt = fontSizePx / PxPerPoint;
+        if (verticalAlign != VerticalAlign.Baseline)
+            fontSizePt /= SuperSubScale;
+
+        var decorations = selection.GetPropertyValue(Inline.TextDecorationsProperty) as TextDecorationCollection;
+        var capitals = selection.GetPropertyValue(Typography.CapitalsProperty);
+
+        return new RunFormatting
+        {
+            Bold = selection.GetPropertyValue(TextElement.FontWeightProperty) is FontWeight w && w >= FontWeights.Bold,
+            Italic = selection.GetPropertyValue(TextElement.FontStyleProperty) is FontStyle s && s == FontStyles.Italic,
+            Underline = decorations?.Contains(TextDecorations.Underline[0]) == true,
+            Strikethrough = decorations?.Contains(TextDecorations.Strikethrough[0]) == true,
+            SmallCaps = capitals is FontCapitals.SmallCaps,
+            AllCaps = capitals is FontCapitals.AllSmallCaps,
+            VerticalAlign = verticalAlign,
+            FontFamily = selection.GetPropertyValue(TextElement.FontFamilyProperty) is FontFamily family ? family.Source : null,
+            FontSizePt = fontSizePt,
+            ColorHex = selection.GetPropertyValue(TextElement.ForegroundProperty) is SolidColorBrush fg ? ToHex(fg.Color) : null,
+            HighlightColorHex = selection.GetPropertyValue(TextElement.BackgroundProperty) is SolidColorBrush bg ? ToHex(bg.Color) : null
+        };
+    }
+
+    // Read the paragraph formatting of the caret's paragraph (or the selection start) from the model,
+    // so spacing/alignment/indents/border/shading are captured exactly as they round-trip.
+    private ParagraphFormatting CaptureCaretParagraphFormatting()
+    {
+        var paragraphs = SelectedModelParagraphs();
+        return paragraphs.Count > 0 ? paragraphs[0].Formatting : ParagraphFormatting.Default;
+    }
+
+    // Apply a fully-resolved RunFormatting to the current selection via WPF selection property values.
+    // This is the inverse of CaptureSelectionRunFormatting and reuses the same encodings as BuildRun
+    // (super/subscript shrink, small/all caps -> FontCapitals, underline/strikethrough decorations) so
+    // the change round-trips through CommitToModel unchanged.
+    private void ApplyRunFormattingToSelection(RunFormatting fmt)
+    {
+        var selection = Selection;
+        selection.ApplyPropertyValue(TextElement.FontWeightProperty, fmt.Bold ? FontWeights.Bold : FontWeights.Normal);
+        selection.ApplyPropertyValue(TextElement.FontStyleProperty, fmt.Italic ? FontStyles.Italic : FontStyles.Normal);
+
+        if (fmt.FontFamily is { Length: > 0 } family)
+            selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(family));
+
+        var fontSizePx = (fmt.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
+        if (fmt.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
+        {
+            selection.ApplyPropertyValue(Inline.BaselineAlignmentProperty,
+                fmt.VerticalAlign == VerticalAlign.Superscript ? BaselineAlignment.Superscript : BaselineAlignment.Subscript);
+            selection.ApplyPropertyValue(TextElement.FontSizeProperty, fontSizePx * SuperSubScale);
+        }
+        else
+        {
+            selection.ApplyPropertyValue(Inline.BaselineAlignmentProperty, BaselineAlignment.Baseline);
+            selection.ApplyPropertyValue(TextElement.FontSizeProperty, fontSizePx);
+        }
+
+        selection.ApplyPropertyValue(TextElement.ForegroundProperty,
+            TryParseColor(fmt.ColorHex, out var color) ? new SolidColorBrush(color) : Brushes.Black);
+        // Highlight: a captured highlight is applied; no highlight clears the background back to none.
+        selection.ApplyPropertyValue(TextElement.BackgroundProperty,
+            TryParseColor(fmt.HighlightColorHex, out var highlight) ? new SolidColorBrush(highlight) : null!);
+
+        var capitals = fmt.AllCaps ? FontCapitals.AllSmallCaps : fmt.SmallCaps ? FontCapitals.SmallCaps : FontCapitals.Normal;
+        selection.ApplyPropertyValue(Typography.CapitalsProperty, capitals);
+
+        var decorations = new TextDecorationCollection();
+        if (fmt.Underline)
+            decorations.Add(TextDecorations.Underline);
+        if (fmt.Strikethrough)
+            decorations.Add(TextDecorations.Strikethrough);
+        selection.ApplyPropertyValue(Inline.TextDecorationsProperty, decorations);
+    }
+
+    // After a mouse-driven selection completes, stamp any armed Format Painter onto it. Runs after the
+    // base handler so Selection reflects the just-finished drag.
+    protected override void OnPreviewMouseLeftButtonUp(MouseButtonEventArgs e)
+    {
+        base.OnPreviewMouseLeftButtonUp(e);
+        if (_formatPainter is not null)
+            TryApplyFormatPainter();
     }
 
     // Commit pending edits, then apply a paragraph-formatting transform to every model paragraph spanned
@@ -1562,6 +1728,35 @@ public sealed class DocumentView : RichTextBox
         var bibliography = Citations.BuildBibliography(_model);
         foreach (var paragraph in bibliography)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+    }
+
+    /// <summary>
+    /// True when the caret currently sits inside a table block. Used by the Insert Caption command to
+    /// default the caption label to <see cref="CaptionLabel.Table"/> for tables (else Figure).
+    /// </summary>
+    public bool IsCaretInTable() => CaretTableLocation().BlockIndex >= 0;
+
+    /// <summary>
+    /// Insert a numbered caption (e.g. "Figure 1: My diagram") of <paramref name="label"/> with the
+    /// given <paramref name="text"/> after the block the caret sits in (so it reads under the selected
+    /// image/table), else at the document end. The next ordinal is computed by counting the document's
+    /// existing captions of that label (see <see cref="Captions.NextCaptionNumber"/>), and the caption
+    /// is a single <c>Caption</c>-styled paragraph routed through the undo/redo bus so it is reversible.
+    /// </summary>
+    public void InsertCaption(CaptionLabel label, string text)
+    {
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+        Captions.EnsureStyles(_model);
+
+        var number = Captions.NextCaptionNumber(_model, label);
+        var caption = Captions.BuildCaption(label, number, text);
+
+        // Insert after the caret's block so the caption sits under the selected image/table.
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+        _commands.Execute(new InsertParagraphCommand(index, caption));
     }
 
     /// <summary>

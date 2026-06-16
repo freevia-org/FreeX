@@ -1,3 +1,6 @@
+using System.Linq;
+using FreeW.Core.Model;
+
 namespace FreeW.App.Host;
 
 /// <summary>
@@ -109,6 +112,7 @@ internal static class FreeWRibbon
                     g.Button("freew.toc-refresh", "Update TOC");
                     g.Button("freew.citation", "Citation");
                     g.Button("freew.bibliography", "Bibliography");
+                    g.Button("freew.caption", "Caption");
                 });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {
@@ -141,11 +145,26 @@ internal static class FreeWRibbon
                     g.Button("freew.print-preview", "Print Preview");
                 });
             })
+            .Tab("design", "Design", "G", tab =>
+            {
+                tab.Group("themes", "Document Formatting", "T", 100, g =>
+                {
+                    g.ComboBox("freew.theme", "Themes", c => c with
+                    {
+                        Items = DocumentTheme.Catalog.Select(t => t.Name).ToArray(),
+                        Width = 140
+                    });
+                });
+            })
             .Tab("view", "View", "W", tab =>
             {
                 tab.Group("show", "Show", "S", 100, g =>
                 {
                     g.Toggle("freew.nav-pane", "Navigation Pane");
+                });
+                tab.Group("views", "Views", "V", 90, g =>
+                {
+                    g.Toggle("freew.read-mode", "Read Mode");
                 });
             })
             .Tab("review", "Review", "R", tab =>

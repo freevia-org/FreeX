@@ -29,6 +29,18 @@ public sealed class MainWindow : Window
     private ListBox _navList = null!;
     private bool _navPaneVisible;
 
+    // Read mode (distraction-free view) chrome we hide/restore, plus the saved presentation we restore.
+    private Border _titleBar = null!;
+    private UIElement _ribbon = null!;
+    private StatusBar _status = null!;
+    private StatusBarItem _dataFolderItem = null!;
+    private StatusBarItem _zoomItem = null!;
+    private bool _readMode;
+    private bool _navPaneVisibleBeforeReadMode;
+    private Thickness _editorMarginBeforeReadMode;
+    private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
+    private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
+
     public MainWindow()
     {
         Title = "FreeW";
@@ -43,27 +55,36 @@ public sealed class MainWindow : Window
         editor.LoadModel(CreateSampleDocument());
         var stateStore = new RibbonStateStore();
         _stateStore = stateStore;
-        var commands = FreeWRibbonCommands.Build(editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible);
+        var commands = FreeWRibbonCommands.Build(
+            editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode);
         _file = new FileCommands(this, editor, UpdateTitle);
         editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); };
+        // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
+        // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
+        editor.SelectionChanged += (_, _) => UpdateCounts();
         _autosave = new AutosaveCoordinator(editor, _file);
         Loaded += (_, _) => { _autosave.OfferRecovery(this); _autosave.Start(); };
         Closing += (_, _) => _autosave.Stop();
 
         var titleBar = BuildTitleBar();
+        _titleBar = titleBar;
         DockPanel.SetDock(titleBar, Dock.Top);
         root.Children.Add(titleBar);
 
         var ribbon = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
+        _ribbon = ribbon;
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
         var status = new StatusBar();
+        _status = status;
         _countsText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         status.Items.Add(new StatusBarItem { Content = _countsText });
         status.Items.Add(new Separator());
-        status.Items.Add(new StatusBarItem { Content = $"Data folder: {ResolveDataFolderLabel()}" });
-        status.Items.Add(new StatusBarItem { HorizontalAlignment = HorizontalAlignment.Right, Content = BuildZoomControl() });
+        _dataFolderItem = new StatusBarItem { Content = $"Data folder: {ResolveDataFolderLabel()}" };
+        status.Items.Add(_dataFolderItem);
+        _zoomItem = new StatusBarItem { HorizontalAlignment = HorizontalAlignment.Right, Content = BuildZoomControl() };
+        status.Items.Add(_zoomItem);
         DockPanel.SetDock(status, Dock.Bottom);
         root.Children.Add(status);
 
@@ -140,10 +161,21 @@ public sealed class MainWindow : Window
         _titleText.Text = $"{name} — FreeW";
     }
 
-    // Recompute live word/character/paragraph counts from the editor's committed model and show them
-    // in the status bar. Cheap enough to run on every edit (TextChanged) and on document load.
+    // Recompute the live status-bar counts. When there is a non-empty selection, show that selection's
+    // word + character totals (via the pure WordCount helpers over Selection.Text); otherwise fall back
+    // to the whole-document word/character/paragraph counts. Cheap enough to run on every edit
+    // (TextChanged), on selection change, and on document load.
     private void UpdateCounts()
     {
+        var selectionText = _editor.Selection.Text;
+        if (!string.IsNullOrEmpty(selectionText))
+        {
+            var words = WordCount.Words(selectionText);
+            var characters = WordCount.Characters(selectionText, includeSpaces: true);
+            _countsText.Text = $"Selection: {words} words, {characters} characters";
+            return;
+        }
+
         _editor.CommitToModel();
         var stats = WordCount.Of(_editor.Model);
         _countsText.Text = $"Words: {stats.Words}   Characters: {stats.CharactersWithSpaces}   Paragraphs: {stats.Paragraphs}";
@@ -193,6 +225,55 @@ public sealed class MainWindow : Window
         _stateStore.SetChecked("freew.nav-pane", _navPaneVisible);
         if (_navPaneVisible)
             RefreshOutline();
+    }
+
+    // Read mode (distraction-free view): hide the ribbon, title bar, navigation pane, and the status
+    // bar's non-essential extras (data folder + zoom), then constrain the editor to a centered, roomy
+    // reading column. Toggling off restores every hidden element to exactly what it was before (including
+    // whether the nav pane had been open) and returns the editor to its original full-width presentation.
+    // The toggle state is mirrored into the shared RibbonStateStore so the View > Read Mode button stays
+    // in sync, exactly like the navigation-pane toggle.
+    private void ToggleReadMode()
+    {
+        _readMode = !_readMode;
+        if (_readMode)
+        {
+            // Remember the normal layout so we can put it back verbatim when read mode is switched off.
+            _navPaneVisibleBeforeReadMode = _navPaneVisible;
+            _editorMarginBeforeReadMode = _editor.Margin;
+            _editorMaxWidthBeforeReadMode = _editor.MaxWidth;
+            _editorAlignmentBeforeReadMode = _editor.HorizontalAlignment;
+
+            _titleBar.Visibility = Visibility.Collapsed;
+            _ribbon.Visibility = Visibility.Collapsed;
+            _dataFolderItem.Visibility = Visibility.Collapsed;
+            _zoomItem.Visibility = Visibility.Collapsed;
+
+            // Collapse the navigation pane while reading (without disturbing its remembered state).
+            _navPane.Visibility = Visibility.Collapsed;
+
+            // A centered, comfortable reading column: cap the width and add generous breathing room.
+            _editor.HorizontalAlignment = HorizontalAlignment.Center;
+            _editor.MaxWidth = 760;
+            _editor.Margin = new Thickness(40, 40, 40, 40);
+        }
+        else
+        {
+            _titleBar.Visibility = Visibility.Visible;
+            _ribbon.Visibility = Visibility.Visible;
+            _dataFolderItem.Visibility = Visibility.Visible;
+            _zoomItem.Visibility = Visibility.Visible;
+
+            // Restore the editor's original full-width presentation.
+            _editor.HorizontalAlignment = _editorAlignmentBeforeReadMode;
+            _editor.MaxWidth = _editorMaxWidthBeforeReadMode;
+            _editor.Margin = _editorMarginBeforeReadMode;
+
+            // Restore the navigation pane to whatever it was before entering read mode.
+            _navPane.Visibility = _navPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        _stateStore.SetChecked("freew.read-mode", _readMode);
     }
 
     // Recompute the heading outline from the editor's committed model and repopulate the nav list.

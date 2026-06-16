@@ -32,7 +32,18 @@ internal static class FreeWRibbonCommands
         RibbonStateStore stateStore,
         Action? onPrintPreview,
         Action? onToggleNavPane,
-        Func<bool>? isNavPaneVisible)
+        Func<bool>? isNavPaneVisible) =>
+        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
+            onToggleReadMode: null, isReadModeActive: null);
+
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Action? onPrintPreview,
+        Action? onToggleNavPane,
+        Func<bool>? isNavPaneVisible,
+        Action? onToggleReadMode,
+        Func<bool>? isReadModeActive)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -80,6 +91,10 @@ internal static class FreeWRibbonCommands
         Routed("freew.copy", ApplicationCommands.Copy);
         Routed("freew.paste", ApplicationCommands.Paste);
 
+        // Home > Clipboard > Format Painter: arm the painter from the current selection's run +
+        // paragraph formatting; the editor stamps it onto the user's next mouse selection and disarms.
+        registry.Register("freew.format-painter", new FormatPainterCommand(editor));
+
         registry.Register("freew.font-family", new SelectionValueCommand(editor,
             (selection, value) => selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(value))));
         registry.Register("freew.font-size", new SelectionValueCommand(editor, (selection, value) =>
@@ -120,6 +135,8 @@ internal static class FreeWRibbonCommands
         // and insert a bibliography built from the document's sources at the caret (reversible).
         registry.Register("freew.citation", new InsertCitationCommand(editor));
         registry.Register("freew.bibliography", new ActionCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
+        // Insert tab — References: insert a numbered figure/table caption under the caret's block.
+        registry.Register("freew.caption", new InsertCaptionCommand(editor));
         // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
         registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
@@ -176,6 +193,11 @@ internal static class FreeWRibbonCommands
         // (reversible via the bus), then re-renders so the style's run/paragraph formatting resolves.
         registry.Register("freew.style", new ApplyParagraphStyleCommand(editor));
 
+        // Design > Document Formatting: the Themes dropdown. Picking a theme name applies that built-in
+        // colour/font scheme to the document's style catalog (rewriting heading/title colours + fonts and
+        // the body face) and re-renders so the change is visible at once.
+        registry.Register("freew.theme", new ApplyThemeCommand(editor));
+
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
         registry.Register("freew.orientation", new PageCommand(editor, page =>
         {
@@ -210,6 +232,11 @@ internal static class FreeWRibbonCommands
         // button reflects whether the pane is currently shown.
         if (onToggleNavPane is not null && isNavPaneVisible is not null)
             registry.Register("freew.nav-pane", new ToggleActionCommand(onToggleNavPane, isNavPaneVisible));
+
+        // View tab — toggle read mode (distraction-free view). Stateful so the ribbon's toggle button
+        // reflects whether the chrome-light reading column is currently active.
+        if (onToggleReadMode is not null && isReadModeActive is not null)
+            registry.Register("freew.read-mode", new ToggleActionCommand(onToggleReadMode, isReadModeActive));
 
         return registry;
     }
@@ -289,6 +316,18 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context) => action();
     }
 
+    // Home > Clipboard > Format Painter: arm the painter from the current selection (capture its run +
+    // paragraph formatting), then let the editor stamp it onto the user's next mouse selection and
+    // disarm — the classic capture-then-apply-to-next gesture. Clicking again while armed cancels it.
+    private sealed class FormatPainterCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.ArmFormatPainter();
+        }
+    }
+
     // A stateful toggle command: executing runs the host action (e.g. show/hide a panel) and its
     // checked-ness is read back from a host predicate, so the ribbon toggle reflects the live state.
     private sealed class ToggleActionCommand(Action toggle, Func<bool> isChecked) : IRibbonStatefulCommand
@@ -365,6 +404,23 @@ internal static class FreeWRibbonCommands
         }
 
         private static string Compact(string value) => value.Replace(" ", string.Empty);
+    }
+
+    // Design > Document Formatting: apply a built-in document theme. The dropdown's value is a theme
+    // name (e.g. "Slate"); this resolves it to a DocumentTheme in the catalog and asks the view to
+    // rewrite the style catalog + re-render so the new heading colours/fonts and body face show at once.
+    private sealed class ApplyThemeCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value || value.Length == 0)
+                return;
+            if (DocumentTheme.FindByName(value) is not { } theme)
+                return;
+
+            editor.Focus();
+            editor.ApplyTheme(theme);
+        }
     }
 
     // Home > Font: pick a colour from a small fixed palette and apply it to the selection. When
@@ -784,6 +840,88 @@ internal static class FreeWRibbonCommands
             if (entry.Author.Length == 0 && entry.Title.Length == 0 && entry.Year.Length == 0)
                 return null;
             return editor.AddSource(entry.Tag, entry.Author, entry.Title, entry.Year, entry.Publisher);
+        }
+    }
+
+    // Insert > References > Caption: pick a label (Figure/Table — defaulting to Table when the caret is
+    // in a table, else Figure), prompt for the caption text, then insert a numbered caption under the
+    // caret's block. The view computes the next ordinal by counting existing captions of that label.
+    private sealed class InsertCaptionCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var defaultLabel = editor.IsCaretInTable() ? CaptionLabel.Table : CaptionLabel.Figure;
+
+            var label = CaptionLabelPicker.Ask(owner, defaultLabel);
+            if (label is null)
+                return; // cancelled
+
+            var text = TextPrompt.Ask(owner, "Insert Caption", "Caption text (optional):", string.Empty);
+            if (text is null)
+                return; // cancelled — leave the model untouched
+
+            editor.Focus();
+            editor.InsertCaption(label.Value, text.Trim());
+        }
+    }
+
+    // A tiny modal dialog choosing the caption label (Figure or Table), seeded with a default. Returns
+    // the chosen label, or null if cancelled.
+    private static class CaptionLabelPicker
+    {
+        public static CaptionLabel? Ask(Window? owner, CaptionLabel defaultLabel)
+        {
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 240,
+                MinHeight = 60,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            list.Items.Add(CaptionLabel.Figure);
+            list.Items.Add(CaptionLabel.Table);
+            list.SelectedItem = defaultLabel;
+
+            CaptionLabel? result = null;
+            var dialog = new Window
+            {
+                Title = "Insert Caption",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            void Choose()
+            {
+                if (list.SelectedItem is CaptionLabel chosen)
+                {
+                    result = chosen;
+                    dialog.DialogResult = true;
+                }
+            }
+            ok.Click += (_, _) => Choose();
+            list.MouseDoubleClick += (_, _) => Choose();
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Label:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(list);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 
