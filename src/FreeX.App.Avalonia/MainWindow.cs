@@ -13,7 +13,10 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System.Globalization;
 using FreeX.App.Services;
+using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
+using FreeX.Ribbon.Avalonia;
+using Free.Shared.Ribbon;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -3098,6 +3101,17 @@ public sealed class MainWindow : Window
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
+            var point = args.GetCurrentPoint(border);
+            if (point.Properties.IsRightButtonPressed)
+            {
+                // Right-click selects the clicked cell (so the menu commands target it) and then
+                // opens the worksheet cell context menu, built from the shared neutral plan.
+                SelectCell(address);
+                OpenWorksheetCellContextMenu(border);
+                args.Handled = true;
+                return;
+            }
+
             if (args.KeyModifiers.HasFlag(KeyModifiers.Shift))
                 SelectRange(address);
             else
@@ -3110,6 +3124,77 @@ public sealed class MainWindow : Window
             args.Handled = true;
         };
         return border;
+    }
+
+    /// <summary>
+    /// Builds and opens the worksheet cell context menu for <paramref name="anchor"/>. The menu is
+    /// produced from the platform-neutral <see cref="WorksheetContextMenuPlanner"/> (same plan WPF
+    /// uses), bridged to the shared <see cref="RibbonMenu"/> model, then rendered into an Avalonia
+    /// <see cref="ContextMenu"/> by <see cref="AvaloniaContextMenuRenderer"/>.
+    /// </summary>
+    private void OpenWorksheetCellContextMenu(Control anchor)
+    {
+        var menu = BuildWorksheetCellContextMenu();
+        menu.Open(anchor);
+    }
+
+    /// <summary>
+    /// Creates the worksheet cell <see cref="ContextMenu"/> from the shared neutral plan. The
+    /// <see cref="WorksheetContextMenuState"/> is left at its default for this slice — structure is
+    /// fully populated; state-driven enablement (comments/notes/hyperlinks/filter) is derivable
+    /// later once the Avalonia session exposes those flags.
+    /// </summary>
+    private ContextMenu BuildWorksheetCellContextMenu()
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(
+            WorksheetContextMenuTargetKind.Worksheet,
+            WorksheetContextMenuState.Default);
+        var ribbonMenu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
+        return AvaloniaContextMenuRenderer.BuildContextMenu(ribbonMenu, DispatchWorksheetContextMenuCommand);
+    }
+
+    /// <summary>
+    /// Routes a worksheet context-menu command id back to the matching Avalonia document command.
+    /// Actions with an existing Avalonia handler (clipboard + clear) are wired; the rest are no-ops
+    /// with a TODO until their Avalonia equivalents exist.
+    /// </summary>
+    private void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
+    {
+        if (!Enum.TryParse<WorksheetContextMenuAction>(commandId.Value, out var action))
+            return;
+
+        switch (action)
+        {
+            case WorksheetContextMenuAction.Cut:
+                _ = CutSelectedRangeToClipboardAsync();
+                break;
+            case WorksheetContextMenuAction.Copy:
+                _ = CopySelectedRangeToClipboardAsync();
+                break;
+            case WorksheetContextMenuAction.Paste:
+                _ = PasteClipboardTextAsync();
+                break;
+            case WorksheetContextMenuAction.ClearContents:
+                ClearSelectedRangeContents();
+                break;
+            case WorksheetContextMenuAction.ClearAll:
+                ClearSelectedRangeAll();
+                break;
+            case WorksheetContextMenuAction.ClearFormats:
+                ClearSelectedRangeFormats();
+                break;
+            case WorksheetContextMenuAction.ClearComments:
+                ClearSelectedRangeComments();
+                break;
+            case WorksheetContextMenuAction.ClearHyperlinks:
+                ClearSelectedRangeHyperlinks();
+                break;
+            default:
+                // TODO: no Avalonia equivalent yet (insert/delete cells, sort/filter, comments,
+                // notes, data tools, format cells, etc.). Menu structure is present; wire as the
+                // corresponding Avalonia document commands land.
+                break;
+        }
     }
 
     private static Border CreateCellBorder(
