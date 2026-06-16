@@ -128,6 +128,16 @@ internal static partial class XlsxWorksheetMetadataPreserver
         string.Equals(attribute.Name.LocalName, "uid", StringComparison.Ordinal) &&
         IsOfficeRevisionNamespace(attribute.Name.NamespaceName);
 
+    // A source row's `s` style index and its companion `customFormat` flag reference the source
+    // stylesheet's cellXfs index space. The full-save path rebuilds styles.xml via ClosedXML, which
+    // renumbers (and usually shrinks) cellXfs, so copying the source index verbatim onto the rebuilt
+    // row produces a reference into the wrong — and possibly out-of-range — index space. An
+    // out-of-range index crashes FreeX's own reload (ClosedXML LoadStyle -> ElementAt). These two
+    // attributes are intentionally not preserved by the row-attribute merge.
+    private static bool IsStylesheetIndexRowAttribute(XAttribute attribute) =>
+        attribute.Name.Namespace == XNamespace.None &&
+        attribute.Name.LocalName is "s" or "customFormat";
+
     private static bool IsOfficeRevisionNamespace(string namespaceName) =>
         namespaceName.StartsWith("http://schemas.microsoft.com/office/spreadsheetml/", StringComparison.Ordinal) &&
         namespaceName.Contains("/revision", StringComparison.Ordinal);
