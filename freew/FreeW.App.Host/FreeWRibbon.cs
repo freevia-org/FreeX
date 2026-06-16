@@ -19,6 +19,16 @@ internal static class FreeWRibbon
                 });
                 tab.Group("font", "Font", "F", 90, g =>
                 {
+                    g.ComboBox("freew.font-family", "Font", c => c with
+                    {
+                        Items = new[] { "Calibri", "Arial", "Times New Roman", "Georgia", "Consolas", "Verdana", "Cambria" },
+                        Width = 140
+                    });
+                    g.ComboBox("freew.font-size", "Size", c => c with
+                    {
+                        Items = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "24", "28", "36", "48", "72" },
+                        Width = 56
+                    });
                     g.Toggle("freew.bold", "Bold");
                     g.Toggle("freew.italic", "Italic");
                     g.Toggle("freew.underline", "Underline");
