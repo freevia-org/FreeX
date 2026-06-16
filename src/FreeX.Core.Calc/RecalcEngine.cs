@@ -117,7 +117,12 @@ public sealed class RecalcEngine
                     cell.CachedAst = cachedAst;
                     RegisterFormulaDependencies(addr, cachedAst, addr.Sheet, workbook);
                 }
-                var result = _evaluator.Evaluate(cachedAst, sheet, workbook, addr);
+                // Dynamic-array formulas spill: a top-level bare range reference (e.g. =A1:C3) must
+                // return the whole range so it spills, rather than collapsing to its top-left cell
+                // via implicit intersection (which is the legacy/Implicit mode behaviour).
+                var result = cell.ArrayMode == FormulaArrayMode.Dynamic
+                    ? _evaluator.EvaluateSpilling(cachedAst, sheet, workbook, addr)
+                    : _evaluator.Evaluate(cachedAst, sheet, workbook, addr);
 
                 if (result is RangeValue implicitRange && cell.ArrayMode == FormulaArrayMode.Implicit)
                 {
