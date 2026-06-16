@@ -89,6 +89,40 @@ public class DocumentCommandBusTests
     }
 
     [Fact]
+    public void SetParagraphFormatting_LineSpacing_Applies_AndReverts()
+    {
+        var (doc, bus) = New();
+        doc.Blocks.Add(new Paragraph("p"));
+        var original = doc.Paragraphs.First().Formatting;
+        var doubled = original with { LineSpacing = 2.0 };
+
+        bus.Execute(new SetParagraphFormattingCommand(0, doubled));
+        doc.Paragraphs.First().Formatting.LineSpacing.Should().Be(2.0);
+
+        bus.Undo();
+        doc.Paragraphs.First().Formatting.LineSpacing.Should().Be(original.LineSpacing);
+
+        bus.Redo();
+        doc.Paragraphs.First().Formatting.LineSpacing.Should().Be(2.0);
+    }
+
+    [Fact]
+    public void SetParagraphFormatting_SpaceBeforeAfter_Applies_AndReverts()
+    {
+        var (doc, bus) = New();
+        doc.Blocks.Add(new Paragraph("p"));
+        var spaced = doc.Paragraphs.First().Formatting with { SpaceBeforePt = 12, SpaceAfterPt = 0 };
+
+        bus.Execute(new SetParagraphFormattingCommand(0, spaced));
+        doc.Paragraphs.First().Formatting.SpaceBeforePt.Should().Be(12);
+        doc.Paragraphs.First().Formatting.SpaceAfterPt.Should().Be(0);
+
+        bus.Undo();
+        doc.Paragraphs.First().Formatting.SpaceBeforePt.Should().Be(0);
+        doc.Paragraphs.First().Formatting.SpaceAfterPt.Should().Be(8); // model default
+    }
+
+    [Fact]
     public void InsertBlock_Table_Execute_Undo_Redo()
     {
         var (doc, bus) = New();

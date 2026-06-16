@@ -8,9 +8,59 @@ public class DocumentModelTests
         var doc = TextDocument.CreateEmpty();
 
         doc.Paragraphs.Should().HaveCount(1);
-        doc.Styles.Keys.Should().Contain(new[] { "Normal", "Heading1", "Title" });
+        doc.Styles.Keys.Should().Contain(new[]
+        {
+            "Normal", "Heading1", "Heading2", "Heading3", "Title", "Subtitle", "Quote"
+        });
         doc.DefaultRun.FontFamily.Should().Be("Calibri");
         doc.DefaultRun.FontSizePt.Should().Be(11);
+    }
+
+    [Fact]
+    public void BuiltInStyles_HaveSensibleFormattingBasedOnNormal()
+    {
+        var styles = TextDocument.CreateEmpty().Styles;
+
+        styles["Heading2"].Name.Should().Be("Heading 2");
+        styles["Heading2"].Run.Bold.Should().BeTrue();
+        styles["Heading2"].BasedOnStyleId.Should().Be("Normal");
+
+        styles["Heading3"].Name.Should().Be("Heading 3");
+        styles["Heading3"].Run.Bold.Should().BeTrue();
+        styles["Heading3"].BasedOnStyleId.Should().Be("Normal");
+
+        styles["Subtitle"].Name.Should().Be("Subtitle");
+        styles["Subtitle"].Run.Italic.Should().BeTrue();
+        styles["Subtitle"].BasedOnStyleId.Should().Be("Normal");
+
+        styles["Quote"].Name.Should().Be("Quote");
+        styles["Quote"].Run.Italic.Should().BeTrue();
+        styles["Quote"].Paragraph.IndentLeftPt.Should().BeGreaterThan(0);
+        styles["Quote"].BasedOnStyleId.Should().Be("Normal");
+    }
+
+    [Fact]
+    public void SetParagraphStyleCommand_SetsStyleId_AndUndoRestoresPrevious()
+    {
+        var doc = TextDocument.CreateEmpty();
+        var paragraph = new Paragraph("Heading text") { StyleId = "Normal" };
+        doc.Blocks.Add(paragraph);
+        var index = doc.Blocks.IndexOf(paragraph);
+        var bus = new DocumentCommandBus(new DocContext(doc));
+
+        bus.Execute(new SetParagraphStyleCommand(index, "Heading2"));
+        paragraph.StyleId.Should().Be("Heading2");
+
+        bus.Undo();
+        paragraph.StyleId.Should().Be("Normal");
+
+        bus.Redo();
+        paragraph.StyleId.Should().Be("Heading2");
+    }
+
+    private sealed class DocContext(TextDocument document) : IDocumentCommandContext
+    {
+        public TextDocument Document { get; } = document;
     }
 
     [Fact]

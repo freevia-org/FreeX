@@ -31,6 +31,7 @@ public static class DocxReader
 
         var document = new TextDocument();
         ReadCoreProperties(archive, document);
+        ReadCustomProperties(archive, document);
         ReadStyles(archive, document);
         var imageRelationships = ReadImageRelationships(archive);
         var hyperlinkRelationships = ReadHyperlinkRelationships(archive);
@@ -51,7 +52,172 @@ public static class DocxReader
         if (document.Blocks.Count == 0)
             document.Blocks.Add(new Paragraph());
 
+        ReadHeaderFooter(documentXml, archive, document, imageRelationships, hyperlinkRelationships);
+        ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
+        ReadComments(archive, document, imageRelationships, hyperlinkRelationships);
+
         return document;
+    }
+
+    /// <summary>
+    /// Loads word/comments.xml (if present) into <see cref="TextDocument.Comments"/>, reconstructing
+    /// each w:comment's author/initials/date and its paragraphs. Comments referenced by no body range
+    /// are still kept; the body range markers are recovered separately in <see cref="ReadParagraph"/>.
+    /// </summary>
+    private static void ReadComments(
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+    {
+        var commentsXml = LoadPart(archive, "word/comments.xml");
+        var root = commentsXml?.Root;
+        if (root is null)
+            return;
+
+        var noNumbering = new Dictionary<int, ListKind>();
+        foreach (var element in root.Elements(W + "comment"))
+        {
+            if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
+                continue;
+
+            var comment = new Comment(id)
+            {
+                Author = element.Attribute(W + "author")?.Value ?? string.Empty,
+                Initials = element.Attribute(W + "initials")?.Value ?? string.Empty,
+                DateXml = element.Attribute(W + "date")?.Value
+            };
+            foreach (var p in element.Elements(W + "p"))
+                comment.Content.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+            if (comment.Content.Count == 0)
+                comment.Content.Add(new Paragraph());
+            document.Comments[id] = comment;
+        }
+    }
+
+    /// <summary>
+    /// Loads word/footnotes.xml (if present) into <see cref="TextDocument.Footnotes"/>, reconstructing
+    /// each w:footnote's paragraphs. The conventional separator footnotes (type separator /
+    /// continuationSeparator, ids -1 and 0) are skipped — only real content footnotes are kept.
+    /// </summary>
+    private static void ReadFootnotes(
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+    {
+        var footnotesXml = LoadPart(archive, "word/footnotes.xml");
+        var root = footnotesXml?.Root;
+        if (root is null)
+            return;
+
+        var noNumbering = new Dictionary<int, ListKind>();
+        foreach (var element in root.Elements(W + "footnote"))
+        {
+            var type = element.Attribute(W + "type")?.Value;
+            if (type is "separator" or "continuationSeparator")
+                continue;
+            if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
+                continue;
+
+            var footnote = new Footnote(id);
+            foreach (var p in element.Elements(W + "p"))
+                footnote.Content.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+            if (footnote.Content.Count == 0)
+                footnote.Content.Add(new Paragraph());
+            document.Footnotes[id] = footnote;
+        }
+    }
+
+    /// <summary>
+    /// Resolves the default header/footer references in w:sectPr (r:id → document rels → part path),
+    /// loads those parts (w:hdr / w:ftr) and reconstructs <see cref="TextDocument.Header"/> / Footer.
+    /// </summary>
+    private static void ReadHeaderFooter(
+        XDocument documentXml,
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+    {
+        var sectPr = documentXml.Root?.Element(W + "body")?.Element(W + "sectPr");
+        if (sectPr is null)
+            return;
+
+        // Equal-width column layout (w:cols/@w:num + @w:space) lives alongside the header/footer
+        // references in w:sectPr, so recover it here while we already hold the section element.
+        var cols = sectPr.Element(W + "cols");
+        if (cols is not null)
+        {
+            if (int.TryParse(cols.Attribute(W + "num")?.Value, out var num) && num >= 1)
+                document.Page.ColumnCount = num;
+            if (cols.Attribute(W + "space") is { } space)
+                document.Page.ColumnSpacingPt = DxaToPoints(space.Value);
+        }
+
+        // Page border (w:pgBorders) lives in the same w:sectPr; recover it into PageSettings.PageBorder.
+        document.Page.PageBorder = ReadPageBorder(sectPr.Element(W + "pgBorders"));
+
+        var partsById = ReadHeaderFooterRelationships(archive);
+
+        document.Header = ReadHeaderFooterPart(
+            sectPr, "headerReference", W + "hdr", partsById, archive, imageRelationships, hyperlinkRelationships);
+        document.Footer = ReadHeaderFooterPart(
+            sectPr, "footerReference", W + "ftr", partsById, archive, imageRelationships, hyperlinkRelationships);
+    }
+
+    private static HeaderFooter? ReadHeaderFooterPart(
+        XElement sectPr,
+        string referenceName,
+        XName rootName,
+        IReadOnlyDictionary<string, string> partsById,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+    {
+        // Prefer the default reference; fall back to the first reference of this kind if present.
+        var references = sectPr.Elements(W + referenceName).ToList();
+        if (references.Count == 0)
+            return null;
+        var reference = references.FirstOrDefault(r => r.Attribute(W + "type")?.Value == "default") ?? references[0];
+
+        var id = reference.Attribute(R + "id")?.Value;
+        if (id is null || !partsById.TryGetValue(id, out var partPath))
+            return null;
+
+        var partXml = LoadPart(archive, partPath);
+        var root = partXml?.Root;
+        if (root is null || root.Name != rootName)
+            return null;
+
+        var result = new HeaderFooter();
+        // Header/footer paragraphs carry no list numbering context (numbering.xml targets the body).
+        var noNumbering = new Dictionary<int, ListKind>();
+        foreach (var p in root.Elements(W + "p"))
+            result.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+        return result;
+    }
+
+    /// <summary>Maps relationship id → part path for header/footer relationships in document.xml.rels.</summary>
+    private static Dictionary<string, string> ReadHeaderFooterRelationships(ZipArchive archive)
+    {
+        var map = new Dictionary<string, string>();
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return map;
+
+        foreach (var rel in relationships)
+        {
+            var type = rel.Attribute("Type")?.Value;
+            if (type is null || !(type.EndsWith("/header", StringComparison.Ordinal) || type.EndsWith("/footer", StringComparison.Ordinal)))
+                continue;
+            var id = rel.Attribute("Id")?.Value;
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(target))
+                map[id] = "word/" + target.TrimStart('/');
+        }
+        return map;
     }
 
     private static XDocument? LoadPart(ZipArchive archive, string entryPath)
@@ -79,46 +245,155 @@ public static class DocxReader
             paragraph.Formatting = ReadParagraphFormatting(pPr, numbering);
         }
 
-        // Iterate in document order so runs nested inside a w:hyperlink keep their position; a
-        // w:hyperlink carries an r:id resolving (via the rels) to the external URL its runs link to.
+        // Iterate in document order so runs nested inside a w:hyperlink keep their position, and so a
+        // bookmark's name (w:bookmarkStart, a run sibling) is captured wherever it appears. A
+        // w:hyperlink either carries an r:id (external URL, resolved via the rels) or a w:anchor
+        // (internal link to a bookmark name).
+        //
+        // Review comments overlay this: a w:commentRangeStart/End pair brackets the runs it covers,
+        // and the trailing w:commentReference run anchors the comment. We track the open range id so
+        // every covered run gets its CommentId, and recover the reference run as a textless anchor.
+        var activeCommentId = (int?)null;
         foreach (var child in p.Elements())
         {
-            if (child.Name == W + "r")
+            if (child.Name == W + "commentRangeStart")
             {
-                AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl: null);
+                if (int.TryParse(child.Attribute(W + "id")?.Value, out var startId))
+                    activeCommentId = startId;
+            }
+            else if (child.Name == W + "commentRangeEnd")
+            {
+                activeCommentId = null;
+            }
+            else if (child.Name == W + "r")
+            {
+                // A run carrying a w:commentReference is the textless comment anchor; recover it.
+                var commentRef = child.Element(W + "commentReference");
+                if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
+                    paragraph.Runs.Add(Run.CommentReference(refId));
+                else
+                    AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId);
             }
             else if (child.Name == W + "hyperlink")
             {
+                var anchor = child.Attribute(W + "anchor")?.Value;
                 var id = child.Attribute(R + "id")?.Value;
                 var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
                 foreach (var r in child.Elements(W + "r"))
-                    AddRun(paragraph, r, archive, imageRelationships, url);
+                    AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null, commentId: activeCommentId);
+            }
+            else if (child.Name == W + "ins" || child.Name == W + "del")
+            {
+                // A tracked insertion (w:ins) or deletion (w:del) wraps one or more runs (and possibly
+                // hyperlinks). Recover the revision kind plus author/date and stamp every covered run.
+                var kind = child.Name == W + "del" ? RevisionKind.Deleted : RevisionKind.Inserted;
+                var author = child.Attribute(W + "author")?.Value;
+                var date = child.Attribute(W + "date")?.Value;
+                var revision = new RevisionInfo(kind, author, date);
+
+                foreach (var revChild in child.Elements())
+                {
+                    if (revChild.Name == W + "r")
+                        AddRun(paragraph, revChild, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, revision: revision);
+                    else if (revChild.Name == W + "hyperlink")
+                    {
+                        var hAnchor = revChild.Attribute(W + "anchor")?.Value;
+                        var hId = revChild.Attribute(R + "id")?.Value;
+                        var hUrl = hId is not null && hyperlinkRelationships.TryGetValue(hId, out var hTarget) ? hTarget : null;
+                        foreach (var r in revChild.Elements(W + "r"))
+                            AddRun(paragraph, r, archive, imageRelationships, hUrl, hUrl is null ? hAnchor : null, commentId: activeCommentId, revision: revision);
+                    }
+                }
+            }
+            else if (child.Name == W + "fldSimple")
+            {
+                AddSimpleField(paragraph, child);
+            }
+            else if (child.Name == W + "bookmarkStart")
+            {
+                // Capture the first non-internal bookmark name on the paragraph. Word emits an
+                // implicit "_GoBack" bookmark on the document; skip it so it is not mistaken for a target.
+                var name = child.Attribute(W + "name")?.Value;
+                if (paragraph.BookmarkName is null && name is { Length: > 0 } && name != "_GoBack")
+                    paragraph.BookmarkName = name;
             }
         }
 
         return paragraph;
     }
 
+    /// <summary>
+    /// Reads a w:fldSimple. A " PAGE " field becomes a page-number field run; any other field is
+    /// flattened to its cached display text (the text inside the wrapped run) so nothing is lost.
+    /// </summary>
+    private static void AddSimpleField(Paragraph paragraph, XElement fldSimple)
+    {
+        var instruction = fldSimple.Attribute(W + "instr")?.Value ?? string.Empty;
+        var inner = fldSimple.Element(W + "r");
+        var text = string.Concat(fldSimple.Descendants(W + "t").Select(t => t.Value));
+        var formatting = ReadRunFormatting(inner?.Element(W + "rPr"));
+
+        if (instruction.Trim().Equals("PAGE", StringComparison.OrdinalIgnoreCase))
+        {
+            paragraph.Runs.Add(new Run(text.Length > 0 ? text : "1", formatting) { FieldKind = RunFieldKind.PageNumber });
+        }
+        else if (text.Length > 0)
+        {
+            paragraph.Runs.Add(new Run(text, formatting));
+        }
+    }
+
+    /// <summary>Carries a tracked-change kind plus its author/date while reading runs inside a w:ins/w:del.</summary>
+    private readonly record struct RevisionInfo(RevisionKind Kind, string? Author, string? DateXml);
+
     private static void AddRun(
         Paragraph paragraph,
         XElement r,
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
-        string? hyperlinkUrl)
+        string? hyperlinkUrl,
+        string? hyperlinkAnchor,
+        int? commentId = null,
+        RevisionInfo revision = default)
     {
+        void ApplyRevision(Run run)
+        {
+            if (revision.Kind == RevisionKind.None)
+                return;
+            run.Revision = revision.Kind;
+            run.RevisionAuthor = revision.Author;
+            run.RevisionDateXml = revision.DateXml;
+        }
+
         var image = ReadImage(r, archive, imageRelationships);
         if (image is not null)
         {
-            paragraph.Runs.Add(new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl });
+            var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId };
+            ApplyRevision(imageRun);
+            paragraph.Runs.Add(imageRun);
             return;
         }
 
-        var text = string.Concat(r.Elements(W + "t").Select(t => t.Value));
+        // A run wrapping a w:footnoteReference is a footnote marker; recover its id into the model.
+        var footnoteRef = r.Element(W + "footnoteReference");
+        if (footnoteRef is not null && int.TryParse(footnoteRef.Attribute(W + "id")?.Value, out var footnoteId))
+        {
+            var footnoteRun = Run.FootnoteReference(footnoteId, ReadRunFormatting(r.Element(W + "rPr")));
+            ApplyRevision(footnoteRun);
+            paragraph.Runs.Add(footnoteRun);
+            return;
+        }
+
+        // A tracked deletion stores its text in w:delText; ordinary/inserted runs use w:t.
+        var text = string.Concat(r.Elements(W + "t").Select(t => t.Value))
+            + string.Concat(r.Elements(W + "delText").Select(t => t.Value));
         if (r.Elements(W + "tab").Any())
             text += "\t";
         if (text.Length == 0)
             return;
-        paragraph.Runs.Add(new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl });
+        var textRun = new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId };
+        ApplyRevision(textRun);
+        paragraph.Runs.Add(textRun);
     }
 
     private static Table ReadTable(
@@ -133,12 +408,29 @@ public static class DocxReader
         var borders = tbl.Element(W + "tblPr")?.Element(W + "tblBorders");
         table.Formatting = TableFormatting.Default with { Borders = ReadBorders(borders) };
 
+        // The table grid (w:tblGrid/w:gridCol) carries per-column widths in dxa.
+        var grid = tbl.Element(W + "tblGrid");
+        if (grid is not null)
+        {
+            foreach (var gridCol in grid.Elements(W + "gridCol"))
+                table.ColumnWidthsPt.Add(DxaToPoints(gridCol.Attribute(W + "w")?.Value));
+        }
+
         foreach (var tr in tbl.Elements(W + "tr"))
         {
             var row = new TableRow();
             foreach (var tc in tr.Elements(W + "tc"))
             {
                 var cell = new TableCell();
+                var tcPr = tc.Element(W + "tcPr");
+                if (tcPr is not null)
+                {
+                    var width = tcPr.Element(W + "tcW")?.Attribute(W + "w")?.Value;
+                    if (width is not null)
+                        cell.WidthPt = DxaToPoints(width);
+                    var shading = tcPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
+                    cell.ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#');
+                }
                 foreach (var p in tc.Elements(W + "p"))
                     cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, numbering));
                 if (cell.Paragraphs.Count == 0)
@@ -260,9 +552,13 @@ public static class DocxReader
             }
         }
 
+        // w:pageBreakBefore is a toggle: present (and not val="false"/"0") means a page break is forced.
+        var pageBreakBefore = ReadToggle(pPr, "pageBreakBefore");
+
         return ParagraphFormatting.Default with
         {
             Border = ReadParagraphBorder(pPr.Element(W + "pBdr")),
+            PageBreakBefore = pageBreakBefore,
             ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
             Alignment = jc switch
             {
@@ -277,8 +573,36 @@ public static class DocxReader
             IndentRightPt = DxaToPoints(indent?.Attribute(W + "right")?.Value ?? indent?.Attribute(W + "end")?.Value),
             FirstLineIndentPt = DxaToPoints(indent?.Attribute(W + "firstLine")?.Value),
             ListKind = listKind,
-            ListLevel = listLevel
+            ListLevel = listLevel,
+            TabStops = ReadTabStops(pPr.Element(W + "tabs"))
         };
+    }
+
+    /// <summary>
+    /// Reads paragraph tab stops (w:tabs) into the model list, one <see cref="TabStop"/> per w:tab.
+    /// Positions come from w:pos (dxa -> points); the alignment from w:val. "clear" stops (which
+    /// remove an inherited stop) carry no real position and are skipped. Returns an empty list if absent.
+    /// </summary>
+    private static IReadOnlyList<TabStop> ReadTabStops(XElement? tabs)
+    {
+        if (tabs is null)
+            return [];
+        var stops = new List<TabStop>();
+        foreach (var tab in tabs.Elements(W + "tab"))
+        {
+            var val = tab.Attribute(W + "val")?.Value;
+            if (val == "clear")
+                continue;
+            var alignment = val switch
+            {
+                "center" => TabStopAlignment.Center,
+                "right" or "end" => TabStopAlignment.Right,
+                "decimal" => TabStopAlignment.Decimal,
+                _ => TabStopAlignment.Left
+            };
+            stops.Add(new TabStop(DxaToPoints(tab.Attribute(W + "pos")?.Value), alignment));
+        }
+        return stops;
     }
 
     /// <summary>Reads a paragraph box border (w:pBdr) into a <see cref="ParagraphBorder"/>, or null if absent/off.</summary>
@@ -294,9 +618,36 @@ public static class DocxReader
 
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+
+        // A bottom-only rule: the only drawn edge is w:bottom (top/left/right absent or off). This is how
+        // CreateHorizontalRule writes itself; recovering the flag keeps the round-trip lossless.
+        bool Drawn(string name) =>
+            (pBdr.Element(W + name)?.Attribute(W + "val")?.Value ?? "none") is not ("none" or "nil");
+        var bottomOnly = Drawn("bottom") && !Drawn("top") && !Drawn("left") && !Drawn("right");
+
         return new ParagraphBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
-            width > 0 ? width : 0.5);
+            width > 0 ? width : 0.5,
+            bottomOnly);
+    }
+
+    /// <summary>Reads a page border (w:pgBorders) into a <see cref="PageBorder"/>, or null if absent/off.</summary>
+    private static PageBorder? ReadPageBorder(XElement? pgBorders)
+    {
+        if (pgBorders is null)
+            return null;
+        // Take the first drawn edge (val not none/nil) for colour/width — page borders are a uniform box.
+        var edge = pgBorders.Elements().FirstOrDefault(e =>
+            (e.Attribute(W + "val")?.Value ?? "single") is not ("none" or "nil"));
+        if (edge is null)
+            return null;
+
+        var color = edge.Attribute(W + "color")?.Value;
+        var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+
+        return new PageBorder(
+            color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
+            width > 0 ? width : 1.0);
     }
 
     /// <summary>
@@ -341,6 +692,7 @@ public static class DocxReader
         var underline = rPr.Element(W + "u");
         var color = rPr.Element(W + "color")?.Attribute(W + "val")?.Value;
         var highlight = rPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
+        var vertAlign = rPr.Element(W + "vertAlign")?.Attribute(W + "val")?.Value;
 
         return new RunFormatting
         {
@@ -348,10 +700,18 @@ public static class DocxReader
             Italic = ReadToggle(rPr, "i"),
             Underline = underline is not null && (underline.Attribute(W + "val")?.Value ?? "single") != "none",
             Strikethrough = ReadToggle(rPr, "strike"),
+            SmallCaps = ReadToggle(rPr, "smallCaps"),
+            AllCaps = ReadToggle(rPr, "caps"),
             FontFamily = rPr.Element(W + "rFonts")?.Attribute(W + "ascii")?.Value,
             FontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value),
             ColorHex = color is null or "auto" ? null : "#" + color.TrimStart('#'),
-            HighlightColorHex = highlight is null or "auto" ? null : "#" + highlight.TrimStart('#')
+            HighlightColorHex = highlight is null or "auto" ? null : "#" + highlight.TrimStart('#'),
+            VerticalAlign = vertAlign switch
+            {
+                "superscript" => VerticalAlign.Superscript,
+                "subscript" => VerticalAlign.Subscript,
+                _ => VerticalAlign.Baseline
+            }
         };
     }
 
@@ -374,6 +734,24 @@ public static class DocxReader
         properties.Modified = ParseW3CDtf(root.Element(DcTerms + "modified")?.Value);
 
         static string? Trimmed(string? value) => string.IsNullOrEmpty(value) ? null : value;
+    }
+
+    /// <summary>
+    /// Reads the FreeW page watermark from docProps/custom.xml into <see cref="PageSettings.Watermark"/>,
+    /// mirroring how the writer persists it as a named custom property. A missing part is fine.
+    /// </summary>
+    private static void ReadCustomProperties(ZipArchive archive, TextDocument document)
+    {
+        var customXml = LoadPart(archive, "docProps/custom.xml");
+        var root = customXml?.Root;
+        if (root is null)
+            return;
+
+        var property = root.Elements(CustomProps + "property")
+            .FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkPropertyName);
+        var text = property?.Element(VtVariant + "lpwstr")?.Value;
+        if (!string.IsNullOrEmpty(text))
+            document.Page.Watermark = text;
     }
 
     private static void ReadStyles(ZipArchive archive, TextDocument document)
