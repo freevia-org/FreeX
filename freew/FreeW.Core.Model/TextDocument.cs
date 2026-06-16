@@ -167,6 +167,31 @@ public sealed class Comment(int id)
 }
 
 /// <summary>
+/// A bibliographic source the document can cite: a short <see cref="Tag"/> (a stable identifier used
+/// to reference the source, e.g. <c>"Knuth1997"</c>) plus author/title/year and an optional publisher.
+/// Kept deliberately small and immutable-friendly (init-only properties) so it round-trips cleanly and
+/// the citation/bibliography formatting helpers (see <see cref="Citations"/>) can stay pure. Missing
+/// fields are represented as empty strings / null and handled gracefully by the formatters.
+/// </summary>
+public sealed class Source
+{
+    /// <summary>A short, stable identifier for the source (used to reference it). May be empty.</summary>
+    public string Tag { get; init; } = string.Empty;
+
+    /// <summary>The author (or authors) of the work. Empty when unknown.</summary>
+    public string Author { get; init; } = string.Empty;
+
+    /// <summary>The title of the work. Empty when unknown.</summary>
+    public string Title { get; init; } = string.Empty;
+
+    /// <summary>The year of publication. Empty when unknown.</summary>
+    public string Year { get; init; } = string.Empty;
+
+    /// <summary>The publisher of the work, or null when unknown / not applicable.</summary>
+    public string? Publisher { get; init; }
+}
+
+/// <summary>
 /// The kind of simple field a <see cref="Run"/> represents. <see cref="None"/> is an ordinary text
 /// run; <see cref="PageNumber"/> maps to a WordprocessingML PAGE field (w:fldSimple w:instr=" PAGE ").
 /// </summary>
@@ -417,6 +442,14 @@ public sealed class TextDocument
 
     /// <summary>The next unused comment id (0-based, as Word numbers comments from 0).</summary>
     public int NextCommentId() => Comments.Count == 0 ? 0 : Comments.Keys.Max() + 1;
+
+    /// <summary>
+    /// The document's bibliographic sources, in insertion order. Citations reference a source's
+    /// <see cref="Source.Tag"/>; <see cref="Citations.BuildBibliography(TextDocument)"/> renders them as
+    /// ordinary styled paragraphs. These are pure model data (no docx part of their own) — inserted
+    /// in-text citations and the bibliography are ordinary text/paragraphs that already round-trip.
+    /// </summary>
+    public List<Source> Sources { get; } = [];
 
     /// <summary>The body's paragraphs (top-level only; table cell paragraphs are not included).</summary>
     public IEnumerable<Paragraph> Paragraphs => Blocks.OfType<Paragraph>();
