@@ -35,6 +35,12 @@ public sealed class DocumentView : RichTextBox
 {
     private const double PxPerPoint = 96.0 / 72.0;
 
+    /// <summary>Document default run size in points, used when a run inherits its size.</summary>
+    private const double DefaultFontSizePt = 11;
+
+    /// <summary>Glyph-shrink factor applied to superscript/subscript runs (and undone on commit).</summary>
+    private const double SuperSubScale = 0.65;
+
     private TextDocument _model = TextDocument.CreateEmpty();
     private readonly DocumentCommandBus _commands;
 
@@ -524,12 +530,32 @@ public sealed class DocumentView : RichTextBox
         };
         if (fmt.FontFamily is { Length: > 0 } family)
             wpf.FontFamily = new FontFamily(family);
-        if (fmt.FontSizePt is { } size)
+        var fontSizePx = (fmt.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
+        // Superscript/subscript: nudge the baseline and shrink the glyphs. Set FontSize explicitly
+        // (even at the default) so ReadRunFormatting can recover the original point size by undoing
+        // the SuperSubScale factor; plain runs leave FontSize at its inherited default.
+        if (fmt.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
+        {
+            wpf.BaselineAlignment = fmt.VerticalAlign == VerticalAlign.Superscript
+                ? BaselineAlignment.Superscript
+                : BaselineAlignment.Subscript;
+            wpf.FontSize = fontSizePx * SuperSubScale;
+        }
+        else if (fmt.FontSizePt is { } size)
+        {
             wpf.FontSize = size * PxPerPoint;
+        }
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
         if (TryParseColor(fmt.HighlightColorHex, out var highlight))
             wpf.Background = new SolidColorBrush(highlight);
+
+        // Small caps / all caps. AllCaps wins visually but both flags are preserved on commit by
+        // mapping each to a distinct FontCapitals value that ReadRunFormatting decodes back.
+        if (fmt.AllCaps)
+            Typography.SetCapitals(wpf, FontCapitals.AllSmallCaps);
+        else if (fmt.SmallCaps)
+            Typography.SetCapitals(wpf, FontCapitals.SmallCaps);
 
         var decorations = new TextDecorationCollection();
         if (fmt.Underline)
@@ -681,17 +707,36 @@ public sealed class DocumentView : RichTextBox
 
     // --- view -> model ---
 
-    private static RunFormatting ReadRunFormatting(WpfRun run) => new()
+    private static RunFormatting ReadRunFormatting(WpfRun run)
     {
-        Bold = run.FontWeight >= FontWeights.Bold,
-        Italic = run.FontStyle == FontStyles.Italic,
-        Underline = run.TextDecorations?.Contains(TextDecorations.Underline[0]) == true,
-        Strikethrough = run.TextDecorations?.Contains(TextDecorations.Strikethrough[0]) == true,
-        FontFamily = run.FontFamily.Source,
-        FontSizePt = run.FontSize / PxPerPoint,
-        ColorHex = run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
-        HighlightColorHex = run.Background is SolidColorBrush highlight ? ToHex(highlight.Color) : null
-    };
+        var verticalAlign = run.BaselineAlignment switch
+        {
+            BaselineAlignment.Superscript => VerticalAlign.Superscript,
+            BaselineAlignment.Subscript => VerticalAlign.Subscript,
+            _ => VerticalAlign.Baseline
+        };
+        // Super/subscript glyphs are rendered shrunk by SuperSubScale; undo that so the committed
+        // point size matches what the user actually chose.
+        var fontSizePt = run.FontSize / PxPerPoint;
+        if (verticalAlign != VerticalAlign.Baseline)
+            fontSizePt /= SuperSubScale;
+
+        var capitals = Typography.GetCapitals(run);
+        return new RunFormatting
+        {
+            Bold = run.FontWeight >= FontWeights.Bold,
+            Italic = run.FontStyle == FontStyles.Italic,
+            Underline = run.TextDecorations?.Contains(TextDecorations.Underline[0]) == true,
+            Strikethrough = run.TextDecorations?.Contains(TextDecorations.Strikethrough[0]) == true,
+            SmallCaps = capitals == FontCapitals.SmallCaps,
+            AllCaps = capitals == FontCapitals.AllSmallCaps,
+            VerticalAlign = verticalAlign,
+            FontFamily = run.FontFamily.Source,
+            FontSizePt = fontSizePt,
+            ColorHex = run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
+            HighlightColorHex = run.Background is SolidColorBrush highlight ? ToHex(highlight.Color) : null
+        };
+    }
 
     private static ParagraphFormatting ReadParagraphFormatting(WpfParagraph paragraph) =>
         ParagraphFormatting.Default with
@@ -721,6 +766,11 @@ public sealed class DocumentView : RichTextBox
             Italic = r.Italic || style.Italic || d.Italic,
             Underline = r.Underline || style.Underline || d.Underline,
             Strikethrough = r.Strikethrough || style.Strikethrough || d.Strikethrough,
+            SmallCaps = r.SmallCaps || style.SmallCaps || d.SmallCaps,
+            AllCaps = r.AllCaps || style.AllCaps || d.AllCaps,
+            VerticalAlign = r.VerticalAlign != VerticalAlign.Baseline ? r.VerticalAlign
+                : style.VerticalAlign != VerticalAlign.Baseline ? style.VerticalAlign
+                : d.VerticalAlign,
             FontFamily = r.FontFamily ?? style.FontFamily ?? d.FontFamily,
             FontSizePt = r.FontSizePt ?? style.FontSizePt ?? d.FontSizePt,
             ColorHex = r.ColorHex ?? style.ColorHex ?? d.ColorHex,

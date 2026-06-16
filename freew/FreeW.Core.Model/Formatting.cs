@@ -7,6 +7,12 @@ public enum TextAlignment { Left, Center, Right, Justify }
 public enum ListKind { None, Bullet, Number }
 
 /// <summary>
+/// Vertical alignment of a run's glyphs relative to the baseline (rPr/w:vertAlign). Maps to docx
+/// <c>w:vertAlign w:val="superscript|subscript"</c>; <see cref="Baseline"/> writes nothing.
+/// </summary>
+public enum VerticalAlign { Baseline, Superscript, Subscript }
+
+/// <summary>
 /// Immutable paragraph box border (pPr/w:pBdr). When present, all four edges are drawn with the
 /// given colour and width. Round-trips to docx as <c>w:top</c>/<c>w:bottom</c>/<c>w:left</c>/<c>w:right</c>
 /// (each <c>w:val="single"</c>), mirroring how table borders map to <c>w:tblBorders</c>.
@@ -34,6 +40,25 @@ public sealed record RunFormatting
     /// highlight. Round-trips to docx as run shading (<c>w:shd w:fill</c>), mirroring <see cref="ColorHex"/>.
     /// </summary>
     public string? HighlightColorHex { get; init; }
+
+    /// <summary>
+    /// Superscript/subscript baseline offset (rPr/w:vertAlign). Defaults to
+    /// <see cref="VerticalAlign.Baseline"/> (no offset).
+    /// </summary>
+    public VerticalAlign VerticalAlign { get; init; } = VerticalAlign.Baseline;
+
+    /// <summary>
+    /// Renders lowercase letters as small capitals (rPr/w:smallCaps toggle). Mirrors how
+    /// <see cref="Bold"/> models a docx toggle element.
+    /// </summary>
+    public bool SmallCaps { get; init; }
+
+    /// <summary>
+    /// Renders all letters as capitals (rPr/w:caps toggle). Mirrors how <see cref="Bold"/> models a
+    /// docx toggle element. When both this and <see cref="SmallCaps"/> are set, Word treats caps as
+    /// winning; we preserve both flags so the round-trip is lossless.
+    /// </summary>
+    public bool AllCaps { get; init; }
 
     public static readonly RunFormatting Default = new();
 }

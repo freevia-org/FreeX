@@ -32,6 +32,10 @@ internal static class FreeWRibbon
                     g.Toggle("freew.bold", "Bold");
                     g.Toggle("freew.italic", "Italic");
                     g.Toggle("freew.underline", "Underline");
+                    g.Button("freew.superscript", "Superscript");
+                    g.Button("freew.subscript", "Subscript");
+                    g.Button("freew.smallcaps", "Small Caps");
+                    g.Button("freew.allcaps", "All Caps");
                     g.Button("freew.font-color", "Text Colour");
                     g.Button("freew.highlight", "Highlight");
                     g.Button("freew.grow-font", "Grow");
