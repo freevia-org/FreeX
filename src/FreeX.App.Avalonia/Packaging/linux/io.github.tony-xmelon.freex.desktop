@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=FreeX
+GenericName=Spreadsheet
+Comment=Open, edit, and save spreadsheets
+Exec=freex %F
+TryExec=freex
+Icon=io.github.tony-xmelon.freex
+Terminal=false
+Categories=Office;Spreadsheet;
+MimeType=application/vnd.freex.workbook+json;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.ms-excel.sheet.macroEnabled.12;application/vnd.openxmlformats-officedocument.spreadsheetml.template;application/vnd.ms-excel.template.macroEnabled.12;application/vnd.ms-excel;application/vnd.ms-excel.sheet.binary.macroEnabled.12;text/csv;text/tab-separated-values;
+StartupNotify=true
+StartupWMClass=FreeX
+Keywords=spreadsheet;workbook;xlsx;xls;csv;excel;

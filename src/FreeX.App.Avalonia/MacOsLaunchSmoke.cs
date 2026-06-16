@@ -17,6 +17,30 @@ internal sealed record MacOsLaunchSmokeOptions(
     public const string VerifyImageClipboardPasteArgument = "--macos-launch-smoke-verify-image-clipboard";
     public const string VerifyLiveCommandKeysArgument = "--macos-launch-smoke-verify-live-command-keys";
 
+    // Platform-neutral aliases used by the Linux preview lane. They drive the same
+    // headless launch-smoke coordinator and report contract as the macOS arguments;
+    // the macOS spellings stay for the existing hosted macOS workflow and guards.
+    public const string NeutralArgument = "--launch-smoke";
+    public const string NeutralDiagnosticsDirectoryArgument = "--launch-smoke-diagnostics-dir";
+    public const string NeutralVerifyImageClipboardPasteArgument = "--launch-smoke-verify-image-clipboard";
+    public const string NeutralVerifyLiveCommandKeysArgument = "--launch-smoke-verify-live-command-keys";
+
+    private static bool IsReportArgument(string argument) =>
+        string.Equals(argument, Argument, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(argument, NeutralArgument, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsDiagnosticsDirectoryArgument(string argument) =>
+        string.Equals(argument, DiagnosticsDirectoryArgument, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(argument, NeutralDiagnosticsDirectoryArgument, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsVerifyImageClipboardPasteArgument(string argument) =>
+        string.Equals(argument, VerifyImageClipboardPasteArgument, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(argument, NeutralVerifyImageClipboardPasteArgument, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsVerifyLiveCommandKeysArgument(string argument) =>
+        string.Equals(argument, VerifyLiveCommandKeysArgument, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(argument, NeutralVerifyLiveCommandKeysArgument, StringComparison.OrdinalIgnoreCase);
+
     public static bool TryParse(
         IReadOnlyList<string> args,
         out MacOsLaunchSmokeOptions? options,
@@ -35,7 +59,7 @@ internal sealed record MacOsLaunchSmokeOptions(
         for (var index = 0; index < args.Count; index++)
         {
             var argument = args[index];
-            if (string.Equals(argument, DiagnosticsDirectoryArgument, StringComparison.OrdinalIgnoreCase))
+            if (IsDiagnosticsDirectoryArgument(argument))
             {
                 if (diagnosticsDirectory is not null)
                 {
@@ -62,19 +86,19 @@ internal sealed record MacOsLaunchSmokeOptions(
                 continue;
             }
 
-            if (string.Equals(argument, VerifyImageClipboardPasteArgument, StringComparison.OrdinalIgnoreCase))
+            if (IsVerifyImageClipboardPasteArgument(argument))
             {
                 verifyImageClipboardPaste = true;
                 continue;
             }
 
-            if (string.Equals(argument, VerifyLiveCommandKeysArgument, StringComparison.OrdinalIgnoreCase))
+            if (IsVerifyLiveCommandKeysArgument(argument))
             {
                 verifyLiveCommandKeys = true;
                 continue;
             }
 
-            if (!string.Equals(argument, Argument, StringComparison.OrdinalIgnoreCase))
+            if (!IsReportArgument(argument))
             {
                 filteredArguments.Add(argument);
                 continue;

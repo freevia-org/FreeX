@@ -1,0 +1,394 @@
+name: Linux App Preview
+
+# Manual trigger only — this lane is intentionally not run on push/PR.
+# Dispatch with: gh workflow run linux-app.yml --ref <branch>
+on:
+  workflow_dispatch:
+    inputs:
+      build_appimage:
+        description: Also build a single-file AppImage for each runtime (requires appimagetool download).
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  FREEX_APP_VERSION: 0.1.0
+
+jobs:
+  linux-app:
+    name: Linux app bundle (${{ matrix.runtime }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: linux-x64
+            arch: x86_64
+            runner: ubuntu-latest
+          - runtime: linux-arm64
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      FREEX_RUNTIME: ${{ matrix.runtime }}
+      FREEX_ARCH: ${{ matrix.arch }}
+      # Headless GitHub runners have no GPU; force Avalonia/Skia software rendering.
+      LIBGL_ALWAYS_SOFTWARE: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Linux desktop dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb \
+            libfontconfig1 \
+            libice6 \
+            libsm6 \
+            libx11-6 \
+            libx11-xcb1 \
+            libxext6 \
+            libxrender1 \
+            libgl1 \
+            libglu1-mesa \
+            libegl1 \
+            desktop-file-utils \
+            shared-mime-info
+
+      - name: Capture runner toolchain evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          runtime="$FREEX_RUNTIME"
+          artifact_root="$GITHUB_WORKSPACE/artifacts"
+          evidence_path="$artifact_root/freex-$runtime-linux-evidence.txt"
+
+          mkdir -p "$artifact_root"
+          {
+            echo "runtime=$runtime"
+            echo "arch=$FREEX_ARCH"
+            echo "artifact_channel=internal-preview"
+            echo "distribution_contract=internal_preview_not_for_distribution_checksum_only"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+            echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "runner_label=${{ matrix.runner }}"
+            echo "runner_os=${RUNNER_OS:-unknown}"
+            echo "runner_arch=${RUNNER_ARCH:-unknown}"
+            echo "app_version=${FREEX_APP_VERSION}"
+            echo "[uname -a]"
+            uname -a
+            echo "[lsb_release]"
+            (lsb_release -a 2>/dev/null) || cat /etc/os-release
+            echo "[dotnet --info]"
+            dotnet --info
+          } | tee "$evidence_path"
+
+      - name: Test portable + Linux app-service routes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \
+            --configuration Release \
+            --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.LinuxPackagingMetadataTests|FullyQualifiedName~FreeX.App.Services.Tests.LinuxAppReadinessPreflightTests|FullyQualifiedName~FreeX.App.Services.Tests.LinuxPlatformPathTests|FullyQualifiedName~FreeX.App.Services.Tests.LinuxReleaseWorkflowTests' \
+            --logger "trx;LogFileName=freex-${{ matrix.runtime }}-portable-tests.trx" \
+            --results-directory artifacts
+
+          dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj \
+            --configuration Release \
+            --filter 'FullyQualifiedName~FreeX.Core.Model.Tests.ExportPathPlannerTests' \
+            --logger "trx;LogFileName=freex-${{ matrix.runtime }}-export-path-tests.trx" \
+            --results-directory artifacts
+
+      - name: Build app project
+        shell: bash
+        run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
+
+      - name: Publish, package, and smoke-test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          runtime="$FREEX_RUNTIME"
+          version="$FREEX_APP_VERSION"
+          artifact_root="$GITHUB_WORKSPACE/artifacts"
+          evidence_path="$artifact_root/freex-$runtime-linux-evidence.txt"
+          smoke_log="$artifact_root/freex-$runtime-linux-packaging-smoke.log"
+          launch_smoke_report="$artifact_root/freex-$runtime-linux-launch-smoke.txt"
+          app_diagnostics_dir="$artifact_root/freex-$runtime-linux-app-diagnostics"
+          published="$RUNNER_TEMP/freex-$runtime-publish"
+          dist="$artifact_root"
+
+          rm -rf "$published" "$app_diagnostics_dir"
+          mkdir -p "$published" "$app_diagnostics_dir"
+
+          dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
+            --configuration Release \
+            --framework net10.0 \
+            --runtime "$runtime" \
+            --self-contained true \
+            -p:UseAppHost=true \
+            -p:PublishReadyToRun=false \
+            -p:PublishSingleFile=false \
+            --output "$published"
+
+          test -x "$published/FreeX"
+          test -f "$published/FreeX.dll"
+          file "$published/FreeX" | tee -a "$evidence_path"
+
+          # Validate desktop integration assets before packaging.
+          desktop_file="src/FreeX.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freex.desktop"
+          mime_file="src/FreeX.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freex.xml"
+          icon_file="src/FreeX.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freex.svg"
+          desktop-file-validate "$desktop_file"
+          test -f "$mime_file"
+          test -f "$icon_file"
+          grep -q "application/vnd.freex.workbook+json" "$desktop_file"
+          grep -q "<glob pattern=\"\*.fxl\"/>" "$mime_file"
+          {
+            echo "desktop_entry_valid=true"
+            echo "mime_definition_present=true"
+            echo "icon_present=true"
+          } >> "$evidence_path"
+
+          # Tarball with installer.
+          chmod +x src/FreeX.App.Avalonia/Packaging/linux/package-linux-app.sh
+          tarball="$(src/FreeX.App.Avalonia/Packaging/linux/package-linux-app.sh \
+            --runtime "$runtime" --published "$published" --version "$version" --output "$dist")"
+          test -f "$tarball"
+          tarball_name="$(basename "$tarball")"
+          (cd "$dist" && sha256sum "$tarball_name" > "$tarball_name.sha256")
+          (cd "$dist" && sha256sum -c "$tarball_name.sha256")
+          tarball_sha256="$(cut -d ' ' -f 1 "$dist/$tarball_name.sha256")"
+          {
+            echo "tarball_name=$tarball_name"
+            echo "tarball_sha256=$tarball_sha256"
+          } >> "$evidence_path"
+
+          # Headless packaging smoke (no display required).
+          "$published/FreeX" --packaging-smoke | tee "$smoke_log"
+          grep -q "Packaging smoke opened" "$smoke_log"
+          grep -q "drawing_object_previews=3" "$smoke_log"
+          grep -q "roundtrip_drawing_object_previews=3" "$smoke_log"
+          grep -q "format_cells_style_roundtrip=true" "$smoke_log"
+          grep -q "edited, saved, and reopened" "$smoke_log"
+
+          smoke_file="$RUNNER_TEMP/freex-$runtime-smoke.csv"
+          printf 'Name,Amount\nFreeX,42\n' > "$smoke_file"
+          "$published/FreeX" --packaging-smoke "$smoke_file" | tee -a "$smoke_log"
+          format_cells_style_roundtrip_count="$(grep -c "format_cells_style_roundtrip=true" "$smoke_log")"
+          test "$format_cells_style_roundtrip_count" -ge 2
+          {
+            echo "format_cells_style_roundtrip=true"
+            echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"
+            echo "packaging_smoke_status=passed"
+          } >> "$evidence_path"
+
+          # GUI launch smoke under a virtual X server (software rendering).
+          launch_smoke_file="$RUNNER_TEMP/freex-$runtime-launch.csv"
+          printf 'Name,Amount\nFreeX Launch,84\n' > "$launch_smoke_file"
+          xvfb-run -a "$published/FreeX" \
+            --launch-smoke "$launch_smoke_report" \
+            --launch-smoke-diagnostics-dir "$app_diagnostics_dir" \
+            "$launch_smoke_file"
+
+          grep -q "window_shown=true" "$launch_smoke_report"
+          grep -q "opened_source_path=.*freex-$runtime-launch.csv" "$launch_smoke_report"
+          grep -q "viewport_rows=[1-9]" "$launch_smoke_report"
+          grep -q "viewport_columns=[1-9]" "$launch_smoke_report"
+          grep -q "native_file_menu=true" "$launch_smoke_report"
+          grep -q "native_edit_menu=true" "$launch_smoke_report"
+          grep -q "native_data_menu=true" "$launch_smoke_report"
+          grep -q "native_format_menu=true" "$launch_smoke_report"
+          grep -q "native_view_menu=true" "$launch_smoke_report"
+          grep -q "native_sheet_menu=true" "$launch_smoke_report"
+          grep -q "native_help_menu=true" "$launch_smoke_report"
+          grep -q "native_open_recent_item_count=[1-9]" "$launch_smoke_report"
+          grep -q "find_dialog=true" "$launch_smoke_report"
+          grep -q "replace_dialog=true" "$launch_smoke_report"
+          grep -q "go_to_dialog=true" "$launch_smoke_report"
+          grep -q "format_cells_dialog=true" "$launch_smoke_report"
+          grep -q "macos_accessibility_smoke=passed" "$launch_smoke_report"
+          echo "launch_smoke_status=passed" >> "$evidence_path"
+
+          test -f "$app_diagnostics_dir/events.jsonl"
+          grep -q '"eventName":"app_start"' "$app_diagnostics_dir/events.jsonl"
+          {
+            echo "app_diagnostics_events_jsonl=true"
+            echo "app_diagnostics_artifact=freex-$runtime-linux-diagnostics"
+          } >> "$evidence_path"
+
+          # Optional AppImage — non-fatal evidence; the hard gates above already passed.
+          # Compute the path directly instead of capturing the builder's stdout (appimagetool
+          # is noisy on stdout, which previously corrupted the captured path).
+          appimage_status="skipped"
+          if [[ "${{ inputs.build_appimage }}" == "true" ]]; then
+            tool="$RUNNER_TEMP/appimagetool"
+            appimage="$dist/FreeX-$version-$FREEX_ARCH.AppImage"
+            if curl -fsSL -o "$tool" \
+                 "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$FREEX_ARCH.AppImage" \
+               && chmod +x "$tool" \
+               && APPIMAGE_EXTRACT_AND_RUN=1 src/FreeX.App.Avalonia/Packaging/linux/build-appimage.sh \
+                    --runtime "$runtime" --published "$published" --version "$version" \
+                    --output "$dist" --appimagetool "$tool" \
+               && test -f "$appimage"; then
+              appimage_name="$(basename "$appimage")"
+              (cd "$dist" && sha256sum "$appimage_name" > "$appimage_name.sha256")
+              appimage_status="built"
+              echo "appimage_name=$appimage_name" >> "$evidence_path"
+            else
+              appimage_status="failed"
+            fi
+          fi
+          echo "appimage_status=$appimage_status" >> "$evidence_path"
+
+      - name: Write tester instructions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          runtime="$FREEX_RUNTIME"
+          version="$FREEX_APP_VERSION"
+          artifact_root="$GITHUB_WORKSPACE/artifacts"
+          tester_instructions_path="$artifact_root/freex-$runtime-linux-tester-instructions.md"
+          tarball_name="freex-$version-$runtime.tar.gz"
+
+          cat > "$tester_instructions_path" <<EOF
+          # FreeX Linux App (internal-preview, $runtime)
+
+          This artifact is a Linux port validation build. Internal-preview artifacts are not a
+          public release channel; trust is established by SHA-256 checksum only (Linux has no
+          Gatekeeper/notarization equivalent).
+
+          Use linux-x64 for x86_64 systems and linux-arm64 for aarch64 systems. Unzip the
+          GitHub Actions artifact wrapper first; these files are inside it.
+
+          ## Download
+
+          - $tarball_name
+          - $tarball_name.sha256
+          - freex-$runtime-linux-evidence.txt
+          - freex-$runtime-linux-packaging-smoke.log
+          - freex-$runtime-linux-launch-smoke.txt
+          - (optional) FreeX-$version-${FREEX_ARCH}.AppImage and its .sha256
+
+          ## Verify
+
+          \`\`\`bash
+          sha256sum -c $tarball_name.sha256
+          \`\`\`
+
+          ## Install and run
+
+          \`\`\`bash
+          tar xzf $tarball_name
+          ./freex-$version-$runtime/install.sh        # installs to ~/.local
+          freex                                        # ensure ~/.local/bin is on PATH
+          \`\`\`
+
+          Or run the AppImage directly: \`chmod +x FreeX-$version-${FREEX_ARCH}.AppImage && ./FreeX-$version-${FREEX_ARCH}.AppImage\`.
+
+          A desktop session with X11 or Wayland is required. The bundle is self-contained; no
+          system .NET install is needed.
+
+          ## Report
+
+          Include the runtime ($runtime), the GitHub Actions run, freex-$runtime-linux-evidence.txt,
+          and the matching diagnostics artifact when filing feedback.
+          EOF
+
+      - name: Require smoke evidence before artifact upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="$FREEX_RUNTIME"
+          evidence_path="$GITHUB_WORKSPACE/artifacts/freex-$runtime-linux-evidence.txt"
+          grep -q "^packaging_smoke_status=passed$" "$evidence_path"
+          grep -q "^launch_smoke_status=passed$" "$evidence_path"
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-linux-app
+          path: |
+            artifacts/freex-${{ env.FREEX_APP_VERSION }}-${{ matrix.runtime }}.tar.gz
+            artifacts/freex-${{ env.FREEX_APP_VERSION }}-${{ matrix.runtime }}.tar.gz.sha256
+            artifacts/FreeX-${{ env.FREEX_APP_VERSION }}-${{ matrix.arch }}.AppImage
+            artifacts/FreeX-${{ env.FREEX_APP_VERSION }}-${{ matrix.arch }}.AppImage.sha256
+            artifacts/freex-${{ matrix.runtime }}-linux-evidence.txt
+            artifacts/freex-${{ matrix.runtime }}-linux-packaging-smoke.log
+            artifacts/freex-${{ matrix.runtime }}-linux-launch-smoke.txt
+            artifacts/freex-${{ matrix.runtime }}-linux-tester-instructions.md
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload app diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-linux-diagnostics
+          path: |
+            artifacts/freex-${{ matrix.runtime }}-linux-evidence.txt
+            artifacts/freex-${{ matrix.runtime }}-linux-packaging-smoke.log
+            artifacts/freex-${{ matrix.runtime }}-linux-launch-smoke.txt
+            artifacts/freex-${{ matrix.runtime }}-linux-tester-instructions.md
+            artifacts/freex-${{ matrix.runtime }}-portable-tests.trx
+            artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx
+            artifacts/freex-${{ matrix.runtime }}-linux-app-diagnostics/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  linux-preview-readiness:
+    name: Linux preview readiness (aggregate)
+    needs: linux-app
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download Linux app artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: downloaded-artifacts
+          pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-linux-app
+
+      - name: Validate aggregate readiness
+        shell: pwsh
+        run: |
+          ./tools/Test-LinuxPublicPreviewReadiness.ps1 `
+            -ArtifactRoot downloaded-artifacts `
+            -ExpectedRunId $env:GITHUB_RUN_ID `
+            -ExpectedRunAttempt $env:GITHUB_RUN_ATTEMPT
+
+      - name: Upload readiness manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-preview-readiness-manifest
+          path: artifacts/linux-preview-readiness-manifest.json
+          if-no-files-found: warn
+          retention-days: 14
