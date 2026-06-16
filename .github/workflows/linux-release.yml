@@ -203,6 +203,22 @@ jobs:
           fi
           echo "appimage_status=$appimage_status" >> "$evidence_path"
 
+          # Debian package (distro-native install; non-fatal evidence).
+          deb_status="skipped"
+          case "$runtime" in linux-x64) deb_arch="amd64";; linux-arm64) deb_arch="arm64";; *) deb_arch="";; esac
+          deb="$dist/freex_${version}_${deb_arch}.deb"
+          if [[ -n "$deb_arch" ]] \
+             && src/FreeX.App.Avalonia/Packaging/linux/build-deb.sh \
+                  --runtime "$runtime" --published "$published" --version "$version" --output "$dist" \
+             && test -f "$deb"; then
+            (cd "$dist" && sha256sum "$(basename "$deb")" > "$(basename "$deb").sha256")
+            deb_status="built"
+            echo "deb_name=$(basename "$deb")" >> "$evidence_path"
+          else
+            deb_status="failed"
+          fi
+          echo "deb_status=$deb_status" >> "$evidence_path"
+
       - name: Upload release build artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -212,6 +228,8 @@ jobs:
             artifacts/freex-${{ inputs.release_version }}-${{ matrix.runtime }}.tar.gz.sha256
             artifacts/FreeX-${{ inputs.release_version }}-${{ matrix.arch }}.AppImage
             artifacts/FreeX-${{ inputs.release_version }}-${{ matrix.arch }}.AppImage.sha256
+            artifacts/freex_${{ inputs.release_version }}_*.deb
+            artifacts/freex_${{ inputs.release_version }}_*.deb.sha256
             artifacts/freex-${{ matrix.runtime }}-linux-evidence.txt
             artifacts/freex-${{ matrix.runtime }}-linux-packaging-smoke.log
             artifacts/freex-${{ matrix.runtime }}-linux-launch-smoke.txt
@@ -265,6 +283,7 @@ jobs:
           find downloaded-artifacts -type f \( \
             -name 'freex-*.tar.gz' -o -name 'freex-*.tar.gz.sha256' -o \
             -name 'FreeX-*.AppImage' -o -name 'FreeX-*.AppImage.sha256' -o \
+            -name 'freex_*.deb' -o -name 'freex_*.deb.sha256' -o \
             -name 'freex-*-linux-evidence.txt' \) -exec cp {} "$stage/" \;
           ls -la "$stage"
           {
