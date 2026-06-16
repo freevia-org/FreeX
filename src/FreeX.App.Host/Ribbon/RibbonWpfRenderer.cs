@@ -332,8 +332,12 @@ public static class RibbonWpfRenderer
             RibbonMetadata.SetCommandName(element, control.CommandId.Value);
         if (!string.IsNullOrEmpty(control.KeyTip))
             RibbonTooltip.SetKeyTip(element, control.KeyTip);
-        if (!string.IsNullOrEmpty(control.TooltipTitle))
-            RibbonTooltip.SetTitle(element, control.TooltipTitle);
+        // The tooltip title doubles as the control's human-readable identity (keytip overlays, tests
+        // that resolve a command by its visible title). Default it to the Label so every rendered
+        // control reports a meaningful title even when no explicit tooltip title was authored.
+        var title = !string.IsNullOrEmpty(control.TooltipTitle) ? control.TooltipTitle : control.Label;
+        if (!string.IsNullOrEmpty(title))
+            RibbonTooltip.SetTitle(element, title);
         if (!string.IsNullOrEmpty(control.TooltipDescription))
             RibbonTooltip.SetDescription(element, control.TooltipDescription);
 

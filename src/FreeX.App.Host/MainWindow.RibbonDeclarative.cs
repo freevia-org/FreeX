@@ -234,6 +234,13 @@ public partial class MainWindow
                 targetButton.ContextMenu = sourceMenu;
             }
 
+            // Mirror enablement from the backplane control (which the app toggles for context, e.g.
+            // multi-window commands disabled in a lone-window host) onto the rendered control, so a
+            // context-disabled command exposes no keytip — matching the original adaptive ribbon.
+            void SyncEnabled() => target.IsEnabled = original.IsEnabled;
+            original.IsEnabledChanged += (_, _) => SyncEnabled();
+            SyncEnabled();
+
             if (original is ToggleButton sourceToggle && target is ToggleButton targetToggle)
             {
                 void Sync() => targetToggle.IsChecked = sourceToggle.IsChecked;
