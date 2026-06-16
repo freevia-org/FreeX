@@ -673,6 +673,18 @@ public sealed class DocumentView : RichTextBox
                     CommentId = covered.CommentId
                 });
                 break;
+            case WpfRun { Tag: RevisionMarker marker } revisedRun when revisedRun.Text.Length > 0:
+                // A tracked-change run: recover its formatting but strip the injected revision colour and
+                // the kind's decoration (view-only chrome), carrying the revision mark back onto the model.
+                modelParagraph.Runs.Add(new ModelRun(revisedRun.Text, StripRevisionChrome(ReadRunFormatting(revisedRun), marker.Kind))
+                {
+                    HyperlinkUrl = hyperlinkUrl,
+                    HyperlinkAnchor = hyperlinkAnchor,
+                    Revision = marker.Kind,
+                    RevisionAuthor = marker.Author,
+                    RevisionDateXml = marker.DateXml
+                });
+                break;
             case WpfRun run when run.Text.Length > 0:
                 modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor });
                 break;
@@ -878,6 +890,19 @@ public sealed class DocumentView : RichTextBox
             decorations.Add(TextDecorations.Underline);
         if (fmt.Strikethrough)
             decorations.Add(TextDecorations.Strikethrough);
+
+        // A tracked-change run is coloured in the revision colour and decorated: insertions get an
+        // underline, deletions get a strikethrough. A RevisionMarker tag carries the kind/author/date
+        // so the mark round-trips on commit (see ReadInline). The mark wins over the run's own colour.
+        if (run.Revision != RevisionKind.None)
+        {
+            wpf.Foreground = new SolidColorBrush(RevisionColor);
+            decorations.Add(run.Revision == RevisionKind.Deleted
+                ? TextDecorations.Strikethrough[0]
+                : TextDecorations.Underline[0]);
+            wpf.Tag = new RevisionMarker(run.Revision, run.RevisionAuthor, run.RevisionDateXml);
+        }
+
         if (decorations.Count > 0)
             wpf.TextDecorations = decorations;
 
@@ -896,6 +921,15 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Subtle highlight used to mark a commented text range (a pale review yellow).</summary>
     private static readonly Color CommentHighlight = Color.FromRgb(0xFF, 0xF4, 0xCE);
+
+    /// <summary>The fixed colour tracked changes are rendered in (a Word-like revision maroon/red).</summary>
+    private static readonly Color RevisionColor = Color.FromRgb(0xC0, 0x00, 0x40);
+
+    /// <summary>
+    /// Carried on a tracked-change WPF run's Tag so CommitToModel can round-trip its revision kind,
+    /// author and date. Mirrors how CommentMarker/FootnoteMarker preserve their marks across an edit.
+    /// </summary>
+    private sealed record RevisionMarker(RevisionKind Kind, string? Author, string? DateXml);
 
     /// <summary>
     /// Marks a WPF run as covered by the comment with id <paramref name="commentId"/>: a subtle
@@ -1171,6 +1205,143 @@ public sealed class DocumentView : RichTextBox
         _model.Comments[id].Content.Add(new ModelParagraph(text));
 
         Render();
+    }
+
+    /// <summary>
+    /// When true, the editor is in Track Changes mode. Live keystroke-level tracking is not attempted
+    /// (it is brittle in a RichTextBox); the flag is a model/UI state that the ribbon toggle reflects and
+    /// that gates <see cref="MarkSelectionAsRevision"/> (used to mark the selection as an insertion or
+    /// deletion). Accept-All / Reject-All operate regardless of this flag.
+    /// </summary>
+    public bool TrackChangesEnabled { get; set; }
+
+    /// <summary>True when the committed model carries any tracked change.</summary>
+    public bool HasRevisions()
+    {
+        CommitToModel();
+        return TrackChanges.HasRevisions(_model);
+    }
+
+    /// <summary>
+    /// Marks the current selection as a tracked change of <paramref name="kind"/> (insertion or
+    /// deletion) by the given author/date, splitting runs at the selection boundaries. With an empty
+    /// selection the caret's whole paragraph is marked. Re-renders so the revision colour/decoration
+    /// appears and the marks round-trip on the next commit/save. A no-op for <see cref="RevisionKind.None"/>.
+    /// </summary>
+    public void MarkSelectionAsRevision(RevisionKind kind, string author, string? dateXml)
+    {
+        if (kind == RevisionKind.None)
+            return;
+
+        Focus();
+
+        var startParagraph = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
+        if (startParagraph is null)
+            return;
+        var sameParagraph = ReferenceEquals(Selection.Start.Paragraph, Selection.End.Paragraph);
+        var startOffset = OffsetInParagraph(startParagraph, Selection.Start);
+        var endOffset = sameParagraph ? OffsetInParagraph(startParagraph, Selection.End) : int.MaxValue;
+        if (Selection.IsEmpty || !sameParagraph)
+        {
+            startOffset = 0;
+            endOffset = int.MaxValue;
+        }
+
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var modelIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref modelIndex);
+        if (!indexOf.TryGetValue(startParagraph, out var paragraphIndex))
+            return;
+
+        CommitToModel();
+        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
+            return;
+
+        MarkRevisionRange(modelParagraph, startOffset, endOffset, kind, author, dateXml);
+        Render();
+    }
+
+    /// <summary>
+    /// Accept every tracked change in the document: insertions become ordinary text, deletions are
+    /// removed. Commits pending edits first, then re-renders so the resolved text shows immediately.
+    /// </summary>
+    public void AcceptAllRevisions()
+    {
+        CommitToModel();
+        TrackChanges.AcceptAll(_model);
+        Render();
+    }
+
+    /// <summary>
+    /// Reject every tracked change in the document: insertions are removed, deletions become ordinary
+    /// text. Commits pending edits first, then re-renders so the resolved text shows immediately.
+    /// </summary>
+    public void RejectAllRevisions()
+    {
+        CommitToModel();
+        TrackChanges.RejectAll(_model);
+        Render();
+    }
+
+    /// <summary>
+    /// Marks the model runs of <paramref name="paragraph"/> covering the character range
+    /// [<paramref name="startOffset"/>, <paramref name="endOffset"/>) as a tracked change of
+    /// <paramref name="kind"/>, splitting runs at the boundaries. Offsets are measured over the
+    /// paragraph's plain text. Mirrors <see cref="MarkCommentRange"/>.
+    /// </summary>
+    private static void MarkRevisionRange(ModelParagraph paragraph, int startOffset, int endOffset, RevisionKind kind, string author, string? dateXml)
+    {
+        var pos = 0;
+        for (var i = 0; i < paragraph.Runs.Count; i++)
+        {
+            var run = paragraph.Runs[i];
+            var len = run.Text.Length;
+            var runStart = pos;
+            var runEnd = pos + len;
+            pos = runEnd;
+            if (len == 0)
+                continue;
+
+            var coverStart = Math.Max(runStart, startOffset);
+            var coverEnd = Math.Min(runEnd, endOffset);
+            if (coverStart >= coverEnd)
+                continue;
+
+            if (coverStart > runStart)
+            {
+                var head = new ModelRun(run.Text[..(coverStart - runStart)], run.Formatting)
+                {
+                    HyperlinkUrl = run.HyperlinkUrl,
+                    HyperlinkAnchor = run.HyperlinkAnchor,
+                    CommentId = run.CommentId,
+                    Revision = run.Revision,
+                    RevisionAuthor = run.RevisionAuthor,
+                    RevisionDateXml = run.RevisionDateXml
+                };
+                run.Text = run.Text[(coverStart - runStart)..];
+                paragraph.Runs.Insert(i, head);
+                i++;
+            }
+            if (coverEnd < runEnd)
+            {
+                var tail = new ModelRun(run.Text[(coverEnd - coverStart)..], run.Formatting)
+                {
+                    HyperlinkUrl = run.HyperlinkUrl,
+                    HyperlinkAnchor = run.HyperlinkAnchor,
+                    CommentId = run.CommentId,
+                    Revision = run.Revision,
+                    RevisionAuthor = run.RevisionAuthor,
+                    RevisionDateXml = run.RevisionDateXml
+                };
+                run.Text = run.Text[..(coverEnd - coverStart)];
+                paragraph.Runs.Insert(i + 1, tail);
+            }
+
+            run.Revision = kind;
+            run.RevisionAuthor = author;
+            run.RevisionDateXml = dateXml;
+        }
     }
 
     /// <summary>The plain-text character offset of <paramref name="position"/> from the paragraph's start.</summary>
@@ -1473,6 +1644,20 @@ public sealed class DocumentView : RichTextBox
             FontSizePt = fontSizePt,
             ColorHex = run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
             HighlightColorHex = run.Background is SolidColorBrush highlight ? ToHex(highlight.Color) : null
+        };
+    }
+
+    // Undo the view-only chrome BuildRun injects for a tracked-change run: clear the revision colour
+    // (so it doesn't leak into the model as an explicit colour) and remove the decoration the kind added
+    // (underline for an insertion, strikethrough for a deletion). The run's own real formatting is kept.
+    private static RunFormatting StripRevisionChrome(RunFormatting formatting, RevisionKind kind)
+    {
+        var revisionHex = ToHex(RevisionColor);
+        return formatting with
+        {
+            ColorHex = string.Equals(formatting.ColorHex, revisionHex, StringComparison.OrdinalIgnoreCase) ? null : formatting.ColorHex,
+            Underline = kind == RevisionKind.Inserted ? false : formatting.Underline,
+            Strikethrough = kind == RevisionKind.Deleted ? false : formatting.Strikethrough
         };
     }
 

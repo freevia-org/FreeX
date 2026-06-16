@@ -1082,4 +1082,90 @@ public class DocxRoundTripTests
         // A comment with no date round-trips with DateXml null.
         DocxReader.Read(new MemoryStream(stream.ToArray())).Comments[0].DateXml.Should().BeNull();
     }
+
+    [Fact]
+    public void InsertedRun_RoundTrips_KindAuthorAndDate()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Before "));
+        body.Runs.Add(new Run("added text")
+        {
+            Revision = RevisionKind.Inserted,
+            RevisionAuthor = "Alice Adams",
+            RevisionDateXml = "2026-06-17T10:30:00Z"
+        });
+        body.Runs.Add(new Run(" after"));
+        doc.Blocks.Add(body);
+
+        var result = RoundTrip(doc);
+
+        var paragraph = result.Paragraphs.First();
+        paragraph.PlainText.Should().Be("Before added text after");
+
+        var inserted = paragraph.Runs.Single(r => r.Revision == RevisionKind.Inserted);
+        inserted.Text.Should().Be("added text");
+        inserted.RevisionAuthor.Should().Be("Alice Adams");
+        inserted.RevisionDateXml.Should().Be("2026-06-17T10:30:00Z");
+
+        // The surrounding text keeps no revision mark.
+        paragraph.Runs.Where(r => r.Text is "Before " or " after").Should().OnlyContain(r => r.Revision == RevisionKind.None);
+    }
+
+    [Fact]
+    public void DeletedRun_RoundTrips_AsDelTextWithKindAndAuthor()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Keep "));
+        body.Runs.Add(new Run("removed text")
+        {
+            Revision = RevisionKind.Deleted,
+            RevisionAuthor = "Bob Brown",
+            RevisionDateXml = "2026-06-17T11:00:00Z"
+        });
+        doc.Blocks.Add(body);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        // The deleted text serialises inside a w:del wrapper using w:delText (not w:t).
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+            var documentXml = docReader.ReadToEnd();
+            documentXml.Should().Contain("<w:del");
+            documentXml.Should().Contain("w:delText");
+            documentXml.Should().Contain("w:author=\"Bob Brown\"");
+        }
+
+        stream.Position = 0;
+        var result = DocxReader.Read(stream);
+
+        var paragraph = result.Paragraphs.First();
+        // The deleted text is kept in the model (struck through, not dropped).
+        paragraph.PlainText.Should().Be("Keep removed text");
+        var deleted = paragraph.Runs.Single(r => r.Revision == RevisionKind.Deleted);
+        deleted.Text.Should().Be("removed text");
+        deleted.RevisionAuthor.Should().Be("Bob Brown");
+        deleted.RevisionDateXml.Should().Be("2026-06-17T11:00:00Z");
+    }
+
+    [Fact]
+    public void NoRevisions_DoesNotEmitInsOrDel()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Plain body"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = docReader.ReadToEnd();
+        documentXml.Should().NotContain("<w:ins");
+        documentXml.Should().NotContain("<w:del");
+    }
 }

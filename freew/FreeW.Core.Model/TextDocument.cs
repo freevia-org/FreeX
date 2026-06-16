@@ -71,6 +71,25 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// </summary>
     public bool IsCommentReference { get; set; }
 
+    /// <summary>
+    /// Tracked-change (revision) mark on this run. <see cref="RevisionKind.None"/> is an ordinary run;
+    /// <see cref="RevisionKind.Inserted"/> is a tracked insertion (serialises wrapped in w:ins, rendered
+    /// underlined in the revision colour); <see cref="RevisionKind.Deleted"/> is a tracked deletion (the
+    /// text is kept in the model but serialises wrapped in w:del with w:delText, rendered struck-through).
+    /// Mirrors how <see cref="CommentId"/>/<see cref="FootnoteId"/> are modelled as optional run marks.
+    /// </summary>
+    public RevisionKind Revision { get; set; } = RevisionKind.None;
+
+    /// <summary>The revision author (w:author on w:ins/w:del). Null when the run carries no revision.</summary>
+    public string? RevisionAuthor { get; set; }
+
+    /// <summary>
+    /// The revision timestamp as a W3CDTF string (the w:date on w:ins/w:del), or null when unset. Kept
+    /// as an explicit string (never auto-stamped) so the writer stays deterministic, matching how
+    /// <see cref="Comment.DateXml"/> is modelled.
+    /// </summary>
+    public string? RevisionDateXml { get; set; }
+
     /// <summary>Creates a run that carries an inline image instead of text.</summary>
     public static Run FromImage(InlineImage image) => new(string.Empty) { Image = image };
 
@@ -155,6 +174,18 @@ public enum RunFieldKind
 {
     None,
     PageNumber
+}
+
+/// <summary>
+/// The tracked-change state of a <see cref="Run"/>. <see cref="None"/> is an ordinary run;
+/// <see cref="Inserted"/> is a tracked insertion (w:ins); <see cref="Deleted"/> is a tracked deletion
+/// (w:del, whose text serialises as w:delText and is kept in the model until the change is accepted).
+/// </summary>
+public enum RevisionKind
+{
+    None,
+    Inserted,
+    Deleted
 }
 
 /// <summary>

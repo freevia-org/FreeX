@@ -114,6 +114,14 @@ internal static class FreeWRibbonCommands
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
         registry.Register("freew.new-comment", new NewCommentCommand(editor));
 
+        // Review tab — Tracking: toggle Track Changes mode (stateful so the ribbon reflects it). When
+        // ON, marking the current selection as a tracked insertion/deletion is offered; turning it on
+        // with a non-empty selection marks that selection as an insertion (a pragmatic stand-in for live
+        // keystroke tracking). Accept All / Reject All resolve every tracked change on the model.
+        registry.Register("freew.track-changes", new TrackChangesToggleCommand(editor));
+        registry.Register("freew.accept-all", new ActionCommand(() => { editor.Focus(); editor.AcceptAllRevisions(); }));
+        registry.Register("freew.reject-all", new ActionCommand(() => { editor.Focus(); editor.RejectAllRevisions(); }));
+
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
         registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false));
@@ -727,6 +735,35 @@ internal static class FreeWRibbonCommands
             var initials = string.Concat(parts.Take(3).Select(p => char.ToUpperInvariant(p[0])));
             return initials.Length > 0 ? initials : "?";
         }
+    }
+
+    // Review > Tracking > Track Changes: a stateful toggle over the editor's Track Changes mode. Live
+    // keystroke tracking is out of scope in a RichTextBox, so as a pragmatic gesture, turning the toggle
+    // ON with a non-empty selection marks that selection as a tracked insertion (so the feature does
+    // something visible and the round-trip is exercisable from the UI). The author comes from the
+    // document Author property (falling back to the OS user); the date is stamped at mark time.
+    private sealed class TrackChangesToggleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.TrackChangesEnabled = !editor.TrackChangesEnabled;
+
+            // When switching ON over a non-empty selection, mark it as an insertion as a stand-in for
+            // live tracking. This keeps the toggle useful without brittle per-keystroke interception.
+            if (editor.TrackChangesEnabled && !editor.Selection.IsEmpty)
+            {
+                var author = editor.Model.Properties.Author;
+                if (string.IsNullOrWhiteSpace(author))
+                    author = Environment.UserName;
+                author = author?.Trim() ?? string.Empty;
+
+                var dateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+                editor.MarkSelectionAsRevision(RevisionKind.Inserted, author, dateXml);
+            }
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.TrackChangesEnabled);
     }
 
     // Insert > Links > Bookmark: name the caret's paragraph as a bookmark target. Seeds the prompt
