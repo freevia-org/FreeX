@@ -288,6 +288,11 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
         if (f.ColorHex is { Length: > 0 } color)
             rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
+        if (f.HighlightColorHex is { Length: > 0 } highlight)
+            rPr.Add(new XElement(W + "shd",
+                new XAttribute(W + "val", "clear"),
+                new XAttribute(W + "color", "auto"),
+                new XAttribute(W + "fill", highlight.TrimStart('#'))));
         if (f.FontSizePt is { } size)
         {
             var halfPoints = PointsToHalfPoints(size);

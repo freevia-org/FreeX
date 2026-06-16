@@ -265,6 +265,8 @@ public sealed class DocumentView : RichTextBox
             wpf.FontSize = size * PxPerPoint;
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
+        if (TryParseColor(fmt.HighlightColorHex, out var highlight))
+            wpf.Background = new SolidColorBrush(highlight);
 
         var decorations = new TextDecorationCollection();
         if (fmt.Underline)
@@ -331,7 +333,8 @@ public sealed class DocumentView : RichTextBox
         Strikethrough = run.TextDecorations?.Contains(TextDecorations.Strikethrough[0]) == true,
         FontFamily = run.FontFamily.Source,
         FontSizePt = run.FontSize / PxPerPoint,
-        ColorHex = run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null
+        ColorHex = run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
+        HighlightColorHex = run.Background is SolidColorBrush highlight ? ToHex(highlight.Color) : null
     };
 
     private static ParagraphFormatting ReadParagraphFormatting(WpfParagraph paragraph) =>
@@ -360,7 +363,8 @@ public sealed class DocumentView : RichTextBox
             Strikethrough = r.Strikethrough || style.Strikethrough || d.Strikethrough,
             FontFamily = r.FontFamily ?? style.FontFamily ?? d.FontFamily,
             FontSizePt = r.FontSizePt ?? style.FontSizePt ?? d.FontSizePt,
-            ColorHex = r.ColorHex ?? style.ColorHex ?? d.ColorHex
+            ColorHex = r.ColorHex ?? style.ColorHex ?? d.ColorHex,
+            HighlightColorHex = r.HighlightColorHex ?? style.HighlightColorHex ?? d.HighlightColorHex
         };
     }
 

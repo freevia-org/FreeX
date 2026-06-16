@@ -209,6 +209,7 @@ public static class DocxReader
 
         var underline = rPr.Element(W + "u");
         var color = rPr.Element(W + "color")?.Attribute(W + "val")?.Value;
+        var highlight = rPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
 
         return new RunFormatting
         {
@@ -218,7 +219,8 @@ public static class DocxReader
             Strikethrough = ReadToggle(rPr, "strike"),
             FontFamily = rPr.Element(W + "rFonts")?.Attribute(W + "ascii")?.Value,
             FontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value),
-            ColorHex = color is null or "auto" ? null : "#" + color.TrimStart('#')
+            ColorHex = color is null or "auto" ? null : "#" + color.TrimStart('#'),
+            HighlightColorHex = highlight is null or "auto" ? null : "#" + highlight.TrimStart('#')
         };
     }
 
