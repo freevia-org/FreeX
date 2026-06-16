@@ -1,13 +1,24 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using FreeW.Core.Model;
+using System.Diagnostics;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun = System.Windows.Documents.Run;
+using WpfHyperlink = System.Windows.Documents.Hyperlink;
+using WpfTable = System.Windows.Documents.Table;
+using WpfTableRow = System.Windows.Documents.TableRow;
+using WpfTableCell = System.Windows.Documents.TableCell;
 using WpfTextAlignment = System.Windows.TextAlignment;
+using ModelBlock = FreeW.Core.Model.Block;
 using ModelParagraph = FreeW.Core.Model.Paragraph;
 using ModelRun = FreeW.Core.Model.Run;
+using ModelTable = FreeW.Core.Model.Table;
+using ModelTableRow = FreeW.Core.Model.TableRow;
+using ModelTableCell = FreeW.Core.Model.TableCell;
 using ModelTextAlignment = FreeW.Core.Model.TextAlignment;
 
 namespace FreeW.App.Host.Editing;
@@ -52,14 +63,148 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    /// <summary>
+    /// Insert a table at the caret (after the block the caret sits in, else at the end), routing
+    /// through the undo/redo command bus so the insert is reversible. Re-renders the surface.
+    /// </summary>
+    public void InsertTable(int rows, int columns)
+    {
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+        _commands.Execute(new InsertBlockCommand(index, ModelTable.Create(rows, columns)));
+    }
+
+    /// <summary>Insert a blank row below the caret's row in the table containing the caret.</summary>
+    public void InsertTableRow() => MutateCaretTable((index, rowIndex, _) =>
+        new InsertTableRowCommand(index, rowIndex + 1));
+
+    /// <summary>Delete the caret's row from the table containing the caret (no-op on the last row).</summary>
+    public void DeleteTableRow() => MutateCaretTable((index, rowIndex, _) =>
+        new DeleteTableRowCommand(index, rowIndex));
+
+    /// <summary>Insert a blank column to the right of the caret's column in the table containing the caret.</summary>
+    public void InsertTableColumn() => MutateCaretTable((index, _, columnIndex) =>
+        new InsertTableColumnCommand(index, columnIndex + 1));
+
+    /// <summary>Delete the caret's column from the table containing the caret (no-op on the last column).</summary>
+    public void DeleteTableColumn() => MutateCaretTable((index, _, columnIndex) =>
+        new DeleteTableColumnCommand(index, columnIndex));
+
+    /// <summary>
+    /// Resize the currently selected inline image to <paramref name="widthPt"/> points wide, scaling
+    /// the height to preserve aspect ratio. Routes through the bus (undoable). No-op without a selection.
+    /// </summary>
+    public void SetSelectedImageSize(double widthPt)
+    {
+        if (widthPt <= 0)
+            return;
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null)
+            return;
+        var aspect = image.WidthPt > 0 ? image.HeightPt / image.WidthPt : 1;
+        _commands.Execute(new SetImageSizeCommand(blockIndex, runIndex, widthPt, widthPt * aspect));
+    }
+
+    /// <summary>The inline image targeted by the current selection/caret, or null if none is selected.</summary>
+    public InlineImage? SelectedImage() => SelectedImageLocation().Image;
+
+    // Commit pending edits, locate the caret's table + cell, build a command for it, run it through the bus.
+    private void MutateCaretTable(Func<int, int, int, IDocumentCommand> build)
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0)
+            return;
+        _commands.Execute(build(blockIndex, rowIndex, columnIndex));
+    }
+
+    // Locate the model block/row/column of the table containing the caret; blockIndex is -1 if not in a table.
+    private (int BlockIndex, int RowIndex, int ColumnIndex) CaretTableLocation()
+    {
+        // Walk up from the caret to the hosting WPF cell/row/table.
+        TextElement? element = CaretPosition?.Parent as TextElement;
+        WpfTableCell? cell = null;
+        while (element is not null)
+        {
+            if (element is WpfTableCell c)
+            {
+                cell = c;
+                break;
+            }
+            element = element.Parent as TextElement;
+        }
+        if (cell?.Parent is not WpfTableRow wpfRow || wpfRow.Parent is not TableRowGroup group
+            || group.Parent is not WpfTable wpfTable)
+            return (-1, -1, -1);
+
+        var blockIndex = new List<System.Windows.Documents.Block>(Document.Blocks).IndexOf(wpfTable);
+        var rowIndex = new List<WpfTableRow>(group.Rows).IndexOf(wpfRow);
+        var columnIndex = new List<WpfTableCell>(wpfRow.Cells).IndexOf(cell);
+        return (blockIndex, rowIndex, columnIndex);
+    }
+
+    // Locate the model paragraph/run index of the inline image under the selection, plus the image itself.
+    private (int BlockIndex, int RunIndex, InlineImage? Image) SelectedImageLocation()
+    {
+        // An InlineUIContainer hosting our tagged Image is the selected picture; find it around the caret.
+        var image = ImageInElement(CaretPosition?.Parent as TextElement)
+            ?? ImageInElement(Selection.Start.Parent as TextElement)
+            ?? ImageInElement(Selection.End.Parent as TextElement);
+        if (image is null)
+            return (-1, -1, null);
+
+        // Match it back to a top-level model paragraph + run by identity (images embedded in tables are skipped).
+        for (var b = 0; b < _model.Blocks.Count; b++)
+        {
+            if (_model.Blocks[b] is not ModelParagraph paragraph)
+                continue;
+            for (var r = 0; r < paragraph.Runs.Count; r++)
+            {
+                if (ReferenceEquals(paragraph.Runs[r].Image, image))
+                    return (b, r, image);
+            }
+        }
+        return (-1, -1, null);
+    }
+
+    private static InlineImage? ImageInElement(TextElement? element)
+    {
+        while (element is not null)
+        {
+            if (element is InlineUIContainer { Child: Image { Tag: InlineImage modelImage } })
+                return modelImage;
+            element = element.Parent as TextElement;
+        }
+        return null;
+    }
+
+    // The index of the model block containing the caret, or the last block (-1 when the body is empty).
+    private int CaretBlockIndex()
+    {
+        TextElement? caretBlock = CaretPosition?.Paragraph
+            ?? CaretPosition?.Parent as TextElement;
+        // Walk up to the block hosted directly by the FlowDocument (its parent is not a TextElement).
+        while (caretBlock?.Parent is TextElement parent)
+            caretBlock = parent;
+
+        var viewIndex = caretBlock is System.Windows.Documents.Block b
+            ? new List<System.Windows.Documents.Block>(Document.Blocks).IndexOf(b)
+            : -1;
+        return viewIndex >= 0 ? viewIndex : _model.Blocks.Count - 1;
+    }
+
     private void Render()
     {
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
 
-        foreach (var paragraph in _model.Paragraphs)
-            flow.Blocks.Add(BuildParagraph(paragraph, _model));
+        foreach (var block in _model.Blocks)
+            flow.Blocks.Add(BuildBlock(block, _model));
 
         Document = flow;
     }
@@ -69,32 +214,138 @@ public sealed class DocumentView : RichTextBox
         public TextDocument Document => view._model;
     }
 
-    /// <summary>Read the edited FlowDocument back into the model (text + run formatting).</summary>
+    /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
     {
-        _model.Paragraphs.Clear();
+        _model.Blocks.Clear();
         foreach (var block in Document.Blocks)
         {
-            if (block is not WpfParagraph wpfParagraph)
-                continue;
-
-            var modelParagraph = new ModelParagraph
+            switch (block)
             {
-                Formatting = ReadParagraphFormatting(wpfParagraph)
-            };
-            foreach (var inline in wpfParagraph.Inlines)
-            {
-                if (inline is WpfRun run && run.Text.Length > 0)
-                    modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)));
+                case WpfParagraph wpfParagraph:
+                    _model.Blocks.Add(ReadParagraph(wpfParagraph));
+                    break;
+                case WpfTable wpfTable:
+                    _model.Blocks.Add(ReadTable(wpfTable));
+                    break;
             }
-            _model.Paragraphs.Add(modelParagraph);
         }
 
-        if (_model.Paragraphs.Count == 0)
-            _model.Paragraphs.Add(new ModelParagraph());
+        if (_model.Blocks.Count == 0)
+            _model.Blocks.Add(new ModelParagraph());
+    }
+
+    private static ModelParagraph ReadParagraph(WpfParagraph wpfParagraph)
+    {
+        var modelParagraph = new ModelParagraph
+        {
+            Formatting = ReadParagraphFormatting(wpfParagraph)
+        };
+        foreach (var inline in wpfParagraph.Inlines)
+            ReadInline(modelParagraph, inline, hyperlinkUrl: null);
+        return modelParagraph;
+    }
+
+    // Maps one FlowDocument inline to model run(s). A Hyperlink is a Span of inlines, so we recurse
+    // into it carrying its NavigateUri, which lands on each produced run as its HyperlinkUrl.
+    private static void ReadInline(ModelParagraph modelParagraph, Inline inline, string? hyperlinkUrl)
+    {
+        switch (inline)
+        {
+            case WpfHyperlink link:
+                var url = link.NavigateUri?.ToString() ?? hyperlinkUrl;
+                foreach (var child in link.Inlines)
+                    ReadInline(modelParagraph, child, url);
+                break;
+            case InlineUIContainer { Child: Image { Tag: InlineImage modelImage } }:
+                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl });
+                break;
+            case WpfRun run when run.Text.Length > 0:
+                modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl });
+                break;
+        }
+    }
+
+    private static ModelTable ReadTable(WpfTable wpfTable)
+    {
+        var table = new ModelTable();
+        foreach (var rowGroup in wpfTable.RowGroups)
+        {
+            foreach (var wpfRow in rowGroup.Rows)
+            {
+                var row = new ModelTableRow();
+                foreach (var wpfCell in wpfRow.Cells)
+                {
+                    var cell = new ModelTableCell();
+                    foreach (var cellBlock in wpfCell.Blocks)
+                    {
+                        if (cellBlock is WpfParagraph cellParagraph)
+                            cell.Paragraphs.Add(ReadParagraph(cellParagraph));
+                    }
+                    if (cell.Paragraphs.Count == 0)
+                        cell.Paragraphs.Add(new ModelParagraph());
+                    row.Cells.Add(cell);
+                }
+                table.Rows.Add(row);
+            }
+        }
+        return table;
     }
 
     // --- model -> view ---
+
+    private static System.Windows.Documents.Block BuildBlock(ModelBlock block, TextDocument document) => block switch
+    {
+        ModelTable table => BuildTable(table, document),
+        ModelParagraph paragraph => BuildParagraph(paragraph, document),
+        _ => BuildParagraph(new ModelParagraph(), document)
+    };
+
+    private static WpfTable BuildTable(ModelTable table, TextDocument document)
+    {
+        var wpf = new WpfTable();
+        var columns = table.ColumnCount;
+        for (var c = 0; c < columns; c++)
+            wpf.Columns.Add(new TableColumn());
+
+        var borderBrush = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A));
+        if (table.Formatting.Borders)
+        {
+            wpf.BorderBrush = borderBrush;
+            wpf.BorderThickness = new Thickness(0.5);
+        }
+
+        var group = new TableRowGroup();
+        foreach (var modelRow in table.Rows)
+        {
+            var wpfRow = new WpfTableRow();
+            foreach (var modelCell in modelRow.Cells)
+            {
+                var wpfCell = new WpfTableCell
+                {
+                    Padding = new Thickness(4, 2, 4, 2)
+                };
+                if (table.Formatting.Borders)
+                {
+                    wpfCell.BorderBrush = borderBrush;
+                    wpfCell.BorderThickness = new Thickness(0.5);
+                }
+                if (modelCell.Paragraphs.Count == 0)
+                {
+                    wpfCell.Blocks.Add(BuildParagraph(new ModelParagraph(), document));
+                }
+                else
+                {
+                    foreach (var cellParagraph in modelCell.Paragraphs)
+                        wpfCell.Blocks.Add(BuildParagraph(cellParagraph, document));
+                }
+                wpfRow.Cells.Add(wpfCell);
+            }
+            group.Rows.Add(wpfRow);
+        }
+        wpf.RowGroups.Add(group);
+        return wpf;
+    }
 
     private static WpfParagraph BuildParagraph(ModelParagraph paragraph, TextDocument document)
     {
@@ -119,8 +370,11 @@ public sealed class DocumentView : RichTextBox
         return wpf;
     }
 
-    private static WpfRun BuildRun(ModelRun run, ModelParagraph paragraph, TextDocument document)
+    private static Inline BuildRun(ModelRun run, ModelParagraph paragraph, TextDocument document)
     {
+        if (run.Image is { } image)
+            return BuildImageRun(image);
+
         var fmt = Resolve(run, paragraph, document);
         var wpf = new WpfRun(run.Text)
         {
@@ -133,6 +387,8 @@ public sealed class DocumentView : RichTextBox
             wpf.FontSize = size * PxPerPoint;
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
+        if (TryParseColor(fmt.HighlightColorHex, out var highlight))
+            wpf.Background = new SolidColorBrush(highlight);
 
         var decorations = new TextDecorationCollection();
         if (fmt.Underline)
@@ -142,7 +398,144 @@ public sealed class DocumentView : RichTextBox
         if (decorations.Count > 0)
             wpf.TextDecorations = decorations;
 
+        if (run.HyperlinkUrl is { Length: > 0 } url)
+            return BuildHyperlink(wpf, url);
+
         return wpf;
+    }
+
+    // Wraps a styled run in a WPF Hyperlink (blue + underlined, with NavigateUri) so the link reads
+    // back on commit and can be opened. Falls back to a plain run if the URL is not a valid Uri.
+    private static Inline BuildHyperlink(WpfRun content, string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return content;
+
+        var link = new WpfHyperlink(content) { NavigateUri = uri };
+        StyleLink(link, url);
+        return link;
+    }
+
+    // Opens the link target in the default handler. Only http/https are launched (safe + simple).
+    private static void OnHyperlinkRequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        e.Handled = true;
+        var uri = e.Uri;
+        if (uri is null || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch
+        {
+            // Ignore launch failures (no handler, blocked, etc.) — opening a link must never crash the editor.
+        }
+    }
+
+    /// <summary>Renders an inline image as an InlineUIContainer hosting a WPF Image (PNG-decoded).</summary>
+    private static InlineUIContainer BuildImageRun(InlineImage image)
+    {
+        var element = new Image
+        {
+            Source = DecodePng(image.PngBytes),
+            Width = image.WidthPt * PxPerPoint,
+            Height = image.HeightPt * PxPerPoint,
+            Stretch = Stretch.Fill,
+            Tag = image // carries the model image so CommitToModel can round-trip it
+        };
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    private static BitmapImage DecodePng(byte[] bytes)
+    {
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit();
+        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+        bitmap.StreamSource = new MemoryStream(bytes);
+        bitmap.EndInit();
+        bitmap.Freeze();
+        return bitmap;
+    }
+
+    /// <summary>Inserts an inline image at the caret. Width/height in points; preserved on save.</summary>
+    public void InsertImage(InlineImage image)
+    {
+        CommitToModel();
+        var container = BuildImageRun(image);
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        if (caret.Paragraph is { } paragraph)
+            paragraph.Inlines.Add(container);
+        else if (Document.Blocks.LastOrDefault() is WpfParagraph last)
+            last.Inlines.Add(container);
+        else
+        {
+            var p = new WpfParagraph(container);
+            Document.Blocks.Add(p);
+        }
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Applies an external hyperlink to the current selection. If the selection is non-empty its text
+    /// becomes the link; if it is empty the URL itself is inserted as a linked run. Re-renders so the
+    /// link is styled and round-trips through the model on the next commit.
+    /// </summary>
+    public void ApplyHyperlink(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return;
+
+        Focus();
+        var selection = Selection;
+        if (selection.IsEmpty)
+        {
+            // No selection: drop the URL as its own linked run at the caret.
+            var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+            var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
+            if (paragraph is null)
+            {
+                paragraph = new WpfParagraph();
+                Document.Blocks.Add(paragraph);
+            }
+            paragraph.Inlines.Add(NewLink(new WpfRun(url), uri, url));
+        }
+        else
+        {
+            // Wrap the selected text range in a hyperlink (WPF splits runs at the range boundaries).
+            try
+            {
+                var link = new WpfHyperlink(selection.Start, selection.End)
+                {
+                    NavigateUri = uri,
+                    ToolTip = url
+                };
+                StyleLink(link, url);
+            }
+            catch (ArgumentException)
+            {
+                // Selection spanned a non-text boundary (e.g. a table); ignore rather than crash.
+                return;
+            }
+        }
+
+        CommitToModel();
+        Render();
+    }
+
+    private static WpfHyperlink NewLink(WpfRun content, Uri uri, string url)
+    {
+        var link = new WpfHyperlink(content) { NavigateUri = uri, ToolTip = url };
+        StyleLink(link, url);
+        return link;
+    }
+
+    private static void StyleLink(WpfHyperlink link, string url)
+    {
+        link.ToolTip = url;
+        link.Foreground = new SolidColorBrush(Color.FromRgb(0x05, 0x63, 0xC1));
+        link.RequestNavigate += OnHyperlinkRequestNavigate;
     }
 
     // --- view -> model ---
@@ -155,7 +548,8 @@ public sealed class DocumentView : RichTextBox
         Strikethrough = run.TextDecorations?.Contains(TextDecorations.Strikethrough[0]) == true,
         FontFamily = run.FontFamily.Source,
         FontSizePt = run.FontSize / PxPerPoint,
-        ColorHex = run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null
+        ColorHex = run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
+        HighlightColorHex = run.Background is SolidColorBrush highlight ? ToHex(highlight.Color) : null
     };
 
     private static ParagraphFormatting ReadParagraphFormatting(WpfParagraph paragraph) =>
@@ -184,7 +578,8 @@ public sealed class DocumentView : RichTextBox
             Strikethrough = r.Strikethrough || style.Strikethrough || d.Strikethrough,
             FontFamily = r.FontFamily ?? style.FontFamily ?? d.FontFamily,
             FontSizePt = r.FontSizePt ?? style.FontSizePt ?? d.FontSizePt,
-            ColorHex = r.ColorHex ?? style.ColorHex ?? d.ColorHex
+            ColorHex = r.ColorHex ?? style.ColorHex ?? d.ColorHex,
+            HighlightColorHex = r.HighlightColorHex ?? style.HighlightColorHex ?? d.HighlightColorHex
         };
     }
 

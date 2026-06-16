@@ -32,6 +32,8 @@ internal static class FreeWRibbon
                     g.Toggle("freew.bold", "Bold");
                     g.Toggle("freew.italic", "Italic");
                     g.Toggle("freew.underline", "Underline");
+                    g.Button("freew.font-color", "Text Colour");
+                    g.Button("freew.highlight", "Highlight");
                     g.Button("freew.grow-font", "Grow");
                     g.Button("freew.shrink-font", "Shrink");
                 });
@@ -59,11 +61,20 @@ internal static class FreeWRibbon
                     g.Button("freew.page-break", "Page Break");
                 });
                 tab.Group("tables", "Tables", "T", 90, g => g.Button("freew.table", "Table"));
+                tab.Group("table-tools", "Table Tools", "B", 85, g =>
+                {
+                    g.Button("freew.table-insert-row", "Insert Row");
+                    g.Button("freew.table-delete-row", "Delete Row");
+                    g.Button("freew.table-insert-col", "Insert Column");
+                    g.Button("freew.table-delete-col", "Delete Column");
+                });
                 tab.Group("illustrations", "Illustrations", "I", 80, g =>
                 {
                     g.Button("freew.picture", "Picture");
+                    g.Button("freew.image-size", "Image Size");
                     g.Button("freew.shapes", "Shapes");
                 });
+                tab.Group("links", "Links", "K", 70, g => g.Button("freew.hyperlink", "Link"));
             })
             .Tab("layout", "Layout", "L", tab =>
             {
@@ -72,6 +83,10 @@ internal static class FreeWRibbon
                     g.Button("freew.margins", "Margins");
                     g.Button("freew.orientation", "Orientation");
                     g.Button("freew.size", "Size");
+                });
+                tab.Group("preview", "Preview", "V", 90, g =>
+                {
+                    g.Button("freew.print-preview", "Print Preview");
                 });
             })
             .Build();

@@ -35,7 +35,7 @@ public sealed class MainWindow : Window
         _editor = editor;
         editor.LoadModel(CreateSampleDocument());
         var stateStore = new RibbonStateStore();
-        var commands = FreeWRibbonCommands.Build(editor, stateStore);
+        var commands = FreeWRibbonCommands.Build(editor, stateStore, OpenPrintPreview);
         _file = new FileCommands(this, editor, UpdateTitle);
         editor.TextChanged += (_, _) => _file.MarkDirty();
         _autosave = new AutosaveCoordinator(editor, _file);
@@ -93,6 +93,10 @@ public sealed class MainWindow : Window
         recentButton.Click += (_, _) => ShowRecentMenu(recentButton);
         bar.Children.Add(recentButton);
 
+        var propertiesButton = new Button { Content = "Properties", Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(10, 2, 10, 2) };
+        propertiesButton.Click += (_, _) => OpenProperties();
+        bar.Children.Add(propertiesButton);
+
         _titleText = new TextBlock
         {
             Foreground = Brushes.White,
@@ -121,25 +125,28 @@ public sealed class MainWindow : Window
     private void Print()
     {
         var dialog = new PrintDialog();
+
+        // Print at the model's page size (points -> DIP), not just the printer's printable area, so
+        // margins and page breaks match what the user sees in Print Preview.
+        var page = _editor.Model.Page;
+        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
+        dialog.PrintTicket.PageMediaSize = new System.Printing.PageMediaSize(pageWidth, pageHeight);
+
         if (dialog.ShowDialog() != true)
             return;
 
-        var doc = _editor.Document;
-        var saved = (doc.PageWidth, doc.PageHeight, doc.PagePadding, doc.ColumnWidth);
-        try
-        {
-            _editor.CommitToModel();
-            doc.PageWidth = dialog.PrintableAreaWidth;
-            doc.PageHeight = dialog.PrintableAreaHeight;
-            doc.PagePadding = new Thickness(60);
-            doc.ColumnWidth = double.PositiveInfinity;
-            var paginator = ((System.Windows.Documents.IDocumentPaginatorSource)doc).DocumentPaginator;
-            dialog.PrintDocument(paginator, "FreeW Document");
-        }
-        finally
-        {
-            (doc.PageWidth, doc.PageHeight, doc.PagePadding, doc.ColumnWidth) = saved;
-        }
+        // Build a fresh, page-settings-aware FlowDocument (display-only clone of the editor content)
+        // and let its paginator break the flow into pages at the model's geometry.
+        var printDoc = PrintLayout.BuildPaginatedDocument(_editor);
+        var paginator = ((System.Windows.Documents.IDocumentPaginatorSource)printDoc).DocumentPaginator;
+        paginator.PageSize = new Size(pageWidth, pageHeight);
+        dialog.PrintDocument(paginator, "FreeW Document");
+    }
+
+    private void OpenPrintPreview()
+    {
+        var preview = new PrintPreviewWindow(_editor) { Owner = this };
+        preview.Show();
     }
 
     private void OpenFindReplace()
@@ -151,6 +158,13 @@ public sealed class MainWindow : Window
         }
         _findDialog.Show();
         _findDialog.Activate();
+    }
+
+    private void OpenProperties()
+    {
+        var dialog = new PropertiesDialog(this, _editor.Model.Properties);
+        if (dialog.ShowDialog() == true)
+            _file.MarkDirty();
     }
 
     private void ShowRecentMenu(Button anchor)
@@ -191,10 +205,10 @@ public sealed class MainWindow : Window
     private static TextDocument CreateSampleDocument()
     {
         var doc = TextDocument.CreateEmpty();
-        doc.Paragraphs.Clear();
+        doc.Blocks.Clear();
 
-        doc.Paragraphs.Add(new Paragraph("Welcome to FreeW") { StyleId = "Title" });
-        doc.Paragraphs.Add(new Paragraph("A free word processor") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Welcome to FreeW") { StyleId = "Title" });
+        doc.Blocks.Add(new Paragraph("A free word processor") { StyleId = "Heading1" });
 
         var intro = new Paragraph();
         intro.Runs.Add(new Run("This document is rendered from the FreeW model. Formatting like "));
@@ -206,9 +220,9 @@ public sealed class MainWindow : Window
         intro.Runs.Add(new Run(" and "));
         intro.Runs.Add(new Run("colour", new RunFormatting { ColorHex = "#C0504D", Bold = true }));
         intro.Runs.Add(new Run(" resolves through styles and document defaults. Edit freely — the surface is a live RichTextBox; CommitToModel() maps your edits back."));
-        doc.Paragraphs.Add(intro);
+        doc.Blocks.Add(intro);
 
-        doc.Paragraphs.Add(new Paragraph("Centered paragraph.")
+        doc.Blocks.Add(new Paragraph("Centered paragraph.")
         {
             Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
         });

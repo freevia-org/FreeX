@@ -15,6 +15,8 @@ public static class DocxWriter
 {
     private const string OfficeDocumentRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
     private const string StylesRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
+    private const string ImageRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+    private const string HyperlinkRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
 
     public static void Write(TextDocument document, string path)
     {
@@ -24,12 +26,63 @@ public static class DocxWriter
 
     public static void Write(TextDocument document, Stream stream)
     {
+        // Assign a relationship + media id to every inline image up front so document.xml, the
+        // document relationships and the media parts all agree on rId/imageN.png.
+        var images = CollectImages(document);
+        // Assign an external relationship id to every distinct hyperlink target the same way.
+        var hyperlinks = CollectHyperlinks(document);
+
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes());
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0));
         WritePart(archive, "_rels/.rels", BuildPackageRels());
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels());
-        WritePart(archive, "word/document.xml", BuildDocument(document));
+        WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
+        foreach (var image in images)
+            WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
+    }
+
+    /// <summary>An inline image paired with the relationship id, media file name and a unique drawing id.</summary>
+    private sealed record ImagePart(InlineImage Image, string RelationshipId, string FileName, uint DrawingId);
+
+    private static List<ImagePart> CollectImages(TextDocument document)
+    {
+        var images = new List<ImagePart>();
+        foreach (var paragraph in EnumerateParagraphs(document))
+            foreach (var run in paragraph.Runs)
+                if (run.Image is { } image)
+                {
+                    var index = images.Count + 1;
+                    images.Add(new ImagePart(image, $"rIdImg{index}", $"image{index}.png", (uint)index));
+                }
+        return images;
+    }
+
+    /// <summary>Maps each distinct hyperlink URL to one external relationship id (rIdLinkN).</summary>
+    private static Dictionary<string, string> CollectHyperlinks(TextDocument document)
+    {
+        var byUrl = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var paragraph in EnumerateParagraphs(document))
+            foreach (var run in paragraph.Runs)
+                if (run.HyperlinkUrl is { Length: > 0 } url && !byUrl.ContainsKey(url))
+                    byUrl[url] = $"rIdLink{byUrl.Count + 1}";
+        return byUrl;
+    }
+
+    /// <summary>All paragraphs, including those nested inside table cells (where runs can also live).</summary>
+    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
+    {
+        foreach (var block in document.Blocks)
+        {
+            if (block is Paragraph paragraph)
+                yield return paragraph;
+            else if (block is Table table)
+                foreach (var row in table.Rows)
+                    foreach (var cell in row.Cells)
+                        foreach (var cellParagraph in cell.Paragraphs)
+                            yield return cellParagraph;
+        }
     }
 
     private static void WritePart(ZipArchive archive, string entryPath, XDocument content)
@@ -39,50 +92,202 @@ public static class DocxWriter
         content.Save(entryStream);
     }
 
-    private static XDocument BuildContentTypes() => new(
+    private static void WriteBinaryPart(ZipArchive archive, string entryPath, byte[] content)
+    {
+        var entry = archive.CreateEntry(entryPath, CompressionLevel.Optimal);
+        using var entryStream = entry.Open();
+        entryStream.Write(content, 0, content.Length);
+    }
+
+    private static XDocument BuildContentTypes(bool includePng) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
             new XElement(Ct + "Default", new XAttribute("Extension", "xml"),
                 new XAttribute("ContentType", "application/xml")),
+            includePng
+                ? new XElement(Ct + "Default", new XAttribute("Extension", "png"),
+                    new XAttribute("ContentType", "image/png"))
+                : null,
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/document.xml"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml")),
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/styles.xml"),
-                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"))));
+                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml")),
+            new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
+                new XAttribute("ContentType", CorePropertiesContentType))));
 
     private static XDocument BuildPackageRels() => new(
         new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rId1"),
                 new XAttribute("Type", OfficeDocumentRel),
-                new XAttribute("Target", "word/document.xml"))));
+                new XAttribute("Target", "word/document.xml")),
+            new XElement(Rel + "Relationship",
+                new XAttribute("Id", "rIdCore"),
+                new XAttribute("Type", CorePropertiesRelType),
+                new XAttribute("Target", "docProps/core.xml"))));
 
-    private static XDocument BuildDocumentRels() => new(
-        new XElement(Rel + "Relationships",
+    /// <summary>Builds docProps/core.xml from <see cref="DocumentProperties"/>, emitting only set values.</summary>
+    private static XDocument BuildCoreProperties(DocumentProperties properties)
+    {
+        var core = new XElement(Cp + "coreProperties",
+            new XAttribute(XNamespace.Xmlns + "cp", Cp.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "dc", Dc.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "dcterms", DcTerms.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "dcmitype", DcmiType.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "xsi", Xsi.NamespaceName));
+
+        AddIfSet(core, Dc + "title", properties.Title);
+        AddIfSet(core, Dc + "creator", properties.Author);
+        AddIfSet(core, Dc + "subject", properties.Subject);
+        AddIfSet(core, Cp + "keywords", properties.Keywords);
+        AddIfSet(core, Dc + "description", properties.Comments);
+        AddIfSet(core, Cp + "lastModifiedBy", properties.LastModifiedBy);
+        AddTimestamp(core, DcTerms + "created", properties.Created);
+        AddTimestamp(core, DcTerms + "modified", properties.Modified);
+
+        return new XDocument(core);
+
+        static void AddIfSet(XElement parent, XName name, string? value)
+        {
+            if (!string.IsNullOrEmpty(value))
+                parent.Add(new XElement(name, value));
+        }
+
+        static void AddTimestamp(XElement parent, XName name, DateTimeOffset? value)
+        {
+            if (value is { } v)
+                parent.Add(new XElement(name,
+                    new XAttribute(Xsi + "type", "dcterms:W3CDTF"),
+                    ToW3CDtf(v)));
+        }
+    }
+
+    private static XDocument BuildDocumentRels(IReadOnlyList<ImagePart> images, IReadOnlyDictionary<string, string> hyperlinks)
+    {
+        var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rId1"),
                 new XAttribute("Type", StylesRel),
-                new XAttribute("Target", "styles.xml"))));
+                new XAttribute("Target", "styles.xml")));
+        foreach (var image in images)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", image.RelationshipId),
+                new XAttribute("Type", ImageRel),
+                new XAttribute("Target", "media/" + image.FileName)));
+        foreach (var (url, relationshipId) in hyperlinks)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", relationshipId),
+                new XAttribute("Type", HyperlinkRel),
+                new XAttribute("Target", url),
+                new XAttribute("TargetMode", "External")));
+        return new XDocument(relationships);
+    }
 
-    private static XDocument BuildDocument(TextDocument document)
+    private static XDocument BuildDocument(TextDocument document, IReadOnlyList<ImagePart> images, IReadOnlyDictionary<string, string> hyperlinks)
     {
+        // Map each image run to its assigned relationship id by replaying the same walk order.
+        var imagesByRun = new Dictionary<Run, ImagePart>();
+        var next = 0;
+        foreach (var paragraph in EnumerateParagraphs(document))
+            foreach (var run in paragraph.Runs)
+                if (run.Image is not null)
+                    imagesByRun[run] = images[next++];
+
         var body = new XElement(W + "body");
-        foreach (var paragraph in document.Paragraphs)
-            body.Add(BuildParagraph(paragraph));
+        foreach (var block in document.Blocks)
+            body.Add(BuildBlock(block, imagesByRun, hyperlinks));
         body.Add(BuildSectionProperties(document.Page));
 
         return new XDocument(
-            new XElement(W + "document", new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName), body));
+            new XElement(W + "document",
+                new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                body));
     }
 
-    private static XElement BuildParagraph(Paragraph paragraph)
+    private static XElement BuildBlock(Block block, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks) => block switch
+    {
+        Table table => BuildTable(table, imagesByRun, hyperlinks),
+        Paragraph paragraph => BuildParagraph(paragraph, imagesByRun, hyperlinks),
+        _ => new XElement(W + "p")
+    };
+
+    private static XElement BuildTable(Table table, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
+    {
+        var tbl = new XElement(W + "tbl", BuildTableProperties(table));
+        foreach (var row in table.Rows)
+        {
+            var tr = new XElement(W + "tr");
+            foreach (var cell in row.Cells)
+            {
+                var tc = new XElement(W + "tc");
+                if (cell.Paragraphs.Count == 0)
+                    tc.Add(new XElement(W + "p"));
+                else
+                    foreach (var paragraph in cell.Paragraphs)
+                        tc.Add(BuildParagraph(paragraph, imagesByRun, hyperlinks));
+                tr.Add(tc);
+            }
+            tbl.Add(tr);
+        }
+        return tbl;
+    }
+
+    private static XElement BuildTableProperties(Table table)
+    {
+        var tblPr = new XElement(W + "tblPr",
+            new XElement(W + "tblW", new XAttribute(W + "w", 0), new XAttribute(W + "type", "auto")));
+        if (table.Formatting.Borders)
+        {
+            XElement Border(string name) => new(W + name,
+                new XAttribute(W + "val", "single"),
+                new XAttribute(W + "sz", 4),
+                new XAttribute(W + "space", 0),
+                new XAttribute(W + "color", "auto"));
+            tblPr.Add(new XElement(W + "tblBorders",
+                Border("top"), Border("left"), Border("bottom"), Border("right"),
+                Border("insideH"), Border("insideV")));
+        }
+        else
+        {
+            tblPr.Add(new XElement(W + "tblBorders",
+                new XElement(W + "top", new XAttribute(W + "val", "none")),
+                new XElement(W + "left", new XAttribute(W + "val", "none")),
+                new XElement(W + "bottom", new XAttribute(W + "val", "none")),
+                new XElement(W + "right", new XAttribute(W + "val", "none")),
+                new XElement(W + "insideH", new XAttribute(W + "val", "none")),
+                new XElement(W + "insideV", new XAttribute(W + "val", "none"))));
+        }
+        return tblPr;
+    }
+
+    private static XElement BuildParagraph(Paragraph paragraph, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var p = new XElement(W + "p");
         var pPr = BuildParagraphProperties(paragraph);
         if (pPr is not null)
             p.Add(pPr);
-        foreach (var run in paragraph.Runs)
-            p.Add(BuildRun(run));
+
+        // Wrap maximal spans of consecutive runs sharing the same hyperlink URL in a single
+        // w:hyperlink referencing the URL's external relationship id.
+        var i = 0;
+        var runs = paragraph.Runs;
+        while (i < runs.Count)
+        {
+            var url = runs[i].HyperlinkUrl;
+            if (url is { Length: > 0 } && hyperlinks.TryGetValue(url, out var relationshipId))
+            {
+                var hyperlink = new XElement(W + "hyperlink", new XAttribute(R + "id", relationshipId));
+                while (i < runs.Count && runs[i].HyperlinkUrl == url)
+                    hyperlink.Add(BuildRun(runs[i++], imagesByRun));
+                p.Add(hyperlink);
+            }
+            else
+            {
+                p.Add(BuildRun(runs[i++], imagesByRun));
+            }
+        }
         return p;
     }
 
@@ -114,14 +319,54 @@ public static class DocxWriter
         return pPr.HasElements ? pPr : null;
     }
 
-    private static XElement BuildRun(Run run)
+    private static XElement BuildRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
     {
         var r = new XElement(W + "r");
         var rPr = BuildRunProperties(run.Formatting);
         if (rPr is not null)
             r.Add(rPr);
-        r.Add(new XElement(W + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), run.Text));
+        if (run.Image is not null && imagesByRun.TryGetValue(run, out var part))
+            r.Add(BuildDrawing(part));
+        else
+            r.Add(new XElement(W + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), run.Text));
         return r;
+    }
+
+    /// <summary>Builds an inline picture: w:drawing/wp:inline/a:graphic/pic:pic referencing the blip.</summary>
+    private static XElement BuildDrawing(ImagePart part)
+    {
+        var cx = PointsToEmu(part.Image.WidthPt);
+        var cy = PointsToEmu(part.Image.HeightPt);
+        var docPrId = part.DrawingId;
+
+        return new XElement(W + "drawing",
+            new XElement(Wp + "inline",
+                new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                new XAttribute("distT", 0), new XAttribute("distB", 0),
+                new XAttribute("distL", 0), new XAttribute("distR", 0),
+                new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(Wp + "effectExtent",
+                    new XAttribute("l", 0), new XAttribute("t", 0),
+                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                new XElement(Wp + "docPr", new XAttribute("id", docPrId), new XAttribute("name", part.FileName)),
+                new XElement(A + "graphic",
+                    new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                    new XElement(A + "graphicData",
+                        new XAttribute("uri", Pic.NamespaceName),
+                        new XElement(Pic + "pic",
+                            new XAttribute(XNamespace.Xmlns + "pic", Pic.NamespaceName),
+                            new XElement(Pic + "nvPicPr",
+                                new XElement(Pic + "cNvPr", new XAttribute("id", 0u), new XAttribute("name", part.FileName)),
+                                new XElement(Pic + "cNvPicPr")),
+                            new XElement(Pic + "blipFill",
+                                new XElement(A + "blip", new XAttribute(R + "embed", part.RelationshipId)),
+                                new XElement(A + "stretch", new XElement(A + "fillRect"))),
+                            new XElement(Pic + "spPr",
+                                new XElement(A + "xfrm",
+                                    new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
+                                    new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
+                                new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
+                                    new XElement(A + "avLst"))))))));
     }
 
     private static XElement? BuildRunProperties(RunFormatting f)
@@ -139,6 +384,11 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
         if (f.ColorHex is { Length: > 0 } color)
             rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
+        if (f.HighlightColorHex is { Length: > 0 } highlight)
+            rPr.Add(new XElement(W + "shd",
+                new XAttribute(W + "val", "clear"),
+                new XAttribute(W + "color", "auto"),
+                new XAttribute(W + "fill", highlight.TrimStart('#'))));
         if (f.FontSizePt is { } size)
         {
             var halfPoints = PointsToHalfPoints(size);

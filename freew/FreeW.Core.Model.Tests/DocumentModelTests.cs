@@ -17,8 +17,8 @@ public class DocumentModelTests
     public void PlainText_JoinsParagraphsWithNewlines()
     {
         var doc = new TextDocument();
-        doc.Paragraphs.Add(new Paragraph("Hello"));
-        doc.Paragraphs.Add(new Paragraph("World"));
+        doc.Blocks.Add(new Paragraph("Hello"));
+        doc.Blocks.Add(new Paragraph("World"));
 
         doc.PlainText.Should().Be("Hello\nWorld");
     }
@@ -31,6 +31,17 @@ public class DocumentModelTests
         paragraph.Runs.Add(new Run("W"));
 
         paragraph.PlainText.Should().Be("FreeW");
+    }
+
+    [Fact]
+    public void Run_CarriesOptionalHyperlinkUrl()
+    {
+        var plain = new Run("plain");
+        var linked = new Run("linked") { HyperlinkUrl = "https://example.com" };
+
+        plain.HyperlinkUrl.Should().BeNull();
+        linked.HyperlinkUrl.Should().Be("https://example.com");
+        linked.Text.Should().Be("linked");
     }
 
     [Fact]
