@@ -32,7 +32,7 @@ using CellVAlign = FreeX.Core.Model.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
-public sealed class MainWindow : Window
+public sealed partial class MainWindow : Window
 {
     private enum CellBorderEdge
     {
@@ -421,6 +421,12 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _goToSpecialMenuItem = new();
     private readonly NativeMenuItem _openHyperlinkMenuItem = new();
     private readonly NativeMenuItem _insertHyperlinkMenuItem = new();
+    private readonly NativeMenuItem _insertColumnChartMenuItem = new();
+    private readonly NativeMenuItem _insertBarChartMenuItem = new();
+    private readonly NativeMenuItem _insertLineChartMenuItem = new();
+    private readonly NativeMenuItem _insertPieChartMenuItem = new();
+    private readonly NativeMenuItem _insertAreaChartMenuItem = new();
+    private readonly NativeMenuItem _insertScatterChartMenuItem = new();
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
@@ -867,6 +873,19 @@ public sealed class MainWindow : Window
         _insertHyperlinkMenuItem.Header = "Hyperlink...";
         _insertHyperlinkMenuItem.Click += async (_, _) => await ShowInsertHyperlinkDialogAsync();
 
+        _insertColumnChartMenuItem.Header = "Column Chart";
+        _insertColumnChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Column);
+        _insertBarChartMenuItem.Header = "Bar Chart";
+        _insertBarChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Bar);
+        _insertLineChartMenuItem.Header = "Line Chart";
+        _insertLineChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Line);
+        _insertPieChartMenuItem.Header = "Pie Chart";
+        _insertPieChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Pie);
+        _insertAreaChartMenuItem.Header = "Area Chart";
+        _insertAreaChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Area);
+        _insertScatterChartMenuItem.Header = "Scatter Chart";
+        _insertScatterChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Scatter);
+
         _sortAscendingMenuItem.Header = "Sort A to Z";
         _sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);
 
@@ -1217,6 +1236,14 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_fillCellsMenuItem);
         editMenu.Items.Add(_clearMenuItem);
 
+        var insertMenu = new NativeMenu();
+        insertMenu.Items.Add(_insertColumnChartMenuItem);
+        insertMenu.Items.Add(_insertBarChartMenuItem);
+        insertMenu.Items.Add(_insertLineChartMenuItem);
+        insertMenu.Items.Add(_insertPieChartMenuItem);
+        insertMenu.Items.Add(_insertAreaChartMenuItem);
+        insertMenu.Items.Add(_insertScatterChartMenuItem);
+
         var dataMenu = new NativeMenu();
         dataMenu.Items.Add(_sortAscendingMenuItem);
         dataMenu.Items.Add(_sortDescendingMenuItem);
@@ -1337,6 +1364,11 @@ public sealed class MainWindow : Window
         {
             Header = "Edit",
             Menu = editMenu,
+        });
+        _nativeMenu.Items.Add(new NativeMenuItem
+        {
+            Header = "Insert",
+            Menu = insertMenu,
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -1993,6 +2025,12 @@ public sealed class MainWindow : Window
         _goToSpecialMenuItem.IsEnabled = isIdle;
         _openHyperlinkMenuItem.IsEnabled = isIdle && _session.CanOpenSelectedHyperlink;
         _insertHyperlinkMenuItem.IsEnabled = isIdle;
+        _insertColumnChartMenuItem.IsEnabled = isIdle;
+        _insertBarChartMenuItem.IsEnabled = isIdle;
+        _insertLineChartMenuItem.IsEnabled = isIdle;
+        _insertPieChartMenuItem.IsEnabled = isIdle;
+        _insertAreaChartMenuItem.IsEnabled = isIdle;
+        _insertScatterChartMenuItem.IsEnabled = isIdle;
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
@@ -2352,6 +2390,10 @@ public sealed class MainWindow : Window
             ClipToBounds = true,
             IsHitTestVisible = true,
         };
+
+        // Charts live on the sheet (not projected into viewport.DrawingObjects), so paint them first —
+        // before the drawing-object early-out — so a chart renders even when no other objects exist.
+        AddChartOverlays(overlay, viewport);
 
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;

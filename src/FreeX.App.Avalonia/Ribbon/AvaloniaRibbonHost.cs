@@ -1,7 +1,9 @@
 using Avalonia.Controls;
 using Free.Shared.Ribbon;
+using FreeX.App.Avalonia.Charts;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
+using FreeX.Core.Model;
 using FreeX.Ribbon.Avalonia;
 
 namespace FreeX.App.Avalonia.Ribbon;
@@ -34,6 +36,39 @@ internal sealed class NoOpRibbonCommand : IRibbonCommand
     public void Execute(RibbonCommandContext context)
     {
         // Intentionally empty: the Avalonia shell wires real behavior elsewhere.
+    }
+}
+
+/// <summary>
+/// Inserts a chart of a fixed <see cref="ChartType"/> over the live session's selection by running the
+/// shared Core <see cref="FreeX.Core.Commands.AddChartCommand"/> (built by
+/// <see cref="InsertChartCommandFactory"/>). On success the host refresh hook redraws the grid so the new
+/// chart paints in the drawing-object overlay; on failure the Core guard message is surfaced on the
+/// status bar. The session is read each time (it may be replaced on open/new).
+/// </summary>
+internal sealed class InsertChartRibbonCommand : IRibbonCommand
+{
+    private readonly Func<WorkbookSession?> _session;
+    private readonly ChartType _chartType;
+    private readonly Action<string> _setStatus;
+
+    public InsertChartRibbonCommand(Func<WorkbookSession?> session, ChartType chartType, Action<string> setStatus)
+    {
+        _session = session ?? throw new ArgumentNullException(nameof(session));
+        _chartType = chartType;
+        _setStatus = setStatus ?? throw new ArgumentNullException(nameof(setStatus));
+    }
+
+    public void Execute(RibbonCommandContext context)
+    {
+        if (_session() is not { } session)
+            return;
+
+        var command = InsertChartCommandFactory.Build(session.ActiveSheet.Id, session.SelectedRange, _chartType);
+        var result = session.ExecuteReviewCommand(command);
+        _setStatus(result.Success
+            ? $"Inserted {_chartType} chart"
+            : result.ErrorMessage ?? "Insert Chart failed.");
     }
 }
 
@@ -274,7 +309,30 @@ internal static class SampleRibbon
         registry.Register("home.bold", WorkbookFormatRibbonCommands.Bold(session, ApplyStatus(setStatus, "Bold")));
         registry.Register("home.italic", WorkbookFormatRibbonCommands.Italic(session, ApplyStatus(setStatus, "Italic")));
         registry.Register("home.underline", WorkbookFormatRibbonCommands.Underline(session, ApplyStatus(setStatus, "Underline")));
+
+        // Override the Insert ▸ Charts controls with a real insert action: each maps its command id to a
+        // ChartType, runs the Core AddChartCommand over the selection, and refreshes so the chart paints.
+        RegisterChartCommands(registry, session, setStatus);
         return registry;
+    }
+
+    /// <summary>
+    /// Wires the Insert chart-type buttons and their chart-type menu items to
+    /// <see cref="InsertChartCommandFactory"/>. Any command id the factory maps to a
+    /// <see cref="ChartType"/> gets an <see cref="InsertChartRibbonCommand"/>; unmapped ids keep their
+    /// no-op registration.
+    /// </summary>
+    private static void RegisterChartCommands(
+        IRibbonCommandRegistry registry,
+        Func<WorkbookSession?> session,
+        Action<string> setStatus)
+    {
+        foreach (var id in EnumerateCommandIds(BuildDefinition()))
+        {
+            if (InsertChartCommandFactory.ChartTypeForRibbonCommand(id.Value) is not { } chartType)
+                continue;
+            registry.Register(id, new InsertChartRibbonCommand(session, chartType, setStatus));
+        }
     }
 
     /// <summary>Builds a post-apply callback that redraws the shell and reports the outcome on the status bar.</summary>
