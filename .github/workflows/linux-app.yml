@@ -1,5 +1,7 @@
 name: Linux App Preview
 
+# Manual trigger only — this lane is intentionally not run on push/PR.
+# Dispatch with: gh workflow run linux-app.yml --ref <branch>
 on:
   workflow_dispatch:
     inputs:
@@ -8,9 +10,6 @@ on:
         required: false
         type: boolean
         default: true
-  pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read
