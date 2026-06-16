@@ -76,6 +76,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.table", new InsertTableCommand(editor, rows: 2, columns: 2));
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
         registry.Register("freew.picture", new InsertPictureCommand(editor));
+        // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
+        registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
 
         registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
         registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
@@ -196,6 +198,68 @@ internal static class FreeWRibbonCommands
                 widthPt = MaxWidthPt;
             }
             return new InlineImage(buffer.ToArray(), widthPt, heightPt);
+        }
+    }
+
+    // Insert > Links > Link: prompt for a URL, then apply it as a hyperlink over the selection.
+    private sealed class InsertHyperlinkCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var seed = editor.Selection.Text is { Length: > 0 } text && Uri.IsWellFormedUriString(text, UriKind.Absolute)
+                ? text
+                : "https://";
+            var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed);
+            if (!string.IsNullOrWhiteSpace(url))
+                editor.ApplyHyperlink(url!.Trim());
+        }
+    }
+
+    // A tiny modal dialog asking for a URL. Returns the entered text, or null if cancelled.
+    private static class HyperlinkPrompt
+    {
+        public static string? Ask(Window? owner, string seed)
+        {
+            var box = new System.Windows.Controls.TextBox
+            {
+                Text = seed,
+                MinWidth = 360,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            box.SelectAll();
+
+            string? result = null;
+            var dialog = new Window
+            {
+                Title = "Insert Link",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Address:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(box);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            box.Focus();
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 

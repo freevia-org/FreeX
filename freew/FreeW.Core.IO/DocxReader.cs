@@ -32,6 +32,7 @@ public static class DocxReader
         var document = new TextDocument();
         ReadStyles(archive, document);
         var imageRelationships = ReadImageRelationships(archive);
+        var hyperlinkRelationships = ReadHyperlinkRelationships(archive);
 
         var body = documentXml.Root?.Element(W + "body");
         if (body is not null)
@@ -39,9 +40,9 @@ public static class DocxReader
             foreach (var element in body.Elements())
             {
                 if (element.Name == W + "p")
-                    document.Blocks.Add(ReadParagraph(element, archive, imageRelationships));
+                    document.Blocks.Add(ReadParagraph(element, archive, imageRelationships, hyperlinkRelationships));
                 else if (element.Name == W + "tbl")
-                    document.Blocks.Add(ReadTable(element, archive, imageRelationships));
+                    document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships));
             }
         }
 
@@ -61,7 +62,11 @@ public static class DocxReader
         return XDocument.Load(reader);
     }
 
-    private static Paragraph ReadParagraph(XElement p, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
+    private static Paragraph ReadParagraph(
+        XElement p,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
         var paragraph = new Paragraph();
         var pPr = p.Element(W + "pPr");
@@ -71,27 +76,53 @@ public static class DocxReader
             paragraph.Formatting = ReadParagraphFormatting(pPr);
         }
 
-        foreach (var r in p.Elements(W + "r"))
+        // Iterate in document order so runs nested inside a w:hyperlink keep their position; a
+        // w:hyperlink carries an r:id resolving (via the rels) to the external URL its runs link to.
+        foreach (var child in p.Elements())
         {
-            var image = ReadImage(r, archive, imageRelationships);
-            if (image is not null)
+            if (child.Name == W + "r")
             {
-                paragraph.Runs.Add(Run.FromImage(image));
-                continue;
+                AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl: null);
             }
-
-            var text = string.Concat(r.Elements(W + "t").Select(t => t.Value));
-            if (r.Elements(W + "tab").Any())
-                text += "\t";
-            if (text.Length == 0)
-                continue;
-            paragraph.Runs.Add(new Run(text, ReadRunFormatting(r.Element(W + "rPr"))));
+            else if (child.Name == W + "hyperlink")
+            {
+                var id = child.Attribute(R + "id")?.Value;
+                var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
+                foreach (var r in child.Elements(W + "r"))
+                    AddRun(paragraph, r, archive, imageRelationships, url);
+            }
         }
 
         return paragraph;
     }
 
-    private static Table ReadTable(XElement tbl, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
+    private static void AddRun(
+        Paragraph paragraph,
+        XElement r,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        string? hyperlinkUrl)
+    {
+        var image = ReadImage(r, archive, imageRelationships);
+        if (image is not null)
+        {
+            paragraph.Runs.Add(new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl });
+            return;
+        }
+
+        var text = string.Concat(r.Elements(W + "t").Select(t => t.Value));
+        if (r.Elements(W + "tab").Any())
+            text += "\t";
+        if (text.Length == 0)
+            return;
+        paragraph.Runs.Add(new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl });
+    }
+
+    private static Table ReadTable(
+        XElement tbl,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
         var table = new Table();
 
@@ -105,7 +136,7 @@ public static class DocxReader
             {
                 var cell = new TableCell();
                 foreach (var p in tc.Elements(W + "p"))
-                    cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships));
+                    cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships));
                 if (cell.Paragraphs.Count == 0)
                     cell.Paragraphs.Add(new Paragraph());
                 row.Cells.Add(cell);
@@ -164,6 +195,27 @@ public static class DocxReader
                 continue;
             // Targets in document rels are relative to the word/ folder.
             map[id] = "word/" + target.TrimStart('/');
+        }
+        return map;
+    }
+
+    /// <summary>Maps relationship id -> external hyperlink target (URL) from document.xml.rels.</summary>
+    private static Dictionary<string, string> ReadHyperlinkRelationships(ZipArchive archive)
+    {
+        var map = new Dictionary<string, string>();
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return map;
+
+        foreach (var rel in relationships)
+        {
+            if (!rel.Attribute("Type")?.Value.EndsWith("/hyperlink", StringComparison.Ordinal) ?? true)
+                continue;
+            var id = rel.Attribute("Id")?.Value;
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(target))
+                map[id] = target; // external targets are stored verbatim (TargetMode="External")
         }
         return map;
     }

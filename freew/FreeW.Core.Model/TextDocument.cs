@@ -25,6 +25,12 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// <summary>Optional inline image. When non-null this run renders/serialises as a picture.</summary>
     public InlineImage? Image { get; set; }
 
+    /// <summary>
+    /// Optional external hyperlink target (absolute URL). When non-null the run is wrapped in a
+    /// w:hyperlink on save, with the URL stored as an external relationship, and rendered as a link.
+    /// </summary>
+    public string? HyperlinkUrl { get; set; }
+
     /// <summary>Creates a run that carries an inline image instead of text.</summary>
     public static Run FromImage(InlineImage image) => new(string.Empty) { Image = image };
 }
