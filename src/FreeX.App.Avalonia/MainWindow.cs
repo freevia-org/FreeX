@@ -449,6 +449,10 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _previousNoteMenuItem = new();
     private readonly NativeMenuItem _nextCommentMenuItem = new();
     private readonly NativeMenuItem _previousCommentMenuItem = new();
+    private readonly NativeMenuItem _insertFunctionMenuItem = new();
+    private readonly NativeMenuItem _nameManagerMenuItem = new();
+    private readonly NativeMenuItem _defineNameMenuItem = new();
+    private readonly NativeMenuItem _createNamesFromSelectionMenuItem = new();
     private readonly NativeMenuItem _autoSumMenuItem = new();
     private readonly NativeMenuItem _autoSumSumMenuItem = new();
     private readonly NativeMenuItem _autoSumAverageMenuItem = new();
@@ -961,6 +965,19 @@ public sealed partial class MainWindow : Window
         _previousCommentMenuItem.Header = "Previous Comment";
         _previousCommentMenuItem.Click += (_, _) => NavigateReviewThreadedComment(previous: true);
 
+        _insertFunctionMenuItem.Header = "Insert Function...";
+        _insertFunctionMenuItem.Gesture = new KeyGesture(Key.F3, KeyModifiers.Shift);
+        _insertFunctionMenuItem.Click += (_, _) => InsertFunction();
+
+        _nameManagerMenuItem.Header = "Name Manager...";
+        _nameManagerMenuItem.Click += (_, _) => NameManager();
+
+        _defineNameMenuItem.Header = "Define Name...";
+        _defineNameMenuItem.Click += (_, _) => DefineName();
+
+        _createNamesFromSelectionMenuItem.Header = "Create from Selection...";
+        _createNamesFromSelectionMenuItem.Click += (_, _) => CreateNamesFromSelection();
+
         _autoSumMenuItem.Header = "AutoSum";
         _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
 
@@ -1276,6 +1293,13 @@ public sealed partial class MainWindow : Window
         dataMenu.Items.Add(_whatIfAnalysisMenuItem);
         dataMenu.Items.Add(_forecastSheetMenuItem);
 
+        var formulasMenu = new NativeMenu();
+        formulasMenu.Items.Add(_insertFunctionMenuItem);
+        formulasMenu.Items.Add(new NativeMenuItemSeparator());
+        formulasMenu.Items.Add(_nameManagerMenuItem);
+        formulasMenu.Items.Add(_defineNameMenuItem);
+        formulasMenu.Items.Add(_createNamesFromSelectionMenuItem);
+
         var reviewMenu = new NativeMenu();
         reviewMenu.Items.Add(_reviewSummaryMenuItem);
         reviewMenu.Items.Add(_checkAccessibilityMenuItem);
@@ -1391,6 +1415,11 @@ public sealed partial class MainWindow : Window
         {
             Header = "Data",
             Menu = dataMenu,
+        });
+        _nativeMenu.Items.Add(new NativeMenuItem
+        {
+            Header = "Formulas",
+            Menu = formulasMenu,
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -2070,6 +2099,10 @@ public sealed partial class MainWindow : Window
         _previousNoteMenuItem.IsEnabled = isIdle;
         _nextCommentMenuItem.IsEnabled = isIdle;
         _previousCommentMenuItem.IsEnabled = isIdle;
+        _insertFunctionMenuItem.IsEnabled = isIdle;
+        _nameManagerMenuItem.IsEnabled = isIdle;
+        _defineNameMenuItem.IsEnabled = isIdle;
+        _createNamesFromSelectionMenuItem.IsEnabled = isIdle;
         _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumAverageMenuItem.IsEnabled = _autoSumButton.IsEnabled;
@@ -13171,6 +13204,13 @@ public sealed partial class MainWindow : Window
             {
                 e.Handled = true;
                 AddNewSheet();
+                return;
+            }
+
+            if (e.Key == Key.F3 && e.KeyModifiers == KeyModifiers.Shift)
+            {
+                e.Handled = true;
+                InsertFunction();
                 return;
             }
 
