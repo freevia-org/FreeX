@@ -113,6 +113,7 @@ internal static class FreeWRibbon
                     g.Button("freew.citation", "Citation");
                     g.Button("freew.bibliography", "Bibliography");
                     g.Button("freew.caption", "Caption");
+                    g.Button("freew.cross-reference", "Cross-reference");
                 });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {
