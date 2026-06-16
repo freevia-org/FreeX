@@ -2,7 +2,7 @@ using System.Xml;
 
 namespace Free.Shared.Opc;
 
-internal static class SecureXmlReaderSettings
+public static class SecureXmlReaderSettings
 {
     public const long DefaultMaxCharactersInDocument = 64L * 1024L * 1024L;
 

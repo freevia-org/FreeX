@@ -20,6 +20,12 @@ public sealed record RunFormatting
     public double? FontSizePt { get; init; }
     public string? ColorHex { get; init; }
 
+    /// <summary>
+    /// Highlight (text background) colour as an RRGGBB hex (e.g. <c>"#FFFF00"</c>). Null means no
+    /// highlight. Round-trips to docx as run shading (<c>w:shd w:fill</c>), mirroring <see cref="ColorHex"/>.
+    /// </summary>
+    public string? HighlightColorHex { get; init; }
+
     public static readonly RunFormatting Default = new();
 }
 

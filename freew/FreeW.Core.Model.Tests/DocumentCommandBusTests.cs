@@ -1,0 +1,232 @@
+namespace FreeW.Core.Model.Tests;
+
+public class DocumentCommandBusTests
+{
+    private sealed class Context(TextDocument document) : IDocumentCommandContext
+    {
+        public TextDocument Document => document;
+    }
+
+    private static (TextDocument doc, DocumentCommandBus bus) New()
+    {
+        var doc = new TextDocument();
+        return (doc, new DocumentCommandBus(new Context(doc)));
+    }
+
+    [Fact]
+    public void InsertParagraph_Execute_Undo_Redo()
+    {
+        var (doc, bus) = New();
+
+        bus.Execute(new InsertParagraphCommand(0, new Paragraph("A")));
+        doc.PlainText.Should().Be("A");
+        bus.CanUndo.Should().BeTrue();
+
+        bus.Undo().Should().BeTrue();
+        doc.Blocks.Should().BeEmpty();
+        bus.CanRedo.Should().BeTrue();
+
+        bus.Redo().Should().BeTrue();
+        doc.PlainText.Should().Be("A");
+    }
+
+    [Fact]
+    public void NewCommand_InvalidatesRedo()
+    {
+        var (doc, bus) = New();
+        bus.Execute(new InsertParagraphCommand(0, new Paragraph("A")));
+        bus.Undo();
+        bus.CanRedo.Should().BeTrue();
+
+        bus.Execute(new InsertParagraphCommand(0, new Paragraph("B")));
+
+        bus.CanRedo.Should().BeFalse();
+        doc.PlainText.Should().Be("B");
+    }
+
+    [Fact]
+    public void DeleteParagraph_Undo_RestoresSameInstance()
+    {
+        var (doc, bus) = New();
+        var p = new Paragraph("keep");
+        doc.Blocks.Add(p);
+
+        bus.Execute(new DeleteParagraphCommand(0));
+        doc.Blocks.Should().BeEmpty();
+
+        bus.Undo();
+        doc.Blocks.Should().ContainSingle().Which.Should().BeSameAs(p);
+    }
+
+    [Fact]
+    public void FormatParagraphRuns_TogglesBold_AndReverts()
+    {
+        var (doc, bus) = New();
+        var p = new Paragraph();
+        p.Runs.Add(new Run("x"));
+        p.Runs.Add(new Run("y"));
+        doc.Blocks.Add(p);
+
+        bus.Execute(new FormatParagraphRunsCommand(0, f => f with { Bold = true }));
+        p.Runs.Should().OnlyContain(r => r.Formatting.Bold);
+
+        bus.Undo();
+        p.Runs.Should().OnlyContain(r => !r.Formatting.Bold);
+    }
+
+    [Fact]
+    public void SetParagraphFormatting_Applies_AndReverts()
+    {
+        var (doc, bus) = New();
+        doc.Blocks.Add(new Paragraph("p"));
+        var centered = ParagraphFormatting.Default with { Alignment = TextAlignment.Center };
+
+        bus.Execute(new SetParagraphFormattingCommand(0, centered));
+        doc.Paragraphs.First().Formatting.Alignment.Should().Be(TextAlignment.Center);
+
+        bus.Undo();
+        doc.Paragraphs.First().Formatting.Alignment.Should().Be(TextAlignment.Left);
+    }
+
+    [Fact]
+    public void InsertBlock_Table_Execute_Undo_Redo()
+    {
+        var (doc, bus) = New();
+        doc.Blocks.Add(new Paragraph("p"));
+        var table = Table.Create(2, 2);
+
+        bus.Execute(new InsertBlockCommand(1, table));
+        doc.Blocks.Should().HaveCount(2);
+        doc.Blocks[1].Should().BeSameAs(table);
+
+        bus.Undo();
+        doc.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>();
+
+        bus.Redo();
+        doc.Blocks[1].Should().BeSameAs(table);
+    }
+
+    [Fact]
+    public void Undo_WhenEmpty_ReturnsFalse()
+    {
+        var (_, bus) = New();
+        bus.CanUndo.Should().BeFalse();
+        bus.Undo().Should().BeFalse();
+    }
+
+    [Fact]
+    public void InsertTableRow_IncreasesRowCount_AndUndoRestores()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(2, 3);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new InsertTableRowCommand(0, 1));
+        table.RowCount.Should().Be(3);
+        table.ColumnCount.Should().Be(3);
+        table.Rows[1].Cells.Should().HaveCount(3);
+
+        bus.Undo();
+        table.RowCount.Should().Be(2);
+
+        bus.Redo();
+        table.RowCount.Should().Be(3);
+    }
+
+    [Fact]
+    public void DeleteTableRow_ReducesRowCount_AndUndoRestoresSameRow()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(3, 2);
+        doc.Blocks.Add(table);
+        var middle = table.Rows[1];
+
+        bus.Execute(new DeleteTableRowCommand(0, 1));
+        table.RowCount.Should().Be(2);
+        table.Rows.Should().NotContain(middle);
+
+        bus.Undo();
+        table.RowCount.Should().Be(3);
+        table.Rows[1].Should().BeSameAs(middle);
+    }
+
+    [Fact]
+    public void DeleteTableRow_LastRow_IsNoOp()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(1, 2);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new DeleteTableRowCommand(0, 0));
+        table.RowCount.Should().Be(1);
+
+        bus.Undo();
+        table.RowCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void InsertTableColumn_AddsCellToEveryRow_AndUndoRestores()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(2, 2);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new InsertTableColumnCommand(0, 1));
+        table.ColumnCount.Should().Be(3);
+        table.Rows.Should().OnlyContain(r => r.Cells.Count == 3);
+
+        bus.Undo();
+        table.ColumnCount.Should().Be(2);
+        table.Rows.Should().OnlyContain(r => r.Cells.Count == 2);
+    }
+
+    [Fact]
+    public void DeleteTableColumn_ReducesColumnCount_AndUndoRestoresCells()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(2, 3);
+        doc.Blocks.Add(table);
+        var keptCell = table.Rows[0].Cells[1];
+
+        bus.Execute(new DeleteTableColumnCommand(0, 1));
+        table.ColumnCount.Should().Be(2);
+        table.Rows[0].Cells.Should().NotContain(keptCell);
+
+        bus.Undo();
+        table.ColumnCount.Should().Be(3);
+        table.Rows[0].Cells[1].Should().BeSameAs(keptCell);
+    }
+
+    [Fact]
+    public void DeleteTableColumn_LastColumn_IsNoOp()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(2, 1);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new DeleteTableColumnCommand(0, 0));
+        table.ColumnCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void SetImageSize_ChangesSize_AndUndoRestores()
+    {
+        var (doc, bus) = New();
+        var image = new InlineImage([1, 2, 3], widthPt: 100, heightPt: 50);
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(image));
+        doc.Blocks.Add(paragraph);
+
+        bus.Execute(new SetImageSizeCommand(0, 0, widthPt: 200, heightPt: 100));
+        image.WidthPt.Should().Be(200);
+        image.HeightPt.Should().Be(100);
+
+        bus.Undo();
+        image.WidthPt.Should().Be(100);
+        image.HeightPt.Should().Be(50);
+
+        bus.Redo();
+        image.WidthPt.Should().Be(200);
+        image.HeightPt.Should().Be(100);
+    }
+}

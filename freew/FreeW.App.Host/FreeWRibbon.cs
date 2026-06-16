@@ -19,9 +19,21 @@ internal static class FreeWRibbon
                 });
                 tab.Group("font", "Font", "F", 90, g =>
                 {
+                    g.ComboBox("freew.font-family", "Font", c => c with
+                    {
+                        Items = new[] { "Calibri", "Arial", "Times New Roman", "Georgia", "Consolas", "Verdana", "Cambria" },
+                        Width = 140
+                    });
+                    g.ComboBox("freew.font-size", "Size", c => c with
+                    {
+                        Items = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "24", "28", "36", "48", "72" },
+                        Width = 56
+                    });
                     g.Toggle("freew.bold", "Bold");
                     g.Toggle("freew.italic", "Italic");
                     g.Toggle("freew.underline", "Underline");
+                    g.Button("freew.font-color", "Text Colour");
+                    g.Button("freew.highlight", "Highlight");
                     g.Button("freew.grow-font", "Grow");
                     g.Button("freew.shrink-font", "Shrink");
                 });
@@ -49,9 +61,17 @@ internal static class FreeWRibbon
                     g.Button("freew.page-break", "Page Break");
                 });
                 tab.Group("tables", "Tables", "T", 90, g => g.Button("freew.table", "Table"));
+                tab.Group("table-tools", "Table Tools", "B", 85, g =>
+                {
+                    g.Button("freew.table-insert-row", "Insert Row");
+                    g.Button("freew.table-delete-row", "Delete Row");
+                    g.Button("freew.table-insert-col", "Insert Column");
+                    g.Button("freew.table-delete-col", "Delete Column");
+                });
                 tab.Group("illustrations", "Illustrations", "I", 80, g =>
                 {
                     g.Button("freew.picture", "Picture");
+                    g.Button("freew.image-size", "Image Size");
                     g.Button("freew.shapes", "Shapes");
                 });
             })
@@ -62,6 +82,10 @@ internal static class FreeWRibbon
                     g.Button("freew.margins", "Margins");
                     g.Button("freew.orientation", "Orientation");
                     g.Button("freew.size", "Size");
+                });
+                tab.Group("preview", "Preview", "V", 90, g =>
+                {
+                    g.Button("freew.print-preview", "Print Preview");
                 });
             })
             .Build();
