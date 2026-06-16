@@ -22,6 +22,11 @@ public sealed record RibbonMenuItem(
     /// from selection state (e.g. comment/filter availability).</summary>
     public bool IsEnabled { get; init; } = true;
 
+    /// <summary>Checkable state. <c>null</c> (default) means the item is not checkable and renders as a
+    /// plain command; a non-null value makes the item checkable with the given check state
+    /// (e.g. the waterfall "Set as Total" toggle).</summary>
+    public bool? IsChecked { get; init; }
+
     public static RibbonMenuItem Separator() =>
         new("", Kind: RibbonMenuItemKind.Separator);
 }

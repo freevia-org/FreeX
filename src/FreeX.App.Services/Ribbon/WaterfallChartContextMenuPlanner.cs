@@ -1,6 +1,6 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services.Ribbon;
 
 public static class WaterfallChartContextMenuPlanner
 {
