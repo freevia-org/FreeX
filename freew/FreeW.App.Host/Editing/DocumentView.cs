@@ -29,6 +29,7 @@ public sealed class DocumentView : RichTextBox
     {
         AcceptsTab = true;
         IsDocumentEnabled = true;
+        SpellCheck.IsEnabled = true;
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
         BorderThickness = new Thickness(1);
         BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));

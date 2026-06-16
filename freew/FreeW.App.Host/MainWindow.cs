@@ -62,6 +62,8 @@ public sealed class MainWindow : Window
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Save, (_, _) => _file.Save()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.SaveAs, (_, _) => _file.SaveAs()));
 
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Print, (_, _) => Print()));
+
         var findReplace = new RoutedUICommand("Find & Replace", "FindReplace", typeof(MainWindow));
         CommandBindings.Add(new CommandBinding(findReplace, (_, _) => OpenFindReplace()));
         InputBindings.Add(new KeyBinding(findReplace, new KeyGesture(Key.F, ModifierKeys.Control)));
@@ -114,6 +116,30 @@ public sealed class MainWindow : Window
         var name = _file.DisplayName + (_file.IsDirty ? " *" : "");
         Title = $"{name} — FreeW";
         _titleText.Text = $"{name} — FreeW";
+    }
+
+    private void Print()
+    {
+        var dialog = new PrintDialog();
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var doc = _editor.Document;
+        var saved = (doc.PageWidth, doc.PageHeight, doc.PagePadding, doc.ColumnWidth);
+        try
+        {
+            _editor.CommitToModel();
+            doc.PageWidth = dialog.PrintableAreaWidth;
+            doc.PageHeight = dialog.PrintableAreaHeight;
+            doc.PagePadding = new Thickness(60);
+            doc.ColumnWidth = double.PositiveInfinity;
+            var paginator = ((System.Windows.Documents.IDocumentPaginatorSource)doc).DocumentPaginator;
+            dialog.PrintDocument(paginator, "FreeW Document");
+        }
+        finally
+        {
+            (doc.PageWidth, doc.PageHeight, doc.PagePadding, doc.ColumnWidth) = saved;
+        }
     }
 
     private void OpenFindReplace()
