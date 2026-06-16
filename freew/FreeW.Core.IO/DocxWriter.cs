@@ -17,6 +17,16 @@ public static class DocxWriter
     private const string StylesRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
     private const string ImageRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
     private const string HyperlinkRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+    private const string HeaderRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header";
+    private const string FooterRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer";
+
+    private const string HeaderContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml";
+    private const string FooterContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml";
+
+    private const string HeaderRelationshipId = "rIdHeader1";
+    private const string FooterRelationshipId = "rIdFooter1";
+    private const string HeaderPartName = "word/header1.xml";
+    private const string FooterPartName = "word/footer1.xml";
 
     public static void Write(TextDocument document, string path)
     {
@@ -32,13 +42,21 @@ public static class DocxWriter
         // Assign an external relationship id to every distinct hyperlink target the same way.
         var hyperlinks = CollectHyperlinks(document);
 
+        // A header/footer is only emitted as a part when it carries visible content.
+        var hasHeader = document.Header is { IsEmpty: false };
+        var hasFooter = document.Footer is { IsEmpty: false };
+
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasHeader, hasFooter));
         WritePart(archive, "_rels/.rels", BuildPackageRels());
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasHeader, hasFooter));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks, hasHeader, hasFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
+        if (hasHeader)
+            WritePart(archive, HeaderPartName, BuildHeaderFooter(W + "hdr", document.Header!));
+        if (hasFooter)
+            WritePart(archive, FooterPartName, BuildHeaderFooter(W + "ftr", document.Footer!));
         foreach (var image in images)
             WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
     }
@@ -99,7 +117,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool hasHeader, bool hasFooter) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -113,6 +131,14 @@ public static class DocxWriter
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml")),
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/styles.xml"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml")),
+            hasHeader
+                ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + HeaderPartName),
+                    new XAttribute("ContentType", HeaderContentType))
+                : null,
+            hasFooter
+                ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + FooterPartName),
+                    new XAttribute("ContentType", FooterContentType))
+                : null,
             new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
                 new XAttribute("ContentType", CorePropertiesContentType))));
 
@@ -163,13 +189,27 @@ public static class DocxWriter
         }
     }
 
-    private static XDocument BuildDocumentRels(IReadOnlyList<ImagePart> images, IReadOnlyDictionary<string, string> hyperlinks)
+    private static XDocument BuildDocumentRels(
+        IReadOnlyList<ImagePart> images,
+        IReadOnlyDictionary<string, string> hyperlinks,
+        bool hasHeader,
+        bool hasFooter)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rId1"),
                 new XAttribute("Type", StylesRel),
                 new XAttribute("Target", "styles.xml")));
+        if (hasHeader)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", HeaderRelationshipId),
+                new XAttribute("Type", HeaderRel),
+                new XAttribute("Target", "header1.xml")));
+        if (hasFooter)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", FooterRelationshipId),
+                new XAttribute("Type", FooterRel),
+                new XAttribute("Target", "footer1.xml")));
         foreach (var image in images)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", image.RelationshipId),
@@ -184,7 +224,12 @@ public static class DocxWriter
         return new XDocument(relationships);
     }
 
-    private static XDocument BuildDocument(TextDocument document, IReadOnlyList<ImagePart> images, IReadOnlyDictionary<string, string> hyperlinks)
+    private static XDocument BuildDocument(
+        TextDocument document,
+        IReadOnlyList<ImagePart> images,
+        IReadOnlyDictionary<string, string> hyperlinks,
+        bool hasHeader,
+        bool hasFooter)
     {
         // Map each image run to its assigned relationship id by replaying the same walk order.
         var imagesByRun = new Dictionary<Run, ImagePart>();
@@ -197,13 +242,33 @@ public static class DocxWriter
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
             body.Add(BuildBlock(block, imagesByRun, hyperlinks));
-        body.Add(BuildSectionProperties(document.Page));
+        body.Add(BuildSectionProperties(document.Page, hasHeader, hasFooter));
 
         return new XDocument(
             new XElement(W + "document",
                 new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
                 body));
+    }
+
+    /// <summary>Builds a header (w:hdr) or footer (w:ftr) part from its model paragraphs.</summary>
+    private static XDocument BuildHeaderFooter(XName rootName, HeaderFooter content)
+    {
+        var root = new XElement(rootName,
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+
+        // Header/footer runs do not carry inline images (the body image walk does not reach them).
+        var noImages = new Dictionary<Run, ImagePart>();
+        var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        if (content.Paragraphs.Count == 0)
+            root.Add(new XElement(W + "p"));
+        else
+            foreach (var paragraph in content.Paragraphs)
+                root.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+
+        return new XDocument(root);
     }
 
     private static XElement BuildBlock(Block block, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks) => block switch
@@ -321,6 +386,18 @@ public static class DocxWriter
 
     private static XElement BuildRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
     {
+        // A page-number field emits a self-contained w:fldSimple wrapping a run; the wrapped run's
+        // w:t carries the last-known value as fallback text for field-unaware consumers.
+        if (run.FieldKind == RunFieldKind.PageNumber)
+            return new XElement(W + "fldSimple",
+                new XAttribute(W + "instr", " PAGE "),
+                BuildTextRun(run, imagesByRun));
+
+        return BuildTextRun(run, imagesByRun);
+    }
+
+    private static XElement BuildTextRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
+    {
         var r = new XElement(W + "r");
         var rPr = BuildRunProperties(run.Formatting);
         if (rPr is not null)
@@ -399,8 +476,19 @@ public static class DocxWriter
         return rPr.HasElements ? rPr : null;
     }
 
-    private static XElement BuildSectionProperties(PageSettings page) =>
+    private static XElement BuildSectionProperties(PageSettings page, bool hasHeader, bool hasFooter) =>
         new(W + "sectPr",
+            // Header/footer references must precede pgSz/pgMar in the sectPr schema order.
+            hasHeader
+                ? new XElement(W + "headerReference",
+                    new XAttribute(W + "type", "default"),
+                    new XAttribute(R + "id", HeaderRelationshipId))
+                : null,
+            hasFooter
+                ? new XElement(W + "footerReference",
+                    new XAttribute(W + "type", "default"),
+                    new XAttribute(R + "id", FooterRelationshipId))
+                : null,
             new XElement(W + "pgSz",
                 new XAttribute(W + "w", PointsToDxa(page.WidthPt)),
                 new XAttribute(W + "h", PointsToDxa(page.HeightPt)),

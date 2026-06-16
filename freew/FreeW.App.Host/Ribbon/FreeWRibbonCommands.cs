@@ -88,6 +88,12 @@ internal static class FreeWRibbonCommands
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
 
+        // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
+        // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
+        registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false));
+        registry.Register("freew.footer", new HeaderFooterCommand(editor, isFooter: true));
+        registry.Register("freew.page-number", new InsertPageNumberCommand(editor));
+
         // Home > Font > Text Colour / Highlight: pick a colour from a small palette and apply it to
         // the selection (foreground reuses TextElement.Foreground; highlight uses TextElement.Background).
         registry.Register("freew.font-color", new ColorPickCommand(editor, isHighlight: false));
@@ -330,6 +336,126 @@ internal static class FreeWRibbonCommands
             var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed);
             if (!string.IsNullOrWhiteSpace(url))
                 editor.ApplyHyperlink(url!.Trim());
+        }
+    }
+
+    // Insert > Header & Footer: prompt for the header/footer text and store it on the model. An empty
+    // entry clears the header/footer. A page-number field already present is preserved by re-appending.
+    private sealed class HeaderFooterCommand(DocumentView editor, bool isFooter) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var model = editor.Model;
+            var existing = isFooter ? model.Footer : model.Header;
+            var seed = existing?.PlainText ?? string.Empty;
+            var label = isFooter ? "Footer" : "Header";
+
+            var text = TextPrompt.Ask(Window.GetWindow(editor), $"Edit {label}", $"{label} text:", seed);
+            if (text is null)
+                return; // cancelled — leave the model untouched
+
+            var hadPageNumber = existing?.Paragraphs.SelectMany(p => p.Runs)
+                .Any(r => r.FieldKind == RunFieldKind.PageNumber) ?? false;
+
+            HeaderFooter? value;
+            if (text.Length == 0 && !hadPageNumber)
+            {
+                value = null;
+            }
+            else
+            {
+                value = new HeaderFooter();
+                var paragraph = new FreeW.Core.Model.Paragraph();
+                if (text.Length > 0)
+                    paragraph.Runs.Add(new FreeW.Core.Model.Run(text));
+                if (hadPageNumber)
+                {
+                    if (paragraph.Runs.Count > 0)
+                        paragraph.Runs.Add(new FreeW.Core.Model.Run("  "));
+                    paragraph.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
+                }
+                value.Paragraphs.Add(paragraph);
+            }
+
+            if (isFooter)
+                model.Footer = value;
+            else
+                model.Header = value;
+
+            editor.Focus();
+        }
+    }
+
+    // Insert > Header & Footer > Page Number: drop a centered page-number field into the footer.
+    private sealed class InsertPageNumberCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var model = editor.Model;
+            var footer = model.Footer ?? new HeaderFooter();
+
+            var alreadyPresent = footer.Paragraphs.SelectMany(p => p.Runs)
+                .Any(r => r.FieldKind == RunFieldKind.PageNumber);
+            if (!alreadyPresent)
+            {
+                var paragraph = new FreeW.Core.Model.Paragraph
+                {
+                    Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
+                };
+                paragraph.Runs.Add(new FreeW.Core.Model.Run("Page "));
+                paragraph.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
+                footer.Paragraphs.Add(paragraph);
+            }
+
+            model.Footer = footer;
+            editor.Focus();
+        }
+    }
+
+    // A tiny modal text-entry dialog. Returns the entered text (possibly empty), or null if cancelled.
+    private static class TextPrompt
+    {
+        public static string? Ask(Window? owner, string title, string label, string seed)
+        {
+            var box = new System.Windows.Controls.TextBox
+            {
+                Text = seed,
+                MinWidth = 360,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            box.SelectAll();
+
+            string? result = null;
+            var dialog = new Window
+            {
+                Title = title,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(box);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            box.Focus();
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 

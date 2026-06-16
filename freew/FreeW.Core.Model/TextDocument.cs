@@ -31,8 +31,29 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// </summary>
     public string? HyperlinkUrl { get; set; }
 
+    /// <summary>
+    /// When set, this run is a simple field rather than literal text — e.g. a PAGE field whose value
+    /// is the current page number. The run's <see cref="Text"/> doubles as cached/fallback display
+    /// text (the last computed value), so non-field-aware consumers still render something sensible.
+    /// </summary>
+    public RunFieldKind FieldKind { get; set; } = RunFieldKind.None;
+
     /// <summary>Creates a run that carries an inline image instead of text.</summary>
     public static Run FromImage(InlineImage image) => new(string.Empty) { Image = image };
+
+    /// <summary>Creates a page-number field run (renders as the current page number).</summary>
+    public static Run PageNumberField(RunFormatting? formatting = null) =>
+        new("1", formatting) { FieldKind = RunFieldKind.PageNumber };
+}
+
+/// <summary>
+/// The kind of simple field a <see cref="Run"/> represents. <see cref="None"/> is an ordinary text
+/// run; <see cref="PageNumber"/> maps to a WordprocessingML PAGE field (w:fldSimple w:instr=" PAGE ").
+/// </summary>
+public enum RunFieldKind
+{
+    None,
+    PageNumber
 }
 
 /// <summary>
@@ -146,6 +167,25 @@ public sealed class DocumentProperties
     public DateTimeOffset? Modified { get; set; }
 }
 
+/// <summary>
+/// A page header or footer: an ordered list of paragraphs shown in the top (header) or bottom
+/// (footer) margin of every page. Maps onto a WordprocessingML header/footer part (w:hdr / w:ftr).
+/// A footer paragraph may contain a page-number field run (see <see cref="Run.PageNumberField"/>).
+/// </summary>
+public sealed class HeaderFooter
+{
+    public List<Paragraph> Paragraphs { get; } = [];
+
+    public HeaderFooter() { }
+
+    public HeaderFooter(string text) => Paragraphs.Add(new Paragraph(text));
+
+    /// <summary>True when there is no visible content (no paragraphs, or only empty ones).</summary>
+    public bool IsEmpty => Paragraphs.Count == 0 || Paragraphs.All(p => p.Runs.Count == 0);
+
+    public string PlainText => string.Join("\n", Paragraphs.Select(p => p.PlainText));
+}
+
 /// <summary>Page geometry for a section (points; US Letter with 1in margins by default).</summary>
 public sealed class PageSettings
 {
@@ -171,6 +211,18 @@ public sealed class TextDocument
     public RunFormatting DefaultRun { get; set; } = new() { FontFamily = "Calibri", FontSizePt = 11 };
     public ParagraphFormatting DefaultParagraph { get; set; } = ParagraphFormatting.Default;
     public PageSettings Page { get; } = new();
+
+    /// <summary>
+    /// The default page header (top margin), or null when the document has no header. Maps to a
+    /// word/header1.xml part referenced from w:sectPr via w:headerReference w:type="default".
+    /// </summary>
+    public HeaderFooter? Header { get; set; }
+
+    /// <summary>
+    /// The default page footer (bottom margin), or null when the document has no footer. Maps to a
+    /// word/footer1.xml part referenced from w:sectPr via w:footerReference w:type="default".
+    /// </summary>
+    public HeaderFooter? Footer { get; set; }
 
     /// <summary>Document-level metadata (maps to docProps/core.xml).</summary>
     public DocumentProperties Properties { get; } = new();
