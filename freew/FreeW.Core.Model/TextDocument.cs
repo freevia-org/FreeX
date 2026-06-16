@@ -549,5 +549,7 @@ public sealed class TextDocument
                 IndentRightPt = 36
             }
         };
+        // The built-in figure/table caption style (round-trips via styles.xml like the others).
+        Styles[Captions.StyleId] = Captions.BuildCaptionStyle();
     }
 }

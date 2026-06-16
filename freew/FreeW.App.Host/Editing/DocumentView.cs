@@ -1565,6 +1565,35 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// True when the caret currently sits inside a table block. Used by the Insert Caption command to
+    /// default the caption label to <see cref="CaptionLabel.Table"/> for tables (else Figure).
+    /// </summary>
+    public bool IsCaretInTable() => CaretTableLocation().BlockIndex >= 0;
+
+    /// <summary>
+    /// Insert a numbered caption (e.g. "Figure 1: My diagram") of <paramref name="label"/> with the
+    /// given <paramref name="text"/> after the block the caret sits in (so it reads under the selected
+    /// image/table), else at the document end. The next ordinal is computed by counting the document's
+    /// existing captions of that label (see <see cref="Captions.NextCaptionNumber"/>), and the caption
+    /// is a single <c>Caption</c>-styled paragraph routed through the undo/redo bus so it is reversible.
+    /// </summary>
+    public void InsertCaption(CaptionLabel label, string text)
+    {
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+        Captions.EnsureStyles(_model);
+
+        var number = Captions.NextCaptionNumber(_model, label);
+        var caption = Captions.BuildCaption(label, number, text);
+
+        // Insert after the caret's block so the caption sits under the selected image/table.
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+        _commands.Execute(new InsertParagraphCommand(index, caption));
+    }
+
+    /// <summary>
     /// When true, the editor is in Track Changes mode. Live keystroke-level tracking is not attempted
     /// (it is brittle in a RichTextBox); the flag is a model/UI state that the ribbon toggle reflects and
     /// that gates <see cref="MarkSelectionAsRevision"/> (used to mark the selection as an insertion or
