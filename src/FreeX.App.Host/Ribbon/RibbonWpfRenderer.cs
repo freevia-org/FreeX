@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -29,6 +31,10 @@ public static class RibbonWpfRenderer
     {
         var panel = new RibbonAdaptivePanel { MinHeight = 88 };
 
+        // Group keytips for the collapsed (overflow) form are derived per tab, deduped against each
+        // other (Excel: a collapsed group is reachable by a 2-letter keytip like Charts -> CH).
+        var usedGroupKeyTips = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+
         var first = true;
         foreach (var group in tab.Groups)
         {
@@ -37,11 +43,14 @@ public static class RibbonWpfRenderer
 
             var full = (FrameworkElement)BuildGroup(group, resourceHost, registry);
             var captured = group;
+            var collapsedKeyTip = DeriveGroupKeyTip(group.Header, usedGroupKeyTips);
             panel.Children.Add(new RibbonGroupHost(
                 group,
                 full,
                 () => (FrameworkElement)BuildGroup(captured, resourceHost, registry),
-                resourceHost));
+                resourceHost,
+                collapsedKeyTip,
+                () => BuildCollapsedGroupMenu(captured, registry)));
             first = false;
         }
 
@@ -51,6 +60,75 @@ public static class RibbonWpfRenderer
             Padding = new Thickness(0, 4, 0, 0),
             Child = panel
         };
+    }
+
+    // Derives a unique 2-letter keytip for a collapsed group from its header (Charts -> CH, Editing ->
+    // ED), falling back to G/G1.. — mirrors the original adaptive ribbon's CreateGroupKeyTip.
+    private static string DeriveGroupKeyTip(string header, HashSet<string> used)
+    {
+        var letters = header.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray();
+        var candidates = new List<string>();
+        if (letters.Length >= 2)
+        {
+            candidates.Add(new string(new[] { letters[0], letters[1] }));
+            for (var i = 2; i < letters.Length; i++)
+                candidates.Add(new string(new[] { letters[0], letters[i] }));
+        }
+        else if (letters.Length == 1)
+        {
+            candidates.Add(new string(new[] { letters[0] }));
+        }
+
+        candidates.Add("G");
+        for (var i = 1; i <= 9; i++)
+            candidates.Add($"G{i}");
+
+        foreach (var candidate in candidates)
+        {
+            if (used.Add(candidate))
+                return candidate;
+        }
+
+        return "G";
+    }
+
+    // Builds the collapsed group's dropdown: every commandable control becomes a menu item carrying
+    // the control's keytip and routed through the registry, so a keytip opens the group and selects a
+    // command exactly like the expanded form.
+    private static ContextMenu BuildCollapsedGroupMenu(RibbonGroup group, IRibbonCommandRegistry? registry)
+    {
+        var menu = new ContextMenu();
+        foreach (var control in group.Controls)
+        {
+            if (control is RibbonSeparator or RibbonRowBreak || string.IsNullOrEmpty(control.Label))
+                continue;
+
+            var menuItem = new MenuItem { Header = control.Label, Tag = control.Label };
+            if (!string.IsNullOrEmpty(control.KeyTip))
+                RibbonTooltip.SetKeyTip(menuItem, control.KeyTip);
+            if (!string.IsNullOrEmpty(control.CommandId.Value))
+                RibbonMetadata.SetCommandName(menuItem, control.CommandId.Value);
+
+            var nested = GetMenu(control);
+            if (registry is not null && nested is not null && nested.Items.Count > 0)
+            {
+                AddMenuItems(menuItem.Items, nested.Items, registry);
+            }
+            else if (registry is not null)
+            {
+                var commandId = control.CommandId;
+                menuItem.IsEnabled = registry.TryGet(commandId, out _);
+                menuItem.Click += (sender, _) =>
+                {
+                    if (registry.TryGet(commandId, out var command) && command is not null)
+                        command.Execute(SenderContext(sender));
+                };
+            }
+
+            menu.Items.Add(menuItem);
+        }
+
+        return menu;
     }
 
     private static FrameworkElement BuildGroup(RibbonGroup group, FrameworkElement resourceHost, IRibbonCommandRegistry? registry)
@@ -331,8 +409,12 @@ public static class RibbonWpfRenderer
             RibbonMetadata.SetCommandName(element, control.CommandId.Value);
         if (!string.IsNullOrEmpty(control.KeyTip))
             RibbonTooltip.SetKeyTip(element, control.KeyTip);
-        if (!string.IsNullOrEmpty(control.TooltipTitle))
-            RibbonTooltip.SetTitle(element, control.TooltipTitle);
+        // The tooltip title doubles as the control's human-readable identity (keytip overlays, tests
+        // that resolve a command by its visible title). Default it to the Label so every rendered
+        // control reports a meaningful title even when no explicit tooltip title was authored.
+        var title = !string.IsNullOrEmpty(control.TooltipTitle) ? control.TooltipTitle : control.Label;
+        if (!string.IsNullOrEmpty(title))
+            RibbonTooltip.SetTitle(element, title);
         if (!string.IsNullOrEmpty(control.TooltipDescription))
             RibbonTooltip.SetDescription(element, control.TooltipDescription);
 
@@ -356,13 +438,23 @@ public static class RibbonWpfRenderer
         }
         else
         {
-            buttonBase.Click += (_, _) =>
+            buttonBase.Click += (sender, _) =>
             {
                 if (registry.TryGet(control.CommandId, out var command) && command is not null)
-                    command.Execute(RibbonCommandContext.Empty);
+                    command.Execute(SenderContext(sender));
             };
         }
     }
+
+    // Passes the actual clicked WPF element to the command so host handlers that inspect their sender
+    // (MenuItem.Tag/Header, ToggleButton.IsChecked) see the real rendered control. ReflectiveHandlerCommand
+    // prefers this over its backplane sender when present.
+    public const string SenderKey = "wpf.sender";
+
+    private static RibbonCommandContext SenderContext(object? sender) =>
+        sender is null
+            ? RibbonCommandContext.Empty
+            : new RibbonCommandContext(new Dictionary<string, object?> { [SenderKey] = sender });
 
     private static RibbonMenu? GetMenu(RibbonControl control) => control switch
     {
@@ -404,10 +496,14 @@ public static class RibbonWpfRenderer
             else if (item.CommandId is { } commandId)
             {
                 menuItem.IsEnabled = registry.TryGet(commandId, out _);
-                menuItem.Click += (_, _) =>
+                // Some menu-item handlers read state off their sender (e.g. ArrangeAllMenuItem_Click
+                // reads MenuItem.Tag, ZoomPresetMenuItem_Click reads the header). Carry the values the
+                // original XAML set as Tag so those handlers resolve against the rendered menu item.
+                menuItem.Tag = item.Header;
+                menuItem.Click += (sender, _) =>
                 {
                     if (registry.TryGet(commandId, out var command) && command is not null)
-                        command.Execute(RibbonCommandContext.Empty);
+                        command.Execute(SenderContext(sender));
                 };
             }
 

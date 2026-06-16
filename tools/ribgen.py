@@ -1,10 +1,22 @@
 import re
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 
 # The live MainWindow.xaml ribbon was deleted in the declarative cutover; regenerate from the
 # pre-deletion ribbon preserved in git (write it with: git show <pre-cutover>:.../MainWindow.xaml).
 XAML = "tools/_old_mainwindow.xaml"
 OUT = "src/FreeX.App.Host/Ribbon/FreeXRibbonDefinition.cs"
+RESX = "src/FreeX.App.Host/Resources/Strings.resx"
+
+# Resolve {local:Loc Key=X} headers to their en-US display strings so dropdown items read like Excel
+# ("More Functions...", "Goal Seek...", "Error Checking..."); the keytip tests look menu items up by
+# their resolved header. WPF strips the leading "_" access-key mnemonic at runtime, so strip it too.
+_loc = {}
+for _data in ET.parse(RESX).getroot().findall("data"):
+    _loc[_data.get("name")] = (_data.findtext("value") or "").replace("_", "")
+
+def resolve(s):
+    return _loc.get(s, s) if s else s
 
 src = open(XAML, encoding="utf-8").read()
 src2 = re.sub(r"\{local:Loc Key=([A-Za-z0-9_]+)\}", r"\1", src)
@@ -50,7 +62,33 @@ for e in root.iter():
 data = {}
 order = []
 curtab = None
-handler_map = {}  # CommandName -> Click handler method name (controls + menu items)
+
+# A single CommandName can be reused by unrelated controls across tabs (e.g. "Normal" is a Home
+# cell-style menu item AND the View workbook-view toggle, with different handlers). A flat
+# CommandName -> handler map silently drops one, so a keytip fires the wrong command. We therefore
+# resolve handlers per (tab, CommandName): controls win over their own menu items, and any
+# CommandName that resolves to MORE THAN ONE distinct handler across tabs is "ambiguous" and gets a
+# tab-qualified command id ("ViewTab/Normal") in both the definition and the handler map.
+def event_handler(d):
+    # Toggles/checkboxes route through Checked/Unchecked, not Click (e.g. ViewGridlinesChk_Changed).
+    return d.get("Click") or d.get("Checked") or d.get("Unchecked")
+
+# name_handlers[name] = set of distinct handlers ever seen for this CommandName (controls + menu
+# items, across all tabs). A name bound to MORE THAN ONE handler is ambiguous and needs a unique id
+# per handler so the keytip fires the right command.
+name_handlers = defaultdict(set)
+
+# home_handlers[name] = handler chosen for the hand-authored Home tab (controls preferred over their
+# own menu items). HomeRibbonDefinition.cs uses PLAIN command ids, so these must map plainly.
+home_handlers = {}
+
+def record(tab, name, handler, is_control):
+    if not handler:
+        return
+    name_handlers[name].add(handler)
+    if tab == "HomeTab" and (name not in home_handlers or is_control):
+        home_handlers[name] = handler
+
 for e in root.iter():
     cid = catid(e)
     if cid and cid.endswith("Tab"):
@@ -72,8 +110,8 @@ for e in root.iter():
                 if not cn:
                     continue
                 style = re.sub(r"\{StaticResource (\w+)\}", r"\1", d.get("Style") or "")
-                if d.get("Click") and cn not in handler_map:
-                    handler_map[cn] = d.get("Click")
+                ch_handler = event_handler(d)
+                record(curtab, cn, ch_handler, is_control=True)
                 menu = []
                 for ch in list(d):
                     if not ch.tag.split("}")[-1].endswith(".ContextMenu"):
@@ -86,18 +124,45 @@ for e in root.iter():
                         if mt == "Separator":
                             menu.append(("sep",))
                         elif mt == "MenuItem":
-                            mcn = mi.get(LK + "RibbonMetadata.CommandName") or mi.get("Header") or ""
+                            mcn = mi.get(LK + "RibbonMetadata.CommandName") or resolve(mi.get("Header")) or ""
                             if mcn:
-                                if mi.get("Click") and mcn not in handler_map:
-                                    handler_map[mcn] = mi.get("Click")
+                                mi_handler = event_handler(mi)
+                                # id binds to a handler (CommandName); label is the resolved header so
+                                # it reads like Excel. Fall back to the id when there is no header.
+                                mlabel = resolve(mi.get("Header")) or mcn
+                                record(curtab, mcn, mi_handler, is_control=False)
                                 menu.append(("item", mcn, mi.get(LK + "RibbonTooltip.KeyTip") or "",
-                                             mi.get("InputGestureText") or ""))
+                                             mi.get("InputGestureText") or "", mi_handler, mlabel))
                 has_drop = d.get(LK + "RibbonMetadata.DropdownMenuButton") == "true" or len(menu) > 0
-                items.append(("ctrl", tag, cn, keytip(d) or "", style, has_drop, menu))
+                items.append(("ctrl", tag, cn, keytip(d) or "", style, has_drop, menu, ch_handler))
         if curtab not in data:
             data[curtab] = []
             order.append(curtab)
         data[curtab].append((cid, items))
+
+# A CommandName is ambiguous when distinct controls bind it to more than one handler (e.g. the View
+# "Freeze Panes" picker button -> FreezePanesPickerBtn_Click vs its "Freeze Panes" menu item ->
+# FreezeAtSelectionMenuItem_Click; or the Home cell-style "Normal" vs the View "Normal" toggle). A
+# flat name->handler map silently drops all but one, firing the wrong command. For ambiguous names we
+# mint a unique id per handler ("name#Handler") so each rendered control/menu item binds to exactly
+# its own handler. Unambiguous names keep their plain id (so the hand-authored Home tab, which uses
+# plain ids, still resolves through the same handler map).
+ambiguous_names = {name for name, hs in name_handlers.items() if len(hs) > 1}
+
+def command_id(name, handler):
+    if handler and name in ambiguous_names:
+        return f"{name}#{handler}"
+    return name
+
+# Build the final id -> handler map (one entry per distinct id; ambiguous ids are 1:1 with handlers).
+handler_map = {}
+for name, handlers in name_handlers.items():
+    for handler in handlers:
+        handler_map[command_id(name, handler)] = handler
+# The hand-authored Home tab uses plain ids; ensure each resolves to Home's own handler even when the
+# name is ambiguous (and thus only minted as "name#handler" by the generated tabs above).
+for name, handler in home_handlers.items():
+    handler_map.setdefault(name, handler)
 
 ctxkey = {
     "ShapeFormatTab": "shape.selected",
@@ -235,6 +300,36 @@ def should_hide_from_insert(title):
             and "recommended chart" not in n)
 
 
+# Per-group collapse priority: HIGHER stays expanded longer; LOWER collapses to an overflow button
+# first. Tuned to read like Excel — the primary action group of each tab is protected (high), large
+# secondary galleries (Charts) collapse early, and small utility groups (Symbols, Comments, Links)
+# collapse first. Keyed by the group's display header; unlisted groups fall back to left-to-right
+# descending order so earlier (more important) groups outlast later ones.
+GROUP_PRIORITY = {
+    # Insert: Tables is the protected primary; Charts is large and collapses before the small groups.
+    "Tables": 200, "Charts": 60, "Sparklines": 120, "Filters": 110, "Links": 100,
+    "Comments": 90, "Text": 80, "Symbols": 70,
+    # Page Layout: Page Setup is primary; Themes/Scale collapse earlier.
+    "Page Setup": 200, "Scale To Fit": 90, "Sheet Options": 80, "Themes": 110, "Arrange": 70,
+    # Formulas: Function Library primary; Calculation/Defined Names mid; Formula Auditing collapses.
+    "Function Library": 200, "Defined Names": 130, "Formula Auditing": 90, "Calculation": 120,
+    # Data: Get & Transform / Sort & Filter primary; What-If/Outline collapse.
+    "Get & Transform Data": 200, "Queries & Connections": 90, "Sort & Filter": 180,
+    "Data Tools": 130, "Forecast": 80, "Outline": 70, "Data Types": 100,
+    # Review: Proofing primary; Notes/Protect collapse first.
+    "Proofing": 200, "Accessibility": 120, "Comments ": 110, "Notes": 80, "Protect": 70, "Changes": 90,
+    # View: Workbook Views / Show primary; Zoom/Window collapse.
+    "Workbook Views": 200, "Show": 180, "Zoom": 110, "Window": 90,
+}
+
+
+def group_priority(tab, cid, header, index):
+    if header in GROUP_PRIORITY:
+        return GROUP_PRIORITY[header]
+    # Fallback: descending left-to-right so the leftmost (primary) group outlasts the rest.
+    return max(40, 180 - index * 10)
+
+
 def grouphdr(cid, tab):
     s = cid[:-5] if cid.endswith("Group") else cid
     tp = tab[:-3]
@@ -263,8 +358,10 @@ def menu_expr(menu):
             continue
         if n >= 14:
             break
-        mcn, mkt, mg = esc(m[1]), esc(m[2]), esc(m[3])
-        args = f'"{mcn}", "{mcn}"'
+        mkt, mg, mhandler = esc(m[2]), esc(m[3]), m[4]
+        mlabel = esc(m[5] if len(m) > 5 else m[1])
+        mid = esc(command_id(m[1], mhandler))
+        args = f'"{mid}", "{mlabel}"'
         if mkt or mg:
             args += f', "{mkt}"'
         if mg:
@@ -321,8 +418,9 @@ for tab in mainorder + ctxorder:
     else:
         out.append(f'        .Tab("{tab}", "{hdr}", "{kt}", tab => tab')
     gp = 180
-    for cid, items in groups:
+    for gi, (cid, items) in enumerate(groups):
         ghdr = esc(grouphdr(cid, tab))
+        gp = group_priority(tab, cid, grouphdr(cid, tab), gi)
         # Cap control count (keep separators), and drop leading/trailing/duplicate separators.
         kept = []
         ctrl_count = 0
@@ -345,9 +443,10 @@ for tab in mainorder + ctxorder:
             if it[0] == "sep":
                 cl.append("                .Separator()")
                 continue
-            _, kind, cn, k, style, has_drop, menu = it
+            _, kind, cn, k, style, has_drop, menu, ch_handler = it
             ic = icon(cn)
-            cesc = esc(cn)
+            cesc = esc(cn)               # label (display text)
+            idesc = esc(command_id(cn, ch_handler))  # command id (handler-qualified when ambiguous)
             kk = esc(k)
             mx = menu_expr(menu) if menu else ""
             if mx:
@@ -381,23 +480,27 @@ for tab in mainorder + ctxorder:
                     parts.append(f"Width = {width}")
                 if citems:
                     parts.append("Items = new[] { " + citems + " }")
-                cl.append(f'                .ComboBox("{cesc}", "{cesc}", c => c with {{ {", ".join(parts)} }})')
+                if kk:
+                    parts.append(f'KeyTip = "{kk}"')
+                cl.append(f'                .ComboBox("{idesc}", "{cesc}", c => c with {{ {", ".join(parts)} }})')
             elif kind == "CheckBox":
-                cl.append(f'                .CheckBox("{cesc}", "{cesc}", b => b with {{ Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}) }})')
+                cb_parts = [f"Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic})"]
+                if kk:
+                    cb_parts.append(f'KeyTip = "{kk}"')
+                cl.append(f'                .CheckBox("{idesc}", "{cesc}", b => b with {{ {", ".join(cb_parts)} }})')
             elif is_large(cn):
-                cl.append(f'                .Large("{cesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
+                cl.append(f'                .Large("{idesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
             elif style in ICON_STYLES or kind == "ToggleButton":
                 if kind == "ToggleButton":
-                    cl.append(f'                .IconToggle("{cesc}", "{cesc}", Ico.{ic}, "{kk}")')
+                    cl.append(f'                .IconToggle("{idesc}", "{cesc}", Ico.{ic}, "{kk}")')
                 else:
-                    cl.append(f'                .Icon("{cesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
+                    cl.append(f'                .Icon("{idesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
             else:
-                cl.append(f'                .Medium("{cesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
+                cl.append(f'                .Medium("{idesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
         body = "\n".join(cl)
-        out.append(f'            .Group("{cid}", "{ghdr}", null, priority: {gp},')
+        out.append(f'            .Group("{cid}", "{ghdr}", null, priority: {int(gp)},')
         out.append("                g => g")
         out.append(body + ")")
-        gp -= 10
     out.append("        )")
 out.append("        .Build();")
 out.append("}")

@@ -25,15 +25,25 @@ public sealed class RibbonGroupHost : ContentControl
     private readonly FrameworkElement _full;
     private readonly System.Func<FrameworkElement> _popupContentFactory;
     private readonly FrameworkElement _resourceHost;
+    private readonly string? _collapsedKeyTip;
+    private readonly System.Func<ContextMenu>? _collapsedMenuFactory;
     private FrameworkElement? _collapsedButton;
     private bool _collapsed;
 
-    public RibbonGroupHost(RibbonGroup group, FrameworkElement full, System.Func<FrameworkElement> popupContentFactory, FrameworkElement resourceHost)
+    public RibbonGroupHost(
+        RibbonGroup group,
+        FrameworkElement full,
+        System.Func<FrameworkElement> popupContentFactory,
+        FrameworkElement resourceHost,
+        string? collapsedKeyTip = null,
+        System.Func<ContextMenu>? collapsedMenuFactory = null)
     {
         _group = group;
         _full = full;
         _popupContentFactory = popupContentFactory;
         _resourceHost = resourceHost;
+        _collapsedKeyTip = collapsedKeyTip;
+        _collapsedMenuFactory = collapsedMenuFactory;
         Priority = group.Priority;
         VerticalAlignment = VerticalAlignment.Stretch;
         Content = full;
@@ -73,6 +83,24 @@ public sealed class RibbonGroupHost : ContentControl
         if (_resourceHost.TryFindResource("RibbonBtn") is Style style)
             button.Style = style;
 
+        // Mark the collapsed button so the keytip system treats it as a group overflow: it carries the
+        // group's derived keytip + title and a menu of the group's commands, so Alt navigation can open
+        // the group and pick a command (CollapsedInsertChartsKeyTip / CollapsedRibbonGroupKeyTip).
+        RibbonMetadata.SetRole(button, RibbonMetadataRole.CollapsedGroupButton);
+        if (!string.IsNullOrEmpty(_collapsedKeyTip))
+            RibbonTooltip.SetKeyTip(button, _collapsedKeyTip);
+        if (!string.IsNullOrEmpty(_group.Header))
+            RibbonTooltip.SetTitle(button, _group.Header);
+        if (_collapsedMenuFactory is not null)
+        {
+            var contextMenu = _collapsedMenuFactory();
+            contextMenu.PlacementTarget = button;
+            contextMenu.Placement = PlacementMode.Bottom;
+            button.ContextMenu = contextMenu;
+            button.Click += (_, _) => contextMenu.IsOpen = true;
+            return Wrap(button);
+        }
+
         var popup = new Popup { Placement = PlacementMode.Bottom, StaysOpen = false, AllowsTransparency = true, PlacementTarget = button };
         button.Click += (_, _) =>
         {
@@ -91,6 +119,13 @@ public sealed class RibbonGroupHost : ContentControl
         container.Children.Add(button);
         container.Children.Add(popup);
         return container;
+    }
+
+    private static FrameworkElement Wrap(FrameworkElement element)
+    {
+        var grid = new Grid();
+        grid.Children.Add(element);
+        return grid;
     }
 }
 
