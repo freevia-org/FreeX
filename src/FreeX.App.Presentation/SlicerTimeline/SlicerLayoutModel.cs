@@ -1,0 +1,246 @@
+using FreeX.App.Presentation.Charts;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Presentation.SlicerTimeline;
+
+/// <summary>
+/// One button tile inside a slicer's layout: the rectangle to draw in pixel space, the caption
+/// text, and the visual state flags the renderers key their fills/colors on. <see cref="ItemIndex"/>
+/// is the index into the slicer's full available-item list (or -1 for the synthetic "all" preview
+/// tile shown when nothing is selected), so hit-testing can map a clicked tile back to its item.
+/// </summary>
+public readonly record struct SlicerTileLayout(
+    LayoutRect Rect,
+    string Caption,
+    bool IsSelected,
+    bool IsEnabled,
+    bool IsAllPreview,
+    int ItemIndex);
+
+/// <summary>
+/// The portable, framework-free layout of a slicer button-grid inside a bounds rectangle. Carries the
+/// header bar rectangle and caption, the body rectangle, the laid-out tiles, and overflow/scroll
+/// information for the renderers. The geometry is faithful to the source desktop renderer: a header
+/// band capped at 22px, a tile grid starting 26px from the top, and a four-tile preview cap.
+/// </summary>
+public sealed record SlicerLayoutModel(
+    string Name,
+    string Caption,
+    string? SourceFieldName,
+    bool HasActiveFilter,
+    LayoutRect Bounds,
+    LayoutRect HeaderRect,
+    LayoutRect BodyRect,
+    IReadOnlyList<SlicerTileLayout> Tiles,
+    int TotalItemCount,
+    int VisibleItemCount,
+    bool HasOverflow);
+
+/// <summary>
+/// The result of toggling a slicer tile: the new selection set ready to hand to the selection command.
+/// An empty <see cref="SelectedItems"/> means "no filter" (all items shown), matching the source
+/// toggle semantics where selecting every item collapses back to the cleared state.
+/// </summary>
+public sealed record SlicerToggleResult(string SlicerName, IReadOnlyList<string> SelectedItems)
+{
+    /// <summary>True when the toggle results in the cleared / unfiltered state (no active filter).</summary>
+    public bool IsCleared => SelectedItems.Count == 0;
+}
+
+/// <summary>
+/// Builds <see cref="SlicerLayoutModel"/> button-grid layouts, performs point hit-testing against the
+/// tiles, and computes selection toggles. Pure geometry and set math; the desktop renderers turn the
+/// returned rectangles into their own drawing primitives and wire the toggle result into the
+/// selection command.
+/// </summary>
+public static class SlicerLayoutBuilder
+{
+    // Faithful to the source desktop renderer's slicer math.
+    private const double HeaderMaxHeight = 22;
+    private const double TileGridTopInset = 26;
+    private const double TileHorizontalInset = 6;
+    private const double TileBottomPadding = 6;
+    private const double TileGap = 3;
+    private const double TileMinHeight = 14;
+    private const double TileMaxHeight = 22;
+    private const int TilePreviewCap = 4;
+
+    /// <summary>
+    /// Builds a button-grid layout for <paramref name="slicer"/> within <paramref name="bounds"/>.
+    /// <paramref name="availableItems"/> is the full set of items offered by the slicer's source field;
+    /// when empty, the slicer's own selected items are used as the available set (matching the source
+    /// fallback). The preview shows up to four tiles; a single "all" tile is shown when nothing is
+    /// selected.
+    /// </summary>
+    public static SlicerLayoutModel Build(
+        SlicerModel slicer,
+        IEnumerable<string> availableItems,
+        LayoutRect bounds)
+    {
+        ArgumentNullException.ThrowIfNull(slicer);
+        ArgumentNullException.ThrowIfNull(availableItems);
+
+        var items = OrderAvailableItems(slicer, availableItems);
+        var selected = new HashSet<string>(slicer.SelectedItems, StringComparer.CurrentCultureIgnoreCase);
+        var hasActiveFilter = slicer.SelectedItems.Count > 0;
+
+        var headerRect = new LayoutRect(
+            bounds.X,
+            bounds.Y,
+            bounds.Width,
+            Math.Min(HeaderMaxHeight, bounds.Height));
+        var bodyRect = bounds;
+
+        var tiles = BuildTiles(slicer, items, selected, bounds);
+
+        return new SlicerLayoutModel(
+            Name: slicer.Name,
+            Caption: ResolveCaption(slicer),
+            SourceFieldName: slicer.SourceFieldName,
+            HasActiveFilter: hasActiveFilter,
+            Bounds: bounds,
+            HeaderRect: headerRect,
+            BodyRect: bodyRect,
+            Tiles: tiles,
+            TotalItemCount: items.Count,
+            VisibleItemCount: tiles.Count(static tile => !tile.IsAllPreview),
+            HasOverflow: items.Count > tiles.Count(static tile => !tile.IsAllPreview));
+    }
+
+    /// <summary>
+    /// Returns the tile at <paramref name="point"/>, or <c>null</c> when the point falls outside every
+    /// tile rectangle. Tiles are non-overlapping so the first containing tile is returned.
+    /// </summary>
+    public static SlicerTileLayout? HitTest(SlicerLayoutModel layout, LayoutPoint point)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+        foreach (var tile in layout.Tiles)
+        {
+            if (Contains(tile.Rect, point))
+                return tile;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Computes the new selection set after toggling <paramref name="caption"/> against the slicer's
+    /// current selection. Mirrors the source toggle: an empty current selection is treated as
+    /// "everything selected"; toggling the item adds or removes it; and selecting every available item
+    /// collapses back to the cleared (unfiltered) state.
+    /// </summary>
+    public static SlicerToggleResult Toggle(
+        SlicerModel slicer,
+        IEnumerable<string> availableItems,
+        string caption)
+    {
+        ArgumentNullException.ThrowIfNull(slicer);
+        ArgumentNullException.ThrowIfNull(availableItems);
+        ArgumentNullException.ThrowIfNull(caption);
+
+        var allItems = OrderAvailableItems(slicer, availableItems);
+        var selected = slicer.SelectedItems.Count == 0
+            ? new HashSet<string>(allItems, StringComparer.CurrentCultureIgnoreCase)
+            : new HashSet<string>(slicer.SelectedItems, StringComparer.CurrentCultureIgnoreCase);
+
+        if (!selected.Remove(caption))
+            selected.Add(caption);
+        if (selected.Count == allItems.Count)
+            selected.Clear();
+
+        return new SlicerToggleResult(slicer.Name, selected.ToList());
+    }
+
+    /// <summary>True when the slicer has at least one explicitly selected item (an active filter).</summary>
+    public static bool HasActiveFilter(SlicerModel slicer)
+    {
+        ArgumentNullException.ThrowIfNull(slicer);
+        return slicer.SelectedItems.Count > 0;
+    }
+
+    private static IReadOnlyList<SlicerTileLayout> BuildTiles(
+        SlicerModel slicer,
+        IReadOnlyList<string> items,
+        HashSet<string> selected,
+        LayoutRect bounds)
+    {
+        var selectedCount = slicer.SelectedItems.Count;
+        var tileCount = selectedCount == 0 ? 1 : Math.Min(TilePreviewCap, selectedCount);
+
+        var tileTop = bounds.Top + TileGridTopInset;
+        var tileHeight = Math.Max(
+            TileMinHeight,
+            Math.Min(TileMaxHeight, (bounds.Bottom - tileTop - TileBottomPadding) / tileCount));
+        var tileWidth = Math.Max(1, bounds.Width - (TileHorizontalInset * 2));
+
+        var tiles = new List<SlicerTileLayout>(tileCount);
+        for (var index = 0; index < tileCount; index++)
+        {
+            var rect = new LayoutRect(
+                bounds.Left + TileHorizontalInset,
+                tileTop + (index * (tileHeight + TileGap)),
+                tileWidth,
+                tileHeight);
+
+            if (selectedCount == 0)
+            {
+                var caption = slicer.SourceFieldName ?? NullIfEmpty(slicer.CacheName) ?? "All";
+                tiles.Add(new SlicerTileLayout(rect, caption, IsSelected: true, IsEnabled: true, IsAllPreview: true, ItemIndex: -1));
+                continue;
+            }
+
+            var itemCaption = slicer.SelectedItems[index];
+            var itemIndex = IndexOf(items, itemCaption);
+            tiles.Add(new SlicerTileLayout(
+                rect,
+                itemCaption,
+                IsSelected: selected.Contains(itemCaption),
+                IsEnabled: true,
+                IsAllPreview: false,
+                ItemIndex: itemIndex));
+        }
+
+        return tiles;
+    }
+
+    private static IReadOnlyList<string> OrderAvailableItems(SlicerModel slicer, IEnumerable<string> availableItems)
+    {
+        var items = new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase);
+        foreach (var item in availableItems)
+            items.Add(item);
+
+        if (items.Count == 0)
+        {
+            foreach (var item in slicer.SelectedItems)
+                items.Add(item);
+        }
+
+        return items.ToList();
+    }
+
+    private static int IndexOf(IReadOnlyList<string> items, string caption)
+    {
+        for (var index = 0; index < items.Count; index++)
+        {
+            if (string.Equals(items[index], caption, StringComparison.CurrentCultureIgnoreCase))
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static string ResolveCaption(SlicerModel slicer)
+    {
+        if (!string.IsNullOrWhiteSpace(slicer.Caption))
+            return slicer.Caption.Trim();
+        if (!string.IsNullOrWhiteSpace(slicer.Name))
+            return slicer.Name.Trim();
+        return string.IsNullOrWhiteSpace(slicer.DrawingShapeName) ? "Filter" : slicer.DrawingShapeName.Trim();
+    }
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static bool Contains(LayoutRect rect, LayoutPoint point) =>
+        point.X >= rect.Left && point.X <= rect.Right &&
+        point.Y >= rect.Top && point.Y <= rect.Bottom;
+}

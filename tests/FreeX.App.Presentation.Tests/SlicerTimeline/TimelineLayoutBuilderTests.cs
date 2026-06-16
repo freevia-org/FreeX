@@ -1,0 +1,209 @@
+using FluentAssertions;
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.SlicerTimeline;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Presentation.Tests.SlicerTimeline;
+
+public sealed class TimelineLayoutBuilderTests
+{
+    private static readonly LayoutRect Bounds = new(40, 20, 200, 80);
+
+    private static TimelineModel Timeline(
+        string? start = "2024-01-01",
+        string? end = "2024-12-31",
+        string? selStart = null,
+        string? selEnd = null) =>
+        new()
+        {
+            Name = "Timeline1",
+            Caption = "Order Date",
+            SourceFieldName = "OrderDate",
+            StartDate = start,
+            EndDate = end,
+            SelectedStartDate = selStart,
+            SelectedEndDate = selEnd
+        };
+
+    [Fact]
+    public void Build_HeaderAndTrackGeometry_MatchSourceMath()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(), Bounds);
+
+        layout.HeaderRect.Height.Should().Be(22);
+        layout.DateLabelRect.Top.Should().Be(Bounds.Top + 22);
+        layout.DateLabelRect.Left.Should().Be(Bounds.Left + 6);
+
+        // track: left+8, top+34, width = width-16, height = max(6, min(14, height-42))
+        layout.TrackRect.Left.Should().Be(Bounds.Left + 8);
+        layout.TrackRect.Top.Should().Be(Bounds.Top + 34);
+        layout.TrackRect.Width.Should().Be(Bounds.Width - 16);
+        layout.TrackRect.Height.Should().Be(14); // height-42 = 38 -> clamped to 14
+    }
+
+    [Fact]
+    public void Build_NoSelection_UsesPreviewRatios()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(), Bounds);
+
+        layout.SelectionLeftRatio.Should().Be(0.18);
+        layout.SelectionWidthRatio.Should().Be(0.56);
+        layout.SelectionRect.Left.Should().BeApproximately(layout.TrackRect.Left + (layout.TrackRect.Width * 0.18), 1e-9);
+        layout.SelectionRect.Width.Should().BeApproximately(layout.TrackRect.Width * 0.56, 1e-9);
+    }
+
+    [Fact]
+    public void Build_WithSelection_DerivesOverlayRatiosFromDates()
+    {
+        // Full year; selection covers Apr 1 .. Sep 30 (roughly Q2-Q3).
+        var layout = TimelineLayoutBuilder.Build(
+            Timeline(selStart: "2024-04-01", selEnd: "2024-09-30"),
+            Bounds);
+
+        var totalDays = new DateOnly(2024, 12, 31).DayNumber - new DateOnly(2024, 1, 1).DayNumber;
+        var expectedLeft = (new DateOnly(2024, 4, 1).DayNumber - new DateOnly(2024, 1, 1).DayNumber) / (double)totalDays;
+        var expectedRight = (new DateOnly(2024, 9, 30).DayNumber - new DateOnly(2024, 1, 1).DayNumber) / (double)totalDays;
+
+        layout.SelectionLeftRatio.Should().BeApproximately(expectedLeft, 1e-9);
+        layout.SelectionWidthRatio.Should().BeApproximately(expectedRight - expectedLeft, 1e-9);
+        layout.HasActiveFilter.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Build_SelectionRatios_ClampedAndWidthFloored()
+    {
+        var layout = TimelineLayoutBuilder.Build(
+            Timeline(selStart: "2024-06-01", selEnd: "2024-06-01"),
+            Bounds);
+
+        layout.SelectionWidthRatio.Should().Be(0); // zero-width range
+        layout.SelectionRect.Width.Should().Be(6); // floored to handle width
+    }
+
+    [Theory]
+    [InlineData(TimelineGranularity.Day, "2024-03-15", "2024-03-15")]
+    [InlineData(TimelineGranularity.Month, "2024-03-15", "2024-03")]
+    [InlineData(TimelineGranularity.Quarter, "2024-03-15", "2024-Q1")]
+    [InlineData(TimelineGranularity.Quarter, "2024-11-15", "2024-Q4")]
+    [InlineData(TimelineGranularity.Year, "2024-03-15", "2024")]
+    public void FormatBoundary_PerGranularity(TimelineGranularity granularity, string input, string expected)
+    {
+        TimelineLayoutBuilder.FormatBoundary(input, granularity).Should().Be(expected);
+    }
+
+    [Fact]
+    public void FormatDateLabel_NoBounds_UsesFieldName()
+    {
+        var timeline = Timeline(start: null, end: null);
+
+        TimelineLayoutBuilder.FormatDateLabel(timeline, TimelineGranularity.Month).Should().Be("OrderDate");
+    }
+
+    [Fact]
+    public void FormatDateLabel_WithRange_FormatsBothEnds()
+    {
+        var timeline = Timeline(selStart: "2024-01-01", selEnd: "2024-06-30");
+
+        TimelineLayoutBuilder.FormatDateLabel(timeline, TimelineGranularity.Month)
+            .Should().Be("2024-01 - 2024-06");
+    }
+
+    [Fact]
+    public void HitTest_StartHandle_TakesPriority()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(selStart: "2024-04-01", selEnd: "2024-09-30"), Bounds);
+
+        var result = TimelineLayoutBuilder.HitTest(layout, layout.StartHandle.Rect.Center);
+
+        result.Kind.Should().Be(TimelineHitKind.StartHandle);
+        result.Date.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void HitTest_EndHandle()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(selStart: "2024-04-01", selEnd: "2024-09-30"), Bounds);
+
+        TimelineLayoutBuilder.HitTest(layout, layout.EndHandle.Rect.Center).Kind
+            .Should().Be(TimelineHitKind.EndHandle);
+    }
+
+    [Fact]
+    public void HitTest_SelectionBody()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(selStart: "2024-04-01", selEnd: "2024-09-30"), Bounds);
+
+        TimelineLayoutBuilder.HitTest(layout, layout.SelectionRect.Center).Kind
+            .Should().Be(TimelineHitKind.Selection);
+    }
+
+    [Fact]
+    public void HitTest_TrackOutsideSelection()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(selStart: "2024-06-01", selEnd: "2024-07-01"), Bounds);
+        // far-right point on track but past the selection overlay
+        var point = new LayoutPoint(layout.TrackRect.Right - 1, layout.TrackRect.Center.Y);
+
+        var result = TimelineLayoutBuilder.HitTest(layout, point);
+
+        result.Kind.Should().BeOneOf(TimelineHitKind.Track, TimelineHitKind.Selection);
+    }
+
+    [Fact]
+    public void HitTest_OutsideEverything_ReturnsNone()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(), Bounds);
+
+        TimelineLayoutBuilder.HitTest(layout, new LayoutPoint(0, 0)).Kind.Should().Be(TimelineHitKind.None);
+    }
+
+    [Fact]
+    public void DateAt_MapsTrackPositionToDate()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(), Bounds);
+
+        TimelineLayoutBuilder.DateAt(layout, layout.TrackRect.Left).Should().Be(new DateOnly(2024, 1, 1));
+        TimelineLayoutBuilder.DateAt(layout, layout.TrackRect.Right).Should().Be(new DateOnly(2024, 12, 31));
+        var mid = TimelineLayoutBuilder.DateAt(layout, layout.TrackRect.Center.X);
+        mid.Should().NotBeNull();
+        mid!.Value.Should().BeOnOrAfter(new DateOnly(2024, 6, 1)).And.BeOnOrBefore(new DateOnly(2024, 7, 31));
+    }
+
+    [Fact]
+    public void DateAt_NoRange_ReturnsNull()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(start: null, end: null), Bounds);
+
+        TimelineLayoutBuilder.DateAt(layout, layout.TrackRect.Center.X).Should().BeNull();
+    }
+
+    [Fact]
+    public void Build_EmptyRange_FallsBackToPreviewRatios()
+    {
+        // start == end => zero total days; selection present but unmeasurable.
+        var layout = TimelineLayoutBuilder.Build(
+            Timeline(start: "2024-05-01", end: "2024-05-01", selStart: "2024-05-01", selEnd: "2024-05-01"),
+            Bounds);
+
+        layout.SelectionLeftRatio.Should().Be(0.18);
+        layout.SelectionWidthRatio.Should().Be(0.56);
+    }
+
+    [Fact]
+    public void HasActiveFilter_TracksSelectedDates()
+    {
+        TimelineLayoutBuilder.HasActiveFilter(Timeline()).Should().BeFalse();
+        TimelineLayoutBuilder.HasActiveFilter(Timeline(selStart: "2024-02-01")).Should().BeTrue();
+        TimelineLayoutBuilder.HasActiveFilter(Timeline(selEnd: "2024-02-01")).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Build_ResolvesCaptionFallbacks()
+    {
+        var noCaption = new TimelineModel { Name = "MyTimeline" };
+        TimelineLayoutBuilder.Build(noCaption, Bounds).Caption.Should().Be("MyTimeline");
+
+        var shapeOnly = new TimelineModel { DrawingShapeName = "Shape 7" };
+        TimelineLayoutBuilder.Build(shapeOnly, Bounds).Caption.Should().Be("Shape 7");
+    }
+}
