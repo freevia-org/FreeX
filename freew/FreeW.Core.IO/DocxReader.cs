@@ -381,8 +381,36 @@ public static class DocxReader
             IndentRightPt = DxaToPoints(indent?.Attribute(W + "right")?.Value ?? indent?.Attribute(W + "end")?.Value),
             FirstLineIndentPt = DxaToPoints(indent?.Attribute(W + "firstLine")?.Value),
             ListKind = listKind,
-            ListLevel = listLevel
+            ListLevel = listLevel,
+            TabStops = ReadTabStops(pPr.Element(W + "tabs"))
         };
+    }
+
+    /// <summary>
+    /// Reads paragraph tab stops (w:tabs) into the model list, one <see cref="TabStop"/> per w:tab.
+    /// Positions come from w:pos (dxa -> points); the alignment from w:val. "clear" stops (which
+    /// remove an inherited stop) carry no real position and are skipped. Returns an empty list if absent.
+    /// </summary>
+    private static IReadOnlyList<TabStop> ReadTabStops(XElement? tabs)
+    {
+        if (tabs is null)
+            return [];
+        var stops = new List<TabStop>();
+        foreach (var tab in tabs.Elements(W + "tab"))
+        {
+            var val = tab.Attribute(W + "val")?.Value;
+            if (val == "clear")
+                continue;
+            var alignment = val switch
+            {
+                "center" => TabStopAlignment.Center,
+                "right" or "end" => TabStopAlignment.Right,
+                "decimal" => TabStopAlignment.Decimal,
+                _ => TabStopAlignment.Left
+            };
+            stops.Add(new TabStop(DxaToPoints(tab.Attribute(W + "pos")?.Value), alignment));
+        }
+        return stops;
     }
 
     /// <summary>Reads a paragraph box border (w:pBdr) into a <see cref="ParagraphBorder"/>, or null if absent/off.</summary>

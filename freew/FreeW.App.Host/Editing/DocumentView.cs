@@ -505,6 +505,13 @@ public sealed class DocumentView : RichTextBox
         if (TryParseColor(paraFmt.ShadingColorHex, out var shading))
             wpf.Background = new SolidColorBrush(shading);
 
+        // WPF's FlowDocument Paragraph has no tab-stop API, so tab stops cannot be rendered with
+        // custom positions/alignments (default tab rendering applies visually). To avoid losing them
+        // on an edit/commit cycle, we carry the model's TabStops on the paragraph's Tag and read them
+        // back verbatim in ReadParagraphFormatting; the docx round-trip remains exact.
+        if (paraFmt.TabStops.Count > 0)
+            wpf.Tag = paraFmt.TabStops;
+
         foreach (var run in paragraph.Runs)
             wpf.Inlines.Add(BuildRun(run, paragraph, document));
 
@@ -705,7 +712,10 @@ public sealed class DocumentView : RichTextBox
             Border = paragraph.BorderBrush is SolidColorBrush bb && paragraph.BorderThickness.Top > 0
                 ? new ParagraphBorder(ToHex(bb.Color), paragraph.BorderThickness.Top / PxPerPoint)
                 : null,
-            ShadingColorHex = paragraph.Background is SolidColorBrush shading ? ToHex(shading.Color) : null
+            ShadingColorHex = paragraph.Background is SolidColorBrush shading ? ToHex(shading.Color) : null,
+            // Tab stops are not representable in the WPF FlowDocument Paragraph, so they are preserved
+            // verbatim from the Tag stamped by BuildParagraph (see comment there); empty if none.
+            TabStops = paragraph.Tag is IReadOnlyList<TabStop> tabStops ? tabStops : []
         };
 
     // --- formatting resolution (run/paragraph -> style -> document default) ---
