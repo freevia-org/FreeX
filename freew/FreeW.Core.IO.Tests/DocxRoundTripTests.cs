@@ -102,6 +102,53 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void ParagraphBorder_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("bordered")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                Border = new ParagraphBorder("#FF0000", 1.5)
+            }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.Border.Should().NotBeNull();
+        formatting.Border!.ColorHex.Should().Be("#FF0000");
+        formatting.Border.WidthPt.Should().BeApproximately(1.5, 0.001);
+        formatting.ShadingColorHex.Should().BeNull();
+    }
+
+    [Fact]
+    public void ParagraphShading_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("shaded")
+        {
+            Formatting = ParagraphFormatting.Default with { ShadingColorHex = "#FFFF00" }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.ShadingColorHex.Should().Be("#FFFF00");
+        formatting.Border.Should().BeNull();
+    }
+
+    [Fact]
+    public void ParagraphWithoutBorderOrShading_HasNeither()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain"));
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.Border.Should().BeNull();
+        formatting.ShadingColorHex.Should().BeNull();
+    }
+
+    [Fact]
     public void Styles_And_StyleReference_RoundTrip()
     {
         var doc = TextDocument.CreateEmpty();

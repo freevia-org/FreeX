@@ -237,9 +237,12 @@ public static class DocxReader
         var spacing = pPr.Element(W + "spacing");
         var indent = pPr.Element(W + "ind");
         var jc = pPr.Element(W + "jc")?.Attribute(W + "val")?.Value;
+        var shading = pPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
 
         return ParagraphFormatting.Default with
         {
+            Border = ReadParagraphBorder(pPr.Element(W + "pBdr")),
+            ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
             Alignment = jc switch
             {
                 "center" => TextAlignment.Center,
@@ -253,6 +256,24 @@ public static class DocxReader
             IndentRightPt = DxaToPoints(indent?.Attribute(W + "right")?.Value ?? indent?.Attribute(W + "end")?.Value),
             FirstLineIndentPt = DxaToPoints(indent?.Attribute(W + "firstLine")?.Value)
         };
+    }
+
+    /// <summary>Reads a paragraph box border (w:pBdr) into a <see cref="ParagraphBorder"/>, or null if absent/off.</summary>
+    private static ParagraphBorder? ReadParagraphBorder(XElement? pBdr)
+    {
+        if (pBdr is null)
+            return null;
+        // Take the first edge that is actually drawn (val not none/nil); paragraphs use a uniform box.
+        var edge = pBdr.Elements().FirstOrDefault(e =>
+            (e.Attribute(W + "val")?.Value ?? "single") is not ("none" or "nil"));
+        if (edge is null)
+            return null;
+
+        var color = edge.Attribute(W + "color")?.Value;
+        var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
+        return new ParagraphBorder(
+            color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
+            width > 0 ? width : 0.5);
     }
 
     internal static RunFormatting ReadRunFormatting(XElement? rPr)
