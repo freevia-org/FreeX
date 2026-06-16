@@ -32,7 +32,18 @@ internal static class FreeWRibbonCommands
         RibbonStateStore stateStore,
         Action? onPrintPreview,
         Action? onToggleNavPane,
-        Func<bool>? isNavPaneVisible)
+        Func<bool>? isNavPaneVisible) =>
+        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
+            onToggleReadMode: null, isReadModeActive: null);
+
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Action? onPrintPreview,
+        Action? onToggleNavPane,
+        Func<bool>? isNavPaneVisible,
+        Action? onToggleReadMode,
+        Func<bool>? isReadModeActive)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -210,6 +221,11 @@ internal static class FreeWRibbonCommands
         // button reflects whether the pane is currently shown.
         if (onToggleNavPane is not null && isNavPaneVisible is not null)
             registry.Register("freew.nav-pane", new ToggleActionCommand(onToggleNavPane, isNavPaneVisible));
+
+        // View tab — toggle read mode (distraction-free view). Stateful so the ribbon's toggle button
+        // reflects whether the chrome-light reading column is currently active.
+        if (onToggleReadMode is not null && isReadModeActive is not null)
+            registry.Register("freew.read-mode", new ToggleActionCommand(onToggleReadMode, isReadModeActive));
 
         return registry;
     }

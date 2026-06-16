@@ -147,6 +147,10 @@ internal static class FreeWRibbon
                 {
                     g.Toggle("freew.nav-pane", "Navigation Pane");
                 });
+                tab.Group("views", "Views", "V", 90, g =>
+                {
+                    g.Toggle("freew.read-mode", "Read Mode");
+                });
             })
             .Tab("review", "Review", "R", tab =>
             {
