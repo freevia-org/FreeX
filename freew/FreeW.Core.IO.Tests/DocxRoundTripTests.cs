@@ -189,6 +189,79 @@ public class DocxRoundTripTests
     ];
 
     [Fact]
+    public void CoreProperties_RoundTrip()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Properties.Title = "My Title";
+        doc.Properties.Author = "Ada Lovelace";
+        doc.Properties.Subject = "Analytical Engine";
+        doc.Properties.Keywords = "history; computing";
+        doc.Properties.Comments = "First program";
+        doc.Properties.LastModifiedBy = "Charles Babbage";
+        doc.Properties.Created = new DateTimeOffset(1843, 10, 1, 9, 30, 0, TimeSpan.Zero);
+        doc.Properties.Modified = new DateTimeOffset(1843, 10, 15, 14, 0, 0, TimeSpan.Zero);
+
+        var properties = RoundTrip(doc).Properties;
+
+        properties.Title.Should().Be("My Title");
+        properties.Author.Should().Be("Ada Lovelace");
+        properties.Subject.Should().Be("Analytical Engine");
+        properties.Keywords.Should().Be("history; computing");
+        properties.Comments.Should().Be("First program");
+        properties.LastModifiedBy.Should().Be("Charles Babbage");
+        properties.Created.Should().Be(new DateTimeOffset(1843, 10, 1, 9, 30, 0, TimeSpan.Zero));
+        properties.Modified.Should().Be(new DateTimeOffset(1843, 10, 15, 14, 0, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void CoreProperties_PackageHasCorePartContentTypeAndRelationship()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Properties.Title = "Has Core";
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("docProps/core.xml").Should().NotBeNull();
+
+        using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+        var contentTypes = ctReader.ReadToEnd();
+        contentTypes.Should().Contain("/docProps/core.xml");
+        contentTypes.Should().Contain("application/vnd.openxmlformats-package.core-properties+xml");
+
+        using var relsReader = new StreamReader(zip.GetEntry("_rels/.rels")!.Open());
+        var rels = relsReader.ReadToEnd();
+        rels.Should().Contain("docProps/core.xml");
+        rels.Should().Contain("http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties");
+    }
+
+    [Fact]
+    public void MissingCorePart_YieldsEmptyProperties()
+    {
+        // A package without docProps/core.xml (built by hand) must read back with empty properties.
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = zip.CreateEntry("word/document.xml");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write(
+                "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">" +
+                "<w:body><w:p><w:r><w:t>Hi</w:t></w:r></w:p></w:body></w:document>");
+        }
+        stream.Position = 0;
+
+        var properties = DocxReader.Read(stream).Properties;
+
+        properties.Title.Should().BeNull();
+        properties.Author.Should().BeNull();
+        properties.Created.Should().BeNull();
+    }
+
+    [Fact]
     public void Read_NonWordZip_Throws()
     {
         using var stream = new MemoryStream();

@@ -93,6 +93,10 @@ public sealed class MainWindow : Window
         recentButton.Click += (_, _) => ShowRecentMenu(recentButton);
         bar.Children.Add(recentButton);
 
+        var propertiesButton = new Button { Content = "Properties", Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(10, 2, 10, 2) };
+        propertiesButton.Click += (_, _) => OpenProperties();
+        bar.Children.Add(propertiesButton);
+
         _titleText = new TextBlock
         {
             Foreground = Brushes.White,
@@ -154,6 +158,13 @@ public sealed class MainWindow : Window
         }
         _findDialog.Show();
         _findDialog.Activate();
+    }
+
+    private void OpenProperties()
+    {
+        var dialog = new PropertiesDialog(this, _editor.Model.Properties);
+        if (dialog.ShowDialog() == true)
+            _file.MarkDirty();
     }
 
     private void ShowRecentMenu(Button anchor)

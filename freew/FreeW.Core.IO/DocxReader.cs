@@ -30,6 +30,7 @@ public static class DocxReader
             ?? throw new InvalidDataException("Not a Word document: word/document.xml is missing.");
 
         var document = new TextDocument();
+        ReadCoreProperties(archive, document);
         ReadStyles(archive, document);
         var imageRelationships = ReadImageRelationships(archive);
 
@@ -220,6 +221,27 @@ public static class DocxReader
             FontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value),
             ColorHex = color is null or "auto" ? null : "#" + color.TrimStart('#')
         };
+    }
+
+    /// <summary>Parses docProps/core.xml into <see cref="TextDocument.Properties"/>; a missing part is fine.</summary>
+    private static void ReadCoreProperties(ZipArchive archive, TextDocument document)
+    {
+        var coreXml = LoadPart(archive, "docProps/core.xml");
+        var root = coreXml?.Root;
+        if (root is null)
+            return;
+
+        var properties = document.Properties;
+        properties.Title = Trimmed(root.Element(Dc + "title")?.Value);
+        properties.Author = Trimmed(root.Element(Dc + "creator")?.Value);
+        properties.Subject = Trimmed(root.Element(Dc + "subject")?.Value);
+        properties.Keywords = Trimmed(root.Element(Cp + "keywords")?.Value);
+        properties.Comments = Trimmed(root.Element(Dc + "description")?.Value);
+        properties.LastModifiedBy = Trimmed(root.Element(Cp + "lastModifiedBy")?.Value);
+        properties.Created = ParseW3CDtf(root.Element(DcTerms + "created")?.Value);
+        properties.Modified = ParseW3CDtf(root.Element(DcTerms + "modified")?.Value);
+
+        static string? Trimmed(string? value) => string.IsNullOrEmpty(value) ? null : value;
     }
 
     private static void ReadStyles(ZipArchive archive, TextDocument document)

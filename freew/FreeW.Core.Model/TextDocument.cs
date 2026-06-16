@@ -108,6 +108,38 @@ public sealed class Table : Block
     public int ColumnCount => Rows.Count == 0 ? 0 : Rows.Max(r => r.Cells.Count);
 }
 
+/// <summary>
+/// Document-level metadata, mapping onto the OPC core properties part (docProps/core.xml). All
+/// fields are optional; timestamps are explicit (never auto-stamped at construction) so the model
+/// and writer stay deterministic. The writer emits only the values that are set.
+/// </summary>
+public sealed class DocumentProperties
+{
+    /// <summary>dc:title</summary>
+    public string? Title { get; set; }
+
+    /// <summary>dc:creator (the document's author).</summary>
+    public string? Author { get; set; }
+
+    /// <summary>dc:subject</summary>
+    public string? Subject { get; set; }
+
+    /// <summary>cp:keywords</summary>
+    public string? Keywords { get; set; }
+
+    /// <summary>dc:description (free-form comments).</summary>
+    public string? Comments { get; set; }
+
+    /// <summary>cp:lastModifiedBy</summary>
+    public string? LastModifiedBy { get; set; }
+
+    /// <summary>dcterms:created (W3CDTF).</summary>
+    public DateTimeOffset? Created { get; set; }
+
+    /// <summary>dcterms:modified (W3CDTF).</summary>
+    public DateTimeOffset? Modified { get; set; }
+}
+
 /// <summary>Page geometry for a section (points; US Letter with 1in margins by default).</summary>
 public sealed class PageSettings
 {
@@ -133,6 +165,9 @@ public sealed class TextDocument
     public RunFormatting DefaultRun { get; set; } = new() { FontFamily = "Calibri", FontSizePt = 11 };
     public ParagraphFormatting DefaultParagraph { get; set; } = ParagraphFormatting.Default;
     public PageSettings Page { get; } = new();
+
+    /// <summary>Document-level metadata (maps to docProps/core.xml).</summary>
+    public DocumentProperties Properties { get; } = new();
 
     /// <summary>The body's paragraphs (top-level only; table cell paragraphs are not included).</summary>
     public IEnumerable<Paragraph> Paragraphs => Blocks.OfType<Paragraph>();
