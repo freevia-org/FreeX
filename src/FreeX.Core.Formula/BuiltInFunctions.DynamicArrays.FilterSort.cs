@@ -100,29 +100,50 @@ public static partial class BuiltInFunctions
         var arr = args[0] is RangeValue arrayRange
             ? arrayRange
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
-        if (!TryGetScalarControlArgument(args.Count > 1 ? args[1] : BlankValue.Instance, out var sortIdxArg, out var sortIdxError)) return sortIdxError;
-        if (!TryGetScalarControlArgument(args.Count > 2 ? args[2] : BlankValue.Instance, out var sortOrderArg, out var sortOrderError)) return sortOrderError;
+
+        // by_col must be a single scalar; resolve it first so the sort orientation is known.
         if (!TryGetScalarControlArgument(args.Count > 3 ? args[3] : BlankValue.Instance, out var byColArg, out var byColError)) return byColError;
-        double sortIdxRaw   = sortIdxArg is not BlankValue ? ToNumber(sortIdxArg) : 1;
-        double sortOrderRaw = sortOrderArg is not BlankValue ? ToNumber(sortOrderArg) : 1;
-        if (!double.IsFinite(sortIdxRaw) || !double.IsFinite(sortOrderRaw)) return ErrorValue.Value;
-        int sortIdx   = (int)sortIdxRaw - 1;
-        if (sortIdx < 0) return ErrorValue.Value;
-        int sortOrder = (int)sortOrderRaw;
-        if (sortOrder != 1 && sortOrder != -1) return ErrorValue.Value;
-        bool byCol    = byColArg is not BlankValue && ToBool(byColArg);
-        if (!byCol && sortIdx >= arr.ColCount) return ErrorValue.Value;
-        if (byCol && sortIdx >= arr.RowCount) return ErrorValue.Value;
+        bool byCol = byColArg is not BlankValue && ToBool(byColArg);
+
+        // sort_index and sort_order may each be a 1-D array, defining a multi-key sort. A blank
+        // sort_index defaults to a single key on the first row/column. sort_order defaults to
+        // ascending; a single sort_order is broadcast across all keys.
+        if (!TryReadSortControlVector(args.Count > 1 ? args[1] : BlankValue.Instance, out var sortIdxRaws, out var sortIdxError)) return sortIdxError;
+        if (!TryReadSortControlVector(args.Count > 2 ? args[2] : BlankValue.Instance, out var sortOrderRaws, out var sortOrderError)) return sortOrderError;
+
+        if (sortIdxRaws.Count == 0) sortIdxRaws = new List<double> { 1 };
+        if (sortOrderRaws.Count == 0) sortOrderRaws = new List<double> { 1 };
+        if (sortOrderRaws.Count != 1 && sortOrderRaws.Count != sortIdxRaws.Count) return ErrorValue.Value;
+
+        var keyCount = sortIdxRaws.Count;
+        int axisLength = byCol ? arr.RowCount : arr.ColCount;
+        var keys = new (int Index, int Order)[keyCount];
+        for (int k = 0; k < keyCount; k++)
+        {
+            double idxRaw = sortIdxRaws[k];
+            if (!double.IsFinite(idxRaw)) return ErrorValue.Value;
+            int idx = (int)idxRaw - 1;
+            if (idx < 0 || idx >= axisLength) return ErrorValue.Value;
+
+            double orderRaw = sortOrderRaws.Count == 1 ? sortOrderRaws[0] : sortOrderRaws[k];
+            if (!double.IsFinite(orderRaw)) return ErrorValue.Value;
+            int order = (int)orderRaw;
+            if (order != 1 && order != -1) return ErrorValue.Value;
+
+            keys[k] = (idx, order);
+        }
 
         if (!byCol)
         {
             var rowIndices = CreateSequentialIndices(arr.RowCount);
             Array.Sort(rowIndices, (a, b) =>
             {
-                var va = sortIdx < arr.ColCount ? arr.Cells[a, sortIdx] : BlankValue.Instance;
-                var vb = sortIdx < arr.ColCount ? arr.Cells[b, sortIdx] : BlankValue.Instance;
-                var cmp = CompareSortKey(va, vb, sortOrder);
-                return cmp != 0 ? cmp : a.CompareTo(b); // stable: preserve original order for ties (Excel SORT is stable)
+                foreach (var (idx, order) in keys)
+                {
+                    var cmp = CompareSortKey(arr.Cells[a, idx], arr.Cells[b, idx], order);
+                    if (cmp != 0) return cmp;
+                }
+                return a.CompareTo(b); // stable: preserve original order for ties (Excel SORT is stable)
             });
             var result = new ScalarValue[arr.RowCount, arr.ColCount];
             for (int r = 0; r < arr.RowCount; r++)
@@ -135,10 +156,12 @@ public static partial class BuiltInFunctions
             var colIndices = CreateSequentialIndices(arr.ColCount);
             Array.Sort(colIndices, (a, b) =>
             {
-                var va = sortIdx < arr.RowCount ? arr.Cells[sortIdx, a] : BlankValue.Instance;
-                var vb = sortIdx < arr.RowCount ? arr.Cells[sortIdx, b] : BlankValue.Instance;
-                var cmp = CompareSortKey(va, vb, sortOrder);
-                return cmp != 0 ? cmp : a.CompareTo(b); // stable: preserve original order for ties (Excel SORT is stable)
+                foreach (var (idx, order) in keys)
+                {
+                    var cmp = CompareSortKey(arr.Cells[idx, a], arr.Cells[idx, b], order);
+                    if (cmp != 0) return cmp;
+                }
+                return a.CompareTo(b); // stable: preserve original order for ties (Excel SORT is stable)
             });
             var result = new ScalarValue[arr.RowCount, arr.ColCount];
             for (int r = 0; r < arr.RowCount; r++)
@@ -146,6 +169,34 @@ public static partial class BuiltInFunctions
                     result[r, c] = arr.Cells[r, colIndices[c]];
             return new RangeValue(result);
         }
+    }
+
+    // Reads a SORT control argument (sort_index / sort_order) as a flat list of numbers. A scalar
+    // yields a single-element list; a 1-D array (row or column vector) yields its elements in order,
+    // enabling multi-key sorts. A blank yields an empty list (caller applies the default). A 2-D
+    // array or an embedded error is rejected.
+    private static bool TryReadSortControlVector(ScalarValue value, out List<double> numbers, out ScalarValue error)
+    {
+        numbers = new List<double>();
+        error = ErrorValue.Value;
+
+        if (value is ErrorValue directError) { error = directError; return false; }
+        if (value is BlankValue) return true;
+
+        if (value is RangeValue range)
+        {
+            if (range.RowCount != 1 && range.ColCount != 1) return false; // 2-D control argument is invalid
+            foreach (var cell in range.Cells)
+            {
+                if (cell is ErrorValue cellError) { error = cellError; return false; }
+                if (cell is BlankValue) continue;
+                numbers.Add(ToNumber(cell));
+            }
+            return true;
+        }
+
+        numbers.Add(ToNumber(value));
+        return true;
     }
 
     // Excel's SORT/SORTBY always places blank cells LAST, regardless of ascending/descending order.
