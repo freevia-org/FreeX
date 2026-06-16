@@ -35,7 +35,8 @@ public partial class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.FormControls);
+        // The legacy /control + ctrlProp relationship is now a supported feature (modeled + preserved).
+        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.FormControls);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.EmbeddedObjects);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.PowerQuery);
         report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.ThreadedComments);
