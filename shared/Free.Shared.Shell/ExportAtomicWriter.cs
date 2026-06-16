@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace FreeX.App.Host;
+namespace Free.Shared.Shell;
 
 /// <summary>
 /// Writes export output through a sibling temp file before atomically replacing the target,
