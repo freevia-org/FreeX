@@ -224,6 +224,16 @@ public partial class MainWindow
             if (!rendered.TryGetValue(name, out var target))
                 continue;
 
+            // Some ribbon buttons own a context menu that is built imperatively in code (e.g. the Draw
+            // "Shapes" gallery in InitializeInsertShapeGalleryContextMenu), not from the declarative
+            // menu model. Share that live menu onto the rendered button so a keytip opens the same
+            // gallery (the keytip path resets PlacementTarget when it opens the menu).
+            if (original is ButtonBase { ContextMenu: { } sourceMenu } &&
+                target is ButtonBase targetButton && targetButton.ContextMenu is null)
+            {
+                targetButton.ContextMenu = sourceMenu;
+            }
+
             if (original is ToggleButton sourceToggle && target is ToggleButton targetToggle)
             {
                 void Sync() => targetToggle.IsChecked = sourceToggle.IsChecked;
