@@ -434,6 +434,8 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _advancedFilterMenuItem = new();
     private readonly NativeMenuItem _removeDuplicatesMenuItem = new();
     private readonly NativeMenuItem _subtotalMenuItem = new();
+    private readonly NativeMenuItem _textToColumnsMenuItem = new();
+    private readonly NativeMenuItem _consolidateMenuItem = new();
     private readonly NativeMenuItem _dataValidationPreviewMenuItem = new();
     private readonly NativeMenuItem _dataValidationMenuItem = new();
     private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();
@@ -577,7 +579,11 @@ public sealed partial class MainWindow : Window
     {
         var root = new DockPanel();
 
-        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(() => _session, RefreshShell);
+        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
+            () => _session,
+            RefreshShell,
+            openTextToColumns: TextToColumns,
+            openConsolidate: Consolidate);
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
@@ -909,6 +915,12 @@ public sealed partial class MainWindow : Window
 
         _subtotalMenuItem.Header = "Subtotal...";
         _subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();
+
+        _textToColumnsMenuItem.Header = "Text to Columns...";
+        _textToColumnsMenuItem.Click += async (_, _) => await ShowTextToColumnsDialogAsync();
+
+        _consolidateMenuItem.Header = "Consolidate...";
+        _consolidateMenuItem.Click += async (_, _) => await ShowConsolidateDialogAsync();
 
         _dataValidationPreviewMenuItem.Header = "Data Validation Preview...";
         _dataValidationPreviewMenuItem.Click += async (_, _) => await ShowDataValidationPreviewDialogAsync();
@@ -1254,6 +1266,9 @@ public sealed partial class MainWindow : Window
         dataMenu.Items.Add(_advancedFilterMenuItem);
         dataMenu.Items.Add(_removeDuplicatesMenuItem);
         dataMenu.Items.Add(_subtotalMenuItem);
+        dataMenu.Items.Add(new NativeMenuItemSeparator());
+        dataMenu.Items.Add(_textToColumnsMenuItem);
+        dataMenu.Items.Add(_consolidateMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_dataValidationPreviewMenuItem);
         dataMenu.Items.Add(_dataValidationMenuItem);
@@ -2040,6 +2055,8 @@ public sealed partial class MainWindow : Window
         _advancedFilterMenuItem.IsEnabled = isIdle;
         _removeDuplicatesMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
         _subtotalMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;
+        _textToColumnsMenuItem.IsEnabled = isIdle && _session.SelectedRange.ColCount == 1;
+        _consolidateMenuItem.IsEnabled = isIdle;
         _dataValidationPreviewMenuItem.IsEnabled = isIdle;
         _dataValidationMenuItem.IsEnabled = isIdle;
         _whatIfAnalysisMenuItem.IsEnabled = isIdle;

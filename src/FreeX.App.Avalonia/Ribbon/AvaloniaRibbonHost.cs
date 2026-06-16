@@ -21,11 +21,39 @@ internal static class AvaloniaRibbonHost
     /// <param name="session">Accessor for the live workbook session the format commands act on.</param>
     /// <param name="setStatus">Host refresh hook (redraws the grid and reports a status line).</param>
     public static Control Build(Func<WorkbookSession?> session, Action<string> setStatus)
+        => Build(session, setStatus, openTextToColumns: null, openConsolidate: null);
+
+    /// <summary>
+    /// Builds the ribbon control, additionally wiring the Data-tab <c>Text to Columns</c> and
+    /// <c>Consolidate</c> buttons to host callbacks that open the corresponding dialogs. A null callback
+    /// leaves its button on the no-op registration (so the smoke harness can still build the ribbon).
+    /// </summary>
+    public static Control Build(
+        Func<WorkbookSession?> session,
+        Action<string> setStatus,
+        Action? openTextToColumns,
+        Action? openConsolidate)
     {
         var registry = SampleRibbon.BuildRegistry(session, setStatus);
+        if (openTextToColumns is not null)
+            registry.Register(new RibbonCommandId("data.textToColumns"), new RelayRibbonCommand(openTextToColumns));
+        if (openConsolidate is not null)
+            registry.Register(new RibbonCommandId("data.consolidate"), new RelayRibbonCommand(openConsolidate));
+
         var definition = SampleRibbon.BuildDefinition();
         return AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
     }
+}
+
+/// <summary>An <see cref="IRibbonCommand"/> that invokes a host-supplied callback (e.g. opens a dialog).</summary>
+internal sealed class RelayRibbonCommand : IRibbonCommand
+{
+    private readonly Action _execute;
+
+    public RelayRibbonCommand(Action execute)
+        => _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+
+    public void Execute(RibbonCommandContext context) => _execute();
 }
 
 /// <summary>A do-nothing command — enough to mark a control as registered/enabled.</summary>
@@ -288,6 +316,10 @@ internal static class SampleRibbon
                     g.Dropdown("data.validation", "Data Validation", ValidationMenu(), c => c with
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Logical),
+                    });
+                    g.Button("data.textToColumns", "Text to Columns", c => c with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextColumns),
                     });
                     g.Button("data.consolidate", "Consolidate", c => c with
                     {
