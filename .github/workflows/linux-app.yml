@@ -74,7 +74,8 @@ jobs:
             desktop-file-utils \
             shared-mime-info \
             appstream \
-            fonts-noto-cjk
+            fonts-noto-cjk \
+            imagemagick
 
       - name: Capture runner toolchain evidence
         shell: bash
@@ -265,6 +266,25 @@ jobs:
             echo "app_diagnostics_artifact=freex-$runtime-linux-diagnostics"
           } >> "$evidence_path"
 
+          # Capture a screenshot of the live UI as visual evidence (non-fatal).
+          screenshot="$artifact_root/freex-$runtime-linux-screenshot.png"
+          screenshot_csv="$RUNNER_TEMP/freex-$runtime-shot.csv"
+          printf 'Region,Q1,Q2,Total\nNorth,120,135,255\nSouth,98,110,208\nEast,143,150,293\n' > "$screenshot_csv"
+          cat > "$RUNNER_TEMP/freex-capture.sh" <<CAP
+          #!/usr/bin/env bash
+          set -u
+          "$published/FreeX" "$screenshot_csv" >/tmp/freex-ui.log 2>&1 &
+          app_pid=\$!
+          sleep 10
+          import -window root "$screenshot" 2>/tmp/freex-import.log || true
+          kill "\$app_pid" 2>/dev/null || true
+          CAP
+          screenshot_status="failed"
+          if xvfb-run -a --server-args="-screen 0 1280x820x24" bash "$RUNNER_TEMP/freex-capture.sh" && [[ -f "$screenshot" ]]; then
+            screenshot_status="captured"
+          fi
+          echo "ui_screenshot_status=$screenshot_status" >> "$evidence_path"
+
           # Optional AppImage — non-fatal evidence; the hard gates above already passed.
           # Compute the path directly instead of capturing the builder's stdout (appimagetool
           # is noisy on stdout, which previously corrupted the captured path).
@@ -366,6 +386,7 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-linux-packaging-smoke.log
             artifacts/freex-${{ matrix.runtime }}-linux-launch-smoke.txt
             artifacts/freex-${{ matrix.runtime }}-linux-tester-instructions.md
+            artifacts/freex-${{ matrix.runtime }}-linux-screenshot.png
           if-no-files-found: ignore
           retention-days: 14
 
@@ -379,6 +400,7 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-linux-packaging-smoke.log
             artifacts/freex-${{ matrix.runtime }}-linux-launch-smoke.txt
             artifacts/freex-${{ matrix.runtime }}-linux-tester-instructions.md
+            artifacts/freex-${{ matrix.runtime }}-linux-screenshot.png
             artifacts/freex-${{ matrix.runtime }}-portable-tests.trx
             artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx
             artifacts/freex-${{ matrix.runtime }}-linux-app-diagnostics/**
