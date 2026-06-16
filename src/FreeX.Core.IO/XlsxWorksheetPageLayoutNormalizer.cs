@@ -38,9 +38,18 @@ internal static class XlsxWorksheetPageLayoutNormalizer
             "firstPageNumber",
             "fitToWidth",
             "fitToHeight",
-            "horizontalDpi",
-            "verticalDpi",
             "copies"
+        };
+
+    // horizontalDpi/verticalDpi are unsignedInt in the schema BUT carry a MinInclusive=1 facet.
+    // Excel itself emits horizontalDpi="0"/verticalDpi="0" when a printerSettings part is referenced
+    // (r:id), which the strict OpenXML validator rejects. Treat 0 (or any non-positive) as "unset" and
+    // drop the attribute so the saved sheet schema-validates while preserving genuine positive DPI values.
+    private static readonly IReadOnlySet<string> PageSetupPositiveDpiAttributes =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "horizontalDpi",
+            "verticalDpi"
         };
 
     private static readonly IReadOnlySet<string> PageSetupBooleanAttributes =
@@ -64,6 +73,7 @@ internal static class XlsxWorksheetPageLayoutNormalizer
     private static readonly IReadOnlySet<string> PageSetupAllowedAttributeNames =
         new HashSet<string>(
             PageSetupUnsignedIntAttributes
+                .Concat(PageSetupPositiveDpiAttributes)
                 .Concat(PageSetupBooleanAttributes)
                 .Concat(PageSetupTokenAttributes.Keys),
             StringComparer.Ordinal);
@@ -177,6 +187,8 @@ internal static class XlsxWorksheetPageLayoutNormalizer
 
         foreach (var attributeName in PageSetupUnsignedIntAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pageSetup, attributeName, XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
+        foreach (var attributeName in PageSetupPositiveDpiAttributes)
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pageSetup, attributeName, NormalizePositiveUnsignedIntOrNull);
         foreach (var attributeName in PageSetupBooleanAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pageSetup, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
         foreach (var (attributeName, allowedValues) in PageSetupTokenAttributes)
@@ -270,6 +282,18 @@ internal static class XlsxWorksheetPageLayoutNormalizer
 
         attribute.Value = normalized;
         return true;
+    }
+
+    // Returns the normalized unsigned-int string only when it is >= 1; otherwise null so the caller
+    // removes the attribute (the schema's MinInclusive=1 facet rejects 0).
+    private static string? NormalizePositiveUnsignedIntOrNull(string? value)
+    {
+        var normalized = XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull(value);
+        if (normalized is null)
+            return null;
+        return uint.TryParse(normalized, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) && parsed >= 1
+            ? normalized
+            : null;
     }
 
     private static string? NormalizeNonNegativeDouble(string? value)
