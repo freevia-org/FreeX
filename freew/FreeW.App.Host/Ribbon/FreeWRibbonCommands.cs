@@ -148,6 +148,12 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.font-color", new ColorPickCommand(editor, isHighlight: false));
         registry.Register("freew.highlight", new ColorPickCommand(editor, isHighlight: true));
 
+        // Home > Font: clear all character formatting in the selection (reset every run to the document
+        // default, keeping text). Insert > Pages: apply a drop cap (enlarged leading letter) to the
+        // caret's paragraph. Both route through the view's undo/redo bus and re-render.
+        registry.Register("freew.clear-formatting", new ActionCommand(() => editor.ClearFormatting()));
+        registry.Register("freew.drop-cap", new ActionCommand(() => editor.ApplyDropCap()));
+
         // Home > Paragraph: set line spacing (a multiplier on the default font size) over the selection,
         // and toggle Add/Remove Space Before/After. All route through the view's undo/redo bus.
         registry.Register("freew.line-spacing", new LineSpacingCommand(editor));

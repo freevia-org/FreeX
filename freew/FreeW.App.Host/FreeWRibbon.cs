@@ -40,6 +40,7 @@ internal static class FreeWRibbon
                     g.Button("freew.highlight", "Highlight");
                     g.Button("freew.grow-font", "Grow");
                     g.Button("freew.shrink-font", "Shrink");
+                    g.Button("freew.clear-formatting", "Clear Formatting");
                 });
                 tab.Group("paragraph", "Paragraph", "P", 80, g =>
                 {
@@ -78,6 +79,7 @@ internal static class FreeWRibbon
                     g.Button("freew.blank-page", "Blank Page");
                     g.Button("freew.horizontal-rule", "Horizontal Rule");
                     g.Button("freew.page-break", "Page Break");
+                    g.Button("freew.drop-cap", "Drop Cap");
                 });
                 tab.Group("tables", "Tables", "T", 90, g => g.Button("freew.table", "Table"));
                 tab.Group("table-tools", "Table Tools", "B", 85, g =>
