@@ -191,4 +191,23 @@ public sealed class LinuxPackagingMetadataTests
         foreach (var forbidden in new[] { "codesign", "notarytool", "MACOS_CODESIGN", "lsregister", "spctl", "Developer ID" })
             workflow.Should().NotContain(forbidden);
     }
+
+    [Fact]
+    public void LinuxUiLane_CapturesScreenshotAndProvidesReusableDockerTool()
+    {
+        // The UI lane captures a screenshot of the live window as visual evidence and uploads it.
+        var workflow = File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "linux-app.yml"));
+        workflow.Should().Contain("imagemagick");
+        workflow.Should().Contain("import -window root");
+        workflow.Should().Contain("ui_screenshot_status");
+        workflow.Should().Contain("linux-screenshot.png");
+
+        // A reusable local tool reproduces the containerized UI smoke + screenshot for Windows devs.
+        var tool = File.ReadAllText(RepositoryFileLocator.Find("tools", "Run-LinuxAppInDocker.ps1"));
+        tool.Should().Contain("docker run");
+        tool.Should().Contain("--packaging-smoke");
+        tool.Should().Contain("--launch-smoke");
+        tool.Should().Contain("import -window root");
+        tool.Should().Contain("freex-linux-screenshot.png");
+    }
 }

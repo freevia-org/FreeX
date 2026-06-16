@@ -39,7 +39,12 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(titleBar, Dock.Top);
         root.Children.Add(titleBar);
 
-        var ribbon = BuildRibbon(FreeWRibbon.Build());
+        var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
+        editor.LoadModel(CreateSampleDocument());
+        var stateStore = new RibbonStateStore();
+        var commands = FreeWRibbonCommands.Build(editor, stateStore);
+
+        var ribbon = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
@@ -48,8 +53,6 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(status, Dock.Bottom);
         root.Children.Add(status);
 
-        var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
-        editor.LoadModel(CreateSampleDocument());
         root.Children.Add(editor);
 
         Content = root;
@@ -99,7 +102,7 @@ public sealed class MainWindow : Window
 
     // --- Minimal ribbon renderer over the shared RibbonDefinition model ---
 
-    private static UIElement BuildRibbon(RibbonDefinition definition)
+    private static UIElement BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
         var tabs = new TabControl
         {
@@ -109,7 +112,7 @@ public sealed class MainWindow : Window
         };
 
         foreach (var tab in definition.Tabs)
-            tabs.Items.Add(new TabItem { Header = tab.Header, Content = BuildTab(tab) });
+            tabs.Items.Add(new TabItem { Header = tab.Header, Content = BuildTab(tab, registry, stateStore) });
 
         if (tabs.Items.Count > 0)
             tabs.SelectedIndex = 0;
@@ -123,7 +126,7 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static UIElement BuildTab(RibbonTab tab)
+    private static UIElement BuildTab(RibbonTab tab, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
         var lane = new StackPanel
         {
@@ -132,7 +135,7 @@ public sealed class MainWindow : Window
         };
 
         foreach (var group in tab.Groups)
-            lane.Children.Add(BuildGroup(group));
+            lane.Children.Add(BuildGroup(group, registry, stateStore));
 
         return new ScrollViewer
         {
@@ -142,12 +145,12 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static UIElement BuildGroup(RibbonGroup group)
+    private static UIElement BuildGroup(RibbonGroup group, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
         var controls = new WrapPanel { MaxWidth = 220, Margin = new Thickness(4, 2, 4, 2) };
         foreach (var control in group.Controls)
         {
-            var element = BuildControl(control);
+            var element = BuildControl(control, registry, stateStore);
             if (element is not null)
                 controls.Children.Add(element);
         }
@@ -174,22 +177,37 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static UIElement? BuildControl(RibbonControl control) => control switch
+    private static UIElement? BuildControl(RibbonControl control, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
-        RibbonSeparator or RibbonRowBreak => null,
-        RibbonToggleButton toggle => new ToggleButton
+        if (control is RibbonSeparator or RibbonRowBreak)
+            return null;
+
+        var thickness = new Thickness(2);
+        var padding = new Thickness(8, 4, 8, 4);
+        registry.TryGet(control.CommandId, out var command);
+
+        void Execute() => command?.Execute(RibbonCommandContext.Empty);
+
+        if (control is RibbonToggleButton)
         {
-            Content = toggle.Label,
-            Margin = new Thickness(2),
-            Padding = new Thickness(8, 4, 8, 4),
-            MinWidth = 60
-        },
-        _ => new Button
-        {
-            Content = control.Label,
-            Margin = new Thickness(2),
-            Padding = new Thickness(8, 4, 8, 4),
-            MinWidth = 60
+            var id = control.CommandId;
+            var toggle = new ToggleButton { Content = control.Label, Margin = thickness, Padding = padding, MinWidth = 60 };
+            if (command is IRibbonStatefulCommand stateful)
+                toggle.IsChecked = stateful.GetState().IsChecked;
+            // Observe the shared state store so the toggle reflects the current selection live.
+            stateStore.StateChanged += (_, e) =>
+            {
+                if (e.Id == id)
+                    toggle.IsChecked = e.State.IsChecked;
+            };
+            toggle.Click += (_, _) => Execute();
+            toggle.IsEnabled = command is not null;
+            return toggle;
         }
-    };
+
+        var button = new Button { Content = control.Label, Margin = thickness, Padding = padding, MinWidth = 60 };
+        button.Click += (_, _) => Execute();
+        button.IsEnabled = command is not null;
+        return button;
+    }
 }
