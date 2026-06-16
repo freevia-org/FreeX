@@ -348,6 +348,9 @@ public sealed partial class Sheet
     /// <summary>Sparklines embedded in cells on this sheet.</summary>
     public List<SparklineModel> Sparklines { get; } = [];
 
+    /// <summary>Legacy Excel form controls (checkboxes, option buttons, spinners, scroll bars, etc.) loaded from XLSX.</summary>
+    public List<FormControlModel> FormControls { get; } = [];
+
     /// <summary>Conditional formatting rules applied to this sheet, ordered by priority.</summary>
     public ConditionalFormatCollection ConditionalFormats { get; } = [];
 

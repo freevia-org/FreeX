@@ -68,6 +68,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<XlsxTextBoxPackagePart> TextBoxParts,
         IReadOnlyList<XlsxShapePackagePart> ShapeParts,
         IReadOnlyList<SparklineModel> Sparklines,
+        IReadOnlyList<FormControlModel> FormControls,
         IReadOnlyList<ConditionalFormat> AdvancedConditionalFormats,
         IReadOnlyList<DataValidationNativeMetadata> DataValidationNativeMetadata,
         IgnoredErrorLayout IgnoredErrors,
@@ -274,6 +275,7 @@ public sealed partial class XlsxFileAdapter
         var headerFooterPictures = XlsxHeaderFooterPictureReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var drawingParts = XlsxWorksheetDrawingPartReader.ReadParts(archive, worksheetPath, worksheetXml);
         var sparklines = XlsxSparklineMapper.Read(worksheetXml);
+        var formControls = XlsxFormControlMapper.ReadWorksheet(archive, worksheetPath, worksheetXml);
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles, workbookTheme, indexedColors);
         var dataValidationNativeMetadata = XlsxDataValidationNativeMetadataMapper.Read(worksheetXml, worksheetNs);
         var ignoredErrors = XlsxWorksheetDiagnosticsMapper.ReadIgnoredErrors(worksheetXml, worksheetNs);
@@ -388,6 +390,7 @@ public sealed partial class XlsxFileAdapter
             drawingParts.TextBoxParts,
             drawingParts.ShapeParts,
             sparklines,
+            formControls,
             advancedConditionalFormats,
             dataValidationNativeMetadata,
             ignoredErrors,

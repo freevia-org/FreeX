@@ -62,6 +62,53 @@ public static partial class ChartRenderer
             ? Math.Clamp(0.5 * 100.0 / (100.0 + gapWidth), 0.05, 0.49)
             : 0.35;
 
+    /// <summary>
+    /// Counts the clustered (grouped) bar/column series that share a single category slot —
+    /// i.e. the Column/Bar series that are NOT promoted to a combo line or combo scatter overlay.
+    /// A clustered chart with N such series draws N bars SIDE BY SIDE within each category.
+    /// Stacked variants are handled separately and never reach this path.
+    /// </summary>
+    private static int CountClusteredBarSeries(
+        ChartModel chart,
+        uint dataStartCol,
+        uint endCol)
+    {
+        var count = 0;
+        for (var col = dataStartCol; col <= endCol; col++)
+        {
+            if (ShouldSkipScatterXColumn(chart, col, dataStartCol))
+                continue;
+
+            var seriesIndex = GetSeriesIndex(chart, col, dataStartCol);
+            if (IsComboLineSeries(chart, seriesIndex) || IsComboScatterSeries(chart, seriesIndex))
+                continue;
+
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Returns the left/right x-offsets (relative to the category centre) for the bar of the
+    /// <paramref name="clusterOrdinal"/>-th clustered series, given the full category half-width
+    /// and the total clustered-series count. With one series the bar fills the whole slot; with N
+    /// series each occupies a disjoint 1/N sub-slot so the bars sit side by side (Excel's clustered
+    /// layout).
+    /// </summary>
+    private static (double Left, double Right) ClusteredBarOffsets(
+        double halfWidth,
+        int clusterOrdinal,
+        int clusterCount)
+    {
+        if (clusterCount <= 1)
+            return (-halfWidth, halfWidth);
+
+        var slotWidth = 2.0 * halfWidth / clusterCount;
+        var left = -halfWidth + clusterOrdinal * slotWidth;
+        return (left, left + slotWidth);
+    }
+
     private static bool ShouldSkipScatterXColumn(ChartModel chart, uint col, uint dataStartCol) =>
         chart.Type == ChartType.Scatter
             && !chart.FirstColIsCategories

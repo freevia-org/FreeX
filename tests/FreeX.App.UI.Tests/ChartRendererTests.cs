@@ -183,6 +183,55 @@ public sealed partial class ChartRendererTests
     }
 
     [Fact]
+    public void ClusteredColumnChart_PlacesSeriesSideBySideWithinCategorySlot()
+    {
+        // A clustered (grouped) Column chart with two series must draw the two bars for each
+        // category SIDE BY SIDE, not stacked on top of each other. Each series' RectangleBarItem
+        // x-window must be a disjoint sub-slot within the category's full bar width.
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [],
+            [],
+            [],
+            ChartDataCells:
+            [
+                ChartCell(sheetId, 1, 1, "Cat", new TextValue("Cat")),
+                ChartCell(sheetId, 1, 2, "Budget", new TextValue("Budget")),
+                ChartCell(sheetId, 1, 3, "Actual", new TextValue("Actual")),
+                ChartCell(sheetId, 2, 1, "A", new TextValue("A")),
+                ChartCell(sheetId, 2, 2, "10", new NumberValue(10)),
+                ChartCell(sheetId, 2, 3, "20", new NumberValue(20)),
+                ChartCell(sheetId, 3, 1, "B", new TextValue("B")),
+                ChartCell(sheetId, 3, 2, "30", new NumberValue(30)),
+                ChartCell(sheetId, 3, 3, "40", new NumberValue(40))
+            ]));
+
+        var barSeries = model.Series.OfType<RectangleBarSeries>().ToList();
+        barSeries.Should().HaveCount(2);
+
+        // For category index 0, the two series' x-windows must not overlap.
+        var s0 = barSeries[0].Items[0];
+        var s1 = barSeries[1].Items[0];
+        var s0Left = Math.Min(s0.X0, s0.X1);
+        var s0Right = Math.Max(s0.X0, s0.X1);
+        var s1Left = Math.Min(s1.X0, s1.X1);
+        var s1Right = Math.Max(s1.X0, s1.X1);
+
+        // Disjoint: one series entirely left of the other within the slot.
+        (s0Right <= s1Left + 1e-9 || s1Right <= s0Left + 1e-9)
+            .Should().BeTrue("clustered columns must sit side-by-side, not overlap");
+        // Both windows stay within the category's full slot [-0.5, +0.5] around index 0.
+        s0Left.Should().BeGreaterThanOrEqualTo(-0.5);
+        s1Right.Should().BeLessThanOrEqualTo(0.5);
+    }
+
+    [Fact]
     public void ChartRenderer_DoesNotRenderMapChart()
     {
         var sheetId = SheetId.New();

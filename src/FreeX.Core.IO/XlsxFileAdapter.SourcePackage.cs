@@ -68,6 +68,8 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
         if (sourceParts.HasDrawings)
             XlsxWorksheetVmlReferencePreserver.Preserve(sourceArchive, generatedArchive, context, workbook);
+        if (sourceParts.HasFormControls)
+            XlsxWorksheetFormControlPreserver.Preserve(sourceArchive, generatedArchive, context);
         if (sourceParts.HasLegacyComments)
             XlsxLegacyCommentPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         if (sourceParts.HasSharedStrings)
@@ -97,6 +99,7 @@ public sealed partial class XlsxFileAdapter
         public bool HasPrinterSettings;
         public bool HasSharedStrings;
         public bool HasLegacyComments;
+        public bool HasFormControls;
     }
 
     private static SourcePackagePartSummary InspectSourcePackageParts(ZipArchive archive)
@@ -118,6 +121,7 @@ public sealed partial class XlsxFileAdapter
             summary.HasPrinterSettings |= fullName.StartsWith("xl/printerSettings/", StringComparison.OrdinalIgnoreCase);
             summary.HasSharedStrings |= fullName.Equals("xl/sharedStrings.xml", StringComparison.OrdinalIgnoreCase);
             summary.HasLegacyComments |= fullName.StartsWith("xl/comments", StringComparison.OrdinalIgnoreCase);
+            summary.HasFormControls |= fullName.StartsWith("xl/ctrlProps/", StringComparison.OrdinalIgnoreCase);
 
             if (summary.HasPivotPackageParts &&
                 summary.HasStructuredTables &&
@@ -126,7 +130,8 @@ public sealed partial class XlsxFileAdapter
                 summary.HasDrawings &&
                 summary.HasPrinterSettings &&
                 summary.HasSharedStrings &&
-                summary.HasLegacyComments)
+                summary.HasLegacyComments &&
+                summary.HasFormControls)
             {
                 break;
             }

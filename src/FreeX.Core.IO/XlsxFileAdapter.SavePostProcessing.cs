@@ -133,6 +133,17 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetDiagnosticsMapper.SaveIgnoredErrors(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        // Persist cached values onto formula cells so FreeX's own ClosedXML reload never recomputes
+        // them. ClosedXML's calc engine cannot evaluate modern dynamic-array functions (throws
+        // "Array formulas not implemented") and produces spurious cycle errors on incomplete caches —
+        // see XlsxWorksheetFormulaCachedValueWriter. (This call handles the no-source-package /
+        // ClosedXML-authored path; the source-package path re-applies after part preservation.)
+        if (featurePlan.HasCellFormulas)
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetFormulaCachedValueWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.WatchedCells.Count > 0)
         {
             packageStream.Position = 0;
@@ -247,6 +258,17 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         var sourceParts = PreserveSourcePackageParts(workbook, packageStream);
+
+        // Re-apply after source-part preservation: PreserveSourcePackageParts restores Excel's
+        // original worksheet XML, which can carry formulas (notably dynamic arrays stored as
+        // <f t="array" ca="1">) WITHOUT a cached <v>. FreeX's own ClosedXML reload would then
+        // recompute and throw. Inject the cached value the model holds so the reload never recomputes.
+        // (The earlier pre-preservation call handles the no-source-package / ClosedXML-authored path.)
+        if (featurePlan.HasCellFormulas)
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetFormulaCachedValueWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
 
         if (sourceParts.HasDrawings)
         {
