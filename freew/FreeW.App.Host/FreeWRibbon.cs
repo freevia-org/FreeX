@@ -73,6 +73,10 @@ internal static class FreeWRibbon
                     g.Button("freew.orientation", "Orientation");
                     g.Button("freew.size", "Size");
                 });
+                tab.Group("preview", "Preview", "V", 90, g =>
+                {
+                    g.Button("freew.print-preview", "Print Preview");
+                });
             })
             .Build();
 }

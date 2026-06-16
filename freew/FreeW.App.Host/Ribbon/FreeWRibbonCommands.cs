@@ -20,7 +20,10 @@ namespace FreeW.App.Host;
 /// </summary>
 internal static class FreeWRibbonCommands
 {
-    public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore)
+    public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore) =>
+        Build(editor, stateStore, onPrintPreview: null);
+
+    public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore, Action? onPrintPreview)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -96,7 +99,17 @@ internal static class FreeWRibbonCommands
             (page.WidthPt, page.HeightPt) = isLetter ? (595.0, 842.0) : (612.0, 792.0); // toggle Letter <-> A4
         }));
 
+        // Layout tab — open the modeless print-preview window (paginated, page-settings-aware).
+        if (onPrintPreview is not null)
+            registry.Register("freew.print-preview", new ActionCommand(onPrintPreview));
+
         return registry;
+    }
+
+    // A parameterless ribbon command that runs a host-supplied action (e.g. opening a window).
+    private sealed class ActionCommand(Action action) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) => action();
     }
 
     // Applies a named paragraph style's formatting (size/weight/colour) to the current selection.
