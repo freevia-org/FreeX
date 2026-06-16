@@ -149,11 +149,9 @@ public sealed class MainWindow : Window
         if (dialog.ShowDialog() != true)
             return;
 
-        // Build a fresh, page-settings-aware FlowDocument (display-only clone of the editor content)
-        // and let its paginator break the flow into pages at the model's geometry.
-        var printDoc = PrintLayout.BuildPaginatedDocument(_editor);
-        var paginator = ((System.Windows.Documents.IDocumentPaginatorSource)printDoc).DocumentPaginator;
-        paginator.PageSize = new Size(pageWidth, pageHeight);
+        // Build a fresh, page-settings-aware paginator (display-only clone of the editor content),
+        // breaking the flow into pages at the model's geometry and overlaying any header/footer.
+        var paginator = PrintLayout.BuildPaginator(_editor);
         dialog.PrintDocument(paginator, "FreeW Document");
     }
 

@@ -496,6 +496,134 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Header_And_Footer_Text_RoundTrip()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Header = new HeaderFooter("Confidential Report");
+        doc.Footer = new HeaderFooter("Company Inc.");
+
+        var result = RoundTrip(doc);
+
+        result.Header.Should().NotBeNull();
+        result.Header!.PlainText.Should().Be("Confidential Report");
+        result.Footer.Should().NotBeNull();
+        result.Footer!.PlainText.Should().Be("Company Inc.");
+    }
+
+    [Fact]
+    public void Footer_PageNumberField_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        var footer = new HeaderFooter();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Page "));
+        paragraph.Runs.Add(Run.PageNumberField());
+        footer.Paragraphs.Add(paragraph);
+        doc.Footer = footer;
+
+        var result = RoundTrip(doc);
+
+        result.Footer.Should().NotBeNull();
+        var runs = result.Footer!.Paragraphs.Single().Runs;
+        runs[0].Text.Should().Be("Page ");
+        runs[0].FieldKind.Should().Be(RunFieldKind.None);
+        runs[1].FieldKind.Should().Be(RunFieldKind.PageNumber);
+    }
+
+    [Fact]
+    public void HeaderFooter_RunFormatting_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        var header = new HeaderFooter();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Bold header", new RunFormatting { Bold = true, FontSizePt = 14 }));
+        header.Paragraphs.Add(paragraph);
+        doc.Header = header;
+
+        var formatting = RoundTrip(doc).Header!.Paragraphs.Single().Runs[0].Formatting;
+
+        formatting.Bold.Should().BeTrue();
+        formatting.FontSizePt.Should().Be(14);
+    }
+
+    [Fact]
+    public void HeaderFooter_Package_HasPartsContentTypesAndRelationships()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Header = new HeaderFooter("Header text");
+        var footer = new HeaderFooter();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.PageNumberField());
+        footer.Paragraphs.Add(paragraph);
+        doc.Footer = footer;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/header1.xml").Should().NotBeNull();
+        zip.GetEntry("word/footer1.xml").Should().NotBeNull();
+
+        using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+        var contentTypes = ctReader.ReadToEnd();
+        contentTypes.Should().Contain("/word/header1.xml");
+        contentTypes.Should().Contain("/word/footer1.xml");
+        contentTypes.Should().Contain("wordprocessingml.header+xml");
+        contentTypes.Should().Contain("wordprocessingml.footer+xml");
+
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        var rels = relsReader.ReadToEnd();
+        rels.Should().Contain("relationships/header");
+        rels.Should().Contain("relationships/footer");
+        rels.Should().Contain("header1.xml");
+        rels.Should().Contain("footer1.xml");
+
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = docReader.ReadToEnd();
+        documentXml.Should().Contain("headerReference");
+        documentXml.Should().Contain("footerReference");
+
+        using var footerReader = new StreamReader(zip.GetEntry("word/footer1.xml")!.Open());
+        var footerXml = footerReader.ReadToEnd();
+        footerXml.Should().Contain("fldSimple");
+        footerXml.Should().Contain(" PAGE ");
+    }
+
+    [Fact]
+    public void EmptyHeaderFooter_DoesNotEmitParts()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Header = new HeaderFooter();  // no paragraphs => empty
+        doc.Footer = null;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/header1.xml").Should().BeNull();
+        zip.GetEntry("word/footer1.xml").Should().BeNull();
+    }
+
+    [Fact]
+    public void NoHeaderFooter_RoundTripsAsNull()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+
+        var result = RoundTrip(doc);
+
+        result.Header.Should().BeNull();
+        result.Footer.Should().BeNull();
+    }
+
+    [Fact]
     public void Read_NonWordZip_Throws()
     {
         using var stream = new MemoryStream();

@@ -51,7 +51,86 @@ public static class DocxReader
         if (document.Blocks.Count == 0)
             document.Blocks.Add(new Paragraph());
 
+        ReadHeaderFooter(documentXml, archive, document, imageRelationships, hyperlinkRelationships);
+
         return document;
+    }
+
+    /// <summary>
+    /// Resolves the default header/footer references in w:sectPr (r:id → document rels → part path),
+    /// loads those parts (w:hdr / w:ftr) and reconstructs <see cref="TextDocument.Header"/> / Footer.
+    /// </summary>
+    private static void ReadHeaderFooter(
+        XDocument documentXml,
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+    {
+        var sectPr = documentXml.Root?.Element(W + "body")?.Element(W + "sectPr");
+        if (sectPr is null)
+            return;
+
+        var partsById = ReadHeaderFooterRelationships(archive);
+
+        document.Header = ReadHeaderFooterPart(
+            sectPr, "headerReference", W + "hdr", partsById, archive, imageRelationships, hyperlinkRelationships);
+        document.Footer = ReadHeaderFooterPart(
+            sectPr, "footerReference", W + "ftr", partsById, archive, imageRelationships, hyperlinkRelationships);
+    }
+
+    private static HeaderFooter? ReadHeaderFooterPart(
+        XElement sectPr,
+        string referenceName,
+        XName rootName,
+        IReadOnlyDictionary<string, string> partsById,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+    {
+        // Prefer the default reference; fall back to the first reference of this kind if present.
+        var references = sectPr.Elements(W + referenceName).ToList();
+        if (references.Count == 0)
+            return null;
+        var reference = references.FirstOrDefault(r => r.Attribute(W + "type")?.Value == "default") ?? references[0];
+
+        var id = reference.Attribute(R + "id")?.Value;
+        if (id is null || !partsById.TryGetValue(id, out var partPath))
+            return null;
+
+        var partXml = LoadPart(archive, partPath);
+        var root = partXml?.Root;
+        if (root is null || root.Name != rootName)
+            return null;
+
+        var result = new HeaderFooter();
+        // Header/footer paragraphs carry no list numbering context (numbering.xml targets the body).
+        var noNumbering = new Dictionary<int, ListKind>();
+        foreach (var p in root.Elements(W + "p"))
+            result.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+        return result;
+    }
+
+    /// <summary>Maps relationship id → part path for header/footer relationships in document.xml.rels.</summary>
+    private static Dictionary<string, string> ReadHeaderFooterRelationships(ZipArchive archive)
+    {
+        var map = new Dictionary<string, string>();
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return map;
+
+        foreach (var rel in relationships)
+        {
+            var type = rel.Attribute("Type")?.Value;
+            if (type is null || !(type.EndsWith("/header", StringComparison.Ordinal) || type.EndsWith("/footer", StringComparison.Ordinal)))
+                continue;
+            var id = rel.Attribute("Id")?.Value;
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(target))
+                map[id] = "word/" + target.TrimStart('/');
+        }
+        return map;
     }
 
     private static XDocument? LoadPart(ZipArchive archive, string entryPath)
@@ -94,9 +173,34 @@ public static class DocxReader
                 foreach (var r in child.Elements(W + "r"))
                     AddRun(paragraph, r, archive, imageRelationships, url);
             }
+            else if (child.Name == W + "fldSimple")
+            {
+                AddSimpleField(paragraph, child);
+            }
         }
 
         return paragraph;
+    }
+
+    /// <summary>
+    /// Reads a w:fldSimple. A " PAGE " field becomes a page-number field run; any other field is
+    /// flattened to its cached display text (the text inside the wrapped run) so nothing is lost.
+    /// </summary>
+    private static void AddSimpleField(Paragraph paragraph, XElement fldSimple)
+    {
+        var instruction = fldSimple.Attribute(W + "instr")?.Value ?? string.Empty;
+        var inner = fldSimple.Element(W + "r");
+        var text = string.Concat(fldSimple.Descendants(W + "t").Select(t => t.Value));
+        var formatting = ReadRunFormatting(inner?.Element(W + "rPr"));
+
+        if (instruction.Trim().Equals("PAGE", StringComparison.OrdinalIgnoreCase))
+        {
+            paragraph.Runs.Add(new Run(text.Length > 0 ? text : "1", formatting) { FieldKind = RunFieldKind.PageNumber });
+        }
+        else if (text.Length > 0)
+        {
+            paragraph.Runs.Add(new Run(text, formatting));
+        }
     }
 
     private static void AddRun(
