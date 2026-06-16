@@ -292,12 +292,29 @@ public static class DocxReader
         var borders = tbl.Element(W + "tblPr")?.Element(W + "tblBorders");
         table.Formatting = TableFormatting.Default with { Borders = ReadBorders(borders) };
 
+        // The table grid (w:tblGrid/w:gridCol) carries per-column widths in dxa.
+        var grid = tbl.Element(W + "tblGrid");
+        if (grid is not null)
+        {
+            foreach (var gridCol in grid.Elements(W + "gridCol"))
+                table.ColumnWidthsPt.Add(DxaToPoints(gridCol.Attribute(W + "w")?.Value));
+        }
+
         foreach (var tr in tbl.Elements(W + "tr"))
         {
             var row = new TableRow();
             foreach (var tc in tr.Elements(W + "tc"))
             {
                 var cell = new TableCell();
+                var tcPr = tc.Element(W + "tcPr");
+                if (tcPr is not null)
+                {
+                    var width = tcPr.Element(W + "tcW")?.Attribute(W + "w")?.Value;
+                    if (width is not null)
+                        cell.WidthPt = DxaToPoints(width);
+                    var shading = tcPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
+                    cell.ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#');
+                }
                 foreach (var p in tc.Elements(W + "p"))
                     cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, numbering));
                 if (cell.Paragraphs.Count == 0)

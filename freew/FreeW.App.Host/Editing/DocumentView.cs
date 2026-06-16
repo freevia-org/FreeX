@@ -208,6 +208,26 @@ public sealed class DocumentView : RichTextBox
         new DeleteTableColumnCommand(index, columnIndex));
 
     /// <summary>
+    /// Set (or clear, when <paramref name="colorHex"/> is null/empty) the background shading of the
+    /// table cell containing the caret. Commits pending edits, mutates the model cell directly, and
+    /// re-renders so the fill shows immediately and round-trips through save. No-op outside a table.
+    /// </summary>
+    public void SetCaretCellShading(string? colorHex)
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        var cells = table.Rows[rowIndex].Cells;
+        if (columnIndex < 0 || columnIndex >= cells.Count)
+            return;
+        cells[columnIndex].ShadingColorHex = string.IsNullOrEmpty(colorHex) ? null : colorHex;
+        Render();
+    }
+
+    /// <summary>
     /// Resize the currently selected inline image to <paramref name="widthPt"/> points wide, scaling
     /// the height to preserve aspect ratio. Routes through the bus (undoable). No-op without a selection.
     /// </summary>
@@ -648,6 +668,19 @@ public sealed class DocumentView : RichTextBox
     private static ModelTable ReadTable(WpfTable wpfTable, TextDocument document)
     {
         var table = new ModelTable();
+
+        // Preserve column widths (column-level in WPF) so the docx tblGrid round-trips through edit.
+        foreach (var column in wpfTable.Columns)
+        {
+            if (column.Width.IsAbsolute && column.Width.Value > 0)
+                table.ColumnWidthsPt.Add(column.Width.Value / PxPerPoint);
+            else
+                table.ColumnWidthsPt.Add(0);
+        }
+        // Drop the grid entirely if no column carried an explicit width (keeps plain tables unchanged).
+        if (table.ColumnWidthsPt.All(w => w <= 0))
+            table.ColumnWidthsPt.Clear();
+
         foreach (var rowGroup in wpfTable.RowGroups)
         {
             foreach (var wpfRow in rowGroup.Rows)
@@ -655,7 +688,10 @@ public sealed class DocumentView : RichTextBox
                 var row = new ModelTableRow();
                 foreach (var wpfCell in wpfRow.Cells)
                 {
-                    var cell = new ModelTableCell();
+                    var cell = new ModelTableCell
+                    {
+                        ShadingColorHex = wpfCell.Background is SolidColorBrush shading ? ToHex(shading.Color) : null
+                    };
                     foreach (var cellBlock in wpfCell.Blocks)
                     {
                         if (cellBlock is WpfParagraph cellParagraph)
@@ -685,7 +721,15 @@ public sealed class DocumentView : RichTextBox
         var wpf = new WpfTable();
         var columns = table.ColumnCount;
         for (var c = 0; c < columns; c++)
-            wpf.Columns.Add(new TableColumn());
+        {
+            var column = new TableColumn();
+            // WPF FlowDocument tables only support column-level (not per-cell) widths, so the model's
+            // column widths drive TableColumn.Width here; per-cell widths are preserved in the model
+            // for docx round-trip but not individually rendered.
+            if (c < table.ColumnWidthsPt.Count && table.ColumnWidthsPt[c] > 0)
+                column.Width = new GridLength(table.ColumnWidthsPt[c] * PxPerPoint);
+            wpf.Columns.Add(column);
+        }
 
         var borderBrush = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A));
         if (table.Formatting.Borders)
@@ -709,6 +753,8 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.BorderBrush = borderBrush;
                     wpfCell.BorderThickness = new Thickness(0.5);
                 }
+                if (modelCell.ShadingColorHex is { Length: > 0 } cellShading)
+                    wpfCell.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(cellShading));
                 if (modelCell.Paragraphs.Count == 0)
                 {
                     wpfCell.Blocks.Add(BuildParagraph(new ModelParagraph(), document));

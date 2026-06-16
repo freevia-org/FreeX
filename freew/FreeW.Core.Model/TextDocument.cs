@@ -137,6 +137,19 @@ public sealed class TableCell
 {
     public List<Paragraph> Paragraphs { get; } = [];
 
+    /// <summary>
+    /// Cell background shading as an RRGGBB hex (e.g. <c>"#FFFF00"</c>). Null means no shading.
+    /// Round-trips to docx as cell shading (<c>tc/tcPr/w:shd w:fill</c>), mirroring
+    /// <see cref="ParagraphFormatting.ShadingColorHex"/> and <see cref="RunFormatting.HighlightColorHex"/>.
+    /// </summary>
+    public string? ShadingColorHex { get; set; }
+
+    /// <summary>
+    /// Preferred cell width in points (<c>tc/tcPr/w:tcW</c>), or null for automatic width. Optional so
+    /// existing cells are unaffected.
+    /// </summary>
+    public double? WidthPt { get; set; }
+
     public TableCell() { }
 
     public TableCell(string text) => Paragraphs.Add(new Paragraph(text));
@@ -163,6 +176,13 @@ public sealed class Table : Block
 {
     public List<TableRow> Rows { get; } = [];
     public TableFormatting Formatting { get; set; } = TableFormatting.Default;
+
+    /// <summary>
+    /// Per-column widths in points, one entry per column, matching the docx table grid
+    /// (<c>w:tbl/w:tblGrid/w:gridCol</c>). Empty when no explicit grid is known (the default), so
+    /// existing tables are unaffected.
+    /// </summary>
+    public List<double> ColumnWidthsPt { get; } = [];
 
     public Table() { }
 
