@@ -8,6 +8,7 @@
   </Folder>
   <Folder Name="/freew/">
     <Project Path="freew/FreeW.Core.Model/FreeW.Core.Model.csproj" />
+    <Project Path="freew/FreeW.Core.Model.Tests/FreeW.Core.Model.Tests.csproj" />
     <Project Path="freew/FreeW.App.Host/FreeW.App.Host.csproj" />
   </Folder>
 </Solution>
