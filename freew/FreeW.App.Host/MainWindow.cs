@@ -1,8 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Documents;
 using System.Windows.Media;
+using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -21,8 +21,6 @@ public sealed class MainWindow : Window
         Width = 1040;
         Height = 720;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
-
-        var document = TextDocument.CreateEmpty();
 
         var root = new DockPanel();
 
@@ -50,18 +48,8 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(status, Dock.Bottom);
         root.Children.Add(status);
 
-        var editor = new RichTextBox
-        {
-            Margin = new Thickness(40, 24, 40, 24),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(48),
-            FontFamily = new FontFamily("Calibri"),
-            FontSize = 16,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-        };
-        editor.Document = new FlowDocument(new System.Windows.Documents.Paragraph(
-            new System.Windows.Documents.Run(document.PlainText.Length == 0 ? "Start typing your document…" : document.PlainText)));
+        var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
+        editor.LoadModel(CreateSampleDocument());
         root.Children.Add(editor);
 
         Content = root;
@@ -78,6 +66,35 @@ public sealed class MainWindow : Window
         {
             return $"%LOCALAPPDATA%\\{AppProduct.Current.ProductDirectoryName}";
         }
+    }
+
+    // A sample document that exercises the model's styles + run/paragraph formatting.
+    private static TextDocument CreateSampleDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Paragraphs.Clear();
+
+        doc.Paragraphs.Add(new Paragraph("Welcome to FreeW") { StyleId = "Title" });
+        doc.Paragraphs.Add(new Paragraph("A free word processor") { StyleId = "Heading1" });
+
+        var intro = new Paragraph();
+        intro.Runs.Add(new Run("This document is rendered from the FreeW model. Formatting like "));
+        intro.Runs.Add(new Run("bold", new RunFormatting { Bold = true }));
+        intro.Runs.Add(new Run(", "));
+        intro.Runs.Add(new Run("italic", new RunFormatting { Italic = true }));
+        intro.Runs.Add(new Run(", "));
+        intro.Runs.Add(new Run("underline", new RunFormatting { Underline = true }));
+        intro.Runs.Add(new Run(" and "));
+        intro.Runs.Add(new Run("colour", new RunFormatting { ColorHex = "#C0504D", Bold = true }));
+        intro.Runs.Add(new Run(" resolves through styles and document defaults. Edit freely — the surface is a live RichTextBox; CommitToModel() maps your edits back."));
+        doc.Paragraphs.Add(intro);
+
+        doc.Paragraphs.Add(new Paragraph("Centered paragraph.")
+        {
+            Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
+        });
+
+        return doc;
     }
 
     // --- Minimal ribbon renderer over the shared RibbonDefinition model ---
