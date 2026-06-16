@@ -1386,6 +1386,16 @@
                             KeyboardNavigation.ControlTabNavigation="Cycle"
                             SnapsToDevicePixels="True"
                             UseLayoutRounding="True">
+                    <Button x:Name="UpdateReadyIndicator"
+                            Visibility="Collapsed"
+                            Click="UpdateReadyIndicator_Click"
+                            Background="Transparent" BorderThickness="0" Padding="6,0"
+                            Margin="0,0,10,0"
+                            VerticalAlignment="Center" Cursor="Hand"
+                            ToolTip="A new version of FreeX has been downloaded. Click to restart and update."
+                            AutomationProperties.AutomationId="UpdateReadyIndicator">
+                        <TextBlock Text="&#x21BB; Update ready" Foreground="White" Opacity="0.75" FontSize="11"/>
+                    </Button>
                     <StackPanel x:Name="StatusViewShortcutControls"
                                 Orientation="Horizontal"
                                 Height="24"
