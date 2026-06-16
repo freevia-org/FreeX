@@ -54,6 +54,13 @@ internal static class FreeWRibbonCommands
                 stateStore.SetState(id, command.GetState());
         };
 
+        // Home > Font: character effects. Superscript/subscript are mutually exclusive baseline
+        // offsets; small caps / all caps map to WPF typography. Each is a toggle over the selection.
+        registry.Register("freew.superscript", new CharacterEffectCommand(editor, CharacterEffect.Superscript));
+        registry.Register("freew.subscript", new CharacterEffectCommand(editor, CharacterEffect.Subscript));
+        registry.Register("freew.smallcaps", new CharacterEffectCommand(editor, CharacterEffect.SmallCaps));
+        registry.Register("freew.allcaps", new CharacterEffectCommand(editor, CharacterEffect.AllCaps));
+
         Routed("freew.grow-font", EditingCommands.IncreaseFontSize);
         Routed("freew.shrink-font", EditingCommands.DecreaseFontSize);
         Routed("freew.align-left", EditingCommands.AlignLeft);
@@ -130,6 +137,75 @@ internal static class FreeWRibbonCommands
             registry.Register("freew.print-preview", new ActionCommand(onPrintPreview));
 
         return registry;
+    }
+
+    // The four Home > Font character effects wired by CharacterEffectCommand.
+    private enum CharacterEffect { Superscript, Subscript, SmallCaps, AllCaps }
+
+    // Home > Font: apply a character effect to the selection as a toggle. Superscript/subscript set
+    // Inline.BaselineAlignment (and shrink the font, mirroring DocumentView's render); small/all caps
+    // set Typography.Capitals. Applying an effect that is already present clears it. These properties
+    // are exactly what DocumentView.ReadRunFormatting reads back, so the effect round-trips to docx.
+    private sealed class CharacterEffectCommand(DocumentView editor, CharacterEffect effect) : IRibbonCommand
+    {
+        private const double SuperSubScale = 0.65;
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var selection = editor.Selection;
+            switch (effect)
+            {
+                case CharacterEffect.Superscript:
+                case CharacterEffect.Subscript:
+                    ToggleBaseline(selection,
+                        effect == CharacterEffect.Superscript ? BaselineAlignment.Superscript : BaselineAlignment.Subscript);
+                    break;
+                case CharacterEffect.SmallCaps:
+                    ToggleCapitals(selection, FontCapitals.SmallCaps);
+                    break;
+                case CharacterEffect.AllCaps:
+                    ToggleCapitals(selection, FontCapitals.AllSmallCaps);
+                    break;
+            }
+        }
+
+        private static void ToggleBaseline(TextSelection selection, BaselineAlignment target)
+        {
+            var current = selection.GetPropertyValue(Inline.BaselineAlignmentProperty);
+            var alreadyOn = current is BaselineAlignment b && b == target;
+            if (alreadyOn)
+            {
+                // Clearing: restore baseline and undo the shrink so the original size returns.
+                selection.ApplyPropertyValue(Inline.BaselineAlignmentProperty, BaselineAlignment.Baseline);
+                ScaleFontSize(selection, 1 / SuperSubScale);
+            }
+            else
+            {
+                // If switching from the other offset, the shrink is already applied — don't shrink twice.
+                if (current is not BaselineAlignment cur ||
+                    (cur != BaselineAlignment.Superscript && cur != BaselineAlignment.Subscript))
+                {
+                    ScaleFontSize(selection, SuperSubScale);
+                }
+                selection.ApplyPropertyValue(Inline.BaselineAlignmentProperty, target);
+            }
+        }
+
+        private static void ScaleFontSize(TextSelection selection, double factor)
+        {
+            var value = selection.GetPropertyValue(TextElement.FontSizeProperty);
+            if (value is double size && size > 0)
+                selection.ApplyPropertyValue(TextElement.FontSizeProperty, size * factor);
+        }
+
+        private static void ToggleCapitals(TextSelection selection, FontCapitals target)
+        {
+            var current = selection.GetPropertyValue(Typography.CapitalsProperty);
+            var alreadyOn = current is FontCapitals c && c == target;
+            selection.ApplyPropertyValue(Typography.CapitalsProperty,
+                alreadyOn ? FontCapitals.Normal : target);
+        }
     }
 
     // A parameterless ribbon command that runs a host-supplied action (e.g. opening a window).

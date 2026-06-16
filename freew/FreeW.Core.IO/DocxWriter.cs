@@ -516,10 +516,17 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "i"));
         if (f.Strikethrough)
             rPr.Add(new XElement(W + "strike"));
+        if (f.SmallCaps)
+            rPr.Add(new XElement(W + "smallCaps"));
+        if (f.AllCaps)
+            rPr.Add(new XElement(W + "caps"));
         if (f.Underline)
             rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
         if (f.ColorHex is { Length: > 0 } color)
             rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
+        if (f.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
+            rPr.Add(new XElement(W + "vertAlign",
+                new XAttribute(W + "val", f.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript")));
         if (f.HighlightColorHex is { Length: > 0 } highlight)
             rPr.Add(new XElement(W + "shd",
                 new XAttribute(W + "val", "clear"),

@@ -54,6 +54,61 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Superscript_RoundTrips()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("2", new RunFormatting { VerticalAlign = VerticalAlign.Superscript }));
+        doc.Blocks.Add(paragraph);
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Runs[0].Formatting;
+
+        formatting.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+    }
+
+    [Fact]
+    public void Subscript_RoundTrips()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("2", new RunFormatting { VerticalAlign = VerticalAlign.Subscript }));
+        doc.Blocks.Add(paragraph);
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Runs[0].Formatting;
+
+        formatting.VerticalAlign.Should().Be(VerticalAlign.Subscript);
+    }
+
+    [Fact]
+    public void SmallCaps_RoundTrips()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("heading", new RunFormatting { SmallCaps = true }));
+        doc.Blocks.Add(paragraph);
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Runs[0].Formatting;
+
+        formatting.SmallCaps.Should().BeTrue();
+        formatting.AllCaps.Should().BeFalse();
+        formatting.VerticalAlign.Should().Be(VerticalAlign.Baseline);
+    }
+
+    [Fact]
+    public void AllCaps_RoundTrips()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("title", new RunFormatting { AllCaps = true }));
+        doc.Blocks.Add(paragraph);
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Runs[0].Formatting;
+
+        formatting.AllCaps.Should().BeTrue();
+        formatting.SmallCaps.Should().BeFalse();
+    }
+
+    [Fact]
     public void RunHighlight_RoundTrips()
     {
         var doc = new TextDocument();
