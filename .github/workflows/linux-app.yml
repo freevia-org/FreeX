@@ -185,26 +185,6 @@ jobs:
             echo "tarball_sha256=$tarball_sha256"
           } >> "$evidence_path"
 
-          # Optional AppImage.
-          appimage_status="skipped"
-          if [[ "${{ github.event_name }}" != "pull_request" && "${{ inputs.build_appimage }}" == "true" ]]; then
-            tool="$RUNNER_TEMP/appimagetool"
-            curl -fsSL -o "$tool" \
-              "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$FREEX_ARCH.AppImage"
-            chmod +x "$tool"
-            export APPIMAGE_EXTRACT_AND_RUN=1
-            chmod +x src/FreeX.App.Avalonia/Packaging/linux/build-appimage.sh
-            appimage="$(src/FreeX.App.Avalonia/Packaging/linux/build-appimage.sh \
-              --runtime "$runtime" --published "$published" --version "$version" \
-              --output "$dist" --appimagetool "$tool")"
-            test -f "$appimage"
-            appimage_name="$(basename "$appimage")"
-            (cd "$dist" && sha256sum "$appimage_name" > "$appimage_name.sha256")
-            appimage_status="built"
-            echo "appimage_name=$appimage_name" >> "$evidence_path"
-          fi
-          echo "appimage_status=$appimage_status" >> "$evidence_path"
-
           # Headless packaging smoke (no display required).
           "$published/FreeX" --packaging-smoke | tee "$smoke_log"
           grep -q "Packaging smoke opened" "$smoke_log"
@@ -257,6 +237,30 @@ jobs:
             echo "app_diagnostics_events_jsonl=true"
             echo "app_diagnostics_artifact=freex-$runtime-linux-diagnostics"
           } >> "$evidence_path"
+
+          # Optional AppImage — non-fatal evidence; the hard gates above already passed.
+          # Compute the path directly instead of capturing the builder's stdout (appimagetool
+          # is noisy on stdout, which previously corrupted the captured path).
+          appimage_status="skipped"
+          if [[ "${{ inputs.build_appimage }}" == "true" ]]; then
+            tool="$RUNNER_TEMP/appimagetool"
+            appimage="$dist/FreeX-$version-$FREEX_ARCH.AppImage"
+            if curl -fsSL -o "$tool" \
+                 "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$FREEX_ARCH.AppImage" \
+               && chmod +x "$tool" \
+               && APPIMAGE_EXTRACT_AND_RUN=1 src/FreeX.App.Avalonia/Packaging/linux/build-appimage.sh \
+                    --runtime "$runtime" --published "$published" --version "$version" \
+                    --output "$dist" --appimagetool "$tool" \
+               && test -f "$appimage"; then
+              appimage_name="$(basename "$appimage")"
+              (cd "$dist" && sha256sum "$appimage_name" > "$appimage_name.sha256")
+              appimage_status="built"
+              echo "appimage_name=$appimage_name" >> "$evidence_path"
+            else
+              appimage_status="failed"
+            fi
+          fi
+          echo "appimage_status=$appimage_status" >> "$evidence_path"
 
       - name: Write tester instructions
         shell: bash

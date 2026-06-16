@@ -83,5 +83,7 @@ chmod +x "$appdir/AppRun"
 mkdir -p "$output"
 appimage="$output/FreeX-$version-$arch.AppImage"
 rm -f "$appimage"
-ARCH="$arch" "$appimagetool" "$appdir" "$appimage"
+# Send appimagetool's own output to stderr so this script's stdout is only the
+# resulting path (callers may capture it via command substitution).
+ARCH="$arch" "$appimagetool" "$appdir" "$appimage" 1>&2
 echo "$appimage"
