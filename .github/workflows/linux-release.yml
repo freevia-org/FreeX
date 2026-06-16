@@ -180,6 +180,10 @@ jobs:
           grep -q "native_file_menu=true" "$launch_smoke_report"
           echo "launch_smoke_status=passed" >> "$evidence_path"
 
+          test -f "$app_diagnostics_dir/events.jsonl"
+          grep -q '"eventName":"app_start"' "$app_diagnostics_dir/events.jsonl"
+          echo "app_diagnostics_events_jsonl=true" >> "$evidence_path"
+
           # AppImage (release artifact; non-fatal evidence).
           appimage_status="skipped"
           tool="$RUNNER_TEMP/appimagetool"
