@@ -239,18 +239,20 @@ jobs:
       - name: Validate promotion gate
         shell: pwsh
         run: |
-          $a11y = @()
-          if ("${{ inputs.public_preview_candidate }}" -eq "true") { $a11y += "-PublicPreviewCandidate" }
-          if ("${{ inputs.accessibility_keyboard_only }}" -eq "true") { $a11y += "-AccessibilityKeyboardOnly" }
-          if ("${{ inputs.accessibility_screen_reader }}" -eq "true") { $a11y += "-AccessibilityScreenReader" }
-          if ("${{ inputs.accessibility_x11 }}" -eq "true") { $a11y += "-AccessibilityX11" }
-          if ("${{ inputs.accessibility_wayland }}" -eq "true") { $a11y += "-AccessibilityWayland" }
-          if ("${{ inputs.accessibility_known_issues }}" -eq "true") { $a11y += "-AccessibilityKnownIssuesReviewed" }
-          ./tools/Test-LinuxPublicPreviewPromotion.ps1 `
-            -ArtifactRoot downloaded-artifacts `
-            -ExpectedRunId $env:GITHUB_RUN_ID `
-            -ExpectedRunAttempt $env:GITHUB_RUN_ATTEMPT `
-            @a11y
+          # Hashtable splat so switch parameters bind correctly (array splat would pass
+          # "-Switch" strings as positional arguments, not switches).
+          $params = @{
+            ArtifactRoot       = "downloaded-artifacts"
+            ExpectedRunId      = $env:GITHUB_RUN_ID
+            ExpectedRunAttempt = $env:GITHUB_RUN_ATTEMPT
+          }
+          if ("${{ inputs.public_preview_candidate }}" -eq "true") { $params.PublicPreviewCandidate = $true }
+          if ("${{ inputs.accessibility_keyboard_only }}" -eq "true") { $params.AccessibilityKeyboardOnly = $true }
+          if ("${{ inputs.accessibility_screen_reader }}" -eq "true") { $params.AccessibilityScreenReader = $true }
+          if ("${{ inputs.accessibility_x11 }}" -eq "true") { $params.AccessibilityX11 = $true }
+          if ("${{ inputs.accessibility_wayland }}" -eq "true") { $params.AccessibilityWayland = $true }
+          if ("${{ inputs.accessibility_known_issues }}" -eq "true") { $params.AccessibilityKnownIssuesReviewed = $true }
+          ./tools/Test-LinuxPublicPreviewPromotion.ps1 @params
 
       - name: Stage release assets
         id: stage
