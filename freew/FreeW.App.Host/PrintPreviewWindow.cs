@@ -148,12 +148,20 @@ internal sealed class HeaderFooterPaginator(DocumentPaginator inner, TextDocumen
     public override DocumentPage GetPage(int pageNumber)
     {
         var basePage = inner.GetPage(pageNumber);
-        if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false })
+        var hasWatermark = !string.IsNullOrEmpty(page.Watermark);
+        var hasBorder = page.PageBorder is not null;
+        if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
+            && !hasWatermark && !hasBorder)
             return basePage;
 
         var size = basePage.Size;
         var visual = new ContainerVisual();
+        // The watermark sits behind the page content; the border is drawn on top of the page edge.
+        if (hasWatermark)
+            visual.Children.Add(BuildWatermark(page.Watermark!, size));
         visual.Children.Add(basePage.Visual);
+        if (hasBorder)
+            visual.Children.Add(BuildPageBorder(page.PageBorder!, size));
 
         var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);
         var contentWidth = Math.Max(0, size.Width - marginLeft - PageLayout.PointsToDip(page.MarginRightPt));
@@ -173,6 +181,60 @@ internal sealed class HeaderFooterPaginator(DocumentPaginator inner, TextDocumen
         }
 
         return new DocumentPage(visual, size, basePage.BleedBox, basePage.ContentBox);
+    }
+
+    /// <summary>
+    /// Draws the whole-page border (w:pgBorders) as a rectangle just inside the page edge, matching the
+    /// editor's BorderBrush/BorderThickness chrome so on-screen and printed pages agree.
+    /// </summary>
+    private static DrawingVisual BuildPageBorder(PageBorder border, Size size)
+    {
+        var visual = new DrawingVisual();
+        var color = ParseColor(border.ColorHex);
+        var thickness = Math.Max(1, PageLayout.PointsToDip(border.WidthPt));
+        var pen = new Pen(new SolidColorBrush(color), thickness);
+        // Inset by half the stroke width plus the 24pt offsetFrom="page" gap used on save, clamped so
+        // the rectangle stays positive on small pages.
+        var inset = thickness / 2 + Math.Min(PageLayout.PointsToDip(24), Math.Min(size.Width, size.Height) / 4);
+        var rect = new Rect(inset, inset, Math.Max(0, size.Width - 2 * inset), Math.Max(0, size.Height - 2 * inset));
+        using (var dc = visual.RenderOpen())
+            dc.DrawRectangle(null, pen, rect);
+        return visual;
+    }
+
+    /// <summary>Draws the faint, 45-degree page watermark text centred on the page, behind the content.</summary>
+    private static DrawingVisual BuildWatermark(string text, Size size)
+    {
+        var visual = new DrawingVisual();
+        var formatted = new FormattedText(
+            text,
+            System.Globalization.CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(new FontFamily("Calibri"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
+            PageLayout.PointsToDip(48.0),
+            new SolidColorBrush(Color.FromArgb(0x28, 0x80, 0x80, 0x80)),
+            1.0);
+
+        var center = new Point(size.Width / 2, size.Height / 2);
+        using (var dc = visual.RenderOpen())
+        {
+            dc.PushTransform(new RotateTransform(-45, center.X, center.Y));
+            dc.DrawText(formatted, new Point(center.X - formatted.Width / 2, center.Y - formatted.Height / 2));
+            dc.Pop();
+        }
+        return visual;
+    }
+
+    private static Color ParseColor(string hex)
+    {
+        try
+        {
+            return (Color)ColorConverter.ConvertFromString(hex);
+        }
+        catch (FormatException)
+        {
+            return Colors.Black;
+        }
     }
 
     /// <summary>Renders one line of header/footer text into a positioned drawing visual.</summary>

@@ -27,6 +27,16 @@ internal static class Ooxml
     public const string CorePropertiesRelType = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
     public const string CorePropertiesPartName = "/docProps/core.xml";
 
+    // OPC custom properties (docProps/custom.xml): used best-effort to persist the page watermark text.
+    public static readonly XNamespace CustomProps = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+    public static readonly XNamespace VtVariant = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+    public const string CustomPropertiesContentType = "application/vnd.openxmlformats-officedocument.custom-properties+xml";
+    public const string CustomPropertiesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
+    public const string CustomPropertiesPartName = "/docProps/custom.xml";
+
+    /// <summary>The custom-property name under which the FreeW page watermark text is persisted.</summary>
+    public const string WatermarkPropertyName = "FreeWWatermark";
+
     public const string NumberingContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml";
     public const string NumberingRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering";
     public const string NumberingPartName = "/word/numbering.xml";

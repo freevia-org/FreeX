@@ -190,6 +190,22 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Toggle the whole-page border (w:sectPr/w:pgBorders). When the page has no border one is added
+    /// (<paramref name="colorHex"/>/<paramref name="widthPt"/>); otherwise it is cleared. Re-renders so
+    /// the change shows immediately and round-trips through the model on save. Layout-ribbon command.
+    /// </summary>
+    public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0) =>
+        ApplyPageSettings(page => page.PageBorder =
+            page.PageBorder is null ? new PageBorder(colorHex, widthPt) : null);
+
+    /// <summary>
+    /// Set (or clear) the page watermark text. A null/empty value removes the watermark. Re-renders so
+    /// the faint diagonal text shows immediately and round-trips on save. Layout-ribbon command.
+    /// </summary>
+    public void SetWatermark(string? text) =>
+        ApplyPageSettings(page => page.Watermark = string.IsNullOrWhiteSpace(text) ? null : text.Trim());
+
+    /// <summary>
     /// Insert a table at the caret (after the block the caret sits in, else at the end), routing
     /// through the undo/redo command bus so the insert is reversible. Re-renders the surface.
     /// </summary>
@@ -706,6 +722,81 @@ public sealed class DocumentView : RichTextBox
         }
 
         Document = flow;
+        ApplyPageChrome();
+    }
+
+    /// <summary>
+    /// Reflects the model's page border and watermark as editor chrome. The page border drives the
+    /// control's own <see cref="Control.BorderBrush"/>/<see cref="Control.BorderThickness"/> (drawn
+    /// around the editing surface), and the watermark is painted as faint, rotated tiled text behind
+    /// the content via the control <see cref="Control.Background"/>. Both are purely visual: the model
+    /// and saved document are untouched. Falls back to the default thin grey frame / white background
+    /// when neither is set, so existing documents look exactly as before.
+    /// </summary>
+    private void ApplyPageChrome()
+    {
+        if (_model.Page.PageBorder is { } pb)
+        {
+            BorderBrush = new SolidColorBrush(ParseColor(pb.ColorHex, Colors.Black));
+            BorderThickness = new Thickness(Math.Max(1, pb.WidthPt * PxPerPoint));
+        }
+        else
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
+            BorderThickness = new Thickness(1);
+        }
+
+        Background = string.IsNullOrEmpty(_model.Page.Watermark)
+            ? Brushes.White
+            : BuildWatermarkBrush(_model.Page.Watermark!);
+    }
+
+    /// <summary>
+    /// Builds a tiling brush that paints faint, 45-degree watermark text on a white page so it sits
+    /// behind the document content. Used by the editor background; the print/preview path draws the
+    /// same text per page so on-screen and printed output match.
+    /// </summary>
+    internal static Brush BuildWatermarkBrush(string text)
+    {
+        var label = new TextBlock
+        {
+            Text = text,
+            FontSize = 48,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromArgb(0x28, 0x80, 0x80, 0x80)),
+            LayoutTransform = new RotateTransform(-45)
+        };
+        label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        label.Arrange(new Rect(label.DesiredSize));
+
+        var visual = new VisualBrush(label)
+        {
+            Stretch = Stretch.None,
+            TileMode = TileMode.Tile,
+            ViewportUnits = BrushMappingMode.Absolute,
+            Viewport = new Rect(0, 0, Math.Max(240, label.DesiredSize.Width + 80),
+                                       Math.Max(240, label.DesiredSize.Height + 80)),
+            AlignmentX = AlignmentX.Center,
+            AlignmentY = AlignmentY.Center
+        };
+
+        // Compose the faint tiled watermark over an opaque white page so the editing surface stays
+        // white behind the text.
+        var canvas = new Grid { Background = Brushes.White };
+        canvas.Children.Add(new System.Windows.Shapes.Rectangle { Fill = visual });
+        return new VisualBrush(canvas) { Stretch = Stretch.Fill };
+    }
+
+    private static Color ParseColor(string hex, Color fallback)
+    {
+        try
+        {
+            return (Color)ColorConverter.ConvertFromString(hex);
+        }
+        catch (FormatException)
+        {
+            return fallback;
+        }
     }
 
     private static TextMarkerStyle ToMarkerStyle(ListKind kind) =>

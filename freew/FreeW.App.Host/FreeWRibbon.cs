@@ -131,6 +131,11 @@ internal static class FreeWRibbon
                     g.Button("freew.size", "Size");
                     g.Button("freew.columns", "Columns");
                 });
+                tab.Group("page-background", "Page Background", "B", 95, g =>
+                {
+                    g.Button("freew.page-border", "Page Border");
+                    g.Button("freew.watermark", "Watermark");
+                });
                 tab.Group("preview", "Preview", "V", 90, g =>
                 {
                     g.Button("freew.print-preview", "Print Preview");

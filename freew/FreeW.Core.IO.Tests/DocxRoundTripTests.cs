@@ -238,6 +238,42 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void PageBorder_RoundTrips_ColorAndWidth()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("page with border"));
+        doc.Page.PageBorder = new PageBorder("#0000FF", 2.0);
+
+        var page = RoundTrip(doc).Page;
+
+        page.PageBorder.Should().NotBeNull();
+        page.PageBorder!.ColorHex.Should().Be("#0000FF");
+        page.PageBorder.WidthPt.Should().BeApproximately(2.0, 0.001);
+    }
+
+    [Fact]
+    public void DefaultPage_HasNoPageBorderOrWatermark()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        var page = RoundTrip(doc).Page;
+
+        page.PageBorder.Should().BeNull();
+        page.Watermark.Should().BeNull();
+    }
+
+    [Fact]
+    public void Watermark_RoundTrips_AsCustomProperty()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("watermarked"));
+        doc.Page.Watermark = "CONFIDENTIAL";
+
+        RoundTrip(doc).Page.Watermark.Should().Be("CONFIDENTIAL");
+    }
+
+    [Fact]
     public void BottomOnlyParagraphBorder_RoundTrips_AsHorizontalRule()
     {
         var doc = new TextDocument();

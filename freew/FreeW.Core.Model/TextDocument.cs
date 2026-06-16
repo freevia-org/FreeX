@@ -370,6 +370,13 @@ public sealed class HeaderFooter
     public string PlainText => string.Join("\n", Paragraphs.Select(p => p.PlainText));
 }
 
+/// <summary>
+/// An immutable page border (w:sectPr/w:pgBorders). A uniform box drawn around the page with one
+/// colour and width (points). Null on <see cref="PageSettings.PageBorder"/> means no page border, so
+/// existing documents are unaffected. Mirrors how <see cref="ParagraphBorder"/> is modelled.
+/// </summary>
+public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.0);
+
 /// <summary>Page geometry for a section (points; US Letter with 1in margins by default).</summary>
 public sealed class PageSettings
 {
@@ -392,6 +399,20 @@ public sealed class PageSettings
     /// (half an inch), Word's default column spacing. Only meaningful when <see cref="ColumnCount"/> &gt; 1.
     /// </summary>
     public double ColumnSpacingPt { get; set; } = 36;
+
+    /// <summary>
+    /// Optional page border drawn around the whole page (w:sectPr/w:pgBorders), or null for none.
+    /// Nullable/default so existing documents round-trip unchanged. Mirrors
+    /// <see cref="ParagraphFormatting.Border"/>; round-trips to docx as the four w:pgBorders edges.
+    /// </summary>
+    public PageBorder? PageBorder { get; set; }
+
+    /// <summary>
+    /// Optional diagonal text watermark shown faintly behind the page content, or null for none.
+    /// Persisted best-effort as a custom document property (docProps/custom.xml) so it round-trips,
+    /// and rendered as an editor/preview visual. Nullable so existing documents are unaffected.
+    /// </summary>
+    public string? Watermark { get; set; }
 }
 
 /// <summary>

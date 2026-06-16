@@ -196,6 +196,12 @@ internal static class FreeWRibbonCommands
         // Columns: cycle 1 -> 2 -> 3 -> 1 equal-width columns, re-rendering so the layout shows at once.
         registry.Register("freew.columns", new ColumnCountCommand(editor));
 
+        // Layout tab — Page Background: toggle a whole-page border (w:pgBorders) and set/clear the
+        // page watermark. Both mutate PageSettings via ApplyPageSettings (commit + re-render) and
+        // round-trip through docx save.
+        registry.Register("freew.page-border", new ActionCommand(() => { editor.Focus(); editor.TogglePageBorder(); }));
+        registry.Register("freew.watermark", new WatermarkCommand(editor));
+
         // Layout tab — open the modeless print-preview window (paginated, page-settings-aware).
         if (onPrintPreview is not null)
             registry.Register("freew.print-preview", new ActionCommand(onPrintPreview));
@@ -1119,6 +1125,22 @@ internal static class FreeWRibbonCommands
             else
                 model.Header = value;
 
+            editor.Focus();
+        }
+    }
+
+    // Layout > Watermark: prompt for the page watermark text (seeded with the current one). An empty
+    // result clears the watermark. Delegates to the view, which mutates PageSettings and re-renders.
+    private sealed class WatermarkCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var seed = editor.Model.Page.Watermark ?? string.Empty;
+            var text = TextPrompt.Ask(Window.GetWindow(editor), "Watermark", "Watermark text (empty to remove):", seed);
+            if (text is null)
+                return; // cancelled — leave the model untouched
+
+            editor.SetWatermark(text);
             editor.Focus();
         }
     }
