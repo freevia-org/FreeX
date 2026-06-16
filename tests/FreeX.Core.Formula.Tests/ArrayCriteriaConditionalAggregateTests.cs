@@ -261,4 +261,33 @@ public class ArrayCriteriaConditionalAggregateTests
         var result = _eval.Evaluate("=SUMPRODUCT(G1:G2,SUMIFS(A1:A4,B1:B4,C1:C2))", sheet);
         result.Should().Be(new NumberValue(1000));
     }
+
+    // Two array criteria of different orientations must BROADCAST into a 2-D result, not nest.
+    // Mirrors Spill Formulae!D197 = SUMIFS(E,C,ANCHORARRAY(C197),D,ANCHORARRAY(D196)) where C197
+    // spills a column vector and D196 spills a row vector.
+    [Fact]
+    public void Sumifs_TwoArrayCriteria_DifferentOrientations_BroadcastsToMatrix()
+    {
+        // A = amount, B = key1, D = key2 over 4 rows.
+        // rows: (10,x,p),(20,y,q),(30,x,p),(40,y,q)
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)), (1, 2, new TextValue("x")), (1, 4, new TextValue("p")),
+            (2, 1, new NumberValue(20)), (2, 2, new TextValue("y")), (2, 4, new TextValue("q")),
+            (3, 1, new NumberValue(30)), (3, 2, new TextValue("x")), (3, 4, new TextValue("p")),
+            (4, 1, new NumberValue(40)), (4, 2, new TextValue("y")), (4, 4, new TextValue("q")),
+            // crit1 vertical (2x1) at F1:F2 = {x; y}
+            (1, 6, new TextValue("x")), (2, 6, new TextValue("y")),
+            // crit2 horizontal (1x2) at H1:I1 = {p, q}
+            (1, 8, new TextValue("p")), (1, 9, new TextValue("q")));
+
+        var result = _eval.Evaluate("=SUMIFS(A1:A4,B1:B4,F1:F2,D1:D4,H1:I1)", sheet)
+            .Should().BeOfType<RangeValue>("two array criteria broadcast into a matrix, not a nested range").Subject;
+
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(2);
+        result.Cells[0, 0].Should().Be(new NumberValue(40), "x AND p → rows 1,3 → 10+30");
+        result.Cells[0, 1].Should().Be(new NumberValue(0), "x AND q → none");
+        result.Cells[1, 0].Should().Be(new NumberValue(0), "y AND p → none");
+        result.Cells[1, 1].Should().Be(new NumberValue(60), "y AND q → rows 2,4 → 20+40");
+    }
 }
