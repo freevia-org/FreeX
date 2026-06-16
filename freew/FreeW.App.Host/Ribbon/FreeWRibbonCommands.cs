@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
 
@@ -61,6 +62,24 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
         registry.Register("freew.style-title", new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
 
+        // Layout tab — page settings (applied to the model; honoured by docx save + print).
+        registry.Register("freew.orientation", new PageCommand(editor, page =>
+        {
+            (page.WidthPt, page.HeightPt) = (page.HeightPt, page.WidthPt);
+            page.Landscape = !page.Landscape;
+        }));
+        registry.Register("freew.margins", new PageCommand(editor, page =>
+        {
+            var narrow = page.MarginLeftPt > 54;
+            var margin = narrow ? 36.0 : 72.0;
+            page.MarginLeftPt = page.MarginRightPt = page.MarginTopPt = page.MarginBottomPt = margin;
+        }));
+        registry.Register("freew.size", new PageCommand(editor, page =>
+        {
+            var isLetter = Math.Abs(page.WidthPt - 612) < 1 && Math.Abs(page.HeightPt - 792) < 1;
+            (page.WidthPt, page.HeightPt) = isLetter ? (595.0, 842.0) : (612.0, 792.0); // toggle Letter <-> A4
+        }));
+
         return registry;
     }
 
@@ -78,6 +97,11 @@ internal static class FreeWRibbonCommands
             var brush = colorHex is null ? Brushes.Black : new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
             selection.ApplyPropertyValue(TextElement.ForegroundProperty, brush);
         }
+    }
+
+    private sealed class PageCommand(DocumentView editor, Action<PageSettings> apply) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) => apply(editor.Model.Page);
     }
 
     private sealed class RoutedEditCommand(DocumentView editor, RoutedCommand command) : IRibbonCommand
