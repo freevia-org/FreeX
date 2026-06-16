@@ -1,0 +1,36 @@
+using System.Globalization;
+using System.Xml.Linq;
+
+namespace FreeW.Core.IO;
+
+/// <summary>WordprocessingML namespaces and unit helpers shared by the docx reader/writer.</summary>
+internal static class Ooxml
+{
+    public static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    public static readonly XNamespace R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    public static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
+    public static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+    /// <summary>OOXML "dxa" = twentieths of a point.</summary>
+    public static double DxaToPoints(string? value) => ParseInt(value) / 20.0;
+
+    public static int PointsToDxa(double points) => (int)Math.Round(points * 20.0);
+
+    /// <summary>Run font size is in half-points.</summary>
+    public static double? HalfPointsToPoints(string? value) => ParseInt(value) is var v && v != 0 ? v / 2.0 : null;
+
+    public static int PointsToHalfPoints(double points) => (int)Math.Round(points * 2.0);
+
+    public static int ParseInt(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
+
+    /// <summary>Reads an OOXML on/off toggle element (e.g. &lt;w:b/&gt;): present and not explicitly off.</summary>
+    public static bool ReadToggle(XElement? parent, string localName)
+    {
+        var element = parent?.Element(W + localName);
+        if (element is null)
+            return false;
+        var val = element.Attribute(W + "val")?.Value;
+        return val is null or "1" or "true" or "on";
+    }
+}

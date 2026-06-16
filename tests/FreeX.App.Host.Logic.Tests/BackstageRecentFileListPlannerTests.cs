@@ -134,7 +134,7 @@ public sealed class BackstageRecentFileListPlannerTests
     [Fact]
     public void RecentFilesStore_UsesUtcClockForPersistedTimestamps()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Services", "RecentFilesStore.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("shared", "Free.Shared.AppServices", "RecentFilesStore.cs"));
 
         source.Should().Contain("DateTimeOffset.UtcNow");
         source.Should().Contain("LastOpened = _clock()");
