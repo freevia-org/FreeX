@@ -113,4 +113,120 @@ public class DocumentCommandBusTests
         bus.CanUndo.Should().BeFalse();
         bus.Undo().Should().BeFalse();
     }
+
+    [Fact]
+    public void InsertTableRow_IncreasesRowCount_AndUndoRestores()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(2, 3);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new InsertTableRowCommand(0, 1));
+        table.RowCount.Should().Be(3);
+        table.ColumnCount.Should().Be(3);
+        table.Rows[1].Cells.Should().HaveCount(3);
+
+        bus.Undo();
+        table.RowCount.Should().Be(2);
+
+        bus.Redo();
+        table.RowCount.Should().Be(3);
+    }
+
+    [Fact]
+    public void DeleteTableRow_ReducesRowCount_AndUndoRestoresSameRow()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(3, 2);
+        doc.Blocks.Add(table);
+        var middle = table.Rows[1];
+
+        bus.Execute(new DeleteTableRowCommand(0, 1));
+        table.RowCount.Should().Be(2);
+        table.Rows.Should().NotContain(middle);
+
+        bus.Undo();
+        table.RowCount.Should().Be(3);
+        table.Rows[1].Should().BeSameAs(middle);
+    }
+
+    [Fact]
+    public void DeleteTableRow_LastRow_IsNoOp()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(1, 2);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new DeleteTableRowCommand(0, 0));
+        table.RowCount.Should().Be(1);
+
+        bus.Undo();
+        table.RowCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void InsertTableColumn_AddsCellToEveryRow_AndUndoRestores()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(2, 2);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new InsertTableColumnCommand(0, 1));
+        table.ColumnCount.Should().Be(3);
+        table.Rows.Should().OnlyContain(r => r.Cells.Count == 3);
+
+        bus.Undo();
+        table.ColumnCount.Should().Be(2);
+        table.Rows.Should().OnlyContain(r => r.Cells.Count == 2);
+    }
+
+    [Fact]
+    public void DeleteTableColumn_ReducesColumnCount_AndUndoRestoresCells()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(2, 3);
+        doc.Blocks.Add(table);
+        var keptCell = table.Rows[0].Cells[1];
+
+        bus.Execute(new DeleteTableColumnCommand(0, 1));
+        table.ColumnCount.Should().Be(2);
+        table.Rows[0].Cells.Should().NotContain(keptCell);
+
+        bus.Undo();
+        table.ColumnCount.Should().Be(3);
+        table.Rows[0].Cells[1].Should().BeSameAs(keptCell);
+    }
+
+    [Fact]
+    public void DeleteTableColumn_LastColumn_IsNoOp()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(2, 1);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new DeleteTableColumnCommand(0, 0));
+        table.ColumnCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void SetImageSize_ChangesSize_AndUndoRestores()
+    {
+        var (doc, bus) = New();
+        var image = new InlineImage([1, 2, 3], widthPt: 100, heightPt: 50);
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(image));
+        doc.Blocks.Add(paragraph);
+
+        bus.Execute(new SetImageSizeCommand(0, 0, widthPt: 200, heightPt: 100));
+        image.WidthPt.Should().Be(200);
+        image.HeightPt.Should().Be(100);
+
+        bus.Undo();
+        image.WidthPt.Should().Be(100);
+        image.HeightPt.Should().Be(50);
+
+        bus.Redo();
+        image.WidthPt.Should().Be(200);
+        image.HeightPt.Should().Be(100);
+    }
 }

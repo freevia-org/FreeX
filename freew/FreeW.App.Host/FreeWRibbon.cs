@@ -59,9 +59,17 @@ internal static class FreeWRibbon
                     g.Button("freew.page-break", "Page Break");
                 });
                 tab.Group("tables", "Tables", "T", 90, g => g.Button("freew.table", "Table"));
+                tab.Group("table-tools", "Table Tools", "B", 85, g =>
+                {
+                    g.Button("freew.table-insert-row", "Insert Row");
+                    g.Button("freew.table-delete-row", "Delete Row");
+                    g.Button("freew.table-insert-col", "Insert Column");
+                    g.Button("freew.table-delete-col", "Delete Column");
+                });
                 tab.Group("illustrations", "Illustrations", "I", 80, g =>
                 {
                     g.Button("freew.picture", "Picture");
+                    g.Button("freew.image-size", "Image Size");
                     g.Button("freew.shapes", "Shapes");
                 });
             })

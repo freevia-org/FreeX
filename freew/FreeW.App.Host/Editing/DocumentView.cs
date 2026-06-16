@@ -75,6 +75,111 @@ public sealed class DocumentView : RichTextBox
         _commands.Execute(new InsertBlockCommand(index, ModelTable.Create(rows, columns)));
     }
 
+    /// <summary>Insert a blank row below the caret's row in the table containing the caret.</summary>
+    public void InsertTableRow() => MutateCaretTable((index, rowIndex, _) =>
+        new InsertTableRowCommand(index, rowIndex + 1));
+
+    /// <summary>Delete the caret's row from the table containing the caret (no-op on the last row).</summary>
+    public void DeleteTableRow() => MutateCaretTable((index, rowIndex, _) =>
+        new DeleteTableRowCommand(index, rowIndex));
+
+    /// <summary>Insert a blank column to the right of the caret's column in the table containing the caret.</summary>
+    public void InsertTableColumn() => MutateCaretTable((index, _, columnIndex) =>
+        new InsertTableColumnCommand(index, columnIndex + 1));
+
+    /// <summary>Delete the caret's column from the table containing the caret (no-op on the last column).</summary>
+    public void DeleteTableColumn() => MutateCaretTable((index, _, columnIndex) =>
+        new DeleteTableColumnCommand(index, columnIndex));
+
+    /// <summary>
+    /// Resize the currently selected inline image to <paramref name="widthPt"/> points wide, scaling
+    /// the height to preserve aspect ratio. Routes through the bus (undoable). No-op without a selection.
+    /// </summary>
+    public void SetSelectedImageSize(double widthPt)
+    {
+        if (widthPt <= 0)
+            return;
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null)
+            return;
+        var aspect = image.WidthPt > 0 ? image.HeightPt / image.WidthPt : 1;
+        _commands.Execute(new SetImageSizeCommand(blockIndex, runIndex, widthPt, widthPt * aspect));
+    }
+
+    /// <summary>The inline image targeted by the current selection/caret, or null if none is selected.</summary>
+    public InlineImage? SelectedImage() => SelectedImageLocation().Image;
+
+    // Commit pending edits, locate the caret's table + cell, build a command for it, run it through the bus.
+    private void MutateCaretTable(Func<int, int, int, IDocumentCommand> build)
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0)
+            return;
+        _commands.Execute(build(blockIndex, rowIndex, columnIndex));
+    }
+
+    // Locate the model block/row/column of the table containing the caret; blockIndex is -1 if not in a table.
+    private (int BlockIndex, int RowIndex, int ColumnIndex) CaretTableLocation()
+    {
+        // Walk up from the caret to the hosting WPF cell/row/table.
+        TextElement? element = CaretPosition?.Parent as TextElement;
+        WpfTableCell? cell = null;
+        while (element is not null)
+        {
+            if (element is WpfTableCell c)
+            {
+                cell = c;
+                break;
+            }
+            element = element.Parent as TextElement;
+        }
+        if (cell?.Parent is not WpfTableRow wpfRow || wpfRow.Parent is not TableRowGroup group
+            || group.Parent is not WpfTable wpfTable)
+            return (-1, -1, -1);
+
+        var blockIndex = new List<System.Windows.Documents.Block>(Document.Blocks).IndexOf(wpfTable);
+        var rowIndex = new List<WpfTableRow>(group.Rows).IndexOf(wpfRow);
+        var columnIndex = new List<WpfTableCell>(wpfRow.Cells).IndexOf(cell);
+        return (blockIndex, rowIndex, columnIndex);
+    }
+
+    // Locate the model paragraph/run index of the inline image under the selection, plus the image itself.
+    private (int BlockIndex, int RunIndex, InlineImage? Image) SelectedImageLocation()
+    {
+        // An InlineUIContainer hosting our tagged Image is the selected picture; find it around the caret.
+        var image = ImageInElement(CaretPosition?.Parent as TextElement)
+            ?? ImageInElement(Selection.Start.Parent as TextElement)
+            ?? ImageInElement(Selection.End.Parent as TextElement);
+        if (image is null)
+            return (-1, -1, null);
+
+        // Match it back to a top-level model paragraph + run by identity (images embedded in tables are skipped).
+        for (var b = 0; b < _model.Blocks.Count; b++)
+        {
+            if (_model.Blocks[b] is not ModelParagraph paragraph)
+                continue;
+            for (var r = 0; r < paragraph.Runs.Count; r++)
+            {
+                if (ReferenceEquals(paragraph.Runs[r].Image, image))
+                    return (b, r, image);
+            }
+        }
+        return (-1, -1, null);
+    }
+
+    private static InlineImage? ImageInElement(TextElement? element)
+    {
+        while (element is not null)
+        {
+            if (element is InlineUIContainer { Child: Image { Tag: InlineImage modelImage } })
+                return modelImage;
+            element = element.Parent as TextElement;
+        }
+        return null;
+    }
+
     // The index of the model block containing the caret, or the last block (-1 when the body is empty).
     private int CaretBlockIndex()
     {

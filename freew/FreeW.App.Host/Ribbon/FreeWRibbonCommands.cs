@@ -74,8 +74,16 @@ internal static class FreeWRibbonCommands
 
         // Insert tab — insert a small 2x2 table at the caret (routes through the undo/redo bus).
         registry.Register("freew.table", new InsertTableCommand(editor, rows: 2, columns: 2));
+        // Insert tab — Table Tools: structural edits to the table containing the caret (all undoable).
+        registry.Register("freew.table-insert-row", new ActionCommand(() => { editor.Focus(); editor.InsertTableRow(); }));
+        registry.Register("freew.table-delete-row", new ActionCommand(() => { editor.Focus(); editor.DeleteTableRow(); }));
+        registry.Register("freew.table-insert-col", new ActionCommand(() => { editor.Focus(); editor.InsertTableColumn(); }));
+        registry.Register("freew.table-delete-col", new ActionCommand(() => { editor.Focus(); editor.DeleteTableColumn(); }));
+
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
         registry.Register("freew.picture", new InsertPictureCommand(editor));
+        // Insert tab — Illustrations: resize the selected inline image (height scales proportionally).
+        registry.Register("freew.image-size", new ImageSizeCommand(editor));
 
         registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
         registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
@@ -196,6 +204,25 @@ internal static class FreeWRibbonCommands
                 widthPt = MaxWidthPt;
             }
             return new InlineImage(buffer.ToArray(), widthPt, heightPt);
+        }
+    }
+
+    // Insert > Illustrations > Image Size: prompt for a new width; the view scales height proportionally.
+    private sealed class ImageSizeCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                MessageBox.Show(Window.GetWindow(editor), "Select an image first, then choose Image Size.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (ImageSizeDialog.Prompt(Window.GetWindow(editor), image.WidthPt) is { } widthPt)
+                editor.SetSelectedImageSize(widthPt);
         }
     }
 
