@@ -12,11 +12,11 @@ public static class FreeXRibbonDefinition
 {
     public static RibbonDefinition Build() => new RibbonDefinitionBuilder()
         .Tab("InsertTab", "Insert", "N", tab => tab
-            .Group("InsertTablesGroup", "Tables", null, priority: 180,
+            .Group("InsertTablesGroup", "Tables", null, priority: 200,
                 g => g
                 .Large("PivotTable", "PivotTable", Ico.PivotTable, "PT")
                 .Large("Table", "Table", Ico.Generic, "TB"))
-            .Group("InsertChartsGroup", "Charts", null, priority: 170,
+            .Group("InsertChartsGroup", "Charts", null, priority: 60,
                 g => g
                 .Large("Recommended Charts", "Recommended Charts", Ico.ChartColumn, "RC")
                 .Medium("Column Chart", "Column Chart", Ico.ChartColumn, "CC")
@@ -34,25 +34,25 @@ public static class FreeXRibbonDefinition
                 .Medium("Bubble Chart", "Bubble Chart", Ico.ChartScatter, "BU")
                 .Medium("Radar Chart", "Radar Chart", Ico.ChartArea, "RD")
                 .Medium("Select Data Source", "Select Data Source", Ico.Search, "DS"))
-            .Group("InsertSparklinesGroup", "Sparklines", null, priority: 160,
+            .Group("InsertSparklinesGroup", "Sparklines", null, priority: 120,
                 g => g
                 .Medium("Line Sparkline", "Line Sparkline", Ico.Sparkline, "SL")
                 .Medium("Column Sparkline", "Column Sparkline", Ico.Sparkline, "SK")
                 .Medium("Win/Loss Sparkline", "Win/Loss Sparkline", Ico.Sparkline, "SW"))
-            .Group("InsertFiltersGroup", "Filters", null, priority: 150,
+            .Group("InsertFiltersGroup", "Filters", null, priority: 110,
                 g => g
                 .Large("Insert Timeline", "Insert Timeline", Ico.Date, "IT"))
-            .Group("InsertLinksGroup", "Links", null, priority: 140,
+            .Group("InsertLinksGroup", "Links", null, priority: 100,
                 g => g
                 .Large("Insert Link", "Insert Link", Ico.Link, "K"))
-            .Group("InsertCommentsGroup", "Comments", null, priority: 130,
+            .Group("InsertCommentsGroup", "Comments", null, priority: 90,
                 g => g
                 .Large("Comment", "Comment", Ico.Comment, "C2"))
-            .Group("InsertTextGroup", "Text", null, priority: 120,
+            .Group("InsertTextGroup", "Text", null, priority: 80,
                 g => g
                 .Large("Text Box", "Text Box", Ico.TextBox, "TX")
                 .Large("Header & Footer", "Header & Footer", Ico.HeaderFooter, "HF"))
-            .Group("InsertSymbolsGroup", "Symbols", null, priority: 110,
+            .Group("InsertSymbolsGroup", "Symbols", null, priority: 70,
                 g => g
                 .Large("Symbol", "Symbol", Ico.Symbol, "SY"))
         )
@@ -61,7 +61,7 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Large("Pictures", "Pictures", Ico.Picture, "IP")
                 .Large("Shapes", "Shapes", Ico.RibbonShape, "SH"))
-            .Group("DrawArrangeGroup", "Arrange", null, priority: 170,
+            .Group("DrawArrangeGroup", "Arrange", null, priority: 70,
                 g => g
                 .Large("Bring Forward", "Bring Forward", Ico.BringForward, "BF")
                 .Large("Send Backward", "Send Backward", Ico.SendBackward, "SB")
@@ -77,13 +77,13 @@ public static class FreeXRibbonDefinition
                 .Medium("Shape Effects", "Shape Effects", Ico.RibbonShape, "FX", menu: m => m.Item("No Effect", "No Effect", "N").Separator().Item("Shadow", "Shadow", "S").Item("Inner Shadow", "Inner Shadow", "I").Item("Reflection", "Reflection", "R").Item("Glow", "Glow", "G").Item("Soft Edges", "Soft Edges", "E").Item("Bevel", "Bevel", "B").Item("3-D Rotation", "3-D Rotation", "D")))
         )
         .Tab("PageLayoutTab", "Page Layout", "P", tab => tab
-            .Group("PageLayoutThemesGroup", "Themes", null, priority: 180,
+            .Group("PageLayoutThemesGroup", "Themes", null, priority: 110,
                 g => g
                 .Large("Themes", "Themes", Ico.Theme, "TH", menu: m => m.Item("Office#ThemeOfficeMenuItem_Click", "Office", "O").Item("FreeX Colorful#ThemeColorfulMenuItem_Click", "FreeX Colorful", "C").Item("Grayscale#ThemeGrayscaleMenuItem_Click", "Grayscale", "G").Item("Customize", "Customize...", "U"))
                 .Large("Theme Colors", "Theme Colors", Ico.Theme, "TC", menu: m => m.Item("Office#ThemeColorsOfficeMenuItem_Click", "Office", "O").Item("FreeX Colorful#ThemeColorsColorfulMenuItem_Click", "FreeX Colorful", "C").Item("Grayscale#ThemeColorsGrayscaleMenuItem_Click", "Grayscale", "G").Item("Customize Colors", "Customize Colors...", "U"))
                 .Large("Theme Fonts", "Theme Fonts", Ico.Font, "TF", menu: m => m.Item("Office#ThemeFontsOfficeMenuItem_Click", "Office", "O").Item("Arial", "Arial", "A").Item("Times New Roman", "Times New Roman", "T").Item("Customize Fonts", "Customize Fonts...", "U"))
                 .Large("Theme Effects", "Theme Effects", Ico.Effects, "TE", menu: m => m.Item("Office#ThemeEffectsOfficeMenuItem_Click", "Office", "O").Item("Subtle", "Subtle", "S").Item("Refined", "Refined", "R").Item("Customize Effects", "Customize Effects...", "U")))
-            .Group("PageLayoutPageSetupGroup", "Page Setup", null, priority: 170,
+            .Group("PageLayoutPageSetupGroup", "Page Setup", null, priority: 200,
                 g => g
                 .Large("Margins", "Margins", Ico.Margins, "M", menu: m => m.Item("Normal#MarginNormalMenuItem_Click", "Normal", "N").Item("Wide", "Wide", "W").Item("Narrow", "Narrow", "A").Item("Custom Margins", "Custom Margins...", "C"))
                 .Large("Page Orientation", "Page Orientation", Ico.Orientation, "OR", menu: m => m.Item("Portrait", "Portrait", "P").Item("Landscape", "Landscape", "L"))
@@ -94,13 +94,13 @@ public static class FreeXRibbonDefinition
                 .Large("Print Titles", "Print Titles", Ico.Print, "PT")
                 .Medium("Page Setup", "Page Setup", Ico.Page, "PS")
                 .Medium("Page Setup dialog", "Page Setup dialog", Ico.Page, "PD"))
-            .Group("PageLayoutScaleToFitGroup", "Scale To Fit", null, priority: 160,
+            .Group("PageLayoutScaleToFitGroup", "Scale To Fit", null, priority: 90,
                 g => g
                 .ComboBox("Scale Width", "Scale Width", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale), Width = 96, Items = new[] { "Automatic", "1 page", "2 pages" }, KeyTip = "SW" })
                 .ComboBox("Scale Height", "Scale Height", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale), Width = 96, Items = new[] { "Automatic", "1 page", "2 pages" }, KeyTip = "SH" })
                 .ComboBox("Scale Percent", "Scale Percent", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Percent), Width = 70, Items = new[] { "100%", "90%", "80%", "75%", "50%" }, KeyTip = "SC" })
                 .Large("Scale to Fit", "Scale to Fit", Ico.Scale, "SF"))
-            .Group("PageLayoutSheetOptionsGroup", "Sheet Options", null, priority: 150,
+            .Group("PageLayoutSheetOptionsGroup", "Sheet Options", null, priority: 80,
                 g => g
                 .CheckBox("View Gridlines", "View Gridlines", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Grid), KeyTip = "VG" })
                 .CheckBox("Print Gridlines", "Print Gridlines", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Grid), KeyTip = "PG" })
@@ -108,7 +108,7 @@ public static class FreeXRibbonDefinition
                 .CheckBox("Print Headings", "Print Headings", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Grid), KeyTip = "PH" }))
         )
         .Tab("FormulasTab", "Formulas", "M", tab => tab
-            .Group("FormulasFunctionLibraryGroup", "Function Library", null, priority: 180,
+            .Group("FormulasFunctionLibraryGroup", "Function Library", null, priority: 200,
                 g => g
                 .Large("AutoSum#FormulasAutoSumPickerBtn_Click", "AutoSum", Ico.Sum, "U", menu: m => m.Item("Sum", "Sum", "S").Item("Average", "Average", "A").Item("Count Numbers", "Count Numbers", "C").Item("Count All", "Count All", "T").Item("Max", "Max", "X").Item("Min", "Min", "M").Item("More Functions#AutoSumMoreMenuItem_Click", "More Functions...", "F"))
                 .Medium("Recently Used", "Recently Used", Ico.Generic, "RU")
@@ -119,13 +119,13 @@ public static class FreeXRibbonDefinition
                 .Medium("Lookup & Reference", "Lookup & Reference", Ico.Search, "K")
                 .Medium("Math & Trig", "Math & Trig", Ico.Math, "MT")
                 .Medium("More Functions#FormulaMoreBtn_Click", "More Functions", Ico.Function, "MF"))
-            .Group("FormulasDefinedNamesGroup", "Defined Names", null, priority: 170,
+            .Group("FormulasDefinedNamesGroup", "Defined Names", null, priority: 130,
                 g => g
                 .Large("Name Manager", "Name Manager", Ico.Label, "N")
                 .Large("Define Name", "Define Name", Ico.Label, "DN")
                 .Large("Use in Formula", "Use in Formula", Ico.Function, "I")
                 .Large("Create from Selection", "Create from Selection", Ico.Label, "CS"))
-            .Group("FormulasFormulaAuditingGroup", "Formula Auditing", null, priority: 160,
+            .Group("FormulasFormulaAuditingGroup", "Formula Auditing", null, priority: 90,
                 g => g
                 .Medium("Trace Precedents", "Trace Precedents", Ico.Link, "TP")
                 .Medium("Trace Dependents", "Trace Dependents", Ico.Link, "TD")
@@ -134,7 +134,7 @@ public static class FreeXRibbonDefinition
                 .Medium("Error Checking", "Error Checking", Ico.Warning, "EC", menu: m => m.Item("Error Checking", "Error Checking...", "E").Item("Error Checking Options", "Error Checking Options...", "O"))
                 .Medium("Evaluate Formula", "Evaluate Formula", Ico.Function, "V")
                 .Medium("Watch Window", "Watch Window", Ico.Watch, "W"))
-            .Group("FormulasCalculationGroup", "Calculation", null, priority: 150,
+            .Group("FormulasCalculationGroup", "Calculation", null, priority: 120,
                 g => g
                 .Large("Calculate Now", "Calculate Now", Ico.Refresh, "CN")
                 .Large("Calculate Sheet", "Calculate Sheet", Ico.Refresh, "SC")
@@ -163,11 +163,11 @@ public static class FreeXRibbonDefinition
                 .Large("Remove Duplicates#RemoveDuplicatesBtn_Click", "Remove Duplicates", Ico.Delete, "M")
                 .Large("Data Validation#ValidationButton_Click", "Data Validation", Ico.List, "V", menu: m => m.Item("Data Validation#ValidationButton_Click", "Data Validation...", "V").Item("Circle Invalid Data", "Circle Invalid Data", "I").Item("Clear Validation Circles", "Clear Validation Circles", "C"))
                 .Large("Consolidate", "Consolidate", Ico.Date, "N"))
-            .Group("DataForecastGroup", "Forecast", null, priority: 140,
+            .Group("DataForecastGroup", "Forecast", null, priority: 80,
                 g => g
                 .Large("What-If Analysis", "What-If Analysis", Ico.Function, "W", menu: m => m.Item("Goal Seek", "Goal Seek...", "G").Item("Scenario Manager", "Scenario Manager...", "S").Item("Data Table", "Data Table...", "D"))
                 .Large("Forecast Sheet", "Forecast Sheet", Ico.ChartLine, "FS"))
-            .Group("DataOutlineGroup", "Outline", null, priority: 130,
+            .Group("DataOutlineGroup", "Outline", null, priority: 70,
                 g => g
                 .Large("Group#GroupRowsBtn_Click", "Group", Ico.Group, "G", menu: m => m.Item("Group#GroupRowsMenuItem_Click", "Group", "G", "G"))
                 .Large("Ungroup#UngroupRowsBtn_Click", "Ungroup", Ico.Group, "U", menu: m => m.Item("Ungroup#UngroupRowsMenuItem_Click", "Ungroup", "U", "U").Separator().Item("Clear Outline", "Clear Outline", "C", "C"))
@@ -176,22 +176,22 @@ public static class FreeXRibbonDefinition
                 .Medium("Show Detail", "Show Detail", Ico.List, "J"))
         )
         .Tab("ReviewTab", "Review", "R", tab => tab
-            .Group("ReviewProofingGroup", "Proofing", null, priority: 180,
+            .Group("ReviewProofingGroup", "Proofing", null, priority: 200,
                 g => g
                 .Large("Spelling", "Spelling", Ico.Spelling, "SP")
                 .Large("Workbook Statistics", "Workbook Statistics", Ico.Info, "W"))
-            .Group("ReviewAccessibilityGroup", "Accessibility", null, priority: 170,
+            .Group("ReviewAccessibilityGroup", "Accessibility", null, priority: 120,
                 g => g
                 .Large("Check Accessibility", "Check Accessibility", Ico.Accessibility, "CA")
                 .Medium("Alt Text", "Alt Text", Ico.Label, "T"))
-            .Group("ReviewCommentsGroup", "Comments", null, priority: 160,
+            .Group("ReviewCommentsGroup", "Comments", null, priority: 90,
                 g => g
                 .Large("New Comment", "New Comment", Ico.Comment, "CM")
                 .Medium("Delete Comment", "Delete Comment", Ico.Comment, "XC")
                 .Medium("Previous Comment", "Previous Comment", Ico.Comment, "PC")
                 .Medium("Next Comment", "Next Comment", Ico.Comment, "JC")
                 .Large("Show Comments", "Show Comments", Ico.Comment, "SC"))
-            .Group("ReviewNotesGroup", "Notes", null, priority: 150,
+            .Group("ReviewNotesGroup", "Notes", null, priority: 80,
                 g => g
                 .Medium("New Note", "New Note", Ico.Comment, "O")
                 .Medium("Edit Note", "Edit Note", Ico.Comment, "E")
@@ -199,7 +199,7 @@ public static class FreeXRibbonDefinition
                 .Medium("Previous Note", "Previous Note", Ico.Comment, "PN")
                 .Medium("Next Note", "Next Note", Ico.Comment, "N")
                 .Medium("Show Notes", "Show Notes", Ico.Comment, "H"))
-            .Group("ReviewProtectGroup", "Protect", null, priority: 140,
+            .Group("ReviewProtectGroup", "Protect", null, priority: 70,
                 g => g
                 .Large("Protect Sheet#ProtectSheetBtn_Click", "Protect Sheet", Ico.Protect, "PS")
                 .Large("Protect Workbook", "Protect Workbook", Ico.Protect, "PW")
@@ -207,24 +207,24 @@ public static class FreeXRibbonDefinition
                 .Medium("Share", "Share", Ico.Share, "SH"))
         )
         .Tab("ViewTab", "View", "W", tab => tab
-            .Group("ViewWorkbookViewsGroup", "Workbook Views", null, priority: 180,
+            .Group("ViewWorkbookViewsGroup", "Workbook Views", null, priority: 200,
                 g => g
                 .Large("Normal#NormalViewBtn_Click", "Normal", Ico.View, "L")
                 .Large("Page Break Preview", "Page Break Preview", Ico.PageBreak, "I")
                 .Large("Page Layout", "Page Layout", Ico.Page, "P")
                 .Large("Custom Views", "Custom Views", Ico.View, "C"))
-            .Group("ViewShowGroup", "Show", null, priority: 170,
+            .Group("ViewShowGroup", "Show", null, priority: 180,
                 g => g
                 .CheckBox("Gridlines", "Gridlines", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Grid), KeyTip = "VG" })
                 .CheckBox("Headings", "Headings", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Grid), KeyTip = "VH" })
                 .CheckBox("Ruler", "Ruler", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Ruler), KeyTip = "RU" })
                 .CheckBox("Formula Bar", "Formula Bar", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Function), KeyTip = "VF" }))
-            .Group("ViewZoomGroup", "Zoom", null, priority: 160,
+            .Group("ViewZoomGroup", "Zoom", null, priority: 110,
                 g => g
                 .Large("Zoom", "Zoom", Ico.Zoom, "Q", menu: m => m.Item("200%", "200%", "2").Item("100%#ZoomPresetMenuItem_Click", "100%", "1").Item("75%", "75%", "7").Item("50%", "50%", "5").Item("25%", "25%", "3").Separator().Item("More", "Custom...", "C"))
                 .Large("100%#Zoom100Btn_Click", "100%", Ico.Generic, "Z1")
                 .Large("Zoom to Selection", "Zoom to Selection", Ico.Zoom, "ZS"))
-            .Group("ViewWindowGroup", "Window", null, priority: 150,
+            .Group("ViewWindowGroup", "Window", null, priority: 90,
                 g => g
                 .Medium("New Window", "New Window", Ico.Window, "NW")
                 .Medium("Arrange All", "Arrange All", Ico.Grid, "A", menu: m => m.Item("Tiled", "Tiled", "T").Item("Horizontal#ArrangeAllMenuItem_Click", "Horizontal", "H").Item("Vertical", "Vertical", "V").Item("Cascade", "Cascade", "C"))
@@ -279,7 +279,7 @@ public static class FreeXRibbonDefinition
                 .Medium("Series Dash", "Series Dash", Ico.ChartColumn, "R")
                 .Medium("Series Marker", "Series Marker", Ico.ChartColumn, "K")
                 .Medium("Marker Size", "Marker Size", Ico.ChartScatter, "Z"))
-            .Group("ChartFormatTextGroup", "Text", null, priority: 160,
+            .Group("ChartFormatTextGroup", "Text", null, priority: 80,
                 g => g
                 .Medium("Chart Title Color", "Chart Title Color", Ico.ChartColumn, "TC")
                 .Medium("Chart Title Size", "Chart Title Size", Ico.ChartColumn, "TS")
@@ -304,14 +304,14 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Medium("Format Picture", "Format Picture", Ico.Picture, "FP")
                 .Medium("Crop Picture", "Crop Picture", Ico.Picture, "C", menu: m => m.Item("Crop", "Crop...", "C").Item("Reset Crop", "Reset Crop", "R")))
-            .Group("PictureFormatArrangeGroup", "Arrange", null, priority: 170,
+            .Group("PictureFormatArrangeGroup", "Arrange", null, priority: 70,
                 g => g
                 .Large("Bring Forward", "Bring Forward", Ico.BringForward, "BF")
                 .Large("Send Backward", "Send Backward", Ico.SendBackward, "SB")
                 .Large("Selection Pane#SelectionPaneBtn_Click", "Selection Pane", Ico.List, "SP")
                 .Large("Rotate Object", "Rotate Object", Ico.Rotate, "RO")
                 .Large("Object Size", "Object Size", Ico.Size, "SZ"))
-            .Group("PictureFormatAccessibilityGroup", "Accessibility", null, priority: 160,
+            .Group("PictureFormatAccessibilityGroup", "Accessibility", null, priority: 120,
                 g => g
                 .Medium("Alt Text", "Alt Text", Ico.Label, "AT"))
         )
@@ -322,14 +322,14 @@ public static class FreeXRibbonDefinition
                 .Medium("Object Outline", "Object Outline", Ico.Border, "O")
                 .Medium("Shape Gradient", "Shape Gradient", Ico.RibbonShape, "G")
                 .Medium("Shape Effects", "Shape Effects", Ico.RibbonShape, "E", menu: m => m.Item("No Effect", "No Effect", "N").Separator().Item("Shadow", "Shadow", "S").Item("Inner Shadow", "Inner Shadow", "I").Item("Reflection", "Reflection", "R").Item("Glow", "Glow", "G").Item("Soft Edges", "Soft Edges", "E").Item("Bevel", "Bevel", "B").Item("3-D Rotation", "3-D Rotation", "D")))
-            .Group("ShapeFormatArrangeGroup", "Arrange", null, priority: 170,
+            .Group("ShapeFormatArrangeGroup", "Arrange", null, priority: 70,
                 g => g
                 .Large("Bring Forward", "Bring Forward", Ico.BringForward, "BF")
                 .Large("Send Backward", "Send Backward", Ico.SendBackward, "SB")
                 .Large("Selection Pane#SelectionPaneBtn_Click", "Selection Pane", Ico.List, "SP")
                 .Large("Rotate Object", "Rotate Object", Ico.Rotate, "RO")
                 .Large("Object Size", "Object Size", Ico.Size, "SZ"))
-            .Group("ShapeFormatAccessibilityGroup", "Accessibility", null, priority: 160,
+            .Group("ShapeFormatAccessibilityGroup", "Accessibility", null, priority: 120,
                 g => g
                 .Medium("Alt Text", "Alt Text", Ico.Label, "AT"))
         )
@@ -390,7 +390,7 @@ public static class FreeXRibbonDefinition
                 .Medium("PivotChart", "PivotChart", Ico.ChartColumn, "PC")
                 .Medium("Change Chart Type#PivotChartChangeTypeBtn_Click", "Change Chart Type", Ico.ChartColumn, "CT")
                 .Medium("PivotChart Options", "PivotChart Options", Ico.ChartColumn, "CO"))
-            .Group("PivotTableAnalyzeShowGroup", "Show", null, priority: 100,
+            .Group("PivotTableAnalyzeShowGroup", "Show", null, priority: 180,
                 g => g
                 .Medium("Field List", "Field List", Ico.Label, "FL")
                 .Medium("+/- Buttons", "+/- Buttons", Ico.Generic, "PB")

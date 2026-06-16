@@ -300,6 +300,36 @@ def should_hide_from_insert(title):
             and "recommended chart" not in n)
 
 
+# Per-group collapse priority: HIGHER stays expanded longer; LOWER collapses to an overflow button
+# first. Tuned to read like Excel — the primary action group of each tab is protected (high), large
+# secondary galleries (Charts) collapse early, and small utility groups (Symbols, Comments, Links)
+# collapse first. Keyed by the group's display header; unlisted groups fall back to left-to-right
+# descending order so earlier (more important) groups outlast later ones.
+GROUP_PRIORITY = {
+    # Insert: Tables is the protected primary; Charts is large and collapses before the small groups.
+    "Tables": 200, "Charts": 60, "Sparklines": 120, "Filters": 110, "Links": 100,
+    "Comments": 90, "Text": 80, "Symbols": 70,
+    # Page Layout: Page Setup is primary; Themes/Scale collapse earlier.
+    "Page Setup": 200, "Scale To Fit": 90, "Sheet Options": 80, "Themes": 110, "Arrange": 70,
+    # Formulas: Function Library primary; Calculation/Defined Names mid; Formula Auditing collapses.
+    "Function Library": 200, "Defined Names": 130, "Formula Auditing": 90, "Calculation": 120,
+    # Data: Get & Transform / Sort & Filter primary; What-If/Outline collapse.
+    "Get & Transform Data": 200, "Queries & Connections": 90, "Sort & Filter": 180,
+    "Data Tools": 130, "Forecast": 80, "Outline": 70, "Data Types": 100,
+    # Review: Proofing primary; Notes/Protect collapse first.
+    "Proofing": 200, "Accessibility": 120, "Comments ": 110, "Notes": 80, "Protect": 70, "Changes": 90,
+    # View: Workbook Views / Show primary; Zoom/Window collapse.
+    "Workbook Views": 200, "Show": 180, "Zoom": 110, "Window": 90,
+}
+
+
+def group_priority(tab, cid, header, index):
+    if header in GROUP_PRIORITY:
+        return GROUP_PRIORITY[header]
+    # Fallback: descending left-to-right so the leftmost (primary) group outlasts the rest.
+    return max(40, 180 - index * 10)
+
+
 def grouphdr(cid, tab):
     s = cid[:-5] if cid.endswith("Group") else cid
     tp = tab[:-3]
@@ -388,8 +418,9 @@ for tab in mainorder + ctxorder:
     else:
         out.append(f'        .Tab("{tab}", "{hdr}", "{kt}", tab => tab')
     gp = 180
-    for cid, items in groups:
+    for gi, (cid, items) in enumerate(groups):
         ghdr = esc(grouphdr(cid, tab))
+        gp = group_priority(tab, cid, grouphdr(cid, tab), gi)
         # Cap control count (keep separators), and drop leading/trailing/duplicate separators.
         kept = []
         ctrl_count = 0
@@ -467,10 +498,9 @@ for tab in mainorder + ctxorder:
             else:
                 cl.append(f'                .Medium("{idesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
         body = "\n".join(cl)
-        out.append(f'            .Group("{cid}", "{ghdr}", null, priority: {gp},')
+        out.append(f'            .Group("{cid}", "{ghdr}", null, priority: {int(gp)},')
         out.append("                g => g")
         out.append(body + ")")
-        gp -= 10
     out.append("        )")
 out.append("        .Build();")
 out.append("}")
