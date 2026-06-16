@@ -5,59 +5,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class ChartCommandSourceTests
 {
-    [Theory]
-    [InlineData("Recommended Charts", "Recommended Charts", "RC", "InsertChartPickerBtn_Click")]
-    [InlineData("Column Chart", "Column", "CC", "ChartColumnMenuItem_Click")]
-    [InlineData("Stacked Column Chart", "Stack Col", "SC", "ChartStackedColumnMenuItem_Click")]
-    [InlineData("100% Stacked Column Chart", "100% Col", "PC", "ChartPercentStackedColumnMenuItem_Click")]
-    [InlineData("Bar Chart", "Bar", "BC", "ChartBarMenuItem_Click")]
-    [InlineData("Line Chart", "Line", "LC", "ChartLineMenuItem_Click")]
-    [InlineData("Pie Chart", "Pie", "PY", "ChartPieMenuItem_Click")]
-    [InlineData("Doughnut Chart", "Doughnut", "DO", "ChartDoughnutMenuItem_Click")]
-    [InlineData("Scatter Chart", "Scatter", "SX", "ChartScatterMenuItem_Click")]
-    [InlineData("Stock Chart", "Stock", "ST", "ChartStockMenuItem_Click")]
-    [InlineData("3D Column Chart", "3D Column", "3C", "Chart3DColumnMenuItem_Click")]
-    [InlineData("3D Bar Chart", "3D Bar", "3B", "Chart3DBarMenuItem_Click")]
-    [InlineData("3D Line Chart", "3D Line", "3L", "Chart3DLineMenuItem_Click")]
-    [InlineData("3D Pie Chart", "3D Pie", "3P", "Chart3DPieMenuItem_Click")]
-    [InlineData("3D Area Chart", "3D Area", "3A", "Chart3DAreaMenuItem_Click")]
-    [InlineData("Surface Chart", "Surface", "UF", "ChartSurfaceMenuItem_Click")]
-    [InlineData("3D Surface Chart", "3D Surface", "3S", "Chart3DSurfaceMenuItem_Click")]
-    public void InsertChartCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
-        string title,
-        string content,
-        string keyTip,
-        string handler)
-    {
-        var button = ReadMainWindowXaml().ExtractButtonElementByInvariantCommandName(title);
-
-        button.ShouldContainLocalizedAttribute("Content", content);
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().Contain($"Click=\"{handler}\"");
-    }
-
-    [Theory]
-    [InlineData("Treemap Chart", "Treemap", "T7", "ChartTreemapMenuItem_Click")]
-    [InlineData("Sunburst Chart", "Sunburst", "SU", "ChartSunburstMenuItem_Click")]
-    [InlineData("Histogram Chart", "Histogram", "HI", "ChartHistogramMenuItem_Click")]
-    [InlineData("Pareto Chart", "Pareto", "PA", "ChartParetoMenuItem_Click")]
-    [InlineData("Box and Whisker Chart", "Box Plot", "BW", "ChartBoxAndWhiskerMenuItem_Click")]
-    [InlineData("Waterfall Chart", "Waterfall", "WF", "ChartWaterfallMenuItem_Click")]
-    [InlineData("Funnel Chart", "Funnel", "FU", "ChartFunnelMenuItem_Click")]
-    public void AdvancedChartCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
-        string title,
-        string content,
-        string keyTip,
-        string handler)
-    {
-        var button = ReadMainWindowXaml().ExtractButtonElementByInvariantCommandName(title);
-
-        button.ShouldContainLocalizedAttribute("Content", content);
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().Contain($"Click=\"{handler}\"");
-    }
 
     [Fact]
     public void ChartHandlers_RouteThroughExpectedDialogsCommandsAndDeferredPath()
@@ -110,21 +57,6 @@ public sealed class ChartCommandSourceTests
         commandExecutionSource.Should().Contain("private ChartModel? GetSelectedChartOnCurrentSheet()");
         commandExecutionSource.Should().Contain("SheetGrid.SelectedObjectKind != FreeX.App.UI.ObjectKind.Chart");
         commandExecutionSource.Should().Contain("chart.Id == SheetGrid.SelectedObjectId");
-    }
-
-    [Fact]
-    public void MapChartCommand_IsNotSurfacedAsDeferredRibbonButton()
-    {
-        var xaml = ReadMainWindowXaml();
-        var source = ReadHostSourceFile("MainWindow.ChartCommands.cs");
-
-        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Map Chart\"");
-        xaml.Should().NotContain("Click=\"DeferredChartFamilyMenuItem_Click\"");
-        xaml.Should().NotContain("local:RibbonTooltip.KeyTip=\"MP\"");
-
-        source.Should().Contain("private void ShowDeferredChartFamilyMessage() =>");
-        source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferred\")");
-        source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferredTitle\")");
     }
 
 }

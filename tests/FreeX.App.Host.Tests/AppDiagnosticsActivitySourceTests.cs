@@ -48,10 +48,10 @@ public sealed class AppDiagnosticsActivitySourceTests
         var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
-        reviewSource.Should().Contain("private void CheckForUpdatesBtn_Click(");
+        reviewSource.Should().Contain("private async void CheckForUpdatesBtn_Click(");
         reviewSource.Should().Contain("RecordDiagnosticEvent(\"update_check_opened\"");
         reviewSource.Should().Contain("[\"source\"] = \"help\"");
-        reviewSource.Should().Contain("AppUpdateSource.CreateDefault().ReleasePageUrl");
+        reviewSource.Should().Contain("OpenExternalHelpLink(updates.ReleasesPageUrl, UiText.Get(\"MainWindowMessage_CheckForUpdatesTitle\"))");
         xaml.Should().Contain("Click=\"CheckForUpdatesBtn_Click\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"HelpCheckForUpdatesButton\"");
     }

@@ -9,6 +9,11 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Velopack must run before any other startup work so it can service install/update/
+        // uninstall hook invocations and exit fast. macOS associations are declared in
+        // Info.plist, so no install hooks are wired here.
+        Velopack.VelopackApp.Build().Run();
+
         if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode))
             return smokeExitCode;
 

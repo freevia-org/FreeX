@@ -93,6 +93,59 @@ public sealed class RibbonGroupBuilder
         return this;
     }
 
+    public RibbonGroupBuilder RowBreak()
+    {
+        _controls.Add(new RibbonRowBreak());
+        return this;
+    }
+
+    /// <summary>A large "hero" button: big icon, label below, optional dropdown (with optional menu contents).</summary>
+    public RibbonGroupBuilder Large(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null, bool dropdown = false, Action<RibbonMenuBuilder>? menu = null)
+        => AddSized(RibbonCommandLayoutKind.Large, commandId, label, icon, keyTip, dropdown, menu);
+
+    /// <summary>An icon-only button (no label), optionally a dropdown (with optional menu contents).</summary>
+    public RibbonGroupBuilder Icon(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null, bool dropdown = false, Action<RibbonMenuBuilder>? menu = null)
+        => AddSized(RibbonCommandLayoutKind.Small, commandId, label, icon, keyTip, dropdown, menu);
+
+    /// <summary>A medium button: small icon with a label to the right, optional dropdown (with optional menu contents).</summary>
+    public RibbonGroupBuilder Medium(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null, bool dropdown = false, Action<RibbonMenuBuilder>? menu = null)
+        => AddSized(RibbonCommandLayoutKind.Medium, commandId, label, icon, keyTip, dropdown, menu);
+
+    /// <summary>An icon-only toggle button (no label).</summary>
+    public RibbonGroupBuilder IconToggle(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null)
+    {
+        _controls.Add(new RibbonToggleButton(commandId, label) with
+        {
+            PreferredLayout = RibbonCommandLayoutKind.Small,
+            Icon = new RibbonCommandIcon(icon),
+            KeyTip = keyTip
+        });
+        return this;
+    }
+
+    private RibbonGroupBuilder AddSized(RibbonCommandLayoutKind layout, string commandId, string label, RibbonCommandIconKind icon, string? keyTip, bool dropdown, Action<RibbonMenuBuilder>? menu)
+    {
+        RibbonMenu? builtMenu = null;
+        if (menu is not null)
+        {
+            var mb = new RibbonMenuBuilder();
+            menu(mb);
+            builtMenu = mb.Build();
+        }
+
+        RibbonControl control = (dropdown || builtMenu is not null)
+            ? new RibbonDropdown(commandId, label, builtMenu ?? RibbonMenu.Empty)
+            : new RibbonButton(commandId, label);
+
+        _controls.Add(control with
+        {
+            PreferredLayout = layout,
+            Icon = new RibbonCommandIcon(icon),
+            KeyTip = keyTip
+        });
+        return this;
+    }
+
     public RibbonGroupBuilder Sizing(RibbonGroupSizing sizing)
     {
         _sizing = sizing;
@@ -106,4 +159,24 @@ public sealed class RibbonGroupBuilder
     }
 
     internal RibbonGroup Build() => new(_id, _header, _keyTip, _priority, _controls.ToArray(), _sizing);
+}
+
+/// <summary>Fluent construction of a dropdown's menu contents.</summary>
+public sealed class RibbonMenuBuilder
+{
+    private readonly List<RibbonMenuItem> _items = new();
+
+    public RibbonMenuBuilder Item(string commandId, string header, string? keyTip = null, string? gesture = null)
+    {
+        _items.Add(new RibbonMenuItem(header, new RibbonCommandId(commandId), keyTip, gesture));
+        return this;
+    }
+
+    public RibbonMenuBuilder Separator()
+    {
+        _items.Add(RibbonMenuItem.Separator());
+        return this;
+    }
+
+    internal RibbonMenu Build() => new(_items.ToArray());
 }

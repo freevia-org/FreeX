@@ -10,6 +10,12 @@ public static class AppInfo
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion);
 
+    /// <summary>
+    /// Release channel for self-update. The tester channel pulls GitHub pre-releases
+    /// (see <c>UpdateFeed.AllowPrereleases</c>); mirrors <c>release/progress.json</c>'s "channel".
+    /// </summary>
+    public const string ReleaseChannel = "test";
+
     public const string HelpUrl = "https://github.com/tony-xmelon/FreeX";
     public const string FeedbackUrl = "https://github.com/tony-xmelon/FreeX/issues/new";
     public const string LatestReleaseUrl = "https://github.com/tony-xmelon/FreeX/releases/latest";

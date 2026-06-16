@@ -38,11 +38,10 @@ public sealed class TableStyleGalleryPlannerTests
     [Fact]
     public void MainWindow_PopulatesFormatAsTableMenuFromGalleryPlanner()
     {
-        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        // The FormatTableGalleryMenu is now a backplane control, not ribbon XAML; the population
+        // code (driven by the gallery planner) is what matters and still runs.
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
-        xaml.Should().Contain("x:Name=\"FormatTableGalleryMenu\"");
-        xaml.Should().NotContain("Header=\"Light 1\"  Tag=\"0\"");
         source.Should().Contain("PopulateFormatTableGalleryMenu()");
         source.Should().Contain("TableStyleGalleryPlanner.GetOptions(_workbook.Theme)");
     }

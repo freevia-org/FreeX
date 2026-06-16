@@ -1,7 +1,9 @@
 import re
 import xml.etree.ElementTree as ET
 
-XAML = "src/FreeX.App.Host/MainWindow.xaml"
+# The live MainWindow.xaml ribbon was deleted in the declarative cutover; regenerate from the
+# pre-deletion ribbon preserved in git (write it with: git show <pre-cutover>:.../MainWindow.xaml).
+XAML = "tools/_old_mainwindow.xaml"
 OUT = "src/FreeX.App.Host/Ribbon/FreeXRibbonDefinition.cs"
 
 src = open(XAML, encoding="utf-8").read()
@@ -48,25 +50,54 @@ for e in root.iter():
 data = {}
 order = []
 curtab = None
+handler_map = {}  # CommandName -> Click handler method name (controls + menu items)
 for e in root.iter():
     cid = catid(e)
     if cid and cid.endswith("Tab"):
         curtab = cid
     if cid and cid.endswith("Group"):
-        ctrls = []
+        items = []
         for d in e.iter():
             tag = d.tag.split("}")[-1]
-            if tag in ("Button", "ToggleButton", "ComboBox", "CheckBox"):
-                if any(a.tag == P + "ContextMenu" for a in anc(d)):
-                    continue
+            ancestors = anc(d)
+            if any(a.tag == P + "ContextMenu" for a in ancestors):
+                continue
+            inside_ctrl = any(
+                a.tag.split("}")[-1] in ("Button", "ToggleButton", "ComboBox", "CheckBox")
+                for a in ancestors)
+            if tag == "Rectangle" and d.get("Width") == "1" and not inside_ctrl:
+                items.append(("sep",))
+            elif tag in ("Button", "ToggleButton", "ComboBox", "CheckBox") and not inside_ctrl:
                 cn = cmdname(d)
                 if not cn:
                     continue
-                ctrls.append((tag, cn, keytip(d) or ""))
+                style = re.sub(r"\{StaticResource (\w+)\}", r"\1", d.get("Style") or "")
+                if d.get("Click") and cn not in handler_map:
+                    handler_map[cn] = d.get("Click")
+                menu = []
+                for ch in list(d):
+                    if not ch.tag.split("}")[-1].endswith(".ContextMenu"):
+                        continue
+                    cm = ch.find(P + "ContextMenu")
+                    if cm is None:
+                        continue
+                    for mi in list(cm):
+                        mt = mi.tag.split("}")[-1]
+                        if mt == "Separator":
+                            menu.append(("sep",))
+                        elif mt == "MenuItem":
+                            mcn = mi.get(LK + "RibbonMetadata.CommandName") or mi.get("Header") or ""
+                            if mcn:
+                                if mi.get("Click") and mcn not in handler_map:
+                                    handler_map[mcn] = mi.get("Click")
+                                menu.append(("item", mcn, mi.get(LK + "RibbonTooltip.KeyTip") or "",
+                                             mi.get("InputGestureText") or ""))
+                has_drop = d.get(LK + "RibbonMetadata.DropdownMenuButton") == "true" or len(menu) > 0
+                items.append(("ctrl", tag, cn, keytip(d) or "", style, has_drop, menu))
         if curtab not in data:
             data[curtab] = []
             order.append(curtab)
-        data[curtab].append((cid, ctrls))
+        data[curtab].append((cid, items))
 
 ctxkey = {
     "ShapeFormatTab": "shape.selected",
@@ -153,6 +184,57 @@ def icon(cn):
     return "Generic"
 
 
+# Mirrors RibbonCommandPresentationPlanner.IsLargeRibbonCommand (the authoritative hero-button list).
+LARGE_EQ = {
+    "paste", "table", "pivottable", "3d map", "insert picture", "pictures", "shapes",
+    "insert link", "comment", "symbol", "line", "rotate object", "object size",
+    "sort ascending", "sort descending", "filter", "group", "ungroup", "zoom", "100%", "macros", "feedback",
+}
+LARGE_CONTAINS = [
+    "conditional formatting", "format as table", "cell styles", "add-ins", "recommended chart",
+    "recommended pivottable", "insert symbol", "insert slicer", "insert timeline", "header", "equation",
+    "text box", "rectangle", "ellipse", "bring forward", "send backward", "selection pane", "themes",
+    "margins", "orientation", "paper size", "print area", "breaks", "background", "print titles",
+    "theme colors", "theme fonts", "theme effects", "scale to fit", "insert function", "autosum",
+    "name manager", "define name", "use in formula", "create from selection", "calculation options",
+    "calculate now", "calculate sheet", "get data", "refresh all", "text to columns", "flash fill",
+    "remove duplicates", "data validation", "consolidate", "data model", "analyze data", "what-if",
+    "forecast sheet", "collapse group", "expand group", "subtotal", "spelling", "workbook statistics",
+    "check accessibility", "show changes", "new comment", "show comments", "protect sheet",
+    "protect workbook", "allow edit", "normal", "page break preview", "page layout", "custom views",
+    "zoom to 100", "zoom to selection", "help online", "copy diagnostics", "check for updates",
+    "about freex", "legal notices",
+]
+ICON_STYLES = {"RibbonIconButton", "RibbonIconToggleButton"}
+
+
+def is_large(name):
+    n = name.strip().lower()
+    if n in LARGE_EQ:
+        return True
+    return any(s in n for s in LARGE_CONTAINS)
+
+
+# Mirrors RibbonCommandPresentationPlanner.ShouldHideFromInsertRibbon: keep only the primary chart
+# types + recommended/sparklines on the Insert tab; the rest are chart-formatting commands surfaced
+# through the chart contextual tabs, not as Insert buttons.
+_PRIMARY_INSERT_CHARTS = {
+    "column chart", "stacked column chart", "100% stacked column chart", "line chart", "pie chart",
+    "doughnut chart", "bar chart", "stacked bar chart", "100% stacked bar chart", "scatter chart",
+    "bubble chart", "area chart", "radar chart", "stock chart",
+}
+
+
+def should_hide_from_insert(title):
+    n = (title or "").strip().lower()
+    if not any(k in n for k in ("chart", "axis", "legend", "trendline", "series", "plot",
+                                "label", "slice", "doughnut hole", "secondary")):
+        return False
+    return (n not in _PRIMARY_INSERT_CHARTS
+            and "sparkline" not in n
+            and "recommended chart" not in n)
+
+
 def grouphdr(cid, tab):
     s = cid[:-5] if cid.endswith("Group") else cid
     tp = tab[:-3]
@@ -171,8 +253,34 @@ def method(kind):
     return {"Button": "Button", "ToggleButton": "Toggle", "CheckBox": "CheckBox", "ComboBox": "ComboBox"}[kind]
 
 
+def menu_expr(menu):
+    parts = []
+    n = 0
+    for m in menu:
+        if m[0] == "sep":
+            if parts and not parts[-1].endswith("Separator()"):
+                parts.append(".Separator()")
+            continue
+        if n >= 14:
+            break
+        mcn, mkt, mg = esc(m[1]), esc(m[2]), esc(m[3])
+        args = f'"{mcn}", "{mcn}"'
+        if mkt or mg:
+            args += f', "{mkt}"'
+        if mg:
+            args += f', "{mg}"'
+        parts.append(f".Item({args})")
+        n += 1
+    while parts and parts[0].endswith("Separator()"):
+        parts.pop(0)
+    while parts and parts[-1].endswith("Separator()"):
+        parts.pop()
+    return "".join(parts)
+
+
 out = []
 out.append("using FreeX.Ribbon;")
+out.append("using Ico = FreeX.Ribbon.RibbonCommandIconKind;")
 out.append("")
 out.append("namespace FreeX.App.Host;")
 out.append("")
@@ -191,6 +299,8 @@ ctxorder = ["ChartDesignTab", "ChartFormatTab", "PictureFormatTab", "ShapeFormat
 for tab in mainorder + ctxorder:
     if tab not in data:
         continue
+    if tab == "HomeTab":
+        continue  # Home is hand-authored in HomeRibbonDefinition for full fidelity.
     meta = tabmeta.get(tab, dict(header=tab, keytip="", contextual=tab in ctxkey))
     raw_hdr = meta["header"]
     if raw_hdr.startswith("MainWindow_Header_"):
@@ -200,7 +310,7 @@ for tab in mainorder + ctxorder:
         raw_hdr = ctxlabel[tab]
     hdr = esc(raw_hdr)
     kt = esc(meta["keytip"])
-    groups = [g for g in data[tab] if g[1]]
+    groups = [g for g in data[tab] if any(it[0] == "ctrl" for it in g[1])]
     if not groups:
         continue
     if tab in ctxkey:
@@ -211,36 +321,78 @@ for tab in mainorder + ctxorder:
     else:
         out.append(f'        .Tab("{tab}", "{hdr}", "{kt}", tab => tab')
     gp = 180
-    for cid, ctrls in groups:
+    for cid, items in groups:
         ghdr = esc(grouphdr(cid, tab))
-        ctrls = ctrls[:16]
+        # Cap control count (keep separators), and drop leading/trailing/duplicate separators.
+        kept = []
+        ctrl_count = 0
+        for it in items:
+            if it[0] == "sep":
+                if kept and kept[-1][0] != "sep":
+                    kept.append(it)
+                continue
+            if tab == "InsertTab" and should_hide_from_insert(it[2]):
+                continue
+            if ctrl_count >= 16:
+                continue
+            kept.append(it)
+            ctrl_count += 1
+        while kept and kept[-1][0] == "sep":
+            kept.pop()
+
         cl = []
-        for i, (kind, cn, k) in enumerate(ctrls):
-            m = method(kind)
+        for it in kept:
+            if it[0] == "sep":
+                cl.append("                .Separator()")
+                continue
+            _, kind, cn, k, style, has_drop, menu = it
             ic = icon(cn)
             cesc = esc(cn)
             kk = esc(k)
-            large = (i == 0 and kind == "Button" and len(ctrls) >= 2)
-            if m == "ComboBox":
+            mx = menu_expr(menu) if menu else ""
+            if mx:
+                drop = f", menu: m => m{mx}"
+            elif has_drop:
+                drop = ", dropdown: true"
+            else:
+                drop = ""
+            if kind == "ComboBox":
                 low = cn.lower()
                 if "font size" in low:
-                    items = '"8", "9", "10", "11", "12", "14", "16", "18", "20", "24"'
+                    citems = '"8", "9", "10", "11", "12", "14", "16", "18", "20", "24"'
+                    width = "44"
                 elif "font" in low:
-                    items = '"Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana"'
+                    citems = '"Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana"'
+                    width = "120"
                 elif "number" in low:
-                    items = '"General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text"'
+                    citems = '"General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text"'
+                    width = "120"
                 elif "width" in low or "height" in low:
-                    items = '"Automatic", "1 page", "2 pages"'
+                    citems = '"Automatic", "1 page", "2 pages"'
+                    width = "96"
                 elif "percent" in low or "scale" in low:
-                    items = '"100%", "90%", "80%", "75%", "50%"'
+                    citems = '"100%", "90%", "80%", "75%", "50%"'
+                    width = "70"
                 else:
-                    items = ""
-                itemexpr = (", Items = new[] { " + items + " }") if items else ""
-                cl.append(f'                .ComboBox("{cesc}", "{cesc}", c => c with {{ Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}){itemexpr} }})')
-            elif large:
-                cl.append(f'                .Button("{cesc}", "{cesc}", b => b with {{ PreferredLayout = RibbonCommandLayoutKind.Large, Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}), KeyTip = "{kk}" }})')
+                    citems = ""
+                    width = ""
+                parts = [f"Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic})"]
+                if width:
+                    parts.append(f"Width = {width}")
+                if citems:
+                    parts.append("Items = new[] { " + citems + " }")
+                cl.append(f'                .ComboBox("{cesc}", "{cesc}", c => c with {{ {", ".join(parts)} }})')
+            elif kind == "CheckBox":
+                cl.append(f'                .CheckBox("{cesc}", "{cesc}", b => b with {{ Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}) }})')
+            elif is_large(cn):
+                cl.append(f'                .Large("{cesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
+            elif style in ICON_STYLES or kind == "ToggleButton":
+                if kind == "ToggleButton":
+                    cl.append(f'                .IconToggle("{cesc}", "{cesc}", Ico.{ic}, "{kk}")')
+                else:
+                    cl.append(f'                .Icon("{cesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
             else:
-                cl.append(f'                .{m}("{cesc}", "{cesc}", b => b with {{ Icon = new RibbonCommandIcon(RibbonCommandIconKind.{ic}), KeyTip = "{kk}" }})')
+                cl.append(f'                .Medium("{cesc}", "{cesc}", Ico.{ic}, "{kk}"{drop})')
         body = "\n".join(cl)
         out.append(f'            .Group("{cid}", "{ghdr}", null, priority: {gp},')
         out.append("                g => g")
@@ -252,6 +404,26 @@ out.append("}")
 
 open(OUT, "w", encoding="utf-8").write("\n".join(out) + "\n")
 print("wrote", OUT)
+
+# Emit the CommandName -> Click-handler-method map for the native command registry.
+HMAP = "src/FreeX.App.Host/Ribbon/FreeXRibbonHandlerMap.g.cs"
+hm = []
+hm.append("using System.Collections.Generic;")
+hm.append("")
+hm.append("namespace FreeX.App.Host;")
+hm.append("")
+hm.append("/// <summary>Generated map: ribbon CommandName -> the MainWindow Click-handler method name.</summary>")
+hm.append("public static class FreeXRibbonHandlerMap")
+hm.append("{")
+hm.append("    public static readonly IReadOnlyDictionary<string, string> Handlers =")
+hm.append("        new Dictionary<string, string>(System.StringComparer.Ordinal)")
+hm.append("        {")
+for cmd in sorted(handler_map):
+    hm.append(f'            ["{esc(cmd)}"] = "{esc(handler_map[cmd])}",')
+hm.append("        };")
+hm.append("}")
+open(HMAP, "w", encoding="utf-8").write("\n".join(hm) + "\n")
+print("wrote", HMAP, "with", len(handler_map), "handlers")
 print("tabs:", sum(1 for t in (mainorder + ctxorder) if t in data and any(g[1] for g in data[t])))
 print("groups:", sum(1 for t in data for g in data[t] if g[1]))
 print("controls:", sum(len(g[1][:16]) for t in data for g in data[t] if g[1]))

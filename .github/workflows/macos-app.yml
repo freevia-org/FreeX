@@ -1025,6 +1025,40 @@ jobs:
           grep -q "^macos_launch_smoke=passed$" "$open_with_report"
           grep -q "^macos_launch_smoke=passed$" "$default_open_report"
 
+      - name: Pack Velopack (macOS)
+        shell: bash
+        env:
+          FREEX_RUNTIME: ${{ matrix.runtime }}
+        run: |
+          set -euo pipefail
+
+          runtime="$FREEX_RUNTIME"
+          output_root="$RUNNER_TEMP/freex-$runtime"
+          app="$output_root/FreeX.app"
+          artifact_root="$GITHUB_WORKSPACE/artifacts"
+          vpk_out="$artifact_root/velopack-$runtime"
+
+          test -d "$app"
+          app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+
+          dotnet tool install -g vpk || true
+          export PATH="$PATH:$HOME/.dotnet/tools"
+
+          rm -rf "$vpk_out"
+          mkdir -p "$vpk_out"
+
+          vpk pack \
+            --packId FreeX \
+            --packVersion "$app_version" \
+            --packDir "$app" \
+            --mainExe FreeX \
+            --outputDir "$vpk_out" \
+            --packTitle FreeX \
+            --channel osx
+
+          echo "Created Velopack artifacts in $vpk_out"
+          ls -1 "$vpk_out"
+
       - name: Upload app artifact
         uses: actions/upload-artifact@v7
         with:
@@ -1039,6 +1073,7 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-default-open-launch-smoke.txt
             artifacts/freex-${{ matrix.runtime }}-macos-notarization.log
             artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
+            artifacts/velopack-${{ matrix.runtime }}/*
           if-no-files-found: error
           retention-days: 14
 

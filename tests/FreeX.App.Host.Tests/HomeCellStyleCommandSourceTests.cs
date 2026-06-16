@@ -4,66 +4,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class HomeCellStyleCommandSourceTests
 {
-    [Fact]
-    public void CellStylesRibbonButton_ExposesMenuWithExpectedKeyTip()
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var button = xaml.ExtractButtonElementByClickHandler("CellStylesBtn_Click");
-
-        button.ShouldContainInvariantCommandName("Cell Styles");
-        button.Should().Contain("local:RibbonTooltip.KeyTip=\"J\"");
-        button.Should().Contain("<Button.ContextMenu>");
-    }
-
-    [Theory]
-    [InlineData("Normal", "NM", "CellStyleNormalMenuItem_Click", "Normal")]
-    [InlineData("Good", "GD", "CellStyleGoodMenuItem_Click", "Good")]
-    [InlineData("Bad", "BD", "CellStyleBadMenuItem_Click", "Bad")]
-    [InlineData("Neutral", "NT", "CellStyleNeutralMenuItem_Click", "Neutral")]
-    [InlineData("Input", "IN", "CellStyleInputMenuItem_Click", "Input")]
-    [InlineData("Output", "OP", "CellStyleOutputMenuItem_Click", "Output")]
-    [InlineData("Calculation", "CA", "CellStyleCalculationMenuItem_Click", "Calculation")]
-    [InlineData("Check Cell", "CK", "CellStyleCheckCellMenuItem_Click", "CheckCell")]
-    [InlineData("Linked Cell", "LK", "CellStyleLinkedCellMenuItem_Click", "LinkedCell")]
-    [InlineData("Explanatory Text", "EX", "CellStyleExplanatoryTextMenuItem_Click", "ExplanatoryText")]
-    [InlineData("Heading 1", "H1", "CellStyleH1MenuItem_Click", "Heading1")]
-    [InlineData("Heading 2", "H2", "CellStyleH2MenuItem_Click", "Heading2")]
-    [InlineData("Note", "NO", "CellStyleNoteMenuItem_Click", "Note")]
-    [InlineData("Warning Text", "WT", "CellStyleWarningMenuItem_Click", "WarningText")]
-    [InlineData("Total", "TT", "CellStyleTotalMenuItem_Click", "Total")]
-    [InlineData("20% - Accent 1", "A1", "CellStyleAccent1_20MenuItem_Click", "Accent1_20")]
-    [InlineData("20% - Accent 2", "A2", "CellStyleAccent2_20MenuItem_Click", "Accent2_20")]
-    [InlineData("20% - Accent 3", "A3", "CellStyleAccent3_20MenuItem_Click", "Accent3_20")]
-    [InlineData("20% - Accent 4", "A4", "CellStyleAccent4_20MenuItem_Click", "Accent4_20")]
-    [InlineData("20% - Accent 5", "A5", "CellStyleAccent5_20MenuItem_Click", "Accent5_20")]
-    [InlineData("20% - Accent 6", "A6", "CellStyleAccent6_20MenuItem_Click", "Accent6_20")]
-    [InlineData("40% - Accent 1", "B1", "CellStyleAccent1_40MenuItem_Click", "Accent1_40")]
-    [InlineData("40% - Accent 2", "B2", "CellStyleAccent2_40MenuItem_Click", "Accent2_40")]
-    [InlineData("40% - Accent 3", "B3", "CellStyleAccent3_40MenuItem_Click", "Accent3_40")]
-    [InlineData("40% - Accent 4", "B4", "CellStyleAccent4_40MenuItem_Click", "Accent4_40")]
-    [InlineData("40% - Accent 5", "B5", "CellStyleAccent5_40MenuItem_Click", "Accent5_40")]
-    [InlineData("40% - Accent 6", "B6", "CellStyleAccent6_40MenuItem_Click", "Accent6_40")]
-    [InlineData("60% - Accent 1", "C1", "CellStyleAccent1_60MenuItem_Click", "Accent1_60")]
-    [InlineData("60% - Accent 2", "C2", "CellStyleAccent2_60MenuItem_Click", "Accent2_60")]
-    [InlineData("60% - Accent 3", "C3", "CellStyleAccent3_60MenuItem_Click", "Accent3_60")]
-    [InlineData("60% - Accent 4", "C4", "CellStyleAccent4_60MenuItem_Click", "Accent4_60")]
-    [InlineData("60% - Accent 5", "C5", "CellStyleAccent5_60MenuItem_Click", "Accent5_60")]
-    [InlineData("60% - Accent 6", "C6", "CellStyleAccent6_60MenuItem_Click", "Accent6_60")]
-    public void CellStyleMenuItems_RouteToPlannerPresets(
-        string header,
-        string keyTip,
-        string handler,
-        string preset)
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
-        var menuItem = xaml.ExtractMenuItemElementByClickHandler(handler);
-
-        menuItem.ShouldContainLocalizedAttribute("Header", header);
-        menuItem.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        source.Should().Contain($"private void {handler}(object sender, RoutedEventArgs e)");
-        source.Should().Contain($"=> ApplyCellStylePreset(CellStylePreset.{preset});");
-    }
 
     [Fact]
     public void CellStylePresetApplication_UsesWorkbookThemeAndRepeatableStyleDiff()

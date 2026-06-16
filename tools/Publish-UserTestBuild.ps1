@@ -3,7 +3,7 @@ param(
     [string]$RuntimeIdentifier = "win-x64",
     [string]$OutputRoot = "artifacts\releases",
     [string]$Version = "",
-    [ValidateSet("SingleFile", "Folder", "Msix")]
+    [ValidateSet("SingleFile", "Folder", "Msix", "Velopack")]
     [string]$PublishMode = "SingleFile",
     [string]$MsixCertificatePath = $env:FREEX_MSIX_CERTIFICATE_PATH,
     [string]$MsixCertificatePassword = $env:FREEX_MSIX_CERTIFICATE_PASSWORD,
@@ -332,6 +332,35 @@ if (-not (Test-Path -LiteralPath $defaultExePath)) {
 }
 
 $runtimeUrl = "https://dotnet.microsoft.com/download/dotnet/10.0"
+
+if ($PublishMode -eq "Velopack") {
+    # Velopack packs the published folder as-is (no single-file rename); the apphost stays FreeX.App.Host.exe.
+    # Ensure the Velopack CLI is available.
+    $vpk = Get-Command vpk -ErrorAction SilentlyContinue
+    if ($null -eq $vpk) {
+        dotnet tool install -g vpk
+        if ($LASTEXITCODE -ne 0) { throw "Failed to install the Velopack CLI (vpk)." }
+        $vpk = Get-Command vpk -ErrorAction SilentlyContinue
+        if ($null -eq $vpk) { throw "vpk not found on PATH after install; ensure the dotnet global tools dir is on PATH." }
+    }
+
+    $vpkOut = Join-Path $artifactRoot "velopack-$RuntimeIdentifier"
+    New-Item -ItemType Directory -Force -Path $vpkOut | Out-Null
+
+    & vpk pack `
+        --packId "FreeX" `
+        --packVersion $assemblyVersion `
+        --packDir $publishDir `
+        --mainExe "FreeX.App.Host.exe" `
+        --outputDir $vpkOut `
+        --packTitle "FreeX" `
+        --channel "win"
+    if ($LASTEXITCODE -ne 0) { throw "vpk pack failed with exit code $LASTEXITCODE" }
+
+    Write-Host "Created Velopack artifacts in $vpkOut"
+    Get-ChildItem -LiteralPath $vpkOut | ForEach-Object { Write-Host "  $($_.Name)" }
+    exit 0
+}
 
 if ($PublishMode -eq "SingleFile") {
     Move-Item -LiteralPath $defaultExePath -Destination $artifactExePath

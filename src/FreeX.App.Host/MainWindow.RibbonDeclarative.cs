@@ -23,16 +23,24 @@ public partial class MainWindow
     /// </summary>
     private void TryApplyDeclarativeRibbon()
     {
-        if (Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE") != "1")
-            return;
         if (RibbonTabs is null)
             return;
 
         try
         {
-            var registry = BuildDeclarativeRibbonRegistry();
-            var definition = FreeXRibbonDefinition.Build();
+            // The ribbon is now declarative. Hidden backplane controls (MainWindow.RibbonBackplane.g.cs)
+            // hold state and serve as the 'sender' for handlers. Commands bind NATIVELY: each CommandId
+            // invokes its MainWindow handler method directly; the control bridge is only a fallback.
+            InitializeRibbonControlBackplane();
+            var originals = RibbonBackplaneControls;
+            var registry = BuildNativeRibbonRegistry();
+            foreach (var (name, control) in originals)
+            {
+                if (!registry.TryGet(name, out _))
+                    registry.Register(name, new RibbonHandlerCommand(control));
+            }
 
+            var definition = FreeXRibbon.Build();
             foreach (var item in RibbonTabs.Items)
             {
                 if (item is not TabItem tabItem)
@@ -44,6 +52,10 @@ public partial class MainWindow
 
                 tabItem.Content = RibbonWpfRenderer.BuildTabContent(definitionTab, this, registry);
             }
+
+            // Mirror the original controls' visual state (toggles pressed, combo values) onto the
+            // rendered controls, so the declarative ribbon reflects the selection like the XAML one.
+            WireDeclarativeStateSync(originals, CollectControlsByName());
 
             if (Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_CAPTURE") == "1")
                 Dispatcher.BeginInvoke(new Action(CaptureDeclarativeRibbon), DispatcherPriority.ContextIdle);
@@ -62,6 +74,14 @@ public partial class MainWindow
         {
             if (RibbonTabs is null)
                 return;
+
+            if (double.TryParse(Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_WIDTH"),
+                    System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var forcedWidth) &&
+                forcedWidth > 0)
+            {
+                WindowState = WindowState.Normal;
+                Width = forcedWidth;
+            }
 
             RibbonTabs.UpdateLayout();
             var width = (int)Math.Ceiling(RibbonTabs.ActualWidth);
@@ -99,11 +119,67 @@ public partial class MainWindow
         return Path.Combine(root, "screenshots", "ribbon-declarative");
     }
 
-    private RibbonCommandRegistry BuildDeclarativeRibbonRegistry()
+    /// <summary>
+    /// Builds the native command registry: each CommandId is bound directly to its MainWindow
+    /// Click-handler method (via the generated <see cref="FreeXRibbonHandlerMap"/>), so command
+    /// execution no longer depends on the XAML control tree.
+    /// </summary>
+    private RibbonCommandRegistry BuildNativeRibbonRegistry()
     {
         var registry = new RibbonCommandRegistry();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var type = typeof(MainWindow);
+        const System.Reflection.BindingFlags flags =
+            System.Reflection.BindingFlags.Instance |
+            System.Reflection.BindingFlags.NonPublic |
+            System.Reflection.BindingFlags.Public;
 
+        foreach (var (name, methodName) in FreeXRibbonHandlerMap.Handlers)
+        {
+            var method = type.GetMethod(methodName, flags, binder: null,
+                types: new[] { typeof(object), typeof(RoutedEventArgs) }, modifiers: null)
+                ?? type.GetMethod(methodName, flags, binder: null, types: System.Type.EmptyTypes, modifiers: null);
+            if (method is not null)
+                registry.Register(name, new ReflectiveHandlerCommand(this, method,
+                    RibbonBackplaneControls.GetValueOrDefault(name)));
+        }
+
+        return registry;
+    }
+
+    /// <summary>Invokes a MainWindow handler method (object,RoutedEventArgs) or parameterless.</summary>
+    private sealed class ReflectiveHandlerCommand : IRibbonCommand
+    {
+        private readonly MainWindow _window;
+        private readonly System.Reflection.MethodInfo _method;
+        private readonly object? _sender;
+
+        public ReflectiveHandlerCommand(MainWindow window, System.Reflection.MethodInfo method, object? sender)
+        {
+            _window = window;
+            _method = method;
+            _sender = sender;
+        }
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var args = _method.GetParameters().Length == 0
+                ? System.Array.Empty<object?>()
+                : new object?[] { _sender ?? _window, new RoutedEventArgs() };
+            try
+            {
+                _method.Invoke(_window, args);
+            }
+            catch (System.Reflection.TargetInvocationException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ribbon command '{_method.Name}' threw: {ex.InnerException}");
+            }
+        }
+    }
+
+    /// <summary>Maps each ribbon control (and menu item) to the first instance found, keyed by CommandName.</summary>
+    private Dictionary<string, Control> CollectControlsByName()
+    {
+        var map = new Dictionary<string, Control>(StringComparer.Ordinal);
         foreach (var item in RibbonTabs!.Items)
         {
             if (item is not TabItem { Content: DependencyObject content })
@@ -113,18 +189,54 @@ public partial class MainWindow
             {
                 if (element is Control control &&
                     RibbonMetadata.TryGetCommandName(control, out var name) &&
-                    seen.Add(name))
+                    !map.ContainsKey(name))
                 {
-                    registry.Register(name, new RibbonHandlerCommand(control));
+                    map[name] = control;
                 }
             }
         }
 
-        return registry;
+        return map;
+    }
+
+    private static void WireDeclarativeStateSync(
+        IReadOnlyDictionary<string, Control> originals,
+        IReadOnlyDictionary<string, Control> rendered)
+    {
+        foreach (var (name, original) in originals)
+        {
+            if (!rendered.TryGetValue(name, out var target))
+                continue;
+
+            if (original is ToggleButton sourceToggle && target is ToggleButton targetToggle)
+            {
+                void Sync() => targetToggle.IsChecked = sourceToggle.IsChecked;
+                sourceToggle.Checked += (_, _) => Sync();
+                sourceToggle.Unchecked += (_, _) => Sync();
+                sourceToggle.Indeterminate += (_, _) => Sync();
+                Sync();
+            }
+            else if (original is ComboBox sourceCombo && target is ComboBox targetCombo)
+            {
+                void Sync() => targetCombo.Text = sourceCombo.Text;
+                sourceCombo.SelectionChanged += (_, _) => Sync();
+                sourceCombo.LostFocus += (_, _) => Sync();
+                Sync();
+            }
+        }
     }
 
     private static IEnumerable<DependencyObject> EnumerateLogicalTree(DependencyObject root)
     {
+        // A control's ContextMenu (its dropdown contents) is not always reached by GetChildren,
+        // so descend into it explicitly to register the menu-item commands too.
+        if (root is FrameworkElement { ContextMenu: { } contextMenu })
+        {
+            yield return contextMenu;
+            foreach (var descendant in EnumerateLogicalTree(contextMenu))
+                yield return descendant;
+        }
+
         foreach (var child in LogicalTreeHelper.GetChildren(root))
         {
             if (child is not DependencyObject node)
@@ -145,8 +257,15 @@ public partial class MainWindow
 
         public void Execute(RibbonCommandContext context)
         {
-            if (_source is ButtonBase button)
-                button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            switch (_source)
+            {
+                case MenuItem menuItem:
+                    menuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                    break;
+                case ButtonBase button:
+                    button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                    break;
+            }
         }
     }
 }

@@ -13,6 +13,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System.Globalization;
 using FreeX.App.Services;
+using FreeX.App.Services.Updates;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -327,6 +328,9 @@ public sealed class MainWindow : Window
     private readonly Button _saveButton = new();
     private readonly Button _saveAsButton = new();
     private readonly Button _newSheetButton = new();
+    private readonly Button _updateReadyIndicator = new();
+    private IUpdateService? _updateService;
+    private string? _stagedUpdateVersion;
     private readonly Button _undoButton = new();
     private readonly Button _redoButton = new();
     private readonly Button _cutButton = new();
@@ -562,6 +566,10 @@ public sealed class MainWindow : Window
     {
         var root = new DockPanel();
 
+        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build();
+        DockPanel.SetDock(ribbon, Dock.Top);
+        root.Children.Add(ribbon);
+
         var toolbar = BuildToolbar();
         DockPanel.SetDock(toolbar, Dock.Top);
         root.Children.Add(toolbar);
@@ -645,12 +653,33 @@ public sealed class MainWindow : Window
         AutomationProperties.SetName(_newSheetButton, "New Sheet");
         AutomationProperties.SetHelpText(_newSheetButton, "Adds a worksheet to the current workbook.");
 
+        _updateReadyIndicator.Content = new TextBlock
+        {
+            Text = "↻ Update ready",
+            FontSize = 11,
+            Opacity = 0.75,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        _updateReadyIndicator.Background = Brushes.Transparent;
+        _updateReadyIndicator.BorderThickness = new Thickness(0);
+        _updateReadyIndicator.Padding = new Thickness(6, 0);
+        _updateReadyIndicator.IsVisible = false;
+        _updateReadyIndicator.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _updateReadyIndicator.Click += UpdateReadyIndicator_Click;
+        AutomationProperties.SetAutomationId(_updateReadyIndicator, "UpdateReadyIndicator");
+        AutomationProperties.SetName(_updateReadyIndicator, "Update ready");
+        AutomationProperties.SetHelpText(
+            _updateReadyIndicator,
+            "A new version of FreeX has been downloaded. Click to restart and update.");
+
         var chrome = new DockPanel
         {
             LastChildFill = true,
         };
         DockPanel.SetDock(_newSheetButton, Dock.Right);
         chrome.Children.Add(_newSheetButton);
+        DockPanel.SetDock(_updateReadyIndicator, Dock.Right);
+        chrome.Children.Add(_updateReadyIndicator);
         chrome.Children.Add(new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -666,6 +695,48 @@ public sealed class MainWindow : Window
             Padding = new Thickness(12, 6),
             Child = chrome,
         };
+    }
+
+    /// <summary>
+    /// Wires the update service and starts a background check. When an update has been
+    /// downloaded, the discreet status-strip indicator is revealed on the UI thread.
+    /// </summary>
+    internal void AttachUpdateService(IUpdateService updateService)
+    {
+        ArgumentNullException.ThrowIfNull(updateService);
+        _updateService = updateService;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await updateService.CheckAndDownloadAsync().ConfigureAwait(false);
+                if (result.State == UpdateState.ReadyToApply)
+                {
+                    await Dispatcher.UIThread.InvokeAsync(() => ShowUpdateReady(result.AvailableVersion));
+                }
+            }
+            catch
+            {
+                // Best-effort: a failed background check must never disrupt the app.
+            }
+        });
+    }
+
+    /// <summary>Reveal the discreet update-ready indicator. Safe to call only on the UI thread.</summary>
+    public void ShowUpdateReady(string? version)
+    {
+        _stagedUpdateVersion = version;
+        _updateReadyIndicator.IsVisible = true;
+    }
+
+    private void UpdateReadyIndicator_Click(object? sender, RoutedEventArgs e)
+    {
+        var versionSuffix = string.IsNullOrWhiteSpace(_stagedUpdateVersion)
+            ? string.Empty
+            : $" {_stagedUpdateVersion}";
+        RefreshShell($"Restarting to install FreeX{versionSuffix}...");
+        _updateService?.ApplyAndRestart();
     }
 
     private void ConfigureNativeMenu()

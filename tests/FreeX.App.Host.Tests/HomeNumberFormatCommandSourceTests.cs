@@ -4,24 +4,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class HomeNumberFormatCommandSourceTests
 {
-    [Theory]
-    [InlineData("CurrencyBtn_Click", "Accounting Number Format", "AN")]
-    [InlineData("PercentBtn_Click", "Percent Style", "P")]
-    [InlineData("CommaStyleBtn_Click", "Comma Style", "K")]
-    [InlineData("IncDecimalBtn_Click", "Increase Decimal Places", "QI")]
-    [InlineData("DecDecimalBtn_Click", "Decrease Decimal Places", "QD")]
-    public void HomeNumberRibbonButtons_KeepExpectedHandlersAndKeyTips(
-        string clickHandler,
-        string tooltipTitle,
-        string keyTip)
-    {
-        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var button = xaml.ExtractButtonElementByClickHandler(clickHandler);
-
-        button.Should().Contain($"Click=\"{clickHandler}\"");
-        button.ShouldContainInvariantCommandName(tooltipTitle);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-    }
 
     [Fact]
     public void HomeNumberFormatHandlers_ApplyExpectedStyleDiffs()

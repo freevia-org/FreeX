@@ -276,6 +276,38 @@ jobs:
           $latestHash = Get-FileHash -LiteralPath $latestMsixPath -Algorithm SHA256
           Set-Content -LiteralPath "$latestMsixPath.sha256" -Value "$($latestHash.Hash.ToLowerInvariant())  FreeX-latest-win-x64.msix" -Encoding ASCII
 
+      - name: Pack Velopack (installer + portable)
+        shell: pwsh
+        run: |
+          $outputRoot = Join-Path $env:RUNNER_TEMP "freex-release"
+          tools/Publish-UserTestBuild.ps1 `
+            -Configuration Release `
+            -RuntimeIdentifier win-x64 `
+            -OutputRoot $outputRoot `
+            -Version "${{ steps.meta.outputs.version }}" `
+            -PublishMode Velopack
+
+          $vpkOut = Join-Path $outputRoot "velopack-win-x64"
+          if (-not (Test-Path -LiteralPath $vpkOut)) {
+            throw "vpk pack did not create the Velopack output directory."
+          }
+
+          # Stage every Velopack artifact (Setup.exe, *-Portable.zip, full .nupkg, RELEASES/assets feed)
+          # for release upload. The RELEASES/assets feed is what installed clients poll to self-update.
+          $uploadRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts\velopack"
+          New-Item -ItemType Directory -Force -Path $uploadRoot | Out-Null
+          Get-ChildItem -LiteralPath $vpkOut -File | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $uploadRoot $_.Name) -Force
+            Write-Host "Staged Velopack asset: $($_.Name)"
+          }
+
+      - name: Upload Velopack artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: freex-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-velopack
+          path: artifacts/velopack/*
+          if-no-files-found: error
+
       - name: Upload versioned artifact
         uses: actions/upload-artifact@v7
         with:
@@ -542,7 +574,9 @@ jobs:
             "artifacts/upload/*.exe",
             "artifacts/upload/*.exe.sha256",
             "artifacts/upload/*.msix",
-            "artifacts/upload/*.msix.sha256"
+            "artifacts/upload/*.msix.sha256",
+            # Velopack installer, portable zip, full nupkg, and the RELEASES/assets feed clients poll.
+            "artifacts/velopack/*"
           )
           if ($includeMacOsPreview) {
             $assetPaths += @(
