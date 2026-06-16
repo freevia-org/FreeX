@@ -142,6 +142,12 @@ internal static class FreeWRibbonCommands
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
         registry.Register("freew.link-bookmark", new LinkToBookmarkCommand(editor));
 
+        // Insert tab — Controls: insert a content control (w:sdt) around the selection. The plain-text
+        // control wraps the selection (or a placeholder) as an editable region; the checkbox control
+        // drops a toggleable ☐/☒ checkbox. Both round-trip through docx as a w:sdt.
+        registry.Register("freew.cc-text", new ActionCommand(() => { editor.Focus(); editor.InsertPlainTextControl(); }));
+        registry.Register("freew.cc-checkbox", new ActionCommand(() => { editor.Focus(); editor.InsertCheckBoxControl(); }));
+
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
         registry.Register("freew.new-comment", new NewCommentCommand(editor));
 

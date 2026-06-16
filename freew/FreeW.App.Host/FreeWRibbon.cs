@@ -114,6 +114,11 @@ internal static class FreeWRibbon
                     g.Button("freew.bibliography", "Bibliography");
                     g.Button("freew.caption", "Caption");
                 });
+                tab.Group("controls", "Controls", "O", 62, g =>
+                {
+                    g.Button("freew.cc-text", "Text Control");
+                    g.Button("freew.cc-checkbox", "Check Box");
+                });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {
                     g.Button("freew.header", "Header");

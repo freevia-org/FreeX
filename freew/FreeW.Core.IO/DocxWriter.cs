@@ -335,6 +335,8 @@ public static class DocxWriter
             new XElement(W + "document",
                 new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                // w14 carries the checkbox content control element (w14:checkbox in a w:sdtPr).
+                new XAttribute(XNamespace.Xmlns + "w14", W14.NamespaceName),
                 body));
     }
 
@@ -549,6 +551,27 @@ public static class DocxWriter
         return wrapper;
     }
 
+    /// <summary>
+    /// Builds the w:sdtPr (content-control properties) for a content control. Emits w:tag / w:alias when
+    /// set, then the control-kind element: w:text for a plain-text control, or a w14:checkbox carrying the
+    /// checked state (w14:checked val="1"/"0") for a checkbox. This is the minimal valid shape FreeW's own
+    /// reader recovers (see <see cref="DocxReader"/>).
+    /// </summary>
+    private static XElement BuildSdtProperties(ContentControl control)
+    {
+        var sdtPr = new XElement(W + "sdtPr");
+        if (control.Alias is { Length: > 0 } alias)
+            sdtPr.Add(new XElement(W + "alias", new XAttribute(W + "val", alias)));
+        if (control.Tag is { Length: > 0 } tag)
+            sdtPr.Add(new XElement(W + "tag", new XAttribute(W + "val", tag)));
+        if (control.Kind == ContentControlKind.CheckBox)
+            sdtPr.Add(new XElement(W14 + "checkbox",
+                new XElement(W14 + "checked", new XAttribute(W14 + "val", control.Checked ? "1" : "0"))));
+        else
+            sdtPr.Add(new XElement(W + "text"));
+        return sdtPr;
+    }
+
     private static XElement BuildParagraph(Paragraph paragraph, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var p = new XElement(W + "p");
@@ -635,6 +658,24 @@ public static class DocxWriter
                 if (coveringId is { } opening)
                     p.Add(new XElement(W + "commentRangeStart", new XAttribute(W + "id", opening)));
                 openCommentId = coveringId;
+            }
+
+            // A content control (w:sdt) wraps the maximal span of consecutive runs sharing the same
+            // ContentControl instance. The wrapped run(s) keep their ordinary w:r form inside w:sdtContent;
+            // the sdt itself still routes through the revision wrapper so a control can sit inside a
+            // tracked change. Content controls are not also hyperlinks/comments in practice.
+            var control = runs[i].Control;
+            if (control is not null)
+            {
+                var head = runs[i];
+                var content = new XElement(W + "sdtContent");
+                while (i < runs.Count && ReferenceEquals(runs[i].Control, control)
+                    && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId
+                    && SameRevision(head, runs[i]))
+                    content.Add(BuildRun(runs[i++], imagesByRun));
+                var sdt = new XElement(W + "sdt", BuildSdtProperties(control), content);
+                Content(head, sdt);
+                continue;
             }
 
             var url = runs[i].HyperlinkUrl;

@@ -80,6 +80,18 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// </summary>
     public RevisionKind Revision { get; set; } = RevisionKind.None;
 
+    /// <summary>
+    /// Optional structured-document-tag (content control) mark. When non-null this run is the content
+    /// of a content control: on save the run(s) sharing this control are wrapped in a w:sdt
+    /// (w:sdtPr + w:sdtContent), and the editor renders the run with a shaded control region so it is
+    /// visibly a control. Consecutive runs carrying the same <see cref="ContentControl"/> instance
+    /// coalesce into one w:sdt, mirroring how w:ins/w:hyperlink wrap runs. For a checkbox the run's
+    /// <see cref="Text"/> carries the checked/unchecked glyph (☒/☐) and the control's
+    /// <see cref="ContentControl.Checked"/> records the state. Kept optional so existing runs are
+    /// unaffected.
+    /// </summary>
+    public ContentControl? Control { get; set; }
+
     /// <summary>The revision author (w:author on w:ins/w:del). Null when the run carries no revision.</summary>
     public string? RevisionAuthor { get; set; }
 
@@ -116,6 +128,56 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// </summary>
     public static Run CommentReference(int commentId) =>
         new(string.Empty) { CommentId = commentId, IsCommentReference = true };
+
+    /// <summary>
+    /// Creates a plain-text content control run carrying <paramref name="text"/> as its content, tagged
+    /// with the optional <paramref name="tag"/> / <paramref name="alias"/>. Serialises as a w:sdt
+    /// (plain-text) wrapping the run.
+    /// </summary>
+    public static Run PlainTextControl(string text, string? tag = null, string? alias = null) =>
+        new(text) { Control = new ContentControl(ContentControlKind.PlainText, tag, alias) };
+
+    /// <summary>
+    /// Creates a checkbox content control run. The run's <see cref="Text"/> is the checked (☒) or
+    /// unchecked (☐) glyph matching <paramref name="checked"/>, and the control records the state.
+    /// Serialises as a w:sdt with a checkbox w:sdtPr wrapping the glyph run.
+    /// </summary>
+    public static Run CheckBoxControl(bool @checked, string? tag = null, string? alias = null) =>
+        new(@checked ? ContentControl.CheckedGlyph : ContentControl.UncheckedGlyph)
+        {
+            Control = new ContentControl(ContentControlKind.CheckBox, tag, alias, @checked)
+        };
+}
+
+/// <summary>
+/// The kind of content control (structured document tag, w:sdt) a <see cref="Run"/> belongs to.
+/// <see cref="PlainText"/> is a plain-text control (w:sdtPr/w:text); <see cref="CheckBox"/> is a
+/// checkbox control (w:sdtPr/w14:checkbox or w:checkbox) whose run carries the checked/unchecked glyph.
+/// </summary>
+public enum ContentControlKind
+{
+    PlainText,
+    CheckBox
+}
+
+/// <summary>
+/// An immutable content-control (structured document tag / w:sdt) mark carried by a <see cref="Run"/>.
+/// Records the control <see cref="Kind"/>, an optional <see cref="Tag"/> (w:tag) and <see cref="Alias"/>
+/// (w:alias), and — for a checkbox — its <see cref="Checked"/> state. Modelled as an immutable record so
+/// it mirrors how other small marks (<see cref="PageBorder"/>, <see cref="TableFormatting"/>) are modelled
+/// and so consecutive runs can share one instance to coalesce into a single w:sdt on save.
+/// </summary>
+public sealed record ContentControl(
+    ContentControlKind Kind,
+    string? Tag = null,
+    string? Alias = null,
+    bool Checked = false)
+{
+    /// <summary>The glyph used in a checkbox run's text when the box is checked (☒, U+2612).</summary>
+    public const string CheckedGlyph = "☒";
+
+    /// <summary>The glyph used in a checkbox run's text when the box is unchecked (☐, U+2610).</summary>
+    public const string UncheckedGlyph = "☐";
 }
 
 /// <summary>
