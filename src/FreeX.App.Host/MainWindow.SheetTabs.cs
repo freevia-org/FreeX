@@ -1359,8 +1359,73 @@ public partial class MainWindow
         Keyboard.Focus(firstEnabledItem);
     }
 
-    private void SheetTabContextMenu_XamlOpened(object sender, RoutedEventArgs e) =>
-        SheetTabContextMenu_Opened(sender, e);
+    // Builds the per-tab context menu at load time from the neutral SheetTabContextMenuPlanner so the
+    // sheet-tab menu's labels, order, keytips, and enablement are single-sourced with the Avalonia port
+    // instead of hand-authored in XAML. The visible menu (headers, "I/E/R/M/V/P/T/H/U/A/G" keytips,
+    // separators, View Code disabled) is identical to the previous XAML ContextMenu.
+    private void SheetTabChrome_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element)
+            return;
+
+        element.ContextMenu = BuildSheetTabContextMenu();
+    }
+
+    private ContextMenu BuildSheetTabContextMenu()
+    {
+        var menu = new ContextMenu();
+        menu.Opened += SheetTabContextMenu_Opened;
+        foreach (var command in SheetTabContextMenuPlanner.BuildSheetTabCommands())
+            AddSheetTabContextMenuItem(menu.Items, command);
+
+        return menu;
+    }
+
+    private void AddSheetTabContextMenuItem(
+        ItemCollection target,
+        SheetTabContextMenuCommand command)
+    {
+        if (command.IsSeparator)
+        {
+            target.Add(new Separator());
+            return;
+        }
+
+        var menuItem = new MenuItem
+        {
+            Header = UiText.Get(command.ResourceKey),
+            IsEnabled = command.IsEnabled
+        };
+
+        if (!string.IsNullOrEmpty(command.KeyTip))
+            RibbonTooltip.SetKeyTip(menuItem, command.KeyTip);
+        if (!string.IsNullOrEmpty(command.CommandName))
+            RibbonMetadata.SetCommandName(menuItem, command.CommandName);
+
+        if (ResolveSheetTabContextMenuHandler(command.Action) is { } handler)
+            menuItem.Click += (clickSender, clickArgs) => handler(clickSender, clickArgs);
+
+        target.Add(menuItem);
+    }
+
+    // Maps neutral planner actions to the existing sheet-tab Click handlers. "View Code" intentionally has
+    // no handler (it was always disabled in the XAML); every other action routes to the same handler the
+    // hand-authored ContextMenu wired, so dispatch through GetContextMenuTab(sender) resolves the tab.
+    private RoutedEventHandler? ResolveSheetTabContextMenuHandler(SheetTabContextMenuAction action) =>
+        action switch
+        {
+            SheetTabContextMenuAction.InsertSheet => SheetCtxInsert_Click,
+            SheetTabContextMenuAction.DeleteSheet => SheetCtxDelete_Click,
+            SheetTabContextMenuAction.Rename => SheetCtxRename_Click,
+            SheetTabContextMenuAction.MoveOrCopy => SheetCtxMoveOrCopy_Click,
+            SheetTabContextMenuAction.ProtectSheet => SheetCtxProtectSheet_Click,
+            SheetTabContextMenuAction.TabColor => SheetCtxTabColor_Click,
+            SheetTabContextMenuAction.Hide => SheetCtxHide_Click,
+            SheetTabContextMenuAction.Unhide => SheetCtxUnhide_Click,
+            SheetTabContextMenuAction.SelectAllSheets => SheetCtxSelectAllSheets_Click,
+            SheetTabContextMenuAction.UngroupSheets => SheetCtxUngroupSheets_Click,
+            _ => null
+        };
 
     private bool TryHandleFocusedSheetTabKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
     {
@@ -1721,9 +1786,6 @@ public partial class MainWindow
 
     private void SheetCtxProtectSheet_Click(object sender, RoutedEventArgs e) =>
         ProtectSheetBtn_Click(sender, e);
-
-    private void SheetCtxTabColor_SubmenuOpened(object sender, RoutedEventArgs e) =>
-        SheetCtxTabColor_Click(sender, e);
 
     private void ColorCurrentSheetTab()
     {
