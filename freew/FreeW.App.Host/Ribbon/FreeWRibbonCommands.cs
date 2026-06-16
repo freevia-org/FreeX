@@ -144,6 +144,13 @@ internal static class FreeWRibbonCommands
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
         registry.Register("freew.link-bookmark", new LinkToBookmarkCommand(editor));
 
+        // Insert tab — Quick Parts (AutoText): a shared snippet library persisted under FreeW's data
+        // folder. "Save Selection" captures the selection's text and stores it under a prompted name;
+        // "Insert Quick Part" picks a saved snippet and drops its text at the caret (reversibly).
+        var quickParts = QuickPartLibrary.Load();
+        registry.Register("freew.save-quickpart", new SaveQuickPartCommand(editor, quickParts));
+        registry.Register("freew.insert-quickpart", new InsertQuickPartCommand(editor, quickParts));
+
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
         registry.Register("freew.new-comment", new NewCommentCommand(editor));
 
@@ -1183,6 +1190,111 @@ internal static class FreeWRibbonCommands
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
             panel.Children.Add(lists);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // Insert > Quick Parts > Save Selection to Quick Parts: capture the current selection's text, prompt
+    // for an entry name, and store it in the shared library (persisted under FreeW's data folder). An
+    // empty selection or a blank/cancelled name is a no-op. Saving under an existing name overwrites it.
+    private sealed class SaveQuickPartCommand(DocumentView editor, QuickPartLibrary library) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var text = editor.Selection.Text;
+            if (string.IsNullOrEmpty(text))
+            {
+                MessageBox.Show(Window.GetWindow(editor),
+                    "Select some text first, then choose Save Selection to Quick Parts.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var name = TextPrompt.Ask(Window.GetWindow(editor), "Save to Quick Parts", "Name:", string.Empty);
+            if (string.IsNullOrWhiteSpace(name))
+                return; // cancelled or blank — nothing to store under
+
+            library.Save(QuickPart.FromText(name.Trim(), text));
+            editor.Focus();
+        }
+    }
+
+    // Insert > Quick Parts > Insert Quick Part: pick a saved snippet from the library and insert its text
+    // at the caret (through the editor's normal edit/undo path, so it is reversible). Reports when the
+    // library is empty so the user knows to save one first.
+    private sealed class InsertQuickPartCommand(DocumentView editor, QuickPartLibrary library) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (library.IsEmpty)
+            {
+                MessageBox.Show(Window.GetWindow(editor),
+                    "No Quick Parts saved yet. Select some text and choose Save Selection to Quick Parts first.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var chosen = QuickPartPicker.Ask(Window.GetWindow(editor), library.Names);
+            if (chosen is null)
+                return; // cancelled
+
+            var part = library.Get(chosen);
+            if (part is null)
+                return; // removed between listing and picking — nothing to insert
+
+            editor.Focus();
+            editor.InsertText(part.Text);
+        }
+    }
+
+    // A tiny modal dialog to pick one of the saved Quick Part names. Returns the chosen name, or null if
+    // cancelled. Mirrors BookmarkPicker.
+    private static class QuickPartPicker
+    {
+        public static string? Ask(Window? owner, IReadOnlyList<string> names)
+        {
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 280,
+                MinHeight = 120,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            foreach (var name in names)
+                list.Items.Add(name);
+            list.SelectedIndex = 0;
+
+            string? result = null;
+            var dialog = new Window
+            {
+                Title = "Insert Quick Part",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "Insert", IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
+            list.MouseDoubleClick += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Quick Part:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(list);
             panel.Children.Add(buttons);
             dialog.Content = panel;
 
