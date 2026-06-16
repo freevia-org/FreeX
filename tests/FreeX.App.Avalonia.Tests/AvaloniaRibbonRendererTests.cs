@@ -2,12 +2,17 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.Themes.Fluent;
+using Avalonia.VisualTree;
 using FreeX.App.Avalonia.Ribbon;
 using Free.Shared.Ribbon;
 using FreeX.Ribbon.Avalonia;
+using FreeX.Ribbon.Icons;
+using AvaloniaPath = Avalonia.Controls.Shapes.Path;
 
 [assembly: AvaloniaTestApplication(typeof(FreeX.App.Avalonia.Tests.RibbonHeadlessApp))]
 
@@ -151,5 +156,79 @@ public sealed class AvaloniaRibbonRendererTests
         var buttons = content.GetLogicalDescendants().OfType<Button>().ToList();
         Assert.NotEmpty(buttons);
         Assert.All(buttons, b => Assert.False(b.IsEnabled));
+    });
+
+    [Fact]
+    public Task IconBuild_ProducesVectorShapes_NotTextGlyphs() => RunOnUiThread(() =>
+    {
+        // Save is a multi-line vector icon: it must render as native Avalonia shapes, proving the
+        // Avalonia renderer draws the shared neutral geometry rather than a single TextBlock glyph.
+        var icon = AvaloniaRibbonIcons.Build(RibbonCommandIconKind.Save, 24);
+
+        var viewbox = Assert.IsType<Viewbox>(icon);
+        var visuals = viewbox.GetVisualDescendants().ToList();
+
+        // The Save geometry is made entirely of lines.
+        Assert.Contains(visuals, v => v is Line);
+        // And it is definitely not a lone text glyph.
+        Assert.DoesNotContain(visuals, v => v is TextBlock);
+    });
+
+    [Fact]
+    public Task IconBuild_ShapeIconHasPathAndEllipse() => RunOnUiThread(() =>
+    {
+        // Protect (shield) mixes a stroked path and a check path; Cut mixes lines and ellipses.
+        var shield = AvaloniaRibbonIcons.Build(RibbonCommandIconKind.Protect, 24);
+        Assert.Contains(((Viewbox)shield).GetVisualDescendants(), v => v is AvaloniaPath);
+
+        var cut = AvaloniaRibbonIcons.Build(RibbonCommandIconKind.Cut, 24);
+        var cutVisuals = ((Viewbox)cut).GetVisualDescendants().ToList();
+        Assert.Contains(cutVisuals, v => v is Line);
+        Assert.Contains(cutVisuals, v => v is Ellipse);
+    });
+
+    [Fact]
+    public Task IconBuild_EveryKind_ProducesVisualsAndScales() => RunOnUiThread(() =>
+    {
+        foreach (var kind in Enum.GetValues<RibbonCommandIconKind>())
+        {
+            var icon = AvaloniaRibbonIcons.Build(kind, 22);
+            var viewbox = Assert.IsType<Viewbox>(icon);
+            Assert.Equal(22, viewbox.Width);
+
+            var canvas = Assert.IsType<Canvas>(viewbox.Child);
+            Assert.NotEmpty(canvas.Children);
+        }
+    });
+
+    [Fact]
+    public Task IconBuild_Accent_ColorsTheShape() => RunOnUiThread(() =>
+    {
+        // A non-None accent should color the geometry with the accent color, ignoring the foreground.
+        var accented = new RibbonCommandIcon(RibbonCommandIconKind.Save, RibbonCommandIconAccent.Warning);
+        var icon = AvaloniaRibbonIcons.Build(accented, 24, Brushes.Black);
+
+        var expected = RibbonIconAccents.Resolve(RibbonCommandIconAccent.Warning)!.Value;
+        var lines = ((Viewbox)icon).GetVisualDescendants().OfType<Line>().ToList();
+        Assert.NotEmpty(lines);
+
+        var stroke = Assert.IsType<SolidColorBrush>(lines[0].Stroke);
+        Assert.Equal(Color.FromArgb(expected.A, expected.R, expected.G, expected.B), stroke.Color);
+    });
+
+    [Fact]
+    public Task LargeControl_EmbedsIconShapes() => RunOnUiThread(() =>
+    {
+        var tab = BuildHomeTab();
+        var content = AvaloniaRibbonRenderer.BuildTabContent(tab, new RibbonCommandRegistry());
+
+        var window = new Window { Width = 1200, Height = 200, Content = content };
+        window.Show();
+        window.Measure(new Size(1200, 200));
+        window.Arrange(new Rect(0, 0, 1200, 200));
+
+        // The rendered ribbon should contain real icon shapes (from the neutral geometry), not just text.
+        var shapes = content.GetVisualDescendants().OfType<Shape>().ToList();
+        Assert.NotEmpty(shapes);
     });
 }
