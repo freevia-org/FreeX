@@ -146,10 +146,16 @@ public static class XlsxFeatureInspector
             yield break;
         }
 
-        if (normalized.StartsWith("xl/activex/", StringComparison.Ordinal) ||
-            normalized.StartsWith("xl/ctrlprops/", StringComparison.Ordinal))
+        if (normalized.StartsWith("xl/activex/", StringComparison.Ordinal))
         {
             yield return Feature(XlsxUnsupportedFeatureKind.FormControls);
+            yield break;
+        }
+
+        // Legacy form controls (ctrlProps) are now modeled on load and round-trip preserved, so the
+        // ctrlProp parts are a SUPPORTED feature and must not be reported as unsupported.
+        if (normalized.StartsWith("xl/ctrlprops/", StringComparison.Ordinal))
+        {
             yield break;
         }
 
@@ -221,8 +227,8 @@ public static class XlsxFeatureInspector
             (normalized.EndsWith(".xml", StringComparison.Ordinal) ||
              normalized.EndsWith(".vml", StringComparison.Ordinal)))
         {
-            if (DrawingHasFormControls(entry))
-                yield return Feature(XlsxUnsupportedFeatureKind.FormControls);
+            // Legacy form-control shapes in VML/drawings are now supported (modeled + preserved);
+            // only embedded OLE objects in drawings remain unsupported.
             if (DrawingHasEmbeddedObjects(entry))
                 yield return Feature(XlsxUnsupportedFeatureKind.EmbeddedObjects);
 
@@ -260,8 +266,8 @@ public static class XlsxFeatureInspector
         if (normalized.StartsWith("xl/worksheets/", StringComparison.Ordinal) &&
             normalized.EndsWith(".xml", StringComparison.Ordinal))
         {
-            if (WorksheetHasFormControls(entry))
-                yield return Feature(XlsxUnsupportedFeatureKind.FormControls);
+            // Worksheet <controls>/<control> form controls are now supported (modeled + preserved);
+            // only embedded OLE objects remain unsupported.
             if (WorksheetHasEmbeddedObjects(entry))
                 yield return Feature(XlsxUnsupportedFeatureKind.EmbeddedObjects);
 
@@ -401,10 +407,10 @@ public static class XlsxFeatureInspector
             return;
         }
 
-        if (normalizedType.EndsWith("/control", StringComparison.OrdinalIgnoreCase) ||
-            normalizedType.EndsWith("/activexcontrol", StringComparison.OrdinalIgnoreCase) ||
-            normalizedType.EndsWith("/activexcontrolbinary", StringComparison.OrdinalIgnoreCase) ||
-            normalizedType.EndsWith("/ctrlprop", StringComparison.OrdinalIgnoreCase))
+        // ActiveX controls remain unsupported. Legacy form-control relationships (/control, /ctrlProp)
+        // are now modeled + round-trip preserved, so they are no longer reported as unsupported.
+        if (normalizedType.EndsWith("/activexcontrol", StringComparison.OrdinalIgnoreCase) ||
+            normalizedType.EndsWith("/activexcontrolbinary", StringComparison.OrdinalIgnoreCase))
         {
             AddFeature(ref result, XlsxUnsupportedFeatureKind.FormControls);
             return;
@@ -498,21 +504,10 @@ public static class XlsxFeatureInspector
         }
     }
 
-    private static bool WorksheetHasFormControls(ZipArchiveEntry entry) =>
-        XmlHasElement(entry, reader =>
-            string.Equals(reader.LocalName, "control", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(reader.LocalName, "controls", StringComparison.OrdinalIgnoreCase));
-
     private static bool WorksheetHasEmbeddedObjects(ZipArchiveEntry entry) =>
         XmlHasElement(entry, reader =>
             string.Equals(reader.LocalName, "oleObject", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(reader.LocalName, "oleObjects", StringComparison.OrdinalIgnoreCase));
-
-    private static bool DrawingHasFormControls(ZipArchiveEntry entry) =>
-        XmlHasElement(entry, reader =>
-            string.Equals(reader.LocalName, "control", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(reader.LocalName, "ClientData", StringComparison.OrdinalIgnoreCase) &&
-            IsFormControlObjectType(reader.GetAttribute("ObjectType")));
 
     private static bool DrawingHasEmbeddedObjects(ZipArchiveEntry entry) =>
         XmlHasElement(entry, reader =>
@@ -551,19 +546,6 @@ public static class XlsxFeatureInspector
             return false;
         }
     }
-
-    private static bool IsFormControlObjectType(string? objectType) =>
-        objectType is not null &&
-        (objectType.Equals("Button", StringComparison.OrdinalIgnoreCase) ||
-         objectType.Equals("CheckBox", StringComparison.OrdinalIgnoreCase) ||
-         objectType.Equals("Drop", StringComparison.OrdinalIgnoreCase) ||
-         objectType.Equals("GBox", StringComparison.OrdinalIgnoreCase) ||
-         objectType.Equals("Label", StringComparison.OrdinalIgnoreCase) ||
-         objectType.Equals("List", StringComparison.OrdinalIgnoreCase) ||
-         objectType.Equals("Option", StringComparison.OrdinalIgnoreCase) ||
-         objectType.Equals("Radio", StringComparison.OrdinalIgnoreCase) ||
-         objectType.Equals("Scroll", StringComparison.OrdinalIgnoreCase) ||
-         objectType.Equals("Spin", StringComparison.OrdinalIgnoreCase));
 
     private static bool CustomPropertiesHaveSensitivityLabels(ZipArchiveEntry entry)
     {

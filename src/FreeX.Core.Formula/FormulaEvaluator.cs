@@ -111,6 +111,42 @@ public sealed partial class FormulaEvaluator
         }
     }
 
+    /// <summary>
+    /// Evaluate a pre-parsed AST in dynamic-array (spilling) context. Identical to
+    /// <see cref="Evaluate(FormulaNode, Sheet, FreeX.Core.Model.Workbook?, FreeX.Core.Model.CellAddress?)"/>
+    /// except that a top-level reference-like node (a bare range, full row/column, named range, or
+    /// structured reference) returns the entire referenced range as a <see cref="RangeValue"/> so it
+    /// spills, instead of collapsing to its top-left cell via implicit intersection. This matches
+    /// Excel's behaviour for a modern dynamic-array formula whose body is a bare range (e.g. =A1:C3).
+    /// </summary>
+    public ScalarValue EvaluateSpilling(
+        FormulaNode ast,
+        Sheet sheet,
+        FreeX.Core.Model.Workbook? workbook = null,
+        FreeX.Core.Model.CellAddress? currentCell = null)
+    {
+        try
+        {
+            _evalDepth = 0;
+            var context = workbook is null && currentCell is null
+                ? GetSingleSheetEvalContext(sheet)
+                : new SheetEvalContext(sheet, workbook, this, currentCell);
+
+            // Only top-level reference nodes need the spilling treatment; every other node already
+            // produces a RangeValue when it yields an array (functions, operators, array constants).
+            var result = ast is RangeRefNode or FullColumnRangeRefNode or FullRowRangeRefNode
+                    or NamedRangeNode or StructuredReferenceNode or StructuredCurrentRowReferenceNode
+                ? EvaluateArrayOperand(ast, context)
+                : EvaluateNode(ast, context);
+
+            return NormalizeTopLevelResult(result);
+        }
+        catch (FormulaEvalException ex)
+        {
+            return ErrorFromCode(ex.ErrorCode);
+        }
+    }
+
     private static ScalarValue NormalizeTopLevelResult(ScalarValue value) =>
         value switch
         {
