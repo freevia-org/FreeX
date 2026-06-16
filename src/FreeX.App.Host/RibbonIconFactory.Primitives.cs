@@ -58,11 +58,6 @@ public static partial class RibbonIconFactory
         canvas.Children.Add(rectangle);
     }
 
-    private static void DrawCircle(Canvas canvas, double x, double y, double width, double height, Brush brush, double thickness)
-    {
-        DrawEllipse(canvas, x, y, width, height, brush, thickness);
-    }
-
     private static void DrawEllipse(Canvas canvas, double x, double y, double width, double height, Brush brush, double thickness)
     {
         var ellipse = new Ellipse
@@ -115,13 +110,6 @@ public static partial class RibbonIconFactory
         if (dash)
             line.StrokeDashArray = new DoubleCollection { 2, 2 };
         canvas.Children.Add(line);
-    }
-
-    private static void AddArrowStem(Canvas canvas, double x1, double y1, double x2, double y2, Brush brush, bool down)
-    {
-        AddLine(canvas, x1, y1, x2, y2, brush, 1.5);
-        if (down)
-            AddPath(canvas, $"M{x2 - 3},{y2 - 3} L{x2},{y2} L{x2 + 3},{y2 - 3}", brush, 1.5);
     }
 
     private static void AddPath(Canvas canvas, string data, Brush brush, double thickness, Brush? fill = null, double fillOpacity = 1)
