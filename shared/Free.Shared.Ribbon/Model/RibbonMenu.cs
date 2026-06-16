@@ -18,6 +18,10 @@ public sealed record RibbonMenuItem(
     public IReadOnlyList<RibbonMenuItem> Children { get; init; } =
         Children ?? Array.Empty<RibbonMenuItem>();
 
+    /// <summary>Whether the item is invokable. Defaults to <c>true</c>; context menus drive this
+    /// from selection state (e.g. comment/filter availability).</summary>
+    public bool IsEnabled { get; init; } = true;
+
     public static RibbonMenuItem Separator() =>
         new("", Kind: RibbonMenuItemKind.Separator);
 }
