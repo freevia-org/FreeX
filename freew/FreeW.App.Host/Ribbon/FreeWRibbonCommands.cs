@@ -101,6 +101,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.footer", new HeaderFooterCommand(editor, isFooter: true));
         registry.Register("freew.page-number", new InsertPageNumberCommand(editor));
 
+        // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
+        // insert it at the caret as ordinary text (flows through the normal edit/undo path).
+        registry.Register("freew.symbol", new InsertSymbolCommand(editor));
+        registry.Register("freew.datetime", new InsertDateTimeCommand(editor));
+
         // Home > Font > Text Colour / Highlight: pick a colour from a small palette and apply it to
         // the selection (foreground reuses TextElement.Foreground; highlight uses TextElement.Background).
         registry.Register("freew.font-color", new ColorPickCommand(editor, isHighlight: false));
@@ -508,6 +513,30 @@ internal static class FreeWRibbonCommands
             var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed);
             if (!string.IsNullOrWhiteSpace(url))
                 editor.ApplyHyperlink(url!.Trim());
+        }
+    }
+
+    // Insert > Symbols > Symbol: show a glyph grid and insert the chosen glyph at the caret as text.
+    private sealed class InsertSymbolCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var glyph = SymbolPickerDialog.Prompt(Window.GetWindow(editor));
+            if (!string.IsNullOrEmpty(glyph))
+                editor.InsertText(glyph);
+        }
+    }
+
+    // Insert > Symbols > Date & Time: list formatted current date/time strings; insert the chosen one.
+    private sealed class InsertDateTimeCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var text = DateTimeDialog.Prompt(Window.GetWindow(editor));
+            if (!string.IsNullOrEmpty(text))
+                editor.InsertText(text);
         }
     }
 

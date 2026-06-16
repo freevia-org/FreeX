@@ -94,6 +94,11 @@ internal static class FreeWRibbon
                     g.Button("freew.footer", "Footer");
                     g.Button("freew.page-number", "Page Number");
                 });
+                tab.Group("symbols", "Symbols", "Y", 50, g =>
+                {
+                    g.Button("freew.symbol", "Symbol");
+                    g.Button("freew.datetime", "Date & Time");
+                });
             })
             .Tab("layout", "Layout", "L", tab =>
             {
