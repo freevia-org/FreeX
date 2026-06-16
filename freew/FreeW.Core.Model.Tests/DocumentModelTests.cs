@@ -34,6 +34,17 @@ public class DocumentModelTests
     }
 
     [Fact]
+    public void Run_CarriesOptionalHyperlinkUrl()
+    {
+        var plain = new Run("plain");
+        var linked = new Run("linked") { HyperlinkUrl = "https://example.com" };
+
+        plain.HyperlinkUrl.Should().BeNull();
+        linked.HyperlinkUrl.Should().Be("https://example.com");
+        linked.Text.Should().Be("linked");
+    }
+
+    [Fact]
     public void Heading1Style_CarriesBoldColouredFormatting()
     {
         var style = TextDocument.CreateEmpty().Styles["Heading1"];

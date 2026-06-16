@@ -20,6 +20,7 @@ public sealed class MainWindow : Window
     private AutosaveCoordinator _autosave = null!;
     private DocumentView _editor = null!;
     private TextBlock _titleText = null!;
+    private TextBlock _countsText = null!;
     private FindReplaceDialog? _findDialog;
 
     public MainWindow()
@@ -37,7 +38,7 @@ public sealed class MainWindow : Window
         var stateStore = new RibbonStateStore();
         var commands = FreeWRibbonCommands.Build(editor, stateStore, OpenPrintPreview);
         _file = new FileCommands(this, editor, UpdateTitle);
-        editor.TextChanged += (_, _) => _file.MarkDirty();
+        editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); };
         _autosave = new AutosaveCoordinator(editor, _file);
         Loaded += (_, _) => { _autosave.OfferRecovery(this); _autosave.Start(); };
         Closing += (_, _) => _autosave.Stop();
@@ -51,6 +52,9 @@ public sealed class MainWindow : Window
         root.Children.Add(ribbon);
 
         var status = new StatusBar();
+        _countsText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+        status.Items.Add(new StatusBarItem { Content = _countsText });
+        status.Items.Add(new Separator());
         status.Items.Add(new StatusBarItem { Content = $"Data folder: {ResolveDataFolderLabel()}" });
         DockPanel.SetDock(status, Dock.Bottom);
         root.Children.Add(status);
@@ -70,6 +74,7 @@ public sealed class MainWindow : Window
         InputBindings.Add(new KeyBinding(findReplace, new KeyGesture(Key.H, ModifierKeys.Control)));
 
         UpdateTitle();
+        UpdateCounts();
 
         Content = root;
     }
@@ -120,6 +125,15 @@ public sealed class MainWindow : Window
         var name = _file.DisplayName + (_file.IsDirty ? " *" : "");
         Title = $"{name} — FreeW";
         _titleText.Text = $"{name} — FreeW";
+    }
+
+    // Recompute live word/character/paragraph counts from the editor's committed model and show them
+    // in the status bar. Cheap enough to run on every edit (TextChanged) and on document load.
+    private void UpdateCounts()
+    {
+        _editor.CommitToModel();
+        var stats = WordCount.Of(_editor.Model);
+        _countsText.Text = $"Words: {stats.Words}   Characters: {stats.CharactersWithSpaces}   Paragraphs: {stats.Paragraphs}";
     }
 
     private void Print()
