@@ -28,8 +28,18 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// <summary>
     /// Optional external hyperlink target (absolute URL). When non-null the run is wrapped in a
     /// w:hyperlink on save, with the URL stored as an external relationship, and rendered as a link.
+    /// Mutually exclusive with <see cref="HyperlinkAnchor"/>: a run links either externally or
+    /// internally, never both.
     /// </summary>
     public string? HyperlinkUrl { get; set; }
+
+    /// <summary>
+    /// Optional internal hyperlink target: the name of a bookmark elsewhere in this document (see
+    /// <see cref="Paragraph.BookmarkName"/>). When non-null the run is wrapped in a
+    /// w:hyperlink w:anchor="…" on save (no relationship) and rendered as a link that jumps to the
+    /// bookmark. Mutually exclusive with <see cref="HyperlinkUrl"/>.
+    /// </summary>
+    public string? HyperlinkAnchor { get; set; }
 
     /// <summary>
     /// When set, this run is a simple field rather than literal text — e.g. a PAGE field whose value
@@ -70,6 +80,13 @@ public sealed class Paragraph : Block
     public List<Run> Runs { get; } = [];
     public ParagraphFormatting Formatting { get; set; } = ParagraphFormatting.Default;
     public string? StyleId { get; set; }
+
+    /// <summary>
+    /// Optional bookmark name marking this paragraph as a navigation target. When non-null the
+    /// paragraph is bracketed by w:bookmarkStart/w:bookmarkEnd on save, and runs elsewhere can point
+    /// to it via <see cref="Run.HyperlinkAnchor"/>. Bookmarks are invisible markers (no glyphs).
+    /// </summary>
+    public string? BookmarkName { get; set; }
 
     public Paragraph() { }
 

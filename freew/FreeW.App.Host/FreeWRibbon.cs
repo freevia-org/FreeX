@@ -87,7 +87,12 @@ internal static class FreeWRibbon
                     g.Button("freew.image-size", "Image Size");
                     g.Button("freew.shapes", "Shapes");
                 });
-                tab.Group("links", "Links", "K", 70, g => g.Button("freew.hyperlink", "Link"));
+                tab.Group("links", "Links", "K", 70, g =>
+                {
+                    g.Button("freew.hyperlink", "Link");
+                    g.Button("freew.bookmark", "Bookmark");
+                    g.Button("freew.link-bookmark", "Link to Bookmark");
+                });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {
                     g.Button("freew.header", "Header");
