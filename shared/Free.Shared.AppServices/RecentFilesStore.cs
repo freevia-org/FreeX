@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace FreeX.App.Services;
+namespace Free.Shared.AppServices;
 
 public sealed class RecentFileEntry
 {
@@ -95,7 +95,7 @@ public sealed class RecentFilesStore
 
         return System.IO.Path.Combine(
             pathProvider.GetApplicationDataDirectory(),
-            "FreeX",
+            AppProduct.Current.ProductDirectoryName,
             "recent.json");
     }
 

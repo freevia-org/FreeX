@@ -43,4 +43,7 @@
   <ItemGroup>
     <Using Include="Free.Shared.Shell" />
   </ItemGroup>
+  <ItemGroup>
+    <Using Include="Free.Shared.AppServices" />
+  </ItemGroup>
 </Project>

@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace FreeX.App.Services;
+namespace Free.Shared.AppServices;
 
 public sealed record AppDiagnosticsMetadata(
     string AppVersion,
