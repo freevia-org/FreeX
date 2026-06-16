@@ -73,6 +73,10 @@ out.append("")
 out.append("    /// <summary>Backplane controls that carry a ribbon CommandName, keyed by it.</summary>")
 out.append("    private readonly Dictionary<string, Control> RibbonBackplaneControls = new(System.StringComparer.Ordinal);")
 out.append("")
+out.append("    /// <summary>Original x:Name of each backplane control keyed by its CommandName, so the")
+out.append("    /// declarative wiring can re-point that name to the visible rendered control (FindName).</summary>")
+out.append("    private readonly Dictionary<string, string> RibbonBackplaneControlNames = new(System.StringComparer.Ordinal);")
+out.append("")
 out.append("    private void InitializeRibbonControlBackplane()")
 out.append("    {")
 for n, t, c in referenced:
@@ -81,6 +85,7 @@ for n, t, c in referenced:
     if c and t in ("ToggleButton", "Button", "ComboBox", "CheckBox", "MenuItem", "AutomationInvokeButton"):
         out.append(f'        RibbonMetadata.SetCommandName({n}, "{c}");')
         out.append(f'        RibbonBackplaneControls["{c}"] = {n};')
+        out.append(f'        RibbonBackplaneControlNames["{c}"] = "{n}";')
 out.append("    }")
 out.append("}")
 

@@ -55,7 +55,9 @@ public partial class MainWindow
 
             // Mirror the original controls' visual state (toggles pressed, combo values) onto the
             // rendered controls, so the declarative ribbon reflects the selection like the XAML one.
-            WireDeclarativeStateSync(originals, CollectControlsByName());
+            var renderedByName = CollectControlsByName();
+            WireDeclarativeStateSync(originals, renderedByName);
+            RepointBackplaneNamesToRenderedControls(renderedByName);
 
             if (Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_CAPTURE") == "1")
                 Dispatcher.BeginInvoke(new Action(CaptureDeclarativeRibbon), DispatcherPriority.ContextIdle);
@@ -234,12 +236,21 @@ public partial class MainWindow
                 targetButton.ContextMenu = sourceMenu;
             }
 
-            // Mirror enablement from the backplane control (which the app toggles for context, e.g.
-            // multi-window commands disabled in a lone-window host) onto the rendered control, so a
-            // context-disabled command exposes no keytip — matching the original adaptive ribbon.
-            void SyncEnabled() => target.IsEnabled = original.IsEnabled;
-            original.IsEnabledChanged += (_, _) => SyncEnabled();
-            SyncEnabled();
+            // Mirror enablement and help text from the backplane control (which the app updates for
+            // context, e.g. multi-window commands disabled with an explanatory description in a
+            // lone-window host) onto the rendered control. Names are re-pointed to the rendered control,
+            // so the rendered one must carry both — a context-disabled command then exposes no keytip
+            // and reports the same help text. Help text is updated alongside IsEnabled by the app, so
+            // refreshing it on IsEnabledChanged keeps it live.
+            void SyncState()
+            {
+                target.IsEnabled = original.IsEnabled;
+                var help = System.Windows.Automation.AutomationProperties.GetHelpText(original);
+                if (!string.IsNullOrEmpty(help))
+                    System.Windows.Automation.AutomationProperties.SetHelpText(target, help);
+            }
+            original.IsEnabledChanged += (_, _) => SyncState();
+            SyncState();
 
             if (original is ToggleButton sourceToggle && target is ToggleButton targetToggle)
             {
@@ -255,6 +266,31 @@ public partial class MainWindow
                 sourceCombo.SelectionChanged += (_, _) => Sync();
                 sourceCombo.LostFocus += (_, _) => Sync();
                 Sync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Re-points each backplane control's original x:Name to the visible rendered control so that
+    /// <see cref="FrameworkElement.FindName"/> resolves the on-screen control (e.g. opening
+    /// NumberFormatBox's dropdown via keytip is observable). Handlers keep using the backplane C#
+    /// fields directly, so their state holders are unaffected — only name-based lookups move.
+    /// </summary>
+    private void RepointBackplaneNamesToRenderedControls(IReadOnlyDictionary<string, Control> rendered)
+    {
+        foreach (var (commandName, xName) in RibbonBackplaneControlNames)
+        {
+            if (!rendered.TryGetValue(commandName, out var target))
+                continue;
+
+            try
+            {
+                UnregisterName(xName);
+                RegisterName(xName, target);
+            }
+            catch (System.ArgumentException)
+            {
+                // Name not currently registered (or already re-pointed) — leave the existing binding.
             }
         }
     }
