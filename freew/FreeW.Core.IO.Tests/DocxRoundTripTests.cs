@@ -413,6 +413,89 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void BulletList_RoundTrips_ListKindAndLevel()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("bullet item")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet, ListLevel = 1 }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.ListKind.Should().Be(ListKind.Bullet);
+        formatting.ListLevel.Should().Be(1);
+    }
+
+    [Fact]
+    public void NumberedList_RoundTrips_ListKindAndLevel()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("numbered item")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number, ListLevel = 2 }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.ListKind.Should().Be(ListKind.Number);
+        formatting.ListLevel.Should().Be(2);
+    }
+
+    [Fact]
+    public void NonListParagraph_HasNoListKind()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain"));
+
+        RoundTrip(doc).Paragraphs.First().Formatting.ListKind.Should().Be(ListKind.None);
+    }
+
+    [Fact]
+    public void List_WritesNumberingPartContentTypeAndRelationship()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("item")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet }
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/numbering.xml").Should().NotBeNull();
+
+        using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+        var contentTypes = ctReader.ReadToEnd();
+        contentTypes.Should().Contain("/word/numbering.xml");
+        contentTypes.Should().Contain("application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml");
+
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        var rels = relsReader.ReadToEnd();
+        rels.Should().Contain("numbering.xml");
+        rels.Should().Contain("http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering");
+
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        docReader.ReadToEnd().Should().Contain("numPr");
+    }
+
+    [Fact]
+    public void NoLists_OmitsNumberingPart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/numbering.xml").Should().BeNull();
+    }
+
+    [Fact]
     public void Read_NonWordZip_Throws()
     {
         using var stream = new MemoryStream();
