@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/shared/">
+    <Project Path="shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <Project Path="shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
+    <Project Path="shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
+    <Project Path="shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+  </Folder>
+  <Folder Name="/freew/">
+    <Project Path="freew/FreeW.Core.Model/FreeW.Core.Model.csproj" />
+    <Project Path="freew/FreeW.App.Host/FreeW.App.Host.csproj" />
+  </Folder>
+</Solution>

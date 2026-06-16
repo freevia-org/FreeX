@@ -1,0 +1,68 @@
+namespace FreeW.App.Host;
+
+/// <summary>
+/// FreeW's Word-style ribbon, authored with the shared <see cref="RibbonDefinitionBuilder"/> —
+/// the same model that drives FreeX, proving the ribbon library is app-neutral.
+/// </summary>
+internal static class FreeWRibbon
+{
+    public static RibbonDefinition Build() =>
+        new RibbonDefinitionBuilder()
+            .Tab("home", "Home", "H", tab =>
+            {
+                tab.Group("clipboard", "Clipboard", "C", 100, g =>
+                {
+                    g.Button("freew.paste", "Paste");
+                    g.Button("freew.cut", "Cut");
+                    g.Button("freew.copy", "Copy");
+                    g.Button("freew.format-painter", "Format Painter");
+                });
+                tab.Group("font", "Font", "F", 90, g =>
+                {
+                    g.Toggle("freew.bold", "Bold");
+                    g.Toggle("freew.italic", "Italic");
+                    g.Toggle("freew.underline", "Underline");
+                    g.Button("freew.grow-font", "Grow");
+                    g.Button("freew.shrink-font", "Shrink");
+                });
+                tab.Group("paragraph", "Paragraph", "P", 80, g =>
+                {
+                    g.Button("freew.bullets", "Bullets");
+                    g.Button("freew.numbering", "Numbering");
+                    g.Button("freew.align-left", "Align Left");
+                    g.Button("freew.align-center", "Center");
+                    g.Button("freew.align-right", "Align Right");
+                });
+                tab.Group("styles", "Styles", "S", 70, g =>
+                {
+                    g.Button("freew.style-normal", "Normal");
+                    g.Button("freew.style-heading1", "Heading 1");
+                    g.Button("freew.style-title", "Title");
+                });
+            })
+            .Tab("insert", "Insert", "N", tab =>
+            {
+                tab.Group("pages", "Pages", "P", 100, g =>
+                {
+                    g.Button("freew.cover-page", "Cover Page");
+                    g.Button("freew.blank-page", "Blank Page");
+                    g.Button("freew.page-break", "Page Break");
+                });
+                tab.Group("tables", "Tables", "T", 90, g => g.Button("freew.table", "Table"));
+                tab.Group("illustrations", "Illustrations", "I", 80, g =>
+                {
+                    g.Button("freew.picture", "Picture");
+                    g.Button("freew.shapes", "Shapes");
+                });
+            })
+            .Tab("layout", "Layout", "L", tab =>
+            {
+                tab.Group("page-setup", "Page Setup", "P", 100, g =>
+                {
+                    g.Button("freew.margins", "Margins");
+                    g.Button("freew.orientation", "Orientation");
+                    g.Button("freew.size", "Size");
+                });
+            })
+            .Build();
+}
