@@ -258,6 +258,22 @@ public sealed class TextDocument
             Run = new RunFormatting { Bold = true, FontSizePt = 16, ColorHex = "#2F5496" },
             Paragraph = new ParagraphFormatting { SpaceBeforePt = 12, SpaceAfterPt = 4 }
         };
+        Styles["Heading2"] = new DocumentStyle
+        {
+            Id = "Heading2",
+            Name = "Heading 2",
+            BasedOnStyleId = "Normal",
+            Run = new RunFormatting { Bold = true, FontSizePt = 13, ColorHex = "#2F5496" },
+            Paragraph = new ParagraphFormatting { SpaceBeforePt = 10, SpaceAfterPt = 4 }
+        };
+        Styles["Heading3"] = new DocumentStyle
+        {
+            Id = "Heading3",
+            Name = "Heading 3",
+            BasedOnStyleId = "Normal",
+            Run = new RunFormatting { Bold = true, FontSizePt = 12, ColorHex = "#1F3864" },
+            Paragraph = new ParagraphFormatting { SpaceBeforePt = 8, SpaceAfterPt = 4 }
+        };
         Styles["Title"] = new DocumentStyle
         {
             Id = "Title",
@@ -265,6 +281,28 @@ public sealed class TextDocument
             BasedOnStyleId = "Normal",
             Run = new RunFormatting { Bold = true, FontSizePt = 28 },
             Paragraph = new ParagraphFormatting { SpaceAfterPt = 8 }
+        };
+        Styles["Subtitle"] = new DocumentStyle
+        {
+            Id = "Subtitle",
+            Name = "Subtitle",
+            BasedOnStyleId = "Normal",
+            Run = new RunFormatting { Italic = true, FontSizePt = 15, ColorHex = "#5A5A5A" },
+            Paragraph = new ParagraphFormatting { SpaceAfterPt = 8 }
+        };
+        Styles["Quote"] = new DocumentStyle
+        {
+            Id = "Quote",
+            Name = "Quote",
+            BasedOnStyleId = "Normal",
+            Run = new RunFormatting { Italic = true, ColorHex = "#404040" },
+            Paragraph = new ParagraphFormatting
+            {
+                SpaceBeforePt = 10,
+                SpaceAfterPt = 10,
+                IndentLeftPt = 36,
+                IndentRightPt = 36
+            }
         };
     }
 }
