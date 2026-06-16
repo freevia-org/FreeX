@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <StartupObject>FreeW.App.Host.Program</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Commands\Free.Shared.Commands.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
+    <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Free.Shared.Ribbon" />
+    <Using Include="Free.Shared.AppServices" />
+    <Using Include="Free.Shared.Shell" />
+  </ItemGroup>
+
+</Project>
