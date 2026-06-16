@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeW.Core.Model;
@@ -37,6 +38,8 @@ public sealed class DocumentView : RichTextBox
 
     private TextDocument _model = TextDocument.CreateEmpty();
     private readonly DocumentCommandBus _commands;
+    private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
+    private double _zoomLevel = ZoomLevels.Default;
 
     public DocumentView()
     {
@@ -49,11 +52,51 @@ public sealed class DocumentView : RichTextBox
         Background = Brushes.White;
         Padding = new Thickness(48);
 
+        // Scale the editing surface via a LayoutTransform so text, images, and tables all zoom together
+        // while the model and on-disk document are untouched (this is pure view chrome).
+        LayoutTransform = _zoomTransform;
+
         _commands = new DocumentCommandBus(new ViewContext(this));
         _commands.Changed += Render;
     }
 
     public TextDocument Model => _model;
+
+    /// <summary>Raised whenever <see cref="ZoomLevel"/> changes; carries the new factor (1.0 == 100%).</summary>
+    public event EventHandler<double>? ZoomChanged;
+
+    /// <summary>
+    /// The editor zoom factor where 1.0 == 100%. Assignments are clamped to the supported range
+    /// (<see cref="ZoomLevels.Min"/>..<see cref="ZoomLevels.Max"/>) and applied as a <see cref="ScaleTransform"/>
+    /// on the editing surface. Purely visual: the model and saved document are unaffected.
+    /// </summary>
+    public double ZoomLevel
+    {
+        get => _zoomLevel;
+        set
+        {
+            var clamped = ZoomLevels.Clamp(value);
+            if (clamped == _zoomLevel)
+                return;
+            _zoomLevel = clamped;
+            _zoomTransform.ScaleX = clamped;
+            _zoomTransform.ScaleY = clamped;
+            ZoomChanged?.Invoke(this, clamped);
+        }
+    }
+
+    // Ctrl+MouseWheel zooms the surface in/out one step per notch (optional convenience). The event is
+    // marked handled so the editor does not also scroll while the user is zooming.
+    protected override void OnPreviewMouseWheel(MouseWheelEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            ZoomLevel = e.Delta > 0 ? ZoomLevels.StepUp(_zoomLevel) : ZoomLevels.StepDown(_zoomLevel);
+            e.Handled = true;
+            return;
+        }
+        base.OnPreviewMouseWheel(e);
+    }
 
     /// <summary>Undo/redo command bus over this view's model (backed by the shared UndoRedoStack).</summary>
     public DocumentCommandBus Commands => _commands;

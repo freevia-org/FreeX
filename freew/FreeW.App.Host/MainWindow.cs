@@ -21,6 +21,8 @@ public sealed class MainWindow : Window
     private DocumentView _editor = null!;
     private TextBlock _titleText = null!;
     private TextBlock _countsText = null!;
+    private Slider _zoomSlider = null!;
+    private TextBlock _zoomLabel = null!;
     private FindReplaceDialog? _findDialog;
 
     public MainWindow()
@@ -56,6 +58,7 @@ public sealed class MainWindow : Window
         status.Items.Add(new StatusBarItem { Content = _countsText });
         status.Items.Add(new Separator());
         status.Items.Add(new StatusBarItem { Content = $"Data folder: {ResolveDataFolderLabel()}" });
+        status.Items.Add(new StatusBarItem { HorizontalAlignment = HorizontalAlignment.Right, Content = BuildZoomControl() });
         DockPanel.SetDock(status, Dock.Bottom);
         root.Children.Add(status);
 
@@ -134,6 +137,57 @@ public sealed class MainWindow : Window
         _editor.CommitToModel();
         var stats = WordCount.Of(_editor.Model);
         _countsText.Text = $"Words: {stats.Words}   Characters: {stats.CharactersWithSpaces}   Paragraphs: {stats.Paragraphs}";
+    }
+
+    // A status-bar zoom control: a [-] button, a 50%..200% slider, a [+] button, and a live percentage
+    // label. All three drive DocumentView.ZoomLevel; ZoomChanged feeds the slider/label back so the
+    // control stays in sync with other zoom sources (e.g. Ctrl+MouseWheel in the editor).
+    private UIElement BuildZoomControl()
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+        Button ZoomButton(string label, Action onClick)
+        {
+            var button = new Button { Content = label, Width = 22, Padding = new Thickness(0), Margin = new Thickness(2, 0, 2, 0) };
+            button.Click += (_, _) => onClick();
+            return button;
+        }
+
+        _zoomSlider = new Slider
+        {
+            Minimum = ZoomLevels.Min,
+            Maximum = ZoomLevels.Max,
+            Value = _editor.ZoomLevel,
+            Width = 120,
+            VerticalAlignment = VerticalAlignment.Center,
+            TickFrequency = ZoomLevels.Step,
+            SmallChange = ZoomLevels.Step,
+            LargeChange = ZoomLevels.Step,
+            ToolTip = "Zoom"
+        };
+        _zoomSlider.ValueChanged += (_, e) => _editor.ZoomLevel = e.NewValue;
+
+        _zoomLabel = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 2, 0),
+            MinWidth = 38,
+            TextAlignment = System.Windows.TextAlignment.Right,
+            Text = $"{ZoomLevels.ToPercent(_editor.ZoomLevel)}%"
+        };
+
+        // Keep the slider + label in sync no matter how zoom changes (buttons, wheel, or the slider itself).
+        _editor.ZoomChanged += (_, factor) =>
+        {
+            _zoomSlider.Value = factor;
+            _zoomLabel.Text = $"{ZoomLevels.ToPercent(factor)}%";
+        };
+
+        panel.Children.Add(ZoomButton("−", () => _editor.ZoomLevel = ZoomLevels.StepDown(_editor.ZoomLevel)));
+        panel.Children.Add(_zoomSlider);
+        panel.Children.Add(ZoomButton("+", () => _editor.ZoomLevel = ZoomLevels.StepUp(_editor.ZoomLevel)));
+        panel.Children.Add(_zoomLabel);
+        return panel;
     }
 
     private void Print()
