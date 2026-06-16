@@ -16,6 +16,15 @@ public partial class MainWindow
             UpdateReadyIndicator.Visibility = Visibility.Visible;
     }
 
+    /// <summary>
+    /// Tell the user no update is available. Lives here (not in a command partial) so the
+    /// status-bar/update UI keeps its own lightweight MessageBox confirmations together.
+    /// </summary>
+    private void ShowUpToDate()
+    {
+        MessageBox.Show("You're up to date.", "FreeX", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
     private void UpdateReadyIndicator_Click(object sender, RoutedEventArgs e)
     {
         var updates = App.Services.GetService<IUpdateService>();

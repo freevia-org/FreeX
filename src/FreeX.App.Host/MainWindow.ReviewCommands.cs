@@ -757,7 +757,7 @@ public partial class MainWindow
                 ShowUpdateReady(result.AvailableVersion);
                 break;
             case FreeX.App.Services.Updates.UpdateState.UpToDate:
-                MessageBox.Show("You're up to date.", "FreeX", MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowUpToDate();
                 break;
             default: // Unavailable — fall back to the releases page
                 OpenExternalHelpLink(updates.ReleasesPageUrl, UiText.Get("MainWindowMessage_CheckForUpdatesTitle"));
