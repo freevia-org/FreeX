@@ -130,8 +130,8 @@ public class RibbonWpfRendererTests
     public void RenderedButton_InvokesRegisteredCommand_OnClick()
     {
         var registry = new RibbonCommandRegistry();
-        var paste = new RecordingCommand();
-        registry.Register("Paste", paste);
+        var cut = new RecordingCommand();
+        registry.Register("Cut", cut);
 
         StaTestRunner.Run(() =>
         {
@@ -142,16 +142,17 @@ public class RibbonWpfRendererTests
             host.Arrange(new Rect(0, 0, 1880, 130));
             host.UpdateLayout();
 
-            var pasteButton = FindByCommandName(host, "Paste");
-            pasteButton.Should().NotBeNull();
-            pasteButton!.IsEnabled.Should().BeTrue();
-            ((ButtonBase)pasteButton).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            // Cut is a plain button -> clicking invokes its command.
+            var cutButton = FindByCommandName(host, "Cut");
+            cutButton.Should().NotBeNull();
+            cutButton!.IsEnabled.Should().BeTrue();
+            ((ButtonBase)cutButton).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
 
-            // "Cut" has no registered command -> rendered disabled, never throws.
-            FindByCommandName(host, "Cut")!.IsEnabled.Should().BeFalse();
+            // "Copy" has no registered command -> rendered disabled, never throws.
+            FindByCommandName(host, "Copy")!.IsEnabled.Should().BeFalse();
         });
 
-        paste.Invocations.Should().Be(1);
+        cut.Invocations.Should().Be(1);
     }
 
     private static Border BuildHost()
