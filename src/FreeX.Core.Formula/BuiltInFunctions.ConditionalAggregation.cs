@@ -162,11 +162,12 @@ public static partial class BuiltInFunctions
         if (args[0] is not RangeValue sumRange) return ErrorValue.Value;
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
 
-        // Array-criteria: any criteria-value slot holds a range → expand element-wise.
-        // Criteria-value slots for SUMIFS are at indices 2, 4, 6, … (step 2).
-        var arrayCriteria = FindArrayCriteriaArg(args, firstCriteriaArgIndex: 2, criteriaArgStep: 2);
-        if (arrayCriteria is var (arrayArgIdx, criteriaArray))
-            return ExpandConditionalArrayCriteria(criteriaArray, args, arrayArgIdx, ctx, Sumifs);
+        // Array-criteria: any criteria-value slot holds a range → expand element-wise. Multiple
+        // array criteria broadcast together into one matrix. Criteria-value slots for SUMIFS are at
+        // indices 2, 4, 6, … (step 2).
+        var arrayCriteriaArgs = FindAllArrayCriteriaArgs(args, firstCriteriaArgIndex: 2, criteriaArgStep: 2);
+        if (arrayCriteriaArgs.Count > 0)
+            return ExpandConditionalArrayCriteriaMulti(args, arrayCriteriaArgs, ctx, Sumifs);
 
         int pairCount = (args.Count - 1) / 2;
         if (TryCreateConditionalCriteriaSet(args, 1, pairCount, sumRange, out var criteriaSet) is { } pairError)
@@ -194,9 +195,9 @@ public static partial class BuiltInFunctions
         if (args.Count < 2 || args.Count % 2 != 0) return ErrorValue.Value;
 
         // Array-criteria: criteria-value slots for COUNTIFS are at indices 1, 3, 5, … (step 2).
-        var arrayCriteria = FindArrayCriteriaArg(args, firstCriteriaArgIndex: 1, criteriaArgStep: 2);
-        if (arrayCriteria is var (arrayArgIdx, criteriaArray))
-            return ExpandConditionalArrayCriteria(criteriaArray, args, arrayArgIdx, ctx, Countifs);
+        var arrayCriteriaArgs = FindAllArrayCriteriaArgs(args, firstCriteriaArgIndex: 1, criteriaArgStep: 2);
+        if (arrayCriteriaArgs.Count > 0)
+            return ExpandConditionalArrayCriteriaMulti(args, arrayCriteriaArgs, ctx, Countifs);
 
         int pairCount = args.Count / 2;
         if (TryCreateConditionalCriteriaSet(args, 0, pairCount, null, out var criteriaSet) is { } pairError)
@@ -223,9 +224,9 @@ public static partial class BuiltInFunctions
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
 
         // Array-criteria: criteria-value slots for AVERAGEIFS are at indices 2, 4, 6, … (step 2).
-        var arrayCriteria = FindArrayCriteriaArg(args, firstCriteriaArgIndex: 2, criteriaArgStep: 2);
-        if (arrayCriteria is var (arrayArgIdx, criteriaArray))
-            return ExpandConditionalArrayCriteria(criteriaArray, args, arrayArgIdx, ctx, Averageifs2);
+        var arrayCriteriaArgs = FindAllArrayCriteriaArgs(args, firstCriteriaArgIndex: 2, criteriaArgStep: 2);
+        if (arrayCriteriaArgs.Count > 0)
+            return ExpandConditionalArrayCriteriaMulti(args, arrayCriteriaArgs, ctx, Averageifs2);
 
         int pairCount = (args.Count - 1) / 2;
         if (TryCreateConditionalCriteriaSet(args, 1, pairCount, avgRange, out var criteriaSet) is { } pairError)
@@ -278,6 +279,68 @@ public static partial class BuiltInFunctions
         }
         return new RangeValue(resultCells);
     }
+
+    /// <summary>
+    /// Find every criteria-value slot (starting at <paramref name="firstCriteriaArgIndex"/>, stepping
+    /// by <paramref name="criteriaArgStep"/>) that holds a RangeValue. These array criteria broadcast
+    /// together into a single result instead of nesting.
+    /// </summary>
+    private static List<int> FindAllArrayCriteriaArgs(
+        IReadOnlyList<ScalarValue> args,
+        int firstCriteriaArgIndex,
+        int criteriaArgStep)
+    {
+        var indexes = new List<int>();
+        for (int i = firstCriteriaArgIndex; i < args.Count; i += criteriaArgStep)
+        {
+            if (args[i] is RangeValue)
+                indexes.Add(i);
+        }
+        return indexes;
+    }
+
+    /// <summary>
+    /// Expand a *IFS function that has one or more array-criteria slots. Excel broadcasts the array
+    /// criteria together: a 2x1 criterion and a 1x3 criterion produce a 2x3 result. Each result cell
+    /// substitutes the per-cell scalar for every array-criteria slot and calls the scalar function,
+    /// so multiple array criteria yield one flat matrix rather than nested ranges.
+    /// </summary>
+    private static ScalarValue ExpandConditionalArrayCriteriaMulti(
+        IReadOnlyList<ScalarValue> args,
+        IReadOnlyList<int> criteriaArgIndexes,
+        IEvalContext ctx,
+        Func<IReadOnlyList<ScalarValue>, IEvalContext, ScalarValue> scalarFunc)
+    {
+        int rows = 1, cols = 1;
+        foreach (var idx in criteriaArgIndexes)
+        {
+            var array = (RangeValue)args[idx];
+            if (!CanBroadcastDimension(rows, array.RowCount) || !CanBroadcastDimension(cols, array.ColCount))
+                return ErrorValue.Value;
+            rows = Math.Max(rows, array.RowCount);
+            cols = Math.Max(cols, array.ColCount);
+        }
+
+        var resultCells = new ScalarValue[rows, cols];
+        var buffer = new ScalarValue[args.Count];
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < cols; c++)
+            {
+                for (int i = 0; i < args.Count; i++)
+                    buffer[i] = args[i];
+                foreach (var idx in criteriaArgIndexes)
+                {
+                    var array = (RangeValue)args[idx];
+                    buffer[idx] = array.Cells[array.RowCount == 1 ? 0 : r, array.ColCount == 1 ? 0 : c];
+                }
+                resultCells[r, c] = scalarFunc(buffer.ToArray(), ctx);
+            }
+        }
+        return new RangeValue(resultCells);
+    }
+
+    private static bool CanBroadcastDimension(int a, int b) => a == b || a == 1 || b == 1;
 
     private readonly struct ConditionalCriteriaPair
     {

@@ -66,6 +66,31 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sort_OverAnchorArraySpillRange_SortsTheSpilledValues()
+    {
+        // Models Spill Formulae!C190 = SORT(ANCHORARRAY(C184)) where C184 spills a 3x3 block.
+        var sheet = new Sheet(SheetId.New(), "S");
+        var anchor = new CellAddress(sheet.Id, 184, 3);
+        sheet.SetCell(anchor, Cell.FromValue(new NumberValue(12)));
+        var rv = new RangeValue(new ScalarValue[,]
+        {
+            { new NumberValue(12), new NumberValue(12.1), new NumberValue(12.2) },
+            { new NumberValue(11), new NumberValue(11.1), new NumberValue(11.2) },
+            { new NumberValue(13), new NumberValue(13.1), new NumberValue(13.2) },
+        }, 184, 3);
+        sheet.SetSpillRange(anchor, rv);
+
+        var result = _eval.Evaluate("=SORT(ANCHORARRAY(C184))", sheet)
+            .Should().BeOfType<RangeValue>("SORT over a spilled range must sort, not error").Subject;
+
+        result.RowCount.Should().Be(3);
+        result.ColCount.Should().Be(3);
+        result.Cells[0, 0].Should().Be(new NumberValue(11), "ascending sort by column 1 puts 11 first");
+        result.Cells[1, 0].Should().Be(new NumberValue(12));
+        result.Cells[2, 0].Should().Be(new NumberValue(13));
+    }
+
+    [Fact]
     public void AnchorArray_SpillAnchorSubtraction_ReturnsCorrectDifference()
     {
         // Models ANCHORARRAY(Z6)-ANCHORARRAY(X6) from the real workbook.

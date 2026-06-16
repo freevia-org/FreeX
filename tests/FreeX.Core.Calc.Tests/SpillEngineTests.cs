@@ -314,4 +314,68 @@ public class SpillEngineTests
         sheet2.GetValue(1, 2).Should().Be(new NumberValue(3),
             "Sheet2!B1 = Sheet1!A3 must see the cross-sheet spilled value (3)");
     }
+
+    // Mirrors Spill Formulae!C190 = SORT(ANCHORARRAY(C184)) where C184 itself spills.
+    [Fact]
+    public void RecalculateAllFormulas_SortOverAnchorArrayOfSpillingAnchor_SortsSpilledValues()
+    {
+        var (engine, wb) = MakeEngine();
+        var sheet = wb.Sheets.First();
+
+        // Source block B1:D3 (col B = 12, 11, 13).
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(121));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(11));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(111));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(13));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(131));
+
+        var anchor = new CellAddress(sheet.Id, 1, 6);   // F1 spills B1:D3 (3x2)
+        var reader = new CellAddress(sheet.Id, 1, 10);  // J1 = SORT(ANCHORARRAY(F1))
+        sheet.SetFormula(anchor, "B1:D3");
+        sheet.SetFormula(reader, "SORT(ANCHORARRAY(F1))");
+
+        engine.RecalculateAllFormulas(wb);
+
+        sheet.GetValue(1, 6).Should().Be(new NumberValue(12), "F1 spills the source block's top-left");
+        sheet.GetValue(1, 10).Should().Be(new NumberValue(11),
+            "SORT(ANCHORARRAY(F1)) must sort the spilled block ascending by col 1, putting 11 first");
+        sheet.GetValue(2, 10).Should().Be(new NumberValue(12));
+        sheet.GetValue(3, 10).Should().Be(new NumberValue(13));
+    }
+
+    // Mirrors Spill Formulae!D197 = SUMIFS(..., ANCHORARRAY(<spill>), ...): array criteria from a
+    // spilled range must make SUMIFS spill one sum per criterion, with the anchor cell holding the
+    // top-left scalar (not a RangeValue).
+    [Fact]
+    public void RecalculateAllFormulas_SumIfsWithAnchorArrayCriteria_SpillsOneSumPerCriterion()
+    {
+        var (engine, wb) = MakeEngine();
+        var sheet = wb.Sheets.First();
+
+        // Data: category in A, amount in B.
+        (uint, string, double)[] data =
+        {
+            (1, "x", 1), (2, "y", 2), (3, "x", 3), (4, "z", 4), (5, "y", 5),
+        };
+        foreach (var (r, cat, amt) in data)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, r, 1), new TextValue(cat));
+            sheet.SetCell(new CellAddress(sheet.Id, r, 2), new NumberValue(amt));
+        }
+
+        // D1 spills the distinct categories {x; y; z}; F1 = SUMIFS(B, A, ANCHORARRAY(D1)).
+        var critAnchor = new CellAddress(sheet.Id, 1, 4);  // D1
+        var sumAnchor = new CellAddress(sheet.Id, 1, 6);   // F1
+        sheet.SetFormula(critAnchor, "UNIQUE(A1:A5)");
+        sheet.SetFormula(sumAnchor, "SUMIFS(B1:B5,A1:A5,ANCHORARRAY(D1))");
+
+        engine.RecalculateAllFormulas(wb);
+
+        // x -> 1+3 = 4, y -> 2+5 = 7, z -> 4
+        sheet.GetValue(1, 6).Should().Be(new NumberValue(4),
+            "SUMIFS over spilled array criteria must spill; the anchor holds the first sum (x=4) as a scalar");
+        sheet.GetValue(2, 6).Should().Be(new NumberValue(7), "y = 2+5");
+        sheet.GetValue(3, 6).Should().Be(new NumberValue(4), "z = 4");
+    }
 }

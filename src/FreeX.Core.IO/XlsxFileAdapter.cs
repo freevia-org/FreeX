@@ -726,10 +726,17 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var materializationDiagnostics = new XlsxLoadPhaseDiagnostics(
             materializationStopwatch.Elapsed.TotalMilliseconds,
             GC.GetTotalAllocatedBytes(precise: true) - materializationAllocatedBefore);
+
+        // Strip Excel-emitted invalid pageSetup DPI (horizontalDpi/verticalDpi = 0) from the source-package
+        // snapshot bytes BEFORE capture so every save path (verbatim copy, patch-save, full save) round-trips
+        // a schema-valid worksheet. The pre-scan keeps the common case (no invalid DPI) buffer-reuse-eligible.
+        var dpiSanitized = XlsxWorksheetPageSetupDpiSanitizer.Sanitize(packageStream);
+        var canReuseBufferForSnapshot = loadPackage.CanReuseBufferForSnapshot && !dpiSanitized;
+        packageStream.Position = 0;
         var (sourcePackage, sourceSnapshotDiagnostics) = MeasureLoadPhase(() => XlsxSourcePackage.Capture(
             packageStream,
             workbook,
-            loadPackage.CanReuseBufferForSnapshot,
+            canReuseBufferForSnapshot,
             worksheetsWithPreservableSourceMetadata,
             hasUnsupportedConditionalFormatting,
             sheetXmlLayout,
