@@ -1,10 +1,32 @@
 namespace FreeW.Core.Model;
 
-/// <summary>A contiguous span of text sharing one run formatting.</summary>
+/// <summary>
+/// An inline raster image carried by a <see cref="Run"/>. Modelled at the run level (rather than as
+/// a block) so it round-trips through docx as an inline w:drawing without touching paragraph storage.
+/// PNG bytes only; size is in points to match the rest of the FreeW unit model.
+/// </summary>
+public sealed class InlineImage(byte[] pngBytes, double widthPt, double heightPt)
+{
+    /// <summary>The raw PNG image bytes (the only supported format).</summary>
+    public byte[] PngBytes { get; } = pngBytes;
+    public double WidthPt { get; set; } = widthPt;
+    public double HeightPt { get; set; } = heightPt;
+}
+
+/// <summary>
+/// A contiguous span of text sharing one run formatting, or — when <see cref="Image"/> is set — an
+/// inline image anchored in the run flow. An image run carries no text (<see cref="Text"/> is empty).
+/// </summary>
 public sealed class Run(string text, RunFormatting? formatting = null)
 {
     public string Text { get; set; } = text;
     public RunFormatting Formatting { get; set; } = formatting ?? RunFormatting.Default;
+
+    /// <summary>Optional inline image. When non-null this run renders/serialises as a picture.</summary>
+    public InlineImage? Image { get; set; }
+
+    /// <summary>Creates a run that carries an inline image instead of text.</summary>
+    public static Run FromImage(InlineImage image) => new(string.Empty) { Image = image };
 }
 
 /// <summary>

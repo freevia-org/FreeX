@@ -11,6 +11,19 @@ internal static class Ooxml
     public static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
     public static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
 
+    // DrawingML namespaces used by inline pictures (w:drawing/wp:inline/.../a:blip).
+    public static readonly XNamespace Wp = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
+    public static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    public static readonly XNamespace Pic = "http://schemas.openxmlformats.org/drawingml/2006/picture";
+
+    /// <summary>DrawingML "EMU" = English Metric Units; 914400 per inch, 12700 per point.</summary>
+    public const long EmuPerPoint = 12700;
+
+    public static long PointsToEmu(double points) => (long)Math.Round(points * EmuPerPoint);
+
+    public static double EmuToPoints(string? value) =>
+        long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v / (double)EmuPerPoint : 0;
+
     /// <summary>OOXML "dxa" = twentieths of a point.</summary>
     public static double DxaToPoints(string? value) => ParseInt(value) / 20.0;
 

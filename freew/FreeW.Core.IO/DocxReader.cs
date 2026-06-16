@@ -31,6 +31,7 @@ public static class DocxReader
 
         var document = new TextDocument();
         ReadStyles(archive, document);
+        var imageRelationships = ReadImageRelationships(archive);
 
         var body = documentXml.Root?.Element(W + "body");
         if (body is not null)
@@ -38,9 +39,9 @@ public static class DocxReader
             foreach (var element in body.Elements())
             {
                 if (element.Name == W + "p")
-                    document.Blocks.Add(ReadParagraph(element));
+                    document.Blocks.Add(ReadParagraph(element, archive, imageRelationships));
                 else if (element.Name == W + "tbl")
-                    document.Blocks.Add(ReadTable(element));
+                    document.Blocks.Add(ReadTable(element, archive, imageRelationships));
             }
         }
 
@@ -60,7 +61,7 @@ public static class DocxReader
         return XDocument.Load(reader);
     }
 
-    private static Paragraph ReadParagraph(XElement p)
+    private static Paragraph ReadParagraph(XElement p, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
     {
         var paragraph = new Paragraph();
         var pPr = p.Element(W + "pPr");
@@ -72,6 +73,13 @@ public static class DocxReader
 
         foreach (var r in p.Elements(W + "r"))
         {
+            var image = ReadImage(r, archive, imageRelationships);
+            if (image is not null)
+            {
+                paragraph.Runs.Add(Run.FromImage(image));
+                continue;
+            }
+
             var text = string.Concat(r.Elements(W + "t").Select(t => t.Value));
             if (r.Elements(W + "tab").Any())
                 text += "\t";
@@ -83,7 +91,7 @@ public static class DocxReader
         return paragraph;
     }
 
-    private static Table ReadTable(XElement tbl)
+    private static Table ReadTable(XElement tbl, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
     {
         var table = new Table();
 
@@ -97,7 +105,7 @@ public static class DocxReader
             {
                 var cell = new TableCell();
                 foreach (var p in tc.Elements(W + "p"))
-                    cell.Paragraphs.Add(ReadParagraph(p));
+                    cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships));
                 if (cell.Paragraphs.Count == 0)
                     cell.Paragraphs.Add(new Paragraph());
                 row.Cells.Add(cell);
@@ -115,6 +123,60 @@ public static class DocxReader
         // Borders are "on" unless every edge is explicitly "none"/"nil".
         var edges = tblBorders.Elements();
         return edges.Any(e => (e.Attribute(W + "val")?.Value ?? "single") is not ("none" or "nil"));
+    }
+
+    /// <summary>Reads an inline picture (w:drawing) from a run into an <see cref="InlineImage"/>, if present.</summary>
+    private static InlineImage? ReadImage(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
+    {
+        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
+        if (inline is null)
+            return null;
+
+        var blip = inline.Descendants(A + "blip").FirstOrDefault();
+        var relationshipId = blip?.Attribute(R + "embed")?.Value;
+        if (relationshipId is null || !imageRelationships.TryGetValue(relationshipId, out var target))
+            return null;
+
+        var bytes = LoadMedia(archive, target);
+        if (bytes is null)
+            return null;
+
+        var extent = inline.Element(Wp + "extent");
+        var widthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
+        var heightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
+        return new InlineImage(bytes, widthPt, heightPt);
+    }
+
+    /// <summary>Maps relationship id -> media part path from word/_rels/document.xml.rels.</summary>
+    private static Dictionary<string, string> ReadImageRelationships(ZipArchive archive)
+    {
+        var map = new Dictionary<string, string>();
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return map;
+
+        foreach (var rel in relationships)
+        {
+            var id = rel.Attribute("Id")?.Value;
+            var target = rel.Attribute("Target")?.Value;
+            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(target))
+                continue;
+            // Targets in document rels are relative to the word/ folder.
+            map[id] = "word/" + target.TrimStart('/');
+        }
+        return map;
+    }
+
+    private static byte[]? LoadMedia(ZipArchive archive, string entryPath)
+    {
+        var entry = archive.GetEntry(entryPath);
+        if (entry is null)
+            return null;
+        using var entryStream = entry.Open();
+        using var buffer = new MemoryStream();
+        entryStream.CopyTo(buffer);
+        return buffer.ToArray();
     }
 
     internal static ParagraphFormatting ReadParagraphFormatting(XElement pPr)

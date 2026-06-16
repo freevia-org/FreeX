@@ -1,7 +1,9 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using FreeW.Core.Model;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun = System.Windows.Documents.Run;
@@ -134,7 +136,9 @@ public sealed class DocumentView : RichTextBox
         };
         foreach (var inline in wpfParagraph.Inlines)
         {
-            if (inline is WpfRun run && run.Text.Length > 0)
+            if (inline is InlineUIContainer { Child: Image { Tag: InlineImage modelImage } })
+                modelParagraph.Runs.Add(ModelRun.FromImage(modelImage));
+            else if (inline is WpfRun run && run.Text.Length > 0)
                 modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)));
         }
         return modelParagraph;
@@ -244,8 +248,11 @@ public sealed class DocumentView : RichTextBox
         return wpf;
     }
 
-    private static WpfRun BuildRun(ModelRun run, ModelParagraph paragraph, TextDocument document)
+    private static Inline BuildRun(ModelRun run, ModelParagraph paragraph, TextDocument document)
     {
+        if (run.Image is { } image)
+            return BuildImageRun(image);
+
         var fmt = Resolve(run, paragraph, document);
         var wpf = new WpfRun(run.Text)
         {
@@ -268,6 +275,50 @@ public sealed class DocumentView : RichTextBox
             wpf.TextDecorations = decorations;
 
         return wpf;
+    }
+
+    /// <summary>Renders an inline image as an InlineUIContainer hosting a WPF Image (PNG-decoded).</summary>
+    private static InlineUIContainer BuildImageRun(InlineImage image)
+    {
+        var element = new Image
+        {
+            Source = DecodePng(image.PngBytes),
+            Width = image.WidthPt * PxPerPoint,
+            Height = image.HeightPt * PxPerPoint,
+            Stretch = Stretch.Fill,
+            Tag = image // carries the model image so CommitToModel can round-trip it
+        };
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    private static BitmapImage DecodePng(byte[] bytes)
+    {
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit();
+        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+        bitmap.StreamSource = new MemoryStream(bytes);
+        bitmap.EndInit();
+        bitmap.Freeze();
+        return bitmap;
+    }
+
+    /// <summary>Inserts an inline image at the caret. Width/height in points; preserved on save.</summary>
+    public void InsertImage(InlineImage image)
+    {
+        CommitToModel();
+        var container = BuildImageRun(image);
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        if (caret.Paragraph is { } paragraph)
+            paragraph.Inlines.Add(container);
+        else if (Document.Blocks.LastOrDefault() is WpfParagraph last)
+            last.Inlines.Add(container);
+        else
+        {
+            var p = new WpfParagraph(container);
+            Document.Blocks.Add(p);
+        }
+        CommitToModel();
+        Render();
     }
 
     // --- view -> model ---
