@@ -354,8 +354,13 @@ if ($PublishMode -eq "Velopack") {
     }
     New-Item -ItemType Directory -Force -Path $vpkOut | Out-Null
 
+    # packId is "FreeXApp" (not "FreeX") on purpose: Velopack installs to %LocalAppData%\<packId>,
+    # and the app already uses %LocalAppData%\FreeX for its own data (Logs/Diagnostics/Recovery).
+    # A matching id would make Velopack rename/own that data dir — wiping user data on uninstall and
+    # failing reinstall when the dir is locked. Distinct id keeps install and data fully separate.
+    # packTitle stays "FreeX" so the display name (Start menu, Programs & Features) is unchanged.
     & vpk pack `
-        --packId "FreeX" `
+        --packId "FreeXApp" `
         --packVersion $assemblyVersion `
         --packDir $publishDir `
         --mainExe "FreeX.App.Host.exe" `

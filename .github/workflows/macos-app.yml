@@ -1047,8 +1047,10 @@ jobs:
           rm -rf "$vpk_out"
           mkdir -p "$vpk_out"
 
+          # packId "FreeXApp" (not "FreeX") so the Velopack install location stays distinct from
+          # the app's own data directory, matching the Windows pack. packTitle stays "FreeX".
           vpk pack \
-            --packId FreeX \
+            --packId FreeXApp \
             --packVersion "$app_version" \
             --packDir "$app" \
             --mainExe FreeX \
