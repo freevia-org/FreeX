@@ -18,8 +18,6 @@ public partial class MainWindow
     private readonly System.Windows.Controls.Primitives.ToggleButton UnderlineButton = new();
     private readonly System.Windows.Controls.Primitives.ToggleButton StrikeButton = new();
     private readonly System.Windows.Controls.Button BordersMenuButton = new();
-    private readonly System.Windows.Shapes.Rectangle FillColorBar = new();
-    private readonly System.Windows.Shapes.Rectangle FontColorBar = new();
     private readonly System.Windows.Controls.Primitives.ToggleButton AlignTopBtn = new();
     private readonly System.Windows.Controls.Primitives.ToggleButton AlignMiddleBtn = new();
     private readonly System.Windows.Controls.Primitives.ToggleButton AlignBottomBtn = new();
@@ -107,8 +105,6 @@ public partial class MainWindow
         try { RegisterName("BordersMenuButton", BordersMenuButton); } catch (System.ArgumentException) { }
         RibbonMetadata.SetCommandName(BordersMenuButton, "Borders");
         RibbonBackplaneControls["Borders"] = BordersMenuButton;
-        try { RegisterName("FillColorBar", FillColorBar); } catch (System.ArgumentException) { }
-        try { RegisterName("FontColorBar", FontColorBar); } catch (System.ArgumentException) { }
         try { RegisterName("AlignTopBtn", AlignTopBtn); } catch (System.ArgumentException) { }
         RibbonMetadata.SetCommandName(AlignTopBtn, "Top Align");
         RibbonBackplaneControls["Top Align"] = AlignTopBtn;
