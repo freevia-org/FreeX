@@ -5,6 +5,7 @@
     <ProjectReference Include="..\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
     <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,5 +27,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Using Include="Free.Shared.Opc" />
+    <Using Include="Free.Shared.AppServices" />
   </ItemGroup>
 </Project>

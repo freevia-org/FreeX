@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace FreeX.App.Services;
+namespace Free.Shared.AppServices;
 
 public sealed record WorkbookFileAccessIdentity
 {

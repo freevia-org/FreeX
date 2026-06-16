@@ -1,4 +1,4 @@
-namespace FreeX.App.Services;
+namespace Free.Shared.AppServices;
 
 /// <summary>
 /// Owns the save/dirty cluster for one workbook window: dirty flag, dirty-generation counter,

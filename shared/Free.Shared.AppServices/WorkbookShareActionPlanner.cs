@@ -1,4 +1,4 @@
-namespace FreeX.App.Services;
+namespace Free.Shared.AppServices;
 
 public enum WorkbookShareActionPlanKind
 {

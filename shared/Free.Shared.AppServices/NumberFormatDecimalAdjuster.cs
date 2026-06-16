@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace FreeX.App.Services;
+namespace Free.Shared.AppServices;
 
 public static partial class NumberFormatDecimalAdjuster
 {

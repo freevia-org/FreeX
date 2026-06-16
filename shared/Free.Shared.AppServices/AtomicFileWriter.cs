@@ -1,4 +1,4 @@
-namespace FreeX.App.Services;
+namespace Free.Shared.AppServices;
 
 /// <summary>
 /// Writes a file through a sibling temp file before replacing the target.

@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/shared/">
+    <Project Path="shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
     <Project Path="shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
     <Project Path="shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
   </Folder>

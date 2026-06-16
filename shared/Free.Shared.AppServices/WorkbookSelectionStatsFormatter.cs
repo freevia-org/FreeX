@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace FreeX.App.Services;
+namespace Free.Shared.AppServices;
 
 public static class WorkbookSelectionStatsFormatter
 {

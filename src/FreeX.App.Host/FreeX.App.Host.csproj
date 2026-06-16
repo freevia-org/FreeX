@@ -69,4 +69,7 @@
   <ItemGroup>
     <Using Include="Free.Shared.Opc" />
   </ItemGroup>
+  <ItemGroup>
+    <Using Include="Free.Shared.AppServices" />
+  </ItemGroup>
 </Project>
