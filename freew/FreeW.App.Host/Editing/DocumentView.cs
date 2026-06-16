@@ -576,6 +576,20 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
                 break;
+            case WpfRun { Tag: CommentMarker { IsReference: true } reference }:
+                // The textless comment anchor: round-trips as a comment-reference run.
+                modelParagraph.Runs.Add(ModelRun.CommentReference(reference.CommentId));
+                break;
+            case WpfRun { Tag: CommentMarker { IsReference: false } covered } commentedRun when commentedRun.Text.Length > 0:
+                // A commented text run: recover its formatting but drop the injected review highlight
+                // (it is view-only chrome) and carry the comment id on the model run.
+                modelParagraph.Runs.Add(new ModelRun(commentedRun.Text, ReadRunFormatting(commentedRun) with { HighlightColorHex = null })
+                {
+                    HyperlinkUrl = hyperlinkUrl,
+                    HyperlinkAnchor = hyperlinkAnchor,
+                    CommentId = covered.CommentId
+                });
+                break;
             case WpfRun run when run.Text.Length > 0:
                 modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor });
                 break;
@@ -711,6 +725,10 @@ public sealed class DocumentView : RichTextBox
         if (run.FootnoteId is { } footnoteId)
             return BuildFootnoteReference(footnoteId, document);
 
+        // The textless comment anchor round-trips as an empty, tagged run carrying its reference flag.
+        if (run is { IsCommentReference: true, CommentId: { } refId })
+            return new WpfRun(string.Empty) { Tag = new CommentMarker(refId, IsReference: true) };
+
         var fmt = Resolve(run, paragraph, document);
         var wpf = new WpfRun(run.Text)
         {
@@ -754,6 +772,11 @@ public sealed class DocumentView : RichTextBox
         if (decorations.Count > 0)
             wpf.TextDecorations = decorations;
 
+        // A commented run gets a subtle highlight + a tooltip surfacing the comment author and text,
+        // and a CommentMarker tag so the id round-trips on commit (see ReadInline).
+        if (run.CommentId is { } commentId)
+            ApplyCommentMarker(wpf, commentId, document);
+
         if (run.HyperlinkUrl is { Length: > 0 } url)
             return BuildHyperlink(wpf, url);
         if (run.HyperlinkAnchor is { Length: > 0 } anchor)
@@ -761,6 +784,35 @@ public sealed class DocumentView : RichTextBox
 
         return wpf;
     }
+
+    /// <summary>Subtle highlight used to mark a commented text range (a pale review yellow).</summary>
+    private static readonly Color CommentHighlight = Color.FromRgb(0xFF, 0xF4, 0xCE);
+
+    /// <summary>
+    /// Marks a WPF run as covered by the comment with id <paramref name="commentId"/>: a subtle
+    /// background highlight (only when the run has no explicit highlight of its own) plus a tooltip
+    /// showing the comment author and text, and a <see cref="CommentMarker"/> tag so the id survives a
+    /// commit/round-trip.
+    /// </summary>
+    private static void ApplyCommentMarker(WpfRun wpf, int commentId, TextDocument document)
+    {
+        wpf.Tag = new CommentMarker(commentId, IsReference: false);
+        if (wpf.Background is null)
+            wpf.Background = new SolidColorBrush(CommentHighlight);
+        if (document.Comments.TryGetValue(commentId, out var comment))
+        {
+            var author = comment.Author.Length > 0 ? comment.Author : "Comment";
+            var body = comment.PlainText;
+            wpf.ToolTip = body.Length > 0 ? $"{author}: {body}" : author;
+        }
+    }
+
+    /// <summary>
+    /// Carried on a commented WPF run's Tag so CommitToModel can round-trip its comment id. When
+    /// <see cref="IsReference"/> is true the run is the textless anchor (the w:commentReference);
+    /// otherwise it is a covered text run within the comment range.
+    /// </summary>
+    private sealed record CommentMarker(int CommentId, bool IsReference);
 
     // Wraps a styled run in a WPF Hyperlink that targets an internal bookmark. The bookmark name is
     // stored on the link's Tag (not NavigateUri, which is reserved for external URLs) so it reads back
@@ -953,6 +1005,134 @@ public sealed class DocumentView : RichTextBox
 
         CommitToModel();
         Render();
+    }
+
+    /// <summary>
+    /// Adds a review comment over the current selection: allocates the next comment id, marks the
+    /// selected run span with it (a w:commentRangeStart/End pair on save), appends a reference anchor,
+    /// and stores the comment (author/initials/text) in the model. With an empty selection the comment
+    /// covers the caret's whole paragraph. Re-renders so the highlight + tooltip appear and the markers
+    /// round-trip on the next commit/save.
+    /// </summary>
+    public void InsertComment(string text, string author, string initials)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        Focus();
+
+        // Capture the selection geometry (start paragraph + char offsets within it) before committing,
+        // since committing rebuilds the model. We support a selection inside one paragraph (the common
+        // case); a wider or empty selection falls back to covering the start paragraph in full.
+        var startParagraph = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
+        if (startParagraph is null)
+            return;
+        var sameParagraph = ReferenceEquals(Selection.Start.Paragraph, Selection.End.Paragraph);
+        var startOffset = OffsetInParagraph(startParagraph, Selection.Start);
+        var endOffset = sameParagraph ? OffsetInParagraph(startParagraph, Selection.End) : int.MaxValue;
+        if (Selection.IsEmpty || !sameParagraph)
+        {
+            startOffset = 0;
+            endOffset = int.MaxValue;
+        }
+
+        // Resolve the start paragraph to its model block index, then commit so the model matches the view.
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var modelIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref modelIndex);
+        if (!indexOf.TryGetValue(startParagraph, out var paragraphIndex))
+            return;
+
+        CommitToModel();
+        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
+            return;
+
+        var id = _model.NextCommentId();
+        if (!MarkCommentRange(modelParagraph, startOffset, endOffset, id))
+            return; // nothing textual to anchor the comment to
+
+        _model.Comments[id] = new Comment(id)
+        {
+            Author = author,
+            Initials = initials,
+            // W3CDTF (UTC, second precision) — matches what the docx writer expects for w:date.
+            DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture)
+        };
+        _model.Comments[id].Content.Add(new ModelParagraph(text));
+
+        Render();
+    }
+
+    /// <summary>The plain-text character offset of <paramref name="position"/> from the paragraph's start.</summary>
+    private static int OffsetInParagraph(WpfParagraph paragraph, TextPointer position)
+    {
+        var range = new TextRange(paragraph.ContentStart, position);
+        return range.Text.Length;
+    }
+
+    /// <summary>
+    /// Marks the model runs of <paramref name="paragraph"/> covering the character range
+    /// [<paramref name="startOffset"/>, <paramref name="endOffset"/>) with comment id
+    /// <paramref name="commentId"/>, splitting runs at the boundaries, and inserts a textless reference
+    /// run just after the covered span. Offsets are measured over the paragraph's plain text. Returns
+    /// false when no textual run is covered (nothing to comment on).
+    /// </summary>
+    private static bool MarkCommentRange(ModelParagraph paragraph, int startOffset, int endOffset, int commentId)
+    {
+        var pos = 0;
+        var lastCoveredIndex = -1;
+        for (var i = 0; i < paragraph.Runs.Count; i++)
+        {
+            var run = paragraph.Runs[i];
+            // Non-text runs (images, markers) have no width in this offset model; skip but advance past
+            // any literal text they carry.
+            var len = run.Text.Length;
+            var runStart = pos;
+            var runEnd = pos + len;
+            pos = runEnd;
+            if (len == 0)
+                continue;
+
+            // Clip the run to the selected range; skip runs entirely outside it.
+            var coverStart = Math.Max(runStart, startOffset);
+            var coverEnd = Math.Min(runEnd, endOffset);
+            if (coverStart >= coverEnd)
+                continue;
+
+            // Split off the leading uncovered part, if any.
+            if (coverStart > runStart)
+            {
+                var head = new ModelRun(run.Text[..(coverStart - runStart)], run.Formatting)
+                {
+                    HyperlinkUrl = run.HyperlinkUrl,
+                    HyperlinkAnchor = run.HyperlinkAnchor
+                };
+                run.Text = run.Text[(coverStart - runStart)..];
+                paragraph.Runs.Insert(i, head);
+                i++;
+            }
+            // Split off the trailing uncovered part, if any.
+            if (coverEnd < runEnd)
+            {
+                var tail = new ModelRun(run.Text[(coverEnd - coverStart)..], run.Formatting)
+                {
+                    HyperlinkUrl = run.HyperlinkUrl,
+                    HyperlinkAnchor = run.HyperlinkAnchor
+                };
+                run.Text = run.Text[..(coverEnd - coverStart)];
+                paragraph.Runs.Insert(i + 1, tail);
+            }
+
+            run.CommentId = commentId;
+            lastCoveredIndex = i;
+        }
+
+        if (lastCoveredIndex < 0)
+            return false;
+
+        paragraph.Runs.Insert(lastCoveredIndex + 1, ModelRun.CommentReference(commentId));
+        return true;
     }
 
     /// <summary>

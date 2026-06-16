@@ -53,8 +53,45 @@ public static class DocxReader
 
         ReadHeaderFooter(documentXml, archive, document, imageRelationships, hyperlinkRelationships);
         ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
+        ReadComments(archive, document, imageRelationships, hyperlinkRelationships);
 
         return document;
+    }
+
+    /// <summary>
+    /// Loads word/comments.xml (if present) into <see cref="TextDocument.Comments"/>, reconstructing
+    /// each w:comment's author/initials/date and its paragraphs. Comments referenced by no body range
+    /// are still kept; the body range markers are recovered separately in <see cref="ReadParagraph"/>.
+    /// </summary>
+    private static void ReadComments(
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+    {
+        var commentsXml = LoadPart(archive, "word/comments.xml");
+        var root = commentsXml?.Root;
+        if (root is null)
+            return;
+
+        var noNumbering = new Dictionary<int, ListKind>();
+        foreach (var element in root.Elements(W + "comment"))
+        {
+            if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
+                continue;
+
+            var comment = new Comment(id)
+            {
+                Author = element.Attribute(W + "author")?.Value ?? string.Empty,
+                Initials = element.Attribute(W + "initials")?.Value ?? string.Empty,
+                DateXml = element.Attribute(W + "date")?.Value
+            };
+            foreach (var p in element.Elements(W + "p"))
+                comment.Content.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+            if (comment.Content.Count == 0)
+                comment.Content.Add(new Paragraph());
+            document.Comments[id] = comment;
+        }
     }
 
     /// <summary>
@@ -197,11 +234,30 @@ public static class DocxReader
         // bookmark's name (w:bookmarkStart, a run sibling) is captured wherever it appears. A
         // w:hyperlink either carries an r:id (external URL, resolved via the rels) or a w:anchor
         // (internal link to a bookmark name).
+        //
+        // Review comments overlay this: a w:commentRangeStart/End pair brackets the runs it covers,
+        // and the trailing w:commentReference run anchors the comment. We track the open range id so
+        // every covered run gets its CommentId, and recover the reference run as a textless anchor.
+        var activeCommentId = (int?)null;
         foreach (var child in p.Elements())
         {
-            if (child.Name == W + "r")
+            if (child.Name == W + "commentRangeStart")
             {
-                AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null);
+                if (int.TryParse(child.Attribute(W + "id")?.Value, out var startId))
+                    activeCommentId = startId;
+            }
+            else if (child.Name == W + "commentRangeEnd")
+            {
+                activeCommentId = null;
+            }
+            else if (child.Name == W + "r")
+            {
+                // A run carrying a w:commentReference is the textless comment anchor; recover it.
+                var commentRef = child.Element(W + "commentReference");
+                if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
+                    paragraph.Runs.Add(Run.CommentReference(refId));
+                else
+                    AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId);
             }
             else if (child.Name == W + "hyperlink")
             {
@@ -209,7 +265,7 @@ public static class DocxReader
                 var id = child.Attribute(R + "id")?.Value;
                 var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
                 foreach (var r in child.Elements(W + "r"))
-                    AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null);
+                    AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null, commentId: activeCommentId);
             }
             else if (child.Name == W + "fldSimple")
             {
@@ -255,12 +311,13 @@ public static class DocxReader
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
         string? hyperlinkUrl,
-        string? hyperlinkAnchor)
+        string? hyperlinkAnchor,
+        int? commentId = null)
     {
         var image = ReadImage(r, archive, imageRelationships);
         if (image is not null)
         {
-            paragraph.Runs.Add(new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor });
+            paragraph.Runs.Add(new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId });
             return;
         }
 
@@ -277,7 +334,7 @@ public static class DocxReader
             text += "\t";
         if (text.Length == 0)
             return;
-        paragraph.Runs.Add(new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor });
+        paragraph.Runs.Add(new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId });
     }
 
     private static Table ReadTable(

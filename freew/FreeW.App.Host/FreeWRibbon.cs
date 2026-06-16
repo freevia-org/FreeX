@@ -124,5 +124,12 @@ internal static class FreeWRibbon
                     g.Button("freew.print-preview", "Print Preview");
                 });
             })
+            .Tab("review", "Review", "R", tab =>
+            {
+                tab.Group("comments", "Comments", "C", 100, g =>
+                {
+                    g.Button("freew.new-comment", "New Comment");
+                });
+            })
             .Build();
 }

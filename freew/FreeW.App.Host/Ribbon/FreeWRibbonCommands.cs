@@ -101,6 +101,9 @@ internal static class FreeWRibbonCommands
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
         registry.Register("freew.link-bookmark", new LinkToBookmarkCommand(editor));
 
+        // Review tab — Comments: prompt for comment text and attach it over the current selection.
+        registry.Register("freew.new-comment", new NewCommentCommand(editor));
+
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
         registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false));
@@ -599,6 +602,36 @@ internal static class FreeWRibbonCommands
                 return; // cancelled or empty — nothing to anchor a footnote to
             editor.Focus();
             editor.InsertFootnote(text.Trim());
+        }
+    }
+
+    // Review > Comments > New Comment: prompt for the comment text, then attach it over the current
+    // selection. The author comes from the document's Author property (falling back to the OS user),
+    // with initials derived from it; the view marks the selected runs and stores the comment.
+    private sealed class NewCommentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var text = TextPrompt.Ask(Window.GetWindow(editor), "New Comment", "Comment:", string.Empty);
+            if (string.IsNullOrWhiteSpace(text))
+                return; // cancelled or empty — nothing to attach
+
+            var author = editor.Model.Properties.Author;
+            if (string.IsNullOrWhiteSpace(author))
+                author = Environment.UserName;
+            author = author?.Trim() ?? string.Empty;
+
+            editor.Focus();
+            editor.InsertComment(text.Trim(), author, DeriveInitials(author));
+        }
+
+        // Initials = the first letter of each whitespace-separated word, upper-cased (max 3).
+        private static string DeriveInitials(string author)
+        {
+            var parts = author.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            var initials = string.Concat(parts.Take(3).Select(p => char.ToUpperInvariant(p[0])));
+            return initials.Length > 0 ? initials : "?";
         }
     }
 

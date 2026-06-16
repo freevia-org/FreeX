@@ -55,6 +55,22 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// </summary>
     public int? FootnoteId { get; set; }
 
+    /// <summary>
+    /// When set, this run is covered by the review comment with this id in
+    /// <see cref="TextDocument.Comments"/>. The covered span serialises with a w:commentRangeStart /
+    /// w:commentRangeEnd pair bracketing the run(s), and a trailing reference run (see
+    /// <see cref="IsCommentReference"/>) carries the w:commentReference. Consecutive runs sharing the
+    /// same id form one comment range.
+    /// </summary>
+    public int? CommentId { get; set; }
+
+    /// <summary>
+    /// When true together with <see cref="CommentId"/>, this run is the comment's anchor marker — it
+    /// carries no literal text and serialises as a run wrapping w:commentReference w:id="N". One such
+    /// run is emitted immediately after the commented range's w:commentRangeEnd.
+    /// </summary>
+    public bool IsCommentReference { get; set; }
+
     /// <summary>Creates a run that carries an inline image instead of text.</summary>
     public static Run FromImage(InlineImage image) => new(string.Empty) { Image = image };
 
@@ -73,6 +89,14 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         {
             FootnoteId = footnoteId
         };
+
+    /// <summary>
+    /// Creates the textless anchor run for the comment with id <paramref name="commentId"/>. It
+    /// serialises as a run wrapping a w:commentReference and is emitted just after the commented
+    /// range's w:commentRangeEnd. The matching content lives in <see cref="TextDocument.Comments"/>.
+    /// </summary>
+    public static Run CommentReference(int commentId) =>
+        new(string.Empty) { CommentId = commentId, IsCommentReference = true };
 }
 
 /// <summary>
@@ -85,6 +109,40 @@ public sealed class Footnote(int id)
     public List<Paragraph> Content { get; } = [];
 
     public Footnote(int id, string text) : this(id) => Content.Add(new Paragraph(text));
+
+    public string PlainText => string.Join("\n", Content.Select(p => p.PlainText));
+}
+
+/// <summary>
+/// A single review comment: an id (matching the body runs' <see cref="Run.CommentId"/>), an author
+/// and initials, an optional explicit date, and the comment's block content as a list of paragraphs.
+/// Maps onto a w:comment element inside word/comments.xml. The date is an explicit model value (never
+/// auto-stamped) so the writer stays deterministic — it is only emitted when set.
+/// </summary>
+public sealed class Comment(int id)
+{
+    public int Id { get; } = id;
+
+    /// <summary>The comment author's display name (w:author). Empty when unknown.</summary>
+    public string Author { get; set; } = string.Empty;
+
+    /// <summary>The author's initials (w:initials). Empty when unknown.</summary>
+    public string Initials { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The comment's timestamp as a W3CDTF string (w:date), or null when unset. Kept as a string so
+    /// the writer never stamps a non-deterministic <c>DateTime.Now</c>; callers set it explicitly.
+    /// </summary>
+    public string? DateXml { get; set; }
+
+    public List<Paragraph> Content { get; } = [];
+
+    public Comment(int id, string text, string author = "", string initials = "") : this(id)
+    {
+        Author = author;
+        Initials = initials;
+        Content.Add(new Paragraph(text));
+    }
 
     public string PlainText => string.Join("\n", Content.Select(p => p.PlainText));
 }
@@ -286,6 +344,16 @@ public sealed class TextDocument
 
     /// <summary>The next unused footnote id (1-based; ignores the reserved separator ids -1 and 0).</summary>
     public int NextFootnoteId() => Footnotes.Count == 0 ? 1 : Math.Max(0, Footnotes.Keys.Max()) + 1;
+
+    /// <summary>
+    /// The document's review comments, keyed by comment id (matching the body runs' <see cref="Run.CommentId"/>).
+    /// Maps to word/comments.xml (w:comments / w:comment w:id="N"). Empty when the document has no
+    /// comments, in which case no comments part is emitted.
+    /// </summary>
+    public Dictionary<int, Comment> Comments { get; } = [];
+
+    /// <summary>The next unused comment id (0-based, as Word numbers comments from 0).</summary>
+    public int NextCommentId() => Comments.Count == 0 ? 0 : Comments.Keys.Max() + 1;
 
     /// <summary>The body's paragraphs (top-level only; table cell paragraphs are not included).</summary>
     public IEnumerable<Paragraph> Paragraphs => Blocks.OfType<Paragraph>();
