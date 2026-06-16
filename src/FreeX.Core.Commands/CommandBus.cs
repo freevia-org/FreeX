@@ -1,3 +1,4 @@
+using Free.Shared.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -11,7 +12,9 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
     private const int MaxUndoByteBudget = 52_428_800; // 50 MB
     private const int DefaultCommandBytes = 200;
 
-    private readonly Dictionary<WorkbookId, CommandStack> _stacks = [];
+    // The undo/redo stack mechanics live in the shared engine; this bus owns the
+    // spreadsheet-specific concerns (context creation, apply/revert, affected cells).
+    private readonly Dictionary<WorkbookId, WorkbookCommandStack> _stacks = [];
     private readonly Dictionary<WorkbookId, Func<IWorkbookCommand>> _repeatableCommandFactories = [];
     private readonly Func<WorkbookId, ICommandContext> _contextFactory;
     private readonly Action<WorkbookId, ICommandContext>? _beforeMutation;
@@ -35,7 +38,7 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
         if (outcome.Success)
         {
             var stack = GetOrCreateStack(workbookId);
-            stack.Push(command, EstimateBytes(command), GetAffectedCells(command, outcome));
+            stack.Push(command, EstimateBytes(command), GetAffectedCells(command, outcome), GetHistoryLabel(command));
             NotifyStackChanged(workbookId);
         }
 
@@ -73,7 +76,7 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
         }
 
         NotifyStackChanged(workbookId);
-        return new CommandOutcome(true, AffectedCells: entry.AffectedCells ?? GetAffectedCells(command));
+        return new CommandOutcome(true, AffectedCells: entry.Payload ?? GetAffectedCells(command));
     }
 
     public CommandOutcome Redo(WorkbookId workbookId)
@@ -98,11 +101,11 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
         }
 
         var affectedCells = outcome.Success
-            ? GetAffectedCells(command, outcome) ?? entry.AffectedCells
+            ? GetAffectedCells(command, outcome) ?? entry.Payload
             : null;
 
         if (outcome.Success)
-            stack.PushWithoutClearingRedo(entry with { AffectedCells = affectedCells });
+            stack.PushWithoutClearingRedo(entry with { Payload = affectedCells });
         else
             stack.PushRedo(entry); // restore so the user can retry
 
@@ -155,11 +158,11 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
                 CanRedo(workbookId)));
     }
 
-    private CommandStack GetOrCreateStack(WorkbookId id)
+    private WorkbookCommandStack GetOrCreateStack(WorkbookId id)
     {
         if (!_stacks.TryGetValue(id, out var stack))
         {
-            stack = new CommandStack(MaxUndoDepth, MaxUndoByteBudget);
+            stack = new WorkbookCommandStack(MaxUndoDepth, MaxUndoByteBudget);
             _stacks[id] = stack;
         }
         return stack;
@@ -181,123 +184,10 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
             ? command.GetType().Name
             : command.Label.Trim();
 
-    private readonly record struct CommandStackEntry(
-        IWorkbookCommand Command,
-        int Bytes,
-        IReadOnlyList<CellAddress>? AffectedCells,
-        string Label);
-
-    private sealed class CommandStack
-    {
-        private readonly int _maxDepth;
-        private readonly int _maxBytes;
-        private readonly LinkedList<CommandStackEntry> _undoStack = new();
-        private readonly Stack<CommandStackEntry> _redoStack = new();
-        private int _undoStackBytes;
-
-        /// <summary>Running total of estimated bytes held in the undo stack.</summary>
-        public int UndoStackBytes => _undoStackBytes;
-
-        public CommandStack(int maxDepth, int maxBytes)
-        {
-            _maxDepth = maxDepth;
-            _maxBytes = maxBytes;
-        }
-
-        public bool CanUndo => _undoStack.Count > 0;
-        public bool CanRedo => _redoStack.Count > 0;
-
-        /// <summary>Number of commands currently on the undo stack.</summary>
-        public int UndoDepth => _undoStack.Count;
-
-        public void Push(
-            IWorkbookCommand command,
-            int bytes,
-            IReadOnlyList<CellAddress>? affectedCells)
-        {
-            PushUndoEntry(new CommandStackEntry(command, bytes, affectedCells, GetHistoryLabel(command)));
-            _redoStack.Clear(); // New action invalidates redo history
-
-            TrimUndoStack();
-        }
-
-        public void PushWithoutClearingRedo(CommandStackEntry entry)
-        {
-            PushUndoEntry(entry);
-            TrimUndoStack();
-        }
-
-        private void PushUndoEntry(CommandStackEntry entry)
-        {
-            _undoStack.AddLast(entry);
-            _undoStackBytes += entry.Bytes;
-        }
-
-        private void TrimUndoStack()
-        {
-            while (_undoStack.Count > _maxDepth || (_undoStack.Count > 0 && _undoStackBytes > _maxBytes))
-            {
-                var first = _undoStack.First!.Value;
-                _undoStack.RemoveFirst();
-                _undoStackBytes -= first.Bytes;
-            }
-        }
-
-        public CommandStackEntry PopUndo()
-        {
-            var entry = _undoStack.Last!.Value;
-            _undoStack.RemoveLast();
-            _undoStackBytes -= entry.Bytes;
-            _redoStack.Push(entry);
-            return entry;
-        }
-
-        public CommandStackEntry PopRedo()
-        {
-            return _redoStack.Pop();
-        }
-
-        public void PushRedo(CommandStackEntry entry)
-        {
-            _redoStack.Push(entry);
-        }
-
-        public IReadOnlyList<CommandHistoryEntry> GetUndoHistory(int maxCount)
-        {
-            var history = new List<CommandHistoryEntry>(Math.Min(maxCount, _undoStack.Count));
-            for (var node = _undoStack.Last; node is not null && history.Count < maxCount; node = node.Previous)
-                history.Add(new CommandHistoryEntry(node.Value.Label));
-
-            return history;
-        }
-
-        public IReadOnlyList<CommandHistoryEntry> GetRedoHistory(int maxCount)
-        {
-            var history = new List<CommandHistoryEntry>(Math.Min(maxCount, _redoStack.Count));
-            foreach (var entry in _redoStack)
-            {
-                if (history.Count >= maxCount)
-                    break;
-
-                history.Add(new CommandHistoryEntry(entry.Label));
-            }
-
-            return history;
-        }
-
-        /// <summary>
-        /// Un-does a <see cref="PopUndo"/>: removes the command from the redo stack and puts it
-        /// back on top of the undo stack.  Call this when <see cref="IWorkbookCommand.Revert"/>
-        /// throws so the undo chain is not permanently broken.
-        /// </summary>
-        public void RollbackPopUndo(CommandStackEntry entry)
-        {
-            // PopUndo pushed the command onto the redo stack — reverse that first.
-            if (_redoStack.Count > 0 && ReferenceEquals(_redoStack.Peek().Command, entry.Command))
-                _redoStack.Pop();
-
-            // Put the command back at the top of the undo stack.
-            PushUndoEntry(entry);
-        }
-    }
+    /// <summary>
+    /// The spreadsheet-specialised undo/redo stack: the shared engine keyed to
+    /// <see cref="IWorkbookCommand"/> with the affected-cell list as its payload.
+    /// </summary>
+    private sealed class WorkbookCommandStack(int maxDepth, int maxBytes)
+        : UndoRedoStack<IWorkbookCommand, IReadOnlyList<CellAddress>?>(maxDepth, maxBytes);
 }

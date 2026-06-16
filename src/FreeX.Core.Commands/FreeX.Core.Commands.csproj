@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
     <ProjectReference Include="..\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Commands\Free.Shared.Commands.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

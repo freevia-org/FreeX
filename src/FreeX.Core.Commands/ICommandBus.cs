@@ -1,3 +1,4 @@
+using Free.Shared.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -45,8 +46,6 @@ public interface ICommandStackChangeNotifier
 {
     event EventHandler<CommandStackChangedEventArgs>? StackChanged;
 }
-
-public sealed record CommandHistoryEntry(string Label);
 
 public interface ICommandHistoryProvider
 {
