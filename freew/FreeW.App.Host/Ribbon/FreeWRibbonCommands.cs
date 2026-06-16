@@ -58,6 +58,14 @@ internal static class FreeWRibbonCommands
         Routed("freew.copy", ApplicationCommands.Copy);
         Routed("freew.paste", ApplicationCommands.Paste);
 
+        registry.Register("freew.font-family", new SelectionValueCommand(editor,
+            (selection, value) => selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(value))));
+        registry.Register("freew.font-size", new SelectionValueCommand(editor, (selection, value) =>
+        {
+            if (double.TryParse(value, out var points))
+                selection.ApplyPropertyValue(TextElement.FontSizeProperty, points * 96.0 / 72.0);
+        }));
+
         registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
         registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
         registry.Register("freew.style-title", new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
@@ -102,6 +110,19 @@ internal static class FreeWRibbonCommands
     private sealed class PageCommand(DocumentView editor, Action<PageSettings> apply) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => apply(editor.Model.Page);
+    }
+
+    // Applies a value chosen from a ribbon combo (font family/size) to the current selection.
+    private sealed class SelectionValueCommand(DocumentView editor, Action<TextSelection, string> apply) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (context.Parameters.TryGetValue("value", out var raw) && raw is string value && value.Length > 0)
+            {
+                editor.Focus();
+                apply(editor.Selection, value);
+            }
+        }
     }
 
     private sealed class RoutedEditCommand(DocumentView editor, RoutedCommand command) : IRibbonCommand

@@ -304,6 +304,28 @@ public sealed class MainWindow : Window
 
         void Execute() => command?.Execute(RibbonCommandContext.Empty);
 
+        if (control is RibbonComboBox combo)
+        {
+            var box = new ComboBox
+            {
+                IsEditable = true,
+                MinWidth = combo.Width ?? 100,
+                Margin = thickness,
+                IsEnabled = command is not null
+            };
+            foreach (var item in combo.Items)
+                box.Items.Add(item);
+
+            void Apply(string? value)
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                    command?.Execute(new RibbonCommandContext(new System.Collections.Generic.Dictionary<string, object?> { ["value"] = value }));
+            }
+            box.SelectionChanged += (_, _) => Apply(box.SelectedItem as string);
+            box.KeyDown += (_, e) => { if (e.Key == Key.Enter) Apply(box.Text); };
+            return box;
+        }
+
         if (control is RibbonToggleButton)
         {
             var id = control.CommandId;
