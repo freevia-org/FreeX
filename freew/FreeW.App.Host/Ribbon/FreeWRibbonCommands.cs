@@ -93,6 +93,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.font-color", new ColorPickCommand(editor, isHighlight: false));
         registry.Register("freew.highlight", new ColorPickCommand(editor, isHighlight: true));
 
+        // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
+        registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
+        registry.Register("freew.para-shading", new ParagraphShadingCommand(editor));
+
         registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
         registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
         registry.Register("freew.style-title", new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
@@ -225,6 +229,76 @@ internal static class FreeWRibbonCommands
             window.Content = panel;
             window.ShowDialog();
             return result;
+        }
+    }
+
+    // Home > Paragraph > Shading: pick a fill colour from a small palette and apply it to the
+    // selected paragraph(s); "No Color" clears shading. Mirrors ColorPickCommand's swatch picker.
+    private sealed class ParagraphShadingCommand(DocumentView editor) : IRibbonCommand
+    {
+        private static readonly string[] Palette =
+        [
+            "#FFFF00", "#92D050", "#00B0F0", "#FFC000", "#FF0000", "#D9D9D9",
+            "#A6A6A6", "#FFF2CC", "#DEEBF7", "#E2EFDA", "#FCE4D6", "#EDEDED",
+        ];
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var (chosen, hex) = ShowPicker(owner);
+            if (!chosen)
+                return;
+            editor.ToggleParagraphShading(hex);
+        }
+
+        private (bool Chosen, string? Hex) ShowPicker(Window? owner)
+        {
+            var chosen = false;
+            string? hex = null;
+            var window = new Window
+            {
+                Title = "Paragraph Shading",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(8) };
+            var grid = new WrapPanel { Width = 6 * 26 };
+            foreach (var swatchHex in Palette)
+            {
+                var swatch = new Button
+                {
+                    Width = 22,
+                    Height = 22,
+                    Margin = new Thickness(2),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(swatchHex)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                    BorderThickness = new Thickness(1),
+                    ToolTip = swatchHex
+                };
+                swatch.Click += (_, _) => { chosen = true; hex = swatchHex; window.Close(); };
+                grid.Children.Add(swatch);
+            }
+            panel.Children.Add(grid);
+
+            var clear = new Button
+            {
+                Content = "No Color",
+                Margin = new Thickness(2, 6, 2, 0),
+                Padding = new Thickness(8, 2, 8, 2)
+            };
+            clear.Click += (_, _) => { chosen = true; hex = null; window.Close(); };
+            panel.Children.Add(clear);
+
+            window.Content = panel;
+            window.ShowDialog();
+            return (chosen, hex);
         }
     }
 

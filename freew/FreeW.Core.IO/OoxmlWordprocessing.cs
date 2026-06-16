@@ -53,6 +53,11 @@ internal static class Ooxml
 
     public static int PointsToHalfPoints(double points) => (int)Math.Round(points * 2.0);
 
+    /// <summary>Border widths (w:sz on w:pBdr / w:tblBorders edges) are in eighths of a point.</summary>
+    public static double EighthPointsToPoints(string? value) => ParseInt(value) / 8.0;
+
+    public static int PointsToEighthPoints(double points) => Math.Max(1, (int)Math.Round(points * 8.0));
+
     public static int ParseInt(string? value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
 

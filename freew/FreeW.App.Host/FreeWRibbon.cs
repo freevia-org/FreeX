@@ -44,6 +44,8 @@ internal static class FreeWRibbon
                     g.Button("freew.align-left", "Align Left");
                     g.Button("freew.align-center", "Center");
                     g.Button("freew.align-right", "Align Right");
+                    g.Button("freew.para-border", "Border");
+                    g.Button("freew.para-shading", "Shading");
                 });
                 tab.Group("styles", "Styles", "S", 70, g =>
                 {

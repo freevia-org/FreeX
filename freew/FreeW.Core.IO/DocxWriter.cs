@@ -315,6 +315,23 @@ public static class DocxWriter
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)),
                 new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
+        // Paragraph box border: all four edges share one colour/width (w:pBdr), analogous to w:tblBorders.
+        if (f.Border is { } border)
+        {
+            XElement Edge(string name) => new(W + name,
+                new XAttribute(W + "val", "single"),
+                new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
+                new XAttribute(W + "space", 0),
+                new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
+            pPr.Add(new XElement(W + "pBdr",
+                Edge("top"), Edge("left"), Edge("bottom"), Edge("right")));
+        }
+        // Paragraph shading (background fill), mirroring run-level w:shd highlight.
+        if (f.ShadingColorHex is { Length: > 0 } shading)
+            pPr.Add(new XElement(W + "shd",
+                new XAttribute(W + "val", "clear"),
+                new XAttribute(W + "color", "auto"),
+                new XAttribute(W + "fill", shading.TrimStart('#'))));
 
         return pPr.HasElements ? pPr : null;
     }
