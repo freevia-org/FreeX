@@ -1,4 +1,4 @@
-namespace FreeX.Ribbon.Icons;
+namespace Free.Shared.Ribbon.Icons;
 
 /// <summary>
 /// A platform-neutral, immutable sRGB color (no WPF/Avalonia types). Renderers convert this

@@ -1,6 +1,6 @@
-using static FreeX.Ribbon.Icons.RibbonIconElement;
+using static Free.Shared.Ribbon.Icons.RibbonIconElement;
 
-namespace FreeX.Ribbon.Icons;
+namespace Free.Shared.Ribbon.Icons;
 
 /// <summary>
 /// The single platform-neutral source of icon shapes for every <see cref="RibbonCommandIconKind"/>.

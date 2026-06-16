@@ -1,4 +1,4 @@
-namespace FreeX.Ribbon.Icons;
+namespace Free.Shared.Ribbon.Icons;
 
 /// <summary>
 /// Platform-neutral description of a single ribbon icon. All coordinates live on a

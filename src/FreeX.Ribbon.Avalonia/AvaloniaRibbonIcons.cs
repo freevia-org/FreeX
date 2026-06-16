@@ -3,7 +3,7 @@ using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using FreeX.Ribbon.Icons;
+using Free.Shared.Ribbon.Icons;
 using AvaloniaPath = Avalonia.Controls.Shapes.Path;
 using AvaloniaLine = Avalonia.Controls.Shapes.Line;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;

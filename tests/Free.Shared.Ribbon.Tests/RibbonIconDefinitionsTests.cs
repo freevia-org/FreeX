@@ -1,4 +1,4 @@
-using FreeX.Ribbon.Icons;
+using Free.Shared.Ribbon.Icons;
 
 namespace FreeX.Ribbon.Tests;
 

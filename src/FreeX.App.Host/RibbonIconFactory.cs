@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
-using FreeX.Ribbon.Icons;
+using Free.Shared.Ribbon.Icons;
 
 namespace FreeX.App.Host;
 
