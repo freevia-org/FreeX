@@ -144,6 +144,22 @@ public partial class App : Application
 
         diagnostics.RecordEvent("app_ready");
         Log.Information("FreeX ready");
+
+        // Background self-update check. Best-effort: any failure resolves to Unavailable and is
+        // swallowed so a flaky network or non-Velopack dev build never disrupts startup.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var updates = Services.GetRequiredService<FreeX.App.Services.Updates.IUpdateService>();
+                var result = await updates.CheckAndDownloadAsync();
+                if (result.State == FreeX.App.Services.Updates.UpdateState.ReadyToApply)
+                {
+                    await mainWindow.Dispatcher.InvokeAsync(() => mainWindow.ShowUpdateReady(result.AvailableVersion));
+                }
+            }
+            catch (Exception ex) { Log.Debug(ex, "Background update check failed."); }
+        });
     }
 
     private static void ConfigureServices(IServiceCollection services)
@@ -211,6 +227,19 @@ public partial class App : Application
         // New-workbook name sequence (Book1, Book2, …) shared across the session so File > New
         // keeps advancing the default name instead of repeatedly producing Book1 (Issue 121).
         services.AddSingleton<NewWorkbookNameSequence>();
+
+        // Self-update + file associations.
+        services.AddSingleton<FreeX.App.Services.FileAssociations.IFileAssociationService>(
+            new FreeX.App.Host.FileAssociations.WindowsFileAssociationService(logger: null));
+        services.AddSingleton<FreeX.App.Services.Updates.IUpdateService>(sp =>
+        {
+            var channel = AppInfo.ReleaseChannel;
+            return FreeX.App.Services.Updates.VelopackUpdateService.CreateForGitHub(
+                repoUrl: FreeX.App.Services.Updates.UpdateFeed.GitHubRepoUrl,
+                prerelease: FreeX.App.Services.Updates.UpdateFeed.AllowPrereleases(channel),
+                releasesPageUrl: AppInfo.LatestReleaseUrl,
+                logger: sp.GetService<ILoggerFactory>()?.CreateLogger<FreeX.App.Services.Updates.VelopackUpdateService>());
+        });
 
         // UI
         services.AddTransient<MainWindow>();
