@@ -143,6 +143,17 @@ public static class DocxReader
         if (sectPr is null)
             return;
 
+        // Equal-width column layout (w:cols/@w:num + @w:space) lives alongside the header/footer
+        // references in w:sectPr, so recover it here while we already hold the section element.
+        var cols = sectPr.Element(W + "cols");
+        if (cols is not null)
+        {
+            if (int.TryParse(cols.Attribute(W + "num")?.Value, out var num) && num >= 1)
+                document.Page.ColumnCount = num;
+            if (cols.Attribute(W + "space") is { } space)
+                document.Page.ColumnSpacingPt = DxaToPoints(space.Value);
+        }
+
         var partsById = ReadHeaderFooterRelationships(archive);
 
         document.Header = ReadHeaderFooterPart(

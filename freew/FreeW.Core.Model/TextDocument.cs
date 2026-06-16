@@ -324,6 +324,18 @@ public sealed class PageSettings
     public double MarginTopPt { get; set; } = 72;
     public double MarginBottomPt { get; set; } = 72;
     public bool Landscape { get; set; }
+
+    /// <summary>
+    /// The number of equal-width text columns the page content flows into (w:sectPr/w:cols w:num).
+    /// Defaults to 1 (single column) so existing documents are unaffected. Always at least 1.
+    /// </summary>
+    public int ColumnCount { get; set; } = 1;
+
+    /// <summary>
+    /// The gap between adjacent columns in points (w:sectPr/w:cols w:space). Defaults to 36 points
+    /// (half an inch), Word's default column spacing. Only meaningful when <see cref="ColumnCount"/> &gt; 1.
+    /// </summary>
+    public double ColumnSpacingPt { get; set; } = 36;
 }
 
 /// <summary>
