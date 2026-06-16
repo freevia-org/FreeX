@@ -18,6 +18,13 @@ public static class DocxWriter
     private const string ImageRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
     private const string HyperlinkRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
 
+    // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
+    // abstractNumId 0 / numId 1; decimal numbering uses abstractNumId 1 / numId 2. Each abstract num
+    // defines 9 levels (ilvl 0..8) so ListLevel maps directly to w:ilvl.
+    internal const int BulletNumId = 1;
+    internal const int NumberNumId = 2;
+    private const int ListLevelCount = 9;
+
     public static void Write(TextDocument document, string path)
     {
         using var stream = File.Create(path);
@@ -31,14 +38,18 @@ public static class DocxWriter
         var images = CollectImages(document);
         // Assign an external relationship id to every distinct hyperlink target the same way.
         var hyperlinks = CollectHyperlinks(document);
+        // Emit a numbering part only when at least one paragraph is decorated as a list.
+        var hasLists = EnumerateParagraphs(document).Any(p => p.Formatting.ListKind != ListKind.None);
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists));
         WritePart(archive, "_rels/.rels", BuildPackageRels());
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
+        if (hasLists)
+            WritePart(archive, "word/numbering.xml", BuildNumbering());
         foreach (var image in images)
             WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
     }
@@ -99,7 +110,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -113,6 +124,10 @@ public static class DocxWriter
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml")),
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/styles.xml"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml")),
+            includeNumbering
+                ? new XElement(Ct + "Override", new XAttribute("PartName", NumberingPartName),
+                    new XAttribute("ContentType", NumberingContentType))
+                : null,
             new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
                 new XAttribute("ContentType", CorePropertiesContentType))));
 
@@ -163,13 +178,18 @@ public static class DocxWriter
         }
     }
 
-    private static XDocument BuildDocumentRels(IReadOnlyList<ImagePart> images, IReadOnlyDictionary<string, string> hyperlinks)
+    private static XDocument BuildDocumentRels(IReadOnlyList<ImagePart> images, IReadOnlyDictionary<string, string> hyperlinks, bool includeNumbering)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rId1"),
                 new XAttribute("Type", StylesRel),
                 new XAttribute("Target", "styles.xml")));
+        if (includeNumbering)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", "rIdNumbering"),
+                new XAttribute("Type", NumberingRelType),
+                new XAttribute("Target", "numbering.xml")));
         foreach (var image in images)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", image.RelationshipId),
@@ -298,6 +318,14 @@ public static class DocxWriter
             pPr.Add(new XElement(W + "pStyle", new XAttribute(W + "val", paragraph.StyleId)));
 
         var f = paragraph.Formatting;
+        if (f.ListKind != ListKind.None)
+        {
+            var numId = f.ListKind == ListKind.Number ? NumberNumId : BulletNumId;
+            var level = Math.Clamp(f.ListLevel, 0, ListLevelCount - 1);
+            pPr.Add(new XElement(W + "numPr",
+                new XElement(W + "ilvl", new XAttribute(W + "val", level)),
+                new XElement(W + "numId", new XAttribute(W + "val", numId))));
+        }
         if (f.Alignment != TextAlignment.Left)
             pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
             {
@@ -410,6 +438,39 @@ public static class DocxWriter
                 new XAttribute(W + "right", PointsToDxa(page.MarginRightPt)),
                 new XAttribute(W + "top", PointsToDxa(page.MarginTopPt)),
                 new XAttribute(W + "bottom", PointsToDxa(page.MarginBottomPt))));
+
+    /// <summary>
+    /// Builds word/numbering.xml: two abstract numbering definitions (bullet + decimal), each with
+    /// <see cref="ListLevelCount"/> levels, mapped to w:num ids <see cref="BulletNumId"/>/<see cref="NumberNumId"/>.
+    /// </summary>
+    private static XDocument BuildNumbering()
+    {
+        XElement AbstractNum(int abstractNumId, string numFmt, string lvlText) =>
+            new(W + "abstractNum", new XAttribute(W + "abstractNumId", abstractNumId),
+                Enumerable.Range(0, ListLevelCount).Select(level => new XElement(W + "lvl",
+                    new XAttribute(W + "ilvl", level),
+                    new XElement(W + "start", new XAttribute(W + "val", 1)),
+                    new XElement(W + "numFmt", new XAttribute(W + "val", numFmt)),
+                    new XElement(W + "lvlText", new XAttribute(W + "val", lvlText)),
+                    new XElement(W + "lvlJc", new XAttribute(W + "val", "left")),
+                    new XElement(W + "pPr",
+                        new XElement(W + "ind",
+                            new XAttribute(W + "left", PointsToDxa(36 + level * 18)),
+                            new XAttribute(W + "hanging", PointsToDxa(18)))))));
+
+        XElement Num(int numId, int abstractNumId) =>
+            new(W + "num", new XAttribute(W + "numId", numId),
+                new XElement(W + "abstractNumId", new XAttribute(W + "val", abstractNumId)));
+
+        var numbering = new XElement(W + "numbering",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            AbstractNum(0, "bullet", "•"),
+            AbstractNum(1, "decimal", "%1."),
+            Num(BulletNumId, 0),
+            Num(NumberNumId, 1));
+
+        return new XDocument(numbering);
+    }
 
     private static XDocument BuildStyles(TextDocument document)
     {
