@@ -120,6 +120,35 @@ public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, Ru
 }
 
 /// <summary>
+/// Replace a paragraph's run list wholesale (snapshotting the prior runs for undo). Used by edits
+/// that restructure a paragraph's runs — e.g. applying a drop cap, which splits the first run so the
+/// leading letter becomes its own enlarged run. The replacement runs are produced by
+/// <paramref name="rebuild"/> from the paragraph; on undo the exact original run objects are restored.
+/// </summary>
+public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Paragraph> rebuild) : IDocumentCommand
+{
+    private List<Run>? _previous;
+
+    public string Label => "Format";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var paragraph = (Paragraph)context.Document.Blocks[paragraphIndex];
+        _previous = [.. paragraph.Runs];
+        rebuild(paragraph);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null)
+            return;
+        var runs = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs;
+        runs.Clear();
+        runs.AddRange(_previous);
+    }
+}
+
+/// <summary>
 /// Insert a blank row into the table at <paramref name="blockIndex"/>, at <paramref name="rowIndex"/>
 /// (clamped to the row count). The new row gets one empty cell per existing column. Reversible.
 /// </summary>

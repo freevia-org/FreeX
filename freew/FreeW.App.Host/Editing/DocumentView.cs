@@ -458,6 +458,39 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    /// <summary>
+    /// Apply a drop cap to the caret's paragraph: the leading letter is split into its own enlarged,
+    /// bold run (see <see cref="DropCap.ApplyDropCap"/>), the remainder keeping its formatting. Routes
+    /// through the undo/redo bus (reversible) and re-renders so the enlarged letter shows immediately.
+    /// No-op outside a paragraph or on a paragraph with no leading text run.
+    /// </summary>
+    public void ApplyDropCap(double sizePt = DropCap.DefaultSizePt)
+    {
+        Focus();
+        CommitToModel();
+        var index = SelectedModelParagraphIndices().FirstOrDefault(-1);
+        if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph)
+            return;
+        _commands.Execute(new ReplaceParagraphRunsCommand(index, p => DropCap.ApplyDropCap(p, sizePt)));
+    }
+
+    /// <summary>
+    /// Clear all character formatting in every model paragraph spanned by the selection (or the caret's
+    /// paragraph): each run's formatting is reset to <see cref="RunFormatting.Default"/> while its text is
+    /// kept (see <see cref="DropCap.ClearFormatting"/>). One reversible <see cref="FormatParagraphRunsCommand"/>
+    /// per paragraph on the undo/redo bus; the view re-renders so the reset shows immediately.
+    /// </summary>
+    public void ClearFormatting()
+    {
+        Focus();
+        CommitToModel();
+        foreach (var index in SelectedModelParagraphIndices())
+        {
+            if (_model.Blocks[index] is ModelParagraph)
+                _commands.Execute(new FormatParagraphRunsCommand(index, _ => RunFormatting.Default));
+        }
+    }
+
     // Commit pending edits, then apply a paragraph-formatting transform to every model paragraph spanned
     // by the selection, one reversible SetParagraphFormattingCommand per paragraph on the undo/redo bus.
     private void FormatSelectedModelParagraphs(Func<ParagraphFormatting, ParagraphFormatting> transform)
