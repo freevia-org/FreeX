@@ -154,6 +154,10 @@ internal static class FreeWRibbonCommands
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
         registry.Register("freew.new-comment", new NewCommentCommand(editor));
 
+        // Review tab — Proofing: open the read-only Word Count / Statistics dialog. Commits pending
+        // edits first so the counts reflect the current text, then computes from the model.
+        registry.Register("freew.statistics", new StatisticsCommand(editor));
+
         // Review tab — Tracking: toggle Track Changes mode (stateful so the ribbon reflects it). When
         // ON, marking the current selection as a tracked insertion/deletion is offered; turning it on
         // with a non-empty selection marks that selection as an insertion (a pragmatic stand-in for live
@@ -961,6 +965,19 @@ internal static class FreeWRibbonCommands
             var parts = author.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             var initials = string.Concat(parts.Take(3).Select(p => char.ToUpperInvariant(p[0])));
             return initials.Length > 0 ? initials : "?";
+        }
+    }
+
+    // Review > Proofing > Word Count: commit pending edits, compute the document statistics with the
+    // pure DocumentStatistics helper, and show them in a read-only modal.
+    private sealed class StatisticsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.CommitToModel();
+            var stats = DocumentStatistics.Compute(editor.Model);
+            var dialog = new StatisticsDialog(Window.GetWindow(editor)!, stats);
+            dialog.ShowDialog();
         }
     }
 

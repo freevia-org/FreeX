@@ -175,6 +175,10 @@ internal static class FreeWRibbon
             })
             .Tab("review", "Review", "R", tab =>
             {
+                tab.Group("proofing", "Proofing", "P", 100, g =>
+                {
+                    g.Button("freew.statistics", "Word Count");
+                });
                 tab.Group("comments", "Comments", "C", 100, g =>
                 {
                     g.Button("freew.new-comment", "New Comment");
