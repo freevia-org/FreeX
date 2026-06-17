@@ -374,6 +374,8 @@ public static class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
                 // w14 carries the checkbox content control element (w14:checkbox in a w:sdtPr).
                 new XAttribute(XNamespace.Xmlns + "w14", W14.NamespaceName),
+                // m carries inline equations (m:oMath and its children).
+                new XAttribute(XNamespace.Xmlns + "m", M.NamespaceName),
                 body));
     }
 
@@ -602,6 +604,7 @@ public static class DocxWriter
             copy.Runs.Add(new Run(run.Text, run.Formatting with { Bold = true })
             {
                 Image = run.Image,
+                Equation = run.Equation,
                 HyperlinkUrl = run.HyperlinkUrl,
                 HyperlinkAnchor = run.HyperlinkAnchor,
                 HyperlinkTooltip = run.HyperlinkTooltip,
@@ -1014,6 +1017,11 @@ public static class DocxWriter
 
     private static XElement BuildRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
     {
+        // An inline equation serialises as an m:oMath emitted in place of the run (a paragraph-level
+        // sibling of w:r, never wrapped in one), carrying its math fragments as m:r/m:sSup/m:f.
+        if (run.Equation is { } equation)
+            return BuildOMath(equation);
+
         // A document field emits a self-contained w:fldSimple wrapping a run; the wrapped run's w:t
         // carries the last-known/cached value as fallback text for field-unaware consumers. The
         // w:instr keyword identifies the field kind (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES).
@@ -1069,6 +1077,37 @@ public static class DocxWriter
         }
         return r;
     }
+
+    /// <summary>
+    /// Builds an inline OMML equation (m:oMath) from an <see cref="Equation"/>. Each fragment maps to its
+    /// OMML element: plain text → m:r/m:t, superscript → m:sSup (m:e base, m:sup exponent), fraction →
+    /// m:f (m:num numerator, m:den denominator). This is the minimal valid shape FreeW's own reader
+    /// recovers (see <see cref="DocxReader"/>).
+    /// </summary>
+    private static XElement BuildOMath(Equation equation)
+    {
+        var oMath = new XElement(M + "oMath");
+        foreach (var run in equation.Runs)
+            oMath.Add(BuildMathRun(run));
+        return oMath;
+    }
+
+    /// <summary>Builds the OMML element for a single math fragment (m:r, m:sSup or m:f).</summary>
+    private static XElement BuildMathRun(MathRun run) => run.Kind switch
+    {
+        MathRunKind.Superscript => new XElement(M + "sSup",
+            new XElement(M + "e", MathText(run.Base)),
+            new XElement(M + "sup", MathText(run.Sup))),
+        MathRunKind.Fraction => new XElement(M + "f",
+            new XElement(M + "num", MathText(run.Numerator)),
+            new XElement(M + "den", MathText(run.Denominator))),
+        _ => MathText(run.Text)
+    };
+
+    /// <summary>Builds an m:r run carrying <paramref name="text"/> in an m:t (xml:space preserved).</summary>
+    private static XElement MathText(string text) =>
+        new(M + "r",
+            new XElement(M + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), text));
 
     /// <summary>Builds an inline picture: w:drawing/wp:inline/a:graphic/pic:pic referencing the blip.</summary>
     private static XElement BuildDrawing(ImagePart part)

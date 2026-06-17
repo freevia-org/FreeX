@@ -33,6 +33,20 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public InlineImage? Image { get; set; }
 
     /// <summary>
+    /// Optional inline mathematical equation (OMML). When non-null this run is an inline equation rather
+    /// than literal text: on save it serialises as an inline <c>m:oMath</c> in the run sequence (instead
+    /// of a <c>w:r/w:t</c>), and the run's <see cref="Text"/> mirrors the equation's linear form so
+    /// field-/math-unaware consumers still render something readable. Modelled at the run level — mirroring
+    /// <see cref="Image"/> and the other optional run marks — so equations round-trip through the existing
+    /// run flow without introducing a new block type.
+    /// </summary>
+    public Equation? Equation { get; set; }
+
+    /// <summary>Creates a run that carries an inline equation. Its <see cref="Text"/> mirrors the linear form.</summary>
+    public static Run FromEquation(Equation equation) =>
+        new(equation.LinearText) { Equation = equation };
+
+    /// <summary>
     /// Optional external hyperlink target (absolute URL). When non-null the run is wrapped in a
     /// w:hyperlink on save, with the URL stored as an external relationship, and rendered as a link.
     /// Mutually exclusive with <see cref="HyperlinkAnchor"/>: a run links either externally or
