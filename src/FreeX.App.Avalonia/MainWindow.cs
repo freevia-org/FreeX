@@ -749,6 +749,10 @@ public sealed partial class MainWindow : Window
                     // Review: New Note / New Comment on the active cell.
                     ["review.newNote"] = () => _ = ShowNewNoteDialogAsync(),
                     ["review.newComment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
+                    // Insert: Sparklines — reuse the existing Quick-Analysis sparkline insertion.
+                    ["insert.sparklineLine"] = () => InsertQuickAnalysisSparklines(SparklineKind.Line),
+                    ["insert.sparklineColumn"] = () => InsertQuickAnalysisSparklines(SparklineKind.Column),
+                    ["insert.sparklineWinLoss"] = () => InsertQuickAnalysisSparklines(SparklineKind.WinLoss),
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
