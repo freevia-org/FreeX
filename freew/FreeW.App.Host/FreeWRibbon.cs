@@ -16,6 +16,8 @@ internal static class FreeWRibbon
                 tab.Group("clipboard", "Clipboard", "C", 100, g =>
                 {
                     g.Button("freew.paste", "Paste");
+                    g.Button("freew.paste-plain", "Paste Text Only");
+                    g.Button("freew.paste-merge", "Merge Formatting");
                     g.Button("freew.cut", "Cut");
                     g.Button("freew.copy", "Copy");
                     g.Button("freew.format-painter", "Format Painter");
@@ -49,6 +51,7 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.bullets", "Bullets");
                     g.Button("freew.numbering", "Numbering");
+                    g.Button("freew.multilevel-list", "Multilevel List");
                     g.Button("freew.align-left", "Align Left");
                     g.Button("freew.align-center", "Center");
                     g.Button("freew.align-right", "Align Right");
@@ -141,6 +144,7 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.symbol", "Symbol");
                     g.Button("freew.datetime", "Date & Time");
+                    g.Button("freew.field", "Field");
                 });
             })
             .Tab("layout", "Layout", "L", tab =>

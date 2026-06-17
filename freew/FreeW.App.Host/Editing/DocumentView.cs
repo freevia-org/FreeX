@@ -44,6 +44,15 @@ public sealed class DocumentView : RichTextBox
     private const double SuperSubScale = 0.65;
 
     private TextDocument _model = TextDocument.CreateEmpty();
+
+    /// <summary>
+    /// The file name a FILENAME field resolves to during the current <see cref="Render"/> pass. Set from
+    /// <see cref="CurrentFileName"/> at the top of Render so the otherwise-static run builders can resolve
+    /// it without threading it through every signature; thread-static to keep it isolated per render call.
+    /// </summary>
+    [ThreadStatic]
+    private static string? _renderFileName;
+
     private readonly DocumentCommandBus _commands;
     private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
     private double _zoomLevel = ZoomLevels.Default;
@@ -54,6 +63,23 @@ public sealed class DocumentView : RichTextBox
     /// and the painter disarms. See <see cref="ArmFormatPainter"/>.
     /// </summary>
     private FormatPainterClipboard? _formatPainter;
+
+    /// <summary>
+    /// Model block indices of headings the user has collapsed in the outline. Collapse is purely a
+    /// view concern: while a heading is collapsed, <see cref="Render"/> skips building the body blocks
+    /// beneath it (down to the next same-or-higher heading), and <see cref="CommitToModel"/> re-inserts
+    /// those hidden model blocks so the model document stays complete. Toggling re-renders.
+    /// </summary>
+    private readonly HashSet<int> _collapsedHeadings = new();
+
+    /// <summary>
+    /// Model blocks the most recent <see cref="Render"/> hid because of <see cref="_collapsedHeadings"/>,
+    /// each tagged with the number of <em>visible</em> blocks that preceded it at render time. On the
+    /// next <see cref="CommitToModel"/> these are spliced back into the rebuilt model at the matching
+    /// visible offset, so a collapsed region survives an edit/commit cycle intact. Empty when nothing
+    /// is collapsed (the common case), so normal commit is completely unaffected.
+    /// </summary>
+    private readonly List<(int VisibleOffset, ModelBlock Block)> _hiddenBlocks = new();
 
     public DocumentView()
     {
@@ -75,6 +101,13 @@ public sealed class DocumentView : RichTextBox
     }
 
     public TextDocument Model => _model;
+
+    /// <summary>
+    /// The current document's file name (without path), used to resolve FILENAME field runs at render.
+    /// Null/empty when the document is unsaved, in which case a FILENAME field falls back to its cached
+    /// text. The host sets this when a document is opened or saved; the model/IO never see it.
+    /// </summary>
+    public string? CurrentFileName { get; set; }
 
     /// <summary>
     /// When true (the default), as-you-type smart typing corrections (smart quotes, dashes, symbols,
@@ -546,6 +579,33 @@ public sealed class DocumentView : RichTextBox
         });
 
     /// <summary>
+    /// Apply (or toggle off) multilevel/legal outline numbering over the selection. If any spanned
+    /// paragraph is not already a <see cref="ListKind.MultiLevel"/> list, all become multilevel lists
+    /// (preserving their <see cref="ParagraphFormatting.ListLevel"/>); otherwise the list decoration is
+    /// cleared back to <see cref="ListKind.None"/>. Reversible via the undo/redo bus, then re-rendered.
+    /// The numbering definition persists to word/numbering.xml as an outline abstract num.
+    /// </summary>
+    public void ApplyMultiLevelList()
+    {
+        var enable = SelectedModelParagraphs().Any(p => p.Formatting.ListKind != ListKind.MultiLevel);
+        FormatSelectedModelParagraphs(f => f with
+        {
+            ListKind = enable ? ListKind.MultiLevel : ListKind.None,
+            ListLevel = enable ? f.ListLevel : 0
+        });
+    }
+
+    /// <summary>
+    /// Change the outline depth (<see cref="ParagraphFormatting.ListLevel"/>) of every list paragraph
+    /// spanned by the selection by <paramref name="delta"/> (e.g. +1 to demote on Tab, -1 to promote on
+    /// Shift+Tab), clamped to 0..8. Non-list paragraphs are unaffected. Reversible via the bus.
+    /// </summary>
+    public void ChangeListLevel(int delta) =>
+        FormatSelectedModelParagraphs(f => f.ListKind == ListKind.None
+            ? f
+            : f with { ListLevel = Math.Clamp(f.ListLevel + delta, 0, 8) });
+
+    /// <summary>
     /// Set the line spacing (a multiplier on the default font size, e.g. 1.0 single / 1.5 / 2.0 double)
     /// on every paragraph spanned by the selection. Routes through the undo/redo bus so it is reversible.
     /// </summary>
@@ -629,6 +689,111 @@ public sealed class DocumentView : RichTextBox
             if (_model.Blocks[index] is ModelParagraph)
                 _commands.Execute(new SetParagraphStyleCommand(index, styleId));
         }
+    }
+
+    /// <summary>
+    /// Promote the heading at <paramref name="modelBlockIndex"/> one rank toward the top of the outline
+    /// (Heading3 → Heading2 → Heading1 → Title; Title stays). The paragraph's <see cref="ModelParagraph.StyleId"/>
+    /// is changed through the reversible <see cref="SetParagraphStyleCommand"/> (the same path the styles
+    /// dropdown uses) so it is undoable, then the view re-renders. No-op when the index is not a paragraph
+    /// or the style does not change (e.g. a non-heading paragraph, which has nothing to promote).
+    /// </summary>
+    public void PromoteHeading(int modelBlockIndex) =>
+        ShiftHeadingStyle(modelBlockIndex, OutlineTools.Promote);
+
+    /// <summary>
+    /// Demote the heading at <paramref name="modelBlockIndex"/> one rank toward the bottom of the outline
+    /// (Title → Heading1 → Heading2 → … → Heading6; a non-heading paragraph becomes Heading1). Routed
+    /// through the reversible <see cref="SetParagraphStyleCommand"/> and re-rendered. No-op when the index
+    /// is not a paragraph or the style does not change (already at the deepest level).
+    /// </summary>
+    public void DemoteHeading(int modelBlockIndex) =>
+        ShiftHeadingStyle(modelBlockIndex, OutlineTools.Demote);
+
+    // Apply a pure style-id shift (promote/demote) to a single model paragraph via the undo/redo bus.
+    private void ShiftHeadingStyle(int modelBlockIndex, Func<string?, string?> shift)
+    {
+        CommitToModel();
+        if (modelBlockIndex < 0 || modelBlockIndex >= _model.Blocks.Count
+            || _model.Blocks[modelBlockIndex] is not ModelParagraph paragraph)
+            return;
+
+        var next = shift(paragraph.StyleId);
+        if (string.Equals(next, paragraph.StyleId, StringComparison.Ordinal))
+            return; // no change (e.g. promoting Title, or demoting past the cap)
+
+        _commands.Execute(new SetParagraphStyleCommand(modelBlockIndex, next));
+    }
+
+    /// <summary>
+    /// Collapse the heading at <paramref name="modelBlockIndex"/>: its body blocks (everything down to
+    /// the next same-or-higher-level heading) are hidden in the rendered view only. The model document is
+    /// untouched — the hidden blocks are restored on the next commit (see <see cref="CommitToModel"/>).
+    /// Re-renders. No-op when the index is not a heading paragraph.
+    /// </summary>
+    public void CollapseHeading(int modelBlockIndex)
+    {
+        if (!IsHeadingBlock(modelBlockIndex) || !_collapsedHeadings.Add(modelBlockIndex))
+            return;
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Expand a previously collapsed heading at <paramref name="modelBlockIndex"/>, showing its hidden
+    /// body blocks again. Re-renders. No-op when the heading was not collapsed.
+    /// </summary>
+    public void ExpandHeading(int modelBlockIndex)
+    {
+        if (!_collapsedHeadings.Remove(modelBlockIndex))
+            return;
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>True when the heading at <paramref name="modelBlockIndex"/> is currently collapsed.</summary>
+    public bool IsHeadingCollapsed(int modelBlockIndex) => _collapsedHeadings.Contains(modelBlockIndex);
+
+    // Whether the model block at the given index is a heading/title paragraph (an outline entry).
+    private bool IsHeadingBlock(int modelBlockIndex) =>
+        modelBlockIndex >= 0 && modelBlockIndex < _model.Blocks.Count
+        && _model.Blocks[modelBlockIndex] is ModelParagraph paragraph
+        && DocumentOutline.TryGetLevel(paragraph.StyleId, out _);
+
+    // Compute the set of model block indices hidden by the currently collapsed headings. For each
+    // collapsed heading, every following block is hidden until (but not including) the next heading whose
+    // level is the same or higher (a smaller-or-equal level number), matching how an outline nests.
+    // Collapsed headings nested inside another collapsed region stay tracked but contribute no extra
+    // hidden blocks (their descendants are already hidden). A heading index that no longer points at a
+    // heading (the document changed underneath us) is ignored.
+    private HashSet<int> HiddenBlockIndices()
+    {
+        var hidden = new HashSet<int>();
+        if (_collapsedHeadings.Count == 0)
+            return hidden;
+
+        var blocks = _model.Blocks;
+        // Snapshot the indices so stale ones (no longer pointing at a heading) can be pruned in place.
+        foreach (var headingIndex in _collapsedHeadings.ToArray())
+        {
+            if (headingIndex < 0 || headingIndex >= blocks.Count
+                || blocks[headingIndex] is not ModelParagraph heading
+                || !DocumentOutline.TryGetLevel(heading.StyleId, out var headingLevel))
+            {
+                _collapsedHeadings.Remove(headingIndex); // heading moved or is no longer a heading
+                continue;
+            }
+
+            for (var j = headingIndex + 1; j < blocks.Count; j++)
+            {
+                if (blocks[j] is ModelParagraph p
+                    && DocumentOutline.TryGetLevel(p.StyleId, out var level)
+                    && level <= headingLevel)
+                    break; // reached the next same-or-higher heading: the collapsed region ends here
+                hidden.Add(j);
+            }
+        }
+        return hidden;
     }
 
     /// <summary>
@@ -1088,26 +1253,47 @@ public sealed class DocumentView : RichTextBox
 
     private void Render()
     {
+        // Expose the current file name to the static run builders for this render pass (FILENAME fields).
+        _renderFileName = CurrentFileName;
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
         ApplyColumnLayout(flow, _model.Page);
 
+        // Outline collapse is view-only: compute the model blocks hidden beneath collapsed headings,
+        // skip building them, and remember them (with their preceding-visible-block count) so
+        // CommitToModel can restore them. With nothing collapsed both collections are empty and this is
+        // a no-op, leaving the original rendering path unchanged.
+        var blocks = _model.Blocks;
+        var hidden = HiddenBlockIndices();
+        _hiddenBlocks.Clear();
+        var visibleCount = 0;
+
         // Coalesce consecutive list paragraphs of the same kind into one WPF List so they render with
         // shared bullet/number decoration; everything else maps one-to-one via BuildBlock.
-        var blocks = _model.Blocks;
         var i = 0;
         while (i < blocks.Count)
         {
+            if (hidden.Contains(i))
+            {
+                // Skip the hidden block but retain it (anchored to the visible blocks rendered so far)
+                // so the model is reconstructed faithfully on the next commit.
+                _hiddenBlocks.Add((visibleCount, blocks[i]));
+                i++;
+                continue;
+            }
+
             if (blocks[i] is ModelParagraph { Formatting.ListKind: not ListKind.None } first)
             {
                 var kind = first.Formatting.ListKind;
                 var list = new WpfList { MarkerStyle = ToMarkerStyle(kind) };
                 while (i < blocks.Count
+                    && !hidden.Contains(i)
                     && blocks[i] is ModelParagraph { Formatting.ListKind: var k } listParagraph
                     && k == kind)
                 {
                     list.ListItems.Add(new WpfListItem(BuildParagraph(listParagraph, _model)));
+                    visibleCount++;
                     i++;
                 }
                 flow.Blocks.Add(list);
@@ -1115,6 +1301,7 @@ public sealed class DocumentView : RichTextBox
             else
             {
                 flow.Blocks.Add(BuildBlock(blocks[i], _model));
+                visibleCount++;
                 i++;
             }
         }
@@ -1247,8 +1434,11 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    // Both numbered and multilevel lists render with a decimal marker. WPF's FlowDocument List has no
+    // built-in accumulating outline marker (true "1.1.1" form), so MultiLevel is rendered best-effort
+    // as a plain decimal-per-level marker; the outline definition still round-trips through the docx.
     private static TextMarkerStyle ToMarkerStyle(ListKind kind) =>
-        kind == ListKind.Number ? TextMarkerStyle.Decimal : TextMarkerStyle.Disc;
+        kind is ListKind.Number or ListKind.MultiLevel ? TextMarkerStyle.Decimal : TextMarkerStyle.Disc;
 
     /// <summary>
     /// Applies the page's multi-column layout to a <see cref="FlowDocument"/>. A FlowDocument derives
@@ -1294,25 +1484,62 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
     {
-        _model.Blocks.Clear();
+        // Read the (visible) FlowDocument blocks back into a fresh list first. When outline collapse is
+        // active the view only holds the visible blocks, so the hidden model blocks are spliced back in
+        // afterwards (see MergeHiddenBlocks) to keep the model document complete.
+        var visible = new List<ModelBlock>();
         foreach (var block in Document.Blocks)
         {
             switch (block)
             {
                 case WpfList wpfList:
-                    ReadList(_model.Blocks, wpfList, _model);
+                    ReadList(visible, wpfList, _model);
                     break;
                 case WpfParagraph wpfParagraph:
-                    _model.Blocks.Add(ReadParagraph(wpfParagraph, _model));
+                    visible.Add(ReadParagraph(wpfParagraph, _model));
                     break;
                 case WpfTable wpfTable:
-                    _model.Blocks.Add(ReadTable(wpfTable, _model));
+                    visible.Add(ReadTable(wpfTable, _model));
                     break;
             }
         }
 
+        _model.Blocks.Clear();
+        if (_hiddenBlocks.Count == 0)
+        {
+            foreach (var block in visible)
+                _model.Blocks.Add(block);
+        }
+        else
+        {
+            MergeHiddenBlocks(visible);
+        }
+
         if (_model.Blocks.Count == 0)
             _model.Blocks.Add(new ModelParagraph());
+    }
+
+    // Reconstruct the full model from the committed visible blocks plus the blocks that Render hid for
+    // collapsed headings. Each hidden block was recorded with the count of visible blocks that preceded
+    // it; we re-insert it once that many visible blocks have been emitted, so a collapsed region lands
+    // back in document order even if the user split/merged visible paragraphs while it was collapsed.
+    private void MergeHiddenBlocks(IReadOnlyList<ModelBlock> visible)
+    {
+        var hiddenIndex = 0;
+        for (var emitted = 0; emitted <= visible.Count; emitted++)
+        {
+            // Drop in every hidden block anchored at this visible offset before the next visible block.
+            while (hiddenIndex < _hiddenBlocks.Count && _hiddenBlocks[hiddenIndex].VisibleOffset == emitted)
+                _model.Blocks.Add(_hiddenBlocks[hiddenIndex++].Block);
+
+            if (emitted < visible.Count)
+                _model.Blocks.Add(visible[emitted]);
+        }
+
+        // Any hidden blocks anchored past the last visible block (e.g. the document ended inside a
+        // collapsed region) are appended so nothing is lost.
+        while (hiddenIndex < _hiddenBlocks.Count)
+            _model.Blocks.Add(_hiddenBlocks[hiddenIndex++].Block);
     }
 
     private static ModelParagraph ReadParagraph(WpfParagraph wpfParagraph, TextDocument document)
@@ -1355,6 +1582,10 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    // Recover a ListKind from a WPF List's marker. Decimal markers map back to Number: multilevel lists
+    // also render with a Decimal marker (see ToMarkerStyle), so a MultiLevel list that is edited through
+    // the RichTextBox surface and re-read here degrades to Number. The docx model round-trip preserves
+    // MultiLevel; only an in-editor edit cycle loses the outline distinction (a known best-effort limit).
     private static ListKind FromMarkerStyle(TextMarkerStyle marker) => marker switch
     {
         TextMarkerStyle.Decimal or TextMarkerStyle.LowerLatin or TextMarkerStyle.UpperLatin
@@ -1385,6 +1616,18 @@ public sealed class DocumentView : RichTextBox
                 break;
             case WpfRun { Tag: EndnoteMarker endnoteMarker }:
                 modelParagraph.Runs.Add(ModelRun.EndnoteReference(endnoteMarker.EndnoteId));
+                break;
+            case WpfRun { Tag: FieldMarker fieldMarker } fieldRun:
+                // A document field round-trips its kind; the run's visible text is the last-resolved
+                // value, which we keep as the cached fallback (matching Word's cached-field behaviour).
+                // If the run somehow lost its text, fall back to the marker's stored cached value.
+                var cachedText = fieldRun.Text.Length > 0 ? fieldRun.Text : fieldMarker.Cached;
+                modelParagraph.Runs.Add(new ModelRun(cachedText, ReadRunFormatting(fieldRun))
+                {
+                    HyperlinkUrl = hyperlinkUrl,
+                    HyperlinkAnchor = hyperlinkAnchor,
+                    FieldKind = fieldMarker.Kind
+                });
                 break;
             case WpfRun { Tag: CommentMarker { IsReference: true } reference }:
                 // The textless comment anchor: round-trips as a comment-reference run.
@@ -1608,6 +1851,9 @@ public sealed class DocumentView : RichTextBox
 
         if (run.EndnoteId is { } endnoteId)
             return BuildEndnoteReference(endnoteId, document);
+
+        if (run.FieldKind != RunFieldKind.None)
+            return BuildFieldRun(run, document);
 
         // The textless comment anchor round-trips as an empty, tagged run carrying its reference flag.
         if (run is { IsCommentReference: true, CommentId: { } refId })
@@ -1899,6 +2145,76 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Carried on an endnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
     private sealed record EndnoteMarker(int EndnoteId);
 
+    /// <summary>
+    /// Renders a document field run (DATE/TIME/FILENAME/AUTHOR/NUMPAGES/PAGE) as a WPF run showing the
+    /// resolved value, tagged with a <see cref="FieldMarker"/> so <see cref="ReadInline"/> can recover
+    /// the kind on commit. DATE/TIME resolve to the current date/time in this app layer (never in the
+    /// model/IO); AUTHOR comes from the document properties; FILENAME from the current file name; the
+    /// rest fall back to the run's cached text. The marker keeps the original cached text so an unsaved
+    /// FILENAME (or an unresolved field) round-trips its last-known value rather than going blank.
+    /// </summary>
+    private static WpfRun BuildFieldRun(ModelRun run, TextDocument document)
+    {
+        var display = ResolveFieldText(run.FieldKind, run.Text, document, _renderFileName);
+        var fmt = run.Formatting ?? document.DefaultRun;
+        var wpf = new WpfRun(display)
+        {
+            FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
+            Tag = new FieldMarker(run.FieldKind, run.Text)
+        };
+        if (fmt.FontFamily is { Length: > 0 } family)
+            wpf.FontFamily = new FontFamily(family);
+        if (fmt.FontSizePt is { } size)
+            wpf.FontSize = size * PxPerPoint;
+        if (TryParseColor(fmt.ColorHex, out var color))
+            wpf.Foreground = new SolidColorBrush(color);
+        wpf.ToolTip = run.FieldKind + " field";
+        return wpf;
+    }
+
+    /// <summary>
+    /// Resolves a field's display text in the app layer. DATE/TIME use the current date/time; AUTHOR uses
+    /// <see cref="DocumentProperties.Author"/>; FILENAME uses <paramref name="fileName"/>; PAGE/NUMPAGES
+    /// and any unresolved value fall back to <paramref name="cached"/> (the last-computed text). This is
+    /// the only place date/time is read — the model and docx IO stay deterministic.
+    /// </summary>
+    private static string ResolveFieldText(RunFieldKind kind, string cached, TextDocument document, string? fileName)
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        return kind switch
+        {
+            RunFieldKind.Date => DateTime.Now.ToString("d", culture),
+            RunFieldKind.Time => DateTime.Now.ToString("t", culture),
+            RunFieldKind.Author => document.Properties.Author is { Length: > 0 } author ? author : cached,
+            RunFieldKind.FileName => fileName is { Length: > 0 } name ? name : cached,
+            _ => cached
+        };
+    }
+
+    /// <summary>
+    /// Carried on a field WPF run's Tag so CommitToModel can round-trip the field kind and its cached
+    /// (last-computed) text. The WPF run's visible text is the resolved value; the cached text is what
+    /// the model keeps so a re-resolve next render is possible and field-unaware consumers still render.
+    /// </summary>
+    private sealed record FieldMarker(RunFieldKind Kind, string Cached);
+
+    /// <summary>
+    /// Inserts a document field run of the given <paramref name="kind"/> at the caret. The field is built
+    /// with an initially-resolved cached value (DATE/TIME/AUTHOR/FILENAME) so it carries a sensible
+    /// fallback even before the next render; it then round-trips through the model and docx as a field.
+    /// </summary>
+    public void InsertField(RunFieldKind kind)
+    {
+        Focus();
+        if (kind == RunFieldKind.None)
+            return;
+        var cached = ResolveFieldText(kind, string.Empty, _model, CurrentFileName);
+        var run = new ModelRun(cached) { FieldKind = kind };
+        var inline = BuildFieldRun(run, _model);
+        InsertInlineAtCaret(inline);
+    }
+
     /// <summary>Renders an inline image as an InlineUIContainer hosting a WPF Image (PNG-decoded).</summary>
     private static InlineUIContainer BuildImageRun(InlineImage image)
     {
@@ -1968,6 +2284,53 @@ public sealed class DocumentView : RichTextBox
         CaretPosition = caret.GetPositionAtOffset(text.Length) ?? caret;
         CommitToModel();
         Render();
+    }
+
+    /// <summary>
+    /// Paste the clipboard's text as unformatted text at the caret ("Paste Text Only"). The clipboard
+    /// text is normalized (line endings canonicalized, control chars stripped — see
+    /// <see cref="PasteText.Normalize"/>) and inserted through <see cref="InsertText"/>, which joins the
+    /// run the caret sits in (so the pasted text inherits the destination formatting), replaces any active
+    /// selection, and is captured by the undo stack. All source/rich formatting is discarded. A no-op when
+    /// the clipboard holds no usable text. Reads <see cref="System.Windows.Clipboard"/> directly — no model
+    /// or docx changes.
+    /// </summary>
+    public void PastePlainText() => PasteFromClipboard();
+
+    /// <summary>
+    /// Paste the clipboard's text and merge it into the destination's formatting ("Merge Formatting"). In
+    /// FreeW, merging formatting means matching the destination: the pasted text takes the formatting of
+    /// the run the caret sits in (the same path <see cref="PastePlainText"/> uses), rather than carrying
+    /// the source's character formatting. The text is normalized (see <see cref="PasteText.Normalize"/>)
+    /// and inserted via <see cref="InsertText"/> so it is undoable. A no-op when the clipboard holds no
+    /// usable text.
+    /// </summary>
+    public void PasteMergeFormatting() => PasteFromClipboard();
+
+    // Shared body for the paste-special commands: read the clipboard's text (guarding the absent/empty
+    // case and the rare clipboard-access failure), normalize it, and insert it at the caret. Both
+    // "Paste Text Only" and "Merge Formatting" resolve to match-destination insertion in FreeW, so they
+    // share one implementation.
+    private void PasteFromClipboard()
+    {
+        string raw;
+        try
+        {
+            if (!System.Windows.Clipboard.ContainsText())
+                return;
+            raw = System.Windows.Clipboard.GetText();
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // The clipboard can be transiently locked by another process; treat that as nothing to paste.
+            return;
+        }
+
+        var text = PasteText.Normalize(raw);
+        if (text.Length == 0)
+            return;
+
+        InsertText(text);
     }
 
     /// <summary>

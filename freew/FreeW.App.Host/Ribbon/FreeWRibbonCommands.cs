@@ -88,9 +88,21 @@ internal static class FreeWRibbonCommands
         Routed("freew.align-right", EditingCommands.AlignRight);
         Routed("freew.bullets", EditingCommands.ToggleBullets);
         Routed("freew.numbering", EditingCommands.ToggleNumbering);
+        // Home > Paragraph: apply multilevel/legal outline numbering (1, 1.1, 1.1.1) to the selected
+        // paragraph(s); the outline definition persists to word/numbering.xml. Tab/Shift+Tab demote
+        // and promote the outline depth (ListLevel) of the selected list paragraphs.
+        registry.Register("freew.multilevel-list", new ActionCommand(() => editor.ApplyMultiLevelList()));
+        registry.Register("freew.multilevel-demote", new ActionCommand(() => editor.ChangeListLevel(+1)));
+        registry.Register("freew.multilevel-promote", new ActionCommand(() => editor.ChangeListLevel(-1)));
         Routed("freew.cut", ApplicationCommands.Cut);
         Routed("freew.copy", ApplicationCommands.Copy);
         Routed("freew.paste", ApplicationCommands.Paste);
+        // Home > Clipboard: paste-special. "Paste Text Only" strips all source formatting; "Merge
+        // Formatting" matches the destination. In FreeW both resolve to match-destination insertion at
+        // the caret (the pasted text inherits the caret run's formatting), routed through the editor's
+        // undoable InsertText path. See DocumentView.PastePlainText / PasteMergeFormatting.
+        registry.Register("freew.paste-plain", new ActionCommand(() => editor.PastePlainText()));
+        registry.Register("freew.paste-merge", new ActionCommand(() => editor.PasteMergeFormatting()));
 
         // Home > Clipboard > Format Painter: arm the painter from the current selection's run +
         // paragraph formatting; the editor stamps it onto the user's next mouse selection and disarms.
@@ -208,6 +220,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false));
         registry.Register("freew.footer", new HeaderFooterCommand(editor, isFooter: true));
         registry.Register("freew.page-number", new InsertPageNumberCommand(editor));
+        registry.Register("freew.field", new InsertFieldCommand(editor));
 
         // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
         // insert it at the caret as ordinary text (flows through the normal edit/undo path).
@@ -2107,6 +2120,88 @@ internal static class FreeWRibbonCommands
 
             model.Footer = footer;
             editor.Focus();
+        }
+    }
+
+    // Insert > Field: open a small picker listing the document field kinds (Date, Time, File Name,
+    // Author, Number of Pages, Page Number) and drop the chosen field run at the caret.
+    private sealed class InsertFieldCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var kind = FieldPickerDialog.Ask(Window.GetWindow(editor));
+            if (kind is not { } chosen)
+                return; // cancelled
+            editor.InsertField(chosen);
+        }
+    }
+
+    // A small modal dialog listing the insertable document field kinds. Returns the chosen
+    // RunFieldKind, or null if cancelled.
+    private static class FieldPickerDialog
+    {
+        private sealed record Choice(string Label, RunFieldKind Kind);
+
+        public static RunFieldKind? Ask(Window? owner)
+        {
+            var choices = new[]
+            {
+                new Choice("Date", RunFieldKind.Date),
+                new Choice("Time", RunFieldKind.Time),
+                new Choice("File Name", RunFieldKind.FileName),
+                new Choice("Author", RunFieldKind.Author),
+                new Choice("Number of Pages", RunFieldKind.NumPages),
+                new Choice("Page Number", RunFieldKind.PageNumber),
+            };
+
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 240,
+                MinHeight = 140,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            foreach (var choice in choices)
+                list.Items.Add(choice.Label);
+            list.SelectedIndex = 0;
+
+            RunFieldKind? result = null;
+            var dialog = new Window
+            {
+                Title = "Insert Field",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            void Commit()
+            {
+                if (list.SelectedIndex >= 0)
+                    result = choices[list.SelectedIndex].Kind;
+                dialog.DialogResult = true;
+            }
+            ok.Click += (_, _) => Commit();
+            list.MouseDoubleClick += (_, _) => Commit();
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 240 };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Choose a field to insert:", Margin = new Thickness(0, 0, 0, 8) });
+            panel.Children.Add(list);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 
