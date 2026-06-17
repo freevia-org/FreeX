@@ -2206,7 +2206,13 @@ public static class DocxReader
                 Type = s.Attribute(W + "type")?.Value == "character" ? StyleType.Character : StyleType.Paragraph,
                 BasedOnStyleId = s.Element(W + "basedOn")?.Attribute(W + "val")?.Value,
                 Run = rPr is null ? RunFormatting.Default : ReadRunFormatting(rPr),
-                Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr)
+                Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr),
+                // A style definition can carry numbering via w:pPr/w:numPr (numId + ilvl). FreeW does not model
+                // numbering on a style, so capture the original numPr so the writer can re-emit it against the
+                // preserved numbering.xml (under the same disjoint-id remap as paragraph-level preserved
+                // numbering). Whether it survives the round-trip depends on the merge plan finding a matching
+                // w:num — a numId with no definition is dropped, exactly like a paragraph's preserved numPr.
+                PreservedNumbering = pPr is null ? null : ReadPreservedNumbering(pPr)
             };
         }
     }

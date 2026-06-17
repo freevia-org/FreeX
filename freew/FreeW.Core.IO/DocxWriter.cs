@@ -69,7 +69,8 @@ public static class DocxWriter
         var hasLists = EnumerateParagraphs(document).Any(p => p.Formatting.ListKind != ListKind.None);
 
         // Preserved numbering FreeW does not model: when the source carried a numbering.xml AND at least one
-        // paragraph kept its original w:numPr (because FreeW did not map it to a ListKind), build a merge plan
+        // paragraph (or paragraph STYLE) kept its original w:numPr (because FreeW did not map it to a ListKind),
+        // build a merge plan
         // that re-emits the ORIGINAL abstractNum/num definitions alongside FreeW's own under a DISJOINT id range
         // (originals remapped to abstractNumId>=3 / numId>=4, clear of FreeW's fixed 0..2 / 1..3). The plan also
         // maps each original numId to its output numId so the preserved paragraphs' w:numPr re-emit consistently.
@@ -143,7 +144,7 @@ public static class DocxWriter
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering));
-        WritePart(archive, "word/styles.xml", BuildStyles(document));
+        WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
             WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground, hasEmbeddedFonts, document.Preserved.OriginalSettings));
@@ -3118,7 +3119,8 @@ public static class DocxWriter
     /// <summary>
     /// Builds a <see cref="PreservedNumberingPlan"/> from the original <c>word/numbering.xml</c>
     /// (<see cref="PreservedParts.OriginalNumbering"/>) when at least one paragraph kept a
-    /// <see cref="Paragraph.PreservedNumbering"/> (i.e. FreeW did not model its numbering). Every original
+    /// <see cref="Paragraph.PreservedNumbering"/> OR at least one paragraph STYLE kept a
+    /// <see cref="DocumentStyle.PreservedNumbering"/> (i.e. FreeW did not model its numbering). Every original
     /// <c>w:abstractNum</c> and <c>w:num</c> is cloned and re-id'd into the disjoint high range
     /// (abstractNumId&gt;=<see cref="PreservedAbstractNumIdStart"/>, numId&gt;=<see cref="PreservedNumIdStart"/>),
     /// with each <c>w:num</c>'s <c>w:abstractNumId</c> reference rewritten to its definition's new id, so the
@@ -3131,7 +3133,13 @@ public static class DocxWriter
         var original = document.Preserved.OriginalNumbering;
         if (original is null)
             return null;
-        if (!EnumerateParagraphs(document).Any(p => p.PreservedNumbering is not null))
+        // Trigger when EITHER a body paragraph kept an original numPr OR a paragraph STYLE definition carries
+        // one (style-level numbering FreeW does not model). Both re-emit against the preserved numbering.xml
+        // under the same disjoint-id remap, so a document that only has style-level numbering still builds a
+        // plan. Authored-from-scratch / FreeW-only-lists documents have neither, so the plan stays null.
+        var hasParagraphPreserved = EnumerateParagraphs(document).Any(p => p.PreservedNumbering is not null);
+        var hasStylePreserved = document.Styles.Values.Any(s => s.PreservedNumbering is not null);
+        if (!hasParagraphPreserved && !hasStylePreserved)
             return null;
 
         // Remap every original abstractNumId → a fresh disjoint id, in document order, so num→abstract
@@ -3502,7 +3510,7 @@ public static class DocxWriter
             new XElement(A + "prstDash", new XAttribute("val", "solid")));
     }
 
-    private static XDocument BuildStyles(TextDocument document)
+    private static XDocument BuildStyles(TextDocument document, PreservedNumberingPlan? preservedNumbering = null)
     {
         var styles = new XElement(W + "styles", new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
         foreach (var style in document.Styles.Values)
@@ -3513,6 +3521,20 @@ public static class DocxWriter
                 new XElement(W + "name", new XAttribute(W + "val", style.Name)));
             if (!string.IsNullOrEmpty(style.BasedOnStyleId))
                 element.Add(new XElement(W + "basedOn", new XAttribute(W + "val", style.BasedOnStyleId)));
+            // Style-level numbering FreeW does not model: when the style carried an original w:numPr and the
+            // merge plan remapped that numId (a definition exists in the preserved numbering.xml), re-emit a
+            // w:pPr/w:numPr pointing at the REMAPPED numId (disjoint from FreeW's fixed ids), keeping the
+            // original ilvl. w:pPr precedes w:rPr in CT_Style schema order. A numPr whose numId the plan did
+            // not remap (no matching w:num) is dropped, exactly like a paragraph's preserved numPr.
+            if (preservedNumbering is not null
+                && style.PreservedNumbering is { } sn
+                && preservedNumbering.NumIdRemap.TryGetValue(sn.NumId, out var mappedNumId))
+            {
+                element.Add(new XElement(W + "pPr",
+                    new XElement(W + "numPr",
+                        new XElement(W + "ilvl", new XAttribute(W + "val", sn.Ilvl)),
+                        new XElement(W + "numId", new XAttribute(W + "val", mappedNumId)))));
+            }
             var rPr = BuildRunProperties(style.Run);
             if (rPr is not null)
                 element.Add(rPr);
