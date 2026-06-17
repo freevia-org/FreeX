@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using Free.Shared.Ribbon.Wpf;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 
@@ -559,10 +560,21 @@ public sealed class MainWindow : Window
         return doc;
     }
 
-    // --- Minimal ribbon renderer over the shared RibbonDefinition model ---
+    // --- Real Word-style ribbon, rendered by the shared WPF renderer ---
+    //
+    // BuildRibbon builds a flat tab strip (Home/Insert/Layout/Design/View/Mailings/Review) over the
+    // shared RibbonDefinition model. Each selected tab's body is produced by the shared
+    // Free.Shared.Ribbon.Wpf.RibbonWpfRenderer — the same renderer FreeX uses — so FreeW gets Word's
+    // visual vocabulary (Large hero buttons, Medium icon+label, Small icon-only, group panels, dividers,
+    // group-label borders and vector glyphs). Command behavior and live toggle state flow through the
+    // FreeW command registry + IRibbonStateStore exactly as before.
 
     private static UIElement BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
+        // Install FreeW's command-id → glyph mapping so the shared renderer draws meaningful icons for
+        // freew.* ids (otherwise every button would fall back to the generic glyph).
+        FreeWRibbonIcons.Install();
+
         var tabs = new TabControl
         {
             Background = Brushes.White,
@@ -570,8 +582,23 @@ public sealed class MainWindow : Window
             MinHeight = 116
         };
 
+        // The renderer resolves its button/group styles and surface brushes via TryFindResource on the
+        // supplied resource host. Merge FreeW's ribbon styles into the TabControl so those lookups
+        // resolve (the renderer falls back gracefully for any key it can't find).
+        tabs.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("/FreeW.App.Host;component/Ribbon/FreeWRibbonResources.xaml", UriKind.Relative)
+        });
+
         foreach (var tab in definition.Tabs)
-            tabs.Items.Add(new TabItem { Header = tab.Header, Content = BuildTab(tab, registry, stateStore) });
+        {
+            var item = new TabItem
+            {
+                Header = tab.Header,
+                Content = RibbonWpfRenderer.BuildTabContent(tab, tabs, registry, stateStore)
+            };
+            tabs.Items.Add(item);
+        }
 
         if (tabs.Items.Count > 0)
             tabs.SelectedIndex = 0;
@@ -583,153 +610,5 @@ public sealed class MainWindow : Window
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = tabs
         };
-    }
-
-    private static UIElement BuildTab(RibbonTab tab, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
-    {
-        var lane = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(6, 6, 6, 4)
-        };
-
-        foreach (var group in tab.Groups)
-            lane.Children.Add(BuildGroup(group, registry, stateStore));
-
-        return new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = lane
-        };
-    }
-
-    private static UIElement BuildGroup(RibbonGroup group, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
-    {
-        var controls = new WrapPanel { MaxWidth = 220, Margin = new Thickness(4, 2, 4, 2) };
-        foreach (var control in group.Controls)
-        {
-            var element = BuildControl(control, registry, stateStore);
-            if (element is not null)
-                controls.Children.Add(element);
-        }
-
-        var header = new TextBlock
-        {
-            Text = group.Header,
-            FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 4, 0, 0)
-        };
-
-        var stack = new StackPanel();
-        stack.Children.Add(controls);
-        stack.Children.Add(header);
-
-        return new Border
-        {
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE2, 0xE2, 0xE2)),
-            BorderThickness = new Thickness(0, 0, 1, 0),
-            Padding = new Thickness(6, 4, 6, 2),
-            Child = stack
-        };
-    }
-
-    private static UIElement? BuildControl(RibbonControl control, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
-    {
-        if (control is RibbonSeparator or RibbonRowBreak)
-            return null;
-
-        var thickness = new Thickness(2);
-        var padding = new Thickness(8, 4, 8, 4);
-        registry.TryGet(control.CommandId, out var command);
-
-        void Execute() => command?.Execute(RibbonCommandContext.Empty);
-
-        if (control is RibbonComboBox combo)
-        {
-            var box = new ComboBox
-            {
-                IsEditable = true,
-                MinWidth = combo.Width ?? 100,
-                Margin = new Thickness(4, 0, 0, 0),
-                IsEnabled = command is not null
-            };
-            foreach (var item in combo.Items)
-                box.Items.Add(item);
-
-            void Apply(string? value)
-            {
-                if (!string.IsNullOrWhiteSpace(value))
-                    command?.Execute(new RibbonCommandContext(new System.Collections.Generic.Dictionary<string, object?> { ["value"] = value }));
-            }
-            box.SelectionChanged += (_, _) => Apply(box.SelectedItem as string);
-            box.KeyDown += (_, e) => { if (e.Key == Key.Enter) Apply(box.Text); };
-
-            var comboContent = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = thickness,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            comboContent.Children.Add(CreateRibbonIcon(control, 16));
-            comboContent.Children.Add(box);
-            return comboContent;
-        }
-
-        if (control is RibbonToggleButton)
-        {
-            var id = control.CommandId;
-            var toggle = new ToggleButton { Content = CreateRibbonButtonContent(control), Margin = thickness, Padding = padding, MinWidth = 64 };
-            if (command is IRibbonStatefulCommand stateful)
-                toggle.IsChecked = stateful.GetState().IsChecked;
-            // Observe the shared state store so the toggle reflects the current selection live.
-            stateStore.StateChanged += (_, e) =>
-            {
-                if (e.Id == id)
-                    toggle.IsChecked = e.State.IsChecked;
-            };
-            toggle.Click += (_, _) => Execute();
-            toggle.IsEnabled = command is not null;
-            return toggle;
-        }
-
-        var button = new Button { Content = CreateRibbonButtonContent(control), Margin = thickness, Padding = padding, MinWidth = 64 };
-        button.Click += (_, _) => Execute();
-        button.IsEnabled = command is not null;
-        return button;
-    }
-
-    private static UIElement CreateRibbonButtonContent(RibbonControl control)
-    {
-        var stack = new StackPanel
-        {
-            Orientation = Orientation.Vertical,
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
-        stack.Children.Add(CreateRibbonIcon(control, 20));
-        stack.Children.Add(new TextBlock
-        {
-            Text = control.Label,
-            FontSize = 11,
-            TextAlignment = System.Windows.TextAlignment.Center,
-            TextWrapping = TextWrapping.NoWrap,
-            Margin = new Thickness(0, 2, 0, 0)
-        });
-        return stack;
-    }
-
-    private static FrameworkElement CreateRibbonIcon(RibbonControl control, double size)
-    {
-        var icon = control.Icon ?? new RibbonCommandIcon(RibbonCommandIconKind.Generic);
-        return RibbonIconFactory.CreateCommandIcon(GetCommandIconLookupName(control), icon, size, Brushes.Black);
-    }
-
-    private static string GetCommandIconLookupName(RibbonControl control)
-    {
-        var id = control.CommandId.Value;
-        var lastDot = id.LastIndexOf('.');
-        return lastDot >= 0 && lastDot < id.Length - 1 ? id[(lastDot + 1)..] : id;
     }
 }
