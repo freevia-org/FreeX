@@ -539,6 +539,63 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_HorizontalMerge_GridSpanRoundTrips()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(1, 3);
+        // Merge the first two cells of the row: the survivor spans two grid columns, the absorbed cell
+        // is dropped (mirroring DocumentView.MergeSelectedCells).
+        table.Rows[0].Cells[0] = new TableCell("merged") { GridSpan = 2 };
+        table.Rows[0].Cells.RemoveAt(1);
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.Rows[0].Cells.Should().HaveCount(2);
+        readTable.Rows[0].Cells[0].PlainText.Should().Be("merged");
+        readTable.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        readTable.Rows[0].Cells[1].GridSpan.Should().Be(1);
+    }
+
+    [Fact]
+    public void Table_VerticalMerge_VMergeRoundTrips()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(2, 2);
+        // Merge the left column down a row: top cell restarts, the one below continues.
+        table.Rows[0].Cells[0] = new TableCell("top") { VerticalMerge = VerticalMergeState.Restart };
+        table.Rows[1].Cells[0] = new TableCell(string.Empty) { VerticalMerge = VerticalMergeState.Continue };
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+        readTable.Rows[0].Cells[0].PlainText.Should().Be("top");
+        readTable.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+        // The other column is untouched.
+        readTable.Rows[0].Cells[1].VerticalMerge.Should().Be(VerticalMergeState.None);
+        readTable.Rows[1].Cells[1].VerticalMerge.Should().Be(VerticalMergeState.None);
+    }
+
+    [Fact]
+    public void Table_PlainCells_HaveDefaultSpansAfterRoundTrip()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(2, 2);
+        table.Rows[0].Cells[0] = new TableCell("a");
+        table.Rows[0].Cells[1] = new TableCell("b");
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.Rows.SelectMany(r => r.Cells)
+            .Should().OnlyContain(c => c.GridSpan == 1 && c.VerticalMerge == VerticalMergeState.None);
+    }
+
+    [Fact]
     public void InlineImage_RoundTrips()
     {
         var png = MinimalPng();

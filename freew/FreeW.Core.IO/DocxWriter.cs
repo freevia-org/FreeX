@@ -578,8 +578,10 @@ public static class DocxWriter
         return tblPr;
     }
 
-    // Cell properties (w:tcPr): emitted only when the cell has an explicit width and/or shading, so
-    // plain cells stay unchanged. Width is w:tcW (dxa); shading mirrors paragraph w:shd (fill colour).
+    // Cell properties (w:tcPr): emitted only when the cell has an explicit width, span, vertical-merge
+    // state and/or shading, so plain cells stay unchanged. Width is w:tcW (dxa); horizontal merge is
+    // w:gridSpan; vertical merge is w:vMerge ("restart" on the top cell, "continue" below); shading
+    // mirrors paragraph w:shd (fill colour). Child order follows the CT_TcPr schema sequence.
     private static XElement? BuildCellProperties(TableCell cell)
     {
         var tcPr = new XElement(W + "tcPr");
@@ -587,6 +589,12 @@ public static class DocxWriter
             tcPr.Add(new XElement(W + "tcW",
                 new XAttribute(W + "w", PointsToDxa(widthPt)),
                 new XAttribute(W + "type", "dxa")));
+        if (cell.GridSpan > 1)
+            tcPr.Add(new XElement(W + "gridSpan", new XAttribute(W + "val", cell.GridSpan)));
+        if (cell.VerticalMerge == VerticalMergeState.Restart)
+            tcPr.Add(new XElement(W + "vMerge", new XAttribute(W + "val", "restart")));
+        else if (cell.VerticalMerge == VerticalMergeState.Continue)
+            tcPr.Add(new XElement(W + "vMerge", new XAttribute(W + "val", "continue")));
         if (cell.ShadingColorHex is { Length: > 0 } shading)
             tcPr.Add(new XElement(W + "shd",
                 new XAttribute(W + "val", "clear"),

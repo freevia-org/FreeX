@@ -499,6 +499,52 @@ public sealed class DocumentView : RichTextBox
         new DeleteTableColumnCommand(index, columnIndex));
 
     /// <summary>
+    /// Merge the table cells spanned by the current selection. When the selection covers several cells
+    /// in one row, they merge horizontally (the left cell's <c>GridSpan</c> grows, the rest are dropped).
+    /// When it covers several rows in one column, they merge vertically (top cell becomes the merge head,
+    /// the cells below become continuations). Routes through the undo/redo bus. No-op outside a table or
+    /// when the selection touches a single cell. Mixed row+column selections fall back to merging
+    /// horizontally within the start row.
+    /// </summary>
+    public void MergeSelectedCells()
+    {
+        CommitToModel();
+        var start = TableLocationOf(Selection.Start.Parent as TextElement);
+        var end = TableLocationOf(Selection.End.Parent as TextElement);
+
+        // Fall back to the caret cell when an endpoint is outside any table (e.g. collapsed selection).
+        if (start.BlockIndex < 0)
+            start = CaretTableLocation();
+        if (end.BlockIndex < 0)
+            end = start;
+        if (start.BlockIndex < 0 || start.BlockIndex != end.BlockIndex)
+            return;
+
+        var blockIndex = start.BlockIndex;
+        if (start.RowIndex == end.RowIndex && start.ColumnIndex != end.ColumnIndex)
+        {
+            _commands.Execute(new MergeCellsHorizontalCommand(blockIndex, start.RowIndex, start.ColumnIndex, end.ColumnIndex));
+        }
+        else if (start.ColumnIndex == end.ColumnIndex && start.RowIndex != end.RowIndex)
+        {
+            _commands.Execute(new MergeCellsVerticalCommand(blockIndex, start.ColumnIndex, start.RowIndex, end.RowIndex));
+        }
+        else if (start.RowIndex != end.RowIndex && start.ColumnIndex != end.ColumnIndex)
+        {
+            // Mixed rectangular selection: merge horizontally across the start row as a best-effort.
+            _commands.Execute(new MergeCellsHorizontalCommand(blockIndex, start.RowIndex, start.ColumnIndex, end.ColumnIndex));
+        }
+    }
+
+    /// <summary>
+    /// Split the merged cell at the caret back into single cells: a horizontal merge resets the cell's
+    /// <c>GridSpan</c> to 1 (re-adding empty cells), and a vertical merge clears the head and its
+    /// continuations. Routes through the undo/redo bus. No-op outside a table or on an unmerged cell.
+    /// </summary>
+    public void SplitCell() => MutateCaretTable((index, rowIndex, columnIndex) =>
+        new SplitCellCommand(index, rowIndex, columnIndex));
+
+    /// <summary>
     /// Set (or clear, when <paramref name="colorHex"/> is null/empty) the background shading of the
     /// table cell containing the caret. Commits pending edits, mutates the model cell directly, and
     /// re-renders so the fill shows immediately and round-trips through save. No-op outside a table.
@@ -1177,10 +1223,13 @@ public sealed class DocumentView : RichTextBox
     }
 
     // Locate the model block/row/column of the table containing the caret; blockIndex is -1 if not in a table.
-    private (int BlockIndex, int RowIndex, int ColumnIndex) CaretTableLocation()
+    private (int BlockIndex, int RowIndex, int ColumnIndex) CaretTableLocation() =>
+        TableLocationOf(CaretPosition?.Parent as TextElement);
+
+    // Resolve a text element (typically a selection endpoint or the caret) to the model block/row/column
+    // of its hosting table cell. blockIndex is -1 if the element is not inside a table.
+    private (int BlockIndex, int RowIndex, int ColumnIndex) TableLocationOf(TextElement? element)
     {
-        // Walk up from the caret to the hosting WPF cell/row/table.
-        TextElement? element = CaretPosition?.Parent as TextElement;
         WpfTableCell? cell = null;
         while (element is not null)
         {
@@ -1692,16 +1741,34 @@ public sealed class DocumentView : RichTextBox
         if (table.ColumnWidthsPt.All(w => w <= 0))
             table.ColumnWidthsPt.Clear();
 
+        // First pass: read each WPF cell into a model cell, carrying ColumnSpan -> GridSpan and
+        // RowSpan -> VerticalMerge.Restart. Continue cells are not rendered (they are absorbed by the
+        // restart's RowSpan), so we record where they need to be re-synthesised in the rows below.
+        var modelRows = new List<ModelTableRow>();
+        // pendingContinues[rowIndex] = list of (gridColumn, gridSpan) continuation cells to inject.
+        var pendingContinues = new List<List<(int Column, int Span)>>();
+        foreach (var rowGroup in wpfTable.RowGroups)
+        {
+            foreach (var _ in rowGroup.Rows)
+            {
+                modelRows.Add(new ModelTableRow());
+                pendingContinues.Add([]);
+            }
+        }
+
+        var rowIndex = 0;
         foreach (var rowGroup in wpfTable.RowGroups)
         {
             foreach (var wpfRow in rowGroup.Rows)
             {
-                var row = new ModelTableRow();
+                var row = modelRows[rowIndex];
                 foreach (var wpfCell in wpfRow.Cells)
                 {
+                    var span = Math.Max(1, wpfCell.ColumnSpan);
                     var cell = new ModelTableCell
                     {
-                        ShadingColorHex = wpfCell.Background is SolidColorBrush shading ? ToHex(shading.Color) : null
+                        ShadingColorHex = wpfCell.Background is SolidColorBrush shading ? ToHex(shading.Color) : null,
+                        GridSpan = span
                     };
                     foreach (var cellBlock in wpfCell.Blocks)
                     {
@@ -1710,12 +1777,54 @@ public sealed class DocumentView : RichTextBox
                     }
                     if (cell.Paragraphs.Count == 0)
                         cell.Paragraphs.Add(new ModelParagraph());
+
+                    if (wpfCell.RowSpan > 1)
+                    {
+                        cell.VerticalMerge = VerticalMergeState.Restart;
+                        // Compute this cell's grid column from cells already placed in the row, then queue
+                        // a Continue placeholder in each covered row below so the model keeps its shape.
+                        var gridColumn = row.Cells.Sum(c => Math.Max(1, c.GridSpan));
+                        for (var r = rowIndex + 1; r < rowIndex + wpfCell.RowSpan && r < pendingContinues.Count; r++)
+                            pendingContinues[r].Add((gridColumn, span));
+                    }
                     row.Cells.Add(cell);
                 }
-                table.Rows.Add(row);
+                rowIndex++;
             }
         }
+
+        // Second pass: inject the queued Continue cells at their grid columns (insertion order by column
+        // keeps the row laid out left-to-right).
+        for (var r = 0; r < modelRows.Count; r++)
+        {
+            foreach (var (column, span) in pendingContinues[r].OrderBy(c => c.Column))
+            {
+                var insertAt = InsertIndexForGridColumn(modelRows[r], column);
+                modelRows[r].Cells.Insert(insertAt, new ModelTableCell
+                {
+                    GridSpan = span,
+                    VerticalMerge = VerticalMergeState.Continue
+                });
+            }
+        }
+
+        foreach (var row in modelRows)
+            table.Rows.Add(row);
         return table;
+    }
+
+    // Returns the cell index at which a Continue placeholder for the given grid column should be
+    // inserted, walking the already-placed cells and summing their grid spans.
+    private static int InsertIndexForGridColumn(ModelTableRow row, int gridColumn)
+    {
+        var column = 0;
+        for (var i = 0; i < row.Cells.Count; i++)
+        {
+            if (column >= gridColumn)
+                return i;
+            column += Math.Max(1, row.Cells[i].GridSpan);
+        }
+        return row.Cells.Count;
     }
 
     // --- model -> view ---
@@ -1750,15 +1859,36 @@ public sealed class DocumentView : RichTextBox
         }
 
         var group = new TableRowGroup();
-        foreach (var modelRow in table.Rows)
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
+            var modelRow = table.Rows[rowIndex];
             var wpfRow = new WpfTableRow();
+            // Track the running grid-column position so vertical-merge runs can be matched up by
+            // column even when earlier cells span multiple grid columns.
+            var gridColumn = 0;
             foreach (var modelCell in modelRow.Cells)
             {
+                var span = Math.Max(1, modelCell.GridSpan);
+                // A vertical-merge "continue" cell is absorbed by the restart cell above (which carries
+                // a RowSpan covering it), so it is not rendered as its own WPF cell.
+                if (modelCell.VerticalMerge == VerticalMergeState.Continue)
+                {
+                    gridColumn += span;
+                    continue;
+                }
+
                 var wpfCell = new WpfTableCell
                 {
                     Padding = new Thickness(4, 2, 4, 2)
                 };
+                if (span > 1)
+                    wpfCell.ColumnSpan = span;
+                if (modelCell.VerticalMerge == VerticalMergeState.Restart)
+                {
+                    var rowSpan = CountVerticalMergeSpan(table, rowIndex, gridColumn);
+                    if (rowSpan > 1)
+                        wpfCell.RowSpan = rowSpan;
+                }
                 if (table.Formatting.Borders)
                 {
                     wpfCell.BorderBrush = borderBrush;
@@ -1776,11 +1906,44 @@ public sealed class DocumentView : RichTextBox
                         wpfCell.Blocks.Add(BuildParagraph(cellParagraph, document));
                 }
                 wpfRow.Cells.Add(wpfCell);
+                gridColumn += span;
             }
             group.Rows.Add(wpfRow);
         }
         wpf.RowGroups.Add(group);
         return wpf;
+    }
+
+    // Counts the height (in rows) of a vertical-merge run that starts at (restartRow, gridColumn):
+    // the restart row plus every immediately following row whose cell at the same grid column carries
+    // VerticalMerge.Continue. Returns at least 1 (the restart cell itself).
+    private static int CountVerticalMergeSpan(ModelTable table, int restartRow, int gridColumn)
+    {
+        var span = 1;
+        for (var r = restartRow + 1; r < table.Rows.Count; r++)
+        {
+            var continuation = CellAtGridColumn(table.Rows[r], gridColumn);
+            if (continuation?.VerticalMerge == VerticalMergeState.Continue)
+                span++;
+            else
+                break;
+        }
+        return span;
+    }
+
+    // Resolves the model cell occupying a given grid-column position in a row, honouring GridSpan so
+    // a wide cell is matched for any column it covers. Returns null if the position is past the row.
+    private static ModelTableCell? CellAtGridColumn(ModelTableRow row, int gridColumn)
+    {
+        var column = 0;
+        foreach (var cell in row.Cells)
+        {
+            var span = Math.Max(1, cell.GridSpan);
+            if (gridColumn >= column && gridColumn < column + span)
+                return cell;
+            column += span;
+        }
+        return null;
     }
 
     private static WpfParagraph BuildParagraph(ModelParagraph paragraph, TextDocument document)

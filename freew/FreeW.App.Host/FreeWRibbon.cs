@@ -96,6 +96,8 @@ internal static class FreeWRibbon
                     g.Button("freew.table-insert-col", "Insert Column");
                     g.Button("freew.table-delete-col", "Delete Column");
                     g.Button("freew.cell-shading", "Cell Shading");
+                    g.Button("freew.merge-cells", "Merge Cells");
+                    g.Button("freew.split-cell", "Split Cell");
                 });
                 tab.Group("illustrations", "Illustrations", "I", 80, g =>
                 {

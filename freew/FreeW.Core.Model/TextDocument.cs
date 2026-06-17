@@ -418,11 +418,40 @@ public sealed class TableCell
     /// </summary>
     public double? WidthPt { get; set; }
 
+    /// <summary>
+    /// Horizontal merge: how many grid columns this cell spans (<c>tc/tcPr/w:gridSpan w:val</c>). The
+    /// default of <c>1</c> means no horizontal merge, so existing tables are unaffected. When merging
+    /// cells horizontally the surviving (left-most) cell's <see cref="GridSpan"/> is increased and the
+    /// absorbed cells are dropped from the row.
+    /// </summary>
+    public int GridSpan { get; set; } = 1;
+
+    /// <summary>
+    /// Vertical merge state (<c>tc/tcPr/w:vMerge</c>). <see cref="VerticalMergeState.None"/> (the default)
+    /// means the cell is not part of a vertical merge, so existing tables are unaffected.
+    /// <see cref="VerticalMergeState.Restart"/> is the top cell of a merged run (<c>w:vMerge w:val="restart"</c>)
+    /// and <see cref="VerticalMergeState.Continue"/> is a cell below it that is absorbed into the restart
+    /// cell (<c>w:vMerge</c> with no value / <c>w:val="continue"</c>).
+    /// </summary>
+    public VerticalMergeState VerticalMerge { get; set; } = VerticalMergeState.None;
+
     public TableCell() { }
 
     public TableCell(string text) => Paragraphs.Add(new Paragraph(text));
 
     public string PlainText => string.Join("\n", Paragraphs.Select(p => p.PlainText));
+}
+
+/// <summary>
+/// Vertical-merge state of a table cell (<c>tc/tcPr/w:vMerge</c>). <see cref="None"/> means the cell
+/// stands alone; <see cref="Restart"/> begins a vertically merged run (the cell whose content survives);
+/// <see cref="Continue"/> is a cell below the restart that is visually absorbed into it.
+/// </summary>
+public enum VerticalMergeState
+{
+    None,
+    Restart,
+    Continue
 }
 
 /// <summary>A table row: an ordered sequence of cells (w:tr).</summary>

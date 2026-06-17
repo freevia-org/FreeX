@@ -123,6 +123,9 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.table-delete-row", new ActionCommand(() => { editor.Focus(); editor.DeleteTableRow(); }));
         registry.Register("freew.table-insert-col", new ActionCommand(() => { editor.Focus(); editor.InsertTableColumn(); }));
         registry.Register("freew.table-delete-col", new ActionCommand(() => { editor.Focus(); editor.DeleteTableColumn(); }));
+        // Insert tab — Table Tools: merge the selected cells / split a merged cell (all undoable).
+        registry.Register("freew.merge-cells", new ActionCommand(() => { editor.Focus(); editor.MergeSelectedCells(); }));
+        registry.Register("freew.split-cell", new ActionCommand(() => { editor.Focus(); editor.SplitCell(); }));
         // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
         registry.Register("freew.cell-shading", new CellShadingCommand(editor));
 
