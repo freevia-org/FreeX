@@ -753,6 +753,9 @@ public sealed partial class MainWindow : Window
                     ["insert.sparklineLine"] = () => InsertQuickAnalysisSparklines(SparklineKind.Line),
                     ["insert.sparklineColumn"] = () => InsertQuickAnalysisSparklines(SparklineKind.Column),
                     ["insert.sparklineWinLoss"] = () => InsertQuickAnalysisSparklines(SparklineKind.WinLoss),
+                    // Data: Outline Group / Ungroup.
+                    ["data.group"] = GroupSelectedRows,
+                    ["data.ungroup"] = ClearWorksheetOutline,
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
