@@ -429,6 +429,137 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    // --- Live preview (galleries) ---------------------------------------------------------------
+    //
+    // The Styles / Themes galleries preview a choice while the pointer hovers a swatch and revert it
+    // when the pointer leaves (unless the user clicks, which commits through the normal reversible
+    // path). Preview deliberately bypasses the undo/redo bus: it mutates the model in place and
+    // re-renders, snapshotting exactly what it changed so EndPreview can restore the document to its
+    // pre-hover state without touching undo history. Commit (the real apply) is a separate, reversible
+    // operation the gallery triggers on click — preview only ever shows, never persists.
+
+    // Snapshot of the paragraph StyleIds a style preview overwrote (model index -> prior style id).
+    private Dictionary<int, string?>? _styleStyleIdSnapshot;
+
+    // The model paragraph indices a style-preview session targets. Captured from the selection when the
+    // session starts (first hover) and reused for every subsequent hover, so re-rendering between hovers
+    // (which clears the editor selection) doesn't make later previews target nothing.
+    private IReadOnlyList<int>? _stylePreviewTargets;
+
+    // Snapshot of the document's pre-theme look (DefaultRun + each affected style's Run) for theme preview.
+    private (RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs)? _themeSnapshot;
+
+    /// <summary>
+    /// Preview a paragraph style on the current selection without committing: snapshot the selected
+    /// paragraphs' current <see cref="ModelParagraph.StyleId"/>, set the previewed id on each, and
+    /// re-render so the style's formatting shows. <see cref="EndStylePreview"/> restores them. A no-op
+    /// for an unknown style id. Used by the Styles gallery's hover live-preview.
+    /// </summary>
+    public void PreviewParagraphStyle(string? styleId)
+    {
+        if (styleId is { Length: > 0 } && !_model.Styles.ContainsKey(styleId))
+            return;
+
+        // Re-baseline against the committed model: on the first hover of a session commit pending edits
+        // and capture the target paragraphs from the selection; on a subsequent hover revert the prior
+        // preview and reuse the captured targets (the re-render between hovers clears the selection).
+        if (_styleStyleIdSnapshot is null)
+        {
+            CommitToModel();
+            _stylePreviewTargets = SelectedModelParagraphIndices();
+        }
+        else
+        {
+            RestoreStylePreview();
+        }
+
+        var snapshot = new Dictionary<int, string?>();
+        foreach (var index in _stylePreviewTargets ?? [])
+        {
+            if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph paragraph)
+            {
+                snapshot[index] = paragraph.StyleId;
+                paragraph.StyleId = styleId;
+            }
+        }
+
+        _styleStyleIdSnapshot = snapshot;
+        Render();
+    }
+
+    /// <summary>Revert a style preview started by <see cref="PreviewParagraphStyle"/> and re-render. No-op if none is active.</summary>
+    public void EndStylePreview()
+    {
+        if (_styleStyleIdSnapshot is null)
+            return;
+        RestoreStylePreview();
+        _stylePreviewTargets = null;
+        Render();
+    }
+
+    // Restore previewed paragraph style ids from the snapshot (without re-rendering).
+    private void RestoreStylePreview()
+    {
+        if (_styleStyleIdSnapshot is null)
+            return;
+        foreach (var (index, styleId) in _styleStyleIdSnapshot)
+        {
+            if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph paragraph)
+                paragraph.StyleId = styleId;
+        }
+        _styleStyleIdSnapshot = null;
+    }
+
+    /// <summary>
+    /// Preview a document <paramref name="theme"/> without committing: snapshot the document default run
+    /// and the run formatting of every style the theme rewrites, apply the theme to the catalog, and
+    /// re-render. <see cref="EndThemePreview"/> restores the snapshot. Used by the Themes gallery's hover
+    /// live-preview; the real apply goes through <see cref="ApplyTheme"/> on click.
+    /// </summary>
+    public void PreviewTheme(DocumentTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+
+        if (_themeSnapshot is null)
+            CommitToModel();
+        else
+            RestoreThemePreview();
+
+        var runs = new Dictionary<string, RunFormatting>();
+        foreach (var id in new[] { "Normal", "Title", "Heading1", "Heading2", "Heading3" })
+        {
+            if (_model.Styles.TryGetValue(id, out var style))
+                runs[id] = style.Run;
+        }
+
+        _themeSnapshot = (_model.DefaultRun, runs);
+        DocumentTheme.Apply(_model, theme);
+        Render();
+    }
+
+    /// <summary>Revert a theme preview started by <see cref="PreviewTheme"/> and re-render. No-op if none is active.</summary>
+    public void EndThemePreview()
+    {
+        if (_themeSnapshot is null)
+            return;
+        RestoreThemePreview();
+        Render();
+    }
+
+    // Restore the pre-preview document default + style runs from the theme snapshot (without re-rendering).
+    private void RestoreThemePreview()
+    {
+        if (_themeSnapshot is not { } snapshot)
+            return;
+        _model.DefaultRun = snapshot.DefaultRun;
+        foreach (var (id, run) in snapshot.Runs)
+        {
+            if (_model.Styles.TryGetValue(id, out var style))
+                style.Run = run;
+        }
+        _themeSnapshot = null;
+    }
+
     /// <summary>
     /// Insert a table at the caret (after the block the caret sits in, else at the end), routing
     /// through the undo/redo command bus so the insert is reversible. Re-renders the surface.
@@ -979,9 +1110,45 @@ public sealed class DocumentView : RichTextBox
             return;
         Focus();
         CommitToModel();
-        foreach (var index in SelectedModelParagraphIndices())
+        ApplyParagraphStyleToIndices(styleId, SelectedModelParagraphIndices());
+    }
+
+    /// <summary>
+    /// Commit a style chosen from the Styles gallery: if a live-preview session is active (the user
+    /// hovered swatches), revert the preview and apply <paramref name="styleId"/> reversibly to the
+    /// paragraphs that session targeted — even though the intervening re-renders cleared the editor
+    /// selection. With no active session this is equivalent to <see cref="SetParagraphStyle"/>.
+    /// </summary>
+    public void CommitStylePreview(string? styleId)
+    {
+        if (styleId is { Length: > 0 } && !_model.Styles.ContainsKey(styleId))
+            return;
+
+        var targets = _stylePreviewTargets;
+        if (_styleStyleIdSnapshot is not null)
         {
-            if (_model.Blocks[index] is ModelParagraph)
+            RestoreStylePreview();
+            Render();
+        }
+        _stylePreviewTargets = null;
+
+        if (targets is null || targets.Count == 0)
+        {
+            SetParagraphStyle(styleId);
+            return;
+        }
+
+        Focus();
+        CommitToModel();
+        ApplyParagraphStyleToIndices(styleId, targets);
+    }
+
+    // Apply a paragraph style id to the given model paragraph indices, one reversible command each.
+    private void ApplyParagraphStyleToIndices(string? styleId, IReadOnlyList<int> indices)
+    {
+        foreach (var index in indices)
+        {
+            if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph)
                 _commands.Execute(new SetParagraphStyleCommand(index, styleId));
         }
     }
@@ -2104,6 +2271,9 @@ public sealed class DocumentView : RichTextBox
             case InlineUIContainer { Child: Image { Tag: InlineImage modelImage } }:
                 modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
                 break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: Shape modelShape } }:
+                modelParagraph.Runs.Add(ModelRun.FromShape(modelShape));
+                break;
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
                 break;
@@ -2518,6 +2688,9 @@ public sealed class DocumentView : RichTextBox
         if (run.Image is { } image)
             return BuildImageRun(image);
 
+        if (run.Shape is { } shape)
+            return BuildShapeRun(shape);
+
         if (run.FootnoteId is { } footnoteId)
             return BuildFootnoteReference(footnoteId, document);
 
@@ -2924,6 +3097,79 @@ public sealed class DocumentView : RichTextBox
         bitmap.EndInit();
         bitmap.Freeze();
         return bitmap;
+    }
+
+    /// <summary>
+    /// Renders an inline shape / text box as an InlineUIContainer hosting a WPF element that carries the
+    /// model <see cref="Shape"/> on its Tag, so CommitToModel round-trips it (mirroring images). Ellipses
+    /// render as a System.Windows.Shapes.Ellipse-backed border; rectangles / rounded rectangles / text
+    /// boxes render as a Border (with a corner radius for rounded). A text box shows its plain text.
+    /// </summary>
+    private static InlineUIContainer BuildShapeRun(Shape shape)
+    {
+        var widthPx = shape.WidthPt * PxPerPoint;
+        var heightPx = shape.HeightPt * PxPerPoint;
+
+        System.Windows.Media.Brush fill = TryParseColor(shape.FillColorHex, out var fillColor)
+            ? new SolidColorBrush(fillColor)
+            : System.Windows.Media.Brushes.Transparent;
+        var stroke = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x80, 0x80, 0x80));
+
+        FrameworkElement element;
+        if (shape.Kind == ShapeKind.Ellipse)
+        {
+            element = new System.Windows.Shapes.Ellipse
+            {
+                Width = widthPx,
+                Height = heightPx,
+                Fill = fill,
+                Stroke = stroke,
+                StrokeThickness = 1,
+            };
+        }
+        else
+        {
+            var border = new Border
+            {
+                Width = widthPx,
+                Height = heightPx,
+                Background = fill,
+                BorderBrush = stroke,
+                BorderThickness = new Thickness(1),
+                CornerRadius = shape.Kind == ShapeKind.RoundedRectangle ? new CornerRadius(6) : new CornerRadius(0),
+            };
+            if (shape.HasText)
+                border.Child = new TextBlock
+                {
+                    Text = shape.PlainText,
+                    Margin = new Thickness(4),
+                    TextWrapping = TextWrapping.Wrap,
+                    VerticalAlignment = VerticalAlignment.Top,
+                };
+            element = border;
+        }
+
+        element.Tag = shape; // carries the model shape so CommitToModel can round-trip it
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    /// <summary>Inserts an inline shape / text box at the caret. Size in points; preserved on save.</summary>
+    public void InsertShape(Shape shape)
+    {
+        CommitToModel();
+        var container = BuildShapeRun(shape);
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        if (caret.Paragraph is { } paragraph)
+            paragraph.Inlines.Add(container);
+        else if (Document.Blocks.LastOrDefault() is WpfParagraph last)
+            last.Inlines.Add(container);
+        else
+        {
+            var p = new WpfParagraph(container);
+            Document.Blocks.Add(p);
+        }
+        CommitToModel();
+        Render();
     }
 
     /// <summary>Inserts an inline image at the caret. Width/height in points; preserved on save.</summary>
