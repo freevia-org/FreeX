@@ -414,6 +414,37 @@ public sealed class DocumentProperties
 }
 
 /// <summary>
+/// How the document restricts editing (document protection, w:settings/w:documentProtection).
+/// <see cref="None"/> is an unprotected document (the default — no settings part is emitted);
+/// <see cref="ReadOnly"/> locks the whole document against edits; <see cref="CommentsOnly"/> permits
+/// only the insertion of comments; <see cref="TrackChangesOnly"/> permits edits but forces them to be
+/// tracked revisions. Maps onto w:documentProtection/@w:edit ("readOnly"/"comments"/"trackedChanges").
+/// </summary>
+public enum ProtectionMode
+{
+    None,
+    ReadOnly,
+    CommentsOnly,
+    TrackChangesOnly
+}
+
+/// <summary>
+/// Document protection (restrict-editing) settings, mapping onto word/settings.xml's
+/// w:documentProtection. Immutable so it round-trips cleanly and can be shared; the default
+/// (<see cref="ProtectionMode.None"/>, see <see cref="Unprotected"/>) leaves existing documents
+/// unaffected — no settings part is emitted and the reader maps a missing/absent protection to None.
+/// When <see cref="Mode"/> is not None the writer emits w:documentProtection with w:enforcement="1".
+/// </summary>
+public sealed record ProtectionSettings(ProtectionMode Mode = ProtectionMode.None)
+{
+    /// <summary>The default, unprotected settings (<see cref="ProtectionMode.None"/>).</summary>
+    public static readonly ProtectionSettings Unprotected = new(ProtectionMode.None);
+
+    /// <summary>True when the document is protected in some mode (i.e. not <see cref="ProtectionMode.None"/>).</summary>
+    public bool IsProtected => Mode != ProtectionMode.None;
+}
+
+/// <summary>
 /// A page header or footer: an ordered list of paragraphs shown in the top (header) or bottom
 /// (footer) margin of every page. Maps onto a WordprocessingML header/footer part (w:hdr / w:ftr).
 /// A footer paragraph may contain a page-number field run (see <see cref="Run.PageNumberField"/>).
@@ -505,6 +536,14 @@ public sealed class TextDocument
 
     /// <summary>Document-level metadata (maps to docProps/core.xml).</summary>
     public DocumentProperties Properties { get; } = new();
+
+    /// <summary>
+    /// Document protection (restrict-editing) settings. Defaults to
+    /// <see cref="ProtectionSettings.Unprotected"/> (<see cref="ProtectionMode.None"/>) so existing
+    /// documents are unaffected and no word/settings.xml part is emitted. When set to a protected mode
+    /// the writer emits w:settings/w:documentProtection and the reader maps it back here.
+    /// </summary>
+    public ProtectionSettings Protection { get; set; } = ProtectionSettings.Unprotected;
 
     /// <summary>
     /// The document's footnotes, keyed by footnote id (matching <see cref="Run.FootnoteId"/> on the

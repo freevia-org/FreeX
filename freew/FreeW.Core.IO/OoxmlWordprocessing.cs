@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml.Linq;
+using FreeW.Core.Model;
 
 namespace FreeW.Core.IO;
 
@@ -55,6 +56,10 @@ internal static class Ooxml
     public const string CommentsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
     public const string CommentsPartName = "/word/comments.xml";
 
+    public const string SettingsContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml";
+    public const string SettingsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings";
+    public const string SettingsPartName = "/word/settings.xml";
+
     /// <summary>W3CDTF as used by dcterms:created/modified (UTC, second precision, trailing 'Z').</summary>
     public static string ToW3CDtf(DateTimeOffset value) =>
         value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
@@ -88,6 +93,31 @@ internal static class Ooxml
 
     public static int ParseInt(string? value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
+
+    /// <summary>
+    /// Maps a <see cref="ProtectionMode"/> to the w:documentProtection/@w:edit token, or null for
+    /// <see cref="ProtectionMode.None"/> (no protection element is emitted). ReadOnly→"readOnly",
+    /// CommentsOnly→"comments", TrackChangesOnly→"trackedChanges".
+    /// </summary>
+    public static string? ProtectionEditToken(ProtectionMode mode) => mode switch
+    {
+        ProtectionMode.ReadOnly => "readOnly",
+        ProtectionMode.CommentsOnly => "comments",
+        ProtectionMode.TrackChangesOnly => "trackedChanges",
+        _ => null
+    };
+
+    /// <summary>
+    /// Maps a w:documentProtection/@w:edit token back to a <see cref="ProtectionMode"/>. Any unknown
+    /// or absent token (including "forms"/"none") maps to <see cref="ProtectionMode.None"/>.
+    /// </summary>
+    public static ProtectionMode ProtectionModeFromEditToken(string? edit) => edit switch
+    {
+        "readOnly" => ProtectionMode.ReadOnly,
+        "comments" => ProtectionMode.CommentsOnly,
+        "trackedChanges" => ProtectionMode.TrackChangesOnly,
+        _ => ProtectionMode.None
+    };
 
     /// <summary>Reads an OOXML on/off toggle element (e.g. &lt;w:b/&gt;): present and not explicitly off.</summary>
     public static bool ReadToggle(XElement? parent, string localName)
