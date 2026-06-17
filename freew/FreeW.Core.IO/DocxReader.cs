@@ -716,6 +716,18 @@ public static class DocxReader
             return;
         }
 
+        // A run whose w:drawing references a SmartArt diagram (a:graphicData/dgm:relIds) becomes a SmartArt
+        // run. imageRelationships maps EVERY document relationship id → part path, so the diagram data part
+        // resolves through it via the dgm:relIds/@r:dm id.
+        var smartArt = ReadSmartArt(r, archive, imageRelationships);
+        if (smartArt is not null)
+        {
+            var smartArtRun = new Run(string.Empty) { SmartArt = smartArt, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(smartArtRun);
+            paragraph.Runs.Add(smartArtRun);
+            return;
+        }
+
         // A run wrapping a w:footnoteReference is a footnote marker; recover its id into the model.
         var footnoteRef = r.Element(W + "footnoteReference");
         if (footnoteRef is not null && int.TryParse(footnoteRef.Attribute(W + "id")?.Value, out var footnoteId))
@@ -1215,6 +1227,105 @@ public static class DocxReader
         if (plotArea.Element(C + "pieChart") is { } pie)
             return (pie, ChartKind.Pie);
         return (null, ChartKind.Column);
+    }
+
+    /// <summary>
+    /// Reads an inline SmartArt diagram (w:drawing/wp:inline/a:graphic/a:graphicData[uri=diagram]/dgm:relIds)
+    /// from a run into a <see cref="SmartArt"/>, if present. Resolves the dgm:relIds/@r:dm id to the diagram
+    /// DATA part via <paramref name="relationships"/> (the all-parts map), then parses the dgm:dataModel:
+    /// each non-doc dgm:pt's text body (a:t) is a node, and the dgm:cxnLst parOf connections rebuild the
+    /// parent→child tree. The diagram KIND is inferred from the data part's sibling layout part's uniqueId
+    /// (process / hierarchy / list). Returns null when the run carries no diagram.
+    /// </summary>
+    private static SmartArt? ReadSmartArt(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> relationships)
+    {
+        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
+        if (inline is null)
+            return null;
+
+        var relIds = inline.Descendants(Dgm + "relIds").FirstOrDefault();
+        var dataRelId = relIds?.Attribute(R + "dm")?.Value;
+        if (dataRelId is null || !relationships.TryGetValue(dataRelId, out var dataPath))
+            return null;
+
+        var dataXml = LoadPart(archive, dataPath);
+        var dataModel = dataXml?.Root;
+        if (dataModel is null || dataModel.Name != Dgm + "dataModel")
+            return null;
+
+        var ptLst = dataModel.Element(Dgm + "ptLst");
+        if (ptLst is null)
+            return null;
+
+        // Index every node point (skip the type="doc"/"pres" presentation points) by its modelId, capturing
+        // its text from the first a:t in its dgm:t body.
+        var textById = new Dictionary<string, string>(StringComparer.Ordinal);
+        var nodeById = new Dictionary<string, SmartArtNode>(StringComparer.Ordinal);
+        var orderedIds = new List<string>();
+        foreach (var pt in ptLst.Elements(Dgm + "pt"))
+        {
+            var type = pt.Attribute("type")?.Value;
+            if (type is "doc" or "pres")
+                continue;
+            var modelId = pt.Attribute("modelId")?.Value;
+            if (modelId is null)
+                continue;
+            var text = string.Concat(pt.Element(Dgm + "t")?.Descendants(A + "t").Select(t => t.Value) ?? []);
+            textById[modelId] = text;
+            nodeById[modelId] = new SmartArtNode(text);
+            orderedIds.Add(modelId);
+        }
+
+        // Rebuild the tree from the parOf connections: each connection's destId is a child of its srcId.
+        // Connections whose srcId is not a node id (e.g. the document point) mark a top-level node.
+        var childIds = new HashSet<string>(StringComparer.Ordinal);
+        var topLevel = new List<SmartArtNode>();
+        var parentOrder = new List<(string Src, string Dest)>();
+        foreach (var cxn in dataModel.Element(Dgm + "cxnLst")?.Elements(Dgm + "cxn") ?? [])
+        {
+            if (cxn.Attribute("type")?.Value != "parOf")
+                continue;
+            var src = cxn.Attribute("srcId")?.Value;
+            var dest = cxn.Attribute("destId")?.Value;
+            if (src is null || dest is null || !nodeById.ContainsKey(dest))
+                continue;
+            parentOrder.Add((src, dest));
+            if (nodeById.ContainsKey(src))
+                childIds.Add(dest);
+        }
+        foreach (var (src, dest) in parentOrder)
+            if (nodeById.TryGetValue(src, out var parent))
+                parent.Children.Add(nodeById[dest]);
+        foreach (var id in orderedIds)
+            if (!childIds.Contains(id))
+                topLevel.Add(nodeById[id]);
+
+        var smartArt = new SmartArt { Kind = ReadSmartArtKind(relIds, relationships, archive) };
+        smartArt.Nodes.AddRange(topLevel);
+
+        // Size: the inline extent (EMU) maps back to points.
+        var extent = inline.Element(Wp + "extent");
+        smartArt.WidthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
+        smartArt.HeightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
+
+        return smartArt;
+    }
+
+    /// <summary>
+    /// Infers the <see cref="SmartArtKind"/> from the layout part's uniqueId (resolved via the relIds/@r:lo
+    /// id). Falls back to <see cref="SmartArtKind.List"/> when the layout part or its id is absent/unknown.
+    /// </summary>
+    private static SmartArtKind ReadSmartArtKind(XElement? relIds, IReadOnlyDictionary<string, string> relationships, ZipArchive archive)
+    {
+        var layoutRelId = relIds?.Attribute(R + "lo")?.Value;
+        if (layoutRelId is null || !relationships.TryGetValue(layoutRelId, out var layoutPath))
+            return SmartArtKind.List;
+        var uniqueId = LoadPart(archive, layoutPath)?.Root?.Attribute("uniqueId")?.Value ?? string.Empty;
+        if (uniqueId.Contains("process", StringComparison.OrdinalIgnoreCase))
+            return SmartArtKind.Process;
+        if (uniqueId.Contains("hierarchy", StringComparison.OrdinalIgnoreCase))
+            return SmartArtKind.Hierarchy;
+        return SmartArtKind.List;
     }
 
     /// <summary>

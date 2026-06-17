@@ -183,6 +183,20 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         new(string.Empty) { EmbeddedObject = embeddedObject };
 
     /// <summary>
+    /// Optional inline SmartArt / DrawingML diagram. When non-null this run is an inline diagram rather than
+    /// literal text: on save it serialises as four diagram parts
+    /// (<c>word/diagrams/{data,layout,quickStyle,colors}N.xml</c>) referenced by an inline <c>w:drawing</c>
+    /// whose <c>dgm:relIds</c> holds the four relationship ids — the node texts/hierarchy live in the data
+    /// part, exactly as <see cref="Chart"/> serialises a chart part. Carries no literal text of its own.
+    /// Modelled at the run level — mirroring <see cref="Chart"/> and <see cref="Image"/> — so diagrams
+    /// round-trip through the existing run flow without a new block type.
+    /// </summary>
+    public SmartArt? SmartArt { get; set; }
+
+    /// <summary>Creates a run that carries an inline SmartArt diagram instead of text.</summary>
+    public static Run FromSmartArt(SmartArt smartArt) => new(string.Empty) { SmartArt = smartArt };
+
+    /// <summary>
     /// Optional external hyperlink target (absolute URL). When non-null the run is wrapped in a
     /// w:hyperlink on save, with the URL stored as an external relationship, and rendered as a link.
     /// Mutually exclusive with <see cref="HyperlinkAnchor"/>: a run links either externally or
