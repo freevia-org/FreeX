@@ -973,9 +973,51 @@ public enum SectionBreakKind
 }
 
 /// <summary>
+/// The per-section set of page headers and footers (parity gap W4/Z3 extension). Each WordprocessingML
+/// section can reference its own header/footer parts via the w:headerReference/w:footerReference elements
+/// in its w:sectPr, keyed by w:type: "default" (every page, or odd pages when different-odd-even is on),
+/// "even" (even pages) and "first" (the first page when w:titlePg is set). Modelling them per-section (on
+/// <see cref="Section.HeadersFooters"/>) rather than only document-wide means multi-section documents and
+/// page-specific (first-page) headers/footers round-trip instead of collapsing onto one document-level
+/// header/footer. All six slots are optional; null means the section does not reference that header/footer
+/// type. The document-level <see cref="TextDocument.Header"/> etc. are a view onto the final section's
+/// instance, so existing single-section callers are unaffected.
+/// </summary>
+public sealed class SectionHeadersFooters
+{
+    /// <summary>The default header (w:headerReference w:type="default"), or null when none.</summary>
+    public HeaderFooter? Header { get; set; }
+
+    /// <summary>The default footer (w:footerReference w:type="default"), or null when none.</summary>
+    public HeaderFooter? Footer { get; set; }
+
+    /// <summary>The even-page header (w:headerReference w:type="even"), or null when none.</summary>
+    public HeaderFooter? EvenHeader { get; set; }
+
+    /// <summary>The even-page footer (w:footerReference w:type="even"), or null when none.</summary>
+    public HeaderFooter? EvenFooter { get; set; }
+
+    /// <summary>The first-page header (w:headerReference w:type="first"), or null when none.</summary>
+    public HeaderFooter? FirstHeader { get; set; }
+
+    /// <summary>The first-page footer (w:footerReference w:type="first"), or null when none.</summary>
+    public HeaderFooter? FirstFooter { get; set; }
+
+    /// <summary>True when no header/footer slot carries visible content.</summary>
+    public bool IsEmpty =>
+        (Header is null || Header.IsEmpty)
+        && (Footer is null || Footer.IsEmpty)
+        && (EvenHeader is null || EvenHeader.IsEmpty)
+        && (EvenFooter is null || EvenFooter.IsEmpty)
+        && (FirstHeader is null || FirstHeader.IsEmpty)
+        && (FirstFooter is null || FirstFooter.IsEmpty);
+}
+
+/// <summary>
 /// One section of a multi-section document: its own <see cref="PageSettings"/> (page size, margins,
 /// orientation, columns, borders, line numbers, …) plus the <see cref="BreakKind"/> describing how the
-/// section begins (continuous / next-page / even-page / odd-page).
+/// section begins (continuous / next-page / even-page / odd-page) and its own per-section
+/// <see cref="HeadersFooters"/> (default/even/first header &amp; footer).
 ///
 /// Sections are modelled as a <em>marker on the paragraph that ends them</em>: setting
 /// <see cref="Paragraph.SectionBreak"/> on a paragraph makes that paragraph the last paragraph of a
@@ -993,6 +1035,12 @@ public sealed class Section(PageSettings page, SectionBreakKind breakKind = Sect
 
     /// <summary>How this section begins relative to the previous one (w:sectPr/w:type).</summary>
     public SectionBreakKind BreakKind { get; set; } = breakKind;
+
+    /// <summary>
+    /// This section's own header/footer set (default/even/first). Each section owns an independent instance
+    /// so multi-section documents keep page-specific headers/footers distinct per section.
+    /// </summary>
+    public SectionHeadersFooters HeadersFooters { get; set; } = new();
 }
 
 /// <summary>
@@ -1032,38 +1080,98 @@ public sealed class TextDocument
                     sections.Add(sectionBreak);
             // The trailing section is always the body-level page settings (the final w:sectPr). Its break
             // kind is not meaningful (Word ignores w:type on the last section), so report it as NextPage.
-            sections.Add(new Section(Page, SectionBreakKind.NextPage));
+            // Its header/footer set is the stable document-level instance, so the document-level Header /
+            // Footer / … views (below) and this final section share one instance.
+            sections.Add(new Section(Page, SectionBreakKind.NextPage)
+            {
+                HeadersFooters = FinalSectionHeadersFooters
+            });
             return sections;
         }
     }
 
     /// <summary>
-    /// The default page header (top margin), or null when the document has no header. Maps to a
-    /// word/header1.xml part referenced from w:sectPr via w:headerReference w:type="default".
+    /// The final (or only) section's header/footer set — the body-level w:sectPr's header/footer
+    /// references. The document-level <see cref="Header"/> / <see cref="Footer"/> / <see cref="EvenHeader"/>
+    /// / <see cref="EvenFooter"/> / <see cref="FirstHeader"/> / <see cref="FirstFooter"/> are a view onto
+    /// this instance, so a single-section document's headers/footers live here and existing callers are
+    /// unaffected. Non-final sections carry their own instance on their <see cref="Section.HeadersFooters"/>.
     /// </summary>
-    public HeaderFooter? Header { get; set; }
+    public SectionHeadersFooters FinalSectionHeadersFooters { get; } = new();
 
     /// <summary>
-    /// The default page footer (bottom margin), or null when the document has no footer. Maps to a
-    /// word/footer1.xml part referenced from w:sectPr via w:footerReference w:type="default".
+    /// The default page header (top margin), or null when the document has no header. A view onto the
+    /// final section's <see cref="FinalSectionHeadersFooters"/>. Maps to a word/headerN.xml part referenced
+    /// from the body-level w:sectPr via w:headerReference w:type="default".
     /// </summary>
-    public HeaderFooter? Footer { get; set; }
+    public HeaderFooter? Header
+    {
+        get => FinalSectionHeadersFooters.Header;
+        set => FinalSectionHeadersFooters.Header = value;
+    }
 
     /// <summary>
-    /// The even-page header, or null when the document has none. Only meaningful when
+    /// The default page footer (bottom margin), or null when the document has no footer. A view onto the
+    /// final section's <see cref="FinalSectionHeadersFooters"/>. Maps to a word/footerN.xml part referenced
+    /// from the body-level w:sectPr via w:footerReference w:type="default".
+    /// </summary>
+    public HeaderFooter? Footer
+    {
+        get => FinalSectionHeadersFooters.Footer;
+        set => FinalSectionHeadersFooters.Footer = value;
+    }
+
+    /// <summary>
+    /// The even-page header, or null when the document has none. A view onto the final section's
+    /// <see cref="FinalSectionHeadersFooters"/>. Only meaningful when
     /// <see cref="PageSettings.DifferentOddEvenPages"/> is set (the default <see cref="Header"/> then
-    /// applies to odd pages). Maps to a word/header2.xml part referenced from w:sectPr via
+    /// applies to odd pages). Maps to a word/headerN.xml part referenced from w:sectPr via
     /// w:headerReference w:type="even". Mirrors <see cref="Header"/>.
     /// </summary>
-    public HeaderFooter? EvenHeader { get; set; }
+    public HeaderFooter? EvenHeader
+    {
+        get => FinalSectionHeadersFooters.EvenHeader;
+        set => FinalSectionHeadersFooters.EvenHeader = value;
+    }
 
     /// <summary>
-    /// The even-page footer, or null when the document has none. Only meaningful when
+    /// The even-page footer, or null when the document has none. A view onto the final section's
+    /// <see cref="FinalSectionHeadersFooters"/>. Only meaningful when
     /// <see cref="PageSettings.DifferentOddEvenPages"/> is set (the default <see cref="Footer"/> then
-    /// applies to odd pages). Maps to a word/footer2.xml part referenced from w:sectPr via
+    /// applies to odd pages). Maps to a word/footerN.xml part referenced from w:sectPr via
     /// w:footerReference w:type="even". Mirrors <see cref="Footer"/>.
     /// </summary>
-    public HeaderFooter? EvenFooter { get; set; }
+    public HeaderFooter? EvenFooter
+    {
+        get => FinalSectionHeadersFooters.EvenFooter;
+        set => FinalSectionHeadersFooters.EvenFooter = value;
+    }
+
+    /// <summary>
+    /// The first-page header, or null when the document has none. A view onto the final section's
+    /// <see cref="FinalSectionHeadersFooters"/>. Only meaningful when
+    /// <see cref="PageSettings.DifferentFirstPage"/> is set (the default <see cref="Header"/> then applies
+    /// to the remaining pages). Maps to a word/headerN.xml part referenced from w:sectPr via
+    /// w:headerReference w:type="first". Mirrors <see cref="Header"/>.
+    /// </summary>
+    public HeaderFooter? FirstHeader
+    {
+        get => FinalSectionHeadersFooters.FirstHeader;
+        set => FinalSectionHeadersFooters.FirstHeader = value;
+    }
+
+    /// <summary>
+    /// The first-page footer, or null when the document has none. A view onto the final section's
+    /// <see cref="FinalSectionHeadersFooters"/>. Only meaningful when
+    /// <see cref="PageSettings.DifferentFirstPage"/> is set (the default <see cref="Footer"/> then applies
+    /// to the remaining pages). Maps to a word/footerN.xml part referenced from w:sectPr via
+    /// w:footerReference w:type="first". Mirrors <see cref="Footer"/>.
+    /// </summary>
+    public HeaderFooter? FirstFooter
+    {
+        get => FinalSectionHeadersFooters.FirstFooter;
+        set => FinalSectionHeadersFooters.FirstFooter = value;
+    }
 
     /// <summary>Document-level metadata (maps to docProps/core.xml).</summary>
     public DocumentProperties Properties { get; } = new();
