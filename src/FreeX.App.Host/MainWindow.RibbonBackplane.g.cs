@@ -11,10 +11,8 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     private readonly System.Windows.Controls.StackPanel HomeRibbonPanel = new();
-    private readonly System.Windows.Controls.ContextMenu FormatTableGalleryMenu = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatCropMenuItem = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatResetCropMenuItem = new();
-    private readonly System.Windows.Controls.ContextMenu TableDesignStyleGalleryMenu = new();
 
     /// <summary>Backplane controls that carry a ribbon CommandName, keyed by it.</summary>
     private readonly Dictionary<string, Control> RibbonBackplaneControls = new(System.StringComparer.Ordinal);
@@ -47,7 +45,6 @@ public partial class MainWindow
         // Number Format combo is driven through the rendered declarative combo as well; keep only the
         // x:Name mapping for FindName resolution.
         RibbonBackplaneControlNames["Number Format"] = "NumberFormatBox";
-        try { RegisterName("FormatTableGalleryMenu", FormatTableGalleryMenu); } catch (System.ArgumentException) { }
         RibbonBackplaneControlNames["Shapes"] = "ShapesBtn";
         // Page Layout Scale-to-Fit combos are driven through the rendered declarative combos
         // (populated + wired by PopulateAndWireRenderedPageLayoutCombos); only the x:Name mapping
@@ -104,7 +101,6 @@ public partial class MainWindow
         RibbonBackplaneControlNames["Banded Rows"] = "TableDesignBandedRowsBtn";
         RibbonBackplaneControlNames["Banded Columns"] = "TableDesignBandedColumnsBtn";
         RibbonBackplaneControlNames["Filter Button"] = "TableDesignFilterButtonBtn";
-        try { RegisterName("TableDesignStyleGalleryMenu", TableDesignStyleGalleryMenu); } catch (System.ArgumentException) { }
         RibbonBackplaneControlNames["Help Online"] = "HelpOnlineButton";
     }
 }

@@ -76,6 +76,12 @@ public partial class MainWindow
             // The Insert Shapes gallery menu is built imperatively (InitializeInsertShapeGalleryContextMenu)
             // before the ribbon exists, so attach it to the now-rendered "Shapes" button here.
             AttachInsertShapeGalleryContextMenu();
+            // The Format as Table / Table Styles galleries are likewise populated imperatively
+            // (PopulateFormatTableGalleryMenu / PopulateTableDesignStyleGalleryMenu, which may run before
+            // the ribbon exists), so attach them to the now-rendered gallery buttons; their click handlers
+            // (FormatTableBtn_Click / TableDesignStylesBtn_Click) open the attached menu.
+            AttachFormatTableGalleryContextMenu();
+            AttachTableDesignStyleGalleryContextMenu();
             RepointBackplaneNamesToRenderedControls(renderedByName);
             WireRenderedMenuOpenedHandlers(renderedByName);
             PopulateAndWireRenderedHomeCombos(renderedByName);
@@ -246,6 +252,11 @@ public partial class MainWindow
     /// ribbon has been built.</summary>
     private Control? FindRenderedRibbonControl(string commandName) =>
         _renderedRibbonControls.TryGetValue(commandName, out var control) ? control : null;
+
+    /// <summary>Test hook: returns the visible rendered ribbon control for a command name (e.g. a
+    /// gallery button) so functional tests can assert its attached context menu.</summary>
+    internal Control? FindRenderedRibbonCommandControlForTest(string commandName) =>
+        FindRenderedRibbonControl(commandName);
 
     /// <summary>
     /// Shares imperatively-built context menus from the legacy backplane buttons onto the rendered
