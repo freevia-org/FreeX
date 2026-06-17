@@ -146,10 +146,14 @@ public static class DocxWriter
             WriteBinaryPart(archive, "word/embeddings/" + embedded.FileName, embedded.EmbeddedObject.Payload);
         foreach (var smartArt in smartArts)
         {
-            WritePart(archive, "word/diagrams/" + smartArt.DataFileName, BuildDiagramData(smartArt.SmartArt));
+            // F2: the data part carries a dgm:dataModelExt pointing (via DrawingRelationshipId) at the
+            // rendered-geometry drawing part, whose relationship is declared in the data part's own .rels.
+            WritePart(archive, "word/diagrams/" + smartArt.DataFileName, BuildDiagramData(smartArt.SmartArt, smartArt.DrawingRelationshipId));
+            WritePart(archive, "word/diagrams/_rels/" + smartArt.DataFileName + ".rels", BuildDiagramDataRels(smartArt));
             WritePart(archive, "word/diagrams/" + smartArt.LayoutFileName, BuildDiagramLayout(smartArt.SmartArt.Kind));
             WritePart(archive, "word/diagrams/" + smartArt.QuickStyleFileName, BuildDiagramQuickStyle());
             WritePart(archive, "word/diagrams/" + smartArt.ColorsFileName, BuildDiagramColors());
+            WritePart(archive, "word/diagrams/" + smartArt.DrawingFileName, BuildDiagramDrawing(smartArt.SmartArt));
         }
     }
 
@@ -223,6 +227,10 @@ public static class DocxWriter
     /// (relative to <c>word/diagrams/</c>) plus a unique drawing id. The diagram is four separate XML parts
     /// — data (the node text/structure), layout, quickStyle and colors — referenced together from the run
     /// drawing's <c>dgm:relIds</c>. Mirrors <see cref="ChartPart"/>.
+    /// F2: a FIFTH part — the rendered-geometry drawing (<c>drawingN.xml</c>, dsp:drawing) — is also emitted.
+    /// It is referenced from the DATA part (not the run drawing) via <see cref="DrawingRelationshipId"/> in
+    /// <c>word/diagrams/_rels/dataN.xml.rels</c> plus a <c>dgm:dataModelExt</c> inside the data part, so a
+    /// viewer can show positioned shapes without re-running SmartArt auto-layout.
     /// </summary>
     private sealed record SmartArtPart(
         SmartArt SmartArt,
@@ -234,6 +242,8 @@ public static class DocxWriter
         string LayoutFileName,
         string QuickStyleFileName,
         string ColorsFileName,
+        string DrawingRelationshipId,
+        string DrawingFileName,
         uint DrawingId);
 
     private static List<SmartArtPart> CollectSmartArts(TextDocument document)
@@ -254,6 +264,10 @@ public static class DocxWriter
                         $"layout{index}.xml",
                         $"quickStyle{index}.xml",
                         $"colors{index}.xml",
+                        // The drawing rel is data-part-relative (lives in word/diagrams/_rels/dataN.xml.rels),
+                        // so a plain "rId1" is fine and clash-free per data part.
+                        "rId1",
+                        $"drawing{index}.xml",
                         (uint)index));
                 }
         return smartArts;
@@ -381,7 +395,8 @@ public static class DocxWriter
             charts.Select(chart => new XElement(Ct + "Override",
                 new XAttribute("PartName", "/word/charts/" + chart.FileName),
                 new XAttribute("ContentType", ChartContentType))),
-            // Four Overrides per SmartArt diagram declare the data / layout / quickStyle / colors content types.
+            // Five Overrides per SmartArt diagram declare the data / layout / quickStyle / colors content
+            // types plus (F2) the rendered-geometry drawing part's content type.
             smartArts.SelectMany(s => new[]
             {
                 new XElement(Ct + "Override",
@@ -395,7 +410,10 @@ public static class DocxWriter
                     new XAttribute("ContentType", DiagramStyleContentType)),
                 new XElement(Ct + "Override",
                     new XAttribute("PartName", "/word/diagrams/" + s.ColorsFileName),
-                    new XAttribute("ContentType", DiagramColorsContentType))
+                    new XAttribute("ContentType", DiagramColorsContentType)),
+                new XElement(Ct + "Override",
+                    new XAttribute("PartName", "/word/diagrams/" + s.DrawingFileName),
+                    new XAttribute("ContentType", DiagramDrawingContentType))
             })));
 
     private static XDocument BuildPackageRels(bool hasWatermark) => new(
@@ -1885,10 +1903,12 @@ public static class DocxWriter
     /// model node (each carrying its text in a dgm:t/a:p/a:r/a:t body), plus a dgm:cxnLst whose parOf
     /// connections record the parent→child structure (used to recover the Hierarchy tree on read). Node ids
     /// are deterministic ("node0", "node1", …) in a stable pre-order walk so write/read agree.
-    /// SIMPLIFICATION (Y1): no presentation-layer points (type="pres") or dsp:dataModelExt rendered geometry
-    /// are emitted — Word re-runs auto-layout on open. The node text + structure here is the round-trip unit.
+    /// SIMPLIFICATION (Y1): no presentation-layer points (type="pres") are emitted. F2 adds a
+    /// <c>dgm:dataModelExt</c> at the end of the data model referencing (via <paramref name="drawingRelId"/>)
+    /// the rendered-geometry drawing part, so a viewer can show positioned shapes without re-running
+    /// auto-layout. The node text + structure here remains the round-trip unit (the reader ignores the ext).
     /// </summary>
-    private static XDocument BuildDiagramData(SmartArt smartArt)
+    private static XDocument BuildDiagramData(SmartArt smartArt, string drawingRelId)
     {
         const string docId = "doc0";
         var ptLst = new XElement(Dgm + "ptLst",
@@ -1931,7 +1951,104 @@ public static class DocxWriter
                 ptLst,
                 cxnLst,
                 new XElement(Dgm + "bg"),
-                new XElement(Dgm + "whole")));
+                new XElement(Dgm + "whole"),
+                // F2: point the data model at the rendered-geometry drawing part. The reader reads only
+                // ptLst/cxnLst, so this trailing ext is ignored gracefully on round-trip.
+                new XElement(Dgm + "dataModelExt",
+                    new XAttribute("relId", drawingRelId),
+                    new XAttribute("minVer", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))));
+    }
+
+    /// <summary>
+    /// Builds the SmartArt DATA part's relationships (word/diagrams/_rels/dataN.xml.rels). F2: a single
+    /// diagramDrawing relationship from the data part to its rendered-geometry drawing part (drawingN.xml),
+    /// which the data part's dgm:dataModelExt/@relId references. Targets are data-part-relative.
+    /// </summary>
+    private static XDocument BuildDiagramDataRels(SmartArtPart part) => new(
+        new XElement(Rel + "Relationships",
+            new XElement(Rel + "Relationship",
+                new XAttribute("Id", part.DrawingRelationshipId),
+                new XAttribute("Type", DiagramDrawingRelType),
+                new XAttribute("Target", part.DrawingFileName))));
+
+    /// <summary>
+    /// Builds the SmartArt rendered-geometry part (word/diagrams/drawingN.xml — dsp:drawing). F2: computes a
+    /// SIMPLE deterministic layout in EMU keyed off the diagram kind and emits one dsp:sp per node, each
+    /// carrying its text (dsp:txBody/a:p/a:r/a:t) and an a:xfrm (a:off x/y + a:ext cx/cy), all inside one
+    /// dsp:spTree. The layout is heuristic (fixed box size + spacing): List = vertical stack, Process =
+    /// horizontal row, Hierarchy = root row centered over a row of descendants. This is presentation only —
+    /// the model reconstructs from the data part, so the geometry is never read back.
+    /// </summary>
+    private static XDocument BuildDiagramDrawing(SmartArt smartArt)
+    {
+        // Flatten the node tree in pre-order so every node (incl. nested Hierarchy children) gets a shape.
+        var nodes = new List<(SmartArtNode Node, int Depth)>();
+        void Flatten(SmartArtNode node, int depth)
+        {
+            nodes.Add((node, depth));
+            foreach (var child in node.Children)
+                Flatten(child, depth + 1);
+        }
+        foreach (var node in smartArt.Nodes)
+            Flatten(node, 0);
+
+        // Fixed heuristic box geometry (EMU). 1 in = 914400 EMU.
+        const long boxW = 1828800;  // 2.0 in
+        const long boxH = 685800;   // 0.75 in
+        const long gap = 228600;    // 0.25 in
+
+        var spTree = new XElement(Dsp + "spTree");
+
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            var (node, depth) = nodes[i];
+            long x, y;
+            switch (smartArt.Kind)
+            {
+                case SmartArtKind.Process:
+                    // Horizontal row of boxes (with a gap acting as the arrow space between steps).
+                    x = i * (boxW + gap);
+                    y = 0;
+                    break;
+                case SmartArtKind.Hierarchy:
+                    // Simple top-down tree: indent by depth (x) and stack by emission order (y) so children
+                    // sit below and to the right of their parent — deterministic and never overlapping.
+                    x = depth * (boxW + gap);
+                    y = i * (boxH + gap);
+                    break;
+                default: // List: vertical stack of boxes.
+                    x = 0;
+                    y = i * (boxH + gap);
+                    break;
+            }
+
+            spTree.Add(new XElement(Dsp + "sp",
+                new XElement(Dsp + "nvSpPr",
+                    new XElement(Dsp + "cNvPr",
+                        new XAttribute("id", i),
+                        new XAttribute("name", $"Node {i}")),
+                    new XElement(Dsp + "cNvSpPr"),
+                    new XElement(Dsp + "nvPr")),
+                new XElement(Dsp + "spPr",
+                    new XElement(A + "xfrm",
+                        new XElement(A + "off", new XAttribute("x", x), new XAttribute("y", y)),
+                        new XElement(A + "ext", new XAttribute("cx", boxW), new XAttribute("cy", boxH))),
+                    new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
+                        new XElement(A + "avLst"))),
+                new XElement(Dsp + "txBody",
+                    new XElement(A + "bodyPr"),
+                    new XElement(A + "lstStyle"),
+                    new XElement(A + "p",
+                        new XElement(A + "r",
+                            new XElement(A + "t", node.Text))))));
+        }
+
+        return new XDocument(
+            new XElement(Dsp + "drawing",
+                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                spTree));
     }
 
     /// <summary>
