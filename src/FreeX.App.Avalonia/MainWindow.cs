@@ -2990,58 +2990,60 @@ public sealed partial class MainWindow : Window
         var stroke = Brush(drawingObject.OutlineColor ?? new CellColor(0x2F, 0x55, 0x97));
         var w = Math.Max(1, width);
         var h = Math.Max(1, height);
-        Control visual;
-        switch (drawingObject.ShapeKind)
+        Control visual = drawingObject.ShapeKind switch
         {
-            case DrawingShapeKind.Ellipse:
-                visual = new AvaloniaEllipse
-                {
-                    Width = w,
-                    Height = h,
-                    Fill = fill,
-                    Stroke = stroke,
-                    StrokeThickness = 1.5,
-                    IsHitTestVisible = false,
-                };
-                break;
-            case DrawingShapeKind.Line:
-                visual = CreateDrawingLineVisual(stroke, width);
-                break;
-            default:
-                if (drawingObject.ShapeKind is { } shapeKind &&
-                    AvaloniaDrawingShapeGeometryFactory.CreateGeometry(shapeKind, w, h) is { } geometry)
-                {
-                    visual = new global::Avalonia.Controls.Shapes.Path
-                    {
-                        Data = geometry,
-                        // Geometry is authored inside a (0,0,w,h) box, so render it 1:1.
-                        Stretch = Stretch.None,
-                        Width = w,
-                        Height = h,
-                        Fill = fill,
-                        Stroke = stroke,
-                        StrokeThickness = 1.5,
-                        IsHitTestVisible = false,
-                    };
-                }
-                else
-                {
-                    visual = new AvaloniaRectangle
-                    {
-                        Width = w,
-                        Height = h,
-                        Fill = fill,
-                        Stroke = stroke,
-                        StrokeThickness = 1.5,
-                        IsHitTestVisible = false,
-                    };
-                }
-
-                break;
-        }
+            DrawingShapeKind.Ellipse => new AvaloniaEllipse
+            {
+                Width = w,
+                Height = h,
+                Fill = fill,
+                Stroke = stroke,
+                StrokeThickness = 1.5,
+                IsHitTestVisible = false,
+            },
+            DrawingShapeKind.Line => CreateDrawingLineVisual(stroke, width),
+            _ => CreateDrawingShapeGeometryVisual(drawingObject.ShapeKind, fill, stroke, w, h),
+        };
 
         ApplyDrawingObjectEffect(visual, drawingObject.Effect);
         return visual;
+    }
+
+    // Non-ellipse/line shapes: render the true preset outline via the geometry factory when available,
+    // falling back to a plain rectangle for kinds the factory does not cover.
+    private static Control CreateDrawingShapeGeometryVisual(
+        DrawingShapeKind? shapeKind,
+        IBrush fill,
+        IBrush stroke,
+        double w,
+        double h)
+    {
+        if (shapeKind is { } kind &&
+            AvaloniaDrawingShapeGeometryFactory.CreateGeometry(kind, w, h) is { } geometry)
+        {
+            return new global::Avalonia.Controls.Shapes.Path
+            {
+                Data = geometry,
+                // Geometry is authored inside a (0,0,w,h) box, so render it 1:1.
+                Stretch = Stretch.None,
+                Width = w,
+                Height = h,
+                Fill = fill,
+                Stroke = stroke,
+                StrokeThickness = 1.5,
+                IsHitTestVisible = false,
+            };
+        }
+
+        return new AvaloniaRectangle
+        {
+            Width = w,
+            Height = h,
+            Fill = fill,
+            Stroke = stroke,
+            StrokeThickness = 1.5,
+            IsHitTestVisible = false,
+        };
     }
 
     // Approximates the authored shape effect (shadow / glow / soft-edges / bevel / reflection / 3-D)

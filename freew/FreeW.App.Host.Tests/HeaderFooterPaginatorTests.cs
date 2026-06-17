@@ -74,4 +74,29 @@ public sealed class HeaderFooterPaginatorTests
 
         Assert.Null(ex);
     }
+
+    [StaFact]
+    public void SinglePageWithFootnote_DrawsNoteBodyAtFoot()
+    {
+        var model = TextDocument.CreateEmpty();
+        var footnote = new Footnote(1);
+        footnote.Content.Add(new Paragraph("the footnote body"));
+        model.Footnotes[1] = footnote;
+
+        var flow = new FlowDocument();
+        flow.Blocks.Add(new System.Windows.Documents.Paragraph(
+            new System.Windows.Documents.Run("body with a note")));
+        var inner = ((IDocumentPaginatorSource)flow).DocumentPaginator;
+        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(model.Page);
+        inner.PageSize = new Size(pageWidth, pageHeight);
+
+        var paginator = new HeaderFooterPaginator(inner, model, model.Page, lineHeightDip: 16);
+        paginator.ComputePageCount();
+        var page = paginator.GetPage(0);
+
+        // With a footnote on a single page the paginator wraps the base page and composites the note
+        // visual, rather than returning the bare base page (the no-overlay early-return).
+        var container = Assert.IsType<System.Windows.Media.ContainerVisual>(page.Visual);
+        Assert.True(container.Children.Count >= 2);
+    }
 }

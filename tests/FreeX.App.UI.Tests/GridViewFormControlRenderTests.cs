@@ -135,21 +135,79 @@ public sealed class GridViewFormControlRenderTests
     }
 
     [Fact]
-    public void NonRenderableControl_DrawsNothing()
+    public void DropDownControl_RendersBoxAndArrowChrome()
     {
         WpfTestThread.Run(() =>
         {
             var grid = CreateGrid(new FormControlModel
             {
-                Kind = FormControlKind.Button,
-                Name = "Click me",
+                Kind = FormControlKind.DropDown,
+                Name = "Drop Down 1",
+                SelectedIndex = 2,
                 Anchor = Anchor(1, 1, 1, 3)
             });
 
             var bitmap = RenderToBitmap(grid);
 
             CountNonWhitePixels(bitmap, new Int32Rect(0, 0, 240, 24))
-                .Should().Be(0, "buttons are out of scope for static chrome and should not be drawn");
+                .Should().BeGreaterThan(30, "a dropdown should draw a bordered box and a grey drop-down button with a down-arrow");
+        });
+    }
+
+    [Fact]
+    public void ButtonControl_RendersRaisedFaceChrome()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var grid = CreateGrid(new FormControlModel
+            {
+                Kind = FormControlKind.Button,
+                Caption = "Click me",
+                Anchor = Anchor(1, 1, 1, 3)
+            });
+
+            var bitmap = RenderToBitmap(grid);
+
+            CountNonWhitePixels(bitmap, new Int32Rect(0, 0, 240, 24))
+                .Should().BeGreaterThan(50, "a button should draw a 3-D raised face and its centered caption");
+        });
+    }
+
+    [Fact]
+    public void ListBoxControl_RendersBorderedWell()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var grid = CreateGrid(new FormControlModel
+            {
+                Kind = FormControlKind.ListBox,
+                Name = "List Box 1",
+                Anchor = Anchor(3, 1, 4, 3)
+            });
+
+            var bitmap = RenderToBitmap(grid);
+
+            CountNonWhitePixels(bitmap, new Int32Rect(0, 48, 240, 48))
+                .Should().BeGreaterThan(30, "a list box should draw a bordered white well");
+        });
+    }
+
+    [Fact]
+    public void UnknownControl_DrawsNothing()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var grid = CreateGrid(new FormControlModel
+            {
+                Kind = FormControlKind.Unknown,
+                Name = "Mystery",
+                Anchor = Anchor(1, 1, 1, 3)
+            });
+
+            var bitmap = RenderToBitmap(grid);
+
+            CountNonWhitePixels(bitmap, new Int32Rect(0, 0, 240, 24))
+                .Should().Be(0, "unknown controls have no modeled appearance and should not be drawn");
         });
     }
 }
