@@ -88,7 +88,7 @@ public static partial class ChartRenderer
         var categories = new List<string>(chart.FirstColIsCategories ? dataPointCapacity : 0);
         if (chart.FirstColIsCategories)
             for (uint r = dataStartRow; r <= endRow; r++)
-                categories.Add(cellLookup.TryGetValue((r, startCol), out var c) ? c.DisplayText : "");
+                categories.Add(cellLookup.TryGetValue((r, startCol), out var c) ? FormatCategoryLabel(chart, c) : "");
 
         var model = new PlotModel { Title = chart.Title };
         model.DefaultColors = BuildExcelSeriesPalette(theme);
@@ -154,6 +154,9 @@ public static partial class ChartRenderer
             }
             model.Series.Add(pieSeries);
             AddPieDataLabelAnnotations(model, chart, theme, pieSeriesName, pieLabelPoints);
+            // OxyPlot 2.x PieSeries does not surface per-slice legend entries, so draw a custom
+            // legend (color swatch + category label per slice) to match Excel's pie legend.
+            AddPieLegendAnnotations(model, chart, theme, pieSeries);
             return model;
         }
 
@@ -237,7 +240,10 @@ public static partial class ChartRenderer
             if (ShouldSkipScatterXColumn(chart, col, dataStartCol))
                 continue;
 
-            var seriesIndex = GetSeriesIndex(chart, col, dataStartCol);
+            if (!ShouldRenderColumnAsSeries(chart, col, dataStartCol, endCol))
+                continue;
+
+            var seriesIndex = GetSeriesIndex(chart, col, dataStartCol, endCol);
             string seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((startRow, col), out var hdr)
                 ? hdr.DisplayText : $"Series {seriesIndex + 1}";
 
@@ -697,6 +703,41 @@ public static partial class ChartRenderer
 
         var count = endRow - dataStartRow + 1;
         return count > int.MaxValue ? int.MaxValue : (int)count;
+    }
+
+    /// <summary>
+    /// Formats a category-axis label. When the chart's category axis carries an explicit number
+    /// format (e.g. a date axis with <c>[$-409]d\-mmm;@</c>) and the underlying cell holds a numeric
+    /// or date value, the value is formatted through that code so date-serial categories render as
+    /// Excel shows them (1-Jan) instead of the raw serial (44562). Otherwise the cell's own display
+    /// text is used unchanged.
+    /// </summary>
+    private static string FormatCategoryLabel(ChartModel chart, DisplayCell cell)
+    {
+        var formatCode = chart.XAxisNumberFormatCode;
+        if (string.IsNullOrWhiteSpace(formatCode) ||
+            formatCode.Equals("General", StringComparison.OrdinalIgnoreCase))
+        {
+            return cell.DisplayText;
+        }
+
+        ScalarValue? numericValue = cell.RawValue switch
+        {
+            NumberValue or DateTimeValue => cell.RawValue,
+            _ => null
+        };
+        if (numericValue is null)
+            return cell.DisplayText;
+
+        try
+        {
+            var formatted = FreeX.Core.Formula.NumberFormatter.Format(numericValue, formatCode);
+            return string.IsNullOrEmpty(formatted) ? cell.DisplayText : formatted;
+        }
+        catch
+        {
+            return cell.DisplayText;
+        }
     }
 
     private static bool TryGetChartNumericValue(DisplayCell cell, out double value)

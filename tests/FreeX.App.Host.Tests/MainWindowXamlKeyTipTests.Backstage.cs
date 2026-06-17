@@ -334,17 +334,24 @@ public sealed partial class MainWindowXamlKeyTipTests
         buttons.Should().OnlyContain(markup => markup.Contains("AutomationProperties.Name="));
         buttons.Should().OnlyContain(markup => markup.Contains("AutomationProperties.HelpText="));
 
-        var contextMenuItems = document
-            .Descendants(presentation + "MenuItem")
-            .Where(item => item.Attribute("Click")?.Value is "SsPinItem_Click" or "SsUnpinItem_Click" or "SsRemoveRecentItem_Click")
-            .Select(item => new
+        // The recent/pinned right-click menus are now single-sourced through the neutral
+        // BackstageRecentFileContextMenuPlanner (rendered at runtime via Ss{Recent,Pinned}FileItem_Loaded)
+        // instead of two near-identical XAML ContextMenus. Assert the planner carries the headers/keytips,
+        // stable automation ids, and the RecentFileViewModel automation-text binding paths the XAML used, and
+        // that the file-item buttons wire the runtime builders.
+        var xamlSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        xamlSource.Should().Contain("Loaded=\"SsRecentFileItem_Loaded\"");
+        xamlSource.Should().Contain("Loaded=\"SsPinnedFileItem_Loaded\"");
+
+        var contextMenuItems = BackstageRecentFileContextMenuPlanner.BuildRecentFileCommands()
+            .Concat(BackstageRecentFileContextMenuPlanner.BuildPinnedFileCommands())
+            .Select(command => new
             {
-                Header = LocalizedAttribute(item, "Header"),
-                Click = item.Attribute("Click")?.Value,
-                KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
-                AutomationId = item.Attribute("AutomationProperties.AutomationId")?.Value,
-                AutomationName = LocalizedAttribute(item, "AutomationProperties.Name"),
-                AutomationHelpText = LocalizedAttribute(item, "AutomationProperties.HelpText")
+                Header = UiText.Get(command.ResourceKey),
+                command.KeyTip,
+                AutomationId = command.AutomationId,
+                AutomationNamePath = command.AutomationNamePath,
+                AutomationHelpTextPath = command.AutomationHelpTextPath
             })
             .ToList();
 
@@ -352,8 +359,8 @@ public sealed partial class MainWindowXamlKeyTipTests
         contextMenuItems.Should().Contain(item => item.Header == "Unpin from list" && item.KeyTip == "U");
         contextMenuItems.Should().Contain(item => item.Header == "Remove from list" && item.KeyTip == "R");
         contextMenuItems.Should().OnlyContain(item => !string.IsNullOrWhiteSpace(item.AutomationId));
-        contextMenuItems.Should().OnlyContain(item => !string.IsNullOrWhiteSpace(item.AutomationName));
-        contextMenuItems.Should().OnlyContain(item => !string.IsNullOrWhiteSpace(item.AutomationHelpText));
+        contextMenuItems.Should().OnlyContain(item => !string.IsNullOrWhiteSpace(item.AutomationNamePath));
+        contextMenuItems.Should().OnlyContain(item => !string.IsNullOrWhiteSpace(item.AutomationHelpTextPath));
     }
 
     [Fact]

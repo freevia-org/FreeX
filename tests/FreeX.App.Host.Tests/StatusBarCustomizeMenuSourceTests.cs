@@ -24,9 +24,14 @@ public sealed class StatusBarCustomizeMenuSourceTests
         var gridStatusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.GridStatus.cs"));
         var optionsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeXOptions.cs"));
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var contextMenuSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ContextMenus.cs"));
 
-        xaml.Should().Contain("Opened=\"StatusBarCustomizeMenu_Opened\"");
-        xaml.Should().Contain("Click=\"StatusBarCustomizeMenuItem_Click\"");
+        // The status-bar customize menu is now built at runtime from StatusBarCustomizeContextMenuPlanner and
+        // attached via StatusBarRoot's Loaded handler, replacing the hand-authored XAML ContextMenu. The
+        // Opened/Click handlers and the persisted-option wiring are unchanged.
+        xaml.Should().Contain("Loaded=\"StatusBarRoot_Loaded\"");
+        contextMenuSource.Should().Contain("menu.Opened += StatusBarCustomizeMenu_Opened;");
+        contextMenuSource.Should().Contain("menuItem.Click += StatusBarCustomizeMenuItem_Click;");
         optionsSource.Should().Contain("public bool StatusBarShowCellMode { get; set; } = true;");
         optionsSource.Should().Contain("public bool StatusBarShowNumericalCount { get; set; }");
         optionsSource.Should().Contain("public bool StatusBarShowMinimum { get; set; }");

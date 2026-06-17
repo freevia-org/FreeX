@@ -41,7 +41,10 @@ public static partial class ChartRenderer
         var negativeBases = new double[categories.Count];
         for (uint col = dataStartCol; col <= endCol; col++)
         {
-            var seriesIndex = (int)(col - dataStartCol);
+            if (!ShouldRenderColumnAsSeries(chart, col, dataStartCol, endCol))
+                continue;
+
+            var seriesIndex = GetSeriesIndex(chart, col, dataStartCol, endCol);
             var seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((headerRow, col), out var hdr)
                 ? hdr.DisplayText
                 : $"Series {seriesIndex + 1}";
@@ -127,10 +130,28 @@ public static partial class ChartRenderer
         var negativeBases = new double[categories.Count];
         for (uint col = dataStartCol; col <= endCol; col++)
         {
-            var seriesIndex = (int)(col - dataStartCol);
+            if (!ShouldRenderColumnAsSeries(chart, col, dataStartCol, endCol))
+                continue;
+
+            var seriesIndex = GetSeriesIndex(chart, col, dataStartCol, endCol);
             var seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((headerRow, col), out var hdr)
                 ? hdr.DisplayText
                 : $"Series {seriesIndex + 1}";
+
+            if (IsComboLineSeries(chart, seriesIndex))
+            {
+                var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex, theme);
+                var pointIdx = 0;
+                for (uint row = dataStartRow; row <= endRow; row++, pointIdx++)
+                {
+                    if (!TryGetNumericCell(cellLookup, row, col, out var value) || pointIdx >= categories.Count)
+                        continue;
+                    lineSeries.Points.Add(new DataPoint(value, pointIdx));
+                }
+                model.Series.Add(lineSeries);
+                continue;
+            }
+
             var series = new RectangleBarSeries
             {
                 Title = seriesName,

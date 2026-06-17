@@ -281,6 +281,14 @@ public sealed class ChartModel
     public double? DownBarBorderThickness { get; set; }
     public bool ShowSecondaryAxis { get; set; }
     public List<int> SecondaryAxisSeriesIndexes { get; set; } = [];
+
+    /// <summary>
+    /// Optional explicit series-to-value-column mapping (one entry per chart series, in
+    /// declared idx order). When populated the renderer plots exactly these columns/indices
+    /// instead of scanning every column in <see cref="DataRange"/>. Empty means "use the legacy
+    /// positional column scan". See <see cref="ChartSeriesColumnMapping"/>.
+    /// </summary>
+    public List<ChartSeriesColumnMapping> SeriesColumnMappings { get; set; } = [];
     public List<int> ComboLineSeriesIndexes { get; set; } = [];
     public List<int> ComboScatterSeriesIndexes { get; set; } = [];
     public List<ChartSeriesFormat> SeriesFormats { get; set; } = [];

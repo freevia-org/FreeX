@@ -218,8 +218,10 @@ internal static partial class XlsxChartXmlWriter
         if (!chart.UseComboLineForSecondarySeries || !ChartTypeSupport.SupportsComboLineOverlay(chart) || seriesCount < 2)
             return [];
 
+        // Allow the combo line at series index 0 — Excel routinely emits the <c:lineChart> series
+        // first (e.g. a shaded target-band chart). Mirrors the loader/sanitizer which keep index 0.
         return chart.ComboLineSeriesIndexes
-            .Where(index => index > 0 && index < seriesCount)
+            .Where(index => index >= 0 && index < seriesCount)
             .Distinct()
             .ToHashSet();
     }

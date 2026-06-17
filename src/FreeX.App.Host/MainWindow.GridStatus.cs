@@ -129,22 +129,39 @@ public partial class MainWindow
                 : Visibility.Collapsed);
     }
 
+    // Tracks the runtime-built status-bar customize toggle items by their persisted-option Tag so the menu's
+    // live checked state can be refreshed on open without relying on hand-authored x:Name fields.
+    private readonly Dictionary<string, MenuItem> _statusBarCustomizeMenuItems = new(StringComparer.Ordinal);
+
+    private void RegisterStatusBarCustomizeMenuItem(string optionTag, MenuItem menuItem)
+    {
+        _statusBarCustomizeMenuItems[optionTag] = menuItem;
+    }
+
     private void StatusBarCustomizeMenu_Opened(object sender, RoutedEventArgs e)
     {
-        StatusBarCellModeMenuItem.IsChecked = _options.StatusBarShowCellMode;
-        StatusBarEndModeMenuItem.IsChecked = _options.StatusBarShowEndMode;
-        StatusBarSelectionModeMenuItem.IsChecked = _options.StatusBarShowSelectionMode;
-        StatusBarPageNumberMenuItem.IsChecked = _options.StatusBarShowPageNumber;
-        StatusBarAverageMenuItem.IsChecked = _options.StatusBarShowAverage;
-        StatusBarCountMenuItem.IsChecked = _options.StatusBarShowCount;
-        StatusBarNumericalCountMenuItem.IsChecked = _options.StatusBarShowNumericalCount;
-        StatusBarMinimumMenuItem.IsChecked = _options.StatusBarShowMinimum;
-        StatusBarMaximumMenuItem.IsChecked = _options.StatusBarShowMaximum;
-        StatusBarSumMenuItem.IsChecked = _options.StatusBarShowSum;
-        StatusBarViewShortcutsMenuItem.IsChecked = _options.StatusBarShowViewShortcuts;
-        StatusBarZoomMenuItem.IsChecked = _options.StatusBarShowZoom;
-        StatusBarZoomSliderMenuItem.IsChecked = _options.StatusBarShowZoomSlider;
+        foreach (var (optionTag, menuItem) in _statusBarCustomizeMenuItems)
+            menuItem.IsChecked = GetStatusBarCustomizeOption(optionTag);
     }
+
+    private bool GetStatusBarCustomizeOption(string optionTag) =>
+        optionTag switch
+        {
+            "CellMode" => _options.StatusBarShowCellMode,
+            "EndMode" => _options.StatusBarShowEndMode,
+            "SelectionMode" => _options.StatusBarShowSelectionMode,
+            "PageNumber" => _options.StatusBarShowPageNumber,
+            "Average" => _options.StatusBarShowAverage,
+            "Count" => _options.StatusBarShowCount,
+            "NumericalCount" => _options.StatusBarShowNumericalCount,
+            "Minimum" => _options.StatusBarShowMinimum,
+            "Maximum" => _options.StatusBarShowMaximum,
+            "Sum" => _options.StatusBarShowSum,
+            "ViewShortcuts" => _options.StatusBarShowViewShortcuts,
+            "Zoom" => _options.StatusBarShowZoom,
+            "ZoomSlider" => _options.StatusBarShowZoomSlider,
+            _ => false
+        };
 
     private void StatusBarCustomizeMenuItem_Click(object sender, RoutedEventArgs e)
     {

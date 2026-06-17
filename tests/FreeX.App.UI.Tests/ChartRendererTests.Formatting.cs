@@ -491,6 +491,7 @@ public sealed partial class ChartRendererTests
         {
             Type = ChartType.Doughnut,
             ShowDataLabels = false,
+            ShowLegend = false,
             DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
         };
 
