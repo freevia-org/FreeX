@@ -24,7 +24,8 @@ public sealed class MainWindow : Window
 
     private readonly DocumentView _editor = new();
     private readonly TextBlock _status = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
-    private readonly TextBox _findBox = new() { Width = 220, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBox _findBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private Border? _findBar;
     private ScrollViewer? _scroller;
     private string? _currentPath;
@@ -141,11 +142,25 @@ public sealed class MainWindow : Window
             }
         };
 
+        var replace = new Button { Content = "Replace", Padding = new Thickness(10, 4), Margin = new Thickness(6, 0, 0, 0) };
+        replace.Click += (_, _) => DoReplace();
+        var replaceAll = new Button { Content = "Replace All", Padding = new Thickness(6, 4), Margin = new Thickness(4, 0, 0, 0) };
+        replaceAll.Click += (_, _) => DoReplaceAll();
+
         var row = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(8, 4),
-            Children = { new TextBlock { Text = "Find:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, _findBox, next },
+            Children =
+            {
+                new TextBlock { Text = "Find:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) },
+                _findBox,
+                next,
+                new TextBlock { Text = "Replace:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 6, 0) },
+                _replaceBox,
+                replace,
+                replaceAll,
+            },
         };
         _findBar = new Border
         {
@@ -183,6 +198,25 @@ public sealed class MainWindow : Window
             return;
         if (!_editor.FindNext(query))
             _status.Text = $"No match for \"{query}\".";
+    }
+
+    private void DoReplace()
+    {
+        var query = _findBox.Text;
+        if (string.IsNullOrEmpty(query))
+            return;
+        if (!_editor.ReplaceNext(query, _replaceBox.Text ?? string.Empty))
+            _status.Text = $"No match for \"{query}\".";
+    }
+
+    private void DoReplaceAll()
+    {
+        var query = _findBox.Text;
+        if (string.IsNullOrEmpty(query))
+            return;
+        var n = _editor.ReplaceAll(query, _replaceBox.Text ?? string.Empty);
+        _status.Text = $"Replaced {n} occurrence{(n == 1 ? "" : "s")} of \"{query}\".";
+        UpdateStatus();
     }
 
     private void ScrollCaretIntoView()

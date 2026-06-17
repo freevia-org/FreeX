@@ -103,6 +103,65 @@ public sealed class DocumentView : Control
     /// <summary>Top of the current caret in control coordinates (0 when not resolvable).</summary>
     public double CaretTop => TryGetCaretRect(out var rect) ? rect.Y : 0;
 
+    /// <summary>If the current selection equals <paramref name="query"/>, replace it; then select the next match.</summary>
+    public bool ReplaceNext(string query, string replacement)
+    {
+        if (string.IsNullOrEmpty(query))
+            return false;
+        if (string.Equals(SelectedText, query, StringComparison.OrdinalIgnoreCase))
+            ReplaceSelectionWith(replacement);
+        return FindNext(query);
+    }
+
+    /// <summary>Replace every occurrence of <paramref name="query"/> from the document start. Returns the count.</summary>
+    public int ReplaceAll(string query, string replacement)
+    {
+        if (string.IsNullOrEmpty(query))
+            return 0;
+
+        _caret = new DocPosition(FirstEditableBlock(), 0);
+        _selectionAnchor = _caret;
+        var count = 0;
+        while (count < 10000 && FindNext(query))
+        {
+            ReplaceSelectionWith(replacement);
+            count++;
+        }
+
+        InvalidateVisual();
+        return count;
+    }
+
+    private void ReplaceSelectionWith(string replacement)
+    {
+        if (NormalizedSelection() is not { } sel || sel.Start.Block != sel.End.Block)
+            return;
+        var block = sel.Start.Block;
+        if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
+            return;
+
+        var a = sel.Start.Offset;
+        var b = sel.End.Offset;
+        var existing = ParaCells(p0);
+        var fmt = existing.Count == 0
+            ? RunFormatting.Default
+            : existing[Math.Clamp(a > 0 ? a - 1 : 0, 0, existing.Count - 1)].Fmt;
+
+        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+        {
+            var cells = ParaCells(p);
+            var lo = Math.Clamp(a, 0, cells.Count);
+            var hi = Math.Clamp(b, 0, cells.Count);
+            cells.RemoveRange(lo, Math.Max(0, hi - lo));
+            for (var i = 0; i < replacement.Length; i++)
+                cells.Insert(lo + i, new Cell(replacement[i], fmt));
+            SetRuns(p, cells);
+        }));
+
+        _caret = new DocPosition(block, a + replacement.Length);
+        _selectionAnchor = _caret;
+    }
+
     // ---- Snapshot for the launch smoke ----------------------------------------------------------
 
     public int BlockCount => _doc.Blocks.Count;
