@@ -22,9 +22,6 @@ public partial class MainWindow
     private readonly System.Windows.Controls.ComboBox PageLayoutScaleWidthBox = new();
     private readonly System.Windows.Controls.ComboBox PageLayoutScaleHeightBox = new();
     private readonly System.Windows.Controls.ComboBox PageLayoutScalePercentBox = new();
-    private readonly System.Windows.Controls.Button ProtectSheetButton = new();
-    private readonly System.Windows.Controls.Button ProtectWorkbookButton = new();
-    private readonly System.Windows.Controls.Button AllowEditRangesButton = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatCropMenuItem = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatResetCropMenuItem = new();
     private readonly System.Windows.Controls.ContextMenu TableDesignStyleGalleryMenu = new();
@@ -105,17 +102,8 @@ public partial class MainWindow
         RibbonBackplaneControlNames["Delete Note"] = "ReviewDeleteNoteButton";
         RibbonBackplaneControlNames["Previous Note"] = "ReviewPreviousNoteButton";
         RibbonBackplaneControlNames["Next Note"] = "ReviewNextNoteButton";
-        try { RegisterName("ProtectSheetButton", ProtectSheetButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ProtectSheetButton, "Protect Sheet");
-        RibbonBackplaneControls["Protect Sheet"] = ProtectSheetButton;
         RibbonBackplaneControlNames["Protect Sheet"] = "ProtectSheetButton";
-        try { RegisterName("ProtectWorkbookButton", ProtectWorkbookButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ProtectWorkbookButton, "Protect Workbook");
-        RibbonBackplaneControls["Protect Workbook"] = ProtectWorkbookButton;
         RibbonBackplaneControlNames["Protect Workbook"] = "ProtectWorkbookButton";
-        try { RegisterName("AllowEditRangesButton", AllowEditRangesButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(AllowEditRangesButton, "Allow Users to Edit Ranges");
-        RibbonBackplaneControls["Allow Users to Edit Ranges"] = AllowEditRangesButton;
         RibbonBackplaneControlNames["Allow Users to Edit Ranges"] = "AllowEditRangesButton";
         RibbonBackplaneControlNames["Normal"] = "ViewNormalButton";
         RibbonBackplaneControlNames["Page Break Preview"] = "ViewPageBreakPreviewButton";
