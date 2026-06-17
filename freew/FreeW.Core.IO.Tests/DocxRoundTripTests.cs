@@ -230,6 +230,76 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void TabStops_RoundTrip_WithEachLeaderKind()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("leaders")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops =
+                [
+                    new TabStop(36, TabStopAlignment.Left, TabLeader.Dots),
+                    new TabStop(108, TabStopAlignment.Center, TabLeader.Dashes),
+                    new TabStop(216, TabStopAlignment.Right, TabLeader.Underline),
+                    new TabStop(324, TabStopAlignment.Decimal, TabLeader.None)
+                ]
+            }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        // TabStop is a record, so structural equality covers position + alignment + leader together.
+        formatting.TabStops.Should().Equal(
+            new TabStop(36, TabStopAlignment.Left, TabLeader.Dots),
+            new TabStop(108, TabStopAlignment.Center, TabLeader.Dashes),
+            new TabStop(216, TabStopAlignment.Right, TabLeader.Underline),
+            new TabStop(324, TabStopAlignment.Decimal, TabLeader.None));
+    }
+
+    [Fact]
+    public void TabStops_WithoutLeader_DefaultToNone()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain stop")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops = [new TabStop(180, TabStopAlignment.Right)]
+            }
+        });
+
+        var stop = RoundTrip(doc).Paragraphs.First().Formatting.TabStops.Single();
+
+        stop.Leader.Should().Be(TabLeader.None);
+    }
+
+    [Fact]
+    public void TabStopLeader_EmitsWLeaderAttribute_OnlyWhenSet()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("leaders")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops =
+                [
+                    new TabStop(36, TabStopAlignment.Left, TabLeader.Dots),
+                    new TabStop(108, TabStopAlignment.Left, TabLeader.None)
+                ]
+            }
+        });
+
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var tabs = WriteDocumentXml(doc).Descendants(ns + "tab").ToList();
+
+        tabs.Should().HaveCount(2);
+        tabs[0].Attribute(ns + "leader")!.Value.Should().Be("dot");
+        // A None leader writes no w:leader attribute, so leaderless stops stay byte-identical to before.
+        tabs[1].Attribute(ns + "leader").Should().BeNull();
+    }
+
+    [Fact]
     public void ParagraphBorder_RoundTrips()
     {
         var doc = new TextDocument();
