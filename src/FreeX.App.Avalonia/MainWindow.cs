@@ -427,6 +427,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _insertPieChartMenuItem = new();
     private readonly NativeMenuItem _insertAreaChartMenuItem = new();
     private readonly NativeMenuItem _insertScatterChartMenuItem = new();
+    private readonly NativeMenuItem _insertTableMenuItem = new();
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
@@ -914,6 +915,9 @@ public sealed partial class MainWindow : Window
         _insertScatterChartMenuItem.Header = "Scatter Chart";
         _insertScatterChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Scatter);
 
+        _insertTableMenuItem.Header = "Table...";
+        _insertTableMenuItem.Click += (_, _) => InsertTableFromSelection();
+
         _sortAscendingMenuItem.Header = "Sort A to Z";
         _sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);
 
@@ -1303,6 +1307,8 @@ public sealed partial class MainWindow : Window
         insertMenu.Items.Add(_insertPieChartMenuItem);
         insertMenu.Items.Add(_insertAreaChartMenuItem);
         insertMenu.Items.Add(_insertScatterChartMenuItem);
+        insertMenu.Items.Add(new NativeMenuItemSeparator());
+        insertMenu.Items.Add(_insertTableMenuItem);
 
         var dataMenu = new NativeMenu();
         dataMenu.Items.Add(_sortAscendingMenuItem);
@@ -2111,6 +2117,7 @@ public sealed partial class MainWindow : Window
         _insertPieChartMenuItem.IsEnabled = isIdle;
         _insertAreaChartMenuItem.IsEnabled = isIdle;
         _insertScatterChartMenuItem.IsEnabled = isIdle;
+        _insertTableMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
