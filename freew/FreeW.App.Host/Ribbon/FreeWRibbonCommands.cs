@@ -261,6 +261,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.clear-formatting", new ActionCommand(() => editor.ClearFormatting()));
         registry.Register("freew.drop-cap", new ActionCommand(() => editor.ApplyDropCap()));
 
+        // Home > Font > Change Case: open a small menu to pick a target case (UPPERCASE / lowercase /
+        // Sentence case / Capitalize Each Word / tOGGLE cASE) and recase the selection's text via the
+        // pure ChangeCase helper. The replacement flows through the editor's normal edit/undo path.
+        registry.Register("freew.change-case", new ChangeCaseCommand(editor));
+
         // Home > Paragraph: set line spacing (a multiplier on the default font size) over the selection,
         // and toggle Add/Remove Space Before/After. All route through the view's undo/redo bus.
         registry.Register("freew.line-spacing", new LineSpacingCommand(editor));
@@ -469,6 +474,72 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             editor.ArmFormatPainter();
+        }
+    }
+
+    // Home > Font > Change Case: show a small menu of the five cases and recase the current selection's
+    // text through the editor (pure ChangeCase + undoable selection replacement). A no-op with an empty
+    // selection — the user is told to select text first.
+    private sealed class ChangeCaseCommand(DocumentView editor) : IRibbonCommand
+    {
+        private static readonly (string Label, CaseKind Kind)[] Choices =
+        [
+            ("UPPERCASE", CaseKind.Upper),
+            ("lowercase", CaseKind.Lower),
+            ("Sentence case", CaseKind.Sentence),
+            ("Capitalize Each Word", CaseKind.Capitalize),
+            ("tOGGLE cASE", CaseKind.Toggle),
+        ];
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.Selection.IsEmpty)
+            {
+                MessageBox.Show(Window.GetWindow(editor), "Select some text first, then choose Change Case.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (ShowPicker(Window.GetWindow(editor)) is { } kind)
+            {
+                editor.Focus();
+                editor.ChangeSelectionCase(kind);
+            }
+        }
+
+        private static CaseKind? ShowPicker(Window? owner)
+        {
+            CaseKind? result = null;
+            var window = new Window
+            {
+                Title = "Change Case",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(8), Width = 200 };
+            foreach (var (label, kind) in Choices)
+            {
+                var button = new Button
+                {
+                    Content = label,
+                    Margin = new Thickness(0, 2, 0, 2),
+                    Padding = new Thickness(8, 4, 8, 4),
+                    HorizontalContentAlignment = HorizontalAlignment.Left
+                };
+                button.Click += (_, _) => { result = kind; window.Close(); };
+                panel.Children.Add(button);
+            }
+
+            window.Content = panel;
+            window.ShowDialog();
+            return result;
         }
     }
 

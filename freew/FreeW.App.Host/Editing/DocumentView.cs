@@ -970,6 +970,36 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Change the case of the current selection's text per <paramref name="kind"/> (UPPERCASE, lowercase,
+    /// Sentence case, Capitalize Each Word, or tOGGLE cASE), via the pure <see cref="ChangeCase.Apply"/>
+    /// helper. The transformed text is written straight back over the selection (<c>Selection.Text</c>),
+    /// so it flows through the RichTextBox's own edit/undo path and keeps the run formatting of the
+    /// selection start (WPF behaviour when replacing selection text). No-op when the selection is empty or
+    /// contains no letters to recase. The selection is re-established over the replacement text so the user
+    /// can immediately apply another case.
+    /// </summary>
+    public void ChangeSelectionCase(CaseKind kind)
+    {
+        Focus();
+        var selection = Selection;
+        if (selection.IsEmpty)
+            return;
+
+        var original = selection.Text;
+        if (string.IsNullOrEmpty(original))
+            return;
+
+        var transformed = ChangeCase.Apply(original, kind);
+        if (string.Equals(original, transformed, StringComparison.Ordinal))
+            return; // nothing changed (e.g. already in the target case) — leave the edit/undo stack alone
+
+        // Remember the endpoints so the recased text stays selected after the replacement.
+        var start = selection.Start;
+        selection.Text = transformed;
+        selection.Select(start, selection.End);
+    }
+
+    /// <summary>
     /// Sort the paragraphs spanned by the current selection (or, with a bare caret, the paragraph the
     /// caret sits in) by their text, in place. Tables interleaved in the selected span are left fixed at
     /// their own positions — only the paragraph blocks are reordered among their own slots — so the
