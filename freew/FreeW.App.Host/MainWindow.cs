@@ -1,10 +1,13 @@
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Shapes;
+using System.Windows.Shell;
 using Free.Shared.Ribbon.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
@@ -38,6 +41,9 @@ public sealed class MainWindow : Window
     private ListBox _navList = null!;
     private bool _navPaneVisible;
 
+    // The maximize/restore caption button's glyph, swapped when the window state changes.
+    private Path _maxRestoreGlyph = null!;
+
     // The grey "desk" the Print-Layout page floats on. Frozen so it can back the editor cheaply.
     private static readonly Brush WorkspaceBrush = CreateWorkspaceBrush();
     private Border _workspace = null!;
@@ -53,10 +59,11 @@ public sealed class MainWindow : Window
     private Border _titleBar = null!;
     private UIElement _ribbon = null!;
     private TabControl _ribbonTabs = null!;
-    private StatusBar _status = null!;
-    private StatusBarItem _dataFolderItem = null!;
-    private StatusBarItem _viewSwitchItem = null!;
-    private StatusBarItem _zoomItem = null!;
+    private Border _status = null!;
+    private TextBlock _dataFolderText = null!;
+    private FrameworkElement _dataFolderItem = null!;
+    private FrameworkElement _viewSwitchItem = null!;
+    private FrameworkElement _zoomItem = null!;
     private bool _readMode;
     private bool _navPaneVisibleBeforeReadMode;
     private Thickness _editorMarginBeforeReadMode;
@@ -74,7 +81,48 @@ public sealed class MainWindow : Window
         Height = 720;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
-        var root = new DockPanel();
+        // Custom window chrome: a single integrated title bar with embedded window buttons (like FreeX),
+        // replacing the default OS caption + the separate blue command strip. WindowChrome lets the client
+        // area extend into the caption region while preserving native drag/resize/snap behaviour; the top
+        // 34px act as the draggable caption except where IsHitTestVisibleInChrome is set (the buttons).
+        WindowStyle = WindowStyle.None;
+        ResizeMode = ResizeMode.CanResize;
+        WindowChrome.SetWindowChrome(this, new WindowChrome
+        {
+            CaptionHeight = 34,
+            ResizeBorderThickness = new Thickness(5),
+            CornerRadius = new CornerRadius(0),
+            GlassFrameThickness = new Thickness(0),
+            UseAeroCaptionButtons = false
+        });
+        // Keep maximized content from spilling under the screen edges (WindowChrome quirk).
+        StateChanged += (_, _) => OnWindowStateChanged();
+        SourceInitialized += (_, _) => OnWindowStateChanged();
+
+        // The shared, app-neutral window-chrome styles (flat buttons, caption buttons, status buttons),
+        // ported from FreeX and merged so both apps reuse the same look. App-specific ribbon brushes/styles
+        // still come from FreeWRibbonResources, merged where the ribbon is built.
+        Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("/Free.Shared.Ribbon.Wpf;component/SharedChromeResources.xaml", UriKind.Relative)
+        });
+
+        // Root layout is an explicit 3-row grid so the footer (#3) is unambiguously a full-width row BELOW
+        // the body. Row 0 = window chrome (title bar + ribbon, stacked), row 1 = body (nav pane + workspace,
+        // where the vertical ruler lives), row 2 = status bar. The body's ruler therefore cannot draw over
+        // the footer: they occupy separate grid rows.
+        var root = new Grid();
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // chrome (title + ribbon)
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // body
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // status bar
+
+        var chromeStack = new StackPanel { Orientation = Orientation.Vertical };
+        Grid.SetRow(chromeStack, 0);
+        root.Children.Add(chromeStack);
+
+        var body = new DockPanel { LastChildFill = true };
+        Grid.SetRow(body, 1);
+        root.Children.Add(body);
 
         var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
         _editor = editor;
@@ -95,42 +143,20 @@ public sealed class MainWindow : Window
 
         var titleBar = BuildTitleBar();
         _titleBar = titleBar;
-        DockPanel.SetDock(titleBar, Dock.Top);
-        root.Children.Add(titleBar);
+        chromeStack.Children.Add(titleBar);
 
         var (ribbon, ribbonTabs) = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
         _ribbon = ribbon;
         _ribbonTabs = ribbonTabs;
-        DockPanel.SetDock(ribbon, Dock.Top);
-        root.Children.Add(ribbon);
+        chromeStack.Children.Add(ribbon);
 
-        var status = new StatusBar();
-        _status = status;
-
-        // Word-style left cluster: "Page X of Y" then the live word/character counts.
-        _pageText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
-        status.Items.Add(new StatusBarItem { Content = _pageText });
-        status.Items.Add(new Separator());
-        _sectionText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
-        status.Items.Add(new StatusBarItem { Content = _sectionText });
-        status.Items.Add(new Separator());
-        _countsText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
-        status.Items.Add(new StatusBarItem { Content = _countsText });
-        status.Items.Add(new Separator());
-        _dataFolderItem = new StatusBarItem { Content = $"Data folder: {ResolveDataFolderLabel()}" };
-        status.Items.Add(_dataFolderItem);
-
-        // Word-style right cluster: view-switch buttons (Read Mode / Print Layout) then the zoom control.
-        _viewSwitchItem = new StatusBarItem { HorizontalAlignment = HorizontalAlignment.Right, Content = BuildViewSwitchControl() };
-        status.Items.Add(_viewSwitchItem);
-        _zoomItem = new StatusBarItem { HorizontalAlignment = HorizontalAlignment.Right, Content = BuildZoomControl() };
-        status.Items.Add(_zoomItem);
-        DockPanel.SetDock(status, Dock.Bottom);
+        var status = BuildStatusBar();
+        Grid.SetRow(status, 2);
         root.Children.Add(status);
 
         var navPane = BuildNavPane();
         DockPanel.SetDock(navPane, Dock.Left);
-        root.Children.Add(navPane);
+        body.Children.Add(navPane);
 
         // Grey "workspace" behind the editor so the Print-Layout page reads as a white sheet floating on a
         // desk. The editor sizes/centres itself to the page width in Print-Layout mode (see
@@ -166,7 +192,7 @@ public sealed class MainWindow : Window
             Background = WorkspaceBrush,
             Child = workspaceGrid
         };
-        root.Children.Add(_workspace);
+        body.Children.Add(_workspace);
 
         // Keep the indent/tab markers on the horizontal ruler following the caret/selection.
         editor.SelectionChanged += (_, _) => _hRuler.Refresh();
@@ -224,57 +250,150 @@ public sealed class MainWindow : Window
     // Show the Word-style Backstage (File screen) over the document.
     private void ShowBackstage() => _backstage.Show();
 
+    // The single integrated title bar (#2): the blue command strip IS the window caption. It carries the
+    // app-icon glyph, the File / New / Open / Save / Recent / Properties quick buttons (flat shared style),
+    // the centred document title, and the embedded minimize / maximize-restore / close window buttons.
+    // The empty space between the quick buttons and the window buttons is the WindowChrome drag region.
     private Border BuildTitleBar()
     {
-        static Button FileButton(string label, System.Windows.Input.RoutedUICommand command) => new()
+        var bar = new DockPanel { LastChildFill = true };
+
+        // ── App icon (a small "W" badge), mirroring FreeX's title-bar app icon. ──
+        var appIcon = new Border
         {
-            Content = label,
-            Margin = new Thickness(0, 0, 6, 0),
-            Padding = new Thickness(10, 2, 10, 2),
-            Command = command
+            Width = 22,
+            Height = 22,
+            Margin = new Thickness(2, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = new SolidColorBrush(Color.FromRgb(0x1F, 0x43, 0x77)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(2),
+            Child = new TextBlock
+            {
+                Text = "W",
+                Foreground = Brushes.White,
+                FontFamily = new FontFamily("Segoe UI"),
+                FontWeight = FontWeights.Bold,
+                FontSize = 13,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
         };
+        DockPanel.SetDock(appIcon, Dock.Left);
+        bar.Children.Add(appIcon);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        // ── Window (caption) buttons, docked right. XAML/right-dock order is right-to-left, so add Close
+        //    first, then Maximize/Restore, then Minimize, to get [_] [▢] [X] left-to-right. ──
+        var closeButton = CaptionButton(CloseGlyph(), "Close", isClose: true);
+        closeButton.Click += (_, _) => Close();
+        DockPanel.SetDock(closeButton, Dock.Right);
+        bar.Children.Add(closeButton);
 
-        // The Backstage entry point: opens the full-window Word-style File screen.
-        var fileButton = new Button
+        _maxRestoreGlyph = MaximizeGlyph();
+        var maxRestoreButton = CaptionButton(_maxRestoreGlyph, "Maximize");
+        maxRestoreButton.Click += (_, _) => ToggleMaximizeRestore();
+        DockPanel.SetDock(maxRestoreButton, Dock.Right);
+        bar.Children.Add(maxRestoreButton);
+
+        var minimizeButton = CaptionButton(MinimizeGlyph(), "Minimize");
+        minimizeButton.Click += (_, _) => WindowState = WindowState.Minimized;
+        DockPanel.SetDock(minimizeButton, Dock.Right);
+        bar.Children.Add(minimizeButton);
+
+        // ── Quick command buttons (flat shared style), docked left after the icon. ──
+        Button QuickBtn(string label, Action onClick, bool semiBold = false)
         {
-            Content = "File",
-            Margin = new Thickness(0, 0, 12, 0),
-            Padding = new Thickness(12, 2, 12, 2),
-            FontWeight = FontWeights.SemiBold
-        };
-        fileButton.Click += (_, _) => ShowBackstage();
-        bar.Children.Add(fileButton);
+            var button = new Button
+            {
+                Content = label,
+                Style = (Style)FindResource("ChromeFlatButtonStyle"),
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Margin = new Thickness(0, 4, 2, 4),
+                FontWeight = semiBold ? FontWeights.SemiBold : FontWeights.Normal
+            };
+            WindowChrome.SetIsHitTestVisibleInChrome(button, true);
+            button.Click += (_, _) => onClick();
+            return button;
+        }
 
-        bar.Children.Add(FileButton("New", ApplicationCommands.New));
-        bar.Children.Add(FileButton("Open", ApplicationCommands.Open));
-        bar.Children.Add(FileButton("Save", ApplicationCommands.Save));
-
-        var recentButton = new Button { Content = "Recent ▾", Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(10, 2, 10, 2) };
+        var quickButtons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Stretch };
+        quickButtons.Children.Add(QuickBtn("File", ShowBackstage, semiBold: true));
+        quickButtons.Children.Add(QuickBtn("New", () => _file.New()));
+        quickButtons.Children.Add(QuickBtn("Open", () => _file.Open()));
+        quickButtons.Children.Add(QuickBtn("Save", () => _file.Save()));
+        var recentButton = QuickBtn("Recent ▾", () => { });
         recentButton.Click += (_, _) => ShowRecentMenu(recentButton);
-        bar.Children.Add(recentButton);
+        quickButtons.Children.Add(recentButton);
+        quickButtons.Children.Add(QuickBtn("Properties", OpenProperties));
+        DockPanel.SetDock(quickButtons, Dock.Left);
+        bar.Children.Add(quickButtons);
 
-        var propertiesButton = new Button { Content = "Properties", Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(10, 2, 10, 2) };
-        propertiesButton.Click += (_, _) => OpenProperties();
-        bar.Children.Add(propertiesButton);
-
+        // ── Centred document title fills the remaining (draggable) caption space. ──
         _titleText = new TextBlock
         {
             Foreground = Brushes.White,
-            FontSize = 13,
+            FontSize = 12,
             FontWeight = FontWeights.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(12, 0, 0, 0)
+            TextTrimming = TextTrimming.CharacterEllipsis
         };
         bar.Children.Add(_titleText);
 
         return new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A)),
-            Padding = new Thickness(12, 6, 12, 6),
+            Padding = new Thickness(8, 0, 0, 0),
+            Height = 34,
             Child = bar
         };
+    }
+
+    // A min/max/close caption button carrying a vector glyph, styled by the shared caption styles.
+    private Button CaptionButton(Path glyph, string automationName, bool isClose = false)
+    {
+        var button = new Button
+        {
+            Style = (Style)FindResource(isClose ? "ChromeCaptionCloseButtonStyle" : "ChromeCaptionButtonStyle"),
+            Content = glyph,
+            ToolTip = automationName
+        };
+        AutomationProperties.SetName(button, automationName);
+        return button;
+    }
+
+    private static Path MinimizeGlyph() => CaptionGlyph("M0,5 H10");
+    private static Path MaximizeGlyph() => CaptionGlyph("M0.5,0.5 H9.5 V9.5 H0.5 Z");
+    private static Path CloseGlyph() => CaptionGlyph("M0,0 L10,10 M10,0 L0,10");
+
+    private static Path CaptionGlyph(string data) => new()
+    {
+        Data = Geometry.Parse(data),
+        Stroke = Brushes.White,
+        StrokeThickness = 1,
+        Width = 10,
+        Height = 10,
+        Stretch = Stretch.None,
+        SnapsToDevicePixels = true,
+        HorizontalAlignment = HorizontalAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Center
+    };
+
+    private void ToggleMaximizeRestore()
+        => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    // Keep the maximize/restore glyph in sync, and pad the client area when maximized so WindowChrome
+    // doesn't clip content under the (invisible) resize border off-screen.
+    private void OnWindowStateChanged()
+    {
+        if (_maxRestoreGlyph is not null)
+            _maxRestoreGlyph.Data = WindowState == WindowState.Maximized
+                ? Geometry.Parse("M2.5,0.5 H9.5 V7.5 M0.5,2.5 H7.5 V9.5 H0.5 Z")
+                : Geometry.Parse("M0.5,0.5 H9.5 V9.5 H0.5 Z");
+
+        if (Content is FrameworkElement fe)
+            fe.Margin = WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
     }
 
     private void UpdateTitle()
@@ -320,16 +439,102 @@ public sealed class MainWindow : Window
         _sectionText.Text = $"Section {section} of {sections}";
     }
 
+    // Build the footer (status bar) as a single full-width row that sits BELOW the ruler + document region
+    // (#3): it is docked to the bottom of the outer DockPanel, so the workspace (which contains the vertical
+    // ruler and the page) fills only the space above it and can never draw over it.
+    //
+    // The bar is responsive (#4): a 3-column grid whose middle column ("*") holds the left info group, which
+    // is allowed to condense/ellipsize as the window narrows, while the right-side view + zoom controls are
+    // pinned in Auto columns so they stay fully visible. The whole strip uses the same #2B579A surface as the
+    // title bar with the shared clean (flat, hover-only) footer button styles.
+    private Border BuildStatusBar()
+    {
+        var grid = new Grid { VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // left info (condenses)
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                       // view toggles (pinned)
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                       // zoom (pinned)
+
+        // ── Left info group: Page / Section / Words-Chars-Paragraphs / Data folder. Hosted in a clipping
+        //    StackPanel so when space runs short the rightmost item (data folder) is clipped/ellipsized
+        //    first while the pinned right-side controls keep their full width. ──
+        var left = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
+
+        TextBlock InfoText() => new()
+        {
+            Foreground = Brushes.White,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        UIElement InfoSep() => new Rectangle
+        {
+            Width = 1,
+            Margin = new Thickness(8, 3, 8, 3),
+            Fill = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+
+        _pageText = InfoText();
+        left.Children.Add(_pageText);
+        left.Children.Add(InfoSep());
+        _sectionText = InfoText();
+        left.Children.Add(_sectionText);
+        left.Children.Add(InfoSep());
+        _countsText = InfoText();
+        left.Children.Add(_countsText);
+
+        // The data folder is the lowest-priority item; wrap it so it ellipsizes and is the first to be
+        // clipped when the window narrows (its separator + text live in one panel that can shrink away).
+        var dataFolderPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        dataFolderPanel.Children.Add(InfoSep());
+        _dataFolderText = InfoText();
+        _dataFolderText.Text = $"Data folder: {ResolveDataFolderLabel()}";
+        _dataFolderText.ToolTip = _dataFolderText.Text;
+        dataFolderPanel.Children.Add(_dataFolderText);
+        _dataFolderItem = dataFolderPanel;
+        left.Children.Add(dataFolderPanel);
+
+        var leftHost = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 4, 0), ClipToBounds = true };
+        leftHost.Children.Add(left);
+        Grid.SetColumn(leftHost, 0);
+        grid.Children.Add(leftHost);
+
+        // ── Pinned right-side controls. ──
+        _viewSwitchItem = (FrameworkElement)BuildViewSwitchControl();
+        Grid.SetColumn(_viewSwitchItem, 1);
+        grid.Children.Add(_viewSwitchItem);
+
+        _zoomItem = (FrameworkElement)BuildZoomControl();
+        _zoomItem.Margin = new Thickness(6, 0, 10, 0);
+        Grid.SetColumn(_zoomItem, 2);
+        grid.Children.Add(_zoomItem);
+
+        _status = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A)),
+            MinHeight = 26,
+            Child = grid
+        };
+        return _status;
+    }
+
     // The Word-style view-switch cluster on the right of the status bar: a Read Mode toggle and a Print
     // Layout toggle. They reuse the existing MainWindow toggles (ToggleReadMode / TogglePrintLayout), so the
-    // ribbon View tab and these buttons drive the same state. No new view state is introduced here.
+    // ribbon View tab and these buttons drive the same state. Uses the shared clean footer toggle style.
     private UIElement BuildViewSwitchControl()
     {
         var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 
         Button ViewButton(string label, string tip, Action onClick)
         {
-            var button = new Button { Content = label, Padding = new Thickness(8, 1, 8, 1), Margin = new Thickness(2, 0, 2, 0), ToolTip = tip };
+            var button = new Button
+            {
+                Content = label,
+                Style = (Style)FindResource("ChromeStatusButtonStyle"),
+                Padding = new Thickness(8, 1, 8, 1),
+                Margin = new Thickness(2, 3, 2, 3),
+                ToolTip = tip
+            };
             button.Click += (_, _) => onClick();
             return button;
         }
@@ -536,7 +741,14 @@ public sealed class MainWindow : Window
 
         Button ZoomButton(string label, Action onClick)
         {
-            var button = new Button { Content = label, Width = 22, Padding = new Thickness(0), Margin = new Thickness(2, 0, 2, 0) };
+            var button = new Button
+            {
+                Content = label,
+                Style = (Style)FindResource("ChromeStatusButtonStyle"),
+                Width = 24,
+                Padding = new Thickness(0),
+                Margin = new Thickness(2, 3, 2, 3)
+            };
             button.Click += (_, _) => onClick();
             return button;
         }
@@ -557,6 +769,8 @@ public sealed class MainWindow : Window
 
         _zoomLabel = new TextBlock
         {
+            Foreground = Brushes.White,
+            FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(6, 0, 2, 0),
             MinWidth = 38,
