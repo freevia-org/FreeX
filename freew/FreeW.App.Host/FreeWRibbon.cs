@@ -81,6 +81,8 @@ internal static class FreeWRibbon
                     g.Button("freew.style-normal", "Normal");
                     g.Button("freew.style-heading1", "Heading 1");
                     g.Button("freew.style-title", "Title");
+                    g.Button("freew.new-style", "New Style");
+                    g.Button("freew.manage-styles", "Manage Styles");
                 });
             })
             .Tab("insert", "Insert", "N", tab =>

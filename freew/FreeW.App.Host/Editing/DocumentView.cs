@@ -358,6 +358,18 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Re-render the surface after the document's <see cref="TextDocument.Styles"/> catalog has been
+    /// mutated out-of-band (e.g. a style created/modified/deleted via <see cref="StyleManager"/>), so the
+    /// new run/paragraph formatting resolves for any paragraph referencing the affected style. Commits the
+    /// in-progress edits first, mirroring <see cref="ApplyTheme"/>.
+    /// </summary>
+    public void RefreshStyles()
+    {
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
     /// Insert a table at the caret (after the block the caret sits in, else at the end), routing
     /// through the undo/redo command bus so the insert is reversible. Re-renders the surface.
     /// </summary>
@@ -801,6 +813,21 @@ public sealed class DocumentView : RichTextBox
         {
             if (_model.Blocks[index] is ModelParagraph)
                 _commands.Execute(new SetParagraphStyleCommand(index, styleId));
+        }
+    }
+
+    /// <summary>
+    /// The <see cref="ModelParagraph.StyleId"/> of the paragraph at the caret (the first paragraph in the
+    /// current selection), or null when that paragraph has no explicit style or no paragraph is selected.
+    /// Used by the New Style / Modify Style commands to seed the dialog (based-on / which style to edit).
+    /// </summary>
+    public string? CurrentParagraphStyleId
+    {
+        get
+        {
+            CommitToModel();
+            var index = SelectedModelParagraphIndices().FirstOrDefault(-1);
+            return index >= 0 && _model.Blocks[index] is ModelParagraph paragraph ? paragraph.StyleId : null;
         }
     }
 

@@ -1,0 +1,164 @@
+using System.Text;
+
+namespace FreeW.Core.Model;
+
+/// <summary>
+/// Pure, deterministic create/modify/delete operations over a <see cref="TextDocument"/>'s
+/// <see cref="TextDocument.Styles"/> catalog. These back the editor's New Style / Modify Style /
+/// Manage Styles UI but carry no UI dependency, so they are fully unit-testable. A style added here
+/// round-trips through docx via the existing <c>DocxWriter.BuildStyles</c> — no I/O changes required.
+/// </summary>
+public static class StyleManager
+{
+    /// <summary>
+    /// The built-in style ids that <see cref="DeleteStyle"/> refuses to remove. These are the styles
+    /// seeded by <c>TextDocument.AddBuiltInStyles</c> (Normal, the Heading ranks, Title, Subtitle,
+    /// Quote) plus the helper-seeded Caption / Index / Table-of-Figures styles. Guarding them keeps the
+    /// built-in catalog intact so existing documents and the outline/heading tooling keep resolving.
+    /// </summary>
+    public static readonly IReadOnlySet<string> BuiltInStyleIds = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "Normal",
+        "Heading1", "Heading2", "Heading3", "Heading4", "Heading5", "Heading6",
+        "Title", "Subtitle", "Quote",
+        "Caption",
+        "IndexHeading", "IndexEntry",
+        "TableOfFiguresHeading", "TableOfFigures",
+    };
+
+    /// <summary>True when <paramref name="styleId"/> names a guarded built-in style (see <see cref="BuiltInStyleIds"/>).</summary>
+    public static bool IsBuiltIn(string styleId) =>
+        styleId is not null && BuiltInStyleIds.Contains(styleId);
+
+    /// <summary>
+    /// Create a new custom paragraph style from <paramref name="name"/>, give it a collision-free id
+    /// derived from the name, add it to <paramref name="doc"/>'s catalog, and return it. The id is the
+    /// name with non-alphanumeric characters removed; if that is empty or already taken (by a built-in
+    /// or a previously created style) a numeric suffix (<c>2</c>, <c>3</c>, …) is appended until unique.
+    /// </summary>
+    /// <param name="doc">The document whose <see cref="TextDocument.Styles"/> catalog is extended.</param>
+    /// <param name="name">The human-readable style name (e.g. "My Heading"); trimmed, must be non-empty.</param>
+    /// <param name="basedOnId">
+    /// The id of the style this one inherits from, or null for none. Ignored when it does not name an
+    /// existing style, so a stale based-on never produces a dangling reference in the catalog.
+    /// </param>
+    /// <param name="run">The run (character) formatting carried by the style.</param>
+    /// <param name="para">The paragraph formatting carried by the style.</param>
+    public static DocumentStyle CreateStyle(
+        TextDocument doc,
+        string name,
+        string? basedOnId,
+        RunFormatting run,
+        ParagraphFormatting para)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(para);
+        var trimmed = (name ?? string.Empty).Trim();
+        if (trimmed.Length == 0)
+            throw new ArgumentException("Style name must be non-empty.", nameof(name));
+
+        var id = GenerateUniqueId(doc, trimmed);
+        var basedOn = basedOnId is { Length: > 0 } && doc.Styles.ContainsKey(basedOnId) ? basedOnId : null;
+        var style = new DocumentStyle
+        {
+            Id = id,
+            Name = trimmed,
+            BasedOnStyleId = basedOn,
+            Run = run,
+            Paragraph = para,
+        };
+        doc.Styles[id] = style;
+        return style;
+    }
+
+    /// <summary>
+    /// Update an existing style's mutable formatting (and optionally its name / based-on). Returns the
+    /// style, or null when <paramref name="styleId"/> is not in the catalog. The id is never changed (so
+    /// paragraphs referencing it keep resolving). A <paramref name="basedOnId"/> that does not name an
+    /// existing style (other than clearing it with null) is ignored, preventing dangling references; a
+    /// style is never allowed to base on itself.
+    /// </summary>
+    public static DocumentStyle? ModifyStyle(
+        TextDocument doc,
+        string styleId,
+        RunFormatting? run = null,
+        ParagraphFormatting? para = null,
+        string? name = null,
+        string? basedOnId = null,
+        bool clearBasedOn = false)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        if (styleId is null || !doc.Styles.TryGetValue(styleId, out var existing))
+            return null;
+
+        var newName = existing.Name;
+        if (name is { } candidate)
+        {
+            var trimmed = candidate.Trim();
+            if (trimmed.Length > 0)
+                newName = trimmed;
+        }
+
+        var newBasedOn = existing.BasedOnStyleId;
+        if (clearBasedOn)
+            newBasedOn = null;
+        else if (basedOnId is { Length: > 0 }
+            && !string.Equals(basedOnId, styleId, StringComparison.Ordinal)
+            && doc.Styles.ContainsKey(basedOnId))
+            newBasedOn = basedOnId;
+
+        // DocumentStyle's Id/Name/BasedOn are init-only, so replace the entry rather than mutate it.
+        var updated = new DocumentStyle
+        {
+            Id = existing.Id,
+            Name = newName,
+            Type = existing.Type,
+            BasedOnStyleId = newBasedOn,
+            Run = run ?? existing.Run,
+            Paragraph = para ?? existing.Paragraph,
+        };
+        doc.Styles[styleId] = updated;
+        return updated;
+    }
+
+    /// <summary>
+    /// Remove the custom style <paramref name="styleId"/> from the catalog. Returns false (and removes nothing)
+    /// when the id is a guarded built-in (see <see cref="BuiltInStyleIds"/>) or is not present. Returns
+    /// true when a custom style was removed. Paragraphs still referencing the removed id fall back to the
+    /// document default formatting (an unknown StyleId resolves to nothing), mirroring Word.
+    /// </summary>
+    public static bool DeleteStyle(TextDocument doc, string styleId)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        if (styleId is null || IsBuiltIn(styleId))
+            return false;
+        return doc.Styles.Remove(styleId);
+    }
+
+    // Derive a unique style id from the display name: keep ASCII letters/digits, then disambiguate with a
+    // numeric suffix against the existing catalog (which includes the built-ins). Deterministic.
+    private static string GenerateUniqueId(TextDocument doc, string name)
+    {
+        var sb = new StringBuilder(name.Length);
+        foreach (var ch in name)
+        {
+            if (char.IsAsciiLetterOrDigit(ch))
+                sb.Append(ch);
+        }
+        var baseId = sb.Length > 0 ? sb.ToString() : "Style";
+        // A leading digit is legal as a dictionary key but unusual for a style id; prefix to be safe.
+        if (char.IsAsciiDigit(baseId[0]))
+            baseId = "Style" + baseId;
+
+        if (!doc.Styles.ContainsKey(baseId))
+            return baseId;
+
+        for (var n = 2; ; n++)
+        {
+            var candidate = baseId + n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (!doc.Styles.ContainsKey(candidate))
+                return candidate;
+        }
+    }
+}

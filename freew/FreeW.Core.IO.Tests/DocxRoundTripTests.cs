@@ -61,6 +61,37 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void CustomStyle_CreatedViaStyleManager_RoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+
+        // A custom style created through the pure StyleManager ops round-trips via the existing
+        // styles.xml writer (no docx I/O changes needed) and the paragraph keeps its StyleId.
+        var custom = StyleManager.CreateStyle(
+            doc, "My Callout", basedOnId: "Normal",
+            new RunFormatting { Bold = true, Italic = true, FontSizePt = 13, ColorHex = "#C00000" },
+            new ParagraphFormatting { Alignment = TextAlignment.Center, SpaceBeforePt = 6 });
+
+        doc.Blocks.Add(new Paragraph("Styled body") { StyleId = custom.Id });
+
+        var result = RoundTrip(doc);
+
+        // The custom style survives in the catalog (styles.xml) with its name, based-on chain and run
+        // (character) formatting — the same properties the existing styles writer persists for built-ins.
+        result.Styles.Should().ContainKey(custom.Id);
+        var read = result.Styles[custom.Id];
+        read.Name.Should().Be("My Callout");
+        read.BasedOnStyleId.Should().Be("Normal");
+        read.Run.Bold.Should().BeTrue();
+        read.Run.Italic.Should().BeTrue();
+        read.Run.FontSizePt.Should().Be(13);
+        read.Run.ColorHex.Should().Be("#C00000");
+
+        // The paragraph still references the custom style id after the round-trip.
+        result.Paragraphs.Should().ContainSingle(p => p.StyleId == custom.Id);
+    }
+
+    [Fact]
     public void RunFormatting_RoundTrips()
     {
         var doc = new TextDocument();
