@@ -46,6 +46,14 @@ internal static class Ooxml
     public const string ChartRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
 
     /// <summary>
+    /// The Office 2014 "chartex" extended-chart relationship type (e.g. sunburst / treemap / box-and-whisker /
+    /// waterfall, the chart kinds FreeW does not model). A <c>w:drawing</c> referencing one of these is captured
+    /// verbatim (drawing + chartex part + its <c>_rels</c> + media) rather than dropped — see
+    /// <c>DocxReader.CaptureUnmodelledChartDrawing</c>.
+    /// </summary>
+    public const string ChartExRelType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
+
+    /// <summary>
     /// The OPC content type + relationship type for a chart's embedded companion workbook (the editable-data
     /// xlsx referenced by c:externalData). The "package" relationship type is what Word's "Edit Data" follows
     /// from the chart part's own _rels to reopen the spreadsheet behind the chart.

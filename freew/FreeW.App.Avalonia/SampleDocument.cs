@@ -32,6 +32,54 @@ internal static class SampleDocument
         tip.Runs.Add(new Run(". Undo and redo are wired through the shared command bus.", RunFormatting.Default with { FontSizePt = 12 }));
         doc.Blocks.Add(tip);
 
+        doc.Styles["Heading1"] = new DocumentStyle
+        {
+            Id = "Heading1",
+            Name = "Heading 1",
+            Run = RunFormatting.Default with { Bold = true, FontSizePt = 16, ColorHex = "#2B5797" },
+            Paragraph = ParagraphFormatting.Default with { SpaceBeforePt = 12, SpaceAfterPt = 6 },
+        };
+        var heading = new Paragraph { StyleId = "Heading1" };
+        heading.Runs.Add(new Run("This heading is styled by the document style (resolved at render)."));
+        doc.Blocks.Add(heading);
+
+        AddListItem(doc, "Bullet and numbered lists now render with markers.", ListKind.Bullet);
+        AddListItem(doc, "Open and save Word .docx files.", ListKind.Bullet);
+
+        AddListItem(doc, "Pick a font size from the ribbon.", ListKind.Number);
+        AddListItem(doc, "Toggle bold, italic, underline.", ListKind.Number);
+        AddListItem(doc, "Undo and redo every edit.", ListKind.Number);
+
+        var table = Table.Create(3, 3);
+        table.Formatting = TableFormatting.Default with { HeaderRow = true, BandedRows = true, Borders = true };
+        SetCell(table, 0, 0, "Capability"); SetCell(table, 0, 1, "Windows"); SetCell(table, 0, 2, "Linux");
+        SetCell(table, 1, 0, "Edit + DOCX"); SetCell(table, 1, 1, "Yes"); SetCell(table, 1, 2, "Yes");
+        SetCell(table, 2, 0, "Ribbon"); SetCell(table, 2, 1, "Yes"); SetCell(table, 2, 2, "Yes");
+        doc.Blocks.Add(table);
+
+        var imagePara = new Paragraph { Formatting = ParagraphFormatting.Default with { Alignment = TextAlignment.Center } };
+        imagePara.Runs.Add(Run.FromImage(new InlineImage(SamplePngBytes(), widthPt: 180, heightPt: 54) { AltText = "FreeW sample image" }));
+        doc.Blocks.Add(imagePara);
+
         return doc;
+    }
+
+    // A 1x1 PNG (stretched to the run's point size when drawn). Embedded as bytes so the headless
+    // packaging-smoke path needs no rendering platform; DocumentView decoding is crash-proof and
+    // falls back to a placeholder box if the bytes ever fail to decode.
+    private static byte[] SamplePngBytes() => Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
+    private static void SetCell(Table table, int row, int column, string text) =>
+        table.Rows[row].Cells[column] = new TableCell(text);
+
+    private static void AddListItem(TextDocument doc, string text, ListKind kind)
+    {
+        var paragraph = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = kind, SpaceAfterPt = 2 },
+        };
+        paragraph.Runs.Add(new Run(text, RunFormatting.Default with { FontSizePt = 12 }));
+        doc.Blocks.Add(paragraph);
     }
 }

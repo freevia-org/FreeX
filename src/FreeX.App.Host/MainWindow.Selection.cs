@@ -475,14 +475,7 @@ public partial class MainWindow
 
         if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(e.Key, Keyboard.Modifiers, out var fontToggleShortcut))
         {
-            var button = fontToggleShortcut switch
-            {
-                FontToggleShortcut.Bold => BoldButton,
-                FontToggleShortcut.Italic => ItalicButton,
-                FontToggleShortcut.Strikethrough => StrikeButton,
-                _ => UnderlineButton
-            };
-            ApplyFontToggleShortcut(fontToggleShortcut, button);
+            ApplyFontToggleShortcut(fontToggleShortcut);
             e.Handled = true;
             return;
         }

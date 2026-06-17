@@ -13,10 +13,7 @@ public partial class MainWindow
     private readonly System.Windows.Controls.StackPanel HomeRibbonPanel = new();
     private readonly System.Windows.Controls.ComboBox FontNameBox = new();
     private readonly System.Windows.Controls.ComboBox FontSizeBox = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton BoldButton = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton ItalicButton = new();
     private readonly System.Windows.Controls.Primitives.ToggleButton UnderlineButton = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton StrikeButton = new();
     private readonly System.Windows.Controls.Button BordersMenuButton = new();
     private readonly System.Windows.Controls.Button OrientationPickerButton = new();
     private readonly System.Windows.Controls.ComboBox NumberFormatBox = new();
@@ -43,12 +40,6 @@ public partial class MainWindow
     private readonly System.Windows.Controls.Primitives.ToggleButton SplitViewBtn = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatCropMenuItem = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatResetCropMenuItem = new();
-    private readonly System.Windows.Controls.CheckBox TableDesignTotalRowBtn = new();
-    private readonly System.Windows.Controls.CheckBox TableDesignFirstColumnBtn = new();
-    private readonly System.Windows.Controls.CheckBox TableDesignLastColumnBtn = new();
-    private readonly System.Windows.Controls.CheckBox TableDesignBandedRowsBtn = new();
-    private readonly System.Windows.Controls.CheckBox TableDesignBandedColumnsBtn = new();
-    private readonly System.Windows.Controls.CheckBox TableDesignFilterButtonBtn = new();
     private readonly System.Windows.Controls.ContextMenu TableDesignStyleGalleryMenu = new();
     private readonly AutomationInvokeButton HelpOnlineButton = new();
 
@@ -70,21 +61,12 @@ public partial class MainWindow
         RibbonMetadata.SetCommandName(FontSizeBox, "Font Size");
         RibbonBackplaneControls["Font Size"] = FontSizeBox;
         RibbonBackplaneControlNames["Font Size"] = "FontSizeBox";
-        try { RegisterName("BoldButton", BoldButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(BoldButton, "Bold");
-        RibbonBackplaneControls["Bold"] = BoldButton;
         RibbonBackplaneControlNames["Bold"] = "BoldButton";
-        try { RegisterName("ItalicButton", ItalicButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ItalicButton, "Italic");
-        RibbonBackplaneControls["Italic"] = ItalicButton;
         RibbonBackplaneControlNames["Italic"] = "ItalicButton";
         try { RegisterName("UnderlineButton", UnderlineButton); } catch (System.ArgumentException) { }
         RibbonMetadata.SetCommandName(UnderlineButton, "Underline");
         RibbonBackplaneControls["Underline"] = UnderlineButton;
         RibbonBackplaneControlNames["Underline"] = "UnderlineButton";
-        try { RegisterName("StrikeButton", StrikeButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(StrikeButton, "Strikethrough");
-        RibbonBackplaneControls["Strikethrough"] = StrikeButton;
         RibbonBackplaneControlNames["Strikethrough"] = "StrikeButton";
         try { RegisterName("BordersMenuButton", BordersMenuButton); } catch (System.ArgumentException) { }
         RibbonMetadata.SetCommandName(BordersMenuButton, "Borders");
@@ -213,29 +195,11 @@ public partial class MainWindow
         RibbonMetadata.SetCommandName(PictureFormatResetCropMenuItem, "Reset Crop");
         RibbonBackplaneControls["Reset Crop"] = PictureFormatResetCropMenuItem;
         RibbonBackplaneControlNames["Reset Crop"] = "PictureFormatResetCropMenuItem";
-        try { RegisterName("TableDesignTotalRowBtn", TableDesignTotalRowBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(TableDesignTotalRowBtn, "Total Row");
-        RibbonBackplaneControls["Total Row"] = TableDesignTotalRowBtn;
         RibbonBackplaneControlNames["Total Row"] = "TableDesignTotalRowBtn";
-        try { RegisterName("TableDesignFirstColumnBtn", TableDesignFirstColumnBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(TableDesignFirstColumnBtn, "First Column");
-        RibbonBackplaneControls["First Column"] = TableDesignFirstColumnBtn;
         RibbonBackplaneControlNames["First Column"] = "TableDesignFirstColumnBtn";
-        try { RegisterName("TableDesignLastColumnBtn", TableDesignLastColumnBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(TableDesignLastColumnBtn, "Last Column");
-        RibbonBackplaneControls["Last Column"] = TableDesignLastColumnBtn;
         RibbonBackplaneControlNames["Last Column"] = "TableDesignLastColumnBtn";
-        try { RegisterName("TableDesignBandedRowsBtn", TableDesignBandedRowsBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(TableDesignBandedRowsBtn, "Banded Rows");
-        RibbonBackplaneControls["Banded Rows"] = TableDesignBandedRowsBtn;
         RibbonBackplaneControlNames["Banded Rows"] = "TableDesignBandedRowsBtn";
-        try { RegisterName("TableDesignBandedColumnsBtn", TableDesignBandedColumnsBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(TableDesignBandedColumnsBtn, "Banded Columns");
-        RibbonBackplaneControls["Banded Columns"] = TableDesignBandedColumnsBtn;
         RibbonBackplaneControlNames["Banded Columns"] = "TableDesignBandedColumnsBtn";
-        try { RegisterName("TableDesignFilterButtonBtn", TableDesignFilterButtonBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(TableDesignFilterButtonBtn, "Filter Button");
-        RibbonBackplaneControls["Filter Button"] = TableDesignFilterButtonBtn;
         RibbonBackplaneControlNames["Filter Button"] = "TableDesignFilterButtonBtn";
         try { RegisterName("TableDesignStyleGalleryMenu", TableDesignStyleGalleryMenu); } catch (System.ArgumentException) { }
         try { RegisterName("HelpOnlineButton", HelpOnlineButton); } catch (System.ArgumentException) { }

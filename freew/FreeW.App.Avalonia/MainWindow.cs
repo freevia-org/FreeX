@@ -1,10 +1,13 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Avalonia.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
@@ -21,6 +24,13 @@ public sealed class MainWindow : Window
 
     private readonly DocumentView _editor = new();
     private readonly TextBlock _status = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
+    private readonly TextBox _findBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _zoomLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
+    private readonly ScaleTransform _zoom = new(1, 1);
+    private Border? _findBar;
+    private ScrollViewer? _scroller;
+    private double _zoomScale = 1.0;
     private string? _currentPath;
 
     public MainWindow()
@@ -39,9 +49,9 @@ public sealed class MainWindow : Window
 
         var root = new DockPanel();
 
-        var toolbar = BuildToolbar();
-        DockPanel.SetDock(toolbar, Dock.Top);
-        root.Children.Add(toolbar);
+        var ribbon = BuildRibbon();
+        DockPanel.SetDock(ribbon, Dock.Top);
+        root.Children.Add(ribbon);
 
         var statusBar = new Border
         {
@@ -49,23 +59,35 @@ public sealed class MainWindow : Window
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
             BorderThickness = new Thickness(0, 1, 0, 0),
             Height = 26,
-            Child = _status,
+            Child = BuildStatusContent(),
         };
         DockPanel.SetDock(statusBar, Dock.Bottom);
         root.Children.Add(statusBar);
 
-        var scroller = new ScrollViewer
+        var findBar = BuildFindBar();
+        DockPanel.SetDock(findBar, Dock.Bottom);
+        root.Children.Add(findBar);
+
+        _scroller = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Padding = new Thickness(48, 24),
-            Content = _editor,
+            Content = new LayoutTransformControl { LayoutTransform = _zoom, Child = _editor },
         };
-        var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = scroller };
+        var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = _scroller };
         root.Children.Add(workspace);
 
         _editor.DocumentChanged += UpdateStatus;
+        _editor.ScrollToCaretRequested += ScrollCaretIntoView;
+        _editor.CellEditRequested += async req =>
+        {
+            var result = await new CellEditDialog(req.Text).ShowDialog<string?>(this);
+            if (result is not null)
+                _editor.SetCellText(req.Block, req.Row, req.Col, result);
+        };
         _editor.LoadDocument(LoadStartupDocument(startupArguments));
+        KeyDown += MainWindow_KeyDown;
         Content = root;
         UpdateStatus();
     }
@@ -88,62 +110,188 @@ public sealed class MainWindow : Window
         }
     }
 
-    private Control BuildToolbar()
+    private Control BuildRibbon()
     {
-        var bar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(8, 6),
-            Spacing = 4,
-        };
+        var callbacks = new RibbonHostCallbacks(
+            Open: () => _ = OpenAsync(),
+            Save: () => _ = SaveAsync(),
+            Cut: () => _ = CutAsync(),
+            Copy: () => _ = CopyAsync(),
+            Paste: () => _ = PasteAsync());
 
-        bar.Children.Add(MakeButton("Open", async () => await OpenAsync()));
-        bar.Children.Add(MakeButton("Save", async () => await SaveAsync()));
-        bar.Children.Add(Separator());
-        bar.Children.Add(MakeButton("B", _editor.ToggleBold, bold: true));
-        bar.Children.Add(MakeButton("I", _editor.ToggleItalic, italic: true));
-        bar.Children.Add(MakeButton("U", _editor.ToggleUnderline, underline: true));
-        bar.Children.Add(Separator());
-        bar.Children.Add(MakeButton("Left", () => _editor.SetAlignment(TextAlignment.Left)));
-        bar.Children.Add(MakeButton("Center", () => _editor.SetAlignment(TextAlignment.Center)));
-        bar.Children.Add(MakeButton("Right", () => _editor.SetAlignment(TextAlignment.Right)));
-        bar.Children.Add(Separator());
-        bar.Children.Add(MakeButton("Undo", _editor.Undo));
-        bar.Children.Add(MakeButton("Redo", _editor.Redo));
-
+        var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
+        var ribbon = AvaloniaRibbonRenderer.Build(FreeWRibbon.BuildDefinition(), registry, afterExecute: () => _editor.Focus());
         HasToolbar = true;
         return new Border
         {
             Background = Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = bar,
+            Child = ribbon,
         };
     }
 
-    private static Control Separator() => new Border
+    // OS clipboard via Avalonia's data-transfer API (same pattern as the FreeX shell):
+    // TopLevel.Clipboard with SetTextAsync / TryGetTextAsync.
+    private Control BuildFindBar()
     {
-        Width = 1,
-        Margin = new Thickness(4, 2),
-        Background = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
-    };
+        var next = new Button { Content = "Find Next", Padding = new Thickness(10, 4), Margin = new Thickness(6, 0, 0, 0) };
+        next.Click += (_, _) => DoFind();
+        _findBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                DoFind();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                ToggleFindBar(show: false);
+                e.Handled = true;
+            }
+        };
 
-    private Button MakeButton(string text, Action onClick, bool bold = false, bool italic = false, bool underline = false)
+        var replace = new Button { Content = "Replace", Padding = new Thickness(10, 4), Margin = new Thickness(6, 0, 0, 0) };
+        replace.Click += (_, _) => DoReplace();
+        var replaceAll = new Button { Content = "Replace All", Padding = new Thickness(6, 4), Margin = new Thickness(4, 0, 0, 0) };
+        replaceAll.Click += (_, _) => DoReplaceAll();
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(8, 4),
+            Children =
+            {
+                new TextBlock { Text = "Find:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) },
+                _findBox,
+                next,
+                new TextBlock { Text = "Replace:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 6, 0) },
+                _replaceBox,
+                replace,
+                replaceAll,
+            },
+        };
+        _findBar = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xF7, 0xF7, 0xF7)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            IsVisible = false,
+            Child = row,
+        };
+        return _findBar;
+    }
+
+    private Control BuildStatusContent()
     {
-        var label = new TextBlock
+        _zoomLabel.Text = "100%";
+        var panel = new DockPanel();
+        DockPanel.SetDock(_zoomLabel, Dock.Right);
+        panel.Children.Add(_zoomLabel);
+        panel.Children.Add(_status);
+        return panel;
+    }
+
+    private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
+    {
+        var ctrl = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+        if (!ctrl)
+            return;
+
+        switch (e.Key)
         {
-            Text = text,
-            FontWeight = bold ? FontWeight.Bold : FontWeight.Normal,
-            FontStyle = italic ? FontStyle.Italic : FontStyle.Normal,
-            TextDecorations = underline ? TextDecorations.Underline : null,
-        };
-        var button = new Button { Content = label, Padding = new Thickness(10, 4), MinWidth = 34 };
-        button.Click += (_, _) =>
-        {
-            onClick();
-            _editor.Focus();
-        };
-        return button;
+            case Key.F: ToggleFindBar(show: true); e.Handled = true; break;
+            case Key.N: NewDocument(); e.Handled = true; break;
+            case Key.O: _ = OpenAsync(); e.Handled = true; break;
+            case Key.S: _ = SaveAsync(); e.Handled = true; break;
+            case Key.OemPlus or Key.Add: ApplyZoom(_zoomScale + 0.1); e.Handled = true; break;
+            case Key.OemMinus or Key.Subtract: ApplyZoom(_zoomScale - 0.1); e.Handled = true; break;
+            case Key.D0 or Key.NumPad0: ApplyZoom(1.0); e.Handled = true; break;
+        }
+    }
+
+    private void ApplyZoom(double scale)
+    {
+        _zoomScale = Math.Clamp(Math.Round(scale, 2), 0.5, 3.0);
+        _zoom.ScaleX = _zoomScale;
+        _zoom.ScaleY = _zoomScale;
+        _zoomLabel.Text = $"{Math.Round(_zoomScale * 100)}%";
+    }
+
+    private void NewDocument()
+    {
+        _editor.LoadDocument(TextDocument.CreateEmpty());
+        _currentPath = null;
+        Title = "FreeW";
+    }
+
+    private void ToggleFindBar(bool show)
+    {
+        if (_findBar is null)
+            return;
+        _findBar.IsVisible = show;
+        if (show)
+            _findBox.Focus();
+    }
+
+    private void DoFind()
+    {
+        var query = _findBox.Text;
+        if (string.IsNullOrEmpty(query))
+            return;
+        if (!_editor.FindNext(query))
+            _status.Text = $"No match for \"{query}\".";
+    }
+
+    private void DoReplace()
+    {
+        var query = _findBox.Text;
+        if (string.IsNullOrEmpty(query))
+            return;
+        if (!_editor.ReplaceNext(query, _replaceBox.Text ?? string.Empty))
+            _status.Text = $"No match for \"{query}\".";
+    }
+
+    private void DoReplaceAll()
+    {
+        var query = _findBox.Text;
+        if (string.IsNullOrEmpty(query))
+            return;
+        var n = _editor.ReplaceAll(query, _replaceBox.Text ?? string.Empty);
+        _status.Text = $"Replaced {n} occurrence{(n == 1 ? "" : "s")} of \"{query}\".";
+        UpdateStatus();
+    }
+
+    private void ScrollCaretIntoView()
+    {
+        if (_scroller is null)
+            return;
+        var target = Math.Max(0, _editor.CaretTop - 40);
+        _scroller.Offset = new Vector(_scroller.Offset.X, target);
+    }
+
+    private async Task CopyAsync()
+    {
+        var text = _editor.SelectedText;
+        if (text.Length == 0)
+            return;
+        if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+            await clipboard.SetTextAsync(text);
+    }
+
+    private async Task CutAsync()
+    {
+        await CopyAsync();
+        _editor.TryDeleteSelection();
+    }
+
+    private async Task PasteAsync()
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+            return;
+        var text = await clipboard.TryGetTextAsync();
+        if (!string.IsNullOrEmpty(text))
+            _editor.InsertText(text.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' '));
     }
 
     private async Task OpenAsync()

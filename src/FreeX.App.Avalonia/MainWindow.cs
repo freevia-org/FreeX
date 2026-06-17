@@ -704,8 +704,17 @@ public sealed partial class MainWindow : Window
                     // Home Number group (added buttons).
                     ["home.increaseDecimal"] = IncreaseSelectedRangeDecimalPlaces,
                     ["home.decreaseDecimal"] = DecreaseSelectedRangeDecimalPlaces,
-                    // Formulas tab (Formula Auditing group).
+                    // Home Alignment Orientation + Cells Format → existing handlers.
+                    ["home.orientation"] = () => ApplySelectedRangeTextRotation(45, "Rotated text for", "Orientation failed."),
+                    ["home.formatCells"] = () => _ = ShowFormatCellsDialogAsync(),
+                    // View tab (Window group) + Formulas tab.
+                    ["view.unhide"] = () => _ = UnhideSheetAsync(),
                     ["formulas.showFormulas"] = ToggleShowFormulas,
+                    // Formulas Function Library category buttons open the function picker.
+                    ["formulas.lookupReference"] = InsertFunction,
+                    ["formulas.mathTrig"] = InsertFunction,
+                    ["formulas.moreFunctions"] = InsertFunction,
+                    ["formulas.recentlyUsed"] = InsertFunction,
                     // Data tab (Sort & Filter / Tools / Forecast / Outline groups).
                     ["data.advancedFilter"] = () => _ = ShowAdvancedFilterDialogAsync(),
                     ["data.flashFill"] = FlashFillSelectedRange,

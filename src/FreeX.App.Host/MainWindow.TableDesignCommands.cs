@@ -14,18 +14,14 @@ public partial class MainWindow
         var visible = TryGetActiveStructuredTable(out _, out var table);
         if (visible)
         {
-            if (TableDesignTotalRowBtn is not null)
-                TableDesignTotalRowBtn.IsChecked = table.TotalsRowShown;
-            if (TableDesignFilterButtonBtn is not null)
-                TableDesignFilterButtonBtn.IsChecked = table.HasAutoFilter;
-            if (TableDesignFirstColumnBtn is not null)
-                TableDesignFirstColumnBtn.IsChecked = table.ShowFirstColumn;
-            if (TableDesignLastColumnBtn is not null)
-                TableDesignLastColumnBtn.IsChecked = table.ShowLastColumn;
-            if (TableDesignBandedRowsBtn is not null)
-                TableDesignBandedRowsBtn.IsChecked = table.ShowRowStripes;
-            if (TableDesignBandedColumnsBtn is not null)
-                TableDesignBandedColumnsBtn.IsChecked = table.ShowColumnStripes;
+            // Checked state flows through the neutral RibbonStateStore to the rendered Table Design
+            // checkboxes (keyed by CommandName); no hidden backplane control is needed.
+            _ribbonState.SetChecked("Total Row", table.TotalsRowShown);
+            _ribbonState.SetChecked("Filter Button", table.HasAutoFilter);
+            _ribbonState.SetChecked("First Column", table.ShowFirstColumn);
+            _ribbonState.SetChecked("Last Column", table.ShowLastColumn);
+            _ribbonState.SetChecked("Banded Rows", table.ShowRowStripes);
+            _ribbonState.SetChecked("Banded Columns", table.ShowColumnStripes);
         }
 
         SetTableContextualTabVisible(visible);

@@ -353,9 +353,19 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
-    private void ApplyFontToggleShortcut(FontToggleShortcut shortcut, ToggleButton button)
+    private void ApplyFontToggleShortcut(FontToggleShortcut shortcut)
     {
-        var enabled = !(button.IsChecked == true);
+        // Read/write the neutral RibbonStateStore (keyed by CommandName) — the same source of truth
+        // the ribbon-click handlers use (BoldButton_Click reads IsRibbonCommandChecked("Bold")), so
+        // the keyboard toggle stays consistent with the rendered ribbon and the current selection.
+        var commandName = shortcut switch
+        {
+            FontToggleShortcut.Bold => "Bold",
+            FontToggleShortcut.Italic => "Italic",
+            FontToggleShortcut.Strikethrough => "Strikethrough",
+            _ => "Underline"
+        };
+        var enabled = !IsRibbonCommandChecked(commandName);
         if (shortcut == FontToggleShortcut.Underline)
         {
             SetToolbarToggleStates(underline: enabled, strike: enabled ? false : null);
@@ -370,7 +380,7 @@ public partial class MainWindow
             return;
         }
 
-        button.IsChecked = enabled;
+        _ribbonState.SetChecked(commandName, enabled);
         ApplyStyleDiff(FontToggleShortcutService.CreateDiff(shortcut, enabled));
     }
 

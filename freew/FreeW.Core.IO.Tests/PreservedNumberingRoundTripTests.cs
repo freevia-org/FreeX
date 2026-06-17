@@ -135,6 +135,201 @@ public class PreservedNumberingRoundTripTests
         return stream.ToArray();
     }
 
+    /// <summary>
+    /// Hand-authors a minimal-but-valid docx package whose paragraph STYLE definition (styleId "ListNum")
+    /// carries the numbering via <c>w:pPr/w:numPr</c> (numId 2, referencing a rich multilevel abstract in
+    /// numbering.xml FreeW cannot represent) — exactly the FieldCodes.docx / stress023.docx shape where the
+    /// document body has no direct numPr. One body paragraph uses that style. The numbering.xml's <c>w:num</c>
+    /// (numId 2) resolves to a multilevel/legal abstract (abstractNumId 10), so the reader leaves it unmodelled
+    /// (style-level numbering FreeW does not represent) and the preserve path must keep both numbering.xml AND
+    /// the style's numPr.
+    /// </summary>
+    private static byte[] AuthorStyleLevelNumberingPackage()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string content)
+            {
+                var entry = zip.CreateEntry(path, CompressionLevel.Optimal);
+                using var s = entry.Open();
+                var bytes = Encoding.UTF8.GetBytes(content);
+                s.Write(bytes, 0, bytes.Length);
+            }
+
+            Add("[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+                  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+                </Types>
+                """);
+
+            Add("_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+                </Relationships>
+                """);
+
+            Add("word/_rels/document.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+                </Relationships>
+                """);
+
+            // The body paragraph gets its numbering ONLY from its style (w:pStyle val="ListNum"); it carries
+            // NO direct w:numPr — the style-level numbering case (numId=0 in the body).
+            Add("word/document.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:body>
+                    <w:p><w:pPr><w:pStyle w:val="ListNum"/></w:pPr><w:r><w:t>Numbered via style</w:t></w:r></w:p>
+                    <w:sectPr/>
+                  </w:body>
+                </w:document>
+                """);
+
+            // The paragraph style "ListNum" carries the numbering in its OWN definition (w:pPr/w:numPr → numId 2).
+            Add("word/styles.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:style w:type="paragraph" w:styleId="ListNum">
+                    <w:name w:val="List Number"/>
+                    <w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr>
+                  </w:style>
+                </w:styles>
+                """);
+
+            // numId 2 → abstractNumId 10, a rich multilevel/legal definition (upperRoman custom level text +
+            // a w15 extension attribute) FreeW cannot represent and drops today.
+            Add("word/numbering.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">
+                  <w:abstractNum w:abstractNumId="10" w15:restartNumberingAfterBreak="0">
+                    <w:multiLevelType w:val="multilevel"/>
+                    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="Section %1."/><w:lvlJc w:val="left"/></w:lvl>
+                    <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1.%2"/><w:lvlJc w:val="left"/></w:lvl>
+                  </w:abstractNum>
+                  <w:num w:numId="2"><w:abstractNumId w:val="10"/></w:num>
+                </w:numbering>
+                """);
+        }
+        return stream.ToArray();
+    }
+
+    // --- Preserve-alongside: STYLE-level numbering survives -----------------------------------------
+
+    [Fact]
+    public void StyleLevelNumbering_PartAndStyleNumPr_SurviveRoundTrip()
+    {
+        var read = ReadDoc(AuthorStyleLevelNumberingPackage());
+
+        // The numbering.xml was captured, and the style kept its original numPr (FreeW does NOT model
+        // style-level numbering, so the style carries a PreservedNumbering pointing at the source numId).
+        read.Preserved.OriginalNumbering.Should().NotBeNull();
+        read.Styles.Should().ContainKey("ListNum");
+        var style = read.Styles["ListNum"];
+        style.PreservedNumbering.Should().NotBeNull();
+        style.PreservedNumbering!.Value.NumId.Should().Be(2);
+        style.PreservedNumbering!.Value.Ilvl.Should().Be(0);
+        // The body paragraph has no direct numbering of its own.
+        var bodyPara = read.Blocks.OfType<Paragraph>().First();
+        bodyPara.Formatting.ListKind.Should().Be(ListKind.None);
+        bodyPara.PreservedNumbering.Should().BeNull();
+
+        var rewritten = WriteBytes(read);
+
+        // numbering.xml survives, carrying the rich formatting (upperRoman, custom level text).
+        HasEntry(rewritten, "word/numbering.xml").Should().BeTrue();
+        var numbering = EntryXml(rewritten, "word/numbering.xml").Root!;
+        numbering.Descendants(W + "numFmt").Attributes(W + "val").Select(a => a.Value)
+            .Should().Contain("upperRoman");
+        numbering.Descendants(W + "lvlText").Attributes(W + "val").Select(a => a.Value)
+            .Should().Contain("Section %1.");
+
+        // The style in the output still carries a w:pPr/w:numPr pointing at a w:num that EXISTS in the
+        // re-emitted numbering.xml (the remapped, disjoint id).
+        var emittedNumIds = numbering.Elements(W + "num")
+            .Select(n => n.Attribute(W + "numId")!.Value).ToHashSet();
+        var styleEl = EntryXml(rewritten, "word/styles.xml").Root!.Elements(W + "style")
+            .Single(s => s.Attribute(W + "styleId")!.Value == "ListNum");
+        var styleNumPr = styleEl.Element(W + "pPr")!.Element(W + "numPr")!;
+        var styleNumId = styleNumPr.Element(W + "numId")!.Attribute(W + "val")!.Value;
+        emittedNumIds.Should().Contain(styleNumId);
+        styleNumPr.Element(W + "ilvl")!.Attribute(W + "val")!.Value.Should().Be("0");
+
+        // The remapped style numId is clear of FreeW's reserved ids (1/2/3) and collides with no other num.
+        int.Parse(styleNumId).Should().BeGreaterThanOrEqualTo(4);
+        var numIds = numbering.Elements(W + "num").Select(n => n.Attribute(W + "numId")!.Value).ToList();
+        numIds.Should().OnlyHaveUniqueItems();
+        numbering.Elements(W + "abstractNum").Select(a => a.Attribute(W + "abstractNumId")!.Value)
+            .Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void StyleLevelNumbering_SurvivesASecondRoundTrip()
+    {
+        // read → write → read → write: the captured numbering + style numPr must still resolve after a re-read
+        // of our own output (idempotent: our remapped style numPr is itself re-captured on re-read).
+        var once = WriteBytes(ReadDoc(AuthorStyleLevelNumberingPackage()));
+        var reread = ReadDoc(once);
+        reread.Preserved.OriginalNumbering.Should().NotBeNull();
+        reread.Styles["ListNum"].PreservedNumbering.Should().NotBeNull();
+
+        var twice = WriteBytes(reread);
+        HasEntry(twice, "word/numbering.xml").Should().BeTrue();
+        var emittedNumIds = EntryXml(twice, "word/numbering.xml").Root!.Elements(W + "num")
+            .Select(n => n.Attribute(W + "numId")!.Value).ToHashSet();
+        var styleEl = EntryXml(twice, "word/styles.xml").Root!.Elements(W + "style")
+            .Single(s => s.Attribute(W + "styleId")!.Value == "ListNum");
+        var styleNumId = styleEl.Element(W + "pPr")!.Element(W + "numPr")!.Element(W + "numId")!.Attribute(W + "val")!.Value;
+        emittedNumIds.Should().Contain(styleNumId);
+    }
+
+    // --- Regression: FreeW-authored styles (no numbering) are unaffected ----------------------------
+
+    [Fact]
+    public void FreeWAuthoredStyles_NoNumbering_RoundTripUnchanged_NoPreservedNumbering()
+    {
+        // A FreeW-authored-styles document with no style-level numbering must be byte-equivalent to before:
+        // the styles carry no w:numPr, NO numbering part is emitted, and the plan stays null.
+        var doc = new TextDocument();
+        doc.Styles["Heading1"] = new DocumentStyle
+        {
+            Id = "Heading1",
+            Name = "Heading 1",
+            Run = RunFormatting.Default with { Bold = true }
+        };
+        doc.Blocks.Add(new Paragraph("A heading") { StyleId = "Heading1" });
+
+        var first = WriteBytes(doc);
+        // No numbering part (no list, no preserved numbering).
+        HasEntry(first, "word/numbering.xml").Should().BeFalse();
+        // The style carries no w:pPr/w:numPr.
+        var styleEl = EntryXml(first, "word/styles.xml").Root!.Elements(W + "style")
+            .Single(s => s.Attribute(W + "styleId")!.Value == "Heading1");
+        styleEl.Descendants(W + "numPr").Should().BeEmpty();
+
+        // Byte-equivalence: read back and re-write yields the identical package (the plan stays null because
+        // no style/paragraph carries preserved numbering).
+        var read = ReadDoc(first);
+        read.Styles["Heading1"].PreservedNumbering.Should().BeNull();
+        var second = WriteBytes(read);
+        second.Should().Equal(first);
+    }
+
     // --- Preserve-alongside: foreign numbering survives ---------------------------------------------
 
     [Fact]
