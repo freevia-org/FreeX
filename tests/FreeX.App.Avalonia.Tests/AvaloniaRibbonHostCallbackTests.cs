@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 using FreeX.App.Avalonia.Ribbon;
 using Free.Shared.Ribbon;
@@ -126,6 +127,37 @@ public sealed class AvaloniaRibbonHostCallbackTests
         Execute(registry, "home.pasteValues");
 
         Assert.Equal(new[] { "general", "date", "yellow", "bordersAll", "pasteValues" }, fired);
+    }
+
+    [Fact]
+    public void BuildDefinition_HasWindowsTabStructure()
+    {
+        var headers = SampleRibbon.BuildDefinition().Tabs.Select(t => t.Header).ToList();
+
+        foreach (var expected in new[] { "Home", "Insert", "Data", "Page Layout", "Formulas", "Review", "View" })
+            Assert.Contains(expected, headers);
+    }
+
+    [Fact]
+    public void BuildDefinition_FormulasTab_HasExpectedGroups()
+    {
+        var formulas = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "Formulas");
+        var groups = formulas.Groups.Select(g => g.Header).ToList();
+
+        Assert.Contains("Function Library", groups);
+        Assert.Contains("Defined Names", groups);
+        Assert.Contains("Calculation", groups);
+    }
+
+    [Fact]
+    public void BuildDefinition_ViewTab_HasShowZoomWindowGroups()
+    {
+        var view = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "View");
+        var groups = view.Groups.Select(g => g.Header).ToList();
+
+        Assert.Contains("Show", groups);
+        Assert.Contains("Zoom", groups);
+        Assert.Contains("Window", groups);
     }
 
     [Fact]
