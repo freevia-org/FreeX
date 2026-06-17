@@ -42,6 +42,10 @@ public sealed class DocumentView : Control
     private DocPosition? _selectionAnchor;
     private double _laidOutWidth = -1;
     private double _contentHeight;
+    private double _pageLeft;
+    private double _pageWidth;
+    private double _contentLeft;
+    private double _contentWidth;
 
     public DocumentView()
     {
@@ -204,7 +208,14 @@ public sealed class DocumentView : Control
         _rects.Clear();
         _images.Clear();
         _cellHits.Clear();
-        var textWidth = Math.Max(120, width - LeftMargin - RightMargin);
+        // Page geometry from the document's PageSettings: a centred page with its own margins.
+        _pageWidth = Math.Max(320, _doc.Page.WidthPt * PxPerPoint);
+        var marginLeft = Math.Max(0, _doc.Page.MarginLeftPt) * PxPerPoint;
+        var marginRight = Math.Max(0, _doc.Page.MarginRightPt) * PxPerPoint;
+        _pageLeft = Math.Max(LeftMargin, (width - _pageWidth) / 2);
+        _contentLeft = _pageLeft + marginLeft;
+        _contentWidth = Math.Max(120, _pageWidth - marginLeft - marginRight);
+        var textWidth = _contentWidth;
         double y = TopMargin;
 
         var listNumber = 0;
@@ -279,7 +290,7 @@ public sealed class DocumentView : Control
         {
             var markerFmt = paragraph.Runs.Count > 0 ? paragraph.Runs[0].Formatting : RunFormatting.Default;
             var markerWidth = Build(marker, markerFmt).WidthIncludingTrailingWhitespace;
-            _markers.Add((LeftMargin + leftInset - markerWidth - 6, y, marker, markerFmt));
+            _markers.Add((_contentLeft + leftInset - markerWidth - 6, y, marker, markerFmt));
         }
 
         // Break the cell stream into wrapped lines.
@@ -342,7 +353,7 @@ public sealed class DocumentView : Control
                 lineHeight = heights[c];
         }
 
-        var x = LeftMargin + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth);
+        var x = _contentLeft + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth);
         for (var c = from; c < to; c++)
         {
             _placed.Add(new PlacedChar(blockIndex, c, x, y, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
@@ -389,7 +400,7 @@ public sealed class DocumentView : Control
         var cols = Math.Max(1, table.ColumnCount);
         var colWidths = ComputeColumnWidths(table, cols, textWidth);
         var columnLeft = new double[cols + 1];
-        var running = LeftMargin;
+        var running = _contentLeft;
         for (var c = 0; c < cols; c++)
         {
             columnLeft[c] = running;
@@ -483,7 +494,7 @@ public sealed class DocumentView : Control
                 height *= scale;
             }
 
-            var x = LeftMargin + AlignmentOffset(alignment, textWidth, width);
+            var x = _contentLeft + AlignmentOffset(alignment, textWidth, width);
             _images.Add((new Rect(x, y, width, height), DecodeBitmap(image)));
             y += height + gap;
         }
@@ -581,6 +592,8 @@ public sealed class DocumentView : Control
     private static IBrush HeaderFill { get; } = new SolidColorBrush(Color.FromRgb(0xDE, 0xE9, 0xF7));
     private static IBrush BandFill { get; } = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
     private static Pen TableBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
+    private static IBrush PageDeskBrush { get; } = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
+    private static Pen PageBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)), 1);
 
     // ---- Render ---------------------------------------------------------------------------------
 
@@ -589,7 +602,11 @@ public sealed class DocumentView : Control
         if (_laidOutWidth < 0 || Math.Abs(_laidOutWidth - Bounds.Width) > 0.5)
             Relayout(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
 
-        context.FillRectangle(Brushes.White, new Rect(Bounds.Size));
+        // Desk behind the page, then the white page itself (PageSettings-driven width).
+        context.FillRectangle(PageDeskBrush, new Rect(Bounds.Size));
+        var pageRect = new Rect(_pageLeft, 0, _pageWidth, Math.Max(_contentHeight, Bounds.Height));
+        context.FillRectangle(Brushes.White, pageRect);
+        context.DrawRectangle(null, PageBorderPen, pageRect);
 
         // Table fills + borders sit beneath the text.
         foreach (var (rect, fill, border) in _rects)
