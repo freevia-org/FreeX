@@ -108,6 +108,11 @@ internal static class FreeWRibbonIcons
             ["freew.image-align-right"] = RibbonCommandIconKind.Align,
             ["freew.shapes"] = RibbonCommandIconKind.Rectangle,
 
+            // Insert: media (equation / chart / WordArt)
+            ["freew.equation"] = RibbonCommandIconKind.Function,
+            ["freew.chart"] = RibbonCommandIconKind.Table,
+            ["freew.wordart"] = RibbonCommandIconKind.TextBox,
+
             // Insert: links
             ["freew.hyperlink"] = RibbonCommandIconKind.Link,
             ["freew.edit-hyperlink"] = RibbonCommandIconKind.Link,
@@ -198,5 +203,6 @@ internal static class FreeWRibbonIcons
             ["freew.restrict-editing"] = RibbonCommandIconKind.Protect,
             ["freew.compare"] = RibbonCommandIconKind.Group,
             ["freew.inspect-document"] = RibbonCommandIconKind.Search,
+            ["freew.check-accessibility"] = RibbonCommandIconKind.Accessibility,
         };
 }

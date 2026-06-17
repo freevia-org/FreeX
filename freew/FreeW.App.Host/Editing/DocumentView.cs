@@ -2314,6 +2314,15 @@ public sealed class DocumentView : RichTextBox
             case InlineUIContainer { Child: FrameworkElement { Tag: Shape modelShape } }:
                 modelParagraph.Runs.Add(ModelRun.FromShape(modelShape));
                 break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: Chart modelChart } }:
+                modelParagraph.Runs.Add(ModelRun.FromChart(modelChart));
+                break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: WordArt modelWordArt } }:
+                modelParagraph.Runs.Add(ModelRun.FromWordArt(modelWordArt));
+                break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: Equation modelEquation } }:
+                modelParagraph.Runs.Add(ModelRun.FromEquation(modelEquation));
+                break;
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
                 break;
@@ -2748,6 +2757,15 @@ public sealed class DocumentView : RichTextBox
 
         if (run.Shape is { } shape)
             return BuildShapeRun(shape);
+
+        if (run.Chart is { } chart)
+            return BuildChartRun(chart);
+
+        if (run.WordArt is { } wordArt)
+            return BuildWordArtRun(wordArt);
+
+        if (run.Equation is { } equation)
+            return BuildEquationRun(equation);
 
         if (run.FootnoteId is { } footnoteId)
             return BuildFootnoteReference(footnoteId, document);
@@ -3243,6 +3261,122 @@ public sealed class DocumentView : RichTextBox
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
     }
 
+    /// <summary>
+    /// Renders an inline equation as an InlineUIContainer hosting a Border that carries the model
+    /// <see cref="Equation"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The border
+    /// shows the equation's linear form in a serif/italic face as a lightweight visual stand-in.
+    /// </summary>
+    private static InlineUIContainer BuildEquationRun(Equation equation)
+    {
+        var element = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF6, 0xFB)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD8)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(4, 1, 4, 1),
+            Child = new TextBlock
+            {
+                Text = equation.LinearText,
+                FontFamily = new FontFamily("Cambria, Times New Roman, serif"),
+                FontStyle = FontStyles.Italic
+            },
+            Tag = equation // carries the model equation so CommitToModel can round-trip it
+        };
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
+    }
+
+    /// <summary>
+    /// Renders inline WordArt as an InlineUIContainer hosting a TextBlock that carries the model
+    /// <see cref="WordArt"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The text is
+    /// drawn at the WordArt's font size with a style-derived fill/outline as a lightweight visual stand-in.
+    /// </summary>
+    private static InlineUIContainer BuildWordArtRun(WordArt wordArt)
+    {
+        var fill = wordArt.Style switch
+        {
+            WordArtStyle.Outline => System.Windows.Media.Brushes.Transparent,
+            WordArtStyle.GradientFill => new SolidColorBrush(Color.FromRgb(0x2E, 0x74, 0xB5)),
+            WordArtStyle.Shadow => new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40)),
+            _ => new SolidColorBrush(Color.FromRgb(0x1F, 0x49, 0x7D)),
+        };
+        var element = new TextBlock
+        {
+            Text = wordArt.Text,
+            FontSize = wordArt.FontSizePt * PxPerPoint,
+            FontWeight = FontWeights.Bold,
+            Foreground = fill,
+            Tag = wordArt // carries the model WordArt so CommitToModel can round-trip it
+        };
+        if (wordArt.Style == WordArtStyle.Outline)
+        {
+            element.Foreground = System.Windows.Media.Brushes.White;
+            element.Effect = null;
+        }
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
+    }
+
+    /// <summary>
+    /// Renders an inline chart as an InlineUIContainer hosting a Border that carries the model
+    /// <see cref="Chart"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The border shows
+    /// a simple labelled bar sketch of the first series as a lightweight visual stand-in for the chart.
+    /// </summary>
+    private static InlineUIContainer BuildChartRun(Chart chart)
+    {
+        var widthPx = chart.WidthPt * PxPerPoint;
+        var heightPx = chart.HeightPt * PxPerPoint;
+
+        var stack = new StackPanel { Margin = new Thickness(6) };
+        if (!string.IsNullOrEmpty(chart.Title))
+            stack.Children.Add(new TextBlock
+            {
+                Text = chart.Title,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 4),
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+
+        // Sketch the first series as a row of proportional bars beneath their category labels.
+        var series = chart.Series.Count > 0 ? chart.Series[0] : new ChartSeries();
+        var max = series.Values.Count > 0 ? Math.Max(1.0, series.Values.Max()) : 1.0;
+        var bars = new Grid { VerticalAlignment = VerticalAlignment.Bottom };
+        var barArea = Math.Max(24, heightPx - 48);
+        for (var i = 0; i < series.Values.Count; i++)
+        {
+            bars.ColumnDefinitions.Add(new ColumnDefinition());
+            var category = i < chart.Categories.Count ? chart.Categories[i] : string.Empty;
+            var column = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(3, 0, 3, 0) };
+            column.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x4E, 0x81, 0xBD)),
+                Height = Math.Max(2, barArea * (series.Values[i] / max)),
+                VerticalAlignment = VerticalAlignment.Bottom
+            });
+            column.Children.Add(new TextBlock
+            {
+                Text = category,
+                FontSize = 10,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 2, 0, 0)
+            });
+            Grid.SetColumn(column, i);
+            bars.Children.Add(column);
+        }
+        stack.Children.Add(bars);
+
+        var element = new Border
+        {
+            Width = widthPx,
+            Height = heightPx,
+            Background = System.Windows.Media.Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1),
+            Child = stack,
+            Tag = chart // carries the model chart so CommitToModel can round-trip it
+        };
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
     /// <summary>Inserts an inline shape / text box at the caret. Size in points; preserved on save.</summary>
     public void InsertShape(Shape shape)
     {
@@ -3279,6 +3413,73 @@ public sealed class DocumentView : RichTextBox
         }
         CommitToModel();
         Render();
+    }
+
+    /// <summary>Inserts an inline equation at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
+    public void InsertEquation(Equation equation) => InsertInlineContainer(BuildEquationRun(equation));
+
+    /// <summary>Inserts an inline chart at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
+    public void InsertChart(Chart chart) => InsertInlineContainer(BuildChartRun(chart));
+
+    /// <summary>Inserts inline WordArt at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
+    public void InsertWordArt(WordArt wordArt) => InsertInlineContainer(BuildWordArtRun(wordArt));
+
+    // Shared caret-insertion path for the tagged InlineUIContainers (shape/image/chart/wordart/equation):
+    // commit pending edits, drop the container at the caret's paragraph (or the last block), commit + render.
+    private void InsertInlineContainer(InlineUIContainer container)
+    {
+        CommitToModel();
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        if (caret.Paragraph is { } paragraph)
+            paragraph.Inlines.Add(container);
+        else if (Document.Blocks.LastOrDefault() is WpfParagraph last)
+            last.Inlines.Add(container);
+        else
+            Document.Blocks.Add(new WpfParagraph(container));
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Best-effort "Section X of N" for the status bar: the total comes from <see cref="TextDocument.Sections"/>
+    /// (reconstructed from <see cref="Paragraph.SectionBreak"/> markers plus the final body section); the current
+    /// index is which section the caret's block falls in, counting section-break markers at or before the caret's
+    /// top-level paragraph. A document with no section breaks reports "1 of 1". The mapping is approximate: in-editor
+    /// edits that have not been saved may not preserve every section marker, so the count can simplify to 1.
+    /// </summary>
+    public (int Current, int Total) SectionInfo()
+    {
+        CommitToModel();
+        var total = Math.Max(1, _model.Sections.Count);
+        if (total == 1)
+            return (1, 1);
+
+        // Find the caret's containing top-level WPF paragraph ordinal, then count model section breaks
+        // at or before the model block at that ordinal (model + WPF top-level blocks stay aligned for the
+        // simple paragraph/table flow these documents use).
+        var caretParagraph = CaretPosition?.Paragraph;
+        var caretOrdinal = -1;
+        if (caretParagraph is not null)
+        {
+            var ordinal = 0;
+            foreach (var block in Document.Blocks)
+            {
+                if (ReferenceEquals(block, caretParagraph))
+                {
+                    caretOrdinal = ordinal;
+                    break;
+                }
+                ordinal++;
+            }
+        }
+        if (caretOrdinal < 0)
+            return (total, total); // caret position unknown: report the last (body) section
+
+        var current = 1;
+        for (var i = 0; i < _model.Blocks.Count && i <= caretOrdinal; i++)
+            if (_model.Blocks[i] is FreeW.Core.Model.Paragraph { SectionBreak: not null } && i < caretOrdinal)
+                current++;
+        return (Math.Clamp(current, 1, total), total);
     }
 
     /// <summary>

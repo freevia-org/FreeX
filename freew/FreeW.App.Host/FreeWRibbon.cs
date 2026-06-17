@@ -131,6 +131,12 @@ internal static class FreeWRibbon
                     g.Button("freew.image-align-right", "Align Right", b => Icon(b, RibbonCommandIconKind.Align));
                     g.Button("freew.shapes", "Shapes", b => Icon(b, RibbonCommandIconKind.Rectangle));
                 });
+                tab.Group("media", "Media", "M", 78, g =>
+                {
+                    g.Button("freew.equation", "Equation", b => Icon(b, RibbonCommandIconKind.Function));
+                    g.Button("freew.chart", "Chart", b => Icon(b, RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green));
+                    g.Button("freew.wordart", "WordArt", b => Icon(b, RibbonCommandIconKind.TextBox));
+                });
                 tab.Group("links", "Links", "K", 70, g =>
                 {
                     g.Button("freew.hyperlink", "Link");
@@ -286,6 +292,7 @@ internal static class FreeWRibbon
                 tab.Group("inspect", "Inspect", "I", 80, g =>
                 {
                     g.Button("freew.inspect-document", "Inspect Document");
+                    g.Button("freew.check-accessibility", "Check Accessibility", b => Icon(b, RibbonCommandIconKind.Accessibility));
                 });
             })
             .Build();
