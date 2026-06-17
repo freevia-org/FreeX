@@ -1425,6 +1425,73 @@ public sealed class DocumentView : RichTextBox
         Document = flow;
         ApplyPageChrome();
         ApplyProtection();
+        SyncFormattingMarksAdorner();
+    }
+
+    /// <summary>
+    /// Whether the editor is showing formatting marks (pilcrow <c>¶</c> at paragraph ends, middle dots
+    /// <c>·</c> for spaces, right arrows <c>→</c> for tabs). The marks are drawn as a non-editable
+    /// <see cref="FormattingMarksAdorner"/> overlay computed from the live document's text geometry, so
+    /// they are purely visual and never enter the document model/text (a <see cref="CommitToModel"/>
+    /// after toggling them on adds no glyphs to any run). Purely view chrome; the model is untouched.
+    /// </summary>
+    public bool ShowFormattingMarks { get; private set; }
+
+    /// <summary>
+    /// Turn the formatting-marks overlay on or off and return the new state. Used by the View ribbon's
+    /// "Show ¶" toggle. Re-syncs the overlay adorner so the change shows immediately; never mutates the
+    /// model (the marks are display-only decorations).
+    /// </summary>
+    public bool ToggleFormattingMarks()
+    {
+        ShowFormattingMarks = !ShowFormattingMarks;
+        SyncFormattingMarksAdorner();
+        return ShowFormattingMarks;
+    }
+
+    // The live overlay drawing the ¶/·/→ glyphs, or null while marks are off. Added to / removed from
+    // this control's AdornerLayer so it never participates in the FlowDocument content (and so never
+    // round-trips through CommitToModel). Recreated cheaply; it reads geometry from the current Document.
+    private FormattingMarksAdorner? _formattingMarksAdorner;
+
+    // Add, remove, or refresh the formatting-marks overlay to match ShowFormattingMarks. The adorner
+    // layer only exists once the control is in a visual tree (loaded), so when it is not yet available
+    // we defer: a one-shot Loaded handler re-runs this. Toggling off removes the adorner; an already
+    // present adorner is just invalidated so it repaints against the freshly rendered Document.
+    private void SyncFormattingMarksAdorner()
+    {
+        var layer = AdornerLayer.GetAdornerLayer(this);
+        if (layer is null)
+        {
+            // Not in a visual tree yet: retry once we are loaded (covers a toggle before first show).
+            if (ShowFormattingMarks)
+            {
+                Loaded -= OnLoadedSyncFormattingMarks;
+                Loaded += OnLoadedSyncFormattingMarks;
+            }
+            return;
+        }
+
+        if (ShowFormattingMarks)
+        {
+            if (_formattingMarksAdorner is null)
+            {
+                _formattingMarksAdorner = new FormattingMarksAdorner(this);
+                layer.Add(_formattingMarksAdorner);
+            }
+            _formattingMarksAdorner.InvalidateVisual();
+        }
+        else if (_formattingMarksAdorner is not null)
+        {
+            layer.Remove(_formattingMarksAdorner);
+            _formattingMarksAdorner = null;
+        }
+    }
+
+    private void OnLoadedSyncFormattingMarks(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoadedSyncFormattingMarks;
+        SyncFormattingMarksAdorner();
     }
 
     /// <summary>
@@ -3542,4 +3609,168 @@ public sealed class DocumentView : RichTextBox
     }
 
     private static string ToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+
+    /// <summary>
+    /// A non-editable overlay that draws formatting marks — a pilcrow (<see cref="FormattingMarks.Pilcrow"/>)
+    /// at each paragraph end, a middle dot (<see cref="FormattingMarks.SpaceDot"/>) over every space and a
+    /// right arrow (<see cref="FormattingMarks.TabArrow"/>) over every tab — on top of the adorned
+    /// <see cref="DocumentView"/>. The glyphs are painted from the live FlowDocument's text geometry
+    /// (<see cref="TextPointer.GetCharacterRect"/>) and are never part of the document content, so they
+    /// cannot round-trip into the model through <see cref="CommitToModel"/>. The overlay is hit-test
+    /// transparent so it never intercepts clicks/selection, and it repaints as the surface scrolls or
+    /// relayouts (see the LayoutUpdated subscription) so the marks stay aligned with the text.
+    /// </summary>
+    private sealed class FormattingMarksAdorner : Adorner
+    {
+        // Faint grey so the marks read as light decorations rather than real text.
+        private static readonly Brush MarkBrush = CreateMarkBrush();
+
+        // Cap how many characters we scan per paragraph so a pathologically long line can never make the
+        // overlay expensive to paint; the pilcrow at the paragraph end is always still drawn.
+        private const int MaxCharsPerParagraph = 20_000;
+
+        private readonly DocumentView _view;
+
+        public FormattingMarksAdorner(DocumentView view) : base(view)
+        {
+            _view = view;
+            IsHitTestVisible = false;
+            // Repaint when the surface scrolls or relayouts so the glyphs track the text. LayoutUpdated
+            // fires after scrolling/resize; invalidating here keeps the overlay aligned.
+            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+        }
+
+        private static Brush CreateMarkBrush()
+        {
+            var brush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80));
+            brush.Freeze();
+            return brush;
+        }
+
+        protected override void OnRender(DrawingContext drawingContext)
+        {
+            base.OnRender(drawingContext);
+
+            if (_view.Document is not { } doc)
+                return;
+
+            // Clip drawing to the visible surface so glyphs for scrolled-off text are not painted onto
+            // the chrome/margins around the editor.
+            var bounds = new Rect(_view.RenderSize);
+            drawingContext.PushClip(new RectangleGeometry(bounds));
+            try
+            {
+                var emPx = Math.Max(1.0, doc.FontSize);
+                foreach (var block in doc.Blocks)
+                    DrawBlockMarks(drawingContext, block, emPx, bounds);
+            }
+            finally
+            {
+                drawingContext.Pop();
+            }
+        }
+
+        // Walk a top-level block (paragraph, list, table, …) and draw the marks for every paragraph it
+        // contains. Only paragraphs carry text positions/ends to decorate; container blocks recurse.
+        private void DrawBlockMarks(DrawingContext dc, System.Windows.Documents.Block block, double emPx, Rect bounds)
+        {
+            switch (block)
+            {
+                case WpfParagraph paragraph:
+                    DrawParagraphMarks(dc, paragraph, emPx, bounds);
+                    break;
+                case WpfList list:
+                    foreach (var item in list.ListItems)
+                        foreach (var inner in item.Blocks)
+                            DrawBlockMarks(dc, inner, emPx, bounds);
+                    break;
+                case WpfTable table:
+                    foreach (var group in table.RowGroups)
+                        foreach (var row in group.Rows)
+                            foreach (var cell in row.Cells)
+                                foreach (var inner in cell.Blocks)
+                                    DrawBlockMarks(dc, inner, emPx, bounds);
+                    break;
+            }
+        }
+
+        // Draw the space/tab glyphs along a paragraph and a pilcrow at its end. Each glyph is placed at
+        // the character's on-screen rectangle (translated from the editor's content coordinates into the
+        // adorner's). Positions are obtained per character from the FlowDocument, so nothing is written
+        // back into the document — the overlay is purely additive paint.
+        private void DrawParagraphMarks(DrawingContext dc, WpfParagraph paragraph, double emPx, Rect bounds)
+        {
+            var pointer = paragraph.ContentStart;
+            var end = paragraph.ContentEnd;
+            var scanned = 0;
+
+            while (pointer is not null
+                && pointer.CompareTo(end) < 0
+                && scanned < MaxCharsPerParagraph)
+            {
+                if (pointer.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.Text)
+                {
+                    var text = pointer.GetTextInRun(LogicalDirection.Forward);
+                    for (var i = 0; i < text.Length && scanned < MaxCharsPerParagraph; i++)
+                    {
+                        var c = text[i];
+                        if (c is ' ' or '\t')
+                        {
+                            var glyphPos = pointer.GetPositionAtOffset(i, LogicalDirection.Forward);
+                            if (glyphPos is not null)
+                                DrawGlyphAt(dc, glyphPos, c == ' ' ? FormattingMarks.SpaceDot : FormattingMarks.TabArrow, emPx, bounds);
+                        }
+                        scanned++;
+                    }
+                }
+
+                pointer = pointer.GetNextContextPosition(LogicalDirection.Forward);
+            }
+
+            // The pilcrow sits just after the last content position of the paragraph.
+            DrawGlyphAt(dc, end, FormattingMarks.Pilcrow, emPx, bounds, atEnd: true);
+        }
+
+        // Draw a single glyph anchored at the character rectangle of `position`. `atEnd` requests the
+        // rectangle on the backward side (the paragraph's trailing edge) so the pilcrow lands after the
+        // last glyph rather than before the following block.
+        private void DrawGlyphAt(DrawingContext dc, TextPointer position, char glyph, double emPx, Rect bounds, bool atEnd = false)
+        {
+            Rect rect;
+            try
+            {
+                rect = position.GetCharacterRect(atEnd ? LogicalDirection.Backward : LogicalDirection.Forward);
+            }
+            catch (InvalidOperationException)
+            {
+                // The document layout can be momentarily unavailable during a relayout; skip this glyph.
+                return;
+            }
+
+            if (rect.IsEmpty)
+                return;
+
+            // GetCharacterRect is relative to the editor's content; the adorner shares the editor's
+            // coordinate space (it adorns the same element), so the rect maps directly. Cull glyphs that
+            // fall outside the visible surface.
+            if (rect.Bottom < bounds.Top || rect.Top > bounds.Bottom || rect.Right < bounds.Left || rect.Left > bounds.Right)
+                return;
+
+            var fontSize = Math.Max(6.0, rect.Height > 0 ? rect.Height * 0.72 : emPx * 0.72);
+            var formatted = new FormattedText(
+                glyph.ToString(),
+                System.Globalization.CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                new Typeface("Segoe UI"),
+                fontSize,
+                MarkBrush,
+                VisualTreeHelper.GetDpi(_view).PixelsPerDip);
+
+            // Centre the glyph on the character cell: horizontally at the cell's left edge (where the
+            // space/tab/end sits) and vertically within the line.
+            var x = atEnd ? rect.Left : rect.Left + Math.Max(0, (rect.Width - formatted.Width) / 2);
+            var y = rect.Top + Math.Max(0, (rect.Height - formatted.Height) / 2);
+            dc.DrawText(formatted, new Point(x, y));
+        }
+    }
 }

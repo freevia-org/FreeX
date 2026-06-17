@@ -331,6 +331,14 @@ internal static class FreeWRibbonCommands
         if (onToggleReadMode is not null && isReadModeActive is not null)
             registry.Register("freew.read-mode", new ToggleActionCommand(onToggleReadMode, isReadModeActive));
 
+        // View tab — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
+        // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the
+        // document's text geometry, so they never enter the model/text; executing flips the overlay and
+        // (being in `stateful`) pushes the new state into the shared store so the ribbon button reflects it.
+        var formattingMarks = new ToggleActionCommand(() => editor.ToggleFormattingMarks(), () => editor.ShowFormattingMarks);
+        registry.Register("freew.formatting-marks", formattingMarks);
+        stateful.Add(("freew.formatting-marks", formattingMarks));
+
         // Mailings tab — a simple mail merge. Field placeholders are the literal text «FieldName»
         // (ordinary run text, so they round-trip through docx as plain text). The four commands share a
         // MailMergeSession: "Set Data" captures the CSV/typed records; "Insert Merge Field" drops a
