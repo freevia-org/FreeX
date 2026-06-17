@@ -145,7 +145,26 @@ public enum RibbonCommandIconKind
     WindowRestore,
     WindowMinimize,
     Wrap,
-    Zoom
+    Zoom,
+
+    // Word Home-tab text/paragraph glyphs (added for FreeW ribbon visual parity).
+    Subscript,
+    Superscript,
+    ChangeCase,
+    Highlight,
+    FontColor,
+    Bullets,
+    NumberedList,
+    MultilevelList,
+    IndentIncrease,
+    IndentDecrease,
+    AlignLeft,
+    AlignCenter,
+    AlignRight,
+    AlignJustify,
+    LineSpacing,
+    SpaceBefore,
+    SpaceAfter
 }
 
 public enum RibbonCommandIconAccent

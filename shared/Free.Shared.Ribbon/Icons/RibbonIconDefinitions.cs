@@ -144,6 +144,65 @@ public static class RibbonIconDefinitions
             Line(5, 15, 19, 15, 1.3),
             Line(5, 19, 14, 19, 1.3));
 
+        // ---- Word Home-tab paragraph alignment glyphs (rows of lines, justified differently) ----
+        Add(RibbonCommandIconKind.AlignLeft,
+            Line(5, 6, 19, 6, 1.4), Line(5, 10, 14, 10, 1.4), Line(5, 14, 19, 14, 1.4), Line(5, 18, 14, 18, 1.4));
+        Add(RibbonCommandIconKind.AlignCenter,
+            Line(5, 6, 19, 6, 1.4), Line(8, 10, 16, 10, 1.4), Line(5, 14, 19, 14, 1.4), Line(8, 18, 16, 18, 1.4));
+        Add(RibbonCommandIconKind.AlignRight,
+            Line(5, 6, 19, 6, 1.4), Line(10, 10, 19, 10, 1.4), Line(5, 14, 19, 14, 1.4), Line(10, 18, 19, 18, 1.4));
+        Add(RibbonCommandIconKind.AlignJustify,
+            Line(5, 6, 19, 6, 1.4), Line(5, 10, 19, 10, 1.4), Line(5, 14, 19, 14, 1.4), Line(5, 18, 19, 18, 1.4));
+
+        // ---- Lists ----
+        Add(RibbonCommandIconKind.Bullets,
+            FilledCircle(6, 7, 3), Line(10, 7, 19, 7, 1.4),
+            FilledCircle(6, 12, 3), Line(10, 12, 19, 12, 1.4),
+            FilledCircle(6, 17, 3), Line(10, 17, 19, 17, 1.4));
+        Add(RibbonCommandIconKind.NumberedList,
+            TextRun("1", 8, RibbonIconTextWeight.SemiBold, -8, -5), Line(10, 7, 19, 7, 1.4),
+            TextRun("2", 8, RibbonIconTextWeight.SemiBold, -8, 0), Line(10, 12, 19, 12, 1.4),
+            TextRun("3", 8, RibbonIconTextWeight.SemiBold, -8, 5), Line(10, 17, 19, 17, 1.4));
+        Add(RibbonCommandIconKind.MultilevelList,
+            FilledCircle(5, 6, 2.4), Line(8, 6, 19, 6, 1.3),
+            FilledRectangle(9, 10.2, 2, 2), Line(12, 11, 19, 11, 1.3),
+            FilledRectangle(9, 15.2, 2, 2), Line(12, 16, 19, 16, 1.3));
+
+        // ---- Indent (lines + arrow) ----
+        Add(RibbonCommandIconKind.IndentIncrease,
+            Line(11, 6, 19, 6, 1.4), Line(11, 18, 19, 18, 1.4), Line(5, 12, 13, 12, 1.4),
+            Path("M5,9 L9,12 L5,15", 1.4));
+        Add(RibbonCommandIconKind.IndentDecrease,
+            Line(11, 6, 19, 6, 1.4), Line(11, 18, 19, 18, 1.4), Line(5, 12, 13, 12, 1.4),
+            Path("M9,9 L5,12 L9,15", 1.4));
+
+        // ---- Line/paragraph spacing (up-down arrow beside lines) ----
+        Add(RibbonCommandIconKind.LineSpacing,
+            Line(11, 6, 19, 6, 1.3), Line(11, 12, 19, 12, 1.3), Line(11, 18, 19, 18, 1.3),
+            Line(6, 5, 6, 19, 1.2),
+            Path("M3.5,8 L6,5 L8.5,8", 1.2), Path("M3.5,16 L6,19 L8.5,16", 1.2));
+        Add(RibbonCommandIconKind.SpaceBefore,
+            Path("M6,9 L9,6 L12,9", 1.3), Line(9, 6, 9, 11, 1.3),
+            Line(4, 14, 20, 14, 1.3), Line(4, 18, 20, 18, 1.3));
+        Add(RibbonCommandIconKind.SpaceAfter,
+            Line(4, 6, 20, 6, 1.3), Line(4, 10, 20, 10, 1.3),
+            Line(9, 13, 9, 18, 1.3), Path("M6,15 L9,18 L12,15", 1.3));
+
+        // ---- Text formatting glyphs ----
+        Add(RibbonCommandIconKind.Subscript,
+            TextRun("X", 13, RibbonIconTextWeight.SemiBold, -3, -2),
+            TextRun("2", 9, RibbonIconTextWeight.Normal, 7, 6));
+        Add(RibbonCommandIconKind.Superscript,
+            TextRun("X", 13, RibbonIconTextWeight.SemiBold, -3, 2),
+            TextRun("2", 9, RibbonIconTextWeight.Normal, 7, -6));
+        Add(RibbonCommandIconKind.ChangeCase, TextRun("Aa", 12, RibbonIconTextWeight.SemiBold));
+        Add(RibbonCommandIconKind.FontColor,
+            TextRun("A", 14, RibbonIconTextWeight.SemiBold, 0, -2),
+            FilledRectangle(6, 18, 12, 3));
+        Add(RibbonCommandIconKind.Highlight,
+            Path("M6,15 L13,8 L17,12 L10,19 L6,19 Z", 1.3),
+            FilledRectangle(5, 20, 14, 2));
+
         // ---- Table / PivotTable (DrawTable) ----
         var table = new[]
         {

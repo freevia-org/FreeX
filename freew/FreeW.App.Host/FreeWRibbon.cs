@@ -14,23 +14,22 @@ internal static class FreeWRibbon
         static RibbonButton Icon(RibbonButton button, RibbonCommandIconKind kind, RibbonCommandIconAccent accent = RibbonCommandIconAccent.None) =>
             button with { Icon = new RibbonCommandIcon(kind, accent) };
 
-        static RibbonToggleButton ToggleIcon(RibbonToggleButton toggle, RibbonCommandIconKind kind) =>
-            toggle with { Icon = new RibbonCommandIcon(kind) };
-
         return new RibbonDefinitionBuilder()
             .Tab("home", "Home", "H", tab =>
             {
                 tab.Group("clipboard", "Clipboard", "C", 100, g =>
                 {
-                    g.Button("freew.paste", "Paste", b => Icon(b, RibbonCommandIconKind.Paste));
-                    g.Button("freew.paste-plain", "Paste Text Only", b => Icon(b, RibbonCommandIconKind.Paste));
-                    g.Button("freew.paste-merge", "Merge Formatting", b => Icon(b, RibbonCommandIconKind.Paste));
-                    g.Button("freew.cut", "Cut", b => Icon(b, RibbonCommandIconKind.Cut));
-                    g.Button("freew.copy", "Copy", b => Icon(b, RibbonCommandIconKind.Copy));
-                    g.Button("freew.format-painter", "Format Painter", b => Icon(b, RibbonCommandIconKind.FormatPainter));
+                    // Paste is the hero (Large); the rest stack as labelled medium buttons, like Word.
+                    g.Large("freew.paste", "Paste", RibbonCommandIconKind.Paste, "V");
+                    g.Medium("freew.cut", "Cut", RibbonCommandIconKind.Cut, "X");
+                    g.Medium("freew.copy", "Copy", RibbonCommandIconKind.Copy, "C");
+                    g.Medium("freew.format-painter", "Format Painter", RibbonCommandIconKind.FormatPainter, "FP");
+                    g.Icon("freew.paste-plain", "Paste Text Only", RibbonCommandIconKind.Paste);
+                    g.Icon("freew.paste-merge", "Merge Formatting", RibbonCommandIconKind.Paste);
                 });
                 tab.Group("font", "Font", "F", 90, g =>
                 {
+                    // Row 1: the font name + size combos. Row 2+: compact icon-only buttons, exactly like Word.
                     g.ComboBox("freew.font-family", "Font", c => c with
                     {
                         Items = new[] { "Calibri", "Arial", "Times New Roman", "Georgia", "Consolas", "Verdana", "Cambria" },
@@ -43,44 +42,48 @@ internal static class FreeWRibbon
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
                         Width = 56
                     });
-                    g.Toggle("freew.bold", "Bold", b => ToggleIcon(b, RibbonCommandIconKind.Bold));
-                    g.Toggle("freew.italic", "Italic", b => ToggleIcon(b, RibbonCommandIconKind.Italic));
-                    g.Toggle("freew.underline", "Underline", b => ToggleIcon(b, RibbonCommandIconKind.Underline));
-                    g.Button("freew.superscript", "Superscript", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.subscript", "Subscript", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.smallcaps", "Small Caps", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.allcaps", "All Caps", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.change-case", "Change Case", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.font-color", "Text Colour", b => Icon(b, RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color));
-                    g.Button("freew.highlight", "Highlight", b => Icon(b, RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill));
-                    g.Button("freew.grow-font", "Grow", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.shrink-font", "Shrink", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.clear-formatting", "Clear Formatting", b => Icon(b, RibbonCommandIconKind.Clear));
+                    g.Icon("freew.grow-font", "Grow Font", RibbonCommandIconKind.ArrowUp);
+                    g.Icon("freew.shrink-font", "Shrink Font", RibbonCommandIconKind.ArrowDown);
+                    g.RowBreak();
+                    g.IconToggle("freew.bold", "Bold", RibbonCommandIconKind.Bold, "1");
+                    g.IconToggle("freew.italic", "Italic", RibbonCommandIconKind.Italic, "2");
+                    g.IconToggle("freew.underline", "Underline", RibbonCommandIconKind.Underline, "3");
+                    g.Icon("freew.subscript", "Subscript", RibbonCommandIconKind.Subscript);
+                    g.Icon("freew.superscript", "Superscript", RibbonCommandIconKind.Superscript);
+                    g.Icon("freew.change-case", "Change Case", RibbonCommandIconKind.ChangeCase);
+                    g.Icon("freew.smallcaps", "Small Caps", RibbonCommandIconKind.Font);
+                    g.Icon("freew.allcaps", "All Caps", RibbonCommandIconKind.Font);
+                    g.Icon("freew.highlight", "Text Highlight Colour", RibbonCommandIconKind.Highlight);
+                    g.Icon("freew.font-color", "Font Colour", RibbonCommandIconKind.FontColor);
+                    g.Icon("freew.clear-formatting", "Clear All Formatting", RibbonCommandIconKind.Clear);
                 });
                 tab.Group("paragraph", "Paragraph", "P", 80, g =>
                 {
-                    g.Button("freew.bullets", "Bullets", b => Icon(b, RibbonCommandIconKind.List));
-                    g.Button("freew.numbering", "Numbering", b => Icon(b, RibbonCommandIconKind.Number));
-                    g.Button("freew.multilevel-list", "Multilevel List", b => Icon(b, RibbonCommandIconKind.List));
-                    g.Button("freew.align-left", "Align Left", b => Icon(b, RibbonCommandIconKind.Align));
-                    g.Button("freew.align-center", "Center", b => Icon(b, RibbonCommandIconKind.Align));
-                    g.Button("freew.align-right", "Align Right", b => Icon(b, RibbonCommandIconKind.Align));
-                    g.ComboBox("freew.line-spacing", "Line Spacing", c => c with
+                    // Row 1: list + indent + spacing. Row 2: alignment + shading/borders. Compact icon-only, Word-style.
+                    g.Icon("freew.bullets", "Bullets", RibbonCommandIconKind.Bullets, dropdown: true);
+                    g.Icon("freew.numbering", "Numbering", RibbonCommandIconKind.NumberedList, dropdown: true);
+                    g.Icon("freew.multilevel-list", "Multilevel List", RibbonCommandIconKind.MultilevelList, dropdown: true);
+                    g.Icon("freew.indent-decrease", "Decrease Indent", RibbonCommandIconKind.IndentDecrease);
+                    g.Icon("freew.indent-increase", "Increase Indent", RibbonCommandIconKind.IndentIncrease);
+                    g.RowBreak();
+                    g.Icon("freew.align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
+                    g.Icon("freew.align-center", "Center", RibbonCommandIconKind.AlignCenter);
+                    g.Icon("freew.align-right", "Align Right", RibbonCommandIconKind.AlignRight);
+                    g.Icon("freew.align-justify", "Justify", RibbonCommandIconKind.AlignJustify);
+                    g.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", c => c with
                     {
                         Items = new[] { "1.0", "1.15", "1.5", "2.0" },
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextFunction),
-                        Width = 56
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.LineSpacing),
+                        Width = 52
                     });
-                    g.Button("freew.space-before-toggle", "Space Before", b => Icon(b, RibbonCommandIconKind.TextFunction));
-                    g.Button("freew.space-after-toggle", "Space After", b => Icon(b, RibbonCommandIconKind.TextFunction));
-                    g.Button("freew.indent-increase", "Increase Indent", b => Icon(b, RibbonCommandIconKind.ArrowRight));
-                    g.Button("freew.indent-decrease", "Decrease Indent", b => Icon(b, RibbonCommandIconKind.ArrowLeft));
-                    g.Button("freew.paragraph-dialog", "Paragraph…", b => Icon(b, RibbonCommandIconKind.TextFunction));
-                    g.Button("freew.para-border", "Border", b => Icon(b, RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border));
-                    g.Button("freew.para-shading", "Shading", b => Icon(b, RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill));
-                    g.Button("freew.keep-with-next", "Keep with Next", b => Icon(b, RibbonCommandIconKind.TextFunction));
-                    g.Button("freew.keep-lines", "Keep Lines Together", b => Icon(b, RibbonCommandIconKind.TextFunction));
-                    g.Button("freew.widow-control", "Widow/Orphan Control", b => Icon(b, RibbonCommandIconKind.TextFunction));
+                    g.Icon("freew.para-shading", "Shading", RibbonCommandIconKind.Fill);
+                    g.Icon("freew.para-border", "Borders", RibbonCommandIconKind.Border);
+                    g.Icon("freew.space-before-toggle", "Add Space Before Paragraph", RibbonCommandIconKind.SpaceBefore);
+                    g.Icon("freew.space-after-toggle", "Add Space After Paragraph", RibbonCommandIconKind.SpaceAfter);
+                    g.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
+                    g.Icon("freew.keep-with-next", "Keep with Next", RibbonCommandIconKind.TextFunction);
+                    g.Icon("freew.keep-lines", "Keep Lines Together", RibbonCommandIconKind.TextFunction);
+                    g.Icon("freew.widow-control", "Widow/Orphan Control", RibbonCommandIconKind.TextFunction);
                 });
                 tab.Group("styles", "Styles", "S", 70, g =>
                 {
