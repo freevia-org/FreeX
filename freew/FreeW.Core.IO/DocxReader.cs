@@ -59,6 +59,7 @@ public static class DocxReader
         ReadSettings(archive, document);
         ReadTheme(archive, document);
         ReadEmbeddedFonts(archive, document);
+        ReadPreservedParts(archive, document);
 
         return document;
     }
@@ -145,6 +146,11 @@ public static class DocxReader
         if (root is null)
             return;
 
+        // Preserve the ORIGINAL settings element so the writer can overlay FreeW's modelled toggles onto it
+        // (rather than emitting a fresh minimal part), keeping unmodelled settings — compat flags, default tab
+        // stop, rsid table, proofing, … — across the round-trip. Cloned so later in-place edits can't leak back.
+        document.Preserved.OriginalSettings = new XElement(root);
+
         // Automatic hyphenation (w:autoHyphenation) is an on/off toggle: present + not explicitly off.
         document.Page.AutoHyphenation = ReadToggle(root, "autoHyphenation");
 
@@ -165,6 +171,101 @@ public static class DocxReader
         var mode = ProtectionModeFromEditToken(protection.Attribute(W + "edit")?.Value);
         if (mode != ProtectionMode.None)
             document.Protection = new ProtectionSettings(mode);
+    }
+
+    /// <summary>
+    /// Captures the package parts FreeW does not model but preserves verbatim (preserve-and-re-emit):
+    /// <c>word/webSettings.xml</c> and every <c>customXml/*</c> part (each item, its props, and the item's own
+    /// <c>_rels</c>). Each captured part records its raw bytes plus — when it has them — its
+    /// <c>[Content_Types].xml</c> Override and the document→part relationship type, so the writer can re-emit
+    /// the part, its content type and its relationship unchanged. A document with none of these parts (authored
+    /// from scratch) captures nothing, so it round-trips byte-equivalently to before.
+    /// </summary>
+    private static void ReadPreservedParts(ZipArchive archive, TextDocument document)
+    {
+        // Map each part name → its content-type Override (so a re-emitted part keeps its declared type), and
+        // each document-relationship Target → its Type (so a re-emitted part keeps its document relationship).
+        var overrides = ReadContentTypeOverrides(archive);
+        var docRelTypesByTarget = ReadDocumentRelationshipTypesByTarget(archive);
+
+        void Capture(string partName, string? relationshipType)
+        {
+            var entryPath = partName.TrimStart('/');
+            var bytes = LoadMedia(archive, entryPath);
+            if (bytes is null)
+                return;
+            overrides.TryGetValue(partName, out var contentType);
+            document.Preserved.Parts.Add(new PreservedPart(partName, bytes, contentType, relationshipType));
+        }
+
+        // word/webSettings.xml: one optional part referenced from document.xml.rels (webSettings rel type).
+        if (archive.GetEntry("word/webSettings.xml") is not null)
+            Capture("/word/webSettings.xml",
+                docRelTypesByTarget.GetValueOrDefault("webSettings.xml") ?? WebSettingsRelType);
+
+        // customXml/* — items, their props and the items' own _rels. The document→item relationships live in
+        // document.xml.rels with a customXml-relative Target (e.g. "../customXml/item1.xml"); item→props
+        // relationships live in each item's own _rels (not document.xml.rels), so those parts carry no document
+        // relationship. We walk the package entries so any number of items (and their satellite parts) survive.
+        foreach (var entry in archive.Entries)
+        {
+            var name = entry.FullName;
+            if (!name.StartsWith("customXml/", StringComparison.Ordinal) || name.EndsWith("/", StringComparison.Ordinal))
+                continue;
+            var partName = "/" + name;
+            // An item part (customXml/itemN.xml, not under _rels) is the one document.xml.rels points at; its
+            // props and _rels are pulled in by the same walk but carry no document relationship.
+            var isItem = !name.StartsWith("customXml/_rels/", StringComparison.Ordinal)
+                && name.StartsWith("customXml/item", StringComparison.Ordinal)
+                && !name.Contains("itemProps", StringComparison.Ordinal);
+            var relationshipType = isItem
+                ? docRelTypesByTarget.GetValueOrDefault("../" + name) ?? CustomXmlRelType
+                : null;
+            Capture(partName, relationshipType);
+        }
+    }
+
+    /// <summary>
+    /// Reads <c>[Content_Types].xml</c>, mapping each Override's PartName → ContentType. Returns an empty map
+    /// when the part is absent. Used to re-emit a preserved part's content-type Override unchanged.
+    /// </summary>
+    private static Dictionary<string, string> ReadContentTypeOverrides(ZipArchive archive)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var ctXml = LoadPart(archive, "[Content_Types].xml");
+        var overrides = ctXml?.Root?.Elements(Ct + "Override");
+        if (overrides is null)
+            return map;
+        foreach (var ov in overrides)
+        {
+            var partName = ov.Attribute("PartName")?.Value;
+            var contentType = ov.Attribute("ContentType")?.Value;
+            if (!string.IsNullOrEmpty(partName) && !string.IsNullOrEmpty(contentType))
+                map[partName] = contentType;
+        }
+        return map;
+    }
+
+    /// <summary>
+    /// Reads <c>word/_rels/document.xml.rels</c>, mapping each relationship Target → its Type. Targets are kept
+    /// exactly as written (e.g. "webSettings.xml", "../customXml/item1.xml") so a preserved part can recover the
+    /// relationship type the document used to reference it. Returns an empty map when the rels part is absent.
+    /// </summary>
+    private static Dictionary<string, string> ReadDocumentRelationshipTypesByTarget(ZipArchive archive)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return map;
+        foreach (var rel in relationships)
+        {
+            var target = rel.Attribute("Target")?.Value;
+            var type = rel.Attribute("Type")?.Value;
+            if (!string.IsNullOrEmpty(target) && !string.IsNullOrEmpty(type))
+                map[target] = type;
+        }
+        return map;
     }
 
     /// <summary>
@@ -1159,9 +1260,14 @@ public static class DocxReader
         var widthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
         var heightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
 
+        // Recover the image's original format so non-PNG pictures round-trip verbatim. Prefer the media
+        // part's extension (the relationship target carries the real extension), falling back to the bytes'
+        // magic number when the extension is unknown/absent.
+        var format = ResolveImageFormat(target, bytes);
+
         // Restore accessibility alt text from wp:docPr/@descr; absent attribute leaves AltText null.
         var descr = container.Element(Wp + "docPr")?.Attribute("descr")?.Value;
-        var image = new InlineImage(bytes, widthPt, heightPt)
+        var image = new InlineImage(bytes, widthPt, heightPt, format)
         {
             AltText = string.IsNullOrEmpty(descr) ? null : descr,
         };
@@ -1367,7 +1473,7 @@ public static class DocxReader
             && LoadMedia(archive, iconPath) is { } iconBytes)
         {
             var (iconWidthPt, iconHeightPt) = ParseVmlShapeSize(shape!.Attribute("style")?.Value);
-            embedded.Icon = new InlineImage(iconBytes, iconWidthPt, iconHeightPt);
+            embedded.Icon = new InlineImage(iconBytes, iconWidthPt, iconHeightPt, ResolveImageFormat(iconPath, iconBytes));
             embedded.WidthPt = iconWidthPt;
             embedded.HeightPt = iconHeightPt;
         }
@@ -1722,6 +1828,19 @@ public static class DocxReader
         using var buffer = new MemoryStream();
         entryStream.CopyTo(buffer);
         return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// Resolves an image's <see cref="ImageFormat"/> from its media-part path and bytes. The part name (the
+    /// relationship target) carries the real extension, so it is preferred; when the extension is unknown or
+    /// absent the bytes' magic number is used (see <see cref="InlineImage.DetectFormat"/>), which also gives
+    /// a usable default for empty data.
+    /// </summary>
+    private static ImageFormat ResolveImageFormat(string partPath, byte[] bytes)
+    {
+        var dot = partPath.LastIndexOf('.');
+        var ext = dot >= 0 ? partPath[(dot + 1)..] : null;
+        return InlineImage.FormatForExtension(ext) ?? InlineImage.DetectFormat(bytes);
     }
 
     internal static ParagraphFormatting ReadParagraphFormatting(XElement pPr) =>
