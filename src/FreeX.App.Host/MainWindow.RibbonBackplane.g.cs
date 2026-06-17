@@ -43,12 +43,6 @@ public partial class MainWindow
     private readonly System.Windows.Controls.Primitives.ToggleButton SplitViewBtn = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatCropMenuItem = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatResetCropMenuItem = new();
-    private readonly System.Windows.Controls.CheckBox TableDesignTotalRowBtn = new();
-    private readonly System.Windows.Controls.CheckBox TableDesignFirstColumnBtn = new();
-    private readonly System.Windows.Controls.CheckBox TableDesignLastColumnBtn = new();
-    private readonly System.Windows.Controls.CheckBox TableDesignBandedRowsBtn = new();
-    private readonly System.Windows.Controls.CheckBox TableDesignBandedColumnsBtn = new();
-    private readonly System.Windows.Controls.CheckBox TableDesignFilterButtonBtn = new();
     private readonly System.Windows.Controls.ContextMenu TableDesignStyleGalleryMenu = new();
     private readonly AutomationInvokeButton HelpOnlineButton = new();
 
@@ -213,29 +207,11 @@ public partial class MainWindow
         RibbonMetadata.SetCommandName(PictureFormatResetCropMenuItem, "Reset Crop");
         RibbonBackplaneControls["Reset Crop"] = PictureFormatResetCropMenuItem;
         RibbonBackplaneControlNames["Reset Crop"] = "PictureFormatResetCropMenuItem";
-        try { RegisterName("TableDesignTotalRowBtn", TableDesignTotalRowBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(TableDesignTotalRowBtn, "Total Row");
-        RibbonBackplaneControls["Total Row"] = TableDesignTotalRowBtn;
         RibbonBackplaneControlNames["Total Row"] = "TableDesignTotalRowBtn";
-        try { RegisterName("TableDesignFirstColumnBtn", TableDesignFirstColumnBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(TableDesignFirstColumnBtn, "First Column");
-        RibbonBackplaneControls["First Column"] = TableDesignFirstColumnBtn;
         RibbonBackplaneControlNames["First Column"] = "TableDesignFirstColumnBtn";
-        try { RegisterName("TableDesignLastColumnBtn", TableDesignLastColumnBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(TableDesignLastColumnBtn, "Last Column");
-        RibbonBackplaneControls["Last Column"] = TableDesignLastColumnBtn;
         RibbonBackplaneControlNames["Last Column"] = "TableDesignLastColumnBtn";
-        try { RegisterName("TableDesignBandedRowsBtn", TableDesignBandedRowsBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(TableDesignBandedRowsBtn, "Banded Rows");
-        RibbonBackplaneControls["Banded Rows"] = TableDesignBandedRowsBtn;
         RibbonBackplaneControlNames["Banded Rows"] = "TableDesignBandedRowsBtn";
-        try { RegisterName("TableDesignBandedColumnsBtn", TableDesignBandedColumnsBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(TableDesignBandedColumnsBtn, "Banded Columns");
-        RibbonBackplaneControls["Banded Columns"] = TableDesignBandedColumnsBtn;
         RibbonBackplaneControlNames["Banded Columns"] = "TableDesignBandedColumnsBtn";
-        try { RegisterName("TableDesignFilterButtonBtn", TableDesignFilterButtonBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(TableDesignFilterButtonBtn, "Filter Button");
-        RibbonBackplaneControls["Filter Button"] = TableDesignFilterButtonBtn;
         RibbonBackplaneControlNames["Filter Button"] = "TableDesignFilterButtonBtn";
         try { RegisterName("TableDesignStyleGalleryMenu", TableDesignStyleGalleryMenu); } catch (System.ArgumentException) { }
         try { RegisterName("HelpOnlineButton", HelpOnlineButton); } catch (System.ArgumentException) { }
