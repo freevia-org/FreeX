@@ -62,7 +62,7 @@ internal sealed class FormControlVisual : Control
         IsHitTestVisible = false;
     }
 
-    // Inlined from the shared FormControlRenderPlanner (which lives in the WPF-only FreeX.App.UI
+    // Inlined from the shared FormControlRenderPlanner (which lives in the WPF-only App.UI
     // assembly the Avalonia project can't reference); kept byte-equivalent so both platforms match.
     public static bool IsRenderable(FormControlKind kind) =>
         kind is FormControlKind.CheckBox or FormControlKind.OptionButton or FormControlKind.Spinner
