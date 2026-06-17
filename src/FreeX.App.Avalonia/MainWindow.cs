@@ -647,6 +647,28 @@ public sealed partial class MainWindow : Window
                     // Paste split-button menu items.
                     ["home.pasteValues"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Values, default, "Values"),
                     ["home.pasteFormat"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formats, default, "Formatting"),
+                    // Formulas tab.
+                    ["formulas.insertFunction"] = InsertFunction,
+                    ["formulas.autoSum"] = () => InsertAutoSumFormula("SUM"),
+                    ["formulas.nameManager"] = NameManager,
+                    ["formulas.defineName"] = DefineName,
+                    ["formulas.createFromSelection"] = CreateNamesFromSelection,
+                    // Review tab.
+                    ["review.checkAccessibility"] = () => _ = ShowReviewSummaryDialogAsync(focusAccessibility: true),
+                    ["review.protectSheet"] = () => _ = ShowProtectSheetDialogAsync(),
+                    ["review.protectWorkbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
+                    // View tab.
+                    ["view.gridlines"] = ToggleShowGridlines,
+                    ["view.headings"] = ToggleShowHeadings,
+                    ["view.zoom"] = ZoomIn,
+                    ["view.zoom100"] = ZoomTo100Percent,
+                    ["view.zoomToSelection"] = ZoomToSelection,
+                    ["view.freezePanes"] = FreezePanesAtActiveCell,
+                    ["view.pageBreakPreview"] = TogglePageBreakPreview,
+                    // Page Layout tab (Page Setup dialog covers margins/orientation/size).
+                    ["pageLayout.margins"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.orientation"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["pageLayout.size"] = () => _ = ShowPageSetupDialogAsync(),
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);

@@ -149,6 +149,32 @@ public sealed class AvaloniaRibbonHostCallbackTests
         Assert.Contains("Calculation", groups);
     }
 
+    [Theory]
+    [InlineData("formulas.insertFunction")]
+    [InlineData("formulas.nameManager")]
+    [InlineData("formulas.autoSum")]
+    [InlineData("review.protectSheet")]
+    [InlineData("review.checkAccessibility")]
+    [InlineData("view.gridlines")]
+    [InlineData("view.freezePanes")]
+    [InlineData("view.zoom100")]
+    [InlineData("pageLayout.margins")]
+    public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
+    {
+        // The id exists in the ribbon definition (else it is not a NoOp default to begin with) ...
+        var defaults = SampleRibbon.BuildRegistry(() => null, _ => { });
+        Assert.True(defaults.TryGet(new RibbonCommandId(commandId), out var noOp));
+        Assert.IsType<NoOpRibbonCommand>(noOp);
+
+        // ... and ExtraCommands (how MainWindow wires the new tabs) overrides it with a real command.
+        var wired = SampleRibbon.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
+        {
+            ExtraCommands = new Dictionary<string, Action> { [commandId] = () => { } },
+        });
+        Assert.True(wired.TryGet(new RibbonCommandId(commandId), out var command));
+        Assert.IsType<RelayRibbonCommand>(command);
+    }
+
     [Fact]
     public void BuildDefinition_ViewTab_HasShowZoomWindowGroups()
     {
