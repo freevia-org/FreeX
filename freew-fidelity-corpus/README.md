@@ -17,7 +17,9 @@ preserve, render, and eventually edit:
 - sizeable stress documents with mixed package parts
 
 The initial seed uses Apache POI's `test-data/document` and `test-data/integration` DOCX fixtures
-under Apache-2.0. Each file is referenced by a direct raw GitHub URL in `manifest.csv`.
+under Apache-2.0. The corpus now also includes targeted Apache-2.0 fixtures from Apache Tika and
+docx4j plus MIT-licensed fixtures from Open XML PowerTools and the Open XML SDK. Each file is
+referenced by a direct raw GitHub URL in `manifest.csv`.
 
 ## What is committed vs. downloaded
 
@@ -40,7 +42,8 @@ pwsh tools/Fetch-FreeWFidelityCorpus.ps1 -Force
 - `feature_tags` is space-separated. Prefer concrete WordprocessingML features such as
   `headers-footers`, `comments`, `tracked-changes`, `footnotes`, `endnotes`, `numbering`,
   `tables`, `images`, `drawings`, `charts`, `embedded-objects`, `attachments`, `styles`,
-  and `stress`.
+  `content-controls`, `smartart`, `custom-xml`, `vml`, `shapes`, `watermarks`, `altchunk`,
+  `mail-merge`, and `stress`.
 
 ## Fidelity runs
 
