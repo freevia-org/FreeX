@@ -604,6 +604,7 @@ public static class DocxWriter
                 Image = run.Image,
                 HyperlinkUrl = run.HyperlinkUrl,
                 HyperlinkAnchor = run.HyperlinkAnchor,
+                HyperlinkTooltip = run.HyperlinkTooltip,
                 FieldKind = run.FieldKind,
                 FootnoteId = run.FootnoteId,
                 EndnoteId = run.EndnoteId,
@@ -850,19 +851,24 @@ public static class DocxWriter
 
             var url = runs[i].HyperlinkUrl;
             var anchor = runs[i].HyperlinkAnchor;
+            var tooltip = runs[i].HyperlinkTooltip;
             if (url is { Length: > 0 } && hyperlinks.TryGetValue(url, out var relationshipId))
             {
                 var hyperlink = new XElement(W + "hyperlink", new XAttribute(R + "id", relationshipId));
+                if (tooltip is { Length: > 0 })
+                    hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
-                while (i < runs.Count && runs[i].HyperlinkUrl == url && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
+                while (i < runs.Count && runs[i].HyperlinkUrl == url && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
                     hyperlink.Add(BuildRun(runs[i++], imagesByRun));
                 Content(head, hyperlink);
             }
             else if (anchor is { Length: > 0 })
             {
                 var hyperlink = new XElement(W + "hyperlink", new XAttribute(W + "anchor", anchor));
+                if (tooltip is { Length: > 0 })
+                    hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
-                while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
+                while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
                     hyperlink.Add(BuildRun(runs[i++], imagesByRun));
                 Content(head, hyperlink);
             }

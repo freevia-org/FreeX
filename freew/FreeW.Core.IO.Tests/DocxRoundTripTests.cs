@@ -1133,6 +1133,91 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Hyperlink_RoundTrips_WithTooltip()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("see "));
+        paragraph.Runs.Add(new Run("the docs")
+        {
+            HyperlinkUrl = "https://example.com/docs",
+            HyperlinkTooltip = "Open the documentation"
+        });
+        paragraph.Runs.Add(new Run(" now"));
+        doc.Blocks.Add(paragraph);
+
+        var runs = RoundTrip(doc).Paragraphs.First().Runs;
+
+        runs.Select(r => r.Text).Should().Equal("see ", "the docs", " now");
+        var linked = runs.Single(r => r.Text == "the docs");
+        linked.HyperlinkUrl.Should().Be("https://example.com/docs");
+        linked.HyperlinkTooltip.Should().Be("Open the documentation");
+        runs[0].HyperlinkTooltip.Should().BeNull();
+        runs[2].HyperlinkTooltip.Should().BeNull();
+    }
+
+    [Fact]
+    public void Hyperlink_WithTooltip_WritesTooltipAttribute()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("link")
+        {
+            HyperlinkUrl = "https://example.com/page",
+            HyperlinkTooltip = "Tip text"
+        });
+        doc.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var xml = docReader.ReadToEnd();
+        xml.Should().Contain("tooltip=\"Tip text\"");
+    }
+
+    [Fact]
+    public void Hyperlink_WithoutTooltip_OmitsTooltipAttribute()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("link") { HyperlinkUrl = "https://example.com/page" });
+        doc.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        docReader.ReadToEnd().Should().NotContain("tooltip");
+    }
+
+    [Fact]
+    public void InternalLink_RoundTrips_WithTooltip()
+    {
+        var doc = new TextDocument();
+        var linking = new Paragraph();
+        linking.Runs.Add(new Run("jump to "));
+        linking.Runs.Add(new Run("Section 1")
+        {
+            HyperlinkAnchor = "Section1",
+            HyperlinkTooltip = "Go to section one"
+        });
+        doc.Blocks.Add(linking);
+        doc.Blocks.Add(new Paragraph("the target") { BookmarkName = "Section1" });
+
+        var runs = RoundTrip(doc).Paragraphs.First().Runs;
+
+        var linked = runs.Single(r => r.Text == "Section 1");
+        linked.HyperlinkAnchor.Should().Be("Section1");
+        linked.HyperlinkUrl.Should().BeNull();
+        linked.HyperlinkTooltip.Should().Be("Go to section one");
+    }
+
+    [Fact]
     public void BulletList_RoundTrips_ListKindAndLevel()
     {
         var doc = new TextDocument();

@@ -1807,19 +1807,21 @@ public sealed class DocumentView : RichTextBox
     // Maps one FlowDocument inline to model run(s). A Hyperlink is a Span of inlines, so we recurse
     // into it carrying its target. An external link carries a NavigateUri (-> HyperlinkUrl); an
     // internal link carries its bookmark name on the Hyperlink's Tag (-> HyperlinkAnchor).
-    private static void ReadInline(ModelParagraph modelParagraph, Inline inline, string? hyperlinkUrl, string? hyperlinkAnchor)
+    private static void ReadInline(ModelParagraph modelParagraph, Inline inline, string? hyperlinkUrl, string? hyperlinkAnchor, string? hyperlinkTooltip = null)
     {
         switch (inline)
         {
             case WpfHyperlink link:
-                var anchor = link.Tag as string ?? hyperlinkAnchor;
+                var info = link.Tag as HyperlinkInfo;
+                var anchor = info?.Anchor ?? hyperlinkAnchor;
                 // An internal link has no NavigateUri; only treat NavigateUri as an external URL.
                 var url = anchor is { Length: > 0 } ? hyperlinkUrl : link.NavigateUri?.ToString() ?? hyperlinkUrl;
+                var tooltip = info?.Tooltip ?? hyperlinkTooltip;
                 foreach (var child in link.Inlines)
-                    ReadInline(modelParagraph, child, url, anchor);
+                    ReadInline(modelParagraph, child, url, anchor, tooltip);
                 break;
             case InlineUIContainer { Child: Image { Tag: InlineImage modelImage } }:
-                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor });
+                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = modelImage, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
                 break;
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
@@ -1836,6 +1838,7 @@ public sealed class DocumentView : RichTextBox
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
+                    HyperlinkTooltip = hyperlinkTooltip,
                     FieldKind = fieldMarker.Kind
                 });
                 break;
@@ -1850,6 +1853,7 @@ public sealed class DocumentView : RichTextBox
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
+                    HyperlinkTooltip = hyperlinkTooltip,
                     CommentId = covered.CommentId
                 });
                 break;
@@ -1865,6 +1869,7 @@ public sealed class DocumentView : RichTextBox
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
+                    HyperlinkTooltip = hyperlinkTooltip,
                     Control = control
                 });
                 break;
@@ -1875,13 +1880,14 @@ public sealed class DocumentView : RichTextBox
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
+                    HyperlinkTooltip = hyperlinkTooltip,
                     Revision = marker.Kind,
                     RevisionAuthor = marker.Author,
                     RevisionDateXml = marker.DateXml
                 });
                 break;
             case WpfRun run when run.Text.Length > 0:
-                modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor });
+                modelParagraph.Runs.Add(new ModelRun(run.Text, ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
                 break;
         }
     }
@@ -2312,12 +2318,19 @@ public sealed class DocumentView : RichTextBox
             ApplyContentControlMarker(wpf, control);
 
         if (run.HyperlinkUrl is { Length: > 0 } url)
-            return BuildHyperlink(wpf, url);
+            return BuildHyperlink(wpf, url, run.HyperlinkTooltip);
         if (run.HyperlinkAnchor is { Length: > 0 } anchor)
-            return BuildInternalHyperlink(wpf, anchor);
+            return BuildInternalHyperlink(wpf, anchor, run.HyperlinkTooltip);
 
         return wpf;
     }
+
+    /// <summary>
+    /// Carried on a WPF <see cref="WpfHyperlink"/>'s Tag so the link's internal target (a bookmark
+    /// anchor) and ScreenTip survive a commit/render round-trip (see <see cref="ReadInline"/>). External
+    /// links leave <see cref="Anchor"/> null and store the URL on the link's NavigateUri.
+    /// </summary>
+    private sealed record HyperlinkInfo(string? Anchor, string? Tooltip);
 
     /// <summary>Subtle highlight used to mark a commented text range (a pale review yellow).</summary>
     private static readonly Color CommentHighlight = Color.FromRgb(0xFF, 0xF4, 0xCE);
@@ -2417,17 +2430,18 @@ public sealed class DocumentView : RichTextBox
     // Wraps a styled run in a WPF Hyperlink that targets an internal bookmark. The bookmark name is
     // stored on the link's Tag (not NavigateUri, which is reserved for external URLs) so it reads back
     // on commit; navigating scrolls the bookmarked paragraph into view (best-effort).
-    private static Inline BuildInternalHyperlink(WpfRun content, string anchor)
+    private static Inline BuildInternalHyperlink(WpfRun content, string anchor, string? tooltip = null)
     {
         var link = new WpfHyperlink(content);
-        StyleInternalLink(link, anchor);
+        StyleInternalLink(link, anchor, tooltip);
         return link;
     }
 
-    private static void StyleInternalLink(WpfHyperlink link, string anchor)
+    private static void StyleInternalLink(WpfHyperlink link, string anchor, string? tooltip = null)
     {
-        link.Tag = anchor;
-        link.ToolTip = "Go to bookmark: " + anchor;
+        link.Tag = new HyperlinkInfo(anchor, tooltip);
+        // A ScreenTip, when set, wins over the default "Go to bookmark" chrome tooltip.
+        link.ToolTip = tooltip is { Length: > 0 } ? tooltip : "Go to bookmark: " + anchor;
         link.Foreground = new SolidColorBrush(Color.FromRgb(0x05, 0x63, 0xC1));
         link.Click += OnInternalLinkClick;
     }
@@ -2437,7 +2451,7 @@ public sealed class DocumentView : RichTextBox
     // that hosts the clicked link.
     private static void OnInternalLinkClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not WpfHyperlink { Tag: string anchor } link || anchor.Length == 0)
+        if (sender is not WpfHyperlink { Tag: HyperlinkInfo { Anchor: { Length: > 0 } anchor } } link)
             return;
         var flow = FindFlowDocument(link);
         var target = flow?.Blocks.OfType<WpfParagraph>()
@@ -2460,13 +2474,13 @@ public sealed class DocumentView : RichTextBox
 
     // Wraps a styled run in a WPF Hyperlink (blue + underlined, with NavigateUri) so the link reads
     // back on commit and can be opened. Falls back to a plain run if the URL is not a valid Uri.
-    private static Inline BuildHyperlink(WpfRun content, string url)
+    private static Inline BuildHyperlink(WpfRun content, string url, string? tooltip = null)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
             return content;
 
         var link = new WpfHyperlink(content) { NavigateUri = uri };
-        StyleLink(link, url);
+        StyleLink(link, url, tooltip);
         return link;
     }
 
@@ -3223,6 +3237,7 @@ public sealed class DocumentView : RichTextBox
                 {
                     HyperlinkUrl = run.HyperlinkUrl,
                     HyperlinkAnchor = run.HyperlinkAnchor,
+                    HyperlinkTooltip = run.HyperlinkTooltip,
                     CommentId = run.CommentId,
                     Revision = run.Revision,
                     RevisionAuthor = run.RevisionAuthor,
@@ -3238,6 +3253,7 @@ public sealed class DocumentView : RichTextBox
                 {
                     HyperlinkUrl = run.HyperlinkUrl,
                     HyperlinkAnchor = run.HyperlinkAnchor,
+                    HyperlinkTooltip = run.HyperlinkTooltip,
                     CommentId = run.CommentId,
                     Revision = run.Revision,
                     RevisionAuthor = run.RevisionAuthor,
@@ -3295,7 +3311,8 @@ public sealed class DocumentView : RichTextBox
                 var head = new ModelRun(run.Text[..(coverStart - runStart)], run.Formatting)
                 {
                     HyperlinkUrl = run.HyperlinkUrl,
-                    HyperlinkAnchor = run.HyperlinkAnchor
+                    HyperlinkAnchor = run.HyperlinkAnchor,
+                    HyperlinkTooltip = run.HyperlinkTooltip
                 };
                 run.Text = run.Text[(coverStart - runStart)..];
                 paragraph.Runs.Insert(i, head);
@@ -3307,7 +3324,8 @@ public sealed class DocumentView : RichTextBox
                 var tail = new ModelRun(run.Text[(coverEnd - coverStart)..], run.Formatting)
                 {
                     HyperlinkUrl = run.HyperlinkUrl,
-                    HyperlinkAnchor = run.HyperlinkAnchor
+                    HyperlinkAnchor = run.HyperlinkAnchor,
+                    HyperlinkTooltip = run.HyperlinkTooltip
                 };
                 run.Text = run.Text[..(coverEnd - coverStart)];
                 paragraph.Runs.Insert(i + 1, tail);
@@ -3376,6 +3394,142 @@ public sealed class DocumentView : RichTextBox
         var link = new WpfHyperlink(content) { NavigateUri = uri, ToolTip = url };
         StyleLink(link, url);
         return link;
+    }
+
+    // --- hyperlink management (edit / remove / screentip) ---
+
+    /// <summary>
+    /// The WPF <see cref="WpfHyperlink"/> wrapping the caret (the link the caret sits inside/next to), or
+    /// null when the caret is not on a hyperlink. Walks the caret position's parent chain up to a link.
+    /// </summary>
+    private WpfHyperlink? HyperlinkAtCaret()
+    {
+        var pointer = CaretPosition;
+        if (pointer is null)
+            return null;
+        // Prefer the element to the caret's left so a caret resting at a link's trailing edge still
+        // resolves to that link; fall back to the right-hand element otherwise.
+        DependencyObject? node = pointer.GetAdjacentElement(LogicalDirection.Backward)
+            ?? pointer.GetAdjacentElement(LogicalDirection.Forward)
+            ?? pointer.Parent;
+        while (node is not null)
+        {
+            if (node is WpfHyperlink link)
+                return link;
+            node = node is TextElement te ? te.Parent : LogicalTreeHelper.GetParent(node);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// True when the caret sits on a hyperlink (external URL or internal bookmark). Lets the ribbon
+    /// enable/disable the manage-link commands.
+    /// </summary>
+    public bool IsCaretOnHyperlink()
+    {
+        Focus();
+        return HyperlinkAtCaret() is not null;
+    }
+
+    /// <summary>
+    /// The current external URL of the hyperlink at the caret (its NavigateUri), or null when the caret
+    /// is not on an external link. Used to seed the Edit Hyperlink prompt.
+    /// </summary>
+    public string? HyperlinkUrlAtCaret()
+    {
+        Focus();
+        return HyperlinkAtCaret()?.NavigateUri?.ToString();
+    }
+
+    /// <summary>The current ScreenTip of the hyperlink at the caret, or null when none/not on a link.</summary>
+    public string? HyperlinkTooltipAtCaret()
+    {
+        Focus();
+        return (HyperlinkAtCaret()?.Tag as HyperlinkInfo)?.Tooltip;
+    }
+
+    /// <summary>
+    /// Changes the external URL of the hyperlink at the caret to <paramref name="newUrl"/> (preserving its
+    /// ScreenTip and visible text), re-styling it. A no-op when the caret is not on a link or the URL is
+    /// not a valid absolute Uri. Commits + re-renders so the change round-trips.
+    /// </summary>
+    public void EditHyperlink(string newUrl)
+    {
+        Focus();
+        if (string.IsNullOrWhiteSpace(newUrl) || !Uri.TryCreate(newUrl, UriKind.Absolute, out var uri))
+            return;
+        if (HyperlinkAtCaret() is not { } link)
+            return;
+
+        var tooltip = (link.Tag as HyperlinkInfo)?.Tooltip;
+        // Re-target as an external link: drop any internal-anchor wiring and restyle for the new URL.
+        link.Click -= OnInternalLinkClick;
+        link.RequestNavigate -= OnHyperlinkRequestNavigate;
+        link.NavigateUri = uri;
+        StyleLink(link, newUrl, tooltip);
+
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Removes the hyperlink at the caret, leaving its visible text in place (clears the URL/anchor and
+    /// ScreenTip). A no-op when the caret is not on a link. Commits + re-renders.
+    /// </summary>
+    public void RemoveHyperlink()
+    {
+        Focus();
+        if (HyperlinkAtCaret() is not { } link || link.Parent is not WpfParagraph paragraph)
+            return;
+
+        // Unwrap: replace the Hyperlink span with its child inlines, in order, then re-render so the
+        // freed runs commit as plain (un-linked) text.
+        var children = link.Inlines.ToList();
+        var anchorPos = paragraph.Inlines.FirstOrDefault(inline => ReferenceEquals(inline, link));
+        foreach (var child in children)
+        {
+            link.Inlines.Remove(child);
+            if (anchorPos is not null)
+                paragraph.Inlines.InsertBefore(anchorPos, child);
+            else
+                paragraph.Inlines.Add(child);
+        }
+        paragraph.Inlines.Remove(link);
+
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Sets (or clears, when null/blank) the ScreenTip on the hyperlink at the caret. A no-op when the
+    /// caret is not on a link. Commits + re-renders so the tip round-trips as w:hyperlink w:tooltip.
+    /// </summary>
+    public void SetHyperlinkTooltip(string? tip)
+    {
+        Focus();
+        if (HyperlinkAtCaret() is not { } link)
+            return;
+
+        var tooltip = string.IsNullOrWhiteSpace(tip) ? null : tip.Trim();
+        if ((link.Tag as HyperlinkInfo)?.Anchor is { Length: > 0 } anchor)
+        {
+            // Internal link: re-apply its bookmark styling carrying the new tip.
+            link.Click -= OnInternalLinkClick;
+            StyleInternalLink(link, anchor, tooltip);
+        }
+        else if (link.NavigateUri?.ToString() is { Length: > 0 } url)
+        {
+            // External link: re-apply its URL styling carrying the new tip.
+            link.RequestNavigate -= OnHyperlinkRequestNavigate;
+            StyleLink(link, url, tooltip);
+        }
+        else
+        {
+            return;
+        }
+
+        CommitToModel();
+        Render();
     }
 
     /// <summary>
@@ -3548,9 +3702,12 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
-    private static void StyleLink(WpfHyperlink link, string url)
+    private static void StyleLink(WpfHyperlink link, string url, string? tooltip = null)
     {
-        link.ToolTip = url;
+        // External links carry no Anchor; the ScreenTip (when set) round-trips on the Tag and wins over
+        // the default URL chrome tooltip.
+        link.Tag = new HyperlinkInfo(null, tooltip);
+        link.ToolTip = tooltip is { Length: > 0 } ? tooltip : url;
         link.Foreground = new SolidColorBrush(Color.FromRgb(0x05, 0x63, 0xC1));
         link.RequestNavigate += OnHyperlinkRequestNavigate;
     }

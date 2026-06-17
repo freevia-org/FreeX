@@ -118,6 +118,9 @@ internal static class FreeWRibbon
                 tab.Group("links", "Links", "K", 70, g =>
                 {
                     g.Button("freew.hyperlink", "Link");
+                    g.Button("freew.edit-hyperlink", "Edit Hyperlink");
+                    g.Button("freew.remove-hyperlink", "Remove Hyperlink");
+                    g.Button("freew.hyperlink-tooltip", "ScreenTip");
                     g.Button("freew.bookmark", "Bookmark");
                     g.Button("freew.link-bookmark", "Link to Bookmark");
                 });
