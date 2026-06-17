@@ -20,6 +20,9 @@ public sealed class RecentFilesStore
     private readonly Func<DateTimeOffset> _clock;
     private readonly PlatformPathIdentityComparer _pathIdentityComparer;
     private readonly string _storePath;
+    // Mutators can be invoked from background threads (async open/save flows); serialize the
+    // list mutation + file rewrite so concurrent callers don't lose updates or interleave writes.
+    private readonly object _sync = new();
 
     public RecentFilesStore(
         string storePath,
@@ -104,21 +107,24 @@ public sealed class RecentFilesStore
         if (string.IsNullOrWhiteSpace(path))
             return;
 
-        var existing = FindEntryByPath(path);
-        var wasPinned = existing?.IsPinned ?? false;
-        var identity = TryPreparePersistentIdentity(fileAccessIdentity, path) ??
-            TryPreparePersistentIdentity(existing?.FileAccessIdentity, path);
-        RemoveEntriesByPath(path);
-        Entries.Insert(0, new RecentFileEntry
+        lock (_sync)
         {
-            Path = path,
-            LastOpened = _clock(),
-            IsPinned = wasPinned,
-            FileAccessIdentity = identity,
-        });
-        Entries = LimitForPersistence(Entries);
+            var existing = FindEntryByPath(path);
+            var wasPinned = existing?.IsPinned ?? false;
+            var identity = TryPreparePersistentIdentity(fileAccessIdentity, path) ??
+                TryPreparePersistentIdentity(existing?.FileAccessIdentity, path);
+            RemoveEntriesByPath(path);
+            Entries.Insert(0, new RecentFileEntry
+            {
+                Path = path,
+                LastOpened = _clock(),
+                IsPinned = wasPinned,
+                FileAccessIdentity = identity,
+            });
+            Entries = LimitForPersistence(Entries);
 
-        Save();
+            Save();
+        }
     }
 
     public static List<RecentFileEntry> LimitForPersistence(
@@ -150,28 +156,37 @@ public sealed class RecentFilesStore
 
     public void Pin(string path)
     {
-        var entry = FindEntryByPath(path);
-        if (entry is null)
-            return;
+        lock (_sync)
+        {
+            var entry = FindEntryByPath(path);
+            if (entry is null)
+                return;
 
-        entry.IsPinned = true;
-        Save();
+            entry.IsPinned = true;
+            Save();
+        }
     }
 
     public void Unpin(string path)
     {
-        var entry = FindEntryByPath(path);
-        if (entry is null)
-            return;
+        lock (_sync)
+        {
+            var entry = FindEntryByPath(path);
+            if (entry is null)
+                return;
 
-        entry.IsPinned = false;
-        Save();
+            entry.IsPinned = false;
+            Save();
+        }
     }
 
     public void Remove(string path)
     {
-        RemoveEntriesByPath(path);
-        Save();
+        lock (_sync)
+        {
+            RemoveEntriesByPath(path);
+            Save();
+        }
     }
 
     private RecentFileEntry? FindEntryByPath(string path)

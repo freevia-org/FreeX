@@ -123,9 +123,50 @@ public class FormulaRewriterTests
     }
 
     [Fact]
-    public void DeleteRows_RangeRef_StartInDeletedRange_BecomesRef()
+    public void DeleteRows_RangeRef_StartInDeletedRange_Shrinks()
     {
+        // Delete row 3 (only the range's START endpoint). Excel SHRINKS the range to the surviving
+        // rows rather than collapsing it to #REF!: A3:A5 → A3:A4 (old rows 4-5 shift up to 3-4).
         var result = FormulaRewriter.Rewrite("SUM(A3:A5)", new DeleteRowsOp("Sheet1", 3, 1), "Sheet1");
+        result.Should().Be("SUM(A3:A4)");
+    }
+
+    [Fact]
+    public void DeleteRows_RangeRef_EndInDeletedRange_Shrinks()
+    {
+        // Delete row 5 (only the range's END endpoint). A3:A5 → A3:A4 (last surviving row is 4).
+        var result = FormulaRewriter.Rewrite("SUM(A3:A5)", new DeleteRowsOp("Sheet1", 5, 1), "Sheet1");
+        result.Should().Be("SUM(A3:A4)");
+    }
+
+    [Fact]
+    public void DeleteRows_RangeRef_EntireRangeDeleted_BecomesRef()
+    {
+        // The whole range is inside the deleted band → #REF! (Excel's only #REF! case here).
+        var result = FormulaRewriter.Rewrite("SUM(A3:A5)", new DeleteRowsOp("Sheet1", 3, 3), "Sheet1");
+        result.Should().Be("SUM(#REF!)");
+    }
+
+    [Fact]
+    public void DeleteRows_RangeRef_BandInsideRange_Shrinks()
+    {
+        // Delete rows 4-5, strictly inside A3:A8 → A3:A6 (range shrinks by the deleted count).
+        var result = FormulaRewriter.Rewrite("SUM(A3:A8)", new DeleteRowsOp("Sheet1", 4, 2), "Sheet1");
+        result.Should().Be("SUM(A3:A6)");
+    }
+
+    [Fact]
+    public void DeleteCols_RangeRef_StartInDeletedRange_Shrinks()
+    {
+        // Delete column B (the range's START). B1:D1 → B1:C1 (old cols C-D shift left to B-C).
+        var result = FormulaRewriter.Rewrite("SUM(B1:D1)", new DeleteColsOp("Sheet1", 2, 1), "Sheet1");
+        result.Should().Be("SUM(B1:C1)");
+    }
+
+    [Fact]
+    public void DeleteCols_RangeRef_EntireRangeDeleted_BecomesRef()
+    {
+        var result = FormulaRewriter.Rewrite("SUM(B1:D1)", new DeleteColsOp("Sheet1", 2, 3), "Sheet1");
         result.Should().Be("SUM(#REF!)");
     }
 

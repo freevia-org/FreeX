@@ -25,7 +25,20 @@ public sealed class CompositeWorkbookCommand : IWorkbookCommand
 
         foreach (var command in _commands)
         {
-            var outcome = command.Apply(ctx);
+            CommandOutcome outcome;
+            try
+            {
+                outcome = command.Apply(ctx);
+            }
+            catch (Exception ex)
+            {
+                // An inner command threw mid-apply: roll back the sub-commands that
+                // already succeeded so the composite stays atomic, then surface a
+                // failure outcome rather than leaving the operation half-applied.
+                RevertApplied(ctx);
+                return new CommandOutcome(false, $"{Label}: {ex.Message}");
+            }
+
             if (!outcome.Success)
             {
                 RevertApplied(ctx);

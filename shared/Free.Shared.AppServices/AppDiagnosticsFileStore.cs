@@ -27,6 +27,12 @@ public sealed class AppDiagnosticsFileStore
         "worksheetCount"
     };
 
+    // Crash/diagnostics events are recorded from arbitrary threads (AppDomain.UnhandledException,
+    // TaskScheduler.UnobservedTaskException, finalizers); serialize appends so concurrent writers
+    // do not interleave or corrupt the shared events.jsonl. Static so two stores pointed at the same
+    // file still serialize against each other. Diagnostics volume is tiny, so contention is moot.
+    private static readonly object FileWriteLock = new();
+
     private readonly AppDiagnosticsOptions _options;
 
     public AppDiagnosticsFileStore(AppDiagnosticsOptions options)
@@ -50,7 +56,10 @@ public sealed class AppDiagnosticsFileStore
                 payload[key] = value;
 
             var line = JsonSerializer.Serialize(payload, JsonOptions);
-            File.AppendAllText(Path.Combine(_options.DiagnosticsDirectory, "events.jsonl"), line + Environment.NewLine);
+            lock (FileWriteLock)
+            {
+                File.AppendAllText(Path.Combine(_options.DiagnosticsDirectory, "events.jsonl"), line + Environment.NewLine);
+            }
         }
         catch
         {

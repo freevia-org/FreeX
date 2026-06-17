@@ -15,7 +15,9 @@ public sealed class AvaloniaShellSourceTests
         appSource.Should().Contain("new MainWindow(StartupArguments)");
         appSource.Should().Contain("desktop.MainWindow = mainWindow;");
         appSource.Should().Contain("this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime");
-        appSource.Should().Contain("activatableLifetime.Activated += async (_, args) => await MainWindow_ActivatedAsync(mainWindow, args);");
+        // Wired through a non-async-void wrapper so a thrown activation cannot crash the dispatcher.
+        appSource.Should().Contain("activatableLifetime.Activated += (_, args) => _ = OnActivatedAsync(mainWindow, args);");
+        appSource.Should().Contain("await MainWindow_ActivatedAsync(mainWindow, args);");
         appSource.Should().Contain("args is not FileActivatedEventArgs fileArgs");
         appSource.Should().Contain("fileArgs.Kind != ActivationKind.File");
         appSource.Should().Contain("mainWindow.Show();");

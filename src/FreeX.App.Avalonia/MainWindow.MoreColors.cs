@@ -32,9 +32,17 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving)
             return;
 
-        var color = await ShowMoreColorsDialogAsync("More Fill Colors", new CellColor(255, 235, 132));
-        if (color is { } chosen)
-            ApplySelectedRangeFillColor(chosen);
+        // async void: an unhandled exception here would escape to the dispatcher and crash the app.
+        try
+        {
+            var color = await ShowMoreColorsDialogAsync("More Fill Colors", new CellColor(255, 235, 132));
+            if (color is { } chosen)
+                ApplySelectedRangeFillColor(chosen);
+        }
+        catch (Exception ex)
+        {
+            ShowOpenIssue($"More Fill Colors failed: {ex.Message}");
+        }
     }
 
     private async void ShowMoreFontColorDialog()
@@ -42,9 +50,16 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving)
             return;
 
-        var color = await ShowMoreColorsDialogAsync("More Font Colors", new CellColor(0, 0, 0));
-        if (color is { } chosen)
-            ApplySelectedRangeFontColor(chosen);
+        try
+        {
+            var color = await ShowMoreColorsDialogAsync("More Font Colors", new CellColor(0, 0, 0));
+            if (color is { } chosen)
+                ApplySelectedRangeFontColor(chosen);
+        }
+        catch (Exception ex)
+        {
+            ShowOpenIssue($"More Font Colors failed: {ex.Message}");
+        }
     }
 
     private async System.Threading.Tasks.Task<CellColor?> ShowMoreColorsDialogAsync(string title, CellColor initial)
