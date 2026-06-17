@@ -485,6 +485,19 @@ public sealed class HeaderFooter
 /// </summary>
 public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.0);
 
+/// <summary>
+/// How (and whether) lines are numbered in the page margin (w:sectPr/w:lnNumType).
+/// <see cref="None"/> emits no w:lnNumType (the default — existing documents are unaffected);
+/// <see cref="Continuous"/> numbers lines continuously across pages (w:restart="continuous");
+/// <see cref="RestartEachPage"/> restarts numbering at 1 on every page (w:restart="newPage").
+/// </summary>
+public enum LineNumberMode
+{
+    None,
+    Continuous,
+    RestartEachPage
+}
+
 /// <summary>Page geometry for a section (points; US Letter with 1in margins by default).</summary>
 public sealed class PageSettings
 {
@@ -521,6 +534,21 @@ public sealed class PageSettings
     /// and rendered as an editor/preview visual. Nullable so existing documents are unaffected.
     /// </summary>
     public string? Watermark { get; set; }
+
+    /// <summary>
+    /// Line-numbering mode shown in the left page margin (w:sectPr/w:lnNumType). Defaults to
+    /// <see cref="LineNumberMode.None"/> so existing documents round-trip unchanged — no w:lnNumType
+    /// is emitted. When not None the writer emits w:lnNumType with the matching w:restart, and the
+    /// print preview draws line numbers in the margin.
+    /// </summary>
+    public LineNumberMode LineNumberMode { get; set; } = LineNumberMode.None;
+
+    /// <summary>
+    /// The interval at which line numbers are shown (w:lnNumType/@w:countBy): every Nth line is
+    /// numbered. Defaults to 1 (every line). Only meaningful when <see cref="LineNumberMode"/> is not
+    /// <see cref="LineNumberMode.None"/>. Always at least 1.
+    /// </summary>
+    public int LineNumberCountBy { get; set; } = 1;
 }
 
 /// <summary>

@@ -206,6 +206,9 @@ public static class DocxReader
         // Page border (w:pgBorders) lives in the same w:sectPr; recover it into PageSettings.PageBorder.
         document.Page.PageBorder = ReadPageBorder(sectPr.Element(W + "pgBorders"));
 
+        // Line numbering (w:lnNumType) lives in the same w:sectPr; recover the mode + interval.
+        ReadLineNumbering(sectPr.Element(W + "lnNumType"), document.Page);
+
         var partsById = ReadHeaderFooterRelationships(archive);
 
         document.Header = ReadHeaderFooterPart(
@@ -740,6 +743,24 @@ public static class DocxReader
         return new PageBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
             width > 0 ? width : 1.0);
+    }
+
+    /// <summary>
+    /// Reads line numbering (w:lnNumType) into <paramref name="page"/>. Absent leaves the default
+    /// (<see cref="LineNumberMode.None"/>). @w:restart="newPage" maps to RestartEachPage; anything else
+    /// (including the default "continuous") maps to Continuous. @w:countBy sets the interval (min 1).
+    /// </summary>
+    private static void ReadLineNumbering(XElement? lnNumType, PageSettings page)
+    {
+        if (lnNumType is null)
+            return;
+
+        page.LineNumberMode = lnNumType.Attribute(W + "restart")?.Value == "newPage"
+            ? LineNumberMode.RestartEachPage
+            : LineNumberMode.Continuous;
+
+        if (int.TryParse(lnNumType.Attribute(W + "countBy")?.Value, out var countBy) && countBy >= 1)
+            page.LineNumberCountBy = countBy;
     }
 
     /// <summary>

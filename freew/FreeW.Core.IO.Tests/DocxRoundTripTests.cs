@@ -264,6 +264,84 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void LineNumbers_Continuous_RoundTripsModeAndCountBy()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("numbered lines"));
+        doc.Page.LineNumberMode = LineNumberMode.Continuous;
+        doc.Page.LineNumberCountBy = 5;
+
+        var page = RoundTrip(doc).Page;
+
+        page.LineNumberMode.Should().Be(LineNumberMode.Continuous);
+        page.LineNumberCountBy.Should().Be(5);
+    }
+
+    [Fact]
+    public void LineNumbers_RestartEachPage_RoundTripsModeAndCountBy()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("numbered lines"));
+        doc.Page.LineNumberMode = LineNumberMode.RestartEachPage;
+        doc.Page.LineNumberCountBy = 2;
+
+        var page = RoundTrip(doc).Page;
+
+        page.LineNumberMode.Should().Be(LineNumberMode.RestartEachPage);
+        page.LineNumberCountBy.Should().Be(2);
+    }
+
+    [Fact]
+    public void DefaultPage_HasNoLineNumbering()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        var page = RoundTrip(doc).Page;
+
+        page.LineNumberMode.Should().Be(LineNumberMode.None);
+        page.LineNumberCountBy.Should().Be(1);
+    }
+
+    [Fact]
+    public void DefaultPage_EmitsNoLnNumTypeElement()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = reader.ReadToEnd();
+
+        documentXml.Should().NotContain("lnNumType");
+    }
+
+    [Fact]
+    public void LineNumbers_EmitsLnNumTypeInSectPr()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Two-line counted body."));
+        doc.Page.LineNumberMode = LineNumberMode.RestartEachPage;
+        doc.Page.LineNumberCountBy = 3;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = reader.ReadToEnd();
+
+        documentXml.Should().Contain("w:lnNumType");
+        documentXml.Should().Contain("w:countBy=\"3\"");
+        documentXml.Should().Contain("w:restart=\"newPage\"");
+    }
+
+    [Fact]
     public void Watermark_RoundTrips_AsCustomProperty()
     {
         var doc = new TextDocument();

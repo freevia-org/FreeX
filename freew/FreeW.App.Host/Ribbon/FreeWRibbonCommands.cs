@@ -268,6 +268,8 @@ internal static class FreeWRibbonCommands
         }));
         // Columns: cycle 1 -> 2 -> 3 -> 1 equal-width columns, re-rendering so the layout shows at once.
         registry.Register("freew.columns", new ColumnCountCommand(editor));
+        // Line Numbers: cycle None -> Continuous -> RestartEachPage -> None (shown in print preview).
+        registry.Register("freew.line-numbers", new LineNumberCommand(editor));
 
         // Layout tab — Page Background: toggle a whole-page border (w:pgBorders) and set/clear the
         // page watermark. Both mutate PageSettings via ApplyPageSettings (commit + re-render) and
@@ -738,6 +740,20 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context) =>
             editor.ApplyPageSettings(page => page.ColumnCount = page.ColumnCount >= 3 ? 1 : page.ColumnCount + 1);
+    }
+
+    // Cycles page line numbering None -> Continuous -> RestartEachPage -> None. Routes through
+    // ApplyPageSettings so the editor commits pending edits, mutates PageSettings, and re-renders;
+    // the numbers themselves surface in the print preview / print output.
+    private sealed class LineNumberCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.LineNumberMode = page.LineNumberMode switch
+            {
+                LineNumberMode.None => LineNumberMode.Continuous,
+                LineNumberMode.Continuous => LineNumberMode.RestartEachPage,
+                _ => LineNumberMode.None
+            });
     }
 
     // Inserts a table at the caret. Delegates to the view, which routes through the undo/redo bus.

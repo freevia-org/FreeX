@@ -944,11 +944,32 @@ public static class DocxWriter
             // Page border (w:pgBorders): a uniform box on all four edges, offset from the page edge.
             // Emitted only when set; w:sz is in eighths of a point, matching w:pBdr edges.
             BuildPageBorders(page.PageBorder),
+            // Line numbering (w:lnNumType): emitted only when enabled. Schema order places it after
+            // pgBorders and before cols. @w:countBy is the numbering interval; @w:restart is
+            // "continuous" (across pages) or "newPage" (restart each page).
+            BuildLineNumbering(page),
             // Equal-width columns: w:cols carries the count (w:num) and inter-column gap (w:space, dxa).
             // Emitted unconditionally; w:num="1" is harmless and keeps the section shape stable.
             new XElement(W + "cols",
                 new XAttribute(W + "num", Math.Max(1, page.ColumnCount)),
                 new XAttribute(W + "space", PointsToDxa(page.ColumnSpacingPt))));
+
+    /// <summary>
+    /// Builds the w:lnNumType element (line numbering in the page margin), or null when line numbering
+    /// is off (<see cref="LineNumberMode.None"/>). @w:countBy is the interval (every Nth line numbered),
+    /// @w:restart maps the mode to "continuous" (across pages) or "newPage" (restart per page).
+    /// </summary>
+    private static XElement? BuildLineNumbering(PageSettings page)
+    {
+        if (page.LineNumberMode == LineNumberMode.None)
+            return null;
+
+        var restart = page.LineNumberMode == LineNumberMode.RestartEachPage ? "newPage" : "continuous";
+        return new XElement(W + "lnNumType",
+            new XAttribute(W + "countBy", Math.Max(1, page.LineNumberCountBy)),
+            new XAttribute(W + "restart", restart),
+            new XAttribute(W + "start", 1));
+    }
 
     /// <summary>
     /// Builds the w:pgBorders element (a uniform box on all four edges) for a page border, or null when
