@@ -11,6 +11,13 @@ public sealed class InlineImage(byte[] pngBytes, double widthPt, double heightPt
     public byte[] PngBytes { get; } = pngBytes;
     public double WidthPt { get; set; } = widthPt;
     public double HeightPt { get; set; } = heightPt;
+
+    /// <summary>
+    /// Optional alternative text (accessibility description). When set it round-trips through docx as
+    /// the <c>wp:docPr/@descr</c> attribute and surfaces as the editor tooltip / automation name.
+    /// Defaults to null so existing image construction and round-trips are unaffected.
+    /// </summary>
+    public string? AltText { get; set; }
 }
 
 /// <summary>

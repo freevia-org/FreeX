@@ -41,6 +41,7 @@ internal static class FreeWRibbon
                     g.Button("freew.subscript", "Subscript");
                     g.Button("freew.smallcaps", "Small Caps");
                     g.Button("freew.allcaps", "All Caps");
+                    g.Button("freew.change-case", "Change Case");
                     g.Button("freew.font-color", "Text Colour");
                     g.Button("freew.highlight", "Highlight");
                     g.Button("freew.grow-font", "Grow");
@@ -113,6 +114,10 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.picture", "Picture");
                     g.Button("freew.image-size", "Image Size");
+                    g.Button("freew.image-alt-text", "Alt Text");
+                    g.Button("freew.image-align-left", "Align Left");
+                    g.Button("freew.image-align-center", "Align Center");
+                    g.Button("freew.image-align-right", "Align Right");
                     g.Button("freew.shapes", "Shapes");
                 });
                 tab.Group("links", "Links", "K", 70, g =>
@@ -123,11 +128,13 @@ internal static class FreeWRibbon
                     g.Button("freew.hyperlink-tooltip", "ScreenTip");
                     g.Button("freew.bookmark", "Bookmark");
                     g.Button("freew.link-bookmark", "Link to Bookmark");
+                    g.Button("freew.bookmark-manager", "Bookmark Manager");
                 });
                 tab.Group("quick-parts", "Quick Parts", "Q", 67, g =>
                 {
                     g.Button("freew.save-quickpart", "Save Selection");
                     g.Button("freew.insert-quickpart", "Insert Quick Part");
+                    g.Button("freew.insert-file", "Text from File");
                 });
                 tab.Group("references", "References", "R", 65, g =>
                 {

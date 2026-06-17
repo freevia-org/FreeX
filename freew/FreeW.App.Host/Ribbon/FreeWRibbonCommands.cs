@@ -139,10 +139,18 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.table-banded-rows", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
         registry.Register("freew.table-repeat-header", new ActionCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
 
+        // Insert tab — Text: pick a .docx file and insert its body content at the caret (block merge).
+        registry.Register("freew.insert-file", new InsertFileCommand(editor));
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
         registry.Register("freew.picture", new InsertPictureCommand(editor));
         // Insert tab — Illustrations: resize the selected inline image (height scales proportionally).
         registry.Register("freew.image-size", new ImageSizeCommand(editor));
+        // Insert tab — Illustrations: set the selected image's accessibility alt text (wp:docPr @descr),
+        // and align the image's (image-only) paragraph left/center/right. Both mutate the model + re-render.
+        registry.Register("freew.image-alt-text", new ImageAltTextCommand(editor));
+        registry.Register("freew.image-align-left", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
+        registry.Register("freew.image-align-center", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
+        registry.Register("freew.image-align-right", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
         // Insert tab — Links: manage the hyperlink at the caret — change its URL, remove it, or set a ScreenTip.
@@ -180,6 +188,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
         registry.Register("freew.link-bookmark", new LinkToBookmarkCommand(editor));
+        // Insert tab — Links: open the Bookmark Manager (list bookmarks with Go To + Delete).
+        registry.Register("freew.bookmark-manager", new BookmarkManagerCommand(editor));
 
         // Insert tab — Quick Parts (AutoText): a shared snippet library persisted under FreeW's data
         // folder. "Save Selection" captures the selection's text and stores it under a prompted name;
@@ -260,6 +270,11 @@ internal static class FreeWRibbonCommands
         // caret's paragraph. Both route through the view's undo/redo bus and re-render.
         registry.Register("freew.clear-formatting", new ActionCommand(() => editor.ClearFormatting()));
         registry.Register("freew.drop-cap", new ActionCommand(() => editor.ApplyDropCap()));
+
+        // Home > Font > Change Case: open a small menu to pick a target case (UPPERCASE / lowercase /
+        // Sentence case / Capitalize Each Word / tOGGLE cASE) and recase the selection's text via the
+        // pure ChangeCase helper. The replacement flows through the editor's normal edit/undo path.
+        registry.Register("freew.change-case", new ChangeCaseCommand(editor));
 
         // Home > Paragraph: set line spacing (a multiplier on the default font size) over the selection,
         // and toggle Add/Remove Space Before/After. All route through the view's undo/redo bus.
@@ -469,6 +484,72 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             editor.ArmFormatPainter();
+        }
+    }
+
+    // Home > Font > Change Case: show a small menu of the five cases and recase the current selection's
+    // text through the editor (pure ChangeCase + undoable selection replacement). A no-op with an empty
+    // selection — the user is told to select text first.
+    private sealed class ChangeCaseCommand(DocumentView editor) : IRibbonCommand
+    {
+        private static readonly (string Label, CaseKind Kind)[] Choices =
+        [
+            ("UPPERCASE", CaseKind.Upper),
+            ("lowercase", CaseKind.Lower),
+            ("Sentence case", CaseKind.Sentence),
+            ("Capitalize Each Word", CaseKind.Capitalize),
+            ("tOGGLE cASE", CaseKind.Toggle),
+        ];
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.Selection.IsEmpty)
+            {
+                MessageBox.Show(Window.GetWindow(editor), "Select some text first, then choose Change Case.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (ShowPicker(Window.GetWindow(editor)) is { } kind)
+            {
+                editor.Focus();
+                editor.ChangeSelectionCase(kind);
+            }
+        }
+
+        private static CaseKind? ShowPicker(Window? owner)
+        {
+            CaseKind? result = null;
+            var window = new Window
+            {
+                Title = "Change Case",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(8), Width = 200 };
+            foreach (var (label, kind) in Choices)
+            {
+                var button = new Button
+                {
+                    Content = label,
+                    Margin = new Thickness(0, 2, 0, 2),
+                    Padding = new Thickness(8, 4, 8, 4),
+                    HorizontalContentAlignment = HorizontalAlignment.Left
+                };
+                button.Click += (_, _) => { result = kind; window.Close(); };
+                panel.Children.Add(button);
+            }
+
+            window.Content = panel;
+            window.ShowDialog();
+            return result;
         }
     }
 
@@ -944,6 +1025,33 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Insert > Text > Text from File: pick a .docx, read it, and merge its body into the document at the caret.
+    private sealed class InsertFileCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "Word Documents (*.docx)|*.docx|All files (*.*)|*.*",
+                Title = "Insert Text from File"
+            };
+            if (dialog.ShowDialog(Window.GetWindow(editor)) != true)
+                return;
+
+            try
+            {
+                var source = DocxReader.Read(dialog.FileName);
+                editor.Focus();
+                editor.InsertDocument(source);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(Window.GetWindow(editor), $"Could not insert the file:\n{ex.Message}",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+
     // Insert > Illustrations > Picture: pick an image, normalise to PNG, insert as an inline image run.
     private sealed class InsertPictureCommand(DocumentView editor) : IRibbonCommand
     {
@@ -1016,6 +1124,47 @@ internal static class FreeWRibbonCommands
 
             if (ImageSizeDialog.Prompt(Window.GetWindow(editor), image.WidthPt) is { } widthPt)
                 editor.SetSelectedImageSize(widthPt);
+        }
+    }
+
+    // Insert > Illustrations > Alt Text: prompt for the selected image's accessibility description
+    // (seeded from its current alt text) and store it on the model image. A blank entry clears it; the
+    // text round-trips through docx as wp:docPr/@descr and surfaces as the image tooltip/automation name.
+    private sealed class ImageAltTextCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                MessageBox.Show(Window.GetWindow(editor), "Select an image first, then choose Alt Text.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var text = TextPrompt.Ask(Window.GetWindow(editor), "Alt Text", "Description:", image.AltText ?? string.Empty);
+            // A null result is a cancel (leave unchanged); an empty/blank string clears the alt text.
+            if (text is not null)
+                editor.SetSelectedImageAltText(text);
+        }
+    }
+
+    // Insert > Illustrations > Align Left/Center/Right: set the alignment of the selected image's
+    // (image-only) paragraph, reusing the existing ParagraphFormatting.Alignment round-trip. No-op when
+    // no image is selected.
+    private sealed class ImageAlignCommand(DocumentView editor, FreeW.Core.Model.TextAlignment alignment) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.SelectedImage() is null)
+            {
+                MessageBox.Show(Window.GetWindow(editor), "Select an image first, then choose an image alignment.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            editor.SetSelectedImageAlignment(alignment);
         }
     }
 
@@ -1483,6 +1632,17 @@ internal static class FreeWRibbonCommands
             var chosen = BookmarkPicker.Ask(Window.GetWindow(editor), bookmarks);
             if (!string.IsNullOrWhiteSpace(chosen))
                 editor.ApplyInternalLink(chosen!);
+        }
+    }
+
+    // Insert > Links > Bookmark Manager: open the modal Bookmark Manager listing the document's
+    // bookmarks with Go To (scroll/caret via BringBlockIntoView) and Delete (clear the marker).
+    private sealed class BookmarkManagerCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            BookmarkManagerDialog.Show(Window.GetWindow(editor), editor);
         }
     }
 

@@ -384,6 +384,38 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Insert the body content of another document (<paramref name="source"/>, typically a just-opened
+    /// .docx) at the caret. The source's blocks are deep-cloned via <see cref="DocumentMerge.CloneBlocks"/>
+    /// (so the source is never aliased), then each clone is inserted after the caret's block — one
+    /// reversible <see cref="InsertBlockCommand"/> per block, in order — and the surface re-renders.
+    /// Any named styles the source defines that the target lacks are also brought over so the inserted
+    /// paragraphs resolve their styling (existing target styles are never overwritten).
+    /// </summary>
+    public void InsertDocument(TextDocument source)
+    {
+        if (source is null)
+            return;
+
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+
+        // Bring over any styles the source has that the target is missing, so style-referencing
+        // paragraphs (e.g. Heading1) render correctly. Never clobber a style the target already defines.
+        foreach (var (id, style) in source.Styles)
+            _model.Styles.TryAdd(id, style);
+
+        var clones = DocumentMerge.CloneBlocks(source);
+
+        // Insert after the block the caret sits in (else at the end), keeping document order.
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+
+        foreach (var block in clones)
+            _commands.Execute(new InsertBlockCommand(index++, block));
+    }
+
+    /// <summary>
     /// Insert a Table of Contents generated from the document's heading outline. The TOC paragraphs
     /// (built by <see cref="TableOfContents.Build"/>) are inserted at the caret's block (else at the
     /// document start), routed one-by-one through the undo/redo bus so the insert is reversible. The
@@ -631,6 +663,37 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>The inline image targeted by the current selection/caret, or null if none is selected.</summary>
     public InlineImage? SelectedImage() => SelectedImageLocation().Image;
+
+    /// <summary>
+    /// Set (or clear, when null/empty) the accessibility alt text on the currently selected inline image.
+    /// Mutates the model image in place — the alt text is carried by the image instance, so it survives
+    /// the next <see cref="CommitToModel"/> — then re-renders so the tooltip/automation name refresh.
+    /// No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageAltText(string? altText)
+    {
+        CommitToModel();
+        var image = SelectedImageLocation().Image;
+        if (image is null)
+            return;
+        image.AltText = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
+        Render();
+    }
+
+    /// <summary>
+    /// Align the paragraph that contains the currently selected inline image. "Image alignment" is the
+    /// alignment of its (image-only) paragraph, which round-trips through the existing
+    /// <see cref="ParagraphFormatting.Alignment"/> infrastructure. No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageAlignment(ModelTextAlignment alignment)
+    {
+        CommitToModel();
+        var (blockIndex, _, image) = SelectedImageLocation();
+        if (image is null || blockIndex < 0 || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
+            return;
+        paragraph.Formatting = paragraph.Formatting with { Alignment = alignment };
+        Render();
+    }
 
     /// <summary>
     /// Toggle a box border on every paragraph touched by the current selection/caret. If any selected
@@ -967,6 +1030,36 @@ public sealed class DocumentView : RichTextBox
             if (_model.Blocks[index] is ModelParagraph)
                 _commands.Execute(new FormatParagraphRunsCommand(index, _ => RunFormatting.Default));
         }
+    }
+
+    /// <summary>
+    /// Change the case of the current selection's text per <paramref name="kind"/> (UPPERCASE, lowercase,
+    /// Sentence case, Capitalize Each Word, or tOGGLE cASE), via the pure <see cref="ChangeCase.Apply"/>
+    /// helper. The transformed text is written straight back over the selection (<c>Selection.Text</c>),
+    /// so it flows through the RichTextBox's own edit/undo path and keeps the run formatting of the
+    /// selection start (WPF behaviour when replacing selection text). No-op when the selection is empty or
+    /// contains no letters to recase. The selection is re-established over the replacement text so the user
+    /// can immediately apply another case.
+    /// </summary>
+    public void ChangeSelectionCase(CaseKind kind)
+    {
+        Focus();
+        var selection = Selection;
+        if (selection.IsEmpty)
+            return;
+
+        var original = selection.Text;
+        if (string.IsNullOrEmpty(original))
+            return;
+
+        var transformed = ChangeCase.Apply(original, kind);
+        if (string.Equals(original, transformed, StringComparison.Ordinal))
+            return; // nothing changed (e.g. already in the target case) — leave the edit/undo stack alone
+
+        // Remember the endpoints so the recased text stays selected after the replacement.
+        var start = selection.Start;
+        selection.Text = transformed;
+        selection.Select(start, selection.End);
     }
 
     /// <summary>
@@ -2625,6 +2718,12 @@ public sealed class DocumentView : RichTextBox
             Stretch = Stretch.Fill,
             Tag = image // carries the model image so CommitToModel can round-trip it
         };
+        // Surface alt text as the hover tooltip and the accessibility (automation) name when present.
+        if (!string.IsNullOrEmpty(image.AltText))
+        {
+            element.ToolTip = image.AltText;
+            System.Windows.Automation.AutomationProperties.SetName(element, image.AltText);
+        }
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
     }
 
@@ -3204,6 +3303,19 @@ public sealed class DocumentView : RichTextBox
             DocumentInspector.RemoveProperties(_model);
         if (bookmarks)
             DocumentInspector.RemoveBookmarks(_model);
+        Render();
+    }
+
+    /// <summary>
+    /// Removes the bookmark named <paramref name="name"/> from the document (clears the matching
+    /// paragraph's <see cref="ModelParagraph.BookmarkName"/> via the pure <see cref="Bookmarks"/>
+    /// helper), then re-renders so the cleared marker round-trips on the next commit. Used by the
+    /// Bookmark Manager's Delete action. No-op for a null/empty name or an unknown bookmark.
+    /// </summary>
+    public void RemoveBookmark(string name)
+    {
+        CommitToModel();
+        Bookmarks.RemoveBookmark(_model, name);
         Render();
     }
 

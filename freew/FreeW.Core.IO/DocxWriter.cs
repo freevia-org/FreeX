@@ -1071,6 +1071,12 @@ public static class DocxWriter
         var cy = PointsToEmu(part.Image.HeightPt);
         var docPrId = part.DrawingId;
 
+        // Carry accessibility alt text on wp:docPr/@descr when set; omitted entirely otherwise so
+        // images without alt text serialise exactly as before.
+        var docPr = new XElement(Wp + "docPr", new XAttribute("id", docPrId), new XAttribute("name", part.FileName));
+        if (!string.IsNullOrEmpty(part.Image.AltText))
+            docPr.Add(new XAttribute("descr", part.Image.AltText));
+
         return new XElement(W + "drawing",
             new XElement(Wp + "inline",
                 new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
@@ -1080,7 +1086,7 @@ public static class DocxWriter
                 new XElement(Wp + "effectExtent",
                     new XAttribute("l", 0), new XAttribute("t", 0),
                     new XAttribute("r", 0), new XAttribute("b", 0)),
-                new XElement(Wp + "docPr", new XAttribute("id", docPrId), new XAttribute("name", part.FileName)),
+                docPr,
                 new XElement(A + "graphic",
                     new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
                     new XElement(A + "graphicData",
