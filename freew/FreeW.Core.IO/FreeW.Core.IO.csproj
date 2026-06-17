@@ -8,4 +8,8 @@
     <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Lets the IO test project exercise the internal ODTTF obfuscation helper (Ooxml.ObfuscateFont). -->
+    <InternalsVisibleTo Include="FreeW.Core.IO.Tests" />
+  </ItemGroup>
 </Project>

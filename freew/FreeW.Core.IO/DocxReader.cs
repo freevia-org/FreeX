@@ -58,6 +58,7 @@ public static class DocxReader
         ReadComments(archive, document, imageRelationships, hyperlinkRelationships);
         ReadSettings(archive, document);
         ReadTheme(archive, document);
+        ReadEmbeddedFonts(archive, document);
 
         return document;
     }
@@ -164,6 +165,97 @@ public static class DocxReader
         var mode = ProtectionModeFromEditToken(protection.Attribute(W + "edit")?.Value);
         if (mode != ProtectionMode.None)
             document.Protection = new ProtectionSettings(mode);
+    }
+
+    /// <summary>
+    /// Resolves word/fontTable.xml (via the document's "/fontTable" relationship, falling back to the
+    /// conventional path), parses each w:font and de-obfuscates its embedded .odttf parts back into the
+    /// original font bytes (the ODTTF XOR is self-inverse, keyed by each w:embed*'s w:fontKey GUID). Each
+    /// recovered family is added to <see cref="TextDocument.EmbeddedFonts"/>. A missing fontTable — or a
+    /// font with no recoverable styles — leaves the list empty, so a document without embedded fonts is
+    /// unaffected.
+    /// </summary>
+    private static void ReadEmbeddedFonts(ZipArchive archive, TextDocument document)
+    {
+        var fontTableXml = LoadPart(archive, ResolveDocumentRelPartPath(archive, "/fontTable") ?? "word/fontTable.xml");
+        var root = fontTableXml?.Root;
+        if (root is null)
+            return;
+
+        // The fontTable's own relationships map each w:embed*'s r:id to its .odttf part (under word/).
+        var fontRels = ReadFontTableRelationships(archive);
+
+        byte[]? Recover(XElement? embed)
+        {
+            if (embed is null)
+                return null;
+            var id = embed.Attribute(R + "id")?.Value;
+            var fontKey = embed.Attribute(W + "fontKey")?.Value;
+            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(fontKey) || !fontRels.TryGetValue(id, out var path))
+                return null;
+            var obfuscated = LoadMedia(archive, path);
+            // De-obfuscation is the same XOR transform applied on write (it is its own inverse).
+            return obfuscated is null ? null : ObfuscateFont(obfuscated, fontKey);
+        }
+
+        foreach (var font in root.Elements(W + "font"))
+        {
+            var family = font.Attribute(W + "name")?.Value;
+            if (string.IsNullOrEmpty(family))
+                continue;
+            var recovered = new EmbeddedFont(
+                family,
+                Recover(font.Element(W + "embedRegular")),
+                Recover(font.Element(W + "embedBold")),
+                Recover(font.Element(W + "embedItalic")),
+                Recover(font.Element(W + "embedBoldItalic")));
+            if (recovered.HasAnyStyle)
+                document.EmbeddedFonts.Add(recovered);
+        }
+    }
+
+    /// <summary>
+    /// Reads word/_rels/fontTable.xml.rels mapping each font relationship id to its part path (under
+    /// word/). Returns an empty map when the rels part is absent.
+    /// </summary>
+    private static Dictionary<string, string> ReadFontTableRelationships(ZipArchive archive)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var relsXml = LoadPart(archive, "word/_rels/fontTable.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return map;
+        foreach (var rel in relationships)
+        {
+            var id = rel.Attribute("Id")?.Value;
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(target))
+                map[id] = "word/" + target.TrimStart('/');
+        }
+        return map;
+    }
+
+    /// <summary>
+    /// Finds a document-relationship target by the suffix of its Type (e.g. "/fontTable"), resolved
+    /// relative to the word/ folder. Returns null when no such relationship exists. Generalises the
+    /// settings/theme resolvers.
+    /// </summary>
+    private static string? ResolveDocumentRelPartPath(ZipArchive archive, string typeSuffix)
+    {
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return null;
+        foreach (var rel in relationships)
+        {
+            var type = rel.Attribute("Type")?.Value;
+            if (type is null || !type.EndsWith(typeSuffix, StringComparison.Ordinal))
+                continue;
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(target))
+                return "word/" + target.TrimStart('/');
+        }
+        return null;
     }
 
     /// <summary>

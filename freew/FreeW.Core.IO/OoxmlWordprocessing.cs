@@ -127,6 +127,74 @@ internal static class Ooxml
     public const string SettingsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings";
     public const string SettingsPartName = "/word/settings.xml";
 
+    // word/fontTable.xml lists the embedded font families (w:font/w:embedRegular/…). Each embed references an
+    // obfuscated font part (word/fonts/fontN.odttf, content type obfuscatedFont) via the fontTable's own rels.
+    public const string FontTableContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml";
+    public const string FontTableRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable";
+    public const string FontTablePartName = "/word/fontTable.xml";
+
+    public const string ObfuscatedFontContentType = "application/vnd.openxmlformats-officedocument.obfuscatedFont";
+    public const string FontRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/font";
+
+    /// <summary>
+    /// Applies the ODTTF font obfuscation (the OOXML "embedded TrueType" transform) to <paramref name="font"/>
+    /// using the 16-byte key derived from <paramref name="fontKey"/> (a GUID string such as
+    /// <c>{XXXXXXXX-XXXX-…}</c>). The first 32 bytes are XOR-ed with the key (cycled), bytes 32+ are copied
+    /// verbatim. The transform is its own inverse, so the same call de-obfuscates an already-obfuscated part.
+    /// </summary>
+    public static byte[] ObfuscateFont(byte[] font, string fontKey)
+    {
+        var key = FontKeyToBytes(fontKey);
+        var result = (byte[])font.Clone();
+        var limit = Math.Min(32, result.Length);
+        for (var i = 0; i < limit; i++)
+            result[i] = (byte)(result[i] ^ key[i % 16]);
+        return result;
+    }
+
+    /// <summary>
+    /// Derives the 16-byte ODTTF obfuscation key from a fontKey GUID string: strip braces/dashes to get 16
+    /// hex byte pairs, then reverse the byte order. E.g. <c>{XXXXXXXX-…}</c> → 16 bytes, reversed.
+    /// </summary>
+    public static byte[] FontKeyToBytes(string fontKey)
+    {
+        var hex = new System.Text.StringBuilder(32);
+        foreach (var c in fontKey)
+            if (Uri.IsHexDigit(c))
+                hex.Append(c);
+        if (hex.Length != 32)
+            throw new ArgumentException("fontKey must contain 16 hex byte pairs (a GUID).", nameof(fontKey));
+
+        var bytes = new byte[16];
+        for (var i = 0; i < 16; i++)
+            bytes[i] = byte.Parse(hex.ToString(i * 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+        Array.Reverse(bytes);
+        return bytes;
+    }
+
+    /// <summary>
+    /// Derives a deterministic fontKey GUID string (<c>{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}</c>) from
+    /// <paramref name="seed"/> (the font family + style), so the writer never calls <c>Guid.NewGuid()</c> and
+    /// the obfuscated output is reproducible. Uses a stable FNV-1a hash to fill the 16 GUID bytes.
+    /// </summary>
+    public static string DeterministicFontKey(string seed)
+    {
+        var bytes = new byte[16];
+        // FNV-1a over the UTF-8 seed, re-seeded per byte so all 16 bytes vary deterministically.
+        var utf8 = System.Text.Encoding.UTF8.GetBytes(seed);
+        for (var b = 0; b < 16; b++)
+        {
+            ulong hash = 14695981039346656037UL + (ulong)b * 1099511628211UL;
+            foreach (var t in utf8)
+            {
+                hash ^= t;
+                hash *= 1099511628211UL;
+            }
+            bytes[b] = (byte)(hash & 0xFF);
+        }
+        return new Guid(bytes).ToString("B").ToUpperInvariant();
+    }
+
     public const string ThemeContentType = "application/vnd.openxmlformats-officedocument.theme+xml";
     public const string ThemeRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
     public const string ThemePartName = "/word/theme/theme1.xml";
