@@ -1112,6 +1112,18 @@ public static class DocxWriter
             return sr;
         }
 
+        // Inline WordArt serialises as a w:r wrapping a w:drawing/wp:inline/.../wps:wsp text box whose run
+        // carries DrawingML text effects (chosen by the style preset) on its a:rPr.
+        if (run.WordArt is { } wordArt)
+        {
+            var wr = new XElement(W + "r");
+            var rPr = BuildRunProperties(run.Formatting);
+            if (rPr is not null)
+                wr.Add(rPr);
+            wr.Add(BuildWordArtDrawing(wordArt));
+            return wr;
+        }
+
         // A document field emits a self-contained w:fldSimple wrapping a run; the wrapped run's w:t
         // carries the last-known/cached value as fallback text for field-unaware consumers. The
         // w:instr keyword identifies the field kind (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES).
@@ -1310,6 +1322,129 @@ public static class DocxWriter
 
     /// <summary>Empty hyperlink map for building text-box body paragraphs (they carry no document rels).</summary>
     private static readonly Dictionary<string, string> EmptyHyperlinks = new();
+
+    // The fixed colours a WordArt preset paints with (kept simple and deterministic so the reader can infer
+    // the preset back from which effect elements are present, not from exact colour values).
+    private const string WordArtFillColor = "1F4E79";        // a deep blue text fill
+    private const string WordArtGradientStart = "4472C4";    // gradient stop 0
+    private const string WordArtGradientEnd = "ED7D31";      // gradient stop 1
+    private const string WordArtOutlineColor = "2E2E2E";     // outline / shadow colour
+
+    /// <summary>
+    /// Builds inline WordArt: a w:drawing/wp:inline/.../wps:wsp text box (exactly like a shape's text box)
+    /// whose single text run carries DrawingML text effects on its a:rPr. The effects are chosen by the
+    /// WordArt style preset: a solid or gradient text fill (a:solidFill/a:gradFill), an outline (a:ln),
+    /// and/or an outer shadow (a:effectLst/a:outerShdw). The wp:docPr id comes from the document-scoped
+    /// <see cref="_shapeDrawingId"/> counter (shared with shapes) so it never collides with image ids.
+    /// </summary>
+    private static XElement BuildWordArtDrawing(WordArt wordArt)
+    {
+        // WordArt has no intrinsic geometry size in the FreeW model; derive a sensible text-box extent from
+        // the font size and text length so the inline drawing has a non-zero extent (Word recomputes it).
+        var heightPt = wordArt.FontSizePt * 1.6;
+        var widthPt = Math.Max(1, wordArt.Text.Length) * wordArt.FontSizePt * 0.62;
+        var cx = PointsToEmu(widthPt);
+        var cy = PointsToEmu(heightPt);
+        var docPrId = System.Threading.Interlocked.Increment(ref _shapeDrawingId);
+        var name = $"WordArt{(uint)docPrId}";
+
+        // A plain text-box rect carries the WordArt; the decorative effects live on the run's a:rPr.
+        var spPr = new XElement(Wps + "spPr",
+            new XElement(A + "xfrm",
+                new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
+                new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
+            new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
+                new XElement(A + "avLst")));
+
+        var wsp = new XElement(Wps + "wsp",
+            new XElement(Wps + "cNvSpPr"),
+            spPr,
+            new XElement(Wps + "txbx",
+                new XElement(W + "txbxContent", BuildWordArtParagraph(wordArt))),
+            new XElement(Wps + "bodyPr"));
+
+        return new XElement(W + "drawing",
+            new XElement(Wp + "inline",
+                new XAttribute("distT", 0), new XAttribute("distB", 0),
+                new XAttribute("distL", 0), new XAttribute("distR", 0),
+                new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(Wp + "effectExtent",
+                    new XAttribute("l", 0), new XAttribute("t", 0),
+                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                new XElement(Wp + "docPr", new XAttribute("id", (uint)docPrId), new XAttribute("name", name)),
+                new XElement(A + "graphic",
+                    new XElement(A + "graphicData",
+                        new XAttribute("uri", Wps.NamespaceName),
+                        wsp))));
+    }
+
+    /// <summary>
+    /// Builds the single w:p inside a WordArt text box: a w:r whose w:rPr carries the font size (w:sz, in
+    /// half-points) plus the DrawingML text effects (a:solidFill/a:gradFill/a:ln/a:effectLst) selected by the
+    /// style preset, followed by the w:t text. The DrawingML effect elements sit directly under w:rPr exactly
+    /// as Word emits WordArt text properties.
+    /// </summary>
+    private static XElement BuildWordArtParagraph(WordArt wordArt)
+    {
+        var rPr = new XElement(W + "rPr",
+            new XElement(W + "sz", new XAttribute(W + "val", PointsToHalfPoints(wordArt.FontSizePt))),
+            new XElement(W + "szCs", new XAttribute(W + "val", PointsToHalfPoints(wordArt.FontSizePt))));
+        foreach (var effect in WordArtEffects(wordArt.Style))
+            rPr.Add(effect);
+
+        var run = new XElement(W + "r",
+            rPr,
+            new XElement(W + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), wordArt.Text));
+
+        return new XElement(W + "p", run);
+    }
+
+    /// <summary>
+    /// Expands a <see cref="WordArtStyle"/> preset into the DrawingML text-effect elements placed on the
+    /// WordArt run's w:rPr. The reader infers the preset back from which of these are present:
+    /// gradient → GradientFill, outline (a:ln) → Outline, shadow (a:effectLst) → Shadow, else FillBlue.
+    /// </summary>
+    private static IEnumerable<XElement> WordArtEffects(WordArtStyle style)
+    {
+        switch (style)
+        {
+            case WordArtStyle.GradientFill:
+                yield return new XElement(A + "gradFill",
+                    new XElement(A + "gsLst",
+                        new XElement(A + "gs", new XAttribute("pos", 0),
+                            new XElement(A + "srgbClr", new XAttribute("val", WordArtGradientStart))),
+                        new XElement(A + "gs", new XAttribute("pos", 100000),
+                            new XElement(A + "srgbClr", new XAttribute("val", WordArtGradientEnd)))),
+                    new XElement(A + "lin", new XAttribute("ang", 5400000), new XAttribute("scaled", 1)));
+                break;
+
+            case WordArtStyle.Outline:
+                yield return SolidFill(WordArtFillColor);
+                yield return new XElement(A + "ln", new XAttribute("w", 9525),
+                    SolidFill(WordArtOutlineColor));
+                break;
+
+            case WordArtStyle.Shadow:
+                yield return SolidFill(WordArtFillColor);
+                yield return new XElement(A + "effectLst",
+                    new XElement(A + "outerShdw",
+                        new XAttribute("blurRad", 50800),
+                        new XAttribute("dist", 38100),
+                        new XAttribute("dir", 2700000),
+                        new XAttribute("algn", "tl"),
+                        new XElement(A + "srgbClr", new XAttribute("val", WordArtOutlineColor),
+                            new XElement(A + "alpha", new XAttribute("val", 40000)))));
+                break;
+
+            default: // FillBlue
+                yield return SolidFill(WordArtFillColor);
+                break;
+        }
+    }
+
+    /// <summary>Builds an a:solidFill wrapping an a:srgbClr of the given RRGGBB hex value.</summary>
+    private static XElement SolidFill(string hex) =>
+        new(A + "solidFill", new XElement(A + "srgbClr", new XAttribute("val", hex)));
 
     /// <summary>
     /// Builds the inline chart drawing: w:drawing/wp:inline/a:graphic/a:graphicData(uri=chart)/c:chart
