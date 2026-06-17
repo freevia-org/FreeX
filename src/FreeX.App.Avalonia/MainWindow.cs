@@ -594,8 +594,17 @@ public sealed partial class MainWindow : Window
         var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
             () => _session,
             RefreshShell,
-            openTextToColumns: TextToColumns,
-            openConsolidate: Consolidate);
+            new FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHostCallbacks
+            {
+                OpenTextToColumns = TextToColumns,
+                OpenConsolidate = Consolidate,
+                InsertTable = InsertTableFromSelection,
+                ConditionalFormatting = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
+                QuickAnalysis = () => _ = ShowQuickAnalysisDialogAsync(),
+                SortAscending = () => SortSelectedRange(ascending: true),
+                SortDescending = () => SortSelectedRange(ascending: false),
+                DataValidation = () => _ = ShowDataValidationDialogAsync(),
+            });
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
