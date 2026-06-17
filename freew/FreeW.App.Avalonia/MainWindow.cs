@@ -26,8 +26,11 @@ public sealed class MainWindow : Window
     private readonly TextBlock _status = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
     private readonly TextBox _findBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _zoomLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
+    private readonly ScaleTransform _zoom = new(1, 1);
     private Border? _findBar;
     private ScrollViewer? _scroller;
+    private double _zoomScale = 1.0;
     private string? _currentPath;
 
     public MainWindow()
@@ -56,7 +59,7 @@ public sealed class MainWindow : Window
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
             BorderThickness = new Thickness(0, 1, 0, 0),
             Height = 26,
-            Child = _status,
+            Child = BuildStatusContent(),
         };
         DockPanel.SetDock(statusBar, Dock.Bottom);
         root.Children.Add(statusBar);
@@ -70,7 +73,7 @@ public sealed class MainWindow : Window
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Padding = new Thickness(48, 24),
-            Content = _editor,
+            Content = new LayoutTransformControl { LayoutTransform = _zoom, Child = _editor },
         };
         var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = _scroller };
         root.Children.Add(workspace);
@@ -179,6 +182,16 @@ public sealed class MainWindow : Window
         return _findBar;
     }
 
+    private Control BuildStatusContent()
+    {
+        _zoomLabel.Text = "100%";
+        var panel = new DockPanel();
+        DockPanel.SetDock(_zoomLabel, Dock.Right);
+        panel.Children.Add(_zoomLabel);
+        panel.Children.Add(_status);
+        return panel;
+    }
+
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
         var ctrl = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
@@ -191,7 +204,18 @@ public sealed class MainWindow : Window
             case Key.N: NewDocument(); e.Handled = true; break;
             case Key.O: _ = OpenAsync(); e.Handled = true; break;
             case Key.S: _ = SaveAsync(); e.Handled = true; break;
+            case Key.OemPlus or Key.Add: ApplyZoom(_zoomScale + 0.1); e.Handled = true; break;
+            case Key.OemMinus or Key.Subtract: ApplyZoom(_zoomScale - 0.1); e.Handled = true; break;
+            case Key.D0 or Key.NumPad0: ApplyZoom(1.0); e.Handled = true; break;
         }
+    }
+
+    private void ApplyZoom(double scale)
+    {
+        _zoomScale = Math.Clamp(Math.Round(scale, 2), 0.5, 3.0);
+        _zoom.ScaleX = _zoomScale;
+        _zoom.ScaleY = _zoomScale;
+        _zoomLabel.Text = $"{Math.Round(_zoomScale * 100)}%";
     }
 
     private void NewDocument()
