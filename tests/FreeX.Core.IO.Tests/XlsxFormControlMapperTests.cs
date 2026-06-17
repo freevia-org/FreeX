@@ -132,6 +132,37 @@ public class XlsxFormControlMapperTests
     }
 
     [Fact]
+    public void ReadVmlCaption_ReturnsTextboxText()
+    {
+        // Legacy form-control caption lives in the VML shape's <v:textbox> content (one or more <div> lines).
+        var shape = XElement.Parse(
+            """
+            <v:shape xmlns:v="urn:schemas-microsoft-com:vml">
+              <v:textbox><div style="text-align:left">Include weekends</div></v:textbox>
+            </v:shape>
+            """);
+
+        XlsxFormControlMapper.ReadVmlCaption(shape).Should().Be("Include weekends");
+    }
+
+    [Fact]
+    public void ReadVmlCaption_ReturnsNullForEmptyOrMissingTextbox()
+    {
+        // The todo-sheet checkboxes have an empty <div> — Excel shows no label, so caption is null
+        // (the renderer must NOT fall back to the shape Name).
+        var emptyTextbox = XElement.Parse(
+            """
+            <v:shape xmlns:v="urn:schemas-microsoft-com:vml">
+              <v:textbox style="mso-direction-alt:auto"><div style="text-align:left;direction:ltr"></div></v:textbox>
+            </v:shape>
+            """);
+        XlsxFormControlMapper.ReadVmlCaption(emptyTextbox).Should().BeNull();
+
+        var noTextbox = XElement.Parse("""<v:shape xmlns:v="urn:schemas-microsoft-com:vml" />""");
+        XlsxFormControlMapper.ReadVmlCaption(noTextbox).Should().BeNull();
+    }
+
+    [Fact]
     public void ReadControlProperties_DropDown_ParsesSelectionAndListFillRange()
     {
         var formControlPr = XElement.Parse(

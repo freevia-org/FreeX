@@ -164,25 +164,27 @@ public sealed class FormControlRenderPlannerTests
     }
 
     [Fact]
-    public void GetCaption_PrefersExplicitNameOverFallback()
+    public void GetCaption_ReturnsAuthoredCaption()
     {
-        var control = new FormControlModel { Kind = FormControlKind.CheckBox, Name = "Include weekends" };
+        var control = new FormControlModel { Kind = FormControlKind.CheckBox, Caption = "Include weekends" };
 
         FormControlRenderPlanner.GetCaption(control).Should().Be("Include weekends");
     }
 
     [Fact]
-    public void GetCaption_FallsBackToKindWhenNameMissing()
+    public void GetCaption_ReturnsEmptyWhenNoCaption_AndNeverUsesName()
     {
-        var control = new FormControlModel { Kind = FormControlKind.OptionButton, Name = null };
+        // The internal shape Name ("Check Box 1") is NOT a visible label — when there is no authored
+        // caption, Excel draws nothing and so must we (no Name / kind-label fallback).
+        var control = new FormControlModel { Kind = FormControlKind.OptionButton, Name = "Option Button 3", Caption = null };
 
-        FormControlRenderPlanner.GetCaption(control).Should().Be("Option Button");
+        FormControlRenderPlanner.GetCaption(control).Should().BeEmpty();
     }
 
     [Fact]
     public void GetCaption_TrimsWhitespace()
     {
-        var control = new FormControlModel { Kind = FormControlKind.CheckBox, Name = "  Tax  " };
+        var control = new FormControlModel { Kind = FormControlKind.CheckBox, Caption = "  Tax  " };
 
         FormControlRenderPlanner.GetCaption(control).Should().Be("Tax");
     }

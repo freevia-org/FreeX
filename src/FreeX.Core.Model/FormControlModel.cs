@@ -30,8 +30,14 @@ public sealed class FormControlModel
     /// <summary>Modeled control kind.</summary>
     public FormControlKind Kind { get; set; } = FormControlKind.Unknown;
 
-    /// <summary>The control shape name (e.g. "Check Box 1"), when present.</summary>
+    /// <summary>The control shape name (e.g. "Check Box 1"), when present. This is the internal
+    /// shape NAME, not the visible label — see <see cref="Caption"/> for the displayed text.</summary>
     public string? Name { get; set; }
+
+    /// <summary>The control's authored display text (its visible caption/label), read from the VML
+    /// shape's <c>v:textbox</c>. <see langword="null"/> when the control has no authored caption
+    /// (Excel draws no label in that case — the shape <see cref="Name"/> is NOT shown).</summary>
+    public string? Caption { get; set; }
 
     /// <summary>The drawing shape id from the worksheet control element.</summary>
     public uint? ShapeId { get; set; }
