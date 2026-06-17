@@ -26,6 +26,55 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void RunProperties_EmittedInCanonicalSchemaOrder()
+    {
+        // A run carrying many formatting facets at once must emit w:rPr children in CT_RPr schema
+        // order, else Word's strict validator rejects it (the order-independent reader hides this).
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("x", new RunFormatting
+        {
+            FontFamily = "Arial",
+            Bold = true,
+            Italic = true,
+            AllCaps = true,
+            SmallCaps = true,
+            Strikethrough = true,
+            ColorHex = "#112233",
+            FontSizePt = 14,
+            Underline = true,
+            HighlightColorHex = "#FFFF00",
+            VerticalAlign = VerticalAlign.Superscript
+        }));
+        doc.Blocks.Add(paragraph);
+
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var rPr = WriteDocumentXml(doc).Descendants(ns + "rPr").First();
+        var names = rPr.Elements().Select(e => e.Name.LocalName).ToList();
+
+        // Canonical EG_RPrBase order for the elements FreeW emits.
+        var canonical = new[] { "rFonts", "b", "i", "caps", "smallCaps", "strike", "color", "sz", "szCs", "u", "shd", "vertAlign" };
+        var expected = canonical.Where(names.Contains).ToList();
+        names.Should().Equal(expected);
+    }
+
+    [Fact]
+    public void FootnoteMarker_PreservesRunFormatting()
+    {
+        var doc = new TextDocument();
+        doc.Footnotes[1] = new Footnote(1, "note");
+        var body = new Paragraph();
+        body.Runs.Add(new Run("see "));
+        body.Runs.Add(Run.FootnoteReference(1, new RunFormatting { Bold = true, ColorHex = "#C00000" }));
+        doc.Blocks.Add(body);
+
+        var marker = RoundTrip(doc).Paragraphs.First().Runs.Single(r => r.FootnoteId == 1);
+        marker.Formatting.Bold.Should().BeTrue();
+        marker.Formatting.ColorHex.Should().Be("#C00000");
+        marker.Formatting.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+    }
+
+    [Fact]
     public void Paragraphs_And_Text_RoundTrip()
     {
         var doc = new TextDocument();
@@ -2390,5 +2439,89 @@ public class DocxRoundTripTests
 
         stream.Position = 0;
         DocxReader.Read(stream).Page.DifferentFirstPage.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SingleSection_RoundTripsIdentically_WithNoParagraphLevelSectPr()
+    {
+        // Regression guard: a document with no section breaks must behave exactly as before — one
+        // body-level w:sectPr, no per-paragraph w:sectPr, and a single reconstructed section.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("only section"));
+        doc.Page.Landscape = true; // exercise the (previously unread) pgSz orientation round-trip too.
+
+        var xml = WriteDocumentXml(doc);
+        var w = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var body = xml.Root!.Element(w + "body")!;
+        // Exactly one body-level sectPr, and no paragraph carries a pPr/sectPr.
+        body.Elements(w + "sectPr").Should().HaveCount(1);
+        body.Elements(w + "p").SelectMany(p => p.Elements(w + "pPr").Elements(w + "sectPr"))
+            .Should().BeEmpty();
+
+        var result = RoundTrip(doc);
+        result.Sections.Should().HaveCount(1);
+        result.Sections[0].Page.Landscape.Should().BeTrue();
+        result.Blocks.OfType<Paragraph>().Should().OnlyContain(p => p.SectionBreak == null);
+    }
+
+    [Fact]
+    public void TwoSections_RoundTrip_PerSectionPageSetupAndBreakKind()
+    {
+        // Section 1: portrait, NextPage break, ending on its last paragraph. Section 2 (final): landscape.
+        var doc = new TextDocument();
+        var section1End = new Paragraph("section one")
+        {
+            SectionBreak = new Section(
+                new PageSettings { Landscape = false, MarginLeftPt = 90 },
+                SectionBreakKind.NextPage)
+        };
+        doc.Blocks.Add(section1End);
+        doc.Blocks.Add(new Paragraph("section two"));
+        doc.Page.Landscape = true; // the final (body-level) section is landscape.
+        doc.Page.MarginLeftPt = 54;
+
+        // Structural check: section 1's sectPr lives in its paragraph's pPr (with a w:type), and there is
+        // exactly one body-level sectPr for the final section.
+        var xml = WriteDocumentXml(doc);
+        var w = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var body = xml.Root!.Element(w + "body")!;
+        body.Elements(w + "sectPr").Should().HaveCount(1);
+        var paragraphSectPrs = body.Elements(w + "p")
+            .SelectMany(p => p.Elements(w + "pPr").Elements(w + "sectPr")).ToList();
+        paragraphSectPrs.Should().HaveCount(1);
+        paragraphSectPrs[0].Element(w + "type")!.Attribute(w + "val")!.Value.Should().Be("nextPage");
+
+        var result = RoundTrip(doc);
+
+        result.Sections.Should().HaveCount(2);
+        // Section 1 (the non-final section, recovered from the paragraph-level sectPr).
+        result.Sections[0].BreakKind.Should().Be(SectionBreakKind.NextPage);
+        result.Sections[0].Page.Landscape.Should().BeFalse();
+        result.Sections[0].Page.MarginLeftPt.Should().BeApproximately(90, 0.01);
+        // Section 2 (the final/body-level section).
+        result.Sections[1].Page.Landscape.Should().BeTrue();
+        result.Sections[1].Page.MarginLeftPt.Should().BeApproximately(54, 0.01);
+
+        // The marker survives on the first paragraph; the second paragraph ends no section.
+        var paragraphs = result.Blocks.OfType<Paragraph>().ToList();
+        paragraphs[0].SectionBreak.Should().NotBeNull();
+        paragraphs[1].SectionBreak.Should().BeNull();
+    }
+
+    [Fact]
+    public void ContinuousSectionBreak_RoundTripsBreakKind()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("continuous-ended")
+        {
+            SectionBreak = new Section(new PageSettings { ColumnCount = 2 }, SectionBreakKind.Continuous)
+        });
+        doc.Blocks.Add(new Paragraph("rest"));
+
+        var result = RoundTrip(doc);
+
+        result.Sections.Should().HaveCount(2);
+        result.Sections[0].BreakKind.Should().Be(SectionBreakKind.Continuous);
+        result.Sections[0].Page.ColumnCount.Should().Be(2);
     }
 }

@@ -1,9 +1,56 @@
 namespace FreeW.Core.Model;
 
 /// <summary>
+/// How an image relates to the surrounding text. <see cref="Inline"/> (the default) keeps the image in
+/// the text flow, serialised as <c>wp:inline</c> exactly as before. The remaining modes make the image
+/// <em>floating</em> (serialised as <c>wp:anchor</c>) with the matching OOXML wrap element:
+/// <see cref="Square"/> → <c>wp:wrapSquare</c>; <see cref="Tight"/> → <c>wp:wrapTight</c> (no wrap polygon —
+/// a deliberate simplification); <see cref="TopAndBottom"/> → <c>wp:wrapTopAndBottom</c>;
+/// <see cref="Behind"/> → <c>wp:wrapNone</c> with <c>behindDoc="1"</c> (behind the text);
+/// <see cref="InFront"/> → <c>wp:wrapNone</c> with <c>behindDoc="0"</c> (in front of the text).
+/// </summary>
+public enum ImageWrapping
+{
+    Inline,
+    Square,
+    Tight,
+    TopAndBottom,
+    Behind,
+    InFront
+}
+
+/// <summary>
+/// The horizontal frame a floating image's offset is measured from (<c>wp:positionH/@relativeFrom</c>).
+/// Maps to "column" / "margin" / "page". Defaults to <see cref="Column"/>.
+/// </summary>
+public enum HorizontalAnchor
+{
+    Column,
+    Margin,
+    Page
+}
+
+/// <summary>
+/// The vertical frame a floating image's offset is measured from (<c>wp:positionV/@relativeFrom</c>).
+/// Maps to "paragraph" / "margin" / "page". Defaults to <see cref="Paragraph"/>.
+/// </summary>
+public enum VerticalAnchor
+{
+    Paragraph,
+    Margin,
+    Page
+}
+
+/// <summary>
 /// An inline raster image carried by a <see cref="Run"/>. Modelled at the run level (rather than as
 /// a block) so it round-trips through docx as an inline w:drawing without touching paragraph storage.
 /// PNG bytes only; size is in points to match the rest of the FreeW unit model.
+///
+/// By default an image is inline (<see cref="ImageWrapping.Inline"/>) and serialises as <c>wp:inline</c>
+/// exactly as before. Setting <see cref="Wrapping"/> to a floating mode makes it serialise as a
+/// <c>wp:anchor</c> positioned by <see cref="HorizontalOffsetPt"/>/<see cref="VerticalOffsetPt"/> relative
+/// to <see cref="HorizontalAnchor"/>/<see cref="VerticalAnchor"/>. The position fields are ignored for an
+/// inline image, so existing inline-image construction and round-trips are fully unaffected.
 /// </summary>
 public sealed class InlineImage(byte[] pngBytes, double widthPt, double heightPt)
 {
@@ -18,6 +65,36 @@ public sealed class InlineImage(byte[] pngBytes, double widthPt, double heightPt
     /// Defaults to null so existing image construction and round-trips are unaffected.
     /// </summary>
     public string? AltText { get; set; }
+
+    /// <summary>
+    /// How the image relates to the surrounding text. Defaults to <see cref="ImageWrapping.Inline"/> so
+    /// existing images serialise as <c>wp:inline</c> unchanged; any other value makes the image floating
+    /// (<c>wp:anchor</c>) with the matching wrap element.
+    /// </summary>
+    public ImageWrapping Wrapping { get; set; } = ImageWrapping.Inline;
+
+    /// <summary>True when the image is floating (i.e. not <see cref="ImageWrapping.Inline"/>).</summary>
+    public bool IsFloating => Wrapping != ImageWrapping.Inline;
+
+    /// <summary>
+    /// Horizontal offset in points from <see cref="HorizontalAnchor"/> for a floating image
+    /// (<c>wp:positionH/wp:posOffset</c>). Ignored when <see cref="Wrapping"/> is
+    /// <see cref="ImageWrapping.Inline"/>. Defaults to 0.
+    /// </summary>
+    public double HorizontalOffsetPt { get; set; }
+
+    /// <summary>
+    /// Vertical offset in points from <see cref="VerticalAnchor"/> for a floating image
+    /// (<c>wp:positionV/wp:posOffset</c>). Ignored when <see cref="Wrapping"/> is
+    /// <see cref="ImageWrapping.Inline"/>. Defaults to 0.
+    /// </summary>
+    public double VerticalOffsetPt { get; set; }
+
+    /// <summary>The frame the horizontal offset is measured from (<c>wp:positionH/@relativeFrom</c>).</summary>
+    public HorizontalAnchor HorizontalAnchor { get; set; } = HorizontalAnchor.Column;
+
+    /// <summary>The frame the vertical offset is measured from (<c>wp:positionV/@relativeFrom</c>).</summary>
+    public VerticalAnchor VerticalAnchor { get; set; } = VerticalAnchor.Paragraph;
 }
 
 /// <summary>
@@ -31,6 +108,93 @@ public sealed class Run(string text, RunFormatting? formatting = null)
 
     /// <summary>Optional inline image. When non-null this run renders/serialises as a picture.</summary>
     public InlineImage? Image { get; set; }
+
+    /// <summary>
+    /// Optional inline mathematical equation (OMML). When non-null this run is an inline equation rather
+    /// than literal text: on save it serialises as an inline <c>m:oMath</c> in the run sequence (instead
+    /// of a <c>w:r/w:t</c>), and the run's <see cref="Text"/> mirrors the equation's linear form so
+    /// field-/math-unaware consumers still render something readable. Modelled at the run level — mirroring
+    /// <see cref="Image"/> and the other optional run marks — so equations round-trip through the existing
+    /// run flow without introducing a new block type.
+    /// </summary>
+    public Equation? Equation { get; set; }
+
+    /// <summary>Creates a run that carries an inline equation. Its <see cref="Text"/> mirrors the linear form.</summary>
+    public static Run FromEquation(Equation equation) =>
+        new(equation.LinearText) { Equation = equation };
+
+    /// <summary>
+    /// Optional inline DrawingML shape or text box. When non-null this run serialises as an inline
+    /// <c>w:drawing</c> wrapping a <c>wps:wsp</c> (preset geometry + optional fill + optional text-box
+    /// content) rather than literal text, and the run carries no <see cref="Text"/> of its own (for a text
+    /// box, <see cref="Text"/> mirrors the box's plain text so shape-unaware consumers still render
+    /// something). Modelled at the run level — mirroring <see cref="Image"/> and <see cref="Equation"/> —
+    /// so shapes round-trip through the existing run flow without a new block type.
+    /// </summary>
+    public Shape? Shape { get; set; }
+
+    /// <summary>
+    /// Creates a run that carries an inline shape. For a text box the run's <see cref="Text"/> mirrors the
+    /// box's plain text; a plain (text-less) shape carries an empty <see cref="Text"/>.
+    /// </summary>
+    public static Run FromShape(Shape shape) =>
+        new(shape.HasText ? shape.PlainText : string.Empty) { Shape = shape };
+
+    /// <summary>
+    /// Optional inline WordArt (decorative text). When non-null this run serialises as an inline
+    /// <c>w:drawing</c> wrapping a <c>wps:wsp</c> text box whose run carries DrawingML text effects (fill
+    /// gradient / outline / shadow chosen by the WordArt style preset) on its <c>a:rPr</c>, rather than
+    /// literal text. The run's <see cref="Text"/> mirrors the WordArt text so effect-unaware consumers still
+    /// render something. Modelled at the run level — mirroring <see cref="Shape"/> and <see cref="Image"/> —
+    /// so WordArt round-trips through the existing run flow without a new block type.
+    /// </summary>
+    public WordArt? WordArt { get; set; }
+
+    /// <summary>Creates a run that carries inline WordArt. Its <see cref="Text"/> mirrors the WordArt text.</summary>
+    public static Run FromWordArt(WordArt wordArt) =>
+        new(wordArt.Text) { WordArt = wordArt };
+
+    /// <summary>
+    /// Optional inline chart (DrawingML). When non-null this run is an inline chart rather than literal
+    /// text: on save it serialises as a separate chart part (<c>word/charts/chartN.xml</c>) referenced by an
+    /// inline <c>w:drawing</c> in the run sequence, exactly as <see cref="Image"/> serialises a picture.
+    /// Carries no literal text of its own. Modelled at the run level — mirroring <see cref="Image"/> and
+    /// <see cref="Equation"/> — so charts round-trip through the existing run flow without a new block type.
+    /// </summary>
+    public Chart? Chart { get; set; }
+
+    /// <summary>Creates a run that carries an inline chart instead of text.</summary>
+    public static Run FromChart(Chart chart) => new(string.Empty) { Chart = chart };
+
+    /// <summary>
+    /// Optional inline embedded OLE object (e.g. an embedded Excel sheet). When non-null this run is an
+    /// embedded object rather than literal text: on save it serialises as a classic <c>w:object</c> wrapping
+    /// a VML <c>v:shape</c>/<c>o:OLEObject</c>, with the payload bytes written to a separate embeddings part
+    /// (<c>word/embeddings/oleObjectN.bin</c>) referenced by relationship id and the presentation icon
+    /// written as a media part — mirroring how <see cref="Chart"/> and <see cref="Image"/> serialise as
+    /// referenced parts. Carries no literal text of its own. Modelled at the run level — mirroring
+    /// <see cref="Chart"/> and <see cref="Image"/> — so embedded objects round-trip through the existing run
+    /// flow without a new block type.
+    /// </summary>
+    public EmbeddedObject? EmbeddedObject { get; set; }
+
+    /// <summary>Creates a run that carries an inline embedded OLE object instead of text.</summary>
+    public static Run FromEmbeddedObject(EmbeddedObject embeddedObject) =>
+        new(string.Empty) { EmbeddedObject = embeddedObject };
+
+    /// <summary>
+    /// Optional inline SmartArt / DrawingML diagram. When non-null this run is an inline diagram rather than
+    /// literal text: on save it serialises as four diagram parts
+    /// (<c>word/diagrams/{data,layout,quickStyle,colors}N.xml</c>) referenced by an inline <c>w:drawing</c>
+    /// whose <c>dgm:relIds</c> holds the four relationship ids — the node texts/hierarchy live in the data
+    /// part, exactly as <see cref="Chart"/> serialises a chart part. Carries no literal text of its own.
+    /// Modelled at the run level — mirroring <see cref="Chart"/> and <see cref="Image"/> — so diagrams
+    /// round-trip through the existing run flow without a new block type.
+    /// </summary>
+    public SmartArt? SmartArt { get; set; }
+
+    /// <summary>Creates a run that carries an inline SmartArt diagram instead of text.</summary>
+    public static Run FromSmartArt(SmartArt smartArt) => new(string.Empty) { SmartArt = smartArt };
 
     /// <summary>
     /// Optional external hyperlink target (absolute URL). When non-null the run is wrapped in a
@@ -404,6 +568,15 @@ public sealed class Paragraph : Block
     /// </summary>
     public string? BookmarkName { get; set; }
 
+    /// <summary>
+    /// Optional section break carried by this paragraph. When non-null this paragraph is the <em>last</em>
+    /// paragraph of a section, and the marker holds that section's <see cref="Section.Page"/> setup and
+    /// <see cref="Section.BreakKind"/>. On save the section's w:sectPr is emitted inside this paragraph's
+    /// w:pPr (with w:type), exactly as WordprocessingML stores a non-final section's properties. Null (the
+    /// default) means the paragraph does not end a section, so single-section documents are unaffected.
+    /// </summary>
+    public Section? SectionBreak { get; set; }
+
     public Paragraph() { }
 
     public Paragraph(string text)
@@ -733,6 +906,93 @@ public sealed class PageSettings
     /// header/footer (a genuinely separate first-page header part is out of scope).
     /// </summary>
     public bool DifferentFirstPage { get; set; }
+
+    /// <summary>
+    /// Whether the document uses distinct headers/footers on odd and even pages (the document-level
+    /// w:settings/w:evenAndOddHeaders toggle). Defaults to false so existing documents are unaffected —
+    /// no w:evenAndOddHeaders is emitted and no settings part is forced. When true the writer emits the
+    /// toggle in word/settings.xml, emits the even header/footer parts (header2.xml / footer2.xml) and
+    /// adds w:headerReference/w:footerReference w:type="even" to the section; the even content lives in
+    /// <see cref="TextDocument.EvenHeader"/> / <see cref="TextDocument.EvenFooter"/>. Unlike the other
+    /// page properties this is a document-wide setting, not a per-section one — it is read/written on the
+    /// body-level (final-section) page settings.
+    /// </summary>
+    public bool DifferentOddEvenPages { get; set; }
+
+    /// <summary>
+    /// Optional page background colour as an RRGGBB hex (e.g. <c>"#FFFFCC"</c>), or null for none (the
+    /// default — existing documents are unaffected). When set the writer emits w:background w:color as the
+    /// first child of w:document (before w:body) and w:displayBackgroundShape in word/settings.xml so Word
+    /// actually paints it. Like <see cref="DifferentOddEvenPages"/> this is a document-wide setting carried
+    /// on the body-level page settings. The '#' prefix is optional and stripped on write.
+    /// </summary>
+    public string? BackgroundColorHex { get; set; }
+
+    /// <summary>
+    /// Returns a deep copy of these page settings. Used when a document is split into multiple
+    /// sections (see <see cref="Section"/>) so each section owns an independent <see cref="PageSettings"/>
+    /// that can be edited without disturbing the others. <see cref="PageBorder"/> is an immutable record,
+    /// so copying the reference is safe.
+    /// </summary>
+    public PageSettings Clone() => new()
+    {
+        WidthPt = WidthPt,
+        HeightPt = HeightPt,
+        MarginLeftPt = MarginLeftPt,
+        MarginRightPt = MarginRightPt,
+        MarginTopPt = MarginTopPt,
+        MarginBottomPt = MarginBottomPt,
+        Landscape = Landscape,
+        ColumnCount = ColumnCount,
+        ColumnSpacingPt = ColumnSpacingPt,
+        PageBorder = PageBorder,
+        Watermark = Watermark,
+        LineNumberMode = LineNumberMode,
+        LineNumberCountBy = LineNumberCountBy,
+        AutoHyphenation = AutoHyphenation,
+        VerticalAlignment = VerticalAlignment,
+        DifferentFirstPage = DifferentFirstPage,
+        DifferentOddEvenPages = DifferentOddEvenPages,
+        BackgroundColorHex = BackgroundColorHex
+    };
+}
+
+/// <summary>
+/// The kind of section break that begins a WordprocessingML section (w:sectPr/w:type w:val).
+/// <see cref="NextPage"/> (Word's default for an inserted section break) starts the new section on the
+/// next page; <see cref="Continuous"/> starts it on the same page (no page break); <see cref="EvenPage"/>
+/// / <see cref="OddPage"/> start it on the next even/odd page. The final (body-level) section carries a
+/// break kind too, but Word ignores it there — it only matters for non-final sections.
+/// </summary>
+public enum SectionBreakKind
+{
+    Continuous,
+    NextPage,
+    EvenPage,
+    OddPage
+}
+
+/// <summary>
+/// One section of a multi-section document: its own <see cref="PageSettings"/> (page size, margins,
+/// orientation, columns, borders, line numbers, …) plus the <see cref="BreakKind"/> describing how the
+/// section begins (continuous / next-page / even-page / odd-page).
+///
+/// Sections are modelled as a <em>marker on the paragraph that ends them</em>: setting
+/// <see cref="Paragraph.SectionBreak"/> on a paragraph makes that paragraph the last paragraph of a
+/// section, carrying the section's page setup — exactly mirroring WordprocessingML, where a non-final
+/// section's w:sectPr lives in the w:pPr of its last paragraph. The document-wide
+/// <see cref="TextDocument.Page"/> remains the <em>final</em> section's settings (the body-level
+/// w:sectPr), so a document with no <see cref="Paragraph.SectionBreak"/> markers behaves exactly as a
+/// single-section document did before. <see cref="TextDocument.Sections"/> exposes the ordered section
+/// view reconstructed from these markers plus the final <see cref="TextDocument.Page"/>.
+/// </summary>
+public sealed class Section(PageSettings page, SectionBreakKind breakKind = SectionBreakKind.NextPage)
+{
+    /// <summary>This section's page geometry / layout. Each section owns an independent instance.</summary>
+    public PageSettings Page { get; set; } = page;
+
+    /// <summary>How this section begins relative to the previous one (w:sectPr/w:type).</summary>
+    public SectionBreakKind BreakKind { get; set; } = breakKind;
 }
 
 /// <summary>
@@ -747,7 +1007,35 @@ public sealed class TextDocument
     public Dictionary<string, DocumentStyle> Styles { get; } = [];
     public RunFormatting DefaultRun { get; set; } = new() { FontFamily = "Calibri", FontSizePt = 11 };
     public ParagraphFormatting DefaultParagraph { get; set; } = ParagraphFormatting.Default;
+
+    /// <summary>
+    /// The page settings of the <em>final</em> (or only) section — the body-level w:sectPr. A document
+    /// with no <see cref="Paragraph.SectionBreak"/> markers is single-section and these are its only page
+    /// settings, so existing single-section behaviour is unchanged. Earlier sections carry their own
+    /// <see cref="PageSettings"/> on their ending paragraph's <see cref="Paragraph.SectionBreak"/>.
+    /// </summary>
     public PageSettings Page { get; } = new();
+
+    /// <summary>
+    /// The document's sections in order. Reconstructed from the <see cref="Paragraph.SectionBreak"/>
+    /// markers (one section per top-level paragraph that ends a section) followed by the final section,
+    /// whose settings are <see cref="Page"/>. A document with no markers yields a single section whose
+    /// page settings are <see cref="Page"/>, matching the single-section model exactly.
+    /// </summary>
+    public IReadOnlyList<Section> Sections
+    {
+        get
+        {
+            var sections = new List<Section>();
+            foreach (var block in Blocks)
+                if (block is Paragraph { SectionBreak: { } sectionBreak })
+                    sections.Add(sectionBreak);
+            // The trailing section is always the body-level page settings (the final w:sectPr). Its break
+            // kind is not meaningful (Word ignores w:type on the last section), so report it as NextPage.
+            sections.Add(new Section(Page, SectionBreakKind.NextPage));
+            return sections;
+        }
+    }
 
     /// <summary>
     /// The default page header (top margin), or null when the document has no header. Maps to a
@@ -761,6 +1049,22 @@ public sealed class TextDocument
     /// </summary>
     public HeaderFooter? Footer { get; set; }
 
+    /// <summary>
+    /// The even-page header, or null when the document has none. Only meaningful when
+    /// <see cref="PageSettings.DifferentOddEvenPages"/> is set (the default <see cref="Header"/> then
+    /// applies to odd pages). Maps to a word/header2.xml part referenced from w:sectPr via
+    /// w:headerReference w:type="even". Mirrors <see cref="Header"/>.
+    /// </summary>
+    public HeaderFooter? EvenHeader { get; set; }
+
+    /// <summary>
+    /// The even-page footer, or null when the document has none. Only meaningful when
+    /// <see cref="PageSettings.DifferentOddEvenPages"/> is set (the default <see cref="Footer"/> then
+    /// applies to odd pages). Maps to a word/footer2.xml part referenced from w:sectPr via
+    /// w:footerReference w:type="even". Mirrors <see cref="Footer"/>.
+    /// </summary>
+    public HeaderFooter? EvenFooter { get; set; }
+
     /// <summary>Document-level metadata (maps to docProps/core.xml).</summary>
     public DocumentProperties Properties { get; } = new();
 
@@ -771,6 +1075,16 @@ public sealed class TextDocument
     /// the writer emits w:settings/w:documentProtection and the reader maps it back here.
     /// </summary>
     public ProtectionSettings Protection { get; set; } = ProtectionSettings.Unprotected;
+
+    /// <summary>
+    /// The document's persisted theme — the colour/font scheme that maps to <c>word/theme/theme1.xml</c>.
+    /// Defaults to <see cref="DocumentTheme.Default"/> ("Office"), so existing documents are unchanged.
+    /// The writer always emits a theme part (mirroring real Word documents, which always carry one); the
+    /// reader infers the closest preset from the theme's accent colours and major/minor fonts, falling
+    /// back to "Office" when no preset matches. Applying a theme to the document's styles is separate
+    /// (<see cref="DocumentTheme.Apply"/>); this property records which theme is in effect.
+    /// </summary>
+    public DocumentTheme Theme { get; set; } = DocumentTheme.Default;
 
     /// <summary>
     /// The document's footnotes, keyed by footnote id (matching <see cref="Run.FootnoteId"/> on the

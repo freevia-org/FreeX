@@ -44,7 +44,20 @@ internal static class FreeWRibbonCommands
         Action? onToggleNavPane,
         Func<bool>? isNavPaneVisible,
         Action? onToggleReadMode,
-        Func<bool>? isReadModeActive)
+        Func<bool>? isReadModeActive) =>
+        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
+            onToggleReadMode, isReadModeActive, onTogglePrintLayout: null, isPrintLayoutActive: null);
+
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Action? onPrintPreview,
+        Action? onToggleNavPane,
+        Func<bool>? isNavPaneVisible,
+        Action? onToggleReadMode,
+        Func<bool>? isReadModeActive,
+        Action? onTogglePrintLayout,
+        Func<bool>? isPrintLayoutActive)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -151,6 +164,64 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-align-left", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
         registry.Register("freew.image-align-center", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
         registry.Register("freew.image-align-right", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
+        // Insert tab — Illustrations > Shapes: a small gallery of preset DrawingML shapes. Each menu item
+        // inserts the matching Shape (preset geometry, or a text box carrying placeholder text) at the caret
+        // via DocumentView.InsertShape. Round-trips through docx as an inline w:drawing/wps:wsp (see
+        // DocxWriter/Reader). The top-level "freew.shapes" id only opens the menu (no direct insert).
+        registry.Register("freew.shape-rectangle", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertShape(FreeW.Core.Model.Shape.Preset(FreeW.Core.Model.ShapeKind.Rectangle, widthPt: 120, heightPt: 80, fillColorHex: "#DCE6F1"));
+        }));
+        registry.Register("freew.shape-rounded", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertShape(FreeW.Core.Model.Shape.Preset(FreeW.Core.Model.ShapeKind.RoundedRectangle, widthPt: 120, heightPt: 80, fillColorHex: "#DCE6F1"));
+        }));
+        registry.Register("freew.shape-ellipse", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertShape(FreeW.Core.Model.Shape.Preset(FreeW.Core.Model.ShapeKind.Ellipse, widthPt: 100, heightPt: 100, fillColorHex: "#DCE6F1"));
+        }));
+        registry.Register("freew.shape-textbox", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertShape(FreeW.Core.Model.Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
+        }));
+        // Insert tab — Media: drop a sample equation / chart / WordArt / SmartArt / OLE object at the caret.
+        // Each routes through the editor's undoable insert path (mirroring InsertShape) and round-trips
+        // through docx (the model + IO already exist; this surfaces them in the ribbon). Sample content is a
+        // starting point the user can replace.
+        registry.Register("freew.equation", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertEquation(SampleEquation());
+        }));
+        registry.Register("freew.chart", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertChart(Chart.Create(
+                ChartKind.Column,
+                categories: ["Q1", "Q2", "Q3", "Q4"],
+                values: [8.0, 5.0, 11.0, 7.0],
+                seriesName: "Sales",
+                title: "Quarterly Sales"));
+        }));
+        registry.Register("freew.wordart", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertWordArt(WordArt.Create("WordArt", WordArtStyle.GradientFill));
+        }));
+        registry.Register("freew.smartart", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertSmartArt(SmartArt.Create(SmartArtKind.Process, ["First", "Second", "Third"]));
+        }));
+        registry.Register("freew.object", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertEmbeddedObject(SampleEmbeddedObject());
+        }));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
         // Insert tab — Links: manage the hyperlink at the caret — change its URL, remove it, or set a ScreenTip.
@@ -247,6 +318,10 @@ internal static class FreeWRibbonCommands
         // changes, document properties, bookmarks) via the pure DocumentInspector, and let the user
         // selectively remove categories. Applied removals mutate editor.Model in place and re-render.
         registry.Register("freew.inspect-document", new InspectDocumentCommand(editor));
+
+        // Review tab — Inspect > Check Accessibility: commit pending edits, run the pure AccessibilityChecker
+        // over the model, and show the report (issues grouped by severity) in a read-only modal. Read-only.
+        registry.Register("freew.check-accessibility", new CheckAccessibilityCommand(editor));
 
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
@@ -376,6 +451,12 @@ internal static class FreeWRibbonCommands
         // reflects whether the chrome-light reading column is currently active.
         if (onToggleReadMode is not null && isReadModeActive is not null)
             registry.Register("freew.read-mode", new ToggleActionCommand(onToggleReadMode, isReadModeActive));
+
+        // View tab — toggle Print Layout (Word-style page view) vs the plain/continuous view. Stateful so
+        // the ribbon's toggle button reflects whether the page presentation is currently active. Default
+        // on (the Word default); the host seeds the checked state to match.
+        if (onTogglePrintLayout is not null && isPrintLayoutActive is not null)
+            registry.Register("freew.print-layout", new ToggleActionCommand(onTogglePrintLayout, isPrintLayoutActive));
 
         // View tab — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
         // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the
@@ -1448,6 +1529,37 @@ internal static class FreeWRibbonCommands
             dialog.ShowDialog();
         }
     }
+
+    // Review > Inspect > Check Accessibility: commit pending edits, run the pure AccessibilityChecker over
+    // the model, and show the report in a read-only modal (issues grouped by severity). Read-only.
+    private sealed class CheckAccessibilityCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.CommitToModel();
+            var report = AccessibilityChecker.Check(editor.Model);
+            var dialog = new AccessibilityReportDialog(Window.GetWindow(editor)!, report);
+            dialog.ShowDialog();
+        }
+    }
+
+    // A sample equation ("E = mc^2") built from explicit math fragments so its linear form renders the
+    // superscript. Used by the Insert > Media > Equation ribbon button as a starting point.
+    private static Equation SampleEquation()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(MathRun.PlainText("E = m"));
+        equation.Runs.Add(MathRun.Superscript("c", "2"));
+        return equation;
+    }
+
+    // A sample embedded OLE object for the Insert > Media > Object ribbon button: a small "Package"-ProgID
+    // payload (a generic embedded package — Word's default for an unknown embedded file). Iconless; the
+    // editor renders a labelled placeholder in its place. A starting point the user can replace.
+    private static EmbeddedObject SampleEmbeddedObject() =>
+        EmbeddedObject.Create(
+            System.Text.Encoding.UTF8.GetBytes("FreeW embedded object placeholder."),
+            progId: "Package");
 
     // Review > Proofing > Add to Dictionary: take the misspelled word the caret currently sits on, add
     // it to FreeW's custom dictionary (persisted to the .lex file under the data folder), and re-read the

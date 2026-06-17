@@ -40,6 +40,54 @@ public sealed record TabStop(
 public enum VerticalAlign { Baseline, Superscript, Subscript }
 
 /// <summary>
+/// OpenType ligature mode for a run (rPr/w14:ligatures, the Office 2010 extension). <see cref="None"/>
+/// is the default and writes nothing (existing runs round-trip unchanged); the remaining values map to the
+/// <c>w14:val</c> tokens <c>none</c>, <c>standard</c>, <c>contextual</c>, <c>standardContextual</c>,
+/// <c>historical</c>, <c>discretional</c>, <c>standardHistorical</c>, <c>contextualHistorical</c>,
+/// <c>standardContextualHistorical</c>, <c>contextualDiscretional</c>, <c>standardDiscretional</c>,
+/// <c>standardContextualDiscretional</c>, <c>historicalDiscretional</c>, <c>standardHistoricalDiscretional</c>,
+/// <c>contextualHistoricalDiscretional</c>, <c>all</c>. <see cref="NoneExplicit"/> is the explicit
+/// <c>w14:val="none"</c> (ligatures deliberately turned off), distinct from <see cref="None"/> which emits
+/// no element at all.
+/// </summary>
+public enum LigatureMode
+{
+    /// <summary>No w14:ligatures element is emitted (inherit / default). Existing runs map here.</summary>
+    None,
+    /// <summary>Explicit <c>w14:val="none"</c> — ligatures turned off.</summary>
+    NoneExplicit,
+    Standard,
+    Contextual,
+    StandardContextual,
+    Historical,
+    Discretional,
+    StandardHistorical,
+    ContextualHistorical,
+    StandardContextualHistorical,
+    ContextualDiscretional,
+    StandardDiscretional,
+    StandardContextualDiscretional,
+    HistoricalDiscretional,
+    StandardHistoricalDiscretional,
+    ContextualHistoricalDiscretional,
+    All
+}
+
+/// <summary>
+/// OpenType number-form style for a run (rPr/w14:numForm). <see cref="Default"/> emits nothing (existing
+/// runs round-trip unchanged); <see cref="Lining"/> / <see cref="OldStyle"/> map to the <c>w14:val</c>
+/// tokens <c>lining</c> / <c>oldStyle</c> (<see cref="Default"/> would be <c>default</c>).
+/// </summary>
+public enum NumberForm { Default, Lining, OldStyle }
+
+/// <summary>
+/// OpenType number-spacing style for a run (rPr/w14:numSpacing). <see cref="Default"/> emits nothing
+/// (existing runs round-trip unchanged); <see cref="Proportional"/> / <see cref="Tabular"/> map to the
+/// <c>w14:val</c> tokens <c>proportional</c> / <c>tabular</c> (<see cref="Default"/> would be <c>default</c>).
+/// </summary>
+public enum NumberSpacing { Default, Proportional, Tabular }
+
+/// <summary>
 /// Immutable paragraph box border (pPr/w:pBdr). By default all four edges are drawn with the given
 /// colour and width; when <paramref name="BottomOnly"/> is set only the bottom edge is drawn, which
 /// models a horizontal rule under the paragraph. Round-trips to docx as the <c>w:pBdr</c> edges (each
@@ -92,6 +140,59 @@ public sealed record RunFormatting
     /// winning; we preserve both flags so the round-trip is lossless.
     /// </summary>
     public bool AllCaps { get; init; }
+
+    /// <summary>
+    /// Advanced character spacing (expand/condense), in points (rPr/w:spacing). Positive expands the
+    /// inter-character spacing, negative condenses it. Defaults to <c>0</c> (no <c>w:spacing</c> emitted),
+    /// so existing runs round-trip byte-unchanged. Stored in points to match FreeW's unit model; the writer
+    /// converts to twentieths of a point (dxa) for <c>w:spacing/@w:val</c>.
+    /// </summary>
+    public double CharacterSpacingPt { get; init; }
+
+    /// <summary>
+    /// Kerning threshold: the minimum font size (in points) at which kerning is applied (rPr/w:kern). Null
+    /// (the default) emits no <c>w:kern</c>, so existing runs are unaffected. A value of <c>0</c> would
+    /// disable kerning; we model "unset" as null and only emit the element when a positive threshold is set.
+    /// The writer converts the threshold to half-points for <c>w:kern/@w:val</c>.
+    /// </summary>
+    public double? KerningMinSizePt { get; init; }
+
+    /// <summary>
+    /// Raised/lowered baseline position, in points (rPr/w:position) — distinct from
+    /// <see cref="VerticalAlign"/> super/subscript, which also shrinks the glyph. Positive raises the text,
+    /// negative lowers it. Defaults to <c>0</c> (no <c>w:position</c> emitted) so existing runs round-trip
+    /// unchanged. The writer converts to half-points for <c>w:position/@w:val</c>.
+    /// </summary>
+    public double PositionPt { get; init; }
+
+    /// <summary>
+    /// OpenType ligature mode (rPr/w14:ligatures). Defaults to <see cref="LigatureMode.None"/>, which emits
+    /// no element so existing runs are unaffected. Any other value emits a <c>w14:ligatures</c> in the w14
+    /// extension region of the run properties.
+    /// </summary>
+    public LigatureMode Ligatures { get; init; } = LigatureMode.None;
+
+    /// <summary>
+    /// OpenType stylistic set id (rPr/w14:stylisticSets/w14:styleSet/@w14:id), or null for none. Defaults
+    /// to null so no <c>w14:stylisticSets</c> is emitted and existing runs are unaffected. When set, a single
+    /// stylistic set is applied (e.g. <c>1</c> selects "Stylistic Set 1"). Modelled as a single optional id
+    /// (the common case); the reader recovers the first declared set when several are present.
+    /// </summary>
+    public int? StylisticSet { get; init; }
+
+    /// <summary>
+    /// OpenType number form (rPr/w14:numForm). Defaults to <see cref="NumberForm.Default"/>, which emits no
+    /// element so existing runs are unaffected; <see cref="NumberForm.Lining"/>/<see cref="NumberForm.OldStyle"/>
+    /// emit a <c>w14:numForm</c> in the w14 extension region.
+    /// </summary>
+    public NumberForm NumberForm { get; init; } = NumberForm.Default;
+
+    /// <summary>
+    /// OpenType number spacing (rPr/w14:numSpacing). Defaults to <see cref="NumberSpacing.Default"/>, which
+    /// emits no element so existing runs are unaffected; <see cref="NumberSpacing.Proportional"/>/
+    /// <see cref="NumberSpacing.Tabular"/> emit a <c>w14:numSpacing</c> in the w14 extension region.
+    /// </summary>
+    public NumberSpacing NumberSpacing { get; init; } = NumberSpacing.Default;
 
     public static readonly RunFormatting Default = new();
 }

@@ -1,8 +1,12 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
+using Free.Shared.Ribbon.Wpf;
+using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 
@@ -19,27 +23,49 @@ public sealed class MainWindow : Window
     private FileCommands _file = null!;
     private AutosaveCoordinator _autosave = null!;
     private DocumentView _editor = null!;
+    private Ruler _hRuler = null!;
+    private Ruler _vRuler = null!;
     private TextBlock _titleText = null!;
+    private TextBlock _pageText = null!;
+    private TextBlock _sectionText = null!;
     private TextBlock _countsText = null!;
     private Slider _zoomSlider = null!;
     private TextBlock _zoomLabel = null!;
     private FindReplaceDialog? _findDialog;
     private RibbonStateStore _stateStore = null!;
+    private BackstageView _backstage = null!;
     private Border _navPane = null!;
     private ListBox _navList = null!;
     private bool _navPaneVisible;
 
+    // The grey "desk" the Print-Layout page floats on. Frozen so it can back the editor cheaply.
+    private static readonly Brush WorkspaceBrush = CreateWorkspaceBrush();
+    private Border _workspace = null!;
+
+    private static Brush CreateWorkspaceBrush()
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
+        brush.Freeze();
+        return brush;
+    }
+
     // Read mode (distraction-free view) chrome we hide/restore, plus the saved presentation we restore.
     private Border _titleBar = null!;
     private UIElement _ribbon = null!;
+    private TabControl _ribbonTabs = null!;
     private StatusBar _status = null!;
     private StatusBarItem _dataFolderItem = null!;
+    private StatusBarItem _viewSwitchItem = null!;
     private StatusBarItem _zoomItem = null!;
     private bool _readMode;
     private bool _navPaneVisibleBeforeReadMode;
     private Thickness _editorMarginBeforeReadMode;
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
+    // Print-Layout sizing the editor applies (page-width Width + drop shadow) which read mode neutralizes
+    // for its reading column and restores on exit, so the two view toggles don't fight over the surface.
+    private double _editorWidthBeforeReadMode = double.NaN;
+    private Effect? _editorEffectBeforeReadMode;
 
     public MainWindow()
     {
@@ -56,7 +82,8 @@ public sealed class MainWindow : Window
         var stateStore = new RibbonStateStore();
         _stateStore = stateStore;
         var commands = FreeWRibbonCommands.Build(
-            editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode);
+            editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode,
+            TogglePrintLayout, () => _editor.PrintLayoutEnabled);
         _file = new FileCommands(this, editor, UpdateTitle);
         editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
@@ -71,18 +98,31 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(titleBar, Dock.Top);
         root.Children.Add(titleBar);
 
-        var ribbon = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
+        var (ribbon, ribbonTabs) = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
         _ribbon = ribbon;
+        _ribbonTabs = ribbonTabs;
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
         var status = new StatusBar();
         _status = status;
+
+        // Word-style left cluster: "Page X of Y" then the live word/character counts.
+        _pageText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+        status.Items.Add(new StatusBarItem { Content = _pageText });
+        status.Items.Add(new Separator());
+        _sectionText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+        status.Items.Add(new StatusBarItem { Content = _sectionText });
+        status.Items.Add(new Separator());
         _countsText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         status.Items.Add(new StatusBarItem { Content = _countsText });
         status.Items.Add(new Separator());
         _dataFolderItem = new StatusBarItem { Content = $"Data folder: {ResolveDataFolderLabel()}" };
         status.Items.Add(_dataFolderItem);
+
+        // Word-style right cluster: view-switch buttons (Read Mode / Print Layout) then the zoom control.
+        _viewSwitchItem = new StatusBarItem { HorizontalAlignment = HorizontalAlignment.Right, Content = BuildViewSwitchControl() };
+        status.Items.Add(_viewSwitchItem);
         _zoomItem = new StatusBarItem { HorizontalAlignment = HorizontalAlignment.Right, Content = BuildZoomControl() };
         status.Items.Add(_zoomItem);
         DockPanel.SetDock(status, Dock.Bottom);
@@ -92,7 +132,44 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(navPane, Dock.Left);
         root.Children.Add(navPane);
 
-        root.Children.Add(editor);
+        // Grey "workspace" behind the editor so the Print-Layout page reads as a white sheet floating on a
+        // desk. The editor sizes/centres itself to the page width in Print-Layout mode (see
+        // DocumentView.ApplyPageChrome); the grey shows on either side. In plain/continuous mode the editor
+        // stretches to fill, so the grey is fully covered and the look is unchanged. Purely host chrome.
+        // Word-style rulers (Print-Layout only): a horizontal tick scale above the page and a thinner
+        // vertical scale down its left edge. Both are passive, read-only chrome (see Ruler) that mirror the
+        // page geometry; the corner cell where they meet stays blank. The editor sits in the bottom-right
+        // cell so the page floats on the grey workspace exactly as before.
+        _hRuler = new Ruler(editor, Ruler.Orientation.Horizontal);
+        _vRuler = new Ruler(editor, Ruler.Orientation.Vertical);
+
+        var workspaceGrid = new Grid();
+        workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        workspaceGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        workspaceGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        Grid.SetRow(_hRuler, 0);
+        Grid.SetColumn(_hRuler, 1);
+        workspaceGrid.Children.Add(_hRuler);
+
+        Grid.SetRow(_vRuler, 1);
+        Grid.SetColumn(_vRuler, 0);
+        workspaceGrid.Children.Add(_vRuler);
+
+        Grid.SetRow(editor, 1);
+        Grid.SetColumn(editor, 1);
+        workspaceGrid.Children.Add(editor);
+
+        _workspace = new Border
+        {
+            Background = WorkspaceBrush,
+            Child = workspaceGrid
+        };
+        root.Children.Add(_workspace);
+
+        // Keep the indent/tab markers on the horizontal ruler following the caret/selection.
+        editor.SelectionChanged += (_, _) => _hRuler.Refresh();
 
         CommandBindings.Add(new CommandBinding(ApplicationCommands.New, (_, _) => _file.New()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, (_, _) => _file.Open()));
@@ -115,8 +192,37 @@ public sealed class MainWindow : Window
         UpdateCounts();
         RefreshOutline();
 
-        Content = root;
+        // Print Layout is the default view (the Word default), so seed the View > Print Layout toggle as
+        // checked to match the editor's initial PrintLayoutEnabled state.
+        _stateStore.SetChecked("freew.print-layout", _editor.PrintLayoutEnabled);
+
+        // The Word-style Backstage (File screen) is a full-window overlay above the document. It is
+        // hidden by default; the File button (title bar) shows it, a back arrow / Esc hides it. It reuses
+        // the host's existing File commands — no file IO is reimplemented in the backstage.
+        _backstage = new BackstageView(_editor, _file, new BackstageActions(
+            New: () => _file.New(),
+            Open: () => _file.Open(),
+            OpenPath: path => _file.OpenPath(path),
+            Save: () => _file.Save(),
+            SaveAs: () => _file.SaveAs(),
+            Print: Print,
+            EditProperties: OpenProperties,
+            OnClosed: () => { },
+            DataFolder: ResolveDataFolderLabel));
+
+        var shell = new Grid();
+        shell.Children.Add(root);
+        shell.Children.Add(_backstage);
+        Content = shell;
+
+        // V5 KeyTips: pressing Alt overlays Word-style letter badges over the ribbon tabs, then over the
+        // active tab's controls, so the ribbon is fully keyboard-navigable. The overlay walks the rendered
+        // ribbon and draws its badges on the shell grid (which spans the whole client area).
+        KeyTipsOverlay.Install(this, _ribbonTabs, shell);
     }
+
+    // Show the Word-style Backstage (File screen) over the document.
+    private void ShowBackstage() => _backstage.Show();
 
     private Border BuildTitleBar()
     {
@@ -129,6 +235,18 @@ public sealed class MainWindow : Window
         };
 
         var bar = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+        // The Backstage entry point: opens the full-window Word-style File screen.
+        var fileButton = new Button
+        {
+            Content = "File",
+            Margin = new Thickness(0, 0, 12, 0),
+            Padding = new Thickness(12, 2, 12, 2),
+            FontWeight = FontWeights.SemiBold
+        };
+        fileButton.Click += (_, _) => ShowBackstage();
+        bar.Children.Add(fileButton);
+
         bar.Children.Add(FileButton("New", ApplicationCommands.New));
         bar.Children.Add(FileButton("Open", ApplicationCommands.Open));
         bar.Children.Add(FileButton("Save", ApplicationCommands.Save));
@@ -172,6 +290,8 @@ public sealed class MainWindow : Window
     // (TextChanged), on selection change, and on document load.
     private void UpdateCounts()
     {
+        UpdatePageStatus();
+
         var selectionText = _editor.Selection.Text;
         if (!string.IsNullOrEmpty(selectionText))
         {
@@ -184,6 +304,39 @@ public sealed class MainWindow : Window
         _editor.CommitToModel();
         var stats = WordCount.Of(_editor.Model);
         _countsText.Text = $"Words: {stats.Words}   Characters: {stats.CharactersWithSpaces}   Paragraphs: {stats.Paragraphs}";
+    }
+
+    // Refresh the Word-style "Page X of Y" status: an approximate page position derived from the editor's
+    // single continuous flow against the page's printable height (see DocumentView.PageInfo). It tracks the
+    // on-screen page-break markers, which can differ by a page from the fully paginated Print Preview.
+    private void UpdatePageStatus()
+    {
+        var (current, total) = _editor.PageInfo();
+        _pageText.Text = $"Page {current} of {total}";
+
+        // Word-style current-section indicator next to the page count. Best-effort: which section the
+        // caret's block falls in, out of TextDocument.Sections (see DocumentView.SectionInfo).
+        var (section, sections) = _editor.SectionInfo();
+        _sectionText.Text = $"Section {section} of {sections}";
+    }
+
+    // The Word-style view-switch cluster on the right of the status bar: a Read Mode toggle and a Print
+    // Layout toggle. They reuse the existing MainWindow toggles (ToggleReadMode / TogglePrintLayout), so the
+    // ribbon View tab and these buttons drive the same state. No new view state is introduced here.
+    private UIElement BuildViewSwitchControl()
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+        Button ViewButton(string label, string tip, Action onClick)
+        {
+            var button = new Button { Content = label, Padding = new Thickness(8, 1, 8, 1), Margin = new Thickness(2, 0, 2, 0), ToolTip = tip };
+            button.Click += (_, _) => onClick();
+            return button;
+        }
+
+        panel.Children.Add(ViewButton("Read Mode", "Toggle distraction-free Read Mode", ToggleReadMode));
+        panel.Children.Add(ViewButton("Print Layout", "Toggle Print Layout page view", TogglePrintLayout));
+        return panel;
     }
 
     // The left navigation pane: a header plus a ListBox of heading outline entries (indented by level).
@@ -253,17 +406,23 @@ public sealed class MainWindow : Window
             _editorMarginBeforeReadMode = _editor.Margin;
             _editorMaxWidthBeforeReadMode = _editor.MaxWidth;
             _editorAlignmentBeforeReadMode = _editor.HorizontalAlignment;
+            _editorWidthBeforeReadMode = _editor.Width;
+            _editorEffectBeforeReadMode = _editor.Effect;
 
             _titleBar.Visibility = Visibility.Collapsed;
             _ribbon.Visibility = Visibility.Collapsed;
             _dataFolderItem.Visibility = Visibility.Collapsed;
+            _viewSwitchItem.Visibility = Visibility.Collapsed;
             _zoomItem.Visibility = Visibility.Collapsed;
 
             // Collapse the navigation pane while reading (without disturbing its remembered state).
             _navPane.Visibility = Visibility.Collapsed;
 
             // A centered, comfortable reading column: cap the width and add generous breathing room.
+            // Drop any Print-Layout page sizing/shadow so the reading column owns the surface width.
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
+            _editor.Width = double.NaN;
+            _editor.Effect = null;
             _editor.MaxWidth = 760;
             _editor.Margin = new Thickness(40, 40, 40, 40);
         }
@@ -272,18 +431,31 @@ public sealed class MainWindow : Window
             _titleBar.Visibility = Visibility.Visible;
             _ribbon.Visibility = Visibility.Visible;
             _dataFolderItem.Visibility = Visibility.Visible;
+            _viewSwitchItem.Visibility = Visibility.Visible;
             _zoomItem.Visibility = Visibility.Visible;
 
-            // Restore the editor's original full-width presentation.
+            // Restore the editor's original presentation (including any Print-Layout page sizing/shadow).
             _editor.HorizontalAlignment = _editorAlignmentBeforeReadMode;
             _editor.MaxWidth = _editorMaxWidthBeforeReadMode;
             _editor.Margin = _editorMarginBeforeReadMode;
+            _editor.Width = _editorWidthBeforeReadMode;
+            _editor.Effect = _editorEffectBeforeReadMode;
 
             // Restore the navigation pane to whatever it was before entering read mode.
             _navPane.Visibility = _navPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
         }
 
         _stateStore.SetChecked("freew.read-mode", _readMode);
+    }
+
+    // View > Print Layout: flip the editor between the Word-style page view (white page on the grey
+    // workspace, margins shown, drop shadow, page-break markers) and the plain/continuous flat view.
+    // DocumentView owns the page presentation; here we only mirror the new checked-state into the shared
+    // RibbonStateStore so the toggle button stays in sync, exactly like the read-mode / nav-pane toggles.
+    private void TogglePrintLayout()
+    {
+        var enabled = _editor.TogglePrintLayout();
+        _stateStore.SetChecked("freew.print-layout", enabled);
     }
 
     // Recompute the heading outline from the editor's committed model and repopulate the nav list.
@@ -512,10 +684,21 @@ public sealed class MainWindow : Window
         return doc;
     }
 
-    // --- Minimal ribbon renderer over the shared RibbonDefinition model ---
+    // --- Real Word-style ribbon, rendered by the shared WPF renderer ---
+    //
+    // BuildRibbon builds a flat tab strip (Home/Insert/Layout/Design/View/Mailings/Review) over the
+    // shared RibbonDefinition model. Each selected tab's body is produced by the shared
+    // Free.Shared.Ribbon.Wpf.RibbonWpfRenderer — the same renderer FreeX uses — so FreeW gets Word's
+    // visual vocabulary (Large hero buttons, Medium icon+label, Small icon-only, group panels, dividers,
+    // group-label borders and vector glyphs). Command behavior and live toggle state flow through the
+    // FreeW command registry + IRibbonStateStore exactly as before.
 
-    private static UIElement BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
+    private (UIElement Ribbon, TabControl Tabs) BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
+        // Install FreeW's command-id → glyph mapping so the shared renderer draws meaningful icons for
+        // freew.* ids (otherwise every button would fall back to the generic glyph).
+        FreeWRibbonIcons.Install();
+
         var tabs = new TabControl
         {
             Background = Brushes.White,
@@ -523,125 +706,108 @@ public sealed class MainWindow : Window
             MinHeight = 116
         };
 
+        // The renderer resolves its button/group styles and surface brushes via TryFindResource on the
+        // supplied resource host. Merge FreeW's ribbon styles into the TabControl so those lookups
+        // resolve (the renderer falls back gracefully for any key it can't find).
+        tabs.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("/FreeW.App.Host;component/Ribbon/FreeWRibbonResources.xaml", UriKind.Relative)
+        });
+
         foreach (var tab in definition.Tabs)
-            tabs.Items.Add(new TabItem { Header = tab.Header, Content = BuildTab(tab, registry, stateStore) });
+        {
+            var content = RibbonWpfRenderer.BuildTabContent(tab, tabs, registry, stateStore);
+
+            // V5 galleries: inject the live-preview Word-style galleries into the rendered group content.
+            // The shared renderer stamps each group's grid with its catalog id (RibbonMetadata.CatalogId),
+            // so we find the target group and prepend a custom gallery control into its content lane. This
+            // keeps the galleries entirely app-side (custom WPF content) without a shared RibbonGallery type.
+            if (tab.Id == "home")
+                // Drop the placeholder Style combo (the gallery supersedes it) but keep the group's
+                // New Style / Manage Styles buttons, prepending the live-preview gallery before them.
+                InjectGallery(content, "styles", StylesGallery.Build(_editor), removeKind: RemoveKind.Combos);
+            if (tab.Id == "design")
+                // The Design > themes group's only control is the placeholder Themes combo; replace it
+                // wholesale with the Themes gallery plus the theme-colours gallery.
+                InjectGallery(content, "themes", ThemeGallery.BuildThemes(_editor), removeKind: RemoveKind.All,
+                    extra: ThemeGallery.BuildColours(_editor));
+
+            var item = new TabItem { Header = tab.Header, Content = content };
+            tabs.Items.Add(item);
+        }
 
         if (tabs.Items.Count > 0)
             tabs.SelectedIndex = 0;
 
-        return new Border
+        var border = new Border
         {
             Background = Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = tabs
         };
+        return (border, tabs);
     }
 
-    private static UIElement BuildTab(RibbonTab tab, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
+    // What of a group's original rendered controls to drop before injecting a gallery.
+    private enum RemoveKind { None, Combos, All }
+
+    // Find the group grid carrying CatalogId == groupId in the freshly built tab content and prepend the
+    // gallery into its content lane (row 0). `removeKind` controls which of the group's original
+    // placeholder controls are removed first: All clears the lane (the gallery fully owns the group);
+    // Combos drops only ComboBox columns (so a placeholder combo the gallery supersedes goes away while
+    // command buttons like New Style / Manage Styles remain). An optional `extra` gallery is appended
+    // after the first (e.g. the Design theme-colours strip).
+    private static void InjectGallery(DependencyObject content, string groupId, FrameworkElement gallery, RemoveKind removeKind, FrameworkElement? extra = null)
     {
-        var lane = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(6, 6, 6, 4)
-        };
+        var grid = FindGroupGrid(content, groupId);
+        if (grid is null)
+            return;
 
-        foreach (var group in tab.Groups)
-            lane.Children.Add(BuildGroup(group, registry, stateStore));
+        // Row 0 of the group grid holds the content lane (a horizontal StackPanel of columns/controls).
+        var lane = grid.Children.OfType<FrameworkElement>().FirstOrDefault(c => Grid.GetRow(c) == 0) as Panel;
+        if (lane is null)
+            return;
 
-        return new ScrollViewer
+        if (removeKind == RemoveKind.All)
         {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = lane
-        };
-    }
-
-    private static UIElement BuildGroup(RibbonGroup group, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
-    {
-        var controls = new WrapPanel { MaxWidth = 220, Margin = new Thickness(4, 2, 4, 2) };
-        foreach (var control in group.Controls)
+            lane.Children.Clear();
+        }
+        else if (removeKind == RemoveKind.Combos)
         {
-            var element = BuildControl(control, registry, stateStore);
-            if (element is not null)
-                controls.Children.Add(element);
+            // Each lane column is its own StackPanel; the renderer packs combos into combo-only columns,
+            // so a column whose children are all ComboBoxes is a placeholder-combo column to drop.
+            var toRemove = lane.Children.OfType<Panel>()
+                .Where(col => col.Children.Count > 0 && col.Children.OfType<UIElement>().All(c => c is ComboBox))
+                .ToList();
+            foreach (var col in toRemove)
+                lane.Children.Remove(col);
         }
 
-        var header = new TextBlock
-        {
-            Text = group.Header,
-            FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 4, 0, 0)
-        };
-
-        var stack = new StackPanel();
-        stack.Children.Add(controls);
-        stack.Children.Add(header);
-
-        return new Border
-        {
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE2, 0xE2, 0xE2)),
-            BorderThickness = new Thickness(0, 0, 1, 0),
-            Padding = new Thickness(6, 4, 6, 2),
-            Child = stack
-        };
+        var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 2, 2, 0) };
+        host.Children.Add(gallery);
+        if (extra is not null)
+            host.Children.Add(extra);
+        lane.Children.Insert(0, host);
     }
 
-    private static UIElement? BuildControl(RibbonControl control, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
+    // Find the group content grid stamped with the given catalog id, walking the renderer's known
+    // structure: the tab content is a Border whose child is a RibbonAdaptivePanel whose children are
+    // RibbonGroupHosts. Each host's Content is the group grid (which carries the catalog id). This walks
+    // the logical structure the renderer built eagerly, so it works before the visual tree is realized
+    // (unlike VisualTreeHelper, which would see nothing until the ribbon is measured/rendered).
+    private static Grid? FindGroupGrid(DependencyObject root, string groupId)
     {
-        if (control is RibbonSeparator or RibbonRowBreak)
+        var panel = (root as Border)?.Child as Panel;
+        if (panel is null)
             return null;
 
-        var thickness = new Thickness(2);
-        var padding = new Thickness(8, 4, 8, 4);
-        registry.TryGet(control.CommandId, out var command);
-
-        void Execute() => command?.Execute(RibbonCommandContext.Empty);
-
-        if (control is RibbonComboBox combo)
+        foreach (var child in panel.Children)
         {
-            var box = new ComboBox
-            {
-                IsEditable = true,
-                MinWidth = combo.Width ?? 100,
-                Margin = thickness,
-                IsEnabled = command is not null
-            };
-            foreach (var item in combo.Items)
-                box.Items.Add(item);
-
-            void Apply(string? value)
-            {
-                if (!string.IsNullOrWhiteSpace(value))
-                    command?.Execute(new RibbonCommandContext(new System.Collections.Generic.Dictionary<string, object?> { ["value"] = value }));
-            }
-            box.SelectionChanged += (_, _) => Apply(box.SelectedItem as string);
-            box.KeyDown += (_, e) => { if (e.Key == Key.Enter) Apply(box.Text); };
-            return box;
+            if (child is RibbonGroupHost host && host.Content is Grid grid
+                && RibbonMetadata.GetCatalogId(grid) == groupId)
+                return grid;
         }
-
-        if (control is RibbonToggleButton)
-        {
-            var id = control.CommandId;
-            var toggle = new ToggleButton { Content = control.Label, Margin = thickness, Padding = padding, MinWidth = 60 };
-            if (command is IRibbonStatefulCommand stateful)
-                toggle.IsChecked = stateful.GetState().IsChecked;
-            // Observe the shared state store so the toggle reflects the current selection live.
-            stateStore.StateChanged += (_, e) =>
-            {
-                if (e.Id == id)
-                    toggle.IsChecked = e.State.IsChecked;
-            };
-            toggle.Click += (_, _) => Execute();
-            toggle.IsEnabled = command is not null;
-            return toggle;
-        }
-
-        var button = new Button { Content = control.Label, Margin = thickness, Padding = padding, MinWidth = 60 };
-        button.Click += (_, _) => Execute();
-        button.IsEnabled = command is not null;
-        return button;
+        return null;
     }
 }

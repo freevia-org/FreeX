@@ -4,6 +4,7 @@
     <Project Path="shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
     <Project Path="shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
     <Project Path="shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <Project Path="shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
   </Folder>
   <Folder Name="/freew/">
@@ -12,5 +13,6 @@
     <Project Path="freew/FreeW.Core.IO/FreeW.Core.IO.csproj" />
     <Project Path="freew/FreeW.Core.IO.Tests/FreeW.Core.IO.Tests.csproj" />
     <Project Path="freew/FreeW.App.Host/FreeW.App.Host.csproj" />
+    <Project Path="freew/FreeW.App.Host.Tests/FreeW.App.Host.Tests.csproj" />
   </Folder>
 </Solution>

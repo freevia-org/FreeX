@@ -45,6 +45,55 @@ public sealed record DocumentTheme(
         Catalog.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
+    /// The DrawingML colour scheme this theme serialises as (the twelve <c>a:clrScheme</c> slots:
+    /// dk1/lt1/dk2/lt2, accent1..6, hlink/folHlink). The theme's small palette drives the first three
+    /// accents — accent1 = <see cref="PrimaryColorHex"/>, accent2 = <see cref="HeadingColorHex"/>,
+    /// accent3 = <see cref="HeadingAccentColorHex"/>; accent4..6 and the link colours are deterministic
+    /// stock values, and the dark/light slots are the conventional black/white pair. Every value is an
+    /// uppercase six-hex-digit RRGGBB string (no leading '#'). This is the exact, lossless data the writer
+    /// emits and the reader matches on to infer the preset.
+    /// </summary>
+    public ThemeColorScheme ColorScheme => new(
+        Dark1: "000000",
+        Light1: "FFFFFF",
+        Dark2: "44546A",
+        Light2: "E7E6E6",
+        Accent1: Hex(PrimaryColorHex),
+        Accent2: Hex(HeadingColorHex),
+        Accent3: Hex(HeadingAccentColorHex),
+        Accent4: "FFC000",
+        Accent5: "5B9BD5",
+        Accent6: "70AD47",
+        Hyperlink: "0563C1",
+        FollowedHyperlink: "954F72");
+
+    /// <summary>Normalises a palette colour to an uppercase six-hex-digit RRGGBB string (drops any '#').</summary>
+    private static string Hex(string value) => value.TrimStart('#').ToUpperInvariant();
+
+    /// <summary>
+    /// Best-effort inference of the closest catalog preset from a parsed theme part. A preset matches when
+    /// its three accent colours (accent1..3) and its major/minor fonts equal <paramref name="scheme"/> and
+    /// the given fonts (case-insensitive). Returns <see cref="Default"/> ("Office") when nothing matches —
+    /// the round-trip is therefore exact for any document FreeW wrote, and degrades gracefully for foreign
+    /// themes whose accents/fonts FreeW does not recognise.
+    /// </summary>
+    public static DocumentTheme InferPreset(ThemeColorScheme scheme, string majorFont, string minorFont)
+    {
+        ArgumentNullException.ThrowIfNull(scheme);
+        foreach (var theme in Catalog)
+        {
+            var candidate = theme.ColorScheme;
+            if (string.Equals(candidate.Accent1, scheme.Accent1, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(candidate.Accent2, scheme.Accent2, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(candidate.Accent3, scheme.Accent3, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(theme.HeadingFont, majorFont, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(theme.BodyFont, minorFont, StringComparison.OrdinalIgnoreCase))
+                return theme;
+        }
+        return Default;
+    }
+
+    /// <summary>
     /// Apply <paramref name="theme"/> to <paramref name="doc"/>'s style catalog and document default,
     /// deterministically. Only the catalog/defaults are touched — body-text runs are left alone and
     /// pick up the new look by inheriting through their styles. Specifically:
@@ -83,3 +132,24 @@ public sealed record DocumentTheme(
             style.Run = transform(style.Run);
     }
 }
+
+/// <summary>
+/// The twelve colours of a DrawingML theme colour scheme (<c>a:clrScheme</c>), in OOXML slot order:
+/// dark1/light1, dark2/light2, accent1..6, then hyperlink/followedHyperlink. Each value is an uppercase
+/// six-hex-digit RRGGBB string with no leading '#'. This is the value object the docx writer serialises
+/// into <c>word/theme/theme1.xml</c> and the reader parses back, so a theme's colours survive round-trip
+/// even when the preset itself cannot be inferred.
+/// </summary>
+public sealed record ThemeColorScheme(
+    string Dark1,
+    string Light1,
+    string Dark2,
+    string Light2,
+    string Accent1,
+    string Accent2,
+    string Accent3,
+    string Accent4,
+    string Accent5,
+    string Accent6,
+    string Hyperlink,
+    string FollowedHyperlink);

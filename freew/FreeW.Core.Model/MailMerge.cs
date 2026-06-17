@@ -381,8 +381,10 @@ public static class MailMerge
             Image = source.Image,
             HyperlinkUrl = source.HyperlinkUrl,
             HyperlinkAnchor = source.HyperlinkAnchor,
+            HyperlinkTooltip = source.HyperlinkTooltip,
             FieldKind = source.FieldKind,
             FootnoteId = source.FootnoteId,
+            EndnoteId = source.EndnoteId,
             CommentId = source.CommentId,
             IsCommentReference = source.IsCommentReference,
             Revision = source.Revision,
@@ -404,7 +406,9 @@ public static class MailMerge
                 var newCell = new TableCell
                 {
                     ShadingColorHex = cell.ShadingColorHex,
-                    WidthPt = cell.WidthPt
+                    WidthPt = cell.WidthPt,
+                    GridSpan = cell.GridSpan,
+                    VerticalMerge = cell.VerticalMerge
                 };
                 foreach (var p in cell.Paragraphs)
                     newCell.Paragraphs.Add(CloneParagraph(p, row));
@@ -438,5 +442,10 @@ public static class MailMerge
         to.ColumnSpacingPt = from.ColumnSpacingPt;
         to.PageBorder = from.PageBorder;
         to.Watermark = from.Watermark;
+        to.LineNumberMode = from.LineNumberMode;
+        to.LineNumberCountBy = from.LineNumberCountBy;
+        to.AutoHyphenation = from.AutoHyphenation;
+        to.VerticalAlignment = from.VerticalAlignment;
+        to.DifferentFirstPage = from.DifferentFirstPage;
     }
 }

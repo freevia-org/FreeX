@@ -46,6 +46,10 @@ $failed = 0
 $localSkipped = 0
 
 foreach ($row in $rows) {
+    if ([string]::IsNullOrWhiteSpace($row.license)) {
+        throw "Manifest row '$($row.id)' is missing a license."
+    }
+
     $target = Join-Path $filesDir $row.file
     if ($row.url -like 'local://*' -or $row.source -eq 'local') {
         if (Test-Path $target) {

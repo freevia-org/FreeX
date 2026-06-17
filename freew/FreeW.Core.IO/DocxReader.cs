@@ -57,8 +57,76 @@ public static class DocxReader
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, imageRelationships, hyperlinkRelationships);
         ReadSettings(archive, document);
+        ReadTheme(archive, document);
 
         return document;
+    }
+
+    /// <summary>
+    /// Resolves and parses word/theme/theme1.xml (via the document's "/theme" relationship, falling back
+    /// to the conventional path), recovering the a:clrScheme colours and the a:fontScheme major/minor
+    /// fonts, then inferring the closest <see cref="DocumentTheme"/> preset (see
+    /// <see cref="DocumentTheme.InferPreset"/>). A missing or unparseable theme part leaves the document
+    /// at <see cref="DocumentTheme.Default"/> ("Office"). Inference is best-effort: a theme whose accent
+    /// colours / fonts match no FreeW preset falls back to "Office".
+    /// </summary>
+    private static void ReadTheme(ZipArchive archive, TextDocument document)
+    {
+        var themeXml = LoadPart(archive, ResolveThemePartPath(archive) ?? "word/theme/theme1.xml");
+        var elements = themeXml?.Root?.Element(A + "themeElements");
+        if (elements is null)
+            return;
+
+        var clr = elements.Element(A + "clrScheme");
+        var fonts = elements.Element(A + "fontScheme");
+        if (clr is null || fonts is null)
+            return;
+
+        // Each clrScheme slot wraps a single colour element; recover its RRGGBB (srgbClr/@val) or, for a
+        // sysClr (e.g. windowText/window), its lastClr fallback. Anything else is treated as absent.
+        string Slot(string name)
+        {
+            var slot = clr.Element(A + name);
+            var srgb = slot?.Element(A + "srgbClr")?.Attribute("val")?.Value;
+            if (!string.IsNullOrEmpty(srgb))
+                return srgb.ToUpperInvariant();
+            var sys = slot?.Element(A + "sysClr")?.Attribute("lastClr")?.Value;
+            return string.IsNullOrEmpty(sys) ? string.Empty : sys.ToUpperInvariant();
+        }
+
+        var scheme = new ThemeColorScheme(
+            Slot("dk1"), Slot("lt1"), Slot("dk2"), Slot("lt2"),
+            Slot("accent1"), Slot("accent2"), Slot("accent3"),
+            Slot("accent4"), Slot("accent5"), Slot("accent6"),
+            Slot("hlink"), Slot("folHlink"));
+
+        string LatinFont(string fontElement) =>
+            fonts.Element(A + fontElement)?.Element(A + "latin")?.Attribute("typeface")?.Value ?? string.Empty;
+
+        document.Theme = DocumentTheme.InferPreset(scheme, LatinFont("majorFont"), LatinFont("minorFont"));
+    }
+
+    /// <summary>
+    /// Finds the theme part path from the document relationships (the rel whose Type ends with "/theme"),
+    /// resolved relative to the word/ folder. Returns null when no such relationship exists.
+    /// </summary>
+    private static string? ResolveThemePartPath(ZipArchive archive)
+    {
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return null;
+
+        foreach (var rel in relationships)
+        {
+            var type = rel.Attribute("Type")?.Value;
+            if (type is null || !type.EndsWith("/theme", StringComparison.Ordinal))
+                continue;
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(target))
+                return "word/" + target.TrimStart('/');
+        }
+        return null;
     }
 
     /// <summary>
@@ -78,6 +146,10 @@ public static class DocxReader
 
         // Automatic hyphenation (w:autoHyphenation) is an on/off toggle: present + not explicitly off.
         document.Page.AutoHyphenation = ReadToggle(root, "autoHyphenation");
+
+        // Different odd/even page headers/footers (w:evenAndOddHeaders): an on/off toggle. When set, the
+        // even header/footer references in w:sectPr are honoured (see ReadHeaderFooter).
+        document.Page.DifferentOddEvenPages = ReadToggle(root, "evenAndOddHeaders");
 
         var protection = root.Element(W + "documentProtection");
         if (protection is null)
@@ -237,52 +309,141 @@ public static class DocxReader
         if (sectPr is null)
             return;
 
-        // Equal-width column layout (w:cols/@w:num + @w:space) lives alongside the header/footer
-        // references in w:sectPr, so recover it here while we already hold the section element.
-        var cols = sectPr.Element(W + "cols");
-        if (cols is not null)
-        {
-            if (int.TryParse(cols.Attribute(W + "num")?.Value, out var num) && num >= 1)
-                document.Page.ColumnCount = num;
-            if (cols.Attribute(W + "space") is { } space)
-                document.Page.ColumnSpacingPt = DxaToPoints(space.Value);
-        }
+        // The body-level w:sectPr is the final/only section: recover its page geometry + layout into
+        // document.Page. The same parse feeds non-final sections (see ReadSectionBreak in ReadParagraph).
+        ReadPageSettings(sectPr, document.Page);
 
-        // Page border (w:pgBorders) lives in the same w:sectPr; recover it into PageSettings.PageBorder.
-        document.Page.PageBorder = ReadPageBorder(sectPr.Element(W + "pgBorders"));
-
-        // Line numbering (w:lnNumType) lives in the same w:sectPr; recover the mode + interval.
-        ReadLineNumbering(sectPr.Element(W + "lnNumType"), document.Page);
-
-        // Page vertical alignment (w:vAlign): map the val token back ("both"→Justified); absent → Top.
-        document.Page.VerticalAlignment =
-            VerticalAlignmentFromToken(sectPr.Element(W + "vAlign")?.Attribute(W + "val")?.Value);
-
-        // "Different first page" (w:titlePg): a bare toggle; absent → false.
-        document.Page.DifferentFirstPage = ReadToggle(sectPr, "titlePg");
+        // Page background colour (w:document/w:background/@w:color): a body-level (document-wide) setting,
+        // null when absent. Restored with a '#' prefix to mirror the model's hex convention.
+        var backgroundColor = documentXml.Root?.Element(W + "background")?.Attribute(W + "color")?.Value;
+        document.Page.BackgroundColorHex = backgroundColor is { Length: > 0 } ? "#" + backgroundColor : null;
 
         var partsById = ReadHeaderFooterRelationships(archive);
 
         document.Header = ReadHeaderFooterPart(
-            sectPr, "headerReference", W + "hdr", partsById, archive, imageRelationships, hyperlinkRelationships);
+            sectPr, "headerReference", "default", W + "hdr", partsById, archive, imageRelationships, hyperlinkRelationships);
         document.Footer = ReadHeaderFooterPart(
-            sectPr, "footerReference", W + "ftr", partsById, archive, imageRelationships, hyperlinkRelationships);
+            sectPr, "footerReference", "default", W + "ftr", partsById, archive, imageRelationships, hyperlinkRelationships);
+        // Even-page header/footer (w:type="even") for "different odd/even pages". Present only when the
+        // document carried the even references + parts; null otherwise so single-header documents are
+        // unaffected.
+        document.EvenHeader = ReadHeaderFooterPart(
+            sectPr, "headerReference", "even", W + "hdr", partsById, archive, imageRelationships, hyperlinkRelationships);
+        document.EvenFooter = ReadHeaderFooterPart(
+            sectPr, "footerReference", "even", W + "ftr", partsById, archive, imageRelationships, hyperlinkRelationships);
     }
+
+    /// <summary>
+    /// Reads one w:sectPr's page geometry + layout into <paramref name="page"/>. Shared by the body-level
+    /// final section (<see cref="ReadHeaderFooter"/>) and each non-final paragraph-level section break
+    /// (<see cref="ReadSectionBreak"/>), so all per-section properties are parsed in one place. Recovers
+    /// page size + orientation (w:pgSz), margins (w:pgMar), columns (w:cols), page borders (w:pgBorders),
+    /// line numbering (w:lnNumType), vertical alignment (w:vAlign) and the different-first-page toggle
+    /// (w:titlePg). Each property is only applied when present, so absent properties keep the defaults.
+    /// </summary>
+    private static void ReadPageSettings(XElement sectPr, PageSettings page)
+    {
+        // Page size + orientation (w:pgSz). w:orient="landscape" sets the flag; width/height carry the
+        // already-oriented dimensions Word writes.
+        var pgSz = sectPr.Element(W + "pgSz");
+        if (pgSz is not null)
+        {
+            if (pgSz.Attribute(W + "w") is { } w)
+                page.WidthPt = DxaToPoints(w.Value);
+            if (pgSz.Attribute(W + "h") is { } h)
+                page.HeightPt = DxaToPoints(h.Value);
+            page.Landscape = pgSz.Attribute(W + "orient")?.Value == "landscape";
+        }
+
+        // Page margins (w:pgMar).
+        var pgMar = sectPr.Element(W + "pgMar");
+        if (pgMar is not null)
+        {
+            if (pgMar.Attribute(W + "left") is { } left)
+                page.MarginLeftPt = DxaToPoints(left.Value);
+            if (pgMar.Attribute(W + "right") is { } right)
+                page.MarginRightPt = DxaToPoints(right.Value);
+            if (pgMar.Attribute(W + "top") is { } top)
+                page.MarginTopPt = DxaToPoints(top.Value);
+            if (pgMar.Attribute(W + "bottom") is { } bottom)
+                page.MarginBottomPt = DxaToPoints(bottom.Value);
+        }
+
+        // Equal-width column layout (w:cols/@w:num + @w:space).
+        var cols = sectPr.Element(W + "cols");
+        if (cols is not null)
+        {
+            if (int.TryParse(cols.Attribute(W + "num")?.Value, out var num) && num >= 1)
+                page.ColumnCount = num;
+            if (cols.Attribute(W + "space") is { } space)
+                page.ColumnSpacingPt = DxaToPoints(space.Value);
+        }
+
+        // Page border (w:pgBorders) → PageSettings.PageBorder (null when absent/off).
+        page.PageBorder = ReadPageBorder(sectPr.Element(W + "pgBorders"));
+
+        // Line numbering (w:lnNumType): recover the mode + interval.
+        ReadLineNumbering(sectPr.Element(W + "lnNumType"), page);
+
+        // Page vertical alignment (w:vAlign): map the val token back ("both"→Justified); absent → Top.
+        page.VerticalAlignment =
+            VerticalAlignmentFromToken(sectPr.Element(W + "vAlign")?.Attribute(W + "val")?.Value);
+
+        // "Different first page" (w:titlePg): a bare toggle; absent → false.
+        page.DifferentFirstPage = ReadToggle(sectPr, "titlePg");
+    }
+
+    /// <summary>
+    /// Reads a non-final section break from a paragraph's w:pPr/w:sectPr into a <see cref="Section"/>:
+    /// the section's page settings (via <see cref="ReadPageSettings"/>) plus its break kind (w:type),
+    /// or null when the paragraph carries no section break. The body-level final section is read
+    /// separately into <see cref="TextDocument.Page"/> (see <see cref="ReadHeaderFooter"/>).
+    /// </summary>
+    private static Section? ReadSectionBreak(XElement? pPr)
+    {
+        var sectPr = pPr?.Element(W + "sectPr");
+        if (sectPr is null)
+            return null;
+
+        var page = new PageSettings();
+        ReadPageSettings(sectPr, page);
+        var breakKind = SectionBreakFromToken(sectPr.Element(W + "type")?.Attribute(W + "val")?.Value);
+        return new Section(page, breakKind);
+    }
+
+    /// <summary>
+    /// Maps a w:sectPr/w:type/@w:val token to a <see cref="SectionBreakKind"/>. A null/unknown token
+    /// (including the absent default) maps to <see cref="SectionBreakKind.NextPage"/>, Word's default.
+    /// </summary>
+    private static SectionBreakKind SectionBreakFromToken(string? token) => token switch
+    {
+        "continuous" => SectionBreakKind.Continuous,
+        "evenPage" => SectionBreakKind.EvenPage,
+        "oddPage" => SectionBreakKind.OddPage,
+        _ => SectionBreakKind.NextPage
+    };
 
     private static HeaderFooter? ReadHeaderFooterPart(
         XElement sectPr,
         string referenceName,
+        string referenceType,
         XName rootName,
         IReadOnlyDictionary<string, string> partsById,
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
-        // Prefer the default reference; fall back to the first reference of this kind if present.
+        // Select the reference of the requested type (e.g. "default" or "even"). For the default type a
+        // type-less reference also counts (Word treats an absent w:type as "default"); the "even" type must
+        // match explicitly so an odd-only document does not pick up the default header as its even header.
         var references = sectPr.Elements(W + referenceName).ToList();
         if (references.Count == 0)
             return null;
-        var reference = references.FirstOrDefault(r => r.Attribute(W + "type")?.Value == "default") ?? references[0];
+        var reference = referenceType == "default"
+            ? references.FirstOrDefault(r => (r.Attribute(W + "type")?.Value ?? "default") == "default")
+            : references.FirstOrDefault(r => r.Attribute(W + "type")?.Value == referenceType);
+        if (reference is null)
+            return null;
 
         var id = reference.Attribute(R + "id")?.Value;
         if (id is null || !partsById.TryGetValue(id, out var partPath))
@@ -346,6 +507,9 @@ public static class DocxReader
         {
             paragraph.StyleId = pPr.Element(W + "pStyle")?.Attribute(W + "val")?.Value;
             paragraph.Formatting = ReadParagraphFormatting(pPr, numbering);
+            // A paragraph carrying a w:pPr/w:sectPr ends a non-final section; recover that section's page
+            // setup + break kind onto the paragraph (the body-level final section is read elsewhere).
+            paragraph.SectionBreak = ReadSectionBreak(pPr);
         }
 
         // Iterate in document order so runs nested inside a w:hyperlink keep their position, and so a
@@ -428,6 +592,11 @@ public static class DocxReader
             {
                 AddSimpleField(paragraph, child);
             }
+            else if (child.Name == M + "oMath")
+            {
+                // An inline equation: parse the OMML m:oMath into an Equation carried by a run.
+                paragraph.Runs.Add(Run.FromEquation(ReadOMath(child)));
+            }
             else if (child.Name == W + "bookmarkStart")
             {
                 // Capture the first non-internal bookmark name on the paragraph. Word emits an
@@ -467,6 +636,42 @@ public static class DocxReader
             paragraph.Runs.Add(new Run(text, formatting));
         }
     }
+
+    /// <summary>
+    /// Parses an inline OMML equation (m:oMath) into an <see cref="Equation"/>. Recognises m:r (plain
+    /// text), m:sSup (superscript) and m:f (fraction); any other top-level child degrades to the plain
+    /// text of its descendant m:t runs so nothing is lost or throws. Mirrors how the writer emits these
+    /// (see <c>DocxWriter.BuildOMath</c>).
+    /// </summary>
+    private static Equation ReadOMath(XElement oMath)
+    {
+        var equation = new Equation();
+        foreach (var child in oMath.Elements())
+        {
+            if (child.Name == M + "r")
+                equation.Runs.Add(MathRun.PlainText(MathTextOf(child)));
+            else if (child.Name == M + "sSup")
+                equation.Runs.Add(MathRun.Superscript(
+                    MathTextOf(child.Element(M + "e")),
+                    MathTextOf(child.Element(M + "sup"))));
+            else if (child.Name == M + "f")
+                equation.Runs.Add(MathRun.Fraction(
+                    MathTextOf(child.Element(M + "num")),
+                    MathTextOf(child.Element(M + "den"))));
+            else
+            {
+                // Unknown OMML construct: keep its text so the equation degrades rather than disappears.
+                var fallback = MathTextOf(child);
+                if (fallback.Length > 0)
+                    equation.Runs.Add(MathRun.PlainText(fallback));
+            }
+        }
+        return equation;
+    }
+
+    /// <summary>The concatenated text of all descendant m:t runs under <paramref name="element"/> (empty if null).</summary>
+    private static string MathTextOf(XElement? element) =>
+        element is null ? string.Empty : string.Concat(element.Descendants(M + "t").Select(t => t.Value));
 
     /// <summary>
     /// Maps a w:fldSimple/@w:instr to a <see cref="RunFieldKind"/> by its leading keyword, tolerating
@@ -546,6 +751,71 @@ public static class DocxReader
             var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
             ApplyRevision(imageRun);
             paragraph.Runs.Add(imageRun);
+            return;
+        }
+
+        // A w:drawing wrapping a wps:wsp text box whose run a:rPr carries DrawingML text effects is WordArt.
+        // Checked BEFORE ReadShape because a WordArt text box is also a wps:wsp (so the shape reader would
+        // otherwise claim it); the text effects on the run's a:rPr are what distinguish the two.
+        var wordArt = ReadWordArt(r);
+        if (wordArt is not null)
+        {
+            var wordArtRun = Run.FromWordArt(wordArt);
+            wordArtRun.HyperlinkUrl = hyperlinkUrl;
+            wordArtRun.HyperlinkAnchor = hyperlinkAnchor;
+            wordArtRun.HyperlinkTooltip = hyperlinkTooltip;
+            wordArtRun.CommentId = commentId;
+            ApplyRevision(wordArtRun);
+            paragraph.Runs.Add(wordArtRun);
+            return;
+        }
+
+        // A w:drawing wrapping a wps:wsp (not a pic:pic) is an inline shape / text box.
+        var shape = ReadShape(r, archive, imageRelationships);
+        if (shape is not null)
+        {
+            var shapeRun = Run.FromShape(shape);
+            shapeRun.HyperlinkUrl = hyperlinkUrl;
+            shapeRun.HyperlinkAnchor = hyperlinkAnchor;
+            shapeRun.HyperlinkTooltip = hyperlinkTooltip;
+            shapeRun.CommentId = commentId;
+            ApplyRevision(shapeRun);
+            paragraph.Runs.Add(shapeRun);
+            return;
+        }
+
+        // A run whose w:drawing references a chart part (a:graphicData/c:chart) becomes a chart run.
+        // imageRelationships maps EVERY document relationship id → part path (it is not filtered to
+        // images), so the chart part resolves through it just like a media part.
+        var chart = ReadChart(r, archive, imageRelationships);
+        if (chart is not null)
+        {
+            var chartRun = new Run(string.Empty) { Chart = chart, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(chartRun);
+            paragraph.Runs.Add(chartRun);
+            return;
+        }
+
+        // A run wrapping a w:object (VML v:shape + o:OLEObject) is an embedded OLE object. imageRelationships
+        // is the all-parts map (id → part path), so both the .bin payload and the icon media part resolve.
+        var embedded = ReadEmbeddedObject(r, archive, imageRelationships);
+        if (embedded is not null)
+        {
+            var embeddedRun = new Run(string.Empty) { EmbeddedObject = embedded, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(embeddedRun);
+            paragraph.Runs.Add(embeddedRun);
+            return;
+        }
+
+        // A run whose w:drawing references a SmartArt diagram (a:graphicData/dgm:relIds) becomes a SmartArt
+        // run. imageRelationships maps EVERY document relationship id → part path, so the diagram data part
+        // resolves through it via the dgm:relIds/@r:dm id.
+        var smartArt = ReadSmartArt(r, archive, imageRelationships);
+        if (smartArt is not null)
+        {
+            var smartArtRun = new Run(string.Empty) { SmartArt = smartArt, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(smartArtRun);
+            paragraph.Runs.Add(smartArtRun);
             return;
         }
 
@@ -692,14 +962,21 @@ public static class DocxReader
         return edges.Any(e => (e.Attribute(W + "val")?.Value ?? "single") is not ("none" or "nil"));
     }
 
-    /// <summary>Reads an inline picture (w:drawing) from a run into an <see cref="InlineImage"/>, if present.</summary>
+    /// <summary>
+    /// Reads a picture (w:drawing) from a run into an <see cref="InlineImage"/>, if present. Handles both
+    /// the inline form (wp:inline, read back as <see cref="ImageWrapping.Inline"/>) and the floating form
+    /// (wp:anchor), recovering the wrapping mode, the position offsets, and the horizontal/vertical anchors.
+    /// Returns null when the drawing is not a picture (e.g. a shape or chart) so those paths keep working —
+    /// a picture is identified by an a:blip whose r:embed resolves to a media part.
+    /// </summary>
     private static InlineImage? ReadImage(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
     {
-        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
-        if (inline is null)
+        var drawing = run.Element(W + "drawing");
+        var container = drawing?.Element(Wp + "inline") ?? drawing?.Element(Wp + "anchor");
+        if (container is null)
             return null;
 
-        var blip = inline.Descendants(A + "blip").FirstOrDefault();
+        var blip = container.Descendants(A + "blip").FirstOrDefault();
         var relationshipId = blip?.Attribute(R + "embed")?.Value;
         if (relationshipId is null || !imageRelationships.TryGetValue(relationshipId, out var target))
             return null;
@@ -708,16 +985,473 @@ public static class DocxReader
         if (bytes is null)
             return null;
 
-        var extent = inline.Element(Wp + "extent");
+        var extent = container.Element(Wp + "extent");
         var widthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
         var heightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
 
         // Restore accessibility alt text from wp:docPr/@descr; absent attribute leaves AltText null.
-        var descr = inline.Element(Wp + "docPr")?.Attribute("descr")?.Value;
-        return new InlineImage(bytes, widthPt, heightPt)
+        var descr = container.Element(Wp + "docPr")?.Attribute("descr")?.Value;
+        var image = new InlineImage(bytes, widthPt, heightPt)
         {
             AltText = string.IsNullOrEmpty(descr) ? null : descr,
         };
+
+        // A wp:anchor is a floating image: recover wrapping mode, offsets and anchors. A wp:inline reads
+        // back as ImageWrapping.Inline with default position fields, exactly as before.
+        if (container.Name == Wp + "anchor")
+            ApplyFloatingPosition(container, image);
+
+        return image;
+    }
+
+    /// <summary>
+    /// Recovers a floating image's wrapping mode + position from a wp:anchor: the wrap element selects the
+    /// <see cref="ImageWrapping"/> (wp:wrapNone disambiguated by @behindDoc into Behind / InFront), and
+    /// wp:positionH/V supply the anchors (@relativeFrom) and offsets (wp:posOffset, EMU → points).
+    /// </summary>
+    private static void ApplyFloatingPosition(XElement anchor, InlineImage image)
+    {
+        image.Wrapping = ReadWrapping(anchor);
+
+        var positionH = anchor.Element(Wp + "positionH");
+        image.HorizontalAnchor = ReadHorizontalAnchor(positionH?.Attribute("relativeFrom")?.Value);
+        image.HorizontalOffsetPt = EmuToPoints(positionH?.Element(Wp + "posOffset")?.Value);
+
+        var positionV = anchor.Element(Wp + "positionV");
+        image.VerticalAnchor = ReadVerticalAnchor(positionV?.Attribute("relativeFrom")?.Value);
+        image.VerticalOffsetPt = EmuToPoints(positionV?.Element(Wp + "posOffset")?.Value);
+    }
+
+    /// <summary>Maps a wp:anchor's wrap element back to an <see cref="ImageWrapping"/> mode.</summary>
+    private static ImageWrapping ReadWrapping(XElement anchor)
+    {
+        if (anchor.Element(Wp + "wrapSquare") is not null)
+            return ImageWrapping.Square;
+        if (anchor.Element(Wp + "wrapTight") is not null)
+            return ImageWrapping.Tight;
+        if (anchor.Element(Wp + "wrapTopAndBottom") is not null)
+            return ImageWrapping.TopAndBottom;
+        // wp:wrapNone (or an unexpected/missing wrap) is a front/behind image, disambiguated by @behindDoc.
+        var behindDoc = anchor.Attribute("behindDoc")?.Value;
+        return behindDoc is "1" or "true" ? ImageWrapping.Behind : ImageWrapping.InFront;
+    }
+
+    /// <summary>Maps a wp:positionH/@relativeFrom token to a <see cref="HorizontalAnchor"/> (default Column).</summary>
+    private static HorizontalAnchor ReadHorizontalAnchor(string? relativeFrom) => relativeFrom switch
+    {
+        "margin" => HorizontalAnchor.Margin,
+        "page" => HorizontalAnchor.Page,
+        _ => HorizontalAnchor.Column,
+    };
+
+    /// <summary>Maps a wp:positionV/@relativeFrom token to a <see cref="VerticalAnchor"/> (default Paragraph).</summary>
+    private static VerticalAnchor ReadVerticalAnchor(string? relativeFrom) => relativeFrom switch
+    {
+        "margin" => VerticalAnchor.Margin,
+        "page" => VerticalAnchor.Page,
+        _ => VerticalAnchor.Paragraph,
+    };
+
+    /// <summary>
+    /// Reads inline WordArt from a run, if present: a w:drawing/wp:inline/.../wps:wsp text box whose single
+    /// run's a:rPr (== w:rPr, since the same w:r is used) carries DrawingML text effects (a:solidFill,
+    /// a:gradFill, a:ln or a:effectLst). Recovers the text, the font size (w:sz in half-points) and infers
+    /// the <see cref="WordArtStyle"/> preset from which effect is present. Returns null when the drawing is a
+    /// plain shape (no text effects) or not a wsp at all, so the ordinary shape/image paths keep working.
+    ///
+    /// SIMPLIFICATION: the preset is inferred from the *kind* of effect present (gradient → GradientFill,
+    /// outline → Outline, shadow → Shadow, else FillBlue), not from exact colour values — colours are fixed
+    /// per preset by the writer, so this is lossless for FreeW-authored WordArt.
+    /// </summary>
+    private static WordArt? ReadWordArt(XElement run)
+    {
+        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
+        var wsp = inline?.Descendants(Wps + "wsp").FirstOrDefault();
+        var txbxContent = wsp?.Element(Wps + "txbx")?.Element(W + "txbxContent");
+        if (txbxContent is null)
+            return null;
+
+        // The WordArt run's properties: the first w:r/w:rPr inside the text box. WordArt is identified by a
+        // DrawingML text effect sitting directly under that w:rPr.
+        var rPr = txbxContent.Descendants(W + "r").FirstOrDefault()?.Element(W + "rPr");
+        if (rPr is null || InferWordArtStyle(rPr) is not { } style)
+            return null;
+
+        var text = string.Concat(txbxContent.Descendants(W + "t").Select(t => t.Value));
+        var fontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value) ?? 36;
+
+        return new WordArt(text, style, fontSizePt);
+    }
+
+    /// <summary>
+    /// Infers a <see cref="WordArtStyle"/> from the DrawingML text effects under a WordArt run's w:rPr, or
+    /// null when none are present (so the element is a plain shape, not WordArt). Gradient fill → GradientFill,
+    /// solid fill + outline → Outline, solid fill + shadow → Shadow, plain solid fill → FillBlue.
+    /// </summary>
+    private static WordArtStyle? InferWordArtStyle(XElement rPr)
+    {
+        if (rPr.Element(A + "gradFill") is not null)
+            return WordArtStyle.GradientFill;
+        if (rPr.Element(A + "ln") is not null)
+            return WordArtStyle.Outline;
+        if (rPr.Element(A + "effectLst") is not null)
+            return WordArtStyle.Shadow;
+        if (rPr.Element(A + "solidFill") is not null)
+            return WordArtStyle.FillBlue;
+        return null;
+    }
+
+    /// <summary>
+    /// Reads an inline DrawingML shape / text box (w:drawing → wp:inline → a:graphic/a:graphicData → wps:wsp)
+    /// from a run into a <see cref="Shape"/>, if present. Recovers the preset geometry kind (a:prstGeom/@prst),
+    /// the EMU extent (size in points), the optional solid fill (a:solidFill/a:srgbClr), and any text-box body
+    /// paragraphs (wps:txbx/w:txbxContent). Returns null for a non-shape drawing (e.g. a picture) so the image
+    /// path keeps working. Mirrors how the writer emits these (see <c>DocxWriter.BuildShapeDrawing</c>).
+    /// </summary>
+    private static Shape? ReadShape(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
+    {
+        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
+        var wsp = inline?.Descendants(Wps + "wsp").FirstOrDefault();
+        if (wsp is null)
+            return null;
+
+        var extent = inline!.Element(Wp + "extent");
+        var widthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
+        var heightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
+
+        var spPr = wsp.Element(Wps + "spPr");
+        var preset = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
+        var hasTextBody = wsp.Element(Wps + "txbx")?.Element(W + "txbxContent") is not null;
+        var kind = ShapeKindFromPreset(preset, hasTextBody);
+
+        var shape = new Shape(kind, widthPt, heightPt);
+
+        var fill = spPr?.Element(A + "solidFill")?.Element(A + "srgbClr")?.Attribute("val")?.Value;
+        if (!string.IsNullOrEmpty(fill) && !string.Equals(fill, "auto", StringComparison.Ordinal))
+            shape.FillColorHex = "#" + fill.TrimStart('#');
+
+        // Text-box body: parse each w:p inside w:txbxContent with the ordinary paragraph reader. Bodies do
+        // not carry hyperlink relationships or list numbering, so build them against empty maps (mirrors the
+        // writer, which emits txbx paragraphs without those).
+        var txbxContent = wsp.Element(Wps + "txbx")?.Element(W + "txbxContent");
+        if (txbxContent is not null)
+        {
+            var noHyperlinks = new Dictionary<string, string>();
+            var noNumbering = new Dictionary<int, ListKind>();
+            foreach (var p in txbxContent.Elements(W + "p"))
+                shape.TextParagraphs.Add(ReadParagraph(p, archive, imageRelationships, noHyperlinks, noNumbering));
+        }
+
+        return shape;
+    }
+
+    /// <summary>
+    /// Maps an a:prstGeom/@prst token back to a <see cref="ShapeKind"/>. "roundRect" → RoundedRectangle,
+    /// "ellipse" → Ellipse; a plain "rect" (or unknown) is a TextBox when it has a text body, otherwise a
+    /// Rectangle — mirroring the writer, which serialises both Rectangle and TextBox as "rect".
+    /// </summary>
+    private static ShapeKind ShapeKindFromPreset(string? preset, bool hasTextBody) => preset switch
+    {
+        "roundRect" => ShapeKind.RoundedRectangle,
+        "ellipse" => ShapeKind.Ellipse,
+        _ => hasTextBody ? ShapeKind.TextBox : ShapeKind.Rectangle,
+    };
+
+    /// <summary>
+    /// Reads an embedded OLE object (a w:object wrapping a VML v:shape + o:OLEObject) from a run into an
+    /// <see cref="EmbeddedObject"/>, if present. Resolves the o:OLEObject/@r:id to the embedded .bin part via
+    /// <paramref name="relationships"/> (the all-parts map) to recover the payload bytes, reads the ProgID
+    /// from o:OLEObject/@ProgID, and — when the v:shape carries a v:imagedata — loads the icon media part
+    /// into the object's presentation image. Returns null when the run carries no embedded object.
+    ///
+    /// SIMPLIFICATION (Y2): only embedded objects (Type other than "Link") are recovered; a linked object
+    /// (no embedded .bin relationship) yields null. The icon's size becomes the object's size when present.
+    /// </summary>
+    private static EmbeddedObject? ReadEmbeddedObject(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> relationships)
+    {
+        var obj = run.Element(W + "object");
+        var ole = obj?.Element(O + "OLEObject");
+        if (ole is null)
+            return null;
+
+        // A linked object references its data externally (Type="Link") rather than via an embedded part.
+        if (string.Equals(ole.Attribute("Type")?.Value, "Link", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var relationshipId = ole.Attribute(R + "id")?.Value;
+        if (relationshipId is null || !relationships.TryGetValue(relationshipId, out var partPath))
+            return null;
+
+        var payload = LoadMedia(archive, partPath);
+        if (payload is null)
+            return null;
+
+        var progId = ole.Attribute("ProgID")?.Value ?? string.Empty;
+        var embedded = new EmbeddedObject(payload, progId);
+
+        // The VML v:shape supplies the on-page icon (v:imagedata r:id → media part) and the size (CSS @style).
+        var shape = obj!.Element(V + "shape");
+        var imagedataRel = shape?.Element(V + "imagedata")?.Attribute(R + "id")?.Value;
+        if (imagedataRel is not null
+            && relationships.TryGetValue(imagedataRel, out var iconPath)
+            && LoadMedia(archive, iconPath) is { } iconBytes)
+        {
+            var (iconWidthPt, iconHeightPt) = ParseVmlShapeSize(shape!.Attribute("style")?.Value);
+            embedded.Icon = new InlineImage(iconBytes, iconWidthPt, iconHeightPt);
+            embedded.WidthPt = iconWidthPt;
+            embedded.HeightPt = iconHeightPt;
+        }
+        else if (ParseVmlShapeSize(shape?.Attribute("style")?.Value) is var (w, h) && (w > 0 || h > 0))
+        {
+            embedded.WidthPt = w;
+            embedded.HeightPt = h;
+        }
+
+        return embedded;
+    }
+
+    /// <summary>
+    /// Parses a VML shape @style ("width:96pt;height:96pt") into its width/height in points. Missing or
+    /// unparseable dimensions read back as 0 (the caller keeps the model default in that case).
+    /// </summary>
+    private static (double WidthPt, double HeightPt) ParseVmlShapeSize(string? style)
+    {
+        if (string.IsNullOrEmpty(style))
+            return (0, 0);
+        double width = 0, height = 0;
+        foreach (var part in style.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var colon = part.IndexOf(':');
+            if (colon <= 0)
+                continue;
+            var key = part[..colon].Trim();
+            var value = part[(colon + 1)..].Trim();
+            if (value.EndsWith("pt", StringComparison.OrdinalIgnoreCase))
+                value = value[..^2].Trim();
+            if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pt))
+                continue;
+            if (key.Equals("width", StringComparison.OrdinalIgnoreCase))
+                width = pt;
+            else if (key.Equals("height", StringComparison.OrdinalIgnoreCase))
+                height = pt;
+        }
+        return (width, height);
+    }
+
+    /// <summary>
+    /// Reads an inline chart (w:drawing/wp:inline/a:graphic/a:graphicData[uri=chart]/c:chart) from a run
+    /// into a <see cref="Chart"/>, if present. Resolves the c:chart/@r:id to the chart part via
+    /// <paramref name="relationships"/> (the all-parts map), loads it and parses its kind, title, category
+    /// labels and series values back out of the literal caches. Returns null when the run carries no chart.
+    /// </summary>
+    private static Chart? ReadChart(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> relationships)
+    {
+        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
+        if (inline is null)
+            return null;
+
+        var chartRef = inline.Descendants(C + "chart").FirstOrDefault(e => e.Attribute(R + "id") is not null);
+        var relationshipId = chartRef?.Attribute(R + "id")?.Value;
+        if (relationshipId is null || !relationships.TryGetValue(relationshipId, out var partPath))
+            return null;
+
+        var chartXml = LoadPart(archive, partPath);
+        var chartElement = chartXml?.Root?.Element(C + "chart");
+        if (chartElement is null)
+            return null;
+
+        var plotArea = chartElement.Element(C + "plotArea");
+        if (plotArea is null)
+            return null;
+
+        // Find the single chart-type element and map it to a ChartKind. barChart's c:barDir distinguishes
+        // column (vertical) from bar (horizontal); anything else falls back to Column.
+        var (typeElement, kind) = ResolveChartType(plotArea);
+        if (typeElement is null)
+            return null;
+
+        var chart = new Chart { Kind = kind };
+
+        // Title: the first c:title's concatenated a:t text (when present and not auto-deleted).
+        var titleText = string.Concat(
+            chartElement.Element(C + "title")?.Descendants(A + "t").Select(t => t.Value) ?? []);
+        if (titleText.Length > 0)
+            chart.Title = titleText;
+
+        // Categories: read once from the first series' c:cat string cache (shared across series).
+        var firstSeries = typeElement.Elements(C + "ser").FirstOrDefault();
+        if (firstSeries is not null)
+            foreach (var value in ReadStringCache(firstSeries.Element(C + "cat")))
+                chart.Categories.Add(value);
+
+        // Series: name (c:tx string cache) + values (c:val number cache).
+        foreach (var ser in typeElement.Elements(C + "ser"))
+        {
+            var name = ReadStringCache(ser.Element(C + "tx")).FirstOrDefault();
+            var series = new ChartSeries { Name = string.IsNullOrEmpty(name) ? null : name };
+            series.Values.AddRange(ReadNumberCache(ser.Element(C + "val")));
+            chart.Series.Add(series);
+        }
+
+        // Size: the inline extent (EMU) maps back to points.
+        var extent = inline.Element(Wp + "extent");
+        chart.WidthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
+        chart.HeightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
+
+        return chart;
+    }
+
+    /// <summary>
+    /// Finds the plot area's single chart-type element (c:barChart / c:lineChart / c:pieChart) and maps it
+    /// to a <see cref="ChartKind"/>. For a bar chart, c:barDir val="bar" is horizontal (Bar), otherwise
+    /// vertical (Column). Returns (null, Column) when no recognised chart type is present.
+    /// </summary>
+    private static (XElement? Element, ChartKind Kind) ResolveChartType(XElement plotArea)
+    {
+        if (plotArea.Element(C + "barChart") is { } bar)
+        {
+            var dir = bar.Element(C + "barDir")?.Attribute(C + "val")?.Value;
+            return (bar, dir == "bar" ? ChartKind.Bar : ChartKind.Column);
+        }
+        if (plotArea.Element(C + "lineChart") is { } line)
+            return (line, ChartKind.Line);
+        if (plotArea.Element(C + "pieChart") is { } pie)
+            return (pie, ChartKind.Pie);
+        return (null, ChartKind.Column);
+    }
+
+    /// <summary>
+    /// Reads an inline SmartArt diagram (w:drawing/wp:inline/a:graphic/a:graphicData[uri=diagram]/dgm:relIds)
+    /// from a run into a <see cref="SmartArt"/>, if present. Resolves the dgm:relIds/@r:dm id to the diagram
+    /// DATA part via <paramref name="relationships"/> (the all-parts map), then parses the dgm:dataModel:
+    /// each non-doc dgm:pt's text body (a:t) is a node, and the dgm:cxnLst parOf connections rebuild the
+    /// parent→child tree. The diagram KIND is inferred from the data part's sibling layout part's uniqueId
+    /// (process / hierarchy / list). Returns null when the run carries no diagram.
+    /// </summary>
+    private static SmartArt? ReadSmartArt(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> relationships)
+    {
+        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
+        if (inline is null)
+            return null;
+
+        var relIds = inline.Descendants(Dgm + "relIds").FirstOrDefault();
+        var dataRelId = relIds?.Attribute(R + "dm")?.Value;
+        if (dataRelId is null || !relationships.TryGetValue(dataRelId, out var dataPath))
+            return null;
+
+        var dataXml = LoadPart(archive, dataPath);
+        var dataModel = dataXml?.Root;
+        if (dataModel is null || dataModel.Name != Dgm + "dataModel")
+            return null;
+
+        var ptLst = dataModel.Element(Dgm + "ptLst");
+        if (ptLst is null)
+            return null;
+
+        // Index every node point (skip the type="doc"/"pres" presentation points) by its modelId, capturing
+        // its text from the first a:t in its dgm:t body.
+        var textById = new Dictionary<string, string>(StringComparer.Ordinal);
+        var nodeById = new Dictionary<string, SmartArtNode>(StringComparer.Ordinal);
+        var orderedIds = new List<string>();
+        foreach (var pt in ptLst.Elements(Dgm + "pt"))
+        {
+            var type = pt.Attribute("type")?.Value;
+            if (type is "doc" or "pres")
+                continue;
+            var modelId = pt.Attribute("modelId")?.Value;
+            if (modelId is null)
+                continue;
+            var text = string.Concat(pt.Element(Dgm + "t")?.Descendants(A + "t").Select(t => t.Value) ?? []);
+            textById[modelId] = text;
+            nodeById[modelId] = new SmartArtNode(text);
+            orderedIds.Add(modelId);
+        }
+
+        // Rebuild the tree from the parOf connections: each connection's destId is a child of its srcId.
+        // Connections whose srcId is not a node id (e.g. the document point) mark a top-level node.
+        var childIds = new HashSet<string>(StringComparer.Ordinal);
+        var topLevel = new List<SmartArtNode>();
+        var parentOrder = new List<(string Src, string Dest)>();
+        foreach (var cxn in dataModel.Element(Dgm + "cxnLst")?.Elements(Dgm + "cxn") ?? [])
+        {
+            if (cxn.Attribute("type")?.Value != "parOf")
+                continue;
+            var src = cxn.Attribute("srcId")?.Value;
+            var dest = cxn.Attribute("destId")?.Value;
+            if (src is null || dest is null || !nodeById.ContainsKey(dest))
+                continue;
+            parentOrder.Add((src, dest));
+            if (nodeById.ContainsKey(src))
+                childIds.Add(dest);
+        }
+        foreach (var (src, dest) in parentOrder)
+            if (nodeById.TryGetValue(src, out var parent))
+                parent.Children.Add(nodeById[dest]);
+        foreach (var id in orderedIds)
+            if (!childIds.Contains(id))
+                topLevel.Add(nodeById[id]);
+
+        var smartArt = new SmartArt { Kind = ReadSmartArtKind(relIds, relationships, archive) };
+        smartArt.Nodes.AddRange(topLevel);
+
+        // Size: the inline extent (EMU) maps back to points.
+        var extent = inline.Element(Wp + "extent");
+        smartArt.WidthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
+        smartArt.HeightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
+
+        return smartArt;
+    }
+
+    /// <summary>
+    /// Infers the <see cref="SmartArtKind"/> from the layout part's uniqueId (resolved via the relIds/@r:lo
+    /// id). Falls back to <see cref="SmartArtKind.List"/> when the layout part or its id is absent/unknown.
+    /// </summary>
+    private static SmartArtKind ReadSmartArtKind(XElement? relIds, IReadOnlyDictionary<string, string> relationships, ZipArchive archive)
+    {
+        var layoutRelId = relIds?.Attribute(R + "lo")?.Value;
+        if (layoutRelId is null || !relationships.TryGetValue(layoutRelId, out var layoutPath))
+            return SmartArtKind.List;
+        var uniqueId = LoadPart(archive, layoutPath)?.Root?.Attribute("uniqueId")?.Value ?? string.Empty;
+        if (uniqueId.Contains("process", StringComparison.OrdinalIgnoreCase))
+            return SmartArtKind.Process;
+        if (uniqueId.Contains("hierarchy", StringComparison.OrdinalIgnoreCase))
+            return SmartArtKind.Hierarchy;
+        return SmartArtKind.List;
+    }
+
+    /// <summary>
+    /// Reads the literal string cache (c:strRef/c:strCache or a bare c:strCache) under <paramref name="parent"/>
+    /// into an ordered list of values by c:pt/@idx. Returns an empty list when the parent or cache is absent.
+    /// </summary>
+    private static List<string> ReadStringCache(XElement? parent)
+    {
+        var cache = parent?.Descendants(C + "strCache").FirstOrDefault();
+        return ReadCachePoints(cache).Select(p => p.Value).ToList();
+    }
+
+    /// <summary>Reads the literal number cache (c:numRef/c:numCache) under <paramref name="parent"/> into ordered doubles.</summary>
+    private static List<double> ReadNumberCache(XElement? parent)
+    {
+        var cache = parent?.Descendants(C + "numCache").FirstOrDefault();
+        return ReadCachePoints(cache)
+            .Select(p => double.TryParse(p.Value, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Returns a chart cache's points ordered by their c:pt/@idx (the OOXML cache is index-addressed, so we
+    /// sort to be robust against out-of-order or sparse points). Each point's text is its c:v value.
+    /// </summary>
+    private static IEnumerable<(int Idx, string Value)> ReadCachePoints(XElement? cache)
+    {
+        if (cache is null)
+            return [];
+        return cache.Elements(C + "pt")
+            .Select(pt => (
+                Idx: int.TryParse(pt.Attribute(C + "idx")?.Value, out var idx) ? idx : 0,
+                Value: pt.Element(C + "v")?.Value ?? string.Empty))
+            .OrderBy(p => p.Idx);
     }
 
     /// <summary>Maps relationship id -> media part path from word/_rels/document.xml.rels.</summary>
@@ -1006,6 +1740,18 @@ public static class DocxReader
         var highlight = rPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
         var vertAlign = rPr.Element(W + "vertAlign")?.Attribute(W + "val")?.Value;
 
+        // Advanced typography (Z1). The three core elements use the standard unit conversions; the
+        // w14:* extension elements use the shared token maps. Each is optional and maps a missing
+        // element back to the model default so default runs read back unchanged.
+        var spacing = rPr.Element(W + "spacing")?.Attribute(W + "val")?.Value;
+        var kern = rPr.Element(W + "kern")?.Attribute(W + "val")?.Value;
+        var position = rPr.Element(W + "position")?.Attribute(W + "val")?.Value;
+        var ligatures = rPr.Element(W14 + "ligatures")?.Attribute(W14 + "val")?.Value;
+        var numForm = rPr.Element(W14 + "numForm")?.Attribute(W14 + "val")?.Value;
+        var numSpacing = rPr.Element(W14 + "numSpacing")?.Attribute(W14 + "val")?.Value;
+        // A stylistic set is the first w14:styleSet inside w14:stylisticSets (the common single-set case).
+        var styleSetId = rPr.Element(W14 + "stylisticSets")?.Element(W14 + "styleSet")?.Attribute(W14 + "id")?.Value;
+
         return new RunFormatting
         {
             Bold = ReadToggle(rPr, "b"),
@@ -1023,7 +1769,18 @@ public static class DocxReader
                 "superscript" => VerticalAlign.Superscript,
                 "subscript" => VerticalAlign.Subscript,
                 _ => VerticalAlign.Baseline
-            }
+            },
+            // w:spacing is in dxa (twentieths of a point); 0 / absent means no advanced spacing.
+            CharacterSpacingPt = spacing is null ? 0 : DxaToPoints(spacing),
+            // w:kern is in half-points; absent means no kerning threshold (null).
+            KerningMinSizePt = kern is null ? null : HalfPointsToPoints(kern),
+            // w:position is in half-points, signed; 0 / absent means baseline.
+            PositionPt = position is null ? 0 : (ParseInt(position) / 2.0),
+            Ligatures = LigatureModeFromToken(ligatures),
+            NumberForm = NumberFormFromToken(numForm),
+            NumberSpacing = NumberSpacingFromToken(numSpacing),
+            StylisticSet = styleSetId is null ? null
+                : int.TryParse(styleSetId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id) ? id : null
         };
     }
 

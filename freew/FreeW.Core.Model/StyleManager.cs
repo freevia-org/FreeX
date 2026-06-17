@@ -23,7 +23,7 @@ public static class StyleManager
         "Title", "Subtitle", "Quote",
         "Caption",
         "IndexHeading", "IndexEntry",
-        "TableOfFiguresHeading", "TableOfFigures",
+        "TableOfFiguresHeading", "TableOfFiguresEntry",
     };
 
     /// <summary>True when <paramref name="styleId"/> names a guarded built-in style (see <see cref="BuiltInStyleIds"/>).</summary>

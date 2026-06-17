@@ -1,0 +1,206 @@
+using System.IO;
+using System.IO.Compression;
+using System.Xml.Linq;
+
+namespace FreeW.Core.IO.Tests;
+
+/// <summary>
+/// Round-trip coverage for inline SmartArt / DrawingML diagrams (roadmap item Y1): a
+/// <see cref="Run.SmartArt"/> must survive write→read with its kind and node texts/structure, materialise
+/// the FOUR diagram PARTS (data / layout / quickStyle / colors) each with a content-type Override and a
+/// document relationship, and reference all four from an inline w:drawing's dgm:relIds.
+/// </summary>
+public class SmartArtRoundTripTests
+{
+    private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    private static readonly XNamespace R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+    private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    private static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
+    private static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+    private const string DataContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml";
+    private const string LayoutContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml";
+    private const string StyleContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml";
+    private const string ColorsContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml";
+
+    private static TextDocument RoundTrip(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
+    private static byte[] WriteBytes(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        return stream.ToArray();
+    }
+
+    private static XDocument EntryXml(byte[] docx, string entryPath)
+    {
+        using var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry(entryPath)!.Open();
+        return XDocument.Load(entry);
+    }
+
+    private static TextDocument SingleDiagramDocument(SmartArt smartArt)
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromSmartArt(smartArt));
+        doc.Blocks.Add(paragraph);
+        return doc;
+    }
+
+    [Fact]
+    public void ListDiagram_KindAndNodeTexts_SurviveRoundTrip()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Alpha", "Beta", "Gamma"]);
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+
+        var run = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null);
+        var diagram = run.SmartArt!;
+        diagram.Kind.Should().Be(SmartArtKind.List);
+        diagram.Nodes.Select(n => n.Text).Should().Equal("Alpha", "Beta", "Gamma");
+        diagram.Nodes.Should().OnlyContain(n => n.Children.Count == 0);
+    }
+
+    [Fact]
+    public void ProcessDiagram_KindSurvivesRoundTrip()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Ship"]);
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+
+        read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!.Kind
+            .Should().Be(SmartArtKind.Process);
+    }
+
+    [Fact]
+    public void Hierarchy_NodeTreeStructureSurvivesRoundTrip()
+    {
+        // CEO -> { VP Eng -> { Lead }, VP Sales }
+        var ceo = new SmartArtNode("CEO");
+        var vpEng = ceo.AddChild("VP Eng");
+        vpEng.AddChild("Lead");
+        ceo.AddChild("VP Sales");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.Nodes.Add(ceo);
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+
+        var diagram = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!;
+        diagram.Kind.Should().Be(SmartArtKind.Hierarchy);
+
+        var root = diagram.Nodes.Should().ContainSingle().Subject;
+        root.Text.Should().Be("CEO");
+        root.Children.Select(c => c.Text).Should().Equal("VP Eng", "VP Sales");
+
+        var eng = root.Children[0];
+        eng.Children.Should().ContainSingle().Which.Text.Should().Be("Lead");
+        root.Children[1].Children.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Diagram_FourPartsContentTypesAndRelationships_ArePresentInZip()
+    {
+        var docx = WriteBytes(SingleDiagramDocument(SmartArt.Create(SmartArtKind.List, ["One", "Two", "Three"])));
+
+        // The four diagram parts exist in the package.
+        using (var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read))
+        {
+            zip.GetEntry("word/diagrams/data1.xml").Should().NotBeNull("the data part carries the node text");
+            zip.GetEntry("word/diagrams/layout1.xml").Should().NotBeNull();
+            zip.GetEntry("word/diagrams/quickStyle1.xml").Should().NotBeNull();
+            zip.GetEntry("word/diagrams/colors1.xml").Should().NotBeNull();
+        }
+
+        // [Content_Types].xml declares an Override for each of the four parts.
+        var types = EntryXml(docx, "[Content_Types].xml");
+        var overrides = types.Root!.Elements(Ct + "Override").ToList();
+        overrides.Should().Contain(o => o.Attribute("PartName")!.Value == "/word/diagrams/data1.xml" && o.Attribute("ContentType")!.Value == DataContentType);
+        overrides.Should().Contain(o => o.Attribute("PartName")!.Value == "/word/diagrams/layout1.xml" && o.Attribute("ContentType")!.Value == LayoutContentType);
+        overrides.Should().Contain(o => o.Attribute("PartName")!.Value == "/word/diagrams/quickStyle1.xml" && o.Attribute("ContentType")!.Value == StyleContentType);
+        overrides.Should().Contain(o => o.Attribute("PartName")!.Value == "/word/diagrams/colors1.xml" && o.Attribute("ContentType")!.Value == ColorsContentType);
+
+        // document.xml.rels carries the four diagram relationships pointing at the parts.
+        var rels = EntryXml(docx, "word/_rels/document.xml.rels");
+        var relList = rels.Root!.Elements(Rel + "Relationship").ToList();
+        var dataRel = relList.Single(r => r.Attribute("Type")!.Value.EndsWith("/diagramData", System.StringComparison.Ordinal));
+        var layoutRel = relList.Single(r => r.Attribute("Type")!.Value.EndsWith("/diagramLayout", System.StringComparison.Ordinal));
+        var styleRel = relList.Single(r => r.Attribute("Type")!.Value.EndsWith("/diagramQuickStyle", System.StringComparison.Ordinal));
+        var colorsRel = relList.Single(r => r.Attribute("Type")!.Value.EndsWith("/diagramColors", System.StringComparison.Ordinal));
+        dataRel.Attribute("Target")!.Value.Should().Be("diagrams/data1.xml");
+        layoutRel.Attribute("Target")!.Value.Should().Be("diagrams/layout1.xml");
+        styleRel.Attribute("Target")!.Value.Should().Be("diagrams/quickStyle1.xml");
+        colorsRel.Attribute("Target")!.Value.Should().Be("diagrams/colors1.xml");
+
+        // document.xml references all four relationships from the inline dgm:relIds.
+        var documentXml = EntryXml(docx, "word/document.xml");
+        var relIds = documentXml.Descendants(Dgm + "relIds").Single();
+        relIds.Attribute(R + "dm")!.Value.Should().Be(dataRel.Attribute("Id")!.Value);
+        relIds.Attribute(R + "lo")!.Value.Should().Be(layoutRel.Attribute("Id")!.Value);
+        relIds.Attribute(R + "qs")!.Value.Should().Be(styleRel.Attribute("Id")!.Value);
+        relIds.Attribute(R + "cs")!.Value.Should().Be(colorsRel.Attribute("Id")!.Value);
+    }
+
+    [Fact]
+    public void DataPart_CarriesNodeTextsInDataModel()
+    {
+        var docx = WriteBytes(SingleDiagramDocument(SmartArt.Create(SmartArtKind.List, ["Red", "Green", "Blue"])));
+        var dataXml = EntryXml(docx, "word/diagrams/data1.xml");
+
+        dataXml.Root!.Name.Should().Be(Dgm + "dataModel");
+        var texts = dataXml.Descendants(A + "t").Select(t => t.Value).ToList();
+        texts.Should().Contain(["Red", "Green", "Blue"]);
+    }
+
+    [Fact]
+    public void Diagram_RoundTripsInsideTableCell()
+    {
+        // SmartArt is an inline run mark, so it must flow through table cells like any other run.
+        var table = Table.Create(1, 1);
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Cell A", "Cell B"]);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(Run.FromSmartArt(smartArt));
+        var doc = new TextDocument();
+        doc.Blocks.Add(table);
+
+        var read = RoundTrip(doc);
+
+        var cellParagraph = ((Table)read.Blocks.Single()).Rows[0].Cells[0].Paragraphs.Single();
+        var diagram = cellParagraph.Runs.Single(r => r.SmartArt is not null).SmartArt!;
+        diagram.Nodes.Select(n => n.Text).Should().Equal("Cell A", "Cell B");
+    }
+
+    [Fact]
+    public void TwoDiagrams_GetDistinctPartsAndRelationships()
+    {
+        var doc = new TextDocument();
+        var p1 = new Paragraph();
+        p1.Runs.Add(Run.FromSmartArt(SmartArt.Create(SmartArtKind.List, ["First diagram"])));
+        var p2 = new Paragraph();
+        p2.Runs.Add(Run.FromSmartArt(SmartArt.Create(SmartArtKind.Process, ["Second diagram"])));
+        doc.Blocks.Add(p1);
+        doc.Blocks.Add(p2);
+
+        var docx = WriteBytes(doc);
+        using (var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read))
+        {
+            zip.GetEntry("word/diagrams/data1.xml").Should().NotBeNull();
+            zip.GetEntry("word/diagrams/data2.xml").Should().NotBeNull();
+            zip.GetEntry("word/diagrams/layout2.xml").Should().NotBeNull();
+        }
+
+        var read = DocxReader.Read(new MemoryStream(docx));
+        var diagrams = read.Paragraphs.SelectMany(p => p.Runs).Where(r => r.SmartArt is not null).Select(r => r.SmartArt!).ToList();
+        diagrams.Should().HaveCount(2);
+        diagrams[0].Nodes.Single().Text.Should().Be("First diagram");
+        diagrams[0].Kind.Should().Be(SmartArtKind.List);
+        diagrams[1].Nodes.Single().Text.Should().Be("Second diagram");
+        diagrams[1].Kind.Should().Be(SmartArtKind.Process);
+    }
+}
