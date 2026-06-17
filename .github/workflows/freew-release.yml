@@ -46,7 +46,7 @@ jobs:
         run: ./freew/build/publish-windows.ps1 -Version "${{ inputs.release_version }}"
 
       - name: Upload release artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: FreeW-win-x64-${{ inputs.release_version }}
           path: artifacts/FreeW-win-x64-${{ inputs.release_version }}.zip

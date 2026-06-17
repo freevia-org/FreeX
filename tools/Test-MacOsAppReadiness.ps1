@@ -4,7 +4,14 @@ param(
     [string]$InfoPlistPath = "src\FreeX.App.Avalonia\Packaging\macos\Info.plist",
     [string]$IconPath = "src\FreeX.App.Avalonia\Packaging\macos\FreeX.icns",
     [string]$WorkflowPath = ".github\workflows\macos-app.yml",
-    [string[]]$PortableSourceRoots = @("src\FreeX.App.Avalonia", "src\FreeX.App.Services")
+    [string[]]$PortableSourceRoots = @(
+        "src\FreeX.App.Avalonia",
+        "src\FreeX.App.Presentation",
+        "src\FreeX.App.Services",
+        "src\FreeX.Ribbon.Avalonia",
+        "shared\Free.Shared.AppServices",
+        "shared\Free.Shared.Ribbon"
+    )
 )
 
 $ErrorActionPreference = "Stop"
@@ -405,11 +412,14 @@ function Test-AvaloniaProject {
     Assert-True -Condition ((Get-ProjectNodeCondition $macOsDefineConstants[0]) -eq "'`$(TargetFramework)' == 'net10.0-macos'") -Message "Avalonia app FREEX_MACOS_SHARE_SHEET constant must be scoped to net10.0-macos."
 
     $allowedProjectReferences = @(
+        "Free.Shared.Ribbon",
+        "FreeX.App.Presentation",
         "FreeX.App.Services",
         "FreeX.Core.Calc",
         "FreeX.Core.Commands",
         "FreeX.Core.IO",
-        "FreeX.Core.Model"
+        "FreeX.Core.Model",
+        "FreeX.Ribbon.Avalonia"
     )
     $projectReferences = @(Get-ProjectItems -Project $project -Name "ProjectReference")
     Assert-True -Condition ($projectReferences.Count -gt 0) -Message "Avalonia app project must reference shared portable projects."
@@ -1078,7 +1088,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\AppDiagnosticsFileStore.cs"
+            Path = "shared\Free.Shared.AppServices\AppDiagnosticsFileStore.cs"
             Markers = @(
                 "AllowedPropertyNames",
                 '"grantKind"',
@@ -2750,7 +2760,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\LocalFilePath.cs"
+            Path = "shared\Free.Shared.AppServices\LocalFilePath.cs"
             Markers = @(
                 "public static class LocalFilePath",
                 "public static bool TryNormalize(string? candidate, out string normalizedPath)",
@@ -2798,7 +2808,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\WorkbookShareActionPlanner.cs"
+            Path = "shared\Free.Shared.AppServices\WorkbookShareActionPlanner.cs"
             Markers = @(
                 "public enum WorkbookShareActionPlanKind",
                 "ShareSheet,",
@@ -2905,7 +2915,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\RecentFilesStore.cs"
+            Path = "shared\Free.Shared.AppServices\RecentFilesStore.cs"
             Markers = @(
                 "public sealed class RecentFileEntry",
                 "public sealed class RecentFilesStore",
@@ -2918,7 +2928,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\AtomicFileWriter.cs"
+            Path = "shared\Free.Shared.AppServices\AtomicFileWriter.cs"
             Markers = @(
                 "public static class AtomicFileWriter",
                 "File.WriteAllText(tempPath, content);",

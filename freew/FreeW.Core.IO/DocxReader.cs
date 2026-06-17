@@ -57,8 +57,76 @@ public static class DocxReader
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, imageRelationships, hyperlinkRelationships);
         ReadSettings(archive, document);
+        ReadTheme(archive, document);
 
         return document;
+    }
+
+    /// <summary>
+    /// Resolves and parses word/theme/theme1.xml (via the document's "/theme" relationship, falling back
+    /// to the conventional path), recovering the a:clrScheme colours and the a:fontScheme major/minor
+    /// fonts, then inferring the closest <see cref="DocumentTheme"/> preset (see
+    /// <see cref="DocumentTheme.InferPreset"/>). A missing or unparseable theme part leaves the document
+    /// at <see cref="DocumentTheme.Default"/> ("Office"). Inference is best-effort: a theme whose accent
+    /// colours / fonts match no FreeW preset falls back to "Office".
+    /// </summary>
+    private static void ReadTheme(ZipArchive archive, TextDocument document)
+    {
+        var themeXml = LoadPart(archive, ResolveThemePartPath(archive) ?? "word/theme/theme1.xml");
+        var elements = themeXml?.Root?.Element(A + "themeElements");
+        if (elements is null)
+            return;
+
+        var clr = elements.Element(A + "clrScheme");
+        var fonts = elements.Element(A + "fontScheme");
+        if (clr is null || fonts is null)
+            return;
+
+        // Each clrScheme slot wraps a single colour element; recover its RRGGBB (srgbClr/@val) or, for a
+        // sysClr (e.g. windowText/window), its lastClr fallback. Anything else is treated as absent.
+        string Slot(string name)
+        {
+            var slot = clr.Element(A + name);
+            var srgb = slot?.Element(A + "srgbClr")?.Attribute("val")?.Value;
+            if (!string.IsNullOrEmpty(srgb))
+                return srgb.ToUpperInvariant();
+            var sys = slot?.Element(A + "sysClr")?.Attribute("lastClr")?.Value;
+            return string.IsNullOrEmpty(sys) ? string.Empty : sys.ToUpperInvariant();
+        }
+
+        var scheme = new ThemeColorScheme(
+            Slot("dk1"), Slot("lt1"), Slot("dk2"), Slot("lt2"),
+            Slot("accent1"), Slot("accent2"), Slot("accent3"),
+            Slot("accent4"), Slot("accent5"), Slot("accent6"),
+            Slot("hlink"), Slot("folHlink"));
+
+        string LatinFont(string fontElement) =>
+            fonts.Element(A + fontElement)?.Element(A + "latin")?.Attribute("typeface")?.Value ?? string.Empty;
+
+        document.Theme = DocumentTheme.InferPreset(scheme, LatinFont("majorFont"), LatinFont("minorFont"));
+    }
+
+    /// <summary>
+    /// Finds the theme part path from the document relationships (the rel whose Type ends with "/theme"),
+    /// resolved relative to the word/ folder. Returns null when no such relationship exists.
+    /// </summary>
+    private static string? ResolveThemePartPath(ZipArchive archive)
+    {
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return null;
+
+        foreach (var rel in relationships)
+        {
+            var type = rel.Attribute("Type")?.Value;
+            if (type is null || !type.EndsWith("/theme", StringComparison.Ordinal))
+                continue;
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(target))
+                return "word/" + target.TrimStart('/');
+        }
+        return null;
     }
 
     /// <summary>
@@ -705,6 +773,29 @@ public static class DocxReader
             return;
         }
 
+        // A run wrapping a w:object (VML v:shape + o:OLEObject) is an embedded OLE object. imageRelationships
+        // is the all-parts map (id → part path), so both the .bin payload and the icon media part resolve.
+        var embedded = ReadEmbeddedObject(r, archive, imageRelationships);
+        if (embedded is not null)
+        {
+            var embeddedRun = new Run(string.Empty) { EmbeddedObject = embedded, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(embeddedRun);
+            paragraph.Runs.Add(embeddedRun);
+            return;
+        }
+
+        // A run whose w:drawing references a SmartArt diagram (a:graphicData/dgm:relIds) becomes a SmartArt
+        // run. imageRelationships maps EVERY document relationship id → part path, so the diagram data part
+        // resolves through it via the dgm:relIds/@r:dm id.
+        var smartArt = ReadSmartArt(r, archive, imageRelationships);
+        if (smartArt is not null)
+        {
+            var smartArtRun = new Run(string.Empty) { SmartArt = smartArt, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(smartArtRun);
+            paragraph.Runs.Add(smartArtRun);
+            return;
+        }
+
         // A run wrapping a w:footnoteReference is a footnote marker; recover its id into the model.
         var footnoteRef = r.Element(W + "footnoteReference");
         if (footnoteRef is not null && int.TryParse(footnoteRef.Attribute(W + "id")?.Value, out var footnoteId))
@@ -1044,6 +1135,87 @@ public static class DocxReader
     };
 
     /// <summary>
+    /// Reads an embedded OLE object (a w:object wrapping a VML v:shape + o:OLEObject) from a run into an
+    /// <see cref="EmbeddedObject"/>, if present. Resolves the o:OLEObject/@r:id to the embedded .bin part via
+    /// <paramref name="relationships"/> (the all-parts map) to recover the payload bytes, reads the ProgID
+    /// from o:OLEObject/@ProgID, and — when the v:shape carries a v:imagedata — loads the icon media part
+    /// into the object's presentation image. Returns null when the run carries no embedded object.
+    ///
+    /// SIMPLIFICATION (Y2): only embedded objects (Type other than "Link") are recovered; a linked object
+    /// (no embedded .bin relationship) yields null. The icon's size becomes the object's size when present.
+    /// </summary>
+    private static EmbeddedObject? ReadEmbeddedObject(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> relationships)
+    {
+        var obj = run.Element(W + "object");
+        var ole = obj?.Element(O + "OLEObject");
+        if (ole is null)
+            return null;
+
+        // A linked object references its data externally (Type="Link") rather than via an embedded part.
+        if (string.Equals(ole.Attribute("Type")?.Value, "Link", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var relationshipId = ole.Attribute(R + "id")?.Value;
+        if (relationshipId is null || !relationships.TryGetValue(relationshipId, out var partPath))
+            return null;
+
+        var payload = LoadMedia(archive, partPath);
+        if (payload is null)
+            return null;
+
+        var progId = ole.Attribute("ProgID")?.Value ?? string.Empty;
+        var embedded = new EmbeddedObject(payload, progId);
+
+        // The VML v:shape supplies the on-page icon (v:imagedata r:id → media part) and the size (CSS @style).
+        var shape = obj!.Element(V + "shape");
+        var imagedataRel = shape?.Element(V + "imagedata")?.Attribute(R + "id")?.Value;
+        if (imagedataRel is not null
+            && relationships.TryGetValue(imagedataRel, out var iconPath)
+            && LoadMedia(archive, iconPath) is { } iconBytes)
+        {
+            var (iconWidthPt, iconHeightPt) = ParseVmlShapeSize(shape!.Attribute("style")?.Value);
+            embedded.Icon = new InlineImage(iconBytes, iconWidthPt, iconHeightPt);
+            embedded.WidthPt = iconWidthPt;
+            embedded.HeightPt = iconHeightPt;
+        }
+        else if (ParseVmlShapeSize(shape?.Attribute("style")?.Value) is var (w, h) && (w > 0 || h > 0))
+        {
+            embedded.WidthPt = w;
+            embedded.HeightPt = h;
+        }
+
+        return embedded;
+    }
+
+    /// <summary>
+    /// Parses a VML shape @style ("width:96pt;height:96pt") into its width/height in points. Missing or
+    /// unparseable dimensions read back as 0 (the caller keeps the model default in that case).
+    /// </summary>
+    private static (double WidthPt, double HeightPt) ParseVmlShapeSize(string? style)
+    {
+        if (string.IsNullOrEmpty(style))
+            return (0, 0);
+        double width = 0, height = 0;
+        foreach (var part in style.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var colon = part.IndexOf(':');
+            if (colon <= 0)
+                continue;
+            var key = part[..colon].Trim();
+            var value = part[(colon + 1)..].Trim();
+            if (value.EndsWith("pt", StringComparison.OrdinalIgnoreCase))
+                value = value[..^2].Trim();
+            if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pt))
+                continue;
+            if (key.Equals("width", StringComparison.OrdinalIgnoreCase))
+                width = pt;
+            else if (key.Equals("height", StringComparison.OrdinalIgnoreCase))
+                height = pt;
+        }
+        return (width, height);
+    }
+
+    /// <summary>
     /// Reads an inline chart (w:drawing/wp:inline/a:graphic/a:graphicData[uri=chart]/c:chart) from a run
     /// into a <see cref="Chart"/>, if present. Resolves the c:chart/@r:id to the chart part via
     /// <paramref name="relationships"/> (the all-parts map), loads it and parses its kind, title, category
@@ -1123,6 +1295,105 @@ public static class DocxReader
         if (plotArea.Element(C + "pieChart") is { } pie)
             return (pie, ChartKind.Pie);
         return (null, ChartKind.Column);
+    }
+
+    /// <summary>
+    /// Reads an inline SmartArt diagram (w:drawing/wp:inline/a:graphic/a:graphicData[uri=diagram]/dgm:relIds)
+    /// from a run into a <see cref="SmartArt"/>, if present. Resolves the dgm:relIds/@r:dm id to the diagram
+    /// DATA part via <paramref name="relationships"/> (the all-parts map), then parses the dgm:dataModel:
+    /// each non-doc dgm:pt's text body (a:t) is a node, and the dgm:cxnLst parOf connections rebuild the
+    /// parent→child tree. The diagram KIND is inferred from the data part's sibling layout part's uniqueId
+    /// (process / hierarchy / list). Returns null when the run carries no diagram.
+    /// </summary>
+    private static SmartArt? ReadSmartArt(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> relationships)
+    {
+        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
+        if (inline is null)
+            return null;
+
+        var relIds = inline.Descendants(Dgm + "relIds").FirstOrDefault();
+        var dataRelId = relIds?.Attribute(R + "dm")?.Value;
+        if (dataRelId is null || !relationships.TryGetValue(dataRelId, out var dataPath))
+            return null;
+
+        var dataXml = LoadPart(archive, dataPath);
+        var dataModel = dataXml?.Root;
+        if (dataModel is null || dataModel.Name != Dgm + "dataModel")
+            return null;
+
+        var ptLst = dataModel.Element(Dgm + "ptLst");
+        if (ptLst is null)
+            return null;
+
+        // Index every node point (skip the type="doc"/"pres" presentation points) by its modelId, capturing
+        // its text from the first a:t in its dgm:t body.
+        var textById = new Dictionary<string, string>(StringComparer.Ordinal);
+        var nodeById = new Dictionary<string, SmartArtNode>(StringComparer.Ordinal);
+        var orderedIds = new List<string>();
+        foreach (var pt in ptLst.Elements(Dgm + "pt"))
+        {
+            var type = pt.Attribute("type")?.Value;
+            if (type is "doc" or "pres")
+                continue;
+            var modelId = pt.Attribute("modelId")?.Value;
+            if (modelId is null)
+                continue;
+            var text = string.Concat(pt.Element(Dgm + "t")?.Descendants(A + "t").Select(t => t.Value) ?? []);
+            textById[modelId] = text;
+            nodeById[modelId] = new SmartArtNode(text);
+            orderedIds.Add(modelId);
+        }
+
+        // Rebuild the tree from the parOf connections: each connection's destId is a child of its srcId.
+        // Connections whose srcId is not a node id (e.g. the document point) mark a top-level node.
+        var childIds = new HashSet<string>(StringComparer.Ordinal);
+        var topLevel = new List<SmartArtNode>();
+        var parentOrder = new List<(string Src, string Dest)>();
+        foreach (var cxn in dataModel.Element(Dgm + "cxnLst")?.Elements(Dgm + "cxn") ?? [])
+        {
+            if (cxn.Attribute("type")?.Value != "parOf")
+                continue;
+            var src = cxn.Attribute("srcId")?.Value;
+            var dest = cxn.Attribute("destId")?.Value;
+            if (src is null || dest is null || !nodeById.ContainsKey(dest))
+                continue;
+            parentOrder.Add((src, dest));
+            if (nodeById.ContainsKey(src))
+                childIds.Add(dest);
+        }
+        foreach (var (src, dest) in parentOrder)
+            if (nodeById.TryGetValue(src, out var parent))
+                parent.Children.Add(nodeById[dest]);
+        foreach (var id in orderedIds)
+            if (!childIds.Contains(id))
+                topLevel.Add(nodeById[id]);
+
+        var smartArt = new SmartArt { Kind = ReadSmartArtKind(relIds, relationships, archive) };
+        smartArt.Nodes.AddRange(topLevel);
+
+        // Size: the inline extent (EMU) maps back to points.
+        var extent = inline.Element(Wp + "extent");
+        smartArt.WidthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
+        smartArt.HeightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
+
+        return smartArt;
+    }
+
+    /// <summary>
+    /// Infers the <see cref="SmartArtKind"/> from the layout part's uniqueId (resolved via the relIds/@r:lo
+    /// id). Falls back to <see cref="SmartArtKind.List"/> when the layout part or its id is absent/unknown.
+    /// </summary>
+    private static SmartArtKind ReadSmartArtKind(XElement? relIds, IReadOnlyDictionary<string, string> relationships, ZipArchive archive)
+    {
+        var layoutRelId = relIds?.Attribute(R + "lo")?.Value;
+        if (layoutRelId is null || !relationships.TryGetValue(layoutRelId, out var layoutPath))
+            return SmartArtKind.List;
+        var uniqueId = LoadPart(archive, layoutPath)?.Root?.Attribute("uniqueId")?.Value ?? string.Empty;
+        if (uniqueId.Contains("process", StringComparison.OrdinalIgnoreCase))
+            return SmartArtKind.Process;
+        if (uniqueId.Contains("hierarchy", StringComparison.OrdinalIgnoreCase))
+            return SmartArtKind.Hierarchy;
+        return SmartArtKind.List;
     }
 
     /// <summary>
@@ -1446,6 +1717,18 @@ public static class DocxReader
         var highlight = rPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
         var vertAlign = rPr.Element(W + "vertAlign")?.Attribute(W + "val")?.Value;
 
+        // Advanced typography (Z1). The three core elements use the standard unit conversions; the
+        // w14:* extension elements use the shared token maps. Each is optional and maps a missing
+        // element back to the model default so default runs read back unchanged.
+        var spacing = rPr.Element(W + "spacing")?.Attribute(W + "val")?.Value;
+        var kern = rPr.Element(W + "kern")?.Attribute(W + "val")?.Value;
+        var position = rPr.Element(W + "position")?.Attribute(W + "val")?.Value;
+        var ligatures = rPr.Element(W14 + "ligatures")?.Attribute(W14 + "val")?.Value;
+        var numForm = rPr.Element(W14 + "numForm")?.Attribute(W14 + "val")?.Value;
+        var numSpacing = rPr.Element(W14 + "numSpacing")?.Attribute(W14 + "val")?.Value;
+        // A stylistic set is the first w14:styleSet inside w14:stylisticSets (the common single-set case).
+        var styleSetId = rPr.Element(W14 + "stylisticSets")?.Element(W14 + "styleSet")?.Attribute(W14 + "id")?.Value;
+
         return new RunFormatting
         {
             Bold = ReadToggle(rPr, "b"),
@@ -1463,7 +1746,18 @@ public static class DocxReader
                 "superscript" => VerticalAlign.Superscript,
                 "subscript" => VerticalAlign.Subscript,
                 _ => VerticalAlign.Baseline
-            }
+            },
+            // w:spacing is in dxa (twentieths of a point); 0 / absent means no advanced spacing.
+            CharacterSpacingPt = spacing is null ? 0 : DxaToPoints(spacing),
+            // w:kern is in half-points; absent means no kerning threshold (null).
+            KerningMinSizePt = kern is null ? null : HalfPointsToPoints(kern),
+            // w:position is in half-points, signed; 0 / absent means baseline.
+            PositionPt = position is null ? 0 : (ParseInt(position) / 2.0),
+            Ligatures = LigatureModeFromToken(ligatures),
+            NumberForm = NumberFormFromToken(numForm),
+            NumberSpacing = NumberSpacingFromToken(numSpacing),
+            StylisticSet = styleSetId is null ? null
+                : int.TryParse(styleSetId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id) ? id : null
         };
     }
 

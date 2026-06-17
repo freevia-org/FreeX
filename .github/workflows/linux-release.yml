@@ -233,7 +233,7 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-linux-evidence.txt
             artifacts/freex-${{ matrix.runtime }}-linux-packaging-smoke.log
             artifacts/freex-${{ matrix.runtime }}-linux-launch-smoke.txt
-          if-no-files-found: ignore
+          if-no-files-found: warn
           retention-days: 14
 
   publish:
@@ -249,7 +249,7 @@ jobs:
           persist-credentials: false
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: downloaded-artifacts
           pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-linux-app
