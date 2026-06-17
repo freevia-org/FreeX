@@ -627,6 +627,13 @@ public sealed partial class MainWindow : Window
                     ["home.fillNone"] = ClearSelectedRangeFill,
                     ["home.fillYellow"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
                     ["home.fillGreen"] = () => ApplySelectedRangeFillColor(new CellColor(198, 239, 206)),
+                    // Borders dropdown items.
+                    ["home.bordersAll"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
+                    ["home.bordersOutside"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Outside),
+                    ["home.bordersNone"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
+                    // Paste split-button menu items.
+                    ["home.pasteValues"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Values, default, "Values"),
+                    ["home.pasteFormat"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formats, default, "Formatting"),
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);

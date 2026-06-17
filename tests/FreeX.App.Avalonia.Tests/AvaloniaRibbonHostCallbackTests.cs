@@ -109,6 +109,8 @@ public sealed class AvaloniaRibbonHostCallbackTests
                 ["home.fmtGeneral"] = () => fired.Add("general"),
                 ["home.fmtDate"] = () => fired.Add("date"),
                 ["home.fillYellow"] = () => fired.Add("yellow"),
+                ["home.bordersAll"] = () => fired.Add("bordersAll"),
+                ["home.pasteValues"] = () => fired.Add("pasteValues"),
             },
         };
         var registry = SampleRibbon.BuildRegistry(() => null, _ => { }, callbacks);
@@ -119,8 +121,10 @@ public sealed class AvaloniaRibbonHostCallbackTests
         Execute(registry, "home.fmtGeneral");
         Execute(registry, "home.fmtDate");
         Execute(registry, "home.fillYellow");
+        Execute(registry, "home.bordersAll");
+        Execute(registry, "home.pasteValues");
 
-        Assert.Equal(new[] { "general", "date", "yellow" }, fired);
+        Assert.Equal(new[] { "general", "date", "yellow", "bordersAll", "pasteValues" }, fired);
     }
 
     [Fact]
