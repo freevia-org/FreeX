@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeX.App.UI;
 using FreeX.Core.Calc;
+using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -68,6 +69,12 @@ internal static class Program
             workbook = result.Workbook;
             if (result.Warnings.Count > 0)
                 Console.WriteLine($"  Load warnings ({result.Warnings.Count}): {string.Join("; ", result.Warnings.Take(5))}");
+
+            // Mirror the real app's open pipeline: recalc all formulas so volatile/date-driven cells
+            // (e.g. =D3-TODAY()) and the conditional-format rules that read them reflect *today*, not the
+            // stale cached values from when the file was last saved.  Without this the GridView would
+            // render cached values and CF would highlight the wrong rows vs Excel (which recalcs on open).
+            new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()).RecalculateAllFormulas(workbook);
 
             // Mirror WorkbookOpenService: Excel applies pivot/table styles dynamically and does not
             // bake them into per-cell styles, so materialize them onto the loaded cells so the GridView
@@ -239,6 +246,13 @@ internal static class Program
             ZoomFactor      = 1.0,
             WorksheetViewMode = sheet.ViewMode,
         };
+
+        // Surface the sheet's AutoFilter range (worksheet-level OR carried inside a structured table)
+        // so the GridView draws the filter-arrow dropdown buttons on the header row, matching Excel.
+        grid.AutoFilterRange =
+            FreeX.App.Host.AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
+                ? autoFilterRange
+                : null;
 
         // Step 4: Off-screen layout pass
         grid.Measure(new Size(viewW, viewH));

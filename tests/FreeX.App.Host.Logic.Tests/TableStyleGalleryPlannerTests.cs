@@ -22,7 +22,14 @@ public sealed class TableStyleGalleryPlannerTests
                 "TableStyleDark11");
         options.Should().HaveCount(60);
         options.Select(option => option.StyleName).Should().OnlyHaveUniqueItems();
-        options.Should().OnlyContain(option => option.Banding.HeaderFill != default);
+
+        // Every gallery option carries a banding whose header reads with contrast against its fill.
+        // (A simple "HeaderFill != default" check is ambiguous because Excel's Light 8-14 styles use a
+        // genuine BLACK header — which equals default(CellColor) — paired with a white font.)
+        options.Should().OnlyContain(option =>
+            option.Banding.HeaderFontColor == CellColor.White || option.Banding.HeaderFontColor == CellColor.Black);
+        options.Should().Contain(option => option.Banding.HeaderFill == CellColor.Black,
+            "Excel's Light 8-14 table styles have a solid black header");
     }
 
     [Fact]
