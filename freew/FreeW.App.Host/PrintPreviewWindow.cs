@@ -124,10 +124,59 @@ internal static class PrintLayout
 
     private static object CloneElement(object element)
     {
-        var xaml = XamlWriter.Save(element);
-        using var reader = new StringReader(xaml);
-        using var xmlReader = System.Xml.XmlReader.Create(reader);
-        return XamlReader.Load(xmlReader);
+        // The editor stamps non-public Tag payloads (ParagraphTag, RunMarkers, Footnote/EndnoteMarker,
+        // HyperlinkInfo, TableCellTag, shape/image/SmartArt models) on its FlowDocument elements so they
+        // survive an edit/commit cycle. XamlWriter.Save cannot serialize a non-public type and throws —
+        // which crashed Print and Print Preview on essentially any real document (every styled paragraph
+        // carries a ParagraphTag). The Tags are metadata only, irrelevant to the printed rendering, so
+        // clear them on the source for the duration of the serialization and restore them immediately
+        // after. This runs synchronously on the UI thread, so the live editor is left exactly as it was.
+        var saved = new List<(DependencyObject Node, object Tag)>();
+        if (element is DependencyObject root)
+            StripTags(root, saved);
+        try
+        {
+            var xaml = XamlWriter.Save(element);
+            using var reader = new StringReader(xaml);
+            using var xmlReader = System.Xml.XmlReader.Create(reader);
+            return XamlReader.Load(xmlReader);
+        }
+        finally
+        {
+            foreach (var (node, tag) in saved)
+                SetTag(node, tag);
+        }
+    }
+
+    /// <summary>
+    /// Recursively clears every non-null <c>Tag</c> in the logical tree, recording each so
+    /// <see cref="CloneElement"/> can restore them after serialization.
+    /// </summary>
+    private static void StripTags(DependencyObject node, List<(DependencyObject Node, object Tag)> saved)
+    {
+        if (GetTag(node) is { } tag)
+        {
+            saved.Add((node, tag));
+            SetTag(node, null);
+        }
+
+        foreach (var child in LogicalTreeHelper.GetChildren(node))
+            if (child is DependencyObject d)
+                StripTags(d, saved);
+    }
+
+    // Tag lives on both FrameworkElement and FrameworkContentElement as distinct properties; handle both.
+    private static object? GetTag(DependencyObject node) => node switch
+    {
+        FrameworkElement fe => fe.Tag,
+        FrameworkContentElement fce => fce.Tag,
+        _ => null
+    };
+
+    private static void SetTag(DependencyObject node, object? tag)
+    {
+        if (node is FrameworkElement fe) fe.Tag = tag;
+        else if (node is FrameworkContentElement fce) fce.Tag = tag;
     }
 
     /// <summary>Minimal <see cref="IDocumentPaginatorSource"/> exposing a ready-made paginator.</summary>

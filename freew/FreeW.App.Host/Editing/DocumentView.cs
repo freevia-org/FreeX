@@ -2697,11 +2697,17 @@ public sealed class DocumentView : RichTextBox
         var wpf = new WpfParagraph
         {
             TextAlignment = ToWpfAlignment(paraFmt.Alignment),
+            // WPF's Block.Margin (unlike FrameworkElement.Margin) rejects negative components with an
+            // ArgumentException, so clamp at >= 0. Real docs do carry negative indents/spacing (e.g. a
+            // negative right indent pulling into the margin); WPF cannot represent that as a block margin,
+            // so we render it as 0 rather than crash. The model keeps the original value, so docx
+            // round-trip is unaffected; only the live render clamps. (TextIndent below may stay negative —
+            // a hanging first-line indent is valid there.)
             Margin = new Thickness(
-                paraFmt.IndentLeftPt * PxPerPoint,
-                paraFmt.SpaceBeforePt * PxPerPoint,
-                paraFmt.IndentRightPt * PxPerPoint,
-                paraFmt.SpaceAfterPt * PxPerPoint),
+                Math.Max(0, paraFmt.IndentLeftPt * PxPerPoint),
+                Math.Max(0, paraFmt.SpaceBeforePt * PxPerPoint),
+                Math.Max(0, paraFmt.IndentRightPt * PxPerPoint),
+                Math.Max(0, paraFmt.SpaceAfterPt * PxPerPoint)),
             TextIndent = paraFmt.FirstLineIndentPt * PxPerPoint,
             LineHeight = paraFmt.LineSpacing > 0
                 ? paraFmt.LineSpacing * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
@@ -3267,6 +3273,27 @@ public sealed class DocumentView : RichTextBox
     private static BitmapSource DecodePng(byte[] bytes) => DecodeRaster(bytes);
 
     /// <summary>
+    /// Guarded raster decode for byte payloads that are nominally images but may be undecodable (e.g.
+    /// embedded-object icons): returns null instead of throwing, mirroring <see cref="DecodeImage"/>, so a
+    /// bad payload falls back to a placeholder rather than taking down the whole render.
+    /// </summary>
+    private static BitmapSource? TryDecodeRaster(byte[]? bytes)
+    {
+        if (bytes is null || bytes.Length == 0)
+            return null;
+        try
+        {
+            return DecodeRaster(bytes);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or FileFormatException
+            or System.Runtime.InteropServices.ExternalException or ArgumentException
+            or InvalidOperationException or IOException or OutOfMemoryException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Best-effort render of a WMF/EMF metafile to a WPF <see cref="BitmapSource"/> via GDI+: load the
     /// bytes as a <see cref="System.Drawing.Imaging.Metafile"/>, draw it onto a
     /// <see cref="System.Drawing.Bitmap"/> at the metafile's natural pixel size, then convert that bitmap
@@ -3632,11 +3659,15 @@ public sealed class DocumentView : RichTextBox
         var heightPx = embedded.HeightPt * PxPerPoint;
 
         FrameworkElement content;
-        if (embedded.Icon is { } icon)
+        // The icon bytes are nominally PNG but real OLE objects carry icons in formats WIC cannot decode
+        // (WMF/EMF/uncommon codecs); decode defensively so a bad icon falls back to the ProgID placeholder
+        // instead of throwing NotSupportedException and blanking the whole document.
+        var iconSource = embedded.Icon is { } icon ? TryDecodeRaster(icon.PngBytes) : null;
+        if (iconSource is not null)
         {
             content = new Image
             {
-                Source = DecodePng(icon.PngBytes),
+                Source = iconSource,
                 Stretch = Stretch.Uniform
             };
         }
