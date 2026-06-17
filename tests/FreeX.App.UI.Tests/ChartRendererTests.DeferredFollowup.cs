@@ -131,9 +131,9 @@ public sealed partial class ChartRendererTests
         var bar = model.Series.OfType<RectangleBarSeries>().Single();
         bar.Items.Should().NotBeEmpty();
         var first = bar.Items[0];
-        // Half-width should be ~0.49 (near full slot), not 0.35.
+        // Half-width should be 0.5 (full slot, touching neighbors) so the band reads continuous.
         var halfWidth = (first.X1 - first.X0) / 2.0;
-        halfWidth.Should().BeApproximately(0.49, 1e-6);
+        halfWidth.Should().BeApproximately(0.5, 1e-6);
     }
 
     [Fact]
@@ -211,6 +211,41 @@ public sealed partial class ChartRendererTests
         // The stacked extent must reach ~0.45 (the sum of the non-zero series).
         var maxExtent = bars.SelectMany(b => b.Items).Select(it => Math.Max(it.X0, it.X1)).DefaultIfEmpty(0).Max();
         maxExtent.Should().BeApproximately(0.45, 1e-9);
+    }
+
+    [Fact]
+    public void StackedBar_SingleCell_HonorsValueAxisBounds()
+    {
+        // chart20's value axis is fixed 0..1 (= 0..100%) so a 0.45 bar reads as ~45%, not full width.
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.StackedBar,
+            FirstRowIsHeader = false,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 4, 10), new CellAddress(sheetId, 5, 10)),
+            SeriesColumnMappings =
+            [
+                new ChartSeriesColumnMapping(0, 10),
+                new ChartSeriesColumnMapping(1, 10)
+            ],
+            SeriesPlotOrder = [0, 1],
+            // Value axis is loaded into YAxis* regardless of bar direction.
+            YAxisMinimum = 0,
+            YAxisMaximum = 1
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                NumericCell(4, 10, 0.30, "0.30"),
+                NumericCell(5, 10, 0.15, "0.15")
+            ],
+            [],
+            []));
+
+        var valueAxis = model.Axes.First(a => a.Position == OxyPlot.Axes.AxisPosition.Bottom);
+        valueAxis.Minimum.Should().Be(0);
+        valueAxis.Maximum.Should().Be(1);
     }
 
     [Fact]

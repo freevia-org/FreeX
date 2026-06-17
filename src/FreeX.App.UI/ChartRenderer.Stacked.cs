@@ -246,15 +246,32 @@ public static partial class ChartRenderer
     {
         // One synthetic category (the single progress bar).
         var singleCategory = new List<string> { string.Empty };
+        // The progress-bar value axis is fixed (e.g. 0..1 = 0..100%) in the chart XML; honor it so
+        // the bar reads as its true fraction (~45%) rather than auto-scaling to fill the plot. The
+        // value-axis bounds are loaded into YAxis* regardless of bar direction.
+        var valueAxisMinimum = chart.YAxisMinimum ?? chart.XAxisMinimum ?? double.NaN;
+        var valueAxisMaximum = chart.YAxisMaximum ?? chart.XAxisMaximum ?? double.NaN;
         if (isBar)
         {
             model.Axes.Add(CreateCategoryAxis(AxisPosition.Left, chart.YAxisTitle, singleCategory));
-            model.Axes.Add(new LinearAxis { Position = AxisPosition.Bottom, Title = chart.XAxisTitle });
+            model.Axes.Add(new LinearAxis
+            {
+                Position = AxisPosition.Bottom,
+                Title = chart.XAxisTitle,
+                Minimum = valueAxisMinimum,
+                Maximum = valueAxisMaximum
+            });
         }
         else
         {
             model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, singleCategory));
-            model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
+            model.Axes.Add(new LinearAxis
+            {
+                Position = AxisPosition.Left,
+                Title = chart.YAxisTitle,
+                Minimum = valueAxisMinimum,
+                Maximum = valueAxisMaximum
+            });
         }
 
         // Sum for percent-stacked normalization (each row is one segment in the single category).

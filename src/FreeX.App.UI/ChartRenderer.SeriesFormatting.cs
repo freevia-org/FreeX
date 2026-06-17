@@ -59,7 +59,9 @@ public static partial class ChartRenderer
 
     private static double ColumnBarHalfWidth(ChartModel chart) =>
         chart.BarGapWidth is int gapWidth
-            ? Math.Clamp(0.5 * 100.0 / (100.0 + gapWidth), 0.05, 0.49)
+            // gapWidth=0 ⇒ half-width 0.5 so adjacent category bars touch (Excel's continuous look,
+            // e.g. a shaded target band). Larger gapWidth narrows the bar toward the category centre.
+            ? Math.Clamp(0.5 * 100.0 / (100.0 + gapWidth), 0.05, 0.5)
             : 0.35;
 
     /// <summary>
