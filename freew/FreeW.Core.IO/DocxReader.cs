@@ -1159,9 +1159,14 @@ public static class DocxReader
         var widthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
         var heightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
 
+        // Recover the image's original format so non-PNG pictures round-trip verbatim. Prefer the media
+        // part's extension (the relationship target carries the real extension), falling back to the bytes'
+        // magic number when the extension is unknown/absent.
+        var format = ResolveImageFormat(target, bytes);
+
         // Restore accessibility alt text from wp:docPr/@descr; absent attribute leaves AltText null.
         var descr = container.Element(Wp + "docPr")?.Attribute("descr")?.Value;
-        var image = new InlineImage(bytes, widthPt, heightPt)
+        var image = new InlineImage(bytes, widthPt, heightPt, format)
         {
             AltText = string.IsNullOrEmpty(descr) ? null : descr,
         };
@@ -1367,7 +1372,7 @@ public static class DocxReader
             && LoadMedia(archive, iconPath) is { } iconBytes)
         {
             var (iconWidthPt, iconHeightPt) = ParseVmlShapeSize(shape!.Attribute("style")?.Value);
-            embedded.Icon = new InlineImage(iconBytes, iconWidthPt, iconHeightPt);
+            embedded.Icon = new InlineImage(iconBytes, iconWidthPt, iconHeightPt, ResolveImageFormat(iconPath, iconBytes));
             embedded.WidthPt = iconWidthPt;
             embedded.HeightPt = iconHeightPt;
         }
@@ -1722,6 +1727,19 @@ public static class DocxReader
         using var buffer = new MemoryStream();
         entryStream.CopyTo(buffer);
         return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// Resolves an image's <see cref="ImageFormat"/> from its media-part path and bytes. The part name (the
+    /// relationship target) carries the real extension, so it is preferred; when the extension is unknown or
+    /// absent the bytes' magic number is used (see <see cref="InlineImage.DetectFormat"/>), which also gives
+    /// a usable default for empty data.
+    /// </summary>
+    private static ImageFormat ResolveImageFormat(string partPath, byte[] bytes)
+    {
+        var dot = partPath.LastIndexOf('.');
+        var ext = dot >= 0 ? partPath[(dot + 1)..] : null;
+        return InlineImage.FormatForExtension(ext) ?? InlineImage.DetectFormat(bytes);
     }
 
     internal static ParagraphFormatting ReadParagraphFormatting(XElement pPr) =>

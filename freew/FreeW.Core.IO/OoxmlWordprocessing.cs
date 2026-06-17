@@ -222,6 +222,23 @@ internal static class Ooxml
     public const string ThemeRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
     public const string ThemePartName = "/word/theme/theme1.xml";
 
+    /// <summary>
+    /// The OPC content type for a media-part image extension (png/jpeg/gif/bmp/tiff/emf/wmf), used to emit the
+    /// matching <c>[Content_Types].xml</c> Default for each image format a document actually carries. The
+    /// extension is the lower-case file extension (no dot) produced by <c>InlineImage.ExtensionFor</c>.
+    /// Defaults to <c>image/png</c> for an unrecognised extension (the historical behaviour).
+    /// </summary>
+    public static string ImageContentTypeForExtension(string extension) => extension switch
+    {
+        "jpeg" or "jpg" => "image/jpeg",
+        "gif" => "image/gif",
+        "bmp" => "image/bmp",
+        "tiff" or "tif" => "image/tiff",
+        "emf" => "image/x-emf",
+        "wmf" => "image/x-wmf",
+        _ => "image/png"
+    };
+
     /// <summary>W3CDTF as used by dcterms:created/modified (UTC, second precision, trailing 'Z').</summary>
     public static string ToW3CDtf(DateTimeOffset value) =>
         value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
