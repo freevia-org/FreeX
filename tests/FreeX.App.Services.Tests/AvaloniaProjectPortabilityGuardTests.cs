@@ -18,6 +18,7 @@ public sealed class AvaloniaProjectPortabilityGuardTests
 
     private static readonly string[] AllowedProjectReferences =
     [
+        "FreeX.App.Presentation",
         "FreeX.App.Services",
         "FreeX.Core.Calc",
         "FreeX.Core.Commands",

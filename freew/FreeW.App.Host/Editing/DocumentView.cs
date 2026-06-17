@@ -2012,6 +2012,46 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Marks <paramref name="term"/> for the document index (appends it to
+    /// <see cref="TextDocument.IndexEntries"/>). Blank terms and exact case-insensitive duplicates are
+    /// ignored so the side-store stays clean; the generated index also de-duplicates. Does not touch the
+    /// visible flow.
+    /// </summary>
+    public void MarkIndexEntry(string term)
+    {
+        CommitToModel();
+        var trimmed = term?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0)
+            return;
+        if (_model.IndexEntries.Any(e => string.Equals(e.Term, trimmed, StringComparison.OrdinalIgnoreCase)))
+            return;
+        _model.IndexEntries.Add(new IndexEntry(trimmed));
+    }
+
+    /// <summary>
+    /// Insert an index generated from the document's marked <see cref="TextDocument.IndexEntries"/> at the
+    /// caret's block (else at the document end), routed one-by-one through the undo/redo bus so the insert
+    /// is reversible — mirroring <see cref="InsertBibliography"/>. The paragraphs carry dedicated index
+    /// styles (registered via <see cref="DocumentIndex.EnsureStyles"/>) which both give them distinct
+    /// formatting and mark the region.
+    /// </summary>
+    public void InsertIndex()
+    {
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+        DocumentIndex.EnsureStyles(_model);
+
+        // Insert at the caret's block (an index reads as back-matter); fall back to the document end.
+        var index = CaretBlockIndex();
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+
+        var entries = DocumentIndex.Build(_model);
+        foreach (var paragraph in entries)
+            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+    }
+
+    /// <summary>
     /// True when the caret currently sits inside a table block. Used by the Insert Caption command to
     /// default the caption label to <see cref="CaptionLabel.Table"/> for tables (else Figure).
     /// </summary>

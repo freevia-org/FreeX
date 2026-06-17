@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
+    <ProjectReference Include="..\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
+    <ProjectReference Include="..\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
+  </ItemGroup>
+
+</Project>

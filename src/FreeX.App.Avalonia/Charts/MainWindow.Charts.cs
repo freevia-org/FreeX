@@ -1,0 +1,239 @@
+using System.Globalization;
+
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Media;
+
+using FreeX.App.Avalonia.Charts;
+using FreeX.App.Presentation.Charts;
+using FreeX.Core.Model;
+
+using AvaloniaGrid = Avalonia.Controls.Grid;
+
+namespace FreeX.App.Avalonia;
+
+public sealed partial class MainWindow
+{
+    private static readonly AvaloniaTextMeasurer ChartTextMeasurer = new();
+
+    /// <summary>
+    /// Adds chart visuals for the active sheet's <see cref="ChartModel"/>s to the drawing-object
+    /// overlay. Charts are not projected into <see cref="ViewportModel.DrawingObjects"/> by the
+    /// viewport service, so they are resolved here directly from the sheet, laid out by the portable
+    /// <see cref="ChartLayoutEngine"/>, painted by <see cref="AvaloniaChartRenderer"/>, and made
+    /// selectable like other drawing objects.
+    /// </summary>
+    private void AddChartOverlays(Canvas overlay, ViewportModel viewport)
+    {
+        var sheet = _session.ActiveSheet;
+        if (sheet.Charts.Count == 0)
+            return;
+
+        var showHeadings = sheet.ShowHeadings;
+        var zoomFactor = GetActiveZoomFactor();
+        var accessor = BuildChartCellAccessor(viewport, sheet.Id);
+        var headerLeft = showHeadings ? HeaderColumnWidth * zoomFactor : 0;
+        var headerTop = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+
+        foreach (var chart in sheet.Charts)
+        {
+            if (!chart.IsVisible || !ChartLayoutEngine.IsSupported(chart.Type))
+                continue;
+
+            var width = Math.Max(1, chart.Width * zoomFactor);
+            var height = Math.Max(1, chart.Height * zoomFactor);
+
+            // The chart's on-sheet pixel box maps into a local canvas (origin 0,0). Inset the plot
+            // area so axis tick labels and the title have room inside the box.
+            var inset = Math.Min(28 * zoomFactor, Math.Min(width, height) / 4);
+            var plotArea = new PlotRect(inset, inset, Math.Max(1, width - (2 * inset)), Math.Max(1, height - (2 * inset)));
+
+            var request = AvaloniaChartRequestBuilder.TryBuild(chart, plotArea, accessor, ChartTextMeasurer);
+            if (request is null)
+                continue;
+
+            Control visual;
+            try
+            {
+                var layout = ChartLayoutEngine.Layout(request);
+                var renderer = new AvaloniaChartRenderer(chart, _session.Workbook.Theme);
+                visual = renderer.Render(layout, width, height);
+            }
+            catch (NotSupportedException)
+            {
+                continue;
+            }
+
+            var container = CreateSelectableChartContainer(chart, visual, width, height);
+            // Chart Left/Top are sheet-absolute pixels; positioning is exact at the scroll origin and
+            // tracks the grid origin otherwise (the viewport does not expose the scrolled sheet offset).
+            Canvas.SetLeft(container, headerLeft + (chart.Left * zoomFactor));
+            Canvas.SetTop(container, headerTop + (chart.Top * zoomFactor));
+            overlay.Children.Add(container);
+        }
+    }
+
+    private Control CreateSelectableChartContainer(ChartModel chart, Control visual, double width, double height)
+    {
+        var selected = IsSelectedChart(chart);
+        var container = new AvaloniaGrid
+        {
+            Width = Math.Max(1, width),
+            Height = Math.Max(1, height),
+            Background = Brushes.Transparent,
+            ClipToBounds = false,
+            Cursor = new Cursor(StandardCursorType.Hand),
+            Focusable = true,
+        };
+
+        AutomationProperties.SetAutomationId(container, $"Chart{chart.Id:N}");
+        AutomationProperties.SetName(container, $"Chart {ChartDisplayName(chart)}");
+        AutomationProperties.SetHelpText(container, "Selects this chart in the workbook viewport.");
+        AutomationProperties.SetItemStatus(container, selected ? "Selected" : "Not selected");
+
+        container.PointerPressed += (_, args) =>
+        {
+            if (args.GetCurrentPoint(container).Properties.IsLeftButtonPressed)
+            {
+                SelectChart(chart);
+                args.Handled = true;
+            }
+        };
+        container.KeyDown += (_, args) =>
+        {
+            if (args.Key is Key.Enter or Key.Space)
+            {
+                SelectChart(chart);
+                args.Handled = true;
+            }
+        };
+
+        container.Children.Add(visual);
+        if (selected)
+            container.Children.Add(CreateSelectedDrawingObjectAdorner());
+
+        return container;
+    }
+
+    private void SelectChart(ChartModel chart)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        _selectedDrawingObjectKind = SelectionPaneObjectKind.Chart;
+        _selectedDrawingObjectId = chart.Id;
+        RefreshShell($"Selected Chart: {ChartDisplayName(chart)}");
+    }
+
+    private bool IsSelectedChart(ChartModel chart) =>
+        _selectedDrawingObjectKind == SelectionPaneObjectKind.Chart &&
+        _selectedDrawingObjectId == chart.Id;
+
+    private static string ChartDisplayName(ChartModel chart) =>
+        !string.IsNullOrWhiteSpace(chart.Name) ? chart.Name!
+        : !string.IsNullOrWhiteSpace(chart.Title) ? chart.Title!
+        : "Chart";
+
+    /// <summary>
+    /// Inserts a chart of <paramref name="chartType"/> over the current selection through the shared
+    /// session command path, reusing the Core <see cref="FreeX.Core.Commands.AddChartCommand"/> the
+    /// chart overlay paints from <c>ActiveSheet.Charts</c>. The selection is the chart's data range; the
+    /// chart lands at the factory's default on-sheet position. Surfaces the Core guard message (e.g.
+    /// "must include at least one data series") on failure rather than silently no-opping.
+    /// </summary>
+    private void InsertChartFromSelection(ChartType chartType)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var range = _session.SelectedRange;
+        var command = InsertChartCommandFactory.Build(_session.ActiveSheet.Id, range, chartType);
+        var result = _session.ExecuteReviewCommand(command);
+        if (!result.Success)
+        {
+            RefreshShell(result.ErrorMessage ?? "Insert Chart failed.");
+            return;
+        }
+
+        ClearSelectedDrawingObject();
+        RefreshShell(string.Create(
+            CultureInfo.InvariantCulture,
+            $"Inserted {chartType} chart from {FormatCellReference(range.Start)}"));
+    }
+
+    /// <summary>
+    /// Builds a cell accessor over the viewport's chart-data cells (and visible cells as a fallback),
+    /// mirroring the desktop renderer's chart cell lookup + numeric coercion.
+    /// </summary>
+    private static AvaloniaChartRequestBuilder.ChartCellAccessor BuildChartCellAccessor(
+        ViewportModel viewport,
+        SheetId sheetId)
+    {
+        var lookup = new Dictionary<(uint Row, uint Col), (double? Value, string Text)>();
+
+        if (viewport.ChartDataCells is { Count: > 0 })
+        {
+            foreach (var cell in viewport.ChartDataCells)
+            {
+                if (cell.SheetId != sheetId)
+                    continue;
+                lookup[(cell.Row, cell.Col)] = (TryGetChartNumericValue(cell.RawValue, cell.DisplayText, out var v) ? v : null, cell.DisplayText);
+            }
+        }
+
+        if (viewport.Cells is { Count: > 0 })
+        {
+            foreach (var cell in viewport.Cells)
+            {
+                var key = (cell.Row, cell.Col);
+                if (lookup.ContainsKey(key))
+                    continue;
+                lookup[key] = (TryGetChartNumericValue(cell.RawValue, cell.DisplayText, out var v) ? v : null, cell.DisplayText);
+            }
+        }
+
+        return (uint row, uint col, out double value, out string displayText) =>
+        {
+            if (lookup.TryGetValue((row, col), out var entry))
+            {
+                displayText = entry.Text;
+                if (entry.Value is { } v)
+                {
+                    value = v;
+                    return true;
+                }
+
+                value = 0;
+                return false;
+            }
+
+            value = 0;
+            displayText = "";
+            return false;
+        };
+    }
+
+    /// <summary>
+    /// Extracts a finite numeric value from a cell (number / date / bool, then a parse of the display
+    /// text), mirroring the desktop renderer's chart-value coercion.
+    /// </summary>
+    private static bool TryGetChartNumericValue(ScalarValue? rawValue, string displayText, out double value)
+    {
+        switch (rawValue)
+        {
+            case NumberValue number:
+                value = number.Value;
+                return double.IsFinite(value);
+            case DateTimeValue dateTime:
+                value = dateTime.Value;
+                return double.IsFinite(value);
+            case BoolValue boolean:
+                value = boolean.Value ? 1 : 0;
+                return true;
+        }
+
+        return double.TryParse(displayText, NumberStyles.Any, CultureInfo.InvariantCulture, out value)
+            && double.IsFinite(value);
+    }
+}

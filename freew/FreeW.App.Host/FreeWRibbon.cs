@@ -119,6 +119,8 @@ internal static class FreeWRibbon
                     g.Button("freew.bibliography", "Bibliography");
                     g.Button("freew.caption", "Caption");
                     g.Button("freew.cross-reference", "Cross-reference");
+                    g.Button("freew.index-mark", "Mark Entry");
+                    g.Button("freew.index-insert", "Insert Index");
                 });
                 tab.Group("controls", "Controls", "O", 62, g =>
                 {

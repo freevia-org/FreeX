@@ -32,7 +32,7 @@ using CellVAlign = FreeX.Core.Model.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
-public sealed class MainWindow : Window
+public sealed partial class MainWindow : Window
 {
     private enum CellBorderEdge
     {
@@ -421,6 +421,12 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _goToSpecialMenuItem = new();
     private readonly NativeMenuItem _openHyperlinkMenuItem = new();
     private readonly NativeMenuItem _insertHyperlinkMenuItem = new();
+    private readonly NativeMenuItem _insertColumnChartMenuItem = new();
+    private readonly NativeMenuItem _insertBarChartMenuItem = new();
+    private readonly NativeMenuItem _insertLineChartMenuItem = new();
+    private readonly NativeMenuItem _insertPieChartMenuItem = new();
+    private readonly NativeMenuItem _insertAreaChartMenuItem = new();
+    private readonly NativeMenuItem _insertScatterChartMenuItem = new();
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
@@ -428,6 +434,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _advancedFilterMenuItem = new();
     private readonly NativeMenuItem _removeDuplicatesMenuItem = new();
     private readonly NativeMenuItem _subtotalMenuItem = new();
+    private readonly NativeMenuItem _textToColumnsMenuItem = new();
+    private readonly NativeMenuItem _consolidateMenuItem = new();
     private readonly NativeMenuItem _dataValidationPreviewMenuItem = new();
     private readonly NativeMenuItem _dataValidationMenuItem = new();
     private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();
@@ -441,6 +449,10 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _previousNoteMenuItem = new();
     private readonly NativeMenuItem _nextCommentMenuItem = new();
     private readonly NativeMenuItem _previousCommentMenuItem = new();
+    private readonly NativeMenuItem _insertFunctionMenuItem = new();
+    private readonly NativeMenuItem _nameManagerMenuItem = new();
+    private readonly NativeMenuItem _defineNameMenuItem = new();
+    private readonly NativeMenuItem _createNamesFromSelectionMenuItem = new();
     private readonly NativeMenuItem _autoSumMenuItem = new();
     private readonly NativeMenuItem _autoSumSumMenuItem = new();
     private readonly NativeMenuItem _autoSumAverageMenuItem = new();
@@ -506,6 +518,9 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _freezeFirstColumnMenuItem = new();
     private readonly NativeMenuItem _unfreezePanesMenuItem = new();
     private readonly NativeMenuItem _showFormulasMenuItem = new();
+    private readonly NativeMenuItem _pageSetupMenuItem = new();
+    private readonly NativeMenuItem _printPreviewMenuItem = new();
+    private readonly NativeMenuItem _pageBreakPreviewMenuItem = new();
     private readonly NativeMenuItem _minimizeWindowMenuItem = new();
     private readonly NativeMenuItem _zoomWindowMenuItem = new();
     private readonly NativeMenuItem _bringAllToFrontMenuItem = new();
@@ -519,6 +534,8 @@ public sealed class MainWindow : Window
     private WorkbookSession _session;
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
+    private IReadOnlyDictionary<(uint Row, uint Col), (IReadOnlyList<double> Values, SparklineKind Kind)> _sparklinesByCell =
+        new Dictionary<(uint Row, uint Col), (IReadOnlyList<double>, SparklineKind)>();
     private string? _formulaBoxEditOriginalText;
     private bool _isOpening;
     private bool _isSaving;
@@ -569,7 +586,11 @@ public sealed class MainWindow : Window
     {
         var root = new DockPanel();
 
-        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(() => _session, RefreshShell);
+        var ribbon = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
+            () => _session,
+            RefreshShell,
+            openTextToColumns: TextToColumns,
+            openConsolidate: Consolidate);
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
@@ -580,6 +601,10 @@ public sealed class MainWindow : Window
         var sheetTabs = BuildSheetTabsChrome();
         DockPanel.SetDock(sheetTabs, Dock.Bottom);
         root.Children.Add(sheetTabs);
+
+        var pivotFieldPane = BuildPivotFieldPaneChrome();
+        DockPanel.SetDock(pivotFieldPane, Dock.Right);
+        root.Children.Add(pivotFieldPane);
 
         root.Children.Add(BuildWorksheetViewportChrome());
 
@@ -766,6 +791,13 @@ public sealed class MainWindow : Window
         _exportPdfMenuItem.Header = "Export to PDF...";
         _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
 
+        _pageSetupMenuItem.Header = "Page Setup...";
+        _pageSetupMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
+
+        _printPreviewMenuItem.Header = "Print Preview...";
+        _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
+        _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
+
         _shareWorkbookMenuItem.Header = "Share Workbook...";
         _shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();
 
@@ -867,6 +899,19 @@ public sealed class MainWindow : Window
         _insertHyperlinkMenuItem.Header = "Hyperlink...";
         _insertHyperlinkMenuItem.Click += async (_, _) => await ShowInsertHyperlinkDialogAsync();
 
+        _insertColumnChartMenuItem.Header = "Column Chart";
+        _insertColumnChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Column);
+        _insertBarChartMenuItem.Header = "Bar Chart";
+        _insertBarChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Bar);
+        _insertLineChartMenuItem.Header = "Line Chart";
+        _insertLineChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Line);
+        _insertPieChartMenuItem.Header = "Pie Chart";
+        _insertPieChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Pie);
+        _insertAreaChartMenuItem.Header = "Area Chart";
+        _insertAreaChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Area);
+        _insertScatterChartMenuItem.Header = "Scatter Chart";
+        _insertScatterChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Scatter);
+
         _sortAscendingMenuItem.Header = "Sort A to Z";
         _sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);
 
@@ -888,6 +933,12 @@ public sealed class MainWindow : Window
 
         _subtotalMenuItem.Header = "Subtotal...";
         _subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();
+
+        _textToColumnsMenuItem.Header = "Text to Columns...";
+        _textToColumnsMenuItem.Click += async (_, _) => await ShowTextToColumnsDialogAsync();
+
+        _consolidateMenuItem.Header = "Consolidate...";
+        _consolidateMenuItem.Click += async (_, _) => await ShowConsolidateDialogAsync();
 
         _dataValidationPreviewMenuItem.Header = "Data Validation Preview...";
         _dataValidationPreviewMenuItem.Click += async (_, _) => await ShowDataValidationPreviewDialogAsync();
@@ -927,6 +978,19 @@ public sealed class MainWindow : Window
 
         _previousCommentMenuItem.Header = "Previous Comment";
         _previousCommentMenuItem.Click += (_, _) => NavigateReviewThreadedComment(previous: true);
+
+        _insertFunctionMenuItem.Header = "Insert Function...";
+        _insertFunctionMenuItem.Gesture = new KeyGesture(Key.F3, KeyModifiers.Shift);
+        _insertFunctionMenuItem.Click += (_, _) => InsertFunction();
+
+        _nameManagerMenuItem.Header = "Name Manager...";
+        _nameManagerMenuItem.Click += (_, _) => NameManager();
+
+        _defineNameMenuItem.Header = "Define Name...";
+        _defineNameMenuItem.Click += (_, _) => DefineName();
+
+        _createNamesFromSelectionMenuItem.Header = "Create from Selection...";
+        _createNamesFromSelectionMenuItem.Click += (_, _) => CreateNamesFromSelection();
 
         _autoSumMenuItem.Header = "AutoSum";
         _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
@@ -1142,6 +1206,10 @@ public sealed class MainWindow : Window
         _showFormulasMenuItem.ToggleType = MenuItemToggleType.CheckBox;
         _showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();
 
+        _pageBreakPreviewMenuItem.Header = "Page Break Preview";
+        _pageBreakPreviewMenuItem.ToggleType = MenuItemToggleType.CheckBox;
+        _pageBreakPreviewMenuItem.Click += (_, _) => TogglePageBreakPreview();
+
         _helpOnlineMenuItem.Header = "Help Online";
         _helpOnlineMenuItem.Gesture = new KeyGesture(Key.F1, default);
         _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
@@ -1189,6 +1257,9 @@ public sealed class MainWindow : Window
         fileMenu.Items.Add(_shareWorkbookMenuItem);
         fileMenu.Items.Add(_workbookStatisticsMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
+        fileMenu.Items.Add(_pageSetupMenuItem);
+        fileMenu.Items.Add(_printPreviewMenuItem);
+        fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_closeWorkbookMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_quitMenuItem);
@@ -1217,6 +1288,14 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_fillCellsMenuItem);
         editMenu.Items.Add(_clearMenuItem);
 
+        var insertMenu = new NativeMenu();
+        insertMenu.Items.Add(_insertColumnChartMenuItem);
+        insertMenu.Items.Add(_insertBarChartMenuItem);
+        insertMenu.Items.Add(_insertLineChartMenuItem);
+        insertMenu.Items.Add(_insertPieChartMenuItem);
+        insertMenu.Items.Add(_insertAreaChartMenuItem);
+        insertMenu.Items.Add(_insertScatterChartMenuItem);
+
         var dataMenu = new NativeMenu();
         dataMenu.Items.Add(_sortAscendingMenuItem);
         dataMenu.Items.Add(_sortDescendingMenuItem);
@@ -1226,11 +1305,21 @@ public sealed class MainWindow : Window
         dataMenu.Items.Add(_removeDuplicatesMenuItem);
         dataMenu.Items.Add(_subtotalMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
+        dataMenu.Items.Add(_textToColumnsMenuItem);
+        dataMenu.Items.Add(_consolidateMenuItem);
+        dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_dataValidationPreviewMenuItem);
         dataMenu.Items.Add(_dataValidationMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_whatIfAnalysisMenuItem);
         dataMenu.Items.Add(_forecastSheetMenuItem);
+
+        var formulasMenu = new NativeMenu();
+        formulasMenu.Items.Add(_insertFunctionMenuItem);
+        formulasMenu.Items.Add(new NativeMenuItemSeparator());
+        formulasMenu.Items.Add(_nameManagerMenuItem);
+        formulasMenu.Items.Add(_defineNameMenuItem);
+        formulasMenu.Items.Add(_createNamesFromSelectionMenuItem);
 
         var reviewMenu = new NativeMenu();
         reviewMenu.Items.Add(_reviewSummaryMenuItem);
@@ -1297,6 +1386,7 @@ public sealed class MainWindow : Window
         viewMenu.Items.Add(_unfreezePanesMenuItem);
         viewMenu.Items.Add(new NativeMenuItemSeparator());
         viewMenu.Items.Add(_showFormulasMenuItem);
+        viewMenu.Items.Add(_pageBreakPreviewMenuItem);
 
         var sheetMenu = new NativeMenu();
         sheetMenu.Items.Add(_newSheetMenuItem);
@@ -1340,8 +1430,18 @@ public sealed class MainWindow : Window
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
+            Header = "Insert",
+            Menu = insertMenu,
+        });
+        _nativeMenu.Items.Add(new NativeMenuItem
+        {
             Header = "Data",
             Menu = dataMenu,
+        });
+        _nativeMenu.Items.Add(new NativeMenuItem
+        {
+            Header = "Formulas",
+            Menu = formulasMenu,
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -1865,6 +1965,7 @@ public sealed class MainWindow : Window
             : Brush(67, 113, 83);
         Title = $"FreeX - {FormatWindowWorkbookTitle()}{(_session.IsDirty ? " *" : "")}";
         UpdateViewportScrollBars();
+        RefreshPivotFieldPane();
         UpdateSaveButton();
     }
 
@@ -1993,6 +2094,12 @@ public sealed class MainWindow : Window
         _goToSpecialMenuItem.IsEnabled = isIdle;
         _openHyperlinkMenuItem.IsEnabled = isIdle && _session.CanOpenSelectedHyperlink;
         _insertHyperlinkMenuItem.IsEnabled = isIdle;
+        _insertColumnChartMenuItem.IsEnabled = isIdle;
+        _insertBarChartMenuItem.IsEnabled = isIdle;
+        _insertLineChartMenuItem.IsEnabled = isIdle;
+        _insertPieChartMenuItem.IsEnabled = isIdle;
+        _insertAreaChartMenuItem.IsEnabled = isIdle;
+        _insertScatterChartMenuItem.IsEnabled = isIdle;
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
@@ -2000,6 +2107,8 @@ public sealed class MainWindow : Window
         _advancedFilterMenuItem.IsEnabled = isIdle;
         _removeDuplicatesMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
         _subtotalMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;
+        _textToColumnsMenuItem.IsEnabled = isIdle && _session.SelectedRange.ColCount == 1;
+        _consolidateMenuItem.IsEnabled = isIdle;
         _dataValidationPreviewMenuItem.IsEnabled = isIdle;
         _dataValidationMenuItem.IsEnabled = isIdle;
         _whatIfAnalysisMenuItem.IsEnabled = isIdle;
@@ -2013,6 +2122,10 @@ public sealed class MainWindow : Window
         _previousNoteMenuItem.IsEnabled = isIdle;
         _nextCommentMenuItem.IsEnabled = isIdle;
         _previousCommentMenuItem.IsEnabled = isIdle;
+        _insertFunctionMenuItem.IsEnabled = isIdle;
+        _nameManagerMenuItem.IsEnabled = isIdle;
+        _defineNameMenuItem.IsEnabled = isIdle;
+        _createNamesFromSelectionMenuItem.IsEnabled = isIdle;
         _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumAverageMenuItem.IsEnabled = _autoSumButton.IsEnabled;
@@ -2080,6 +2193,10 @@ public sealed class MainWindow : Window
         _unfreezePanesMenuItem.IsEnabled = isIdle;
         _showFormulasMenuItem.IsEnabled = isIdle;
         _showFormulasMenuItem.IsChecked = _session.IsShowingFormulas;
+        _pageSetupMenuItem.IsEnabled = isIdle;
+        _printPreviewMenuItem.IsEnabled = isIdle;
+        _pageBreakPreviewMenuItem.IsEnabled = isIdle;
+        _pageBreakPreviewMenuItem.IsChecked = _isPageBreakPreviewActive;
     }
 
     private int FindActiveSheetTabIndex()
@@ -2278,6 +2395,7 @@ public sealed class MainWindow : Window
         var zoomFactor = GetActiveZoomFactor();
         var headerOffset = showHeadings ? 1 : 0;
         var cellsByAddress = viewport.Cells.ToDictionary(cell => (cell.Row, cell.Col));
+        _sparklinesByCell = BuildSparklineCellLookup(_session.ActiveSheet);
         var grid = new AvaloniaGrid
         {
             Background = Brushes.White,
@@ -2327,18 +2445,25 @@ public sealed class MainWindow : Window
 
         var overlay = BuildDrawingObjectOverlay(viewport);
         AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
-        if (overlay.Children.Count == 0)
+
+        var pageBreakOverlay = _isPageBreakPreviewActive
+            ? BuildPageBreakPreviewOverlay(viewport, showHeadings, zoomFactor)
+            : null;
+
+        if (overlay.Children.Count == 0 && pageBreakOverlay is null)
             return grid;
 
-        return new AvaloniaGrid
+        var composite = new AvaloniaGrid
         {
             ClipToBounds = true,
-            Children =
-            {
-                grid,
-                overlay,
-            },
+            Children = { grid },
         };
+        if (pageBreakOverlay is not null)
+            composite.Children.Add(pageBreakOverlay);
+        if (overlay.Children.Count > 0)
+            composite.Children.Add(overlay);
+
+        return composite;
     }
 
     private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)
@@ -2352,6 +2477,15 @@ public sealed class MainWindow : Window
             ClipToBounds = true,
             IsHitTestVisible = true,
         };
+
+        // Charts live on the sheet (not projected into viewport.DrawingObjects), so paint them first —
+        // before the drawing-object early-out — so a chart renders even when no other objects exist.
+        AddChartOverlays(overlay, viewport);
+
+        // Slicers and timelines are positioned drawing objects connected at the workbook level
+        // (not projected into viewport.DrawingObjects), so paint them here — before the
+        // drawing-object early-out — so they render even when no other objects exist.
+        AddSlicerTimelineOverlays(overlay, viewport);
 
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;
@@ -2985,6 +3119,30 @@ public sealed class MainWindow : Window
             selected: false,
             zoomFactor: zoomFactor);
 
+    /// <summary>
+    /// Reads every sparkline on <paramref name="sheet"/> into a per-cell lookup keyed by its anchor
+    /// <see cref="SparklineModel.Location"/>, using the same numeric series read as the Windows host
+    /// (<see cref="SparklineRenderPlanner.BuildValues"/>). Empty series are dropped so cells without
+    /// drawable data don't get an empty panel.
+    /// </summary>
+    private static IReadOnlyDictionary<(uint Row, uint Col), (IReadOnlyList<double> Values, SparklineKind Kind)> BuildSparklineCellLookup(Sheet sheet)
+    {
+        var lookup = new Dictionary<(uint Row, uint Col), (IReadOnlyList<double>, SparklineKind)>();
+        if (sheet.Sparklines.Count == 0)
+            return lookup;
+
+        var values = SparklineRenderPlanner.BuildValues(sheet);
+        foreach (var sparkline in sheet.Sparklines)
+        {
+            if (!values.TryGetValue(sparkline.Id, out var series) || series.Count == 0)
+                continue;
+
+            lookup[(sparkline.Location.Row, sparkline.Location.Col)] = (series, sparkline.Kind);
+        }
+
+        return lookup;
+    }
+
     private Border CreateCell(DisplayCell cell, uint row, uint col, double zoomFactor, double cellWidth, double cellHeight)
     {
         var hasCell = cell.Row != 0 && cell.Col != 0;
@@ -3029,6 +3187,19 @@ public sealed class MainWindow : Window
         var indentPadding = GetCellIndentPadding(style);
         var textRotation = style?.TextRotation ?? CellStyle.Default.TextRotation;
 
+        // Highlight and color-scale rules are already baked into cell.Style (fill/font) by the
+        // engine, so they ride along with the background/foreground above. Data bars and icon sets
+        // arrive as separate engine results on the DisplayCell; the portable planner turns each into
+        // a framework-neutral render instruction that the cell content layer draws.
+        var dataBar = ConditionalFormatCellRenderPlanner.PlanDataBar(cell.ConditionalDataBar);
+        var icon = ConditionalFormatCellRenderPlanner.PlanIcon(cell.ConditionalIcon);
+
+        // Sparklines live per-cell on the sheet (keyed by Location). When one anchors here, build a
+        // binding-free panel that paints the series geometry behind the cell text.
+        var sparklineLayer = _sparklinesByCell.TryGetValue((row, col), out var sparkline)
+            ? new SparklineCellPanel(sparkline.Values, sparkline.Kind)
+            : null;
+
         return CreateInteractiveCellBorder(
             cell.DisplayText,
             background,
@@ -3050,7 +3221,10 @@ public sealed class MainWindow : Window
             cellHeight,
             horizontalAlignment,
             verticalAlignmentModel,
-            isNumeric);
+            isNumeric,
+            dataBar,
+            icon,
+            sparklineLayer);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -3074,7 +3248,10 @@ public sealed class MainWindow : Window
         double cellHeight = 20,
         CellHAlign horizontalAlignment = CellHAlign.General,
         CellVAlign? verticalAlignmentModel = null,
-        bool isNumeric = false)
+        bool isNumeric = false,
+        CfDataBarRenderInstruction? conditionalDataBar = null,
+        CfIconRenderInstruction? conditionalIcon = null,
+        Control? sparklineLayer = null)
     {
         var border = CreateCellBorder(
             text,
@@ -3097,7 +3274,10 @@ public sealed class MainWindow : Window
             cellHeight,
             horizontalAlignment,
             verticalAlignmentModel,
-            isNumeric);
+            isNumeric,
+            conditionalDataBar,
+            conditionalIcon,
+            sparklineLayer);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -3218,7 +3398,10 @@ public sealed class MainWindow : Window
         double cellHeight = 20,
         CellHAlign horizontalAlignment = CellHAlign.General,
         CellVAlign? verticalAlignmentModel = null,
-        bool isNumeric = false)
+        bool isNumeric = false,
+        CfDataBarRenderInstruction? conditionalDataBar = null,
+        CfIconRenderInstruction? conditionalIcon = null,
+        Control? sparklineLayer = null)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -3254,7 +3437,7 @@ public sealed class MainWindow : Window
                 textRotation,
                 effectiveTextWrapping,
                 style)
-            : CreateDefaultCellContent(textBlock, style);
+            : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding, sparklineLayer);
 
         return new Border
         {
@@ -3266,12 +3449,110 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static AvaloniaGrid CreateDefaultCellContent(TextBlock textBlock, CellStyle? style)
+    private static AvaloniaGrid CreateDefaultCellContent(
+        TextBlock textBlock,
+        CellStyle? style,
+        CfDataBarRenderInstruction? conditionalDataBar = null,
+        CfIconRenderInstruction? conditionalIcon = null,
+        double zoomFactor = 1,
+        double scaledIndentPadding = 0,
+        Control? sparklineLayer = null)
     {
         var content = new AvaloniaGrid { ClipToBounds = true };
+
+        // Sparklines and data bars render behind the text; add them first so they sit at the bottom
+        // of the z-order.
+        if (sparklineLayer is not null)
+            content.Children.Add(sparklineLayer);
+
+        // Data bars render behind the text; add them first so they sit at the bottom of the z-order.
+        if (conditionalDataBar is { } bar)
+            content.Children.Add(CreateConditionalDataBarLayer(bar, zoomFactor));
+
+        // Icon-set glyphs occupy a left gutter and push the cell text right by the gutter width.
+        if (conditionalIcon is { } icon)
+        {
+            var gutter = icon.TextGutter * zoomFactor;
+            if (gutter > 0)
+            {
+                var existing = textBlock.Margin;
+                textBlock.Margin = new Thickness(
+                    Math.Max(existing.Left, gutter + scaledIndentPadding),
+                    existing.Top,
+                    existing.Right,
+                    existing.Bottom);
+            }
+        }
+
         content.Children.Add(textBlock);
+
+        if (conditionalIcon is { } iconGlyph)
+            content.Children.Add(CreateConditionalIconLayer(iconGlyph, zoomFactor));
+
         AddStyledCellBorderOverlay(content, style);
         return content;
+    }
+
+    private static Control CreateConditionalDataBarLayer(CfDataBarRenderInstruction bar, double zoomFactor)
+    {
+        var horizontalInset = bar.HorizontalInset * zoomFactor;
+        var verticalInset = bar.VerticalInset * zoomFactor;
+        var color = Color.FromRgb(bar.FillColor.R, bar.FillColor.G, bar.FillColor.B);
+
+        IBrush fill = bar.Gradient
+            ? new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.FromArgb(90, color.R, color.G, color.B), 0),
+                    new GradientStop(color, 1),
+                },
+            }
+            : new SolidColorBrush(color);
+
+        var rectangle = new AvaloniaRectangle
+        {
+            Fill = fill,
+            // Horizontal extent is set by the hosting panel at arrange time; the rectangle only
+            // applies the vertical inset so the bar is shorter than the cell.
+            Margin = new Thickness(0, verticalInset, 0, verticalInset),
+            IsHitTestVisible = false,
+        };
+        if (bar.Border)
+        {
+            rectangle.Stroke = new SolidColorBrush(color);
+            rectangle.StrokeThickness = 0.75 * zoomFactor;
+        }
+
+        // Width is resolved relative to the cell's drawable content area via a binding-free
+        // panel that places the fraction-sized rectangle at arrange time.
+        return new ConditionalDataBarPanel(rectangle, bar.StartFraction, bar.FractionWidth, horizontalInset);
+    }
+
+    private static Control CreateConditionalIconLayer(CfIconRenderInstruction icon, double zoomFactor)
+    {
+        const double iconSize = 10d;
+        const double iconLeftInset = 4d;
+        var size = iconSize * zoomFactor;
+        var glyph = ConditionalFormatIconGlyphFactory.Create(icon, size);
+        return new Border
+        {
+            Width = (iconLeftInset + iconSize) * zoomFactor,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
+            Padding = new Thickness(iconLeftInset * zoomFactor, 0, 0, 0),
+            IsHitTestVisible = false,
+            Child = new Border
+            {
+                Width = size,
+                Height = size,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Child = glyph,
+            },
+        };
     }
 
     private static AvaloniaGrid CreateOrientedCellContent(
@@ -12957,6 +13238,13 @@ public sealed class MainWindow : Window
             {
                 e.Handled = true;
                 AddNewSheet();
+                return;
+            }
+
+            if (e.Key == Key.F3 && e.KeyModifiers == KeyModifiers.Shift)
+            {
+                e.Handled = true;
+                InsertFunction();
                 return;
             }
 

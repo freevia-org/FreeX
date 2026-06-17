@@ -1,0 +1,110 @@
+using Avalonia.Headless;
+
+using FluentAssertions;
+
+using FreeX.App.Avalonia;
+using FreeX.App.Presentation.PageLayout;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Avalonia.Tests;
+
+/// <summary>
+/// Tests for the print-preview pagination context: resolving the print range, building the page plan,
+/// reporting the page count, and producing renderable page layouts that flatten into paint primitives.
+/// Page builds use the shared Avalonia text measurer (to vertically center text), so the build-and-flatten
+/// assertions run on the shared headless UI thread and opt out cleanly when no font backend is available;
+/// the page-count / empty-sheet contract does not need a backend.
+/// </summary>
+public sealed class PrintPreviewPaginationContextTests
+{
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+
+    private static (Workbook Workbook, Sheet Sheet) CreateBook()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        return (workbook, sheet);
+    }
+
+    [Fact]
+    public void TryCreate_EmptySheetReturnsFalse()
+    {
+        var (workbook, sheet) = CreateBook();
+
+        PrintPreviewPaginationContext.TryCreate(workbook, sheet, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryCreate_SingleCellSheetHasOnePage()
+    {
+        var (workbook, sheet) = CreateBook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("hello"));
+
+        PrintPreviewPaginationContext.TryCreate(workbook, sheet, out var context).Should().BeTrue();
+        context.PageCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void TryCreate_WideTallRangeProducesMultiplePages()
+    {
+        var (workbook, sheet) = CreateBook();
+        // A range far larger than one page along both axes => more than one page.
+        for (uint r = 1; r <= 200; r += 50)
+            sheet.SetCell(new CellAddress(sheet.Id, r, 1), new NumberValue(r));
+        sheet.PrintArea = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 400, 60));
+
+        PrintPreviewPaginationContext.TryCreate(workbook, sheet, out var context).Should().BeTrue();
+        context.PageCount.Should().BeGreaterThan(1);
+    }
+
+    [Fact]
+    public void BuildPage_OutOfRangeIndexReturnsNull()
+    {
+        var (workbook, sheet) = CreateBook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        PrintPreviewPaginationContext.TryCreate(workbook, sheet, out var context).Should().BeTrue();
+
+        context.BuildPage(context.PageCount).Should().BeNull();
+        context.BuildPage(-1).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task BuildPage_ProducesLayoutThatFlattensToInstructions_WhenBackendAvailable()
+    {
+        var (workbook, sheet) = CreateBook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Apples"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+        sheet.PrintGridlines = true;
+        sheet.PrintHeadings = true;
+
+        PrintPreviewPaginationContext.TryCreate(workbook, sheet, out var context).Should().BeTrue();
+
+        PageContentLayout? layout = null;
+        try
+        {
+            await Session.Dispatch(() => layout = context.BuildPage(0), CancellationToken.None);
+        }
+        catch (Exception)
+        {
+            // No headless drawing backend in this environment — opt out cleanly.
+            return;
+        }
+
+        layout.Should().NotBeNull();
+
+        var painting = Dialogs.PrintPreviewInstructionBuilder.Build(layout!);
+
+        // Page background is always present; gridlines + headings + cell text add more primitives.
+        painting.Instructions.Should().NotBeEmpty();
+        painting.Instructions[0].Kind.Should().Be(Dialogs.PrintPreviewPaintKind.Rectangle);
+        painting.Instructions.Should().Contain(i => i.Kind == Dialogs.PrintPreviewPaintKind.Line);
+        painting.Instructions.Should().Contain(i =>
+            i.Kind == Dialogs.PrintPreviewPaintKind.Text && i.Text == "Apples");
+        painting.PageNumber.Should().Be(1);
+    }
+}

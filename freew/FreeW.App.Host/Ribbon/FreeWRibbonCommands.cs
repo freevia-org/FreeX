@@ -140,6 +140,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.caption", new InsertCaptionCommand(editor));
         // Insert tab — References: insert a cross-reference (heading/bookmark/caption/footnote) at the caret.
         registry.Register("freew.cross-reference", new InsertCrossReferenceCommand(editor));
+        // Insert tab — References: mark the selection (or a prompted term) for the document index, and
+        // insert an alphabetical index built from the marked terms at the caret (reversibly via the bus).
+        registry.Register("freew.index-mark", new MarkIndexEntryCommand(editor));
+        registry.Register("freew.index-insert", new ActionCommand(() => { editor.Focus(); editor.InsertIndex(); }));
         // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
         registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
@@ -1222,6 +1226,23 @@ internal static class FreeWRibbonCommands
                 editor.InsertInternalLink(text, pick.Value.Anchor!);
             else
                 editor.InsertText(text);
+        }
+    }
+
+    // Insert > References > Mark Entry: mark a term for the document index. Seeds from the current
+    // selection's text (the usual "select then mark" gesture) and lets the user confirm or edit the term;
+    // with no selection the prompt starts blank. The view appends the term to the model's index entries
+    // (ignoring blanks/duplicates). The matching index is built later by Insert Index.
+    private sealed class MarkIndexEntryCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var seed = editor.Selection.Text?.Trim() ?? string.Empty;
+            var term = TextPrompt.Ask(Window.GetWindow(editor), "Mark Index Entry", "Index term:", seed);
+            if (string.IsNullOrWhiteSpace(term))
+                return; // cancelled or empty — nothing to mark
+            editor.MarkIndexEntry(term.Trim());
         }
     }
 
