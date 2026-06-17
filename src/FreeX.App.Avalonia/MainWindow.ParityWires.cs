@@ -15,6 +15,14 @@ public sealed partial class MainWindow
             : result.ErrorMessage ?? "Could not delete the comment.");
     }
 
+    /// <summary>View ▸ Normal — leave Page Break Preview.</summary>
+    private void SetNormalView()
+    {
+        if (_isPageBreakPreviewActive)
+            _isPageBreakPreviewActive = false;
+        RefreshShell("Normal view");
+    }
+
     /// <summary>View ▸ Split — split the window at the active cell.</summary>
     private void SplitPanesAtActiveCell()
     {

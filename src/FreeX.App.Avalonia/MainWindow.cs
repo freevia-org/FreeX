@@ -761,9 +761,13 @@ public sealed partial class MainWindow : Window
                     ["home.deleteCells"] = () => _ = ShowDeleteCellsDialogAsync(),
                     // Home ▸ Styles: Cell Styles gallery.
                     ["home.cellStyles"] = () => _ = ShowCellStylesGalleryAsync(),
-                    // Review ▸ Delete Comment; View ▸ Split.
+                    // Review ▸ Delete Comment; View ▸ Split / Normal.
                     ["review.deleteComment"] = DeleteActiveCellComment,
                     ["view.split"] = SplitPanesAtActiveCell,
+                    ["view.normal"] = SetNormalView,
+                    // Insert ▸ Comment (reuse New Comment); Insert ▸ Header & Footer (Page Setup).
+                    ["insert.comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
+                    ["insert.headerFooter"] = () => _ = ShowPageSetupDialogAsync(),
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
