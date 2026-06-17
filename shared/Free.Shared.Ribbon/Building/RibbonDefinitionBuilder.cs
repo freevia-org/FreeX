@@ -100,16 +100,20 @@ public sealed class RibbonGroupBuilder
     }
 
     /// <summary>A large "hero" button: big icon, label below, optional dropdown (with optional menu contents).</summary>
-    public RibbonGroupBuilder Large(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null, bool dropdown = false, Action<RibbonMenuBuilder>? menu = null)
-        => AddSized(RibbonCommandLayoutKind.Large, commandId, label, icon, keyTip, dropdown, menu);
+    public RibbonGroupBuilder Large(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null, bool dropdown = false, Action<RibbonMenuBuilder>? menu = null, RibbonCommandIconAccent accent = RibbonCommandIconAccent.None)
+        => AddSized(RibbonCommandLayoutKind.Large, commandId, label, icon, keyTip, dropdown, menu, accent);
 
     /// <summary>An icon-only button (no label), optionally a dropdown (with optional menu contents).</summary>
-    public RibbonGroupBuilder Icon(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null, bool dropdown = false, Action<RibbonMenuBuilder>? menu = null)
-        => AddSized(RibbonCommandLayoutKind.Small, commandId, label, icon, keyTip, dropdown, menu);
+    public RibbonGroupBuilder Icon(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null, bool dropdown = false, Action<RibbonMenuBuilder>? menu = null, RibbonCommandIconAccent accent = RibbonCommandIconAccent.None)
+        => AddSized(RibbonCommandLayoutKind.Small, commandId, label, icon, keyTip, dropdown, menu, accent);
+
+    /// <summary>An icon-only button with a colour accent (e.g. green table glyphs).</summary>
+    public RibbonGroupBuilder Icon(string commandId, string label, RibbonCommandIconKind icon, RibbonCommandIconAccent accent)
+        => AddSized(RibbonCommandLayoutKind.Small, commandId, label, icon, keyTip: null, dropdown: false, menu: null, accent);
 
     /// <summary>A medium button: small icon with a label to the right, optional dropdown (with optional menu contents).</summary>
-    public RibbonGroupBuilder Medium(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null, bool dropdown = false, Action<RibbonMenuBuilder>? menu = null)
-        => AddSized(RibbonCommandLayoutKind.Medium, commandId, label, icon, keyTip, dropdown, menu);
+    public RibbonGroupBuilder Medium(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null, bool dropdown = false, Action<RibbonMenuBuilder>? menu = null, RibbonCommandIconAccent accent = RibbonCommandIconAccent.None)
+        => AddSized(RibbonCommandLayoutKind.Medium, commandId, label, icon, keyTip, dropdown, menu, accent);
 
     /// <summary>An icon-only toggle button (no label).</summary>
     public RibbonGroupBuilder IconToggle(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null)
@@ -123,7 +127,7 @@ public sealed class RibbonGroupBuilder
         return this;
     }
 
-    private RibbonGroupBuilder AddSized(RibbonCommandLayoutKind layout, string commandId, string label, RibbonCommandIconKind icon, string? keyTip, bool dropdown, Action<RibbonMenuBuilder>? menu)
+    private RibbonGroupBuilder AddSized(RibbonCommandLayoutKind layout, string commandId, string label, RibbonCommandIconKind icon, string? keyTip, bool dropdown, Action<RibbonMenuBuilder>? menu, RibbonCommandIconAccent accent = RibbonCommandIconAccent.None)
     {
         RibbonMenu? builtMenu = null;
         if (menu is not null)
@@ -140,7 +144,7 @@ public sealed class RibbonGroupBuilder
         _controls.Add(control with
         {
             PreferredLayout = layout,
-            Icon = new RibbonCommandIcon(icon),
+            Icon = new RibbonCommandIcon(icon, accent),
             KeyTip = keyTip
         });
         return this;
