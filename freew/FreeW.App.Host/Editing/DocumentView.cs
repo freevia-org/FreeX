@@ -3147,6 +3147,26 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Apply the Document Inspector's selected removal operations to the model and re-render. Pending
+    /// edits are committed first so the removals run over the current text, then each selected category
+    /// is stripped via the pure <see cref="DocumentInspector"/> ops (which mutate the model in place),
+    /// and the view re-renders so the cleaned document shows immediately.
+    /// </summary>
+    public void ApplyInspectorRemovals(bool comments, bool revisions, bool properties, bool bookmarks)
+    {
+        CommitToModel();
+        if (comments)
+            DocumentInspector.RemoveComments(_model);
+        if (revisions)
+            DocumentInspector.RemoveRevisions(_model);
+        if (properties)
+            DocumentInspector.RemoveProperties(_model);
+        if (bookmarks)
+            DocumentInspector.RemoveBookmarks(_model);
+        Render();
+    }
+
+    /// <summary>
     /// Marks the model runs of <paramref name="paragraph"/> covering the character range
     /// [<paramref name="startOffset"/>, <paramref name="endOffset"/>) as a tracked change of
     /// <paramref name="kind"/>, splitting runs at the boundaries. Offsets are measured over the

@@ -256,6 +256,10 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.compare", "Compare");
                 });
+                tab.Group("inspect", "Inspect", "I", 80, g =>
+                {
+                    g.Button("freew.inspect-document", "Inspect Document");
+                });
             })
             .Build();
 }

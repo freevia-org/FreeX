@@ -229,6 +229,11 @@ internal static class FreeWRibbonCommands
         // it as tracked changes (insertions/deletions relative to the opened "original").
         registry.Register("freew.compare", new CompareDocumentsCommand(editor));
 
+        // Review tab — Inspect Document: report the metadata the document carries (comments, tracked
+        // changes, document properties, bookmarks) via the pure DocumentInspector, and let the user
+        // selectively remove categories. Applied removals mutate editor.Model in place and re-render.
+        registry.Register("freew.inspect-document", new InspectDocumentCommand(editor));
+
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
         registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false));
@@ -1263,6 +1268,23 @@ internal static class FreeWRibbonCommands
                 MessageBox.Show(owner, $"Could not compare the documents:\n{ex.Message}",
                     "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+    }
+
+    // Review > Inspect Document: commit pending edits, run the pure DocumentInspector over the model, and
+    // open the inspector dialog reporting what was found. If the user ticks categories and clicks Remove,
+    // apply the matching removal ops to editor.Model (mutating in place) and re-render the cleaned document.
+    private sealed class InspectDocumentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.CommitToModel();
+            var result = DocumentInspector.Inspect(editor.Model);
+            var choice = DocumentInspectorDialog.Show(Window.GetWindow(editor), result);
+            if (choice is null)
+                return; // cancelled or nothing selected
+
+            editor.ApplyInspectorRemovals(choice.Comments, choice.Revisions, choice.Properties, choice.Bookmarks);
         }
     }
 
