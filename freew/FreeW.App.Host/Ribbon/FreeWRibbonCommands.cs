@@ -157,6 +157,9 @@ internal static class FreeWRibbonCommands
         // and insert a bibliography built from the document's sources at the caret (reversible).
         registry.Register("freew.citation", new InsertCitationCommand(editor));
         registry.Register("freew.bibliography", new ActionCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
+        // Insert tab — References: select the active citation/bibliography style (APA / MLA / Chicago) used
+        // by the citation + bibliography commands. The combo box delivers its label via the "value" param.
+        registry.Register("freew.citation-style", new CitationStyleCommand(editor));
         // Insert tab — References: insert a numbered figure/table caption under the caret's block.
         registry.Register("freew.caption", new InsertCaptionCommand(editor));
         // Insert tab — References: insert a cross-reference (heading/bookmark/caption/footnote) at the caret.
@@ -2489,6 +2492,25 @@ internal static class FreeWRibbonCommands
     }
 
     // Applies a value chosen from a ribbon combo (font family/size) to the current selection.
+    // Insert > References > Citation Style: set the editor's active citation style from the combo box
+    // label ("APA"/"MLA"/"Chicago"). Unrecognised labels leave the current style unchanged.
+    private sealed class CitationStyleCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+                return;
+
+            editor.ActiveCitationStyle = value.Trim().ToUpperInvariant() switch
+            {
+                "MLA" => CitationStyle.Mla,
+                "CHICAGO" => CitationStyle.Chicago,
+                "APA" => CitationStyle.Apa,
+                _ => editor.ActiveCitationStyle,
+            };
+        }
+    }
+
     private sealed class SelectionValueCommand(DocumentView editor, Action<TextSelection, string> apply) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
