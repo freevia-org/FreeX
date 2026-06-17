@@ -14,6 +14,19 @@ public sealed record ThreadedComment(string Text, string Author = "FreeX")
     public DateTimeOffset? ModifiedAtUtc { get; init; }
 }
 
+/// <summary>
+/// Distinguishes a normal worksheet (cell grid) from a chartsheet (a single full-page chart with
+/// no cell grid). Dialog and macro sheets are not modeled and remain unsupported.
+/// </summary>
+public enum SheetKind
+{
+    /// <summary>A normal worksheet backed by a cell grid.</summary>
+    Worksheet,
+
+    /// <summary>A full-page chart-only sheet; its chart is stored in <see cref="Sheet.Charts"/>.</summary>
+    Chartsheet
+}
+
 public enum HyperlinkTargetKind
 {
     ExistingFileOrWebPage,
@@ -53,6 +66,23 @@ public sealed partial class Sheet
 
     /// <summary>Unique identifier for this sheet.</summary>
     public SheetId Id { get; }
+
+    /// <summary>
+    /// The kind of sheet. <see cref="SheetKind.Worksheet"/> is a normal cell-grid sheet;
+    /// <see cref="SheetKind.Chartsheet"/> is a full-page chart-only sheet (no cell grid). A
+    /// chartsheet carries its single chart in <see cref="Charts"/>; <see cref="ChartsheetChart"/>
+    /// exposes it.
+    /// </summary>
+    public SheetKind Kind { get; set; } = SheetKind.Worksheet;
+
+    /// <summary>True when this sheet is a full-page chartsheet rather than a worksheet grid.</summary>
+    public bool IsChartsheet => Kind == SheetKind.Chartsheet;
+
+    /// <summary>
+    /// The full-page chart for a chartsheet, or <see langword="null"/> when this is not a
+    /// chartsheet or the chart could not be loaded. Returns the first entry of <see cref="Charts"/>.
+    /// </summary>
+    public ChartModel? ChartsheetChart => IsChartsheet ? (Charts.Count > 0 ? Charts[0] : null) : null;
 
     /// <summary>
     /// Monotonically increasing counter bumped whenever cell content changes (SetCell, ClearCell,

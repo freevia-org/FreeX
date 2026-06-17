@@ -43,11 +43,18 @@ internal static class XlsxUnsupportedSheetReferencePreserver
         }
 
         var worksheetPathRebindings = CreateWorksheetPathRebindings(context);
-        var targetSheetNames = targetSheets
-            .Elements(workbookNs + "sheet")
-            .Select(sheet => sheet.Attribute("name")?.Value)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Map sheet name -> generated <sheet> element so chartsheets that FreeX now models as Sheets
+        // (so ClosedXML emits a placeholder worksheet for them) can be reclaimed: the generated
+        // <sheet> entry is re-pointed at the preserved chartsheet part and the stray worksheet part
+        // is removed below.
+        var targetSheetsByName = new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var targetSheet in targetSheets.Elements(workbookNs + "sheet"))
+        {
+            var targetName = targetSheet.Attribute("name")?.Value;
+            if (!string.IsNullOrWhiteSpace(targetName))
+                targetSheetsByName.TryAdd(targetName, targetSheet);
+        }
+        var targetSheetNames = new HashSet<string>(targetSheetsByName.Keys, StringComparer.OrdinalIgnoreCase);
         var usedSheetIds = targetSheets
             .Elements(workbookNs + "sheet")
             .Select(sheet => XlsxXmlAttributeReader.ReadIntAttribute(sheet, "sheetId"))
@@ -55,6 +62,7 @@ internal static class XlsxUnsupportedSheetReferencePreserver
             .Select(id => id!.Value)
             .ToHashSet();
         var nextSheetId = usedSheetIds.Count == 0 ? 1 : usedSheetIds.Max() + 1;
+        var reclaimedWorksheetParts = new List<(string Part, string? RelId)>();
         var changed = false;
 
         foreach (var sourceSheet in sourceSheets.Elements(workbookNs + "sheet"))
@@ -63,7 +71,6 @@ internal static class XlsxUnsupportedSheetReferencePreserver
             var sourceRelId = sourceSheet.Attribute(relNs + "id")?.Value;
             if (string.IsNullOrWhiteSpace(name) ||
                 string.IsNullOrWhiteSpace(sourceRelId) ||
-                targetSheetNames.Contains(name) ||
                 !sourceRelationships.TryGetValue(sourceRelId, out var sourceRelationship))
             {
                 continue;
@@ -81,6 +88,34 @@ internal static class XlsxUnsupportedSheetReferencePreserver
             var targetPart = XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target);
             if (targetArchive.GetEntry(targetPart) is null)
                 continue;
+
+            // Case 1: the generated workbook already lists this sheet name (FreeX modeled the
+            // chartsheet as a Sheet, so ClosedXML emitted a placeholder worksheet). Re-point that
+            // entry at the preserved chartsheet part and schedule the stray worksheet for removal.
+            if (targetSheetsByName.TryGetValue(name, out var collidingTargetSheet))
+            {
+                var collidingRelId = collidingTargetSheet.Attribute(relNs + "id")?.Value;
+                var collidingWorksheetPart = ResolveSheetRelationshipPart(
+                    targetWorkbookRelsXml, packageRelNs, collidingRelId);
+
+                var reboundRelId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
+                    targetWorkbookRelsXml,
+                    packageRelNs,
+                    "xl/workbook.xml",
+                    targetPart,
+                    relationshipType);
+                collidingTargetSheet.SetAttributeValue(relNs + "id", reboundRelId);
+
+                if (!string.IsNullOrWhiteSpace(collidingWorksheetPart) &&
+                    IsWorksheetPartPath(collidingWorksheetPart) &&
+                    !string.Equals(collidingWorksheetPart, targetPart, StringComparison.OrdinalIgnoreCase))
+                {
+                    reclaimedWorksheetParts.Add((collidingWorksheetPart, collidingRelId));
+                }
+
+                changed = true;
+                continue;
+            }
 
             while (usedSheetIds.Contains(nextSheetId))
                 nextSheetId++;
@@ -100,6 +135,12 @@ internal static class XlsxUnsupportedSheetReferencePreserver
             changed = true;
         }
 
+        changed |= RemoveReclaimedWorksheetParts(
+            targetArchive,
+            targetWorkbookRelsXml,
+            reclaimedWorksheetParts,
+            packageRelNs);
+
         changed |= RebindUnsupportedSheetSidecarRelationships(
             sourceArchive,
             targetArchive,
@@ -115,6 +156,82 @@ internal static class XlsxUnsupportedSheetReferencePreserver
 
     private static bool IsWorksheetRelationshipType(string relationshipType) =>
         relationshipType.EndsWith("/worksheet", StringComparison.OrdinalIgnoreCase);
+
+    private static string? ResolveSheetRelationshipPart(
+        XDocument workbookRelsXml,
+        XNamespace packageRelNs,
+        string? relId)
+    {
+        if (string.IsNullOrWhiteSpace(relId))
+            return null;
+
+        foreach (var relationship in workbookRelsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+        {
+            if (!string.Equals(relationship.Attribute("Id")?.Value, relId, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var target = relationship.Attribute("Target")?.Value;
+            return string.IsNullOrWhiteSpace(target)
+                ? null
+                : XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target);
+        }
+
+        return null;
+    }
+
+    // Removes placeholder worksheet parts that ClosedXML generated for sheets which are actually
+    // chartsheets (or other unsupported sheet types). The workbook <sheet> entry has already been
+    // re-pointed at the preserved chartsheet part, so the generated worksheet part, its sidecar
+    // relationships, the workbook relationship, and the [Content_Types].xml override are now dead.
+    private static bool RemoveReclaimedWorksheetParts(
+        ZipArchive targetArchive,
+        XDocument targetWorkbookRelsXml,
+        IReadOnlyList<(string Part, string? RelId)> reclaimedWorksheetParts,
+        XNamespace packageRelNs)
+    {
+        if (reclaimedWorksheetParts.Count == 0)
+            return false;
+
+        // A worksheet part is only safe to remove when no surviving workbook <sheet> still points at
+        // it (Excel allows two sheets to share neither name nor part, but guard against aliasing).
+        var changed = false;
+        foreach (var (part, relId) in reclaimedWorksheetParts)
+        {
+            if (!string.IsNullOrWhiteSpace(relId))
+            {
+                var relationship = targetWorkbookRelsXml.Root?
+                    .Elements(packageRelNs + "Relationship")
+                    .FirstOrDefault(r => string.Equals(r.Attribute("Id")?.Value, relId, StringComparison.OrdinalIgnoreCase));
+                relationship?.Remove();
+            }
+
+            targetArchive.GetEntry(part)?.Delete();
+            targetArchive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(part))?.Delete();
+            RemoveContentTypeOverride(targetArchive, "/" + part);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static void RemoveContentTypeOverride(ZipArchive targetArchive, string partName)
+    {
+        var contentTypesEntry = targetArchive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return;
+
+        XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+        var overrideElement = contentTypesXml.Root?
+            .Elements(contentTypesNs + "Override")
+            .FirstOrDefault(element =>
+                string.Equals(element.Attribute("PartName")?.Value, partName, StringComparison.OrdinalIgnoreCase));
+        if (overrideElement is null)
+            return;
+
+        overrideElement.Remove();
+        XlsxPackageXmlEditor.ReplaceXml(targetArchive, "[Content_Types].xml", contentTypesXml);
+    }
 
     private static IReadOnlyDictionary<string, string> CreateWorksheetPathRebindings(
         XlsxSourcePackagePreservationContext? context)

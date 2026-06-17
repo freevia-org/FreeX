@@ -88,6 +88,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var slicerTimelineMetadata = SlicerTimelinePackageMetadata.Empty;
         IReadOnlyList<ExternalLinkModel> externalLinkMetadata = [];
         var structuredTableMetadata = StructuredTablePackageMetadata.Empty;
+        IReadOnlyList<XlsxChartsheet> chartsheets = [];
         var packageMetadataDiagnostics = MeasureLoadPhase(() =>
         {
             try
@@ -99,6 +100,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     inspectedFeatureReport = XlsxFeatureInspector.Inspect(packageArchive);
 
                 packageParts = XlsxLoadPackageParts.Inspect(packageArchive);
+                chartsheets = XlsxChartsheetReader.Read(packageArchive);
 
                 workbookTheme = packageParts.HasTheme
                     ? XlsxWorkbookThemeReader.Load(packageArchive)
@@ -701,6 +703,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             }
         }
 
+        InsertChartsheets(workbook, chartsheets, warnings);
+
         ResolvePivotChartCacheBindings(workbook);
 
         // Load named ranges (best-effort; skip any we cannot map)
@@ -966,6 +970,51 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 return true;
 
         return false;
+    }
+
+    // ClosedXML only surfaces worksheets, so chartsheets (full-page chart-only sheets) are inserted
+    // here from the raw package. Each chartsheet is modeled as a Sheet with Kind = Chartsheet that
+    // carries its single full-page chart, placed at its original position in the workbook's sheet
+    // tab order.
+    private static void InsertChartsheets(
+        Workbook workbook,
+        IReadOnlyList<XlsxChartsheet> chartsheets,
+        List<string> warnings)
+    {
+        if (chartsheets.Count == 0)
+            return;
+
+        // Resolver covers every already-loaded worksheet so chart series that reference data on
+        // another sheet (e.g. "Sheet1!$A$2:$A$5") resolve to the correct SheetId.
+        var sheetNameResolver = workbook.Sheets
+            .ToDictionary(s => s.Name, s => s.Id, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var chartsheet in chartsheets)
+        {
+            try
+            {
+                var index = Math.Clamp(chartsheet.WorkbookSheetIndex, 0, workbook.Sheets.Count);
+                var sheet = workbook.InsertSheet(index, chartsheet.Name);
+                sheet.Kind = SheetKind.Chartsheet;
+                sheet.IsHidden = chartsheet.IsHidden;
+                sheet.IsVeryHidden = chartsheet.IsVeryHidden;
+
+                if (chartsheet.ChartPart is { } chartPart &&
+                    XlsxChartPartReader.TryReadSupportedChart(
+                        chartPart.Xml, sheet.Id, fallbackDataRange: null, sheetNameResolver, out var chart))
+                {
+                    chart.Name = chartPart.Name;
+                    XlsxDrawingAnchorApplier.ApplyToChart(chart, chartPart.Anchor, sheet);
+                    ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
+                    ApplyChartUserShapesRelationshipMetadata(chart, chartPart);
+                    sheet.Charts.Add(chart);
+                }
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"[chartsheet] Sheet '{chartsheet.Name}': {ex.Message}");
+            }
+        }
     }
 
     private static void LoadMergedRegions(IXLWorksheet xlSheet, Sheet sheet)
