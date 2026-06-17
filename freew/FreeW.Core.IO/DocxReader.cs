@@ -1649,6 +1649,18 @@ public static class DocxReader
         var highlight = rPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
         var vertAlign = rPr.Element(W + "vertAlign")?.Attribute(W + "val")?.Value;
 
+        // Advanced typography (Z1). The three core elements use the standard unit conversions; the
+        // w14:* extension elements use the shared token maps. Each is optional and maps a missing
+        // element back to the model default so default runs read back unchanged.
+        var spacing = rPr.Element(W + "spacing")?.Attribute(W + "val")?.Value;
+        var kern = rPr.Element(W + "kern")?.Attribute(W + "val")?.Value;
+        var position = rPr.Element(W + "position")?.Attribute(W + "val")?.Value;
+        var ligatures = rPr.Element(W14 + "ligatures")?.Attribute(W14 + "val")?.Value;
+        var numForm = rPr.Element(W14 + "numForm")?.Attribute(W14 + "val")?.Value;
+        var numSpacing = rPr.Element(W14 + "numSpacing")?.Attribute(W14 + "val")?.Value;
+        // A stylistic set is the first w14:styleSet inside w14:stylisticSets (the common single-set case).
+        var styleSetId = rPr.Element(W14 + "stylisticSets")?.Element(W14 + "styleSet")?.Attribute(W14 + "id")?.Value;
+
         return new RunFormatting
         {
             Bold = ReadToggle(rPr, "b"),
@@ -1666,7 +1678,18 @@ public static class DocxReader
                 "superscript" => VerticalAlign.Superscript,
                 "subscript" => VerticalAlign.Subscript,
                 _ => VerticalAlign.Baseline
-            }
+            },
+            // w:spacing is in dxa (twentieths of a point); 0 / absent means no advanced spacing.
+            CharacterSpacingPt = spacing is null ? 0 : DxaToPoints(spacing),
+            // w:kern is in half-points; absent means no kerning threshold (null).
+            KerningMinSizePt = kern is null ? null : HalfPointsToPoints(kern),
+            // w:position is in half-points, signed; 0 / absent means baseline.
+            PositionPt = position is null ? 0 : (ParseInt(position) / 2.0),
+            Ligatures = LigatureModeFromToken(ligatures),
+            NumberForm = NumberFormFromToken(numForm),
+            NumberSpacing = NumberSpacingFromToken(numSpacing),
+            StylisticSet = styleSetId is null ? null
+                : int.TryParse(styleSetId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id) ? id : null
         };
     }
 

@@ -186,6 +186,89 @@ internal static class Ooxml
         _ => ProtectionMode.None
     };
 
+    /// <summary>
+    /// Maps a <see cref="LigatureMode"/> to its w14:ligatures/@w14:val token, or null for
+    /// <see cref="LigatureMode.None"/> (no element is emitted). <see cref="LigatureMode.NoneExplicit"/>
+    /// maps to the explicit "none" token.
+    /// </summary>
+    public static string? LigaturesToken(LigatureMode mode) => mode switch
+    {
+        LigatureMode.NoneExplicit => "none",
+        LigatureMode.Standard => "standard",
+        LigatureMode.Contextual => "contextual",
+        LigatureMode.StandardContextual => "standardContextual",
+        LigatureMode.Historical => "historical",
+        LigatureMode.Discretional => "discretional",
+        LigatureMode.StandardHistorical => "standardHistorical",
+        LigatureMode.ContextualHistorical => "contextualHistorical",
+        LigatureMode.StandardContextualHistorical => "standardContextualHistorical",
+        LigatureMode.ContextualDiscretional => "contextualDiscretional",
+        LigatureMode.StandardDiscretional => "standardDiscretional",
+        LigatureMode.StandardContextualDiscretional => "standardContextualDiscretional",
+        LigatureMode.HistoricalDiscretional => "historicalDiscretional",
+        LigatureMode.StandardHistoricalDiscretional => "standardHistoricalDiscretional",
+        LigatureMode.ContextualHistoricalDiscretional => "contextualHistoricalDiscretional",
+        LigatureMode.All => "all",
+        _ => null
+    };
+
+    /// <summary>
+    /// Maps a w14:ligatures/@w14:val token back to a <see cref="LigatureMode"/>. The "none" token maps to
+    /// <see cref="LigatureMode.NoneExplicit"/>; an unknown/absent token maps to <see cref="LigatureMode.None"/>.
+    /// </summary>
+    public static LigatureMode LigatureModeFromToken(string? token) => token switch
+    {
+        "none" => LigatureMode.NoneExplicit,
+        "standard" => LigatureMode.Standard,
+        "contextual" => LigatureMode.Contextual,
+        "standardContextual" => LigatureMode.StandardContextual,
+        "historical" => LigatureMode.Historical,
+        "discretional" => LigatureMode.Discretional,
+        "standardHistorical" => LigatureMode.StandardHistorical,
+        "contextualHistorical" => LigatureMode.ContextualHistorical,
+        "standardContextualHistorical" => LigatureMode.StandardContextualHistorical,
+        "contextualDiscretional" => LigatureMode.ContextualDiscretional,
+        "standardDiscretional" => LigatureMode.StandardDiscretional,
+        "standardContextualDiscretional" => LigatureMode.StandardContextualDiscretional,
+        "historicalDiscretional" => LigatureMode.HistoricalDiscretional,
+        "standardHistoricalDiscretional" => LigatureMode.StandardHistoricalDiscretional,
+        "contextualHistoricalDiscretional" => LigatureMode.ContextualHistoricalDiscretional,
+        "all" => LigatureMode.All,
+        _ => LigatureMode.None
+    };
+
+    /// <summary>Maps a <see cref="NumberForm"/> to its w14:numForm/@w14:val token, or null for the default.</summary>
+    public static string? NumberFormToken(NumberForm form) => form switch
+    {
+        NumberForm.Lining => "lining",
+        NumberForm.OldStyle => "oldStyle",
+        _ => null
+    };
+
+    /// <summary>Maps a w14:numForm token back to a <see cref="NumberForm"/> (unknown/absent → Default).</summary>
+    public static NumberForm NumberFormFromToken(string? token) => token switch
+    {
+        "lining" => NumberForm.Lining,
+        "oldStyle" => NumberForm.OldStyle,
+        _ => NumberForm.Default
+    };
+
+    /// <summary>Maps a <see cref="NumberSpacing"/> to its w14:numSpacing/@w14:val token, or null for the default.</summary>
+    public static string? NumberSpacingToken(NumberSpacing spacing) => spacing switch
+    {
+        NumberSpacing.Proportional => "proportional",
+        NumberSpacing.Tabular => "tabular",
+        _ => null
+    };
+
+    /// <summary>Maps a w14:numSpacing token back to a <see cref="NumberSpacing"/> (unknown/absent → Default).</summary>
+    public static NumberSpacing NumberSpacingFromToken(string? token) => token switch
+    {
+        "proportional" => NumberSpacing.Proportional,
+        "tabular" => NumberSpacing.Tabular,
+        _ => NumberSpacing.Default
+    };
+
     /// <summary>Reads an OOXML on/off toggle element (e.g. &lt;w:b/&gt;): present and not explicitly off.</summary>
     public static bool ReadToggle(XElement? parent, string localName)
     {
