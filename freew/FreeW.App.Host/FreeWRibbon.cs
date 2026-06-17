@@ -113,6 +113,10 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.picture", "Picture");
                     g.Button("freew.image-size", "Image Size");
+                    g.Button("freew.image-alt-text", "Alt Text");
+                    g.Button("freew.image-align-left", "Align Left");
+                    g.Button("freew.image-align-center", "Align Center");
+                    g.Button("freew.image-align-right", "Align Right");
                     g.Button("freew.shapes", "Shapes");
                 });
                 tab.Group("links", "Links", "K", 70, g =>

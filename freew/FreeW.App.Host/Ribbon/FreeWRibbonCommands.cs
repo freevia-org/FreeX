@@ -143,6 +143,12 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.picture", new InsertPictureCommand(editor));
         // Insert tab — Illustrations: resize the selected inline image (height scales proportionally).
         registry.Register("freew.image-size", new ImageSizeCommand(editor));
+        // Insert tab — Illustrations: set the selected image's accessibility alt text (wp:docPr @descr),
+        // and align the image's (image-only) paragraph left/center/right. Both mutate the model + re-render.
+        registry.Register("freew.image-alt-text", new ImageAltTextCommand(editor));
+        registry.Register("freew.image-align-left", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
+        registry.Register("freew.image-align-center", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
+        registry.Register("freew.image-align-right", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
         // Insert tab — Links: manage the hyperlink at the caret — change its URL, remove it, or set a ScreenTip.
@@ -1016,6 +1022,47 @@ internal static class FreeWRibbonCommands
 
             if (ImageSizeDialog.Prompt(Window.GetWindow(editor), image.WidthPt) is { } widthPt)
                 editor.SetSelectedImageSize(widthPt);
+        }
+    }
+
+    // Insert > Illustrations > Alt Text: prompt for the selected image's accessibility description
+    // (seeded from its current alt text) and store it on the model image. A blank entry clears it; the
+    // text round-trips through docx as wp:docPr/@descr and surfaces as the image tooltip/automation name.
+    private sealed class ImageAltTextCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                MessageBox.Show(Window.GetWindow(editor), "Select an image first, then choose Alt Text.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var text = TextPrompt.Ask(Window.GetWindow(editor), "Alt Text", "Description:", image.AltText ?? string.Empty);
+            // A null result is a cancel (leave unchanged); an empty/blank string clears the alt text.
+            if (text is not null)
+                editor.SetSelectedImageAltText(text);
+        }
+    }
+
+    // Insert > Illustrations > Align Left/Center/Right: set the alignment of the selected image's
+    // (image-only) paragraph, reusing the existing ParagraphFormatting.Alignment round-trip. No-op when
+    // no image is selected.
+    private sealed class ImageAlignCommand(DocumentView editor, FreeW.Core.Model.TextAlignment alignment) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.SelectedImage() is null)
+            {
+                MessageBox.Show(Window.GetWindow(editor), "Select an image first, then choose an image alignment.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            editor.SetSelectedImageAlignment(alignment);
         }
     }
 
