@@ -68,6 +68,17 @@ public static class DocxWriter
         // Emit a numbering part only when at least one paragraph is decorated as a list.
         var hasLists = EnumerateParagraphs(document).Any(p => p.Formatting.ListKind != ListKind.None);
 
+        // Preserved numbering FreeW does not model: when the source carried a numbering.xml AND at least one
+        // paragraph kept its original w:numPr (because FreeW did not map it to a ListKind), build a merge plan
+        // that re-emits the ORIGINAL abstractNum/num definitions alongside FreeW's own under a DISJOINT id range
+        // (originals remapped to abstractNumId>=3 / numId>=4, clear of FreeW's fixed 0..2 / 1..3). The plan also
+        // maps each original numId to its output numId so the preserved paragraphs' w:numPr re-emit consistently.
+        // Null for an authored-from-scratch / FreeW-only-lists document, so such a document is unaffected.
+        var preservedNumbering = BuildPreservedNumberingPlan(document);
+
+        // A numbering part is emitted when FreeW authored a list OR preserved numbering must be re-emitted.
+        var emitNumbering = hasLists || preservedNumbering is not null;
+
         // Header/footer parts are now modelled per-section: one part per (section × header/footer × type)
         // slot that carries visible content, each with its OWN image relationships. The final/body-level
         // section owns the legacy header1/footer1/header2/footer2 names so single-section documents stay
@@ -125,13 +136,13 @@ public static class DocxWriter
             .ToList();
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, hasLists, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
@@ -144,8 +155,8 @@ public static class DocxWriter
             foreach (var part in embeddedFonts.SelectMany(f => f.Parts))
                 WriteBinaryPart(archive, "word/fonts/" + part.FileName, ObfuscateFont(part.FontBytes, part.FontKey));
         }
-        if (hasLists)
-            WritePart(archive, "word/numbering.xml", BuildNumbering());
+        if (emitNumbering)
+            WritePart(archive, "word/numbering.xml", BuildNumbering(hasLists, preservedNumbering));
         // One part per (section × header/footer × type) slot with content. Each part XML carries its inline
         // images via PART-LOCAL r:embed ids resolved against its own word/_rels/<part>.xml.rels, and its
         // image media bytes go under word/media/.
@@ -878,7 +889,8 @@ public static class DocxWriter
         IReadOnlyList<EmbeddedObjectPart> embeddedObjects,
         IReadOnlyList<SmartArtPart> smartArts,
         IReadOnlyDictionary<string, string> hyperlinks,
-        IReadOnlyList<HeaderFooterPart> headerFooterParts)
+        IReadOnlyList<HeaderFooterPart> headerFooterParts,
+        PreservedNumberingPlan? preservedNumbering)
     {
         // Group header/footer parts by their owning section: the final/body-level section (Section == null)
         // feeds the body-level w:sectPr; each non-final section feeds its paragraph-level w:sectPr.
@@ -921,7 +933,7 @@ public static class DocxWriter
 
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
-            body.Add(BuildBlock(block, drawings, hyperlinks, partsBySection));
+            body.Add(BuildBlock(block, drawings, hyperlinks, partsBySection, preservedNumbering));
         body.Add(BuildSectionProperties(document.Page, finalSectionParts));
 
         // Page background colour (w:background): it is positionally the FIRST child of w:document, before
@@ -1151,12 +1163,13 @@ public static class DocxWriter
         Block block,
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
-        IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>> partsBySection) => block switch
+        IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>> partsBySection,
+        PreservedNumberingPlan? preservedNumbering = null) => block switch
     {
-        Table table => BuildTable(table, drawings, hyperlinks),
+        Table table => BuildTable(table, drawings, hyperlinks, preservedNumbering),
         // Only top-level body paragraphs can end a non-final section, so the per-section header/footer map
         // is threaded here (and nowhere else); table-cell/header/footer/footnote paragraphs pass no map.
-        Paragraph paragraph => BuildParagraph(paragraph, drawings, hyperlinks, partsBySection),
+        Paragraph paragraph => BuildParagraph(paragraph, drawings, hyperlinks, partsBySection, preservedNumbering),
         _ => new XElement(W + "p")
     };
 
@@ -1166,7 +1179,7 @@ public static class DocxWriter
     private const string HeaderFill = "D9E2F3";
     private const string BandedFill = "F2F2F2";
 
-    private static XElement BuildTable(Table table, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks)
+    private static XElement BuildTable(Table table, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks, PreservedNumberingPlan? preservedNumbering = null)
     {
         var tbl = new XElement(W + "tbl", BuildTableProperties(table));
 
@@ -1207,7 +1220,7 @@ public static class DocxWriter
                     tc.Add(new XElement(W + "p"));
                 else
                     foreach (var paragraph in cell.Paragraphs)
-                        tc.Add(BuildParagraph(isHeaderRow ? BoldHeaderParagraph(paragraph) : paragraph, drawings, hyperlinks));
+                        tc.Add(BuildParagraph(isHeaderRow ? BoldHeaderParagraph(paragraph) : paragraph, drawings, hyperlinks, preservedNumbering: preservedNumbering));
                 tr.Add(tc);
             }
             tbl.Add(tr);
@@ -1383,10 +1396,11 @@ public static class DocxWriter
         Paragraph paragraph,
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
-        IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null)
+        IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null,
+        PreservedNumberingPlan? preservedNumbering = null)
     {
         var p = new XElement(W + "p");
-        var pPr = BuildParagraphProperties(paragraph, partsBySection);
+        var pPr = BuildParagraphProperties(paragraph, partsBySection, preservedNumbering);
         if (pPr is not null)
             p.Add(pPr);
 
@@ -1532,7 +1546,8 @@ public static class DocxWriter
 
     private static XElement? BuildParagraphProperties(
         Paragraph paragraph,
-        IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null)
+        IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null,
+        PreservedNumberingPlan? preservedNumbering = null)
     {
         var pPr = new XElement(W + "pPr");
         if (!string.IsNullOrEmpty(paragraph.StyleId))
@@ -1566,6 +1581,18 @@ public static class DocxWriter
             pPr.Add(new XElement(W + "numPr",
                 new XElement(W + "ilvl", new XAttribute(W + "val", level)),
                 new XElement(W + "numId", new XAttribute(W + "val", numId))));
+        }
+        // FreeW did not model this paragraph as a list, but it carried an original w:numPr against a
+        // numbering definition FreeW could not represent. Re-emit it pointing at the preserved definition's
+        // REMAPPED numId (disjoint from FreeW's fixed ids), keeping the original ilvl. Only when a merge plan
+        // exists and it actually remapped this numId (a numPr referencing a missing w:num is dropped, as before).
+        else if (preservedNumbering is not null
+            && paragraph.PreservedNumbering is { } pn
+            && preservedNumbering.NumIdRemap.TryGetValue(pn.NumId, out var mappedNumId))
+        {
+            pPr.Add(new XElement(W + "numPr",
+                new XElement(W + "ilvl", new XAttribute(W + "val", pn.Ilvl)),
+                new XElement(W + "numId", new XAttribute(W + "val", mappedNumId))));
         }
         if (f.Alignment != TextAlignment.Left)
             pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
@@ -3066,11 +3093,107 @@ public static class DocxWriter
             Edge("top"), Edge("left"), Edge("bottom"), Edge("right"));
     }
 
+    // Preserved-numbering merge plan: the smallest disjoint id above FreeW's fixed reservations. FreeW's own
+    // abstractNumIds occupy 0..2 and numIds 1..3, so the remapped originals start at abstractNumId 3 / numId 4
+    // and increment from there — they can therefore never collide with FreeW's ids regardless of whether FreeW
+    // authored a list, and regardless of the original ids' values.
+    private const int PreservedAbstractNumIdStart = 3;
+    private const int PreservedNumIdStart = 4;
+
+    /// <summary>
+    /// The plan for merging a document's preserved (FreeW-unmodelled) numbering alongside FreeW's own under a
+    /// disjoint id space. <see cref="AbstractNums"/> / <see cref="Nums"/> are the original
+    /// <c>w:abstractNum</c> / <c>w:num</c> elements with their <c>abstractNumId</c> / <c>numId</c> (and the
+    /// <c>num→abstractNum</c> reference) rewritten into the reserved high range, preserving all rich formatting
+    /// (multilevel, custom start/format/text/indent) verbatim. <see cref="NumIdRemap"/> maps each ORIGINAL
+    /// <c>numId</c> to its rewritten value so the body paragraphs' preserved <c>w:numPr</c> point at the right
+    /// (re-emitted) <c>w:num</c>.
+    /// </summary>
+    private sealed record PreservedNumberingPlan(
+        IReadOnlyList<XElement> AbstractNums,
+        IReadOnlyList<XElement> Nums,
+        IReadOnlyDictionary<int, int> NumIdRemap,
+        IReadOnlyList<XAttribute> NamespaceDeclarations);
+
+    /// <summary>
+    /// Builds a <see cref="PreservedNumberingPlan"/> from the original <c>word/numbering.xml</c>
+    /// (<see cref="PreservedParts.OriginalNumbering"/>) when at least one paragraph kept a
+    /// <see cref="Paragraph.PreservedNumbering"/> (i.e. FreeW did not model its numbering). Every original
+    /// <c>w:abstractNum</c> and <c>w:num</c> is cloned and re-id'd into the disjoint high range
+    /// (abstractNumId&gt;=<see cref="PreservedAbstractNumIdStart"/>, numId&gt;=<see cref="PreservedNumIdStart"/>),
+    /// with each <c>w:num</c>'s <c>w:abstractNumId</c> reference rewritten to its definition's new id, so the
+    /// preserved definitions stay internally consistent and never collide with FreeW's fixed ids. Returns null
+    /// when there is no original numbering or no paragraph preserved a <c>numPr</c> (so an authored-from-scratch
+    /// or FreeW-only-lists document gets no plan and is unaffected).
+    /// </summary>
+    private static PreservedNumberingPlan? BuildPreservedNumberingPlan(TextDocument document)
+    {
+        var original = document.Preserved.OriginalNumbering;
+        if (original is null)
+            return null;
+        if (!EnumerateParagraphs(document).Any(p => p.PreservedNumbering is not null))
+            return null;
+
+        // Remap every original abstractNumId → a fresh disjoint id, in document order, so num→abstract
+        // references can be rewritten consistently.
+        var abstractRemap = new Dictionary<int, int>();
+        var nextAbstractId = PreservedAbstractNumIdStart;
+        foreach (var abstractNum in original.Elements(W + "abstractNum"))
+        {
+            var id = ParseInt(abstractNum.Attribute(W + "abstractNumId")?.Value);
+            if (!abstractRemap.ContainsKey(id))
+                abstractRemap[id] = nextAbstractId++;
+        }
+
+        // Remap every original numId → a fresh disjoint id and rewrite its abstractNumId reference.
+        var numRemap = new Dictionary<int, int>();
+        var nextNumId = PreservedNumIdStart;
+        var remappedNums = new List<XElement>();
+        foreach (var num in original.Elements(W + "num"))
+        {
+            var id = ParseInt(num.Attribute(W + "numId")?.Value);
+            if (numRemap.ContainsKey(id))
+                continue;
+            var newNumId = nextNumId++;
+            numRemap[id] = newNumId;
+
+            var clone = new XElement(num);
+            clone.SetAttributeValue(W + "numId", newNumId);
+            var abstractRef = clone.Element(W + "abstractNumId");
+            var refId = ParseInt(abstractRef?.Attribute(W + "val")?.Value);
+            if (abstractRef is not null && abstractRemap.TryGetValue(refId, out var newAbstractId))
+                abstractRef.SetAttributeValue(W + "val", newAbstractId);
+            remappedNums.Add(clone);
+        }
+
+        // Clone and re-id the abstract definitions (formatting otherwise verbatim).
+        var remappedAbstracts = new List<XElement>();
+        foreach (var abstractNum in original.Elements(W + "abstractNum"))
+        {
+            var id = ParseInt(abstractNum.Attribute(W + "abstractNumId")?.Value);
+            var clone = new XElement(abstractNum);
+            clone.SetAttributeValue(W + "abstractNumId", abstractRemap[id]);
+            remappedAbstracts.Add(clone);
+        }
+
+        // Carry the original root's namespace declarations (other than the default w, which the merged root
+        // already declares) so any extension-prefixed content inside the preserved definitions — e.g.
+        // w15:restartNumberingAfterBreak, mc:Ignorable, w14:* — keeps a valid prefix when re-emitted.
+        var namespaceDeclarations = original.Attributes()
+            .Where(a => a.IsNamespaceDeclaration && a.Value != W.NamespaceName)
+            .Select(a => new XAttribute(a.Name, a.Value))
+            .ToList();
+
+        return new PreservedNumberingPlan(remappedAbstracts, remappedNums, numRemap, namespaceDeclarations);
+    }
+
     /// <summary>
     /// Builds word/numbering.xml: three abstract numbering definitions — bullet (abstractNumId 0),
     /// decimal (abstractNumId 1) and a multilevel/legal outline (abstractNumId 2) — each with
     /// <see cref="ListLevelCount"/> levels, mapped to w:num ids <see cref="BulletNumId"/>/
-    /// <see cref="NumberNumId"/>/<see cref="MultiLevelNumId"/>.
+    /// <see cref="NumberNumId"/>/<see cref="MultiLevelNumId"/>. When <paramref name="includeFreeWNumbering"/>
+    /// is false (a preserved-only document) FreeW's definitions are omitted; the <paramref name="preserved"/>
+    /// plan, when present, contributes the merged original definitions under a disjoint id range.
     /// </summary>
     /// <remarks>
     /// The bullet and decimal definitions reuse one fixed lvlText across every level. The multilevel
@@ -3079,7 +3202,7 @@ public static class DocxWriter
     /// the familiar outline form (1, 1.1, 1.1.1). Every multilevel level is w:numFmt="decimal" and the
     /// indent grows one step (18pt) per level.
     /// </remarks>
-    private static XDocument BuildNumbering()
+    private static XDocument BuildNumbering(bool includeFreeWNumbering, PreservedNumberingPlan? preserved)
     {
         XElement Lvl(int level, string numFmt, string lvlText) =>
             new(W + "lvl",
@@ -3110,13 +3233,41 @@ public static class DocxWriter
                 new XElement(W + "abstractNumId", new XAttribute(W + "val", abstractNumId)));
 
         var numbering = new XElement(W + "numbering",
-            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
-            AbstractNum(0, "bullet", "•"),
-            AbstractNum(1, "decimal", "%1."),
-            MultiLevelAbstractNum(2),
-            Num(BulletNumId, 0),
-            Num(NumberNumId, 1),
-            Num(MultiLevelNumId, 2));
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
+
+        // Re-declare any extra namespaces the preserved definitions use (so extension-prefixed children keep
+        // a valid prefix). The default w namespace is already declared above and is filtered out of the list.
+        if (preserved is not null)
+            foreach (var ns in preserved.NamespaceDeclarations)
+                numbering.Add(new XAttribute(ns.Name, ns.Value));
+
+        // w:abstractNum elements must precede every w:num (CT_Numbering schema order), so emit all abstract
+        // definitions first (FreeW's, then the preserved-and-remapped ones) and all w:num after.
+        // FreeW's own abstract definitions use the historical fixed ids 0/1/2, emitted only when FreeW
+        // actually authored a list — so a preserved-only document carries just the original definitions.
+        if (includeFreeWNumbering)
+        {
+            numbering.Add(
+                AbstractNum(0, "bullet", "•"),
+                AbstractNum(1, "decimal", "%1."),
+                MultiLevelAbstractNum(2));
+        }
+        // The preserved original abstractNum definitions, already remapped to a disjoint id range
+        // (abstractNumId>=3) by BuildPreservedNumberingPlan, re-emitted verbatim with their rich formatting.
+        if (preserved is not null)
+            numbering.Add(preserved.AbstractNums.Select(a => new XElement(a)));
+
+        if (includeFreeWNumbering)
+        {
+            numbering.Add(
+                Num(BulletNumId, 0),
+                Num(NumberNumId, 1),
+                Num(MultiLevelNumId, 2));
+        }
+        // The preserved w:num instances, already remapped (numId>=4 → remapped abstractNumId) so they never
+        // collide with FreeW's fixed 1/2/3 and the body paragraphs' re-emitted numPr resolve to a valid w:num.
+        if (preserved is not null)
+            numbering.Add(preserved.Nums.Select(n => new XElement(n)));
 
         return new XDocument(numbering);
     }

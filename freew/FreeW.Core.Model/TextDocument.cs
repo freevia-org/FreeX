@@ -693,6 +693,20 @@ public sealed class Paragraph : Block
     /// </summary>
     public Section? SectionBreak { get; set; }
 
+    /// <summary>
+    /// The original <c>w:numPr</c> (numId + ilvl) this paragraph carried on read when FreeW did <em>not</em>
+    /// model it as one of its own lists (see <see cref="ParagraphFormatting.ListKind"/>). Null (the default)
+    /// when the paragraph carries no numbering, or when FreeW maps its numbering to a <see cref="ListKind"/>
+    /// (in which case FreeW's own model is authoritative and re-emits FreeW's numbering instead).
+    /// <para>
+    /// Captured alongside <see cref="PreservedParts.OriginalNumbering"/> so a document whose numbering FreeW
+    /// cannot fully represent (rich multilevel/legal/custom-format definitions) keeps both its original
+    /// <c>word/numbering.xml</c> and the paragraphs' <c>w:numPr</c> across a round-trip. The writer emits this
+    /// paragraph's <c>numPr</c> from the (possibly remapped) preserved id, never from FreeW's fixed list ids.
+    /// </para>
+    /// </summary>
+    public PreservedNumbering? PreservedNumbering { get; set; }
+
     public Paragraph() { }
 
     public Paragraph(string text)
