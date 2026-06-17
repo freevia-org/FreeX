@@ -705,6 +705,17 @@ public static class DocxReader
             return;
         }
 
+        // A run wrapping a w:object (VML v:shape + o:OLEObject) is an embedded OLE object. imageRelationships
+        // is the all-parts map (id → part path), so both the .bin payload and the icon media part resolve.
+        var embedded = ReadEmbeddedObject(r, archive, imageRelationships);
+        if (embedded is not null)
+        {
+            var embeddedRun = new Run(string.Empty) { EmbeddedObject = embedded, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(embeddedRun);
+            paragraph.Runs.Add(embeddedRun);
+            return;
+        }
+
         // A run wrapping a w:footnoteReference is a footnote marker; recover its id into the model.
         var footnoteRef = r.Element(W + "footnoteReference");
         if (footnoteRef is not null && int.TryParse(footnoteRef.Attribute(W + "id")?.Value, out var footnoteId))
@@ -1042,6 +1053,87 @@ public static class DocxReader
         "ellipse" => ShapeKind.Ellipse,
         _ => hasTextBody ? ShapeKind.TextBox : ShapeKind.Rectangle,
     };
+
+    /// <summary>
+    /// Reads an embedded OLE object (a w:object wrapping a VML v:shape + o:OLEObject) from a run into an
+    /// <see cref="EmbeddedObject"/>, if present. Resolves the o:OLEObject/@r:id to the embedded .bin part via
+    /// <paramref name="relationships"/> (the all-parts map) to recover the payload bytes, reads the ProgID
+    /// from o:OLEObject/@ProgID, and — when the v:shape carries a v:imagedata — loads the icon media part
+    /// into the object's presentation image. Returns null when the run carries no embedded object.
+    ///
+    /// SIMPLIFICATION (Y2): only embedded objects (Type other than "Link") are recovered; a linked object
+    /// (no embedded .bin relationship) yields null. The icon's size becomes the object's size when present.
+    /// </summary>
+    private static EmbeddedObject? ReadEmbeddedObject(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> relationships)
+    {
+        var obj = run.Element(W + "object");
+        var ole = obj?.Element(O + "OLEObject");
+        if (ole is null)
+            return null;
+
+        // A linked object references its data externally (Type="Link") rather than via an embedded part.
+        if (string.Equals(ole.Attribute("Type")?.Value, "Link", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var relationshipId = ole.Attribute(R + "id")?.Value;
+        if (relationshipId is null || !relationships.TryGetValue(relationshipId, out var partPath))
+            return null;
+
+        var payload = LoadMedia(archive, partPath);
+        if (payload is null)
+            return null;
+
+        var progId = ole.Attribute("ProgID")?.Value ?? string.Empty;
+        var embedded = new EmbeddedObject(payload, progId);
+
+        // The VML v:shape supplies the on-page icon (v:imagedata r:id → media part) and the size (CSS @style).
+        var shape = obj!.Element(V + "shape");
+        var imagedataRel = shape?.Element(V + "imagedata")?.Attribute(R + "id")?.Value;
+        if (imagedataRel is not null
+            && relationships.TryGetValue(imagedataRel, out var iconPath)
+            && LoadMedia(archive, iconPath) is { } iconBytes)
+        {
+            var (iconWidthPt, iconHeightPt) = ParseVmlShapeSize(shape!.Attribute("style")?.Value);
+            embedded.Icon = new InlineImage(iconBytes, iconWidthPt, iconHeightPt);
+            embedded.WidthPt = iconWidthPt;
+            embedded.HeightPt = iconHeightPt;
+        }
+        else if (ParseVmlShapeSize(shape?.Attribute("style")?.Value) is var (w, h) && (w > 0 || h > 0))
+        {
+            embedded.WidthPt = w;
+            embedded.HeightPt = h;
+        }
+
+        return embedded;
+    }
+
+    /// <summary>
+    /// Parses a VML shape @style ("width:96pt;height:96pt") into its width/height in points. Missing or
+    /// unparseable dimensions read back as 0 (the caller keeps the model default in that case).
+    /// </summary>
+    private static (double WidthPt, double HeightPt) ParseVmlShapeSize(string? style)
+    {
+        if (string.IsNullOrEmpty(style))
+            return (0, 0);
+        double width = 0, height = 0;
+        foreach (var part in style.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var colon = part.IndexOf(':');
+            if (colon <= 0)
+                continue;
+            var key = part[..colon].Trim();
+            var value = part[(colon + 1)..].Trim();
+            if (value.EndsWith("pt", StringComparison.OrdinalIgnoreCase))
+                value = value[..^2].Trim();
+            if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pt))
+                continue;
+            if (key.Equals("width", StringComparison.OrdinalIgnoreCase))
+                width = pt;
+            else if (key.Equals("height", StringComparison.OrdinalIgnoreCase))
+                height = pt;
+        }
+        return (width, height);
+    }
 
     /// <summary>
     /// Reads an inline chart (w:drawing/wp:inline/a:graphic/a:graphicData[uri=chart]/c:chart) from a run

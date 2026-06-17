@@ -55,6 +55,10 @@ public static class DocxWriter
         // Assign a relationship + part name to every inline chart the same way (charts are a separate XML
         // part referenced from the run drawing by r:id, mirroring how images add a media part + r:embed).
         var charts = CollectCharts(document);
+        // Assign a relationship + binary part name to every inline embedded OLE object the same way. Each
+        // object's presentation icon is collected as an extra ImagePart appended to `images`, so the icon
+        // media part + relationship + png content-type flow through the existing image plumbing untouched.
+        var embeddedObjects = CollectEmbeddedObjects(document, images);
         // Assign an external relationship id to every distinct hyperlink target the same way.
         var hyperlinks = CollectHyperlinks(document);
         // Emit a numbering part only when at least one paragraph is decorated as a list.
@@ -84,13 +88,13 @@ public static class DocxWriter
         var hasSettings = hasProtection || document.Page.AutoHyphenation;
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, hyperlinks, hasHeader, hasFooter));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, hyperlinks, hasHeader, hasFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         if (hasSettings)
             WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation));
@@ -110,6 +114,10 @@ public static class DocxWriter
             WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
         foreach (var chart in charts)
             WritePart(archive, "word/charts/" + chart.FileName, BuildChartSpace(chart.Chart));
+        // Each embedded OLE object's native payload is written verbatim as a binary part. Its presentation
+        // icon (if any) was appended to `images` by CollectEmbeddedObjects and is emitted in the media loop.
+        foreach (var embedded in embeddedObjects)
+            WriteBinaryPart(archive, "word/embeddings/" + embedded.FileName, embedded.EmbeddedObject.Payload);
     }
 
     /// <summary>An inline image paired with the relationship id, media file name and a unique drawing id.</summary>
@@ -132,6 +140,49 @@ public static class DocxWriter
                     charts.Add(new ChartPart(chart, $"rIdChart{index}", $"chart{index}.xml", (uint)index));
                 }
         return charts;
+    }
+
+    /// <summary>
+    /// An inline embedded OLE object paired with its document relationship id (to the .bin part), the binary
+    /// part file name (relative to <c>word/embeddings/</c>), the VML shape id, and — when the object carries
+    /// a presentation icon — the <see cref="ImagePart"/> emitting that icon as a media part. Mirrors
+    /// <see cref="ChartPart"/>; the icon part is shared with the ordinary image plumbing.
+    /// </summary>
+    private sealed record EmbeddedObjectPart(
+        EmbeddedObject EmbeddedObject,
+        string RelationshipId,
+        string FileName,
+        string ShapeId,
+        ImagePart? IconPart);
+
+    /// <summary>
+    /// Assigns each inline embedded OLE object a relationship id (rIdOleN), a binary part name
+    /// (oleObjectN.bin) and a VML shape id. When the object has a presentation icon, an extra
+    /// <see cref="ImagePart"/> is appended to <paramref name="images"/> so the icon's media part, document
+    /// relationship and png content-type flow through the existing image plumbing unchanged. The walk order
+    /// matches <see cref="EnumerateParagraphs"/> so document.xml and the rels agree on which ids belong to
+    /// which run (replayed in <see cref="BuildDocument"/>).
+    /// </summary>
+    private static List<EmbeddedObjectPart> CollectEmbeddedObjects(TextDocument document, List<ImagePart> images)
+    {
+        var embedded = new List<EmbeddedObjectPart>();
+        foreach (var paragraph in EnumerateParagraphs(document))
+            foreach (var run in paragraph.Runs)
+                if (run.EmbeddedObject is { } obj)
+                {
+                    var index = embedded.Count + 1;
+                    ImagePart? iconPart = null;
+                    if (obj.Icon is { } icon)
+                    {
+                        // Continue the image numbering so the icon media file name never clashes with a body
+                        // image; the appended part is emitted by the ordinary media/rel/content-type loops.
+                        var imageIndex = images.Count + 1;
+                        iconPart = new ImagePart(icon, $"rIdImg{imageIndex}", $"image{imageIndex}.png", (uint)imageIndex);
+                        images.Add(iconPart);
+                    }
+                    embedded.Add(new EmbeddedObjectPart(obj, $"rIdOle{index}", $"oleObject{index}.bin", $"_oleObj{index}", iconPart));
+                }
+        return embedded;
     }
 
     private static List<ImagePart> CollectImages(TextDocument document)
@@ -187,7 +238,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -196,6 +247,11 @@ public static class DocxWriter
             includePng
                 ? new XElement(Ct + "Default", new XAttribute("Extension", "png"),
                     new XAttribute("ContentType", "image/png"))
+                : null,
+            // A single Default for the bin extension covers every embedded OLE payload part.
+            hasEmbeddedObjects
+                ? new XElement(Ct + "Default", new XAttribute("Extension", "bin"),
+                    new XAttribute("ContentType", OleObjectContentType))
                 : null,
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/document.xml"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml")),
@@ -317,7 +373,8 @@ public static class DocxWriter
         bool hasEndnotes,
         bool hasComments,
         bool hasSettings,
-        IReadOnlyList<ChartPart> charts)
+        IReadOnlyList<ChartPart> charts,
+        IReadOnlyList<EmbeddedObjectPart> embeddedObjects)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
@@ -369,6 +426,12 @@ public static class DocxWriter
                 new XAttribute("Id", chart.RelationshipId),
                 new XAttribute("Type", ChartRelType),
                 new XAttribute("Target", "charts/" + chart.FileName)));
+        // The embedded OLE payload relationship (the icon's image relationship is emitted in the images loop).
+        foreach (var embedded in embeddedObjects)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", embedded.RelationshipId),
+                new XAttribute("Type", OleObjectRelType),
+                new XAttribute("Target", "embeddings/" + embedded.FileName)));
         foreach (var (url, relationshipId) in hyperlinks)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", relationshipId),
@@ -382,6 +445,7 @@ public static class DocxWriter
         TextDocument document,
         IReadOnlyList<ImagePart> images,
         IReadOnlyList<ChartPart> charts,
+        IReadOnlyList<EmbeddedObjectPart> embeddedObjects,
         IReadOnlyDictionary<string, string> hyperlinks,
         bool hasHeader,
         bool hasFooter)
@@ -397,8 +461,10 @@ public static class DocxWriter
         // CollectCharts used, so document.xml and the rels agree on which rId belongs to which run.
         var imagesByRun = new Dictionary<Run, ImagePart>();
         var chartsByRun = new Dictionary<Run, ChartPart>();
+        var embeddedByRun = new Dictionary<Run, EmbeddedObjectPart>();
         var nextImage = 0;
         var nextChart = 0;
+        var nextEmbedded = 0;
         foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
             {
@@ -406,9 +472,11 @@ public static class DocxWriter
                     imagesByRun[run] = images[nextImage++];
                 if (run.Chart is not null)
                     chartsByRun[run] = charts[nextChart++];
+                if (run.EmbeddedObject is not null)
+                    embeddedByRun[run] = embeddedObjects[nextEmbedded++];
             }
 
-        var drawings = new RunDrawings(imagesByRun, chartsByRun);
+        var drawings = new RunDrawings(imagesByRun, chartsByRun, embeddedByRun);
 
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
@@ -427,6 +495,9 @@ public static class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "wps", Wps.NamespaceName),
+                // v/o carry a classic embedded OLE object's VML presentation (w:object/v:shape/o:OLEObject).
+                new XAttribute(XNamespace.Xmlns + "v", V.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "o", O.NamespaceName),
                 body));
     }
 
@@ -437,11 +508,13 @@ public static class DocxWriter
     /// </summary>
     private sealed record RunDrawings(
         IReadOnlyDictionary<Run, ImagePart> Images,
-        IReadOnlyDictionary<Run, ChartPart> Charts)
+        IReadOnlyDictionary<Run, ChartPart> Charts,
+        IReadOnlyDictionary<Run, EmbeddedObjectPart> EmbeddedObjects)
     {
         public static readonly RunDrawings None = new(
             new Dictionary<Run, ImagePart>(),
-            new Dictionary<Run, ChartPart>());
+            new Dictionary<Run, ChartPart>(),
+            new Dictionary<Run, EmbeddedObjectPart>());
     }
 
     /// <summary>Builds a header (w:hdr) or footer (w:ftr) part from its model paragraphs.</summary>
@@ -1172,6 +1245,8 @@ public static class DocxWriter
             r.Add(BuildDrawing(imagePart));
         else if (run.Chart is not null && drawings.Charts.TryGetValue(run, out var chartPart))
             r.Add(BuildChartDrawing(chartPart));
+        else if (run.EmbeddedObject is not null && drawings.EmbeddedObjects.TryGetValue(run, out var embeddedPart))
+            r.Add(BuildEmbeddedObject(embeddedPart));
         else
         {
             // A tracked deletion stores its text in w:delText (so Word renders it as deleted content);
@@ -1567,6 +1642,45 @@ public static class DocxWriter
                             new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
                             new XAttribute(R + "id", part.RelationshipId))))));
     }
+
+    /// <summary>
+    /// Builds a classic embedded OLE object as a <c>w:object</c> wrapping the VML presentation: a
+    /// <c>v:shape</c> sized in points carrying an <c>o:OLEObject</c> (Type="Embed", the model's ProgID, the
+    /// shape id, and an <c>r:id</c> to the embedded <c>.bin</c> part) and — when the object has an icon — a
+    /// <c>v:imagedata</c> whose <c>r:id</c> points at the icon media part. The VML namespaces (v/o) are
+    /// declared on the document root (see <see cref="BuildDocument"/>).
+    /// SIMPLIFICATION (Y2): the VML presentation is minimised to a single v:shape (+ optional v:imagedata);
+    /// only embedded (not linked) objects are emitted, and no live OLE activation data is written.
+    /// </summary>
+    private static XElement BuildEmbeddedObject(EmbeddedObjectPart part)
+    {
+        // VML shapes size in points via a CSS-style @style; width/height map directly from the model.
+        var style = $"width:{FormatPt(part.EmbeddedObject.WidthPt)}pt;height:{FormatPt(part.EmbeddedObject.HeightPt)}pt";
+
+        var shape = new XElement(V + "shape",
+            new XAttribute("id", part.ShapeId),
+            new XAttribute("type", "#_oleObjType"),
+            new XAttribute("style", style));
+        // The on-page presentation: v:imagedata references the icon media part by relationship id.
+        if (part.IconPart is { } icon)
+            shape.Add(new XElement(V + "imagedata",
+                new XAttribute(R + "id", icon.RelationshipId),
+                new XAttribute(O + "title", "")));
+
+        var ole = new XElement(O + "OLEObject",
+            new XAttribute("Type", "Embed"),
+            new XAttribute("ProgID", part.EmbeddedObject.ProgId),
+            new XAttribute("ShapeID", part.ShapeId),
+            new XAttribute("DrawAspect", "Icon"),
+            new XAttribute("ObjectID", part.ShapeId),
+            new XAttribute(R + "id", part.RelationshipId));
+
+        return new XElement(W + "object", shape, ole);
+    }
+
+    /// <summary>Formats a point measure for a VML CSS @style value (invariant, trimmed of trailing zeros).</summary>
+    private static string FormatPt(double points) =>
+        points.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Builds a self-contained DrawingML chart part (c:chartSpace) for <paramref name="chart"/>. Emits one
