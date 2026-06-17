@@ -86,9 +86,18 @@ internal static class XlsxFormControlMapper
             model.AnchorOffsets = ReadAnchorOffsets(anchor);
         }
 
-        // Fall back to the VML <x:ClientData><x:Anchor> (pixel offsets) when the worksheet controlPr
-        // carries no offset-bearing anchor (e.g. legacy files that anchor purely via VML).
-        model.AnchorOffsets ??= ReadVmlAnchorOffsets(archive, worksheetPath, model.ShapeId, worksheetRels);
+        // Resolve the control's VML shape once for both the anchor fallback and the caption text.
+        var vmlShape = ResolveVmlShape(archive, worksheetPath, model.ShapeId, worksheetRels);
+        if (vmlShape is not null)
+        {
+            // Fall back to the VML <x:ClientData><x:Anchor> (pixel offsets) when the worksheet controlPr
+            // carries no offset-bearing anchor (e.g. legacy files that anchor purely via VML).
+            model.AnchorOffsets ??= ParseVmlAnchor(
+                vmlShape.Element(ExcelVmlNs + "ClientData")?.Element(ExcelVmlNs + "Anchor")?.Value);
+            // The visible caption/label lives in the VML shape's <v:textbox> (empty when the control
+            // has no authored display text — Excel shows nothing, and so do we; we never show Name).
+            model.Caption = ReadVmlCaption(vmlShape);
+        }
 
         // controlPr can also carry the linked cell / list fill range when no ctrlProp part exists.
         model.LinkedCell ??= NullIfWhiteSpace(controlPr?.Attribute("fmlaLink")?.Value);
@@ -229,11 +238,11 @@ internal static class XlsxFormControlMapper
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
 
     /// <summary>
-    /// Resolves the worksheet's legacy VML drawing and recovers the <c>x:Anchor</c> for the control's
-    /// shape (matched by its <c>shapeId</c>, encoded in the VML shape id as <c>_x0000_s{shapeId}</c>).
-    /// Used only as a fallback when the worksheet controlPr carries no offset-bearing anchor.
+    /// Resolves the worksheet's legacy VML drawing and returns the <c>v:shape</c> for the control's
+    /// shape (matched by its <c>shapeId</c>, encoded in the VML shape id as <c>_x0000_s{shapeId}</c>),
+    /// from which both the <c>x:Anchor</c> (offset fallback) and the <c>v:textbox</c> caption are read.
     /// </summary>
-    private static DrawingAnchorRange? ReadVmlAnchorOffsets(
+    private static XElement? ResolveVmlShape(
         ZipArchive archive,
         string worksheetPath,
         uint? shapeId,
@@ -271,14 +280,26 @@ internal static class XlsxFormControlMapper
             if (string.IsNullOrEmpty(id) || !id.EndsWith(targetSuffix, StringComparison.Ordinal))
                 continue;
 
-            var clientData = shape.Element(ExcelVmlNs + "ClientData");
-            var anchorText = clientData?.Element(ExcelVmlNs + "Anchor")?.Value;
-            var parsed = ParseVmlAnchor(anchorText);
-            if (parsed is not null)
-                return parsed;
+            return shape;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Reads the control's authored caption from its VML shape's <c>v:textbox</c> (the visible label).
+    /// Returns <see langword="null"/> when the textbox is absent or empty — the common case for
+    /// checkboxes whose caption was cleared, where Excel shows no label.
+    /// </summary>
+    internal static string? ReadVmlCaption(XElement vmlShape)
+    {
+        var textbox = vmlShape.Element(VmlNs + "textbox");
+        if (textbox is null)
+            return null;
+
+        // The caption text is the concatenated text of the textbox content (one or more <div> lines,
+        // possibly wrapping <font> runs). XElement.Value already flattens descendant text.
+        return NullIfWhiteSpace(textbox.Value);
     }
 
     private static string? ResolveVmlDrawingPath(

@@ -58,26 +58,11 @@ internal static class FormControlRenderPlanner
             or FormControlKind.GroupBox;
 
     /// <summary>
-    /// Resolves the caption text drawn next to / inside the control. Prefers the control's
-    /// authored name, falling back to a friendly kind label (e.g. "Check Box").
+    /// Resolves the caption text drawn next to / inside the control: the control's authored display
+    /// text (<see cref="FormControlModel.Caption"/>, read from its VML textbox). Returns an empty
+    /// string when the control has no authored caption — Excel draws no label in that case, so the
+    /// caller renders nothing. The internal shape <see cref="FormControlModel.Name"/> is NOT used.
     /// </summary>
     public static string GetCaption(FormControlModel control)
-    {
-        if (!string.IsNullOrWhiteSpace(control.Name))
-            return control.Name.Trim();
-
-        return control.Kind switch
-        {
-            FormControlKind.CheckBox => "Check Box",
-            FormControlKind.OptionButton => "Option Button",
-            FormControlKind.Spinner => "Spinner",
-            FormControlKind.ScrollBar => "Scroll Bar",
-            FormControlKind.Label => "Label",
-            FormControlKind.GroupBox => "Group Box",
-            FormControlKind.Button => "Button",
-            FormControlKind.DropDown => "Drop Down",
-            FormControlKind.ListBox => "List Box",
-            _ => "Control"
-        };
-    }
+        => string.IsNullOrWhiteSpace(control.Caption) ? string.Empty : control.Caption.Trim();
 }
