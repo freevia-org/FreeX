@@ -874,6 +874,74 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void MultiLevelList_RoundTrips_ListKindAndLevel()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("outline item")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel, ListLevel = 2 }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        formatting.ListLevel.Should().Be(2);
+    }
+
+    [Fact]
+    public void MultiLevelList_DoesNotChangeBulletOrDecimalRoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("bullet")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet, ListLevel = 0 }
+        });
+        doc.Blocks.Add(new Paragraph("decimal")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number, ListLevel = 1 }
+        });
+        doc.Blocks.Add(new Paragraph("outline")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel, ListLevel = 1 }
+        });
+
+        var paragraphs = RoundTrip(doc).Paragraphs.ToList();
+
+        paragraphs[0].Formatting.ListKind.Should().Be(ListKind.Bullet);
+        paragraphs[1].Formatting.ListKind.Should().Be(ListKind.Number);
+        paragraphs[2].Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        paragraphs[2].Formatting.ListLevel.Should().Be(1);
+    }
+
+    [Fact]
+    public void MultiLevelList_WritesOutlineAbstractDefinition()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("outline item")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel }
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var numReader = new StreamReader(zip.GetEntry("word/numbering.xml")!.Open());
+        var numbering = numReader.ReadToEnd();
+
+        // The outline abstract num is tagged multilevel and accumulates ancestor counters in its
+        // level text: %1. / %1.%2. / %1.%2.%3. , and the multilevel list maps to numId 3.
+        numbering.Should().Contain("multiLevelType");
+        numbering.Should().Contain("multilevel");
+        numbering.Should().Contain("%1.%2.");
+        numbering.Should().Contain("%1.%2.%3.");
+
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        docReader.ReadToEnd().Should().Contain("w:val=\"3\"");
+    }
+
+    [Fact]
     public void NonListParagraph_HasNoListKind()
     {
         var doc = new TextDocument();
