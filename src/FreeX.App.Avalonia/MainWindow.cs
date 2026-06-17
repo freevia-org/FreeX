@@ -681,6 +681,8 @@ public sealed partial class MainWindow : Window
                     ["view.zoomToSelection"] = ZoomToSelection,
                     ["view.freezePanes"] = FreezePanesAtActiveCell,
                     ["view.pageBreakPreview"] = TogglePageBreakPreview,
+                    ["view.formulaBar"] = ToggleFormulaBarVisibility,
+                    ["view.pageLayoutView"] = SetPageLayoutView,
                     // Home tab (Editing group).
                     ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
                     ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
@@ -787,6 +789,9 @@ public sealed partial class MainWindow : Window
                     ["formulas.tracePrecedents"] = TraceFormulaPrecedents,
                     ["formulas.traceDependents"] = TraceFormulaDependents,
                     ["formulas.removeArrows"] = RemoveFormulaTraceArrows,
+                    // Formulas ▸ Calculation group.
+                    ["formulas.calcOptions"] = ToggleCalculationMode,
+                    ["formulas.calcNow"] = CalculateNow,
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
