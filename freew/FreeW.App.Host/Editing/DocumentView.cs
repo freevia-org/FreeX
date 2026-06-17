@@ -267,6 +267,14 @@ public sealed class DocumentView : RichTextBox
     public event EventHandler<double>? ZoomChanged;
 
     /// <summary>
+    /// Raised whenever the page chrome is (re)applied — i.e. when the page size/margins change, Print
+    /// Layout is toggled, or the document re-renders. Lets passive view chrome that mirrors the page
+    /// geometry (e.g. the <see cref="Ruler"/>) redraw without polling. Purely a view-layout signal; it
+    /// never implies a model change.
+    /// </summary>
+    public event EventHandler? LayoutChanged;
+
+    /// <summary>
     /// The editor zoom factor where 1.0 == 100%. Assignments are clamped to the supported range
     /// (<see cref="ZoomLevels.Min"/>..<see cref="ZoomLevels.Max"/>) and applied as a <see cref="ScaleTransform"/>
     /// on the editing surface. Purely visual: the model and saved document are unaffected.
@@ -910,6 +918,53 @@ public sealed class DocumentView : RichTextBox
         var first = SelectedModelParagraphs().FirstOrDefault();
         var f = first?.Formatting ?? ParagraphFormatting.Default;
         return (f.IndentLeftPt, f.IndentRightPt, f.FirstLineIndentPt);
+    }
+
+    /// <summary>
+    /// The <see cref="ParagraphFormatting"/> of the first paragraph spanned by the current selection (the
+    /// caret's paragraph), or <see cref="ParagraphFormatting.Default"/> when none is selected. Read-only;
+    /// used by the <see cref="Ruler"/> to reflect the current paragraph's indents and tab stops. Does not
+    /// commit pending edits (cheap, called on selection change) — the indent/tab markers are advisory.
+    /// </summary>
+    public ParagraphFormatting CurrentParagraphFormatting =>
+        SelectedModelParagraphs().FirstOrDefault()?.Formatting ?? ParagraphFormatting.Default;
+
+    /// <summary>
+    /// An approximate "Page X of Y" for the status bar: the page the caret currently sits on, and the
+    /// total page count. Both are computed from the editable surface's single continuous flow against the
+    /// page's printable content height (<see cref="PageLayout.ContentAreaDip"/>) — the same approximation
+    /// the <see cref="PageBreakAdorner"/> uses (see its remarks), so the numbers track the on-screen
+    /// page-break markers. It does not model keep-together rules, explicit breaks, or straddling tables, so
+    /// it can differ by a page from the fully paginated Print Preview. Returns (1, 1) when geometry is not
+    /// yet available (e.g. before first layout) so callers always have a sane value.
+    /// </summary>
+    public (int Current, int Total) PageInfo()
+    {
+        if (Document is not { } doc)
+            return (1, 1);
+
+        var (_, contentHeight) = PageLayout.ContentAreaDip(_model.Page);
+        if (contentHeight <= 0)
+            return (1, 1);
+
+        try
+        {
+            var top = doc.ContentStart.GetCharacterRect(LogicalDirection.Forward).Top;
+
+            // Total: span from the first to the last content line, divided into page-height bands.
+            var bottom = doc.ContentEnd.GetCharacterRect(LogicalDirection.Backward).Bottom;
+            var total = Math.Max(1, (int)Math.Ceiling(Math.Max(0, bottom - top) / contentHeight));
+
+            // Current: which band the caret's line falls into (1-based), clamped into range.
+            var caret = (CaretPosition ?? doc.ContentStart).GetCharacterRect(LogicalDirection.Forward).Top;
+            var current = Math.Clamp((int)Math.Floor(Math.Max(0, caret - top) / contentHeight) + 1, 1, total);
+            return (current, total);
+        }
+        catch (InvalidOperationException)
+        {
+            // Layout momentarily unavailable during a relayout; report a safe default.
+            return (1, 1);
+        }
     }
 
     /// <summary>
@@ -1778,6 +1833,9 @@ public sealed class DocumentView : RichTextBox
             Padding = PlainPadding;
             Effect = null;
         }
+
+        // Let passive page-geometry chrome (the ruler) redraw against the new width/margins/print-layout.
+        LayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 
     // Add, remove, or refresh the page-break overlay to match PrintLayoutEnabled. Mirrors
