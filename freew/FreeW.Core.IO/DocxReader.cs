@@ -663,6 +663,18 @@ public static class DocxReader
             return;
         }
 
+        // A run whose w:drawing references a chart part (a:graphicData/c:chart) becomes a chart run.
+        // imageRelationships maps EVERY document relationship id → part path (it is not filtered to
+        // images), so the chart part resolves through it just like a media part.
+        var chart = ReadChart(r, archive, imageRelationships);
+        if (chart is not null)
+        {
+            var chartRun = new Run(string.Empty) { Chart = chart, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(chartRun);
+            paragraph.Runs.Add(chartRun);
+            return;
+        }
+
         // A run wrapping a w:footnoteReference is a footnote marker; recover its id into the model.
         var footnoteRef = r.Element(W + "footnoteReference");
         if (footnoteRef is not null && int.TryParse(footnoteRef.Attribute(W + "id")?.Value, out var footnoteId))
@@ -832,6 +844,123 @@ public static class DocxReader
         {
             AltText = string.IsNullOrEmpty(descr) ? null : descr,
         };
+    }
+
+    /// <summary>
+    /// Reads an inline chart (w:drawing/wp:inline/a:graphic/a:graphicData[uri=chart]/c:chart) from a run
+    /// into a <see cref="Chart"/>, if present. Resolves the c:chart/@r:id to the chart part via
+    /// <paramref name="relationships"/> (the all-parts map), loads it and parses its kind, title, category
+    /// labels and series values back out of the literal caches. Returns null when the run carries no chart.
+    /// </summary>
+    private static Chart? ReadChart(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> relationships)
+    {
+        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
+        if (inline is null)
+            return null;
+
+        var chartRef = inline.Descendants(C + "chart").FirstOrDefault(e => e.Attribute(R + "id") is not null);
+        var relationshipId = chartRef?.Attribute(R + "id")?.Value;
+        if (relationshipId is null || !relationships.TryGetValue(relationshipId, out var partPath))
+            return null;
+
+        var chartXml = LoadPart(archive, partPath);
+        var chartElement = chartXml?.Root?.Element(C + "chart");
+        if (chartElement is null)
+            return null;
+
+        var plotArea = chartElement.Element(C + "plotArea");
+        if (plotArea is null)
+            return null;
+
+        // Find the single chart-type element and map it to a ChartKind. barChart's c:barDir distinguishes
+        // column (vertical) from bar (horizontal); anything else falls back to Column.
+        var (typeElement, kind) = ResolveChartType(plotArea);
+        if (typeElement is null)
+            return null;
+
+        var chart = new Chart { Kind = kind };
+
+        // Title: the first c:title's concatenated a:t text (when present and not auto-deleted).
+        var titleText = string.Concat(
+            chartElement.Element(C + "title")?.Descendants(A + "t").Select(t => t.Value) ?? []);
+        if (titleText.Length > 0)
+            chart.Title = titleText;
+
+        // Categories: read once from the first series' c:cat string cache (shared across series).
+        var firstSeries = typeElement.Elements(C + "ser").FirstOrDefault();
+        if (firstSeries is not null)
+            foreach (var value in ReadStringCache(firstSeries.Element(C + "cat")))
+                chart.Categories.Add(value);
+
+        // Series: name (c:tx string cache) + values (c:val number cache).
+        foreach (var ser in typeElement.Elements(C + "ser"))
+        {
+            var name = ReadStringCache(ser.Element(C + "tx")).FirstOrDefault();
+            var series = new ChartSeries { Name = string.IsNullOrEmpty(name) ? null : name };
+            series.Values.AddRange(ReadNumberCache(ser.Element(C + "val")));
+            chart.Series.Add(series);
+        }
+
+        // Size: the inline extent (EMU) maps back to points.
+        var extent = inline.Element(Wp + "extent");
+        chart.WidthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
+        chart.HeightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
+
+        return chart;
+    }
+
+    /// <summary>
+    /// Finds the plot area's single chart-type element (c:barChart / c:lineChart / c:pieChart) and maps it
+    /// to a <see cref="ChartKind"/>. For a bar chart, c:barDir val="bar" is horizontal (Bar), otherwise
+    /// vertical (Column). Returns (null, Column) when no recognised chart type is present.
+    /// </summary>
+    private static (XElement? Element, ChartKind Kind) ResolveChartType(XElement plotArea)
+    {
+        if (plotArea.Element(C + "barChart") is { } bar)
+        {
+            var dir = bar.Element(C + "barDir")?.Attribute(C + "val")?.Value;
+            return (bar, dir == "bar" ? ChartKind.Bar : ChartKind.Column);
+        }
+        if (plotArea.Element(C + "lineChart") is { } line)
+            return (line, ChartKind.Line);
+        if (plotArea.Element(C + "pieChart") is { } pie)
+            return (pie, ChartKind.Pie);
+        return (null, ChartKind.Column);
+    }
+
+    /// <summary>
+    /// Reads the literal string cache (c:strRef/c:strCache or a bare c:strCache) under <paramref name="parent"/>
+    /// into an ordered list of values by c:pt/@idx. Returns an empty list when the parent or cache is absent.
+    /// </summary>
+    private static List<string> ReadStringCache(XElement? parent)
+    {
+        var cache = parent?.Descendants(C + "strCache").FirstOrDefault();
+        return ReadCachePoints(cache).Select(p => p.Value).ToList();
+    }
+
+    /// <summary>Reads the literal number cache (c:numRef/c:numCache) under <paramref name="parent"/> into ordered doubles.</summary>
+    private static List<double> ReadNumberCache(XElement? parent)
+    {
+        var cache = parent?.Descendants(C + "numCache").FirstOrDefault();
+        return ReadCachePoints(cache)
+            .Select(p => double.TryParse(p.Value, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Returns a chart cache's points ordered by their c:pt/@idx (the OOXML cache is index-addressed, so we
+    /// sort to be robust against out-of-order or sparse points). Each point's text is its c:v value.
+    /// </summary>
+    private static IEnumerable<(int Idx, string Value)> ReadCachePoints(XElement? cache)
+    {
+        if (cache is null)
+            return [];
+        return cache.Elements(C + "pt")
+            .Select(pt => (
+                Idx: int.TryParse(pt.Attribute(C + "idx")?.Value, out var idx) ? idx : 0,
+                Value: pt.Element(C + "v")?.Value ?? string.Empty))
+            .OrderBy(p => p.Idx);
     }
 
     /// <summary>Maps relationship id -> media part path from word/_rels/document.xml.rels.</summary>

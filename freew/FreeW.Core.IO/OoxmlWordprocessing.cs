@@ -29,6 +29,18 @@ internal static class Ooxml
     public static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
     public static readonly XNamespace Pic = "http://schemas.openxmlformats.org/drawingml/2006/picture";
 
+    /// <summary>
+    /// The DrawingML chart namespace (c), used by the chart part (c:chartSpace / c:barChart / c:ser / …)
+    /// and by the a:graphicData that references the chart from the inline w:drawing.
+    /// </summary>
+    public static readonly XNamespace C = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+    public const string ChartContentType = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+    public const string ChartRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+
+    /// <summary>The a:graphicData/@uri that marks a DrawingML graphic frame as a chart.</summary>
+    public const string ChartGraphicDataUri = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
     // OPC core properties (docProps/core.xml): Dublin Core + the cp / dcterms / xsi vocabularies.
     public static readonly XNamespace Cp = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
     public static readonly XNamespace Dc = "http://purl.org/dc/elements/1.1/";
