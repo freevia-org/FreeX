@@ -45,6 +45,14 @@ internal static class Ooxml
     public const string ChartContentType = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
     public const string ChartRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
 
+    /// <summary>
+    /// The OPC content type + relationship type for a chart's embedded companion workbook (the editable-data
+    /// xlsx referenced by c:externalData). The "package" relationship type is what Word's "Edit Data" follows
+    /// from the chart part's own _rels to reopen the spreadsheet behind the chart.
+    /// </summary>
+    public const string SpreadsheetContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    public const string ExternalDataRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package";
+
     /// <summary>The a:graphicData/@uri that marks a DrawingML graphic frame as a chart.</summary>
     public const string ChartGraphicDataUri = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 

@@ -1278,18 +1278,35 @@ public static class DocxReader
         if (titleText.Length > 0)
             chart.Title = titleText;
 
-        // Categories: read once from the first series' c:cat string cache (shared across series).
+        // A legend element (regardless of position) maps back to ShowLegend.
+        chart.ShowLegend = chartElement.Element(C + "legend") is not null;
+
+        // Axis titles: the c:catAx / c:valAx title text (the scatter x-axis is a value axis at axPos="b", so
+        // it carries the CategoryAxisTitle). Read by axis position to stay kind-agnostic.
+        var (categoryAxisTitle, valueAxisTitle) = ReadAxisTitles(plotArea);
+        chart.CategoryAxisTitle = categoryAxisTitle;
+        chart.ValueAxisTitle = valueAxisTitle;
+
+        // Categories: read once from the first series, shared across series. Scatter has no c:cat — its
+        // categories live in c:xVal (a number cache), so read those as their invariant string form.
         var firstSeries = typeElement.Elements(C + "ser").FirstOrDefault();
         if (firstSeries is not null)
-            foreach (var value in ReadStringCache(firstSeries.Element(C + "cat")))
-                chart.Categories.Add(value);
+        {
+            if (kind == ChartKind.Scatter)
+                foreach (var x in ReadNumberCache(firstSeries.Element(C + "xVal")))
+                    chart.Categories.Add(x.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            else
+                foreach (var value in ReadStringCache(firstSeries.Element(C + "cat")))
+                    chart.Categories.Add(value);
+        }
 
-        // Series: name (c:tx string cache) + values (c:val number cache).
+        // Series: name (c:tx string cache) + values (c:val number cache, or c:yVal for scatter).
+        var valueElementName = kind == ChartKind.Scatter ? "yVal" : "val";
         foreach (var ser in typeElement.Elements(C + "ser"))
         {
             var name = ReadStringCache(ser.Element(C + "tx")).FirstOrDefault();
             var series = new ChartSeries { Name = string.IsNullOrEmpty(name) ? null : name };
-            series.Values.AddRange(ReadNumberCache(ser.Element(C + "val")));
+            series.Values.AddRange(ReadNumberCache(ser.Element(C + valueElementName)));
             chart.Series.Add(series);
         }
 
@@ -1302,9 +1319,9 @@ public static class DocxReader
     }
 
     /// <summary>
-    /// Finds the plot area's single chart-type element (c:barChart / c:lineChart / c:pieChart) and maps it
-    /// to a <see cref="ChartKind"/>. For a bar chart, c:barDir val="bar" is horizontal (Bar), otherwise
-    /// vertical (Column). Returns (null, Column) when no recognised chart type is present.
+    /// Finds the plot area's single chart-type element and maps it to a <see cref="ChartKind"/>:
+    /// c:barChart → Column/Bar (by c:barDir), c:lineChart → Line, c:areaChart → Area, c:pieChart → Pie,
+    /// c:doughnutChart → Doughnut, c:scatterChart → Scatter. Returns (null, Column) when none is present.
     /// </summary>
     private static (XElement? Element, ChartKind Kind) ResolveChartType(XElement plotArea)
     {
@@ -1315,9 +1332,39 @@ public static class DocxReader
         }
         if (plotArea.Element(C + "lineChart") is { } line)
             return (line, ChartKind.Line);
+        if (plotArea.Element(C + "areaChart") is { } area)
+            return (area, ChartKind.Area);
         if (plotArea.Element(C + "pieChart") is { } pie)
             return (pie, ChartKind.Pie);
+        if (plotArea.Element(C + "doughnutChart") is { } doughnut)
+            return (doughnut, ChartKind.Doughnut);
+        if (plotArea.Element(C + "scatterChart") is { } scatter)
+            return (scatter, ChartKind.Scatter);
         return (null, ChartKind.Column);
+    }
+
+    /// <summary>
+    /// Reads the bottom (category/x) and left (value/y) axis titles from a plot area by axis position. The
+    /// category-axis title is taken from the bottom-positioned axis (axPos="b" — a c:catAx for the cartesian
+    /// kinds, or a c:valAx for scatter) and the value-axis title from the left axis (axPos="l"). Returns nulls
+    /// when an axis has no title.
+    /// </summary>
+    private static (string? Category, string? Value) ReadAxisTitles(XElement plotArea)
+    {
+        string? category = null;
+        string? value = null;
+        foreach (var axis in plotArea.Elements().Where(e => e.Name == C + "catAx" || e.Name == C + "valAx"))
+        {
+            var position = axis.Element(C + "axPos")?.Attribute(C + "val")?.Value;
+            var title = string.Concat(axis.Element(C + "title")?.Descendants(A + "t").Select(t => t.Value) ?? []);
+            if (title.Length == 0)
+                continue;
+            if (position == "b")
+                category = title;
+            else if (position == "l")
+                value = title;
+        }
+        return (category, value);
     }
 
     /// <summary>
