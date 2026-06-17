@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 
@@ -29,6 +30,17 @@ public sealed class MainWindow : Window
     private ListBox _navList = null!;
     private bool _navPaneVisible;
 
+    // The grey "desk" the Print-Layout page floats on. Frozen so it can back the editor cheaply.
+    private static readonly Brush WorkspaceBrush = CreateWorkspaceBrush();
+    private Border _workspace = null!;
+
+    private static Brush CreateWorkspaceBrush()
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
+        brush.Freeze();
+        return brush;
+    }
+
     // Read mode (distraction-free view) chrome we hide/restore, plus the saved presentation we restore.
     private Border _titleBar = null!;
     private UIElement _ribbon = null!;
@@ -40,6 +52,10 @@ public sealed class MainWindow : Window
     private Thickness _editorMarginBeforeReadMode;
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
+    // Print-Layout sizing the editor applies (page-width Width + drop shadow) which read mode neutralizes
+    // for its reading column and restores on exit, so the two view toggles don't fight over the surface.
+    private double _editorWidthBeforeReadMode = double.NaN;
+    private Effect? _editorEffectBeforeReadMode;
 
     public MainWindow()
     {
@@ -56,7 +72,8 @@ public sealed class MainWindow : Window
         var stateStore = new RibbonStateStore();
         _stateStore = stateStore;
         var commands = FreeWRibbonCommands.Build(
-            editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode);
+            editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode,
+            TogglePrintLayout, () => _editor.PrintLayoutEnabled);
         _file = new FileCommands(this, editor, UpdateTitle);
         editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
@@ -92,7 +109,16 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(navPane, Dock.Left);
         root.Children.Add(navPane);
 
-        root.Children.Add(editor);
+        // Grey "workspace" behind the editor so the Print-Layout page reads as a white sheet floating on a
+        // desk. The editor sizes/centres itself to the page width in Print-Layout mode (see
+        // DocumentView.ApplyPageChrome); the grey shows on either side. In plain/continuous mode the editor
+        // stretches to fill, so the grey is fully covered and the look is unchanged. Purely host chrome.
+        _workspace = new Border
+        {
+            Background = WorkspaceBrush,
+            Child = editor
+        };
+        root.Children.Add(_workspace);
 
         CommandBindings.Add(new CommandBinding(ApplicationCommands.New, (_, _) => _file.New()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, (_, _) => _file.Open()));
@@ -114,6 +140,10 @@ public sealed class MainWindow : Window
         UpdateTitle();
         UpdateCounts();
         RefreshOutline();
+
+        // Print Layout is the default view (the Word default), so seed the View > Print Layout toggle as
+        // checked to match the editor's initial PrintLayoutEnabled state.
+        _stateStore.SetChecked("freew.print-layout", _editor.PrintLayoutEnabled);
 
         Content = root;
     }
@@ -253,6 +283,8 @@ public sealed class MainWindow : Window
             _editorMarginBeforeReadMode = _editor.Margin;
             _editorMaxWidthBeforeReadMode = _editor.MaxWidth;
             _editorAlignmentBeforeReadMode = _editor.HorizontalAlignment;
+            _editorWidthBeforeReadMode = _editor.Width;
+            _editorEffectBeforeReadMode = _editor.Effect;
 
             _titleBar.Visibility = Visibility.Collapsed;
             _ribbon.Visibility = Visibility.Collapsed;
@@ -263,7 +295,10 @@ public sealed class MainWindow : Window
             _navPane.Visibility = Visibility.Collapsed;
 
             // A centered, comfortable reading column: cap the width and add generous breathing room.
+            // Drop any Print-Layout page sizing/shadow so the reading column owns the surface width.
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
+            _editor.Width = double.NaN;
+            _editor.Effect = null;
             _editor.MaxWidth = 760;
             _editor.Margin = new Thickness(40, 40, 40, 40);
         }
@@ -274,16 +309,28 @@ public sealed class MainWindow : Window
             _dataFolderItem.Visibility = Visibility.Visible;
             _zoomItem.Visibility = Visibility.Visible;
 
-            // Restore the editor's original full-width presentation.
+            // Restore the editor's original presentation (including any Print-Layout page sizing/shadow).
             _editor.HorizontalAlignment = _editorAlignmentBeforeReadMode;
             _editor.MaxWidth = _editorMaxWidthBeforeReadMode;
             _editor.Margin = _editorMarginBeforeReadMode;
+            _editor.Width = _editorWidthBeforeReadMode;
+            _editor.Effect = _editorEffectBeforeReadMode;
 
             // Restore the navigation pane to whatever it was before entering read mode.
             _navPane.Visibility = _navPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
         }
 
         _stateStore.SetChecked("freew.read-mode", _readMode);
+    }
+
+    // View > Print Layout: flip the editor between the Word-style page view (white page on the grey
+    // workspace, margins shown, drop shadow, page-break markers) and the plain/continuous flat view.
+    // DocumentView owns the page presentation; here we only mirror the new checked-state into the shared
+    // RibbonStateStore so the toggle button stays in sync, exactly like the read-mode / nav-pane toggles.
+    private void TogglePrintLayout()
+    {
+        var enabled = _editor.TogglePrintLayout();
+        _stateStore.SetChecked("freew.print-layout", enabled);
     }
 
     // Recompute the heading outline from the editor's committed model and repopulate the nav list.

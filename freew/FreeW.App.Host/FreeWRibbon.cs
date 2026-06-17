@@ -223,6 +223,7 @@ internal static class FreeWRibbon
                 });
                 tab.Group("views", "Views", "V", 90, g =>
                 {
+                    g.Toggle("freew.print-layout", "Print Layout");
                     g.Toggle("freew.read-mode", "Read Mode");
                 });
             })
