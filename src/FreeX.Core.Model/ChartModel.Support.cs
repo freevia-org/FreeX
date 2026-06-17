@@ -48,6 +48,20 @@ public enum ChartLineDashStyle { Solid, Dash, Dot }
 public sealed record ChartLegendEntryModel(int Index, bool? IsDeleted);
 
 /// <summary>
+/// Maps a chart series (identified by its chart-XML <c>&lt;c:idx&gt;</c>) to the worksheet
+/// column that supplies its values. Populated from each series' <c>&lt;c:val&gt;</c> range so the
+/// renderer can draw exactly the columns the chart references — in their declared idx order —
+/// rather than assuming every column inside <see cref="ChartModel.DataRange"/> is a series.
+/// This is required for charts whose series skip columns (e.g. a combo chart that plots columns
+/// B, D, E but not C) or list series out of column order.
+/// <para>
+/// <paramref name="ValueColumn"/> is an absolute worksheet column index. When the list is empty
+/// the renderer falls back to its legacy positional column scan.
+/// </para>
+/// </summary>
+public sealed record ChartSeriesColumnMapping(int SeriesXmlIndex, uint ValueColumn);
+
+/// <summary>
 /// Verbatim formula strings for a single chart series, preserved from the source XML.
 /// Used to round-trip multi-area series formulas that cannot be represented as a
 /// single rectangular <see cref="GridRange"/>.
@@ -271,7 +285,8 @@ public sealed record ChartSeriesFormat(
     WorkbookThemeColorReference? MarkerBorderThemeColor = null,
     double? MarkerBorderThickness = null,
     bool? InvertIfNegative = null,
-    bool NoFill = false)
+    bool NoFill = false,
+    bool NoLine = false)
 {
     public CellColor? ResolveFillColor(WorkbookTheme theme) =>
         FillThemeColor?.Resolve(theme) ?? FillColor;

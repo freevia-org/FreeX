@@ -72,6 +72,13 @@ public static class StructuredTableStyleBandingResolver
         if (string.IsNullOrWhiteSpace(styleName))
             return DefaultLightBanding();
 
+        // Excel's built-in "Light" table styles 8-14 are the black-header variants: a solid black
+        // (Text1/dark1) header row with white bold text and an unbanded white body.  They are NOT
+        // accent-tinted like Light 1-7, and they precede the themed-accent Light 16-21 range, so they
+        // must be intercepted before the accent-palette fallback would map them to a grey/accent header.
+        if (TryResolveBlackHeaderLightStyle(styleName))
+            return BlackHeaderLightBanding();
+
         if (ResolveThemeBanding(styleName, theme) is { } themed)
             return themed;
 
@@ -203,6 +210,20 @@ public static class StructuredTableStyleBandingResolver
             OddRowFill: theme.ResolveColor(slot, 0.95),
             EvenRowFill: CellColor.White,
             HeaderFontColor: CellColor.Black);
+
+    /// <summary>
+    /// True for the black-header "Light" family (TableStyleLight 8-14), which Excel renders with a solid
+    /// black header row rather than an accent-tinted one.
+    /// </summary>
+    private static bool TryResolveBlackHeaderLightStyle(string styleName) =>
+        TryParseFamilyIndex(styleName, "TableStyleLight", out var index) && index is >= 8 and <= 14;
+
+    private static StructuredTableStyleBanding BlackHeaderLightBanding() =>
+        new(
+            HeaderFill: CellColor.Black,
+            OddRowFill: CellColor.White,
+            EvenRowFill: CellColor.White,
+            HeaderFontColor: CellColor.White);
 
     private static StructuredTableStyleBanding DefaultLightBanding() =>
         new(

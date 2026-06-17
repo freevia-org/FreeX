@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -183,9 +184,24 @@ public partial class MainWindow
         return null;
     }
 
+    // Builds the PivotChart field-button (and pivot header-dropdown) context menu from the neutral
+    // PivotChartFieldContextMenuPlanner so the menu's order, headers, enablement, and tooltips are single-sourced
+    // with the Avalonia port instead of hand-authored here. The live filter/sort state is resolved from the
+    // clicked field (TryResolvePivotFieldMenuContext) and threaded into the planner as PivotChartFieldContextMenuState;
+    // each emitted item dispatches to the same Click handler the previous ContextMenu wired, and keytips are still
+    // assigned at render time by MenuKeyTipAssigner (preserving the previous behavior verbatim).
     private ContextMenu CreatePivotFieldContextMenu()
     {
         var menu = new ContextMenu();
+        foreach (var command in PivotChartFieldContextMenuPlanner.BuildCommands(BuildPivotChartFieldContextMenuState()))
+            AddPivotChartFieldContextMenuItem(menu.Items, command);
+
+        MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
+        return menu;
+    }
+
+    private PivotChartFieldContextMenuState BuildPivotChartFieldContextMenuState()
+    {
         var context = TryResolvePivotFieldMenuContext();
         var filterState = context is { SourceFieldIndex: { } sourceIndex }
             ? PivotFieldFilterSummary.CreateState(
@@ -198,47 +214,49 @@ public partial class MainWindow
             ? null
             : ResolveValueFieldSettingsIndex(context.PivotTable, context.Caption, context.Zone);
 
-        void Add(string header, RoutedEventHandler handler, bool isEnabled = true, string? toolTip = null)
-        {
-            var item = new MenuItem { Header = header, IsEnabled = isEnabled };
-            if (!string.IsNullOrWhiteSpace(toolTip))
-                item.ToolTip = toolTip;
-            item.Click += handler;
-            menu.Items.Add(item);
-        }
-
-        if (filterState is not null)
-        {
-            menu.Items.Add(new MenuItem
-            {
-                Header = filterState.OverallSummary,
-                IsEnabled = false,
-                ToolTip = "Current filter state for this PivotTable field."
-            });
-            menu.Items.Add(new Separator());
-        }
-
-        Add("Sort A to Z", PivotFieldSortAscendingMenuItem_Click);
-        Add("Sort Z to A", PivotFieldSortDescendingMenuItem_Click);
-        Add("More Sort Options...", PivotFieldMoreSortOptionsMenuItem_Click, filterState is not null, "Open PivotTable sort options for this field.");
-        menu.Items.Add(new Separator());
-        Add(filterState is null ? "Select Items..." : PivotFieldFilterSummary.FormatSelectItemsHeader(filterState), PivotFieldSelectItemsMenuItem_Click, filterState is not null);
-        Add(filterState is null ? "Label Filter..." : PivotFieldFilterSummary.FormatLabelFilterHeader(filterState), PivotFieldLabelFilterMenuItem_Click, filterState is not null);
-        Add(filterState is null ? "Value Filter..." : PivotFieldFilterSummary.FormatValueFilterHeader(filterState), PivotFieldValueFilterMenuItem_Click, filterState is not null && context?.PivotTable.DataFields.Count > 0);
-        Add(
-            filterState is null ? "Clear Filters from Field" : PivotFieldFilterSummary.FormatClearFilterHeader(filterState),
-            PivotFieldClearFilterMenuItem_Click,
-            filterState?.HasAnyFilter == true,
-            filterState?.HasAnyFilter == true ? null : "No item, label, or value filters are active for this field.");
-        menu.Items.Add(new Separator());
-        Add(
-            "Value Field Settings...",
-            PivotFieldValueSettingsMenuItem_Click,
-            valueFieldIndex is not null,
-            valueFieldIndex is null
-                ? "Select a value field, the PivotChart Values button, or a PivotTable with one value field."
-                : "Open settings for the relevant PivotTable value field.");
-        MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
-        return menu;
+        return new PivotChartFieldContextMenuState(
+            HasFilterState: filterState is not null,
+            OverallSummary: filterState?.OverallSummary ?? "",
+            SelectItemsHeader: filterState is null ? "Select Items..." : PivotFieldFilterSummary.FormatSelectItemsHeader(filterState),
+            LabelFilterHeader: filterState is null ? "Label Filter..." : PivotFieldFilterSummary.FormatLabelFilterHeader(filterState),
+            ValueFilterHeader: filterState is null ? "Value Filter..." : PivotFieldFilterSummary.FormatValueFilterHeader(filterState),
+            ClearFilterHeader: filterState is null ? "Clear Filters from Field" : PivotFieldFilterSummary.FormatClearFilterHeader(filterState),
+            CanValueFilter: filterState is not null && context?.PivotTable.DataFields.Count > 0,
+            HasAnyFilter: filterState?.HasAnyFilter == true,
+            CanValueFieldSettings: valueFieldIndex is not null);
     }
+
+    private void AddPivotChartFieldContextMenuItem(ItemCollection target, PivotChartFieldContextMenuCommand command)
+    {
+        if (command.IsSeparator)
+        {
+            target.Add(new Separator());
+            return;
+        }
+
+        var item = new MenuItem { Header = command.Header, IsEnabled = command.IsEnabled };
+        if (!string.IsNullOrWhiteSpace(command.ToolTip))
+            item.ToolTip = command.ToolTip;
+
+        if (ResolvePivotChartFieldContextMenuHandler(command.Action) is { } handler)
+            item.Click += handler;
+
+        target.Add(item);
+    }
+
+    // Maps neutral planner actions to the existing pivot-field Click handlers. The disabled summary banner
+    // (Summary) carries no handler, matching the previous non-interactive header MenuItem.
+    private RoutedEventHandler? ResolvePivotChartFieldContextMenuHandler(PivotChartFieldContextMenuAction action) =>
+        action switch
+        {
+            PivotChartFieldContextMenuAction.SortAscending => PivotFieldSortAscendingMenuItem_Click,
+            PivotChartFieldContextMenuAction.SortDescending => PivotFieldSortDescendingMenuItem_Click,
+            PivotChartFieldContextMenuAction.MoreSortOptions => PivotFieldMoreSortOptionsMenuItem_Click,
+            PivotChartFieldContextMenuAction.SelectItems => PivotFieldSelectItemsMenuItem_Click,
+            PivotChartFieldContextMenuAction.LabelFilter => PivotFieldLabelFilterMenuItem_Click,
+            PivotChartFieldContextMenuAction.ValueFilter => PivotFieldValueFilterMenuItem_Click,
+            PivotChartFieldContextMenuAction.ClearFilter => PivotFieldClearFilterMenuItem_Click,
+            PivotChartFieldContextMenuAction.ValueFieldSettings => PivotFieldValueSettingsMenuItem_Click,
+            _ => null
+        };
 }

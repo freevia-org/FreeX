@@ -375,6 +375,19 @@ internal static class XlsxChartAxisReader
         chart.XAxisLabelOffset = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "lblOffset")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisNoMultiLevelLabels = ReadBool(axisElement.Element(ChartNs + "noMultiLvlLbl")?.Attribute("val")?.Value);
         chart.XAxisLabelAlignment = FromXlsxAxisLabelAlignment(axisElement.Element(ChartNs + "lblAlgn")?.Attribute("val")?.Value);
+
+        // Category/date axes carry their own <c:numFmt> (e.g. "[$-409]d\-mmm;@" on a date axis).
+        // Capture it so the renderer can format date-serial categories as Excel does (1-Jan, not 44562).
+        var categoryNumberFormatElement = axisElement.Element(ChartNs + "numFmt");
+        var categoryNumberFormatCode = categoryNumberFormatElement?.Attribute("formatCode")?.Value;
+        if (!string.IsNullOrWhiteSpace(categoryNumberFormatCode))
+        {
+            chart.XAxisNumberFormatCode = categoryNumberFormatCode;
+            chart.XAxisNumberFormat = FromXlsxNumberFormatCode(categoryNumberFormatCode);
+            chart.XAxisNumberFormatSourceLinked =
+                ReadNullableBool(categoryNumberFormatElement?.Attribute("sourceLinked")?.Value);
+        }
+
         if (axisElement.Name == ChartNs + "dateAx")
         {
             chart.XAxisBaseTimeUnit = FromXlsxDateAxisUnit(axisElement.Element(ChartNs + "baseTimeUnit")?.Attribute("val")?.Value);

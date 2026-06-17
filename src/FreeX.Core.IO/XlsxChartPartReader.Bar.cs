@@ -58,6 +58,9 @@ public static partial class XlsxChartPartReader
                 if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, seriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
+                if (XlsxChartSeriesRangeReader.TryReadSeriesValueColumn(series, sheetId, sheetNameResolver) is { } barValueColumn)
+                    result.SeriesColumnMappings.Add(new ChartSeriesColumnMapping(seriesIndex, barValueColumn));
+
                 if (barUsesSecondaryAxis && seriesIndex > 0)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
@@ -85,6 +88,8 @@ public static partial class XlsxChartPartReader
                 }
 
                 result.ComboLineSeriesIndexes.Add(seriesIndex);
+                if (XlsxChartSeriesRangeReader.TryReadSeriesValueColumn(series, sheetId, sheetNameResolver) is { } lineValueColumn)
+                    result.SeriesColumnMappings.Add(new ChartSeriesColumnMapping(seriesIndex, lineValueColumn));
                 if (lineUsesSecondaryAxis && seriesIndex > 0)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
@@ -114,6 +119,8 @@ public static partial class XlsxChartPartReader
                 }
 
                 result.ComboScatterSeriesIndexes.Add(seriesIndex);
+                if (XlsxChartSeriesRangeReader.TryReadSeriesValueColumn(series, sheetId, sheetNameResolver, "yVal") is { } scatterValueColumn)
+                    result.SeriesColumnMappings.Add(new ChartSeriesColumnMapping(seriesIndex, scatterValueColumn));
                 if (scatterUsesSecondaryAxis && seriesIndex > 0)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
@@ -164,18 +171,24 @@ public static partial class XlsxChartPartReader
             .Distinct()
             .Order()
             .ToList();
+        // Combo line/scatter membership comes straight from which plot element the series lived in
+        // (<c:lineChart>/<c:scatterChart>), so it is authoritative even for series index 0 — Excel
+        // frequently emits the line series first (e.g. a "shaded target band" chart where Qty is the
+        // line at idx 0 over Target helper columns). Do NOT drop index 0 here or that line collapses
+        // back into a column.
         result.ComboLineSeriesIndexes = result.ComboLineSeriesIndexes
-            .Where(index => index > 0)
+            .Where(index => index >= 0)
             .Distinct()
             .Order()
             .ToList();
         result.ComboScatterSeriesIndexes = result.ComboScatterSeriesIndexes
-            .Where(index => index > 0)
+            .Where(index => index >= 0)
             .Distinct()
             .Order()
             .ToList();
         result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
         result.UseComboLineForSecondarySeries = result.ComboLineSeriesIndexes.Count > 0;
+        result.SeriesColumnMappings = NormalizeSeriesColumnMappings(result.SeriesColumnMappings);
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
@@ -242,6 +255,9 @@ public static partial class XlsxChartPartReader
                 if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, seriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
+                if (XlsxChartSeriesRangeReader.TryReadSeriesValueColumn(series, sheetId, sheetNameResolver) is { } valueColumn)
+                    result.SeriesColumnMappings.Add(new ChartSeriesColumnMapping(seriesIndex, valueColumn));
+
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
                 XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
                 XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
@@ -289,6 +305,7 @@ public static partial class XlsxChartPartReader
             .Order()
             .ToList();
         result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
+        result.SeriesColumnMappings = NormalizeSeriesColumnMappings(result.SeriesColumnMappings);
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
@@ -300,6 +317,29 @@ public static partial class XlsxChartPartReader
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
+    }
+
+    /// <summary>
+    /// De-duplicates (by series idx, keeping the first) and orders series-column mappings by their
+    /// declared chart-XML index. The renderer treats a non-empty, gap-free mapping as the
+    /// authoritative series list; partial/ambiguous mappings are still passed through and the
+    /// renderer decides whether to trust them.
+    /// </summary>
+    private static List<ChartSeriesColumnMapping> NormalizeSeriesColumnMappings(
+        List<ChartSeriesColumnMapping> mappings)
+    {
+        if (mappings.Count == 0)
+            return mappings;
+
+        var seen = new HashSet<int>();
+        var result = new List<ChartSeriesColumnMapping>(mappings.Count);
+        foreach (var mapping in mappings.OrderBy(m => m.SeriesXmlIndex))
+        {
+            if (seen.Add(mapping.SeriesXmlIndex))
+                result.Add(mapping);
+        }
+
+        return result;
     }
 
     private static void ApplyBarChartMetadata(XElement barChart, ChartModel chart)

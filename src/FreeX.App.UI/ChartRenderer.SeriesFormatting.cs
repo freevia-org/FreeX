@@ -79,7 +79,10 @@ public static partial class ChartRenderer
             if (ShouldSkipScatterXColumn(chart, col, dataStartCol))
                 continue;
 
-            var seriesIndex = GetSeriesIndex(chart, col, dataStartCol);
+            if (!ShouldRenderColumnAsSeries(chart, col, dataStartCol, endCol))
+                continue;
+
+            var seriesIndex = GetSeriesIndex(chart, col, dataStartCol, endCol);
             if (IsComboLineSeries(chart, seriesIndex) || IsComboScatterSeries(chart, seriesIndex))
                 continue;
 
@@ -114,8 +117,66 @@ public static partial class ChartRenderer
             && !chart.FirstColIsCategories
             && col == dataStartCol;
 
+    /// <summary>
+    /// True when the chart carries an authoritative series-to-column mapping (every series'
+    /// value column is known and lies within the rendered data-column span). When this holds the
+    /// renderer plots exactly those columns — using each series' chart-XML idx for format / combo /
+    /// legend lookups — and skips any column that is not a mapped series (e.g. a worksheet column
+    /// that falls inside the union data range but is not actually plotted, such as a "Target" helper
+    /// column the chart does not reference).
+    /// </summary>
+    private static bool HasAuthoritativeSeriesColumns(ChartModel chart, uint dataStartCol, uint endCol)
+    {
+        var mappings = chart.SeriesColumnMappings;
+        if (mappings.Count == 0)
+            return false;
+
+        for (var i = 0; i < mappings.Count; i++)
+        {
+            var column = mappings[i].ValueColumn;
+            if (column < dataStartCol || column > endCol)
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// True when <paramref name="col"/> should be rendered as a data series. With an authoritative
+    /// mapping only mapped value columns render; otherwise every column in the span renders (legacy).
+    /// </summary>
+    private static bool ShouldRenderColumnAsSeries(ChartModel chart, uint col, uint dataStartCol, uint endCol)
+    {
+        if (!HasAuthoritativeSeriesColumns(chart, dataStartCol, endCol))
+            return true;
+
+        var mappings = chart.SeriesColumnMappings;
+        for (var i = 0; i < mappings.Count; i++)
+        {
+            if (mappings[i].ValueColumn == col)
+                return true;
+        }
+
+        return false;
+    }
+
     private static int GetSeriesIndex(ChartModel chart, uint col, uint dataStartCol) =>
-        (int)(col - dataStartCol - (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories ? 1 : 0));
+        GetSeriesIndex(chart, col, dataStartCol, uint.MaxValue);
+
+    private static int GetSeriesIndex(ChartModel chart, uint col, uint dataStartCol, uint endCol)
+    {
+        if (HasAuthoritativeSeriesColumns(chart, dataStartCol, endCol))
+        {
+            var mappings = chart.SeriesColumnMappings;
+            for (var i = 0; i < mappings.Count; i++)
+            {
+                if (mappings[i].ValueColumn == col)
+                    return mappings[i].SeriesXmlIndex;
+            }
+        }
+
+        return (int)(col - dataStartCol - (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories ? 1 : 0));
+    }
 
     private static ChartSeriesFormat? GetSeriesFormat(ChartModel chart, int seriesIndex)
     {
@@ -204,9 +265,17 @@ public static partial class ChartRenderer
         {
             series.FillColor = OxyColor.FromRgb(fill.R, fill.G, fill.B);
         }
-        if (format.ResolveStrokeColor(theme) is { } stroke)
+        if (format.NoLine)
+        {
+            // Explicit <a:ln><a:noFill/> — suppress the bar outline entirely (transparent spacer).
+            series.StrokeColor = OxyColors.Transparent;
+            series.StrokeThickness = 0;
+        }
+        else if (format.ResolveStrokeColor(theme) is { } stroke)
+        {
             series.StrokeColor = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
-        if (format.StrokeThickness is { } thickness)
+        }
+        if (!format.NoLine && format.StrokeThickness is { } thickness)
             series.StrokeThickness = thickness;
         // Note: RectangleBarSeries does not support dash-style strokes; the dash
         // pattern on outline-only helper series (e.g. "Max Outline") is a best-effort
@@ -226,9 +295,16 @@ public static partial class ChartRenderer
         {
             series.FillColor = OxyColor.FromRgb(fill.R, fill.G, fill.B);
         }
-        if (format.ResolveStrokeColor(theme) is { } stroke)
+        if (format.NoLine)
+        {
+            series.StrokeColor = OxyColors.Transparent;
+            series.StrokeThickness = 0;
+        }
+        else if (format.ResolveStrokeColor(theme) is { } stroke)
+        {
             series.StrokeColor = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
-        if (format.StrokeThickness is { } thickness)
+        }
+        if (!format.NoLine && format.StrokeThickness is { } thickness)
             series.StrokeThickness = thickness;
     }
 
@@ -315,6 +391,96 @@ public static partial class ChartRenderer
                 Padding = new OxyThickness(chart.ShowDataLabelCallouts ? 4 : 2)
             });
         }
+    }
+
+    private const string PieLegendXAxisKey = "PieLegendX";
+    private const string PieLegendYAxisKey = "PieLegendY";
+
+    /// <summary>
+    /// Draws a custom pie/doughnut legend (a colored swatch + category label per slice). OxyPlot's
+    /// PieSeries does not contribute per-slice entries to the built-in legend, so this annotation-based
+    /// legend mirrors Excel's behaviour (e.g. Completed / Remaining swatches). Honors the chart's
+    /// legend position for the corner placement and skips slices whose value is non-positive.
+    /// </summary>
+    private static void AddPieLegendAnnotations(PlotModel model, ChartModel chart, WorkbookTheme theme, PieSeries pieSeries)
+    {
+        if (!chart.ShowLegend || chart.LegendPosition == ChartLegendPosition.None || pieSeries.Slices.Count == 0)
+            return;
+
+        // A dedicated 0..1 normalized axis pair keeps legend placement independent of the pie's own
+        // annotation axes; it is invisible and does not affect the pie geometry.
+        if (!model.Axes.Any(axis => axis.Key == PieLegendXAxisKey))
+        {
+            model.Axes.Add(new LinearAxis
+            {
+                Key = PieLegendXAxisKey,
+                Position = AxisPosition.Bottom,
+                IsAxisVisible = false,
+                Minimum = 0,
+                Maximum = 1
+            });
+            model.Axes.Add(new LinearAxis
+            {
+                Key = PieLegendYAxisKey,
+                Position = AxisPosition.Left,
+                IsAxisVisible = false,
+                Minimum = 0,
+                Maximum = 1
+            });
+        }
+
+        var onRight = chart.LegendPosition is ChartLegendPosition.Right;
+        var onTop = chart.LegendPosition is ChartLegendPosition.Top;
+        var onBottom = chart.LegendPosition is ChartLegendPosition.Bottom;
+        // Default (Right / tr-style) places the legend column near the top-right corner.
+        var swatchX = chart.LegendPosition is ChartLegendPosition.Left ? 0.02 : 0.86;
+        var labelX = swatchX + 0.035;
+        var startY = onBottom ? 0.12 : 0.96;
+        var step = 0.06;
+
+        var legendTextColor = ToOxyColor(chart.ResolveLegendTextColor(theme)) ?? OxyColor.FromRgb(89, 89, 89);
+
+        for (var i = 0; i < pieSeries.Slices.Count; i++)
+        {
+            var slice = pieSeries.Slices[i];
+            var y = onTop || onBottom
+                ? (onTop ? 0.96 : 0.12)
+                : startY - i * step;
+
+            // For top/bottom legends lay swatches out horizontally instead of vertically.
+            var sx = onTop || onBottom ? 0.30 + i * 0.22 : swatchX;
+            var lx = onTop || onBottom ? sx + 0.035 : labelX;
+
+            model.Annotations.Add(new RectangleAnnotation
+            {
+                XAxisKey = PieLegendXAxisKey,
+                YAxisKey = PieLegendYAxisKey,
+                MinimumX = sx,
+                MaximumX = sx + 0.028,
+                MinimumY = y - 0.018,
+                MaximumY = y + 0.018,
+                Fill = slice.Fill,
+                Stroke = OxyColors.Transparent,
+                StrokeThickness = 0
+            });
+            model.Annotations.Add(new TextAnnotation
+            {
+                XAxisKey = PieLegendXAxisKey,
+                YAxisKey = PieLegendYAxisKey,
+                Text = slice.Label,
+                TextPosition = new DataPoint(lx, y),
+                TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Left,
+                TextVerticalAlignment = OxyPlot.VerticalAlignment.Middle,
+                TextColor = legendTextColor,
+                FontSize = chart.LegendFontSize,
+                Stroke = OxyColors.Transparent,
+                StrokeThickness = 0,
+                Background = OxyColors.Transparent
+            });
+        }
+
+        // The custom annotation legend replaces the (empty) built-in legend for pies.
+        model.Legends.Clear();
     }
 
     private static void AddPieAnnotationAxes(PlotModel model)
@@ -479,7 +645,11 @@ public static partial class ChartRenderer
 
     private static bool IsComboLineSeries(ChartModel chart, int seriesIndex)
     {
-        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type) || !chart.UseComboLineForSecondarySeries || seriesIndex <= 0)
+        // Membership in ComboLineSeriesIndexes is authoritative (populated from the chart's
+        // <c:lineChart> element), so honor it even at series index 0 — Excel commonly draws the
+        // line series first over bar helper series (shaded target-band charts). An empty list still
+        // means "no combo lines", so a plain stacked/clustered chart is unaffected.
+        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type) || !chart.UseComboLineForSecondarySeries || seriesIndex < 0)
             return false;
 
         return chart.ComboLineSeriesIndexes.Contains(seriesIndex);
@@ -487,7 +657,7 @@ public static partial class ChartRenderer
 
     private static bool IsComboScatterSeries(ChartModel chart, int seriesIndex)
     {
-        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type) || seriesIndex <= 0)
+        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type) || seriesIndex < 0)
             return false;
 
         return chart.ComboScatterSeriesIndexes.Contains(seriesIndex);

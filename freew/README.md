@@ -1,0 +1,230 @@
+# FreeW
+
+FreeW is a Word-class `.docx` word processor for Windows. It opens and saves standard
+WordprocessingML documents with rich editing, a Word-style ribbon, file lifecycle, and print —
+keeping the project, branding, and release artifacts independent from Microsoft.
+
+- **Platform:** native Windows desktop app, WPF, `net10.0-windows`.
+- **Document format:** Office Open XML WordprocessingML (`.docx`) over a plain `ZipArchive` OPC container.
+- **Foundation:** built on the shared `Free.Shared.*` tier (Ribbon, Opc, AppServices, Commands, Shell)
+  with **zero coupling to FreeX**, the sibling spreadsheet app in the same monorepo. FreeW and FreeX
+  share only the `Free.Shared.*` libraries; neither references the other.
+
+> Status: feature-complete through roadmap Milestones **A–U** (64 word-processor features beyond the
+> A–E base). See [`../docs/planning/freew-roadmap.md`](../docs/planning/freew-roadmap.md) for the
+> authoritative, per-feature implementation log.
+
+---
+
+## Architecture
+
+FreeW is split into a pure model, a pure-ish IO layer, and the WPF app host. The model and IO target
+`net10.0` (no WPF/Windows dependency) so they are unit-testable on any runner; only the app host pulls
+in WPF.
+
+| Project | TFM | Responsibility |
+|---|---|---|
+| `FreeW.Core.Model` | `net10.0` | Pure document model (`TextDocument`, `Paragraph`, `Run`, `Table`, `InlineImage`), run/paragraph formatting records, the named-style catalog, page settings, side stores (footnotes, endnotes, comments, sources, index entries…), editing **commands**, and a large family of **pure helpers** (outline, TOC, citations, mail merge, compare, autocorrect, change case, sort/convert, statistics, …). |
+| `FreeW.Core.IO` | `net10.0` | WordprocessingML `.docx` **reader/writer** over `System.IO.Compression.ZipArchive` plus the shared `Free.Shared.Opc` hardened-XML settings. `DocxReader` / `DocxWriter` / `OoxmlWordprocessing` (element constants). |
+| `FreeW.App.Host` | `net10.0-windows` (WPF) | The application: a `RichTextBox`/`FlowDocument` editing surface (`DocumentView`), the ribbon, dialogs, file commands, autosave, print/preview. `WinExe`. |
+| `FreeW.Core.Model.Tests` | `net10.0` | xUnit tests for the model + commands + helpers. |
+| `FreeW.Core.IO.Tests` | `net10.0` | xUnit `.docx` round-trip tests. |
+
+### Shared tier reused
+
+| Shared library | Used for |
+|---|---|
+| `Free.Shared.Ribbon` | Declarative ribbon model/builder used to compose FreeW's tabs. |
+| `Free.Shared.Commands` | `UndoRedoStack` — FreeW layers a document command bus on top (see below). |
+| `Free.Shared.Opc` | OPC/OOXML packaging helpers + `SecureXmlReaderSettings` (hardened XML) for the docx reader. |
+| `Free.Shared.AppServices` | Recent files, autosave snapshots, per-product storage/settings, under a FreeW identity. |
+| `Free.Shared.Shell` | Window/dialog chrome shared with the rest of the suite. |
+
+### Undo/redo command bus
+
+Editing goes through `IDocumentCommand` + a `DocumentCommandBus` built over the shared
+`UndoRedoStack`. Commands capture a snapshot and revert on undo (insert/delete text, set run/paragraph
+formatting, set style, insert/replace blocks, table edits, etc.). The `DocumentView` redraws on bus
+change, so every ribbon action that mutates the document is undoable/redoable.
+
+### Editing surface
+
+`DocumentView : RichTextBox` renders the model into a WPF `FlowDocument` (resolving each run/paragraph
+through the style catalog + document defaults) and maps edits back to the model on commit. This is the
+right tool for a text surface (built-in caret, selection, spell-check, IME) — FreeW does **not** reuse
+FreeX's cell-grid surface.
+
+### CI
+
+A dedicated workflow, `.github/workflows/freew-ci.yml` ("FreeW CI"), gates the FreeW lane on PRs/pushes
+that touch `freew/**`, `FreeW.slnx`, or `shared/**`: it builds `FreeW.slnx` in Release (0 warnings
+enforced) then runs `dotnet test FreeW.slnx --no-build` on `windows-latest` with .NET 10.
+
+---
+
+## Feature catalog
+
+Grouped by area. Every item below is implemented and (where it touches IO) round-trips through the
+docx reader/writer; unsupported renderings are noted under [Known limitations](#known-limitations).
+
+### Editing & character formatting
+- Typing/selection/caret with full undo/redo via the command bus.
+- Font family, size, color, **bold** / *italic* / underline / strikethrough.
+- Text **highlight** (encoded as `w:shd w:fill`, exact-hex round-trip).
+- Character effects: superscript / subscript (`w:vertAlign`), small caps & all caps (`w:smallCaps` / `w:caps`).
+- **Change Case** (UPPER / lower / Sentence / Capitalize Each Word / tOGGLE).
+- Format Painter (capture formatting, apply to the next selection).
+- Clear All Formatting (reset runs to default).
+- Find / Replace (modeless) with match-case, **whole-word**, wrap, Replace All, replace-all-in-selection,
+  and **Go To** (heading / bookmark / doc start–end).
+- Spell-check (live red squiggles + suggestions) with a persistent **custom dictionary** (`.lex`) and a toggle.
+- AutoCorrect / smart typing (smart quotes, `--`→en dash, `(c)`/`(r)`/`(tm)`, `...`→…, sentence caps), toggleable.
+- Paste Special: Paste Text Only / Merge Formatting (Ctrl+Shift+V).
+- Insert **Symbol** (glyph picker) and **Date & Time**.
+
+### Paragraph formatting
+- Alignment (left/center/right/justify), line spacing, space before/after.
+- Indentation: increase/decrease step + explicit left/right/first-line (hanging) indents.
+- **Tab stops** (left/center/right/decimal) with **tab leaders** (dots/dashes/underline) — `w:tabs`/`w:tab`.
+- Paragraph **borders & shading** (`w:pBdr` + paragraph `w:shd`).
+- Flow control: keep-with-next, keep-lines-together, widow control (`w:keepNext`/`w:keepLines`/`w:widowControl`).
+- Bulleted / numbered / **multilevel** lists persisted to `word/numbering.xml` (`w:numPr`).
+- **Drop cap** (split first letter into an oversized run).
+
+### Styles, themes & design
+- Built-in style catalog: Normal, Title, Subtitle, Heading 1–3, Quote, Caption, TOC/Index styles, etc.
+- Styles gallery / combo applies a paragraph `StyleId` (round-trips via `pStyle` + `styles.xml`).
+- **Custom styles** (create/modify/delete with a built-in guard; safe unique-id generation) round-tripping run formatting.
+- **Document themes** (Office / Slate / Berlin / Ion) rewriting heading/body fonts + Title/Heading colours.
+
+### Page & section layout
+- Margins, orientation, page size; honoured by docx save and print.
+- **Multi-column** layout (1/2/3 equal columns, `sectPr/w:cols`).
+- **Headers & footers** with a live **PAGE-number field** (`word/header1.xml`/`footer1.xml`, `w:fldSimple`).
+- Page borders + **watermark** (page border `w:pgBorders`; watermark stored as a `docProps/custom.xml` custom property).
+- **Line numbers** (continuous / restart-each-page, `sectPr/w:lnNumType`) drawn in print preview.
+- Auto-hyphenation (`w:autoHyphenation`), vertical page alignment (`sectPr/w:vAlign`), different-first-page (`w:titlePg`).
+- Cover page, horizontal rule, manual page break.
+
+### Tables
+- Insert table; insert/delete row & column at the caret (undoable).
+- **Cell merge & split** (`w:gridSpan` + `w:vMerge` restart/continue).
+- Per-cell shading & width, grid column widths (`w:tcPr/w:shd`, `w:tcW`, `w:tblGrid/w:gridCol`).
+- **Table styles**: header row (bold + shaded), banded rows, repeat-header-row (`w:tblHeader` + `w:tblLook`).
+- Convert text ↔ table, and stable sort of paragraphs / table rows (asc/desc, case-aware).
+
+### Images / illustrations
+- Insert inline picture (DrawingML `w:drawing`, PNG part under `word/media`, rels + content type).
+- Resize the selected image (undoable); image alignment; **alt text** (`wp:docPr @descr`).
+
+### References
+- **Footnotes** (`word/footnotes.xml`, `w:footnoteReference`) and **endnotes** (`word/endnotes.xml`) — they coexist.
+- **Table of Contents** (built from the heading outline; Insert + Update).
+- **Index** (mark entry → build sorted/deduped index, `IndexHeading`/`IndexEntry` styles).
+- **Citations & bibliography** in **APA / MLA / Chicago** (in-text + a sorted bibliography under the right heading: References / Works Cited / Bibliography).
+- **Captions** ("Figure/Table N: …") with automatic figure/table numbering, plus a **Table of Figures**.
+- **Cross-references** to headings / bookmarks / captions / footnotes (clickable internal link when anchored).
+- **Bookmarks** + internal hyperlinks (`w:bookmarkStart/End`, `w:hyperlink w:anchor`) with a Bookmark Manager + Go To.
+- **Hyperlinks** (external `w:hyperlink` + `word/_rels`, deduped per URL) with edit/remove and ScreenTip (`w:tooltip`).
+
+### Review & collaboration
+- **Comments** (`word/comments.xml`, `w:commentRangeStart/End` + `w:commentReference`) with author/text tooltip.
+- **Track changes** (`w:ins`/`w:del`, author/date) with Track-Changes toggle and Accept All / Reject All.
+- **Compare documents** — two-level (paragraph-anchor + word-level) LCS diff producing tracked changes.
+- **Restrict editing / protection** (read-only / comments-only / track-changes-only, `w:documentProtection` in `settings.xml`).
+- **Document Inspector** (count + selectively remove comments / revisions / properties / bookmarks).
+- Word count + live status bar; **Document Statistics** dialog (words/chars/sentences/syllables, reading time, Flesch reading ease).
+
+### Mailings
+- **Mail merge**: `«Field»` placeholders, CSV data source, insert field, preview record (next/prev), Finish & Merge (records concatenated, page-broken).
+
+### Content & navigation
+- **Content controls** (`w:sdt`): plain-text and clickable checkbox (`w14:checkbox`).
+- **Quick Parts / AutoText**: save selection + insert, persisted as `quickparts.json`.
+- **Navigation pane** (heading outline; click to scroll) and **Outline tools** (promote/demote, collapse/expand).
+- **Cross-document insert**: "Text from File" deep-clones another `.docx`'s blocks at the caret (bringing missing styles).
+- Insert Field (DATE/TIME/FILENAME/AUTHOR/NUMPAGES as `w:fldSimple` with the right `w:instr`).
+
+### View & reading
+- **Zoom** 50–200% (slider / ± / Ctrl+wheel).
+- **Read mode** (hides chrome, centered reading column) + live selection word/char count.
+- **Show formatting marks** (¶ / · / →) drawn as a non-destructive adorner overlay.
+- Document properties dialog (`docProps/core.xml`, Dublin Core).
+
+### File lifecycle
+- New / Open / Save / Save As over `DocxReader`/`DocxWriter` with file dialogs, dirty-state + title bar, Ctrl+N/O/S.
+- **Recent files** (shared `RecentFilesStore`, persisted under FreeW's data folder).
+- **Autosave & recovery** (shared `AutosaveSnapshotStore`): a `.docx` snapshot every 30 s while dirty, recovery offered on startup, cleaned up on clean exit.
+- **Print + Export PDF**: Ctrl+P → WPF `PrintDialog` over the paginator; "Microsoft Print to PDF" for PDF. Paginated WYSIWYG **Print Preview** (`FlowDocumentPageViewer`).
+
+### docx fidelity at a glance
+
+OOXML parts FreeW reads and/or writes:
+
+| Part | Notes |
+|---|---|
+| `[Content_Types].xml`, `_rels` | Full content-type + relationship graph. |
+| `word/document.xml` | Paragraphs, runs, `rPr`/`pPr`, tables (`w:tbl`), drawings, fields, sections (`sectPr`). |
+| `word/styles.xml` | Built-in + custom styles, document defaults. |
+| `word/numbering.xml` | Bullet / decimal / multilevel abstract nums. |
+| `word/settings.xml` | Document protection, auto-hyphenation. |
+| `word/header1.xml` / `footer1.xml` | Headers/footers + PAGE field, referenced from `sectPr`. |
+| `word/footnotes.xml` / `endnotes.xml` | Footnotes and endnotes. |
+| `word/comments.xml` | Review comments. |
+| `word/media/*` | Inline PNG images. |
+| `docProps/core.xml` | Dublin Core document properties. |
+| `docProps/custom.xml` | Watermark (stored as a custom property). |
+
+---
+
+## Build & test
+
+From the repo root:
+
+```powershell
+# Build (Release; 0 warnings enforced via TreatWarningsAsErrors)
+dotnet build FreeW.slnx -c Release
+
+# Run the FreeW test lane (~580+ tests across model + IO)
+dotnet test FreeW.slnx
+
+# Run the app
+dotnet run --project freew/FreeW.App.Host
+```
+
+`FreeW.slnx` contains the five FreeW projects plus the `Free.Shared.*` libraries they depend on — it is
+self-contained and does not pull in FreeX. The build treats warnings as errors, so a green build is a
+0-warning build.
+
+---
+
+## Known limitations
+
+FreeW renders into a WPF `FlowDocument`, which is excellent for live editing but cannot reproduce every
+print-layout detail. The model/IO still round-trip these faithfully; the live view is the approximation.
+
+- **Multilevel list markers** render best-effort decimal-per-level on screen, not Word's exact
+  `1.1.1` accumulated text (the accumulated level text is still written to `numbering.xml`).
+- **Tab leaders** are carried verbatim through round-trip but are **not drawn** live (FlowDocument has
+  no tab-leader API); FreeW preserves them via a paragraph `Tag`.
+- **Tab stops** are likewise preserved via the paragraph `Tag` (FlowDocument has no tab-stop API).
+- **Line numbers** appear only in **print preview**, not in the live editing surface.
+- **Vertical page alignment** (`w:vAlign`) is persisted but not reflowed live.
+- **Widow/orphan control** is stored in the model/docx but is model-only on screen.
+- **Watermark** is stored as a `docProps/custom.xml` custom property (FreeW's own convention), not as a
+  header drawing; it renders as a faint rotated overlay in the editor/preview.
+- **Outline collapse/expand** is view-only — hidden body blocks are re-spliced on commit so they can't
+  be lost.
+
+### Not implemented
+
+FreeW deliberately does **not** implement: equations / OMML, charts, SmartArt, OLE-embedded objects,
+and macros/VBA. Cloud / Microsoft 365 account integration is out of scope — FreeW is local-file by default.
+
+---
+
+## Roadmap
+
+The single source of truth for FreeW's feature set, per-feature implementation notes, and status log is
+[`../docs/planning/freew-roadmap.md`](../docs/planning/freew-roadmap.md). Milestones A through U are
+complete.

@@ -27,6 +27,10 @@ internal static class XlsxChartSeriesFormatReader
             fillColor = color;
 
         var line = shapeProperties?.Element(DrawingNs + "ln");
+        // An explicit <a:ln><a:noFill/> means the bar outline must NOT be drawn (e.g. a transparent
+        // stacked spacer series like a target-band's "T_Low" helper, which sits invisibly beneath the
+        // shaded band). Distinguish it from absence of a line (palette default outline).
+        var hasNoLine = line?.Element(DrawingNs + "noFill") is not null;
         var lineFill = line?.Element(DrawingNs + "solidFill");
         CellColor? strokeColor = null;
         WorkbookThemeColorReference? strokeThemeColor = null;
@@ -44,6 +48,7 @@ internal static class XlsxChartSeriesFormatReader
             : null;
         var invertIfNegative = XlsxChartScalarReader.ReadOptionalBool(series.Element(ChartNs + "invertIfNegative")?.Attribute("val")?.Value);
         if (!hasNoFill &&
+            !hasNoLine &&
             fillColor is null &&
             fillThemeColor is null &&
             strokeColor is null &&
@@ -64,7 +69,8 @@ internal static class XlsxChartSeriesFormatReader
             FillThemeColor: fillThemeColor,
             StrokeThemeColor: strokeThemeColor,
             InvertIfNegative: invertIfNegative,
-            NoFill: hasNoFill);
+            NoFill: hasNoFill,
+            NoLine: hasNoLine);
         return true;
     }
 

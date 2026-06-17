@@ -1,0 +1,273 @@
+using System.Windows;
+using System.Windows.Media;
+using FreeX.Core.Model;
+
+namespace FreeX.App.UI;
+
+public partial class GridView
+{
+    // Static chrome for legacy Excel form controls (checkboxes, option buttons, spinners,
+    // scroll bars, group boxes, labels) anchored over the GridView. Interactivity
+    // (click -> linked cell) is out of scope; this layer only draws the appearance,
+    // reading checked/selected state from the FormControlModel.
+
+    private static readonly Brush FormControlGlyphBrush = MakeBrush(0, 0, 0);
+    private static readonly Brush FormControlCaptionBrush = MakeBrush(0, 0, 0);
+    private static readonly Brush FormControlBoxFillBrush = MakeBrush(255, 255, 255);
+    private static readonly Brush FormControlChromeFillBrush = MakeBrush(240, 240, 240);
+    private static readonly Pen FormControlGlyphPen = CreateFrozenPen(FormControlGlyphBrush, 1.6);
+    private static readonly Pen FormControlBoxBorderPen = CreateFrozenPen(MakeBrush(128, 128, 128), 1);
+    // 3-D shading: light highlight (top/left) + dark shadow (bottom/right) for raised chrome.
+    private static readonly Pen FormControlHighlightPen = CreateFrozenPen(MakeBrush(255, 255, 255), 1);
+    private static readonly Pen FormControlShadowPen = CreateFrozenPen(MakeBrush(128, 128, 128), 1);
+    private static readonly Pen FormControlDarkShadowPen = CreateFrozenPen(MakeBrush(105, 105, 105), 1);
+
+    private const double FormControlGlyphSize = 13;
+
+    private void RenderFormControls(DrawingContext dc)
+    {
+        if (FormControls is not { Count: > 0 } || Viewport == null)
+            return;
+
+        var visibleRight = GetDrawingViewportRight();
+        var visibleBottom = GetDrawingViewportBottom();
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
+        var metricLookups = GetRenderMetricLookups(Viewport);
+
+        foreach (var control in FormControls)
+        {
+            if (!FormControlRenderPlanner.IsRenderable(control.Kind))
+                continue;
+            if (!FormControlRenderPlanner.TryCreateAnchorRange(control, out var anchorRange) ||
+                anchorRange is not { } anchor)
+                continue;
+            if (!CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn))
+                continue;
+            if (!GridDrawingObjectPlanner.TryCreateSpanningAnchorRect(
+                    metricLookups.Rows,
+                    metricLookups.Columns,
+                    anchor,
+                    ActualRowHeaderWidth,
+                    EffectiveColHeaderHeight,
+                    out var rect))
+                continue;
+            if (!IntersectsDrawingViewport(rect, 0, visibleRight, visibleBottom))
+                continue;
+
+            DrawFormControl(dc, control, rect, pixelsPerDip);
+        }
+    }
+
+    private void DrawFormControl(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
+    {
+        switch (control.Kind)
+        {
+            case FormControlKind.CheckBox:
+                DrawFormCheckBox(dc, control, rect, pixelsPerDip);
+                break;
+            case FormControlKind.OptionButton:
+                DrawFormOptionButton(dc, control, rect, pixelsPerDip);
+                break;
+            case FormControlKind.Spinner:
+                DrawFormSpinner(dc, rect);
+                break;
+            case FormControlKind.ScrollBar:
+                DrawFormScrollBar(dc, rect);
+                break;
+            case FormControlKind.GroupBox:
+                DrawFormGroupBox(dc, control, rect, pixelsPerDip);
+                break;
+            case FormControlKind.Label:
+                DrawFormLabel(dc, control, rect, pixelsPerDip);
+                break;
+        }
+    }
+
+    private void DrawFormCheckBox(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
+    {
+        var box = GetFormControlGlyphRect(rect);
+        dc.DrawRectangle(FormControlBoxFillBrush, FormControlBoxBorderPen, box);
+        DrawFormControlSunkenEdge(dc, box);
+
+        if (control.IsChecked)
+            DrawFormCheckGlyph(dc, box);
+
+        DrawFormControlCaption(dc, FormControlRenderPlanner.GetCaption(control), rect, box.Right + 4, pixelsPerDip);
+    }
+
+    private void DrawFormOptionButton(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
+    {
+        var box = GetFormControlGlyphRect(rect);
+        var center = new Point(box.Left + box.Width / 2, box.Top + box.Height / 2);
+        var radius = box.Width / 2;
+        dc.DrawEllipse(FormControlBoxFillBrush, FormControlBoxBorderPen, center, radius, radius);
+
+        if (control.IsChecked)
+        {
+            var dotRadius = Math.Max(1.5, radius - 3.5);
+            dc.DrawEllipse(FormControlGlyphBrush, null, center, dotRadius, dotRadius);
+        }
+
+        DrawFormControlCaption(dc, FormControlRenderPlanner.GetCaption(control), rect, box.Right + 4, pixelsPerDip);
+    }
+
+    private void DrawFormSpinner(DrawingContext dc, Rect rect)
+    {
+        // Two stacked raised buttons (up over down) with black triangle glyphs.
+        var width = Math.Max(8, Math.Min(rect.Width, 17));
+        var buttonRect = new Rect(rect.Left, rect.Top, width, rect.Height);
+        var half = buttonRect.Height / 2;
+        var upRect = new Rect(buttonRect.Left, buttonRect.Top, buttonRect.Width, half);
+        var downRect = new Rect(buttonRect.Left, buttonRect.Top + half, buttonRect.Width, buttonRect.Height - half);
+
+        DrawFormControlRaisedButton(dc, upRect);
+        DrawFormControlRaisedButton(dc, downRect);
+        DrawFormTriangle(dc, upRect, pointingUp: true);
+        DrawFormTriangle(dc, downRect, pointingUp: false);
+    }
+
+    private void DrawFormScrollBar(DrawingContext dc, Rect rect)
+    {
+        var horizontal = rect.Width >= rect.Height;
+        dc.DrawRectangle(FormControlChromeFillBrush, FormControlBoxBorderPen, rect);
+
+        if (horizontal)
+        {
+            var size = Math.Min(rect.Height, rect.Width / 2);
+            var leftRect = new Rect(rect.Left, rect.Top, size, rect.Height);
+            var rightRect = new Rect(rect.Right - size, rect.Top, size, rect.Height);
+            DrawFormControlRaisedButton(dc, leftRect);
+            DrawFormControlRaisedButton(dc, rightRect);
+            DrawFormTriangle(dc, leftRect, pointingUp: false, pointingLeft: true);
+            DrawFormTriangle(dc, rightRect, pointingUp: false, pointingLeft: false, pointingRight: true);
+        }
+        else
+        {
+            var size = Math.Min(rect.Width, rect.Height / 2);
+            var topRect = new Rect(rect.Left, rect.Top, rect.Width, size);
+            var bottomRect = new Rect(rect.Left, rect.Bottom - size, rect.Width, size);
+            DrawFormControlRaisedButton(dc, topRect);
+            DrawFormControlRaisedButton(dc, bottomRect);
+            DrawFormTriangle(dc, topRect, pointingUp: true);
+            DrawFormTriangle(dc, bottomRect, pointingUp: false);
+        }
+    }
+
+    private void DrawFormGroupBox(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
+    {
+        // Etched rectangle with the caption breaking the top border at the left.
+        var frame = new Rect(rect.Left + 1, rect.Top + 7, Math.Max(1, rect.Width - 2), Math.Max(1, rect.Height - 8));
+        dc.DrawRectangle(null, FormControlBoxBorderPen, frame);
+        DrawFormControlCaption(dc, FormControlRenderPlanner.GetCaption(control), new Rect(rect.Left, rect.Top, rect.Width, 14), rect.Left + 8, pixelsPerDip);
+    }
+
+    private void DrawFormLabel(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
+    {
+        DrawFormControlCaption(dc, FormControlRenderPlanner.GetCaption(control), rect, rect.Left + 2, pixelsPerDip);
+    }
+
+    private static Rect GetFormControlGlyphRect(Rect rect)
+    {
+        var size = Math.Min(FormControlGlyphSize, Math.Min(rect.Width, rect.Height));
+        var top = rect.Top + Math.Max(0, (rect.Height - size) / 2);
+        return new Rect(rect.Left + 1, top, size, size);
+    }
+
+    private static void DrawFormControlSunkenEdge(DrawingContext dc, Rect box)
+    {
+        // Light bottom/right, dark top/left -> a slightly sunken well like Excel's checkbox.
+        dc.DrawLine(FormControlShadowPen, box.TopLeft, box.TopRight);
+        dc.DrawLine(FormControlShadowPen, box.TopLeft, box.BottomLeft);
+    }
+
+    private static void DrawFormCheckGlyph(DrawingContext dc, Rect box)
+    {
+        var p1 = new Point(box.Left + box.Width * 0.20, box.Top + box.Height * 0.52);
+        var p2 = new Point(box.Left + box.Width * 0.42, box.Top + box.Height * 0.74);
+        var p3 = new Point(box.Left + box.Width * 0.80, box.Top + box.Height * 0.24);
+        dc.DrawLine(FormControlGlyphPen, p1, p2);
+        dc.DrawLine(FormControlGlyphPen, p2, p3);
+    }
+
+    private static void DrawFormControlRaisedButton(DrawingContext dc, Rect rect)
+    {
+        dc.DrawRectangle(FormControlChromeFillBrush, null, rect);
+        dc.DrawLine(FormControlHighlightPen, rect.TopLeft, rect.TopRight);
+        dc.DrawLine(FormControlHighlightPen, rect.TopLeft, rect.BottomLeft);
+        dc.DrawLine(FormControlDarkShadowPen, rect.BottomLeft, rect.BottomRight);
+        dc.DrawLine(FormControlDarkShadowPen, rect.TopRight, rect.BottomRight);
+    }
+
+    private static void DrawFormTriangle(
+        DrawingContext dc,
+        Rect rect,
+        bool pointingUp,
+        bool pointingLeft = false,
+        bool pointingRight = false)
+    {
+        var cx = rect.Left + rect.Width / 2;
+        var cy = rect.Top + rect.Height / 2;
+        var size = Math.Max(2, Math.Min(rect.Width, rect.Height) * 0.3);
+
+        Point a, b, c;
+        if (pointingLeft)
+        {
+            a = new Point(cx - size, cy);
+            b = new Point(cx + size, cy - size);
+            c = new Point(cx + size, cy + size);
+        }
+        else if (pointingRight)
+        {
+            a = new Point(cx + size, cy);
+            b = new Point(cx - size, cy - size);
+            c = new Point(cx - size, cy + size);
+        }
+        else if (pointingUp)
+        {
+            a = new Point(cx, cy - size);
+            b = new Point(cx - size, cy + size);
+            c = new Point(cx + size, cy + size);
+        }
+        else
+        {
+            a = new Point(cx, cy + size);
+            b = new Point(cx - size, cy - size);
+            c = new Point(cx + size, cy - size);
+        }
+
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(a, isFilled: true, isClosed: true);
+            ctx.LineTo(b, isStroked: false, isSmoothJoin: false);
+            ctx.LineTo(c, isStroked: false, isSmoothJoin: false);
+        }
+
+        geometry.Freeze();
+        dc.DrawGeometry(FormControlGlyphBrush, null, geometry);
+    }
+
+    private void DrawFormControlCaption(DrawingContext dc, string caption, Rect rect, double textLeft, double pixelsPerDip)
+    {
+        if (string.IsNullOrWhiteSpace(caption))
+            return;
+
+        var textWidth = Math.Max(1, rect.Right - textLeft - 2);
+        var textHeight = Math.Max(1, rect.Height);
+        var text = GetDrawingObjectText(
+            caption,
+            FormControlCaptionBrush,
+            11,
+            textWidth,
+            textHeight,
+            pixelsPerDip,
+            TextTrimming.CharacterEllipsis);
+        var textTop = rect.Top + Math.Max(0, (rect.Height - text.Height) / 2);
+        var clipRect = new Rect(textLeft, rect.Top, textWidth, textHeight);
+
+        dc.PushClip(GetDrawingObjectClipGeometry(clipRect));
+        dc.DrawText(text, new Point(textLeft, textTop));
+        dc.Pop();
+    }
+}
