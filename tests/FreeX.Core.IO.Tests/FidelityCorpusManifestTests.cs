@@ -34,6 +34,7 @@ public sealed class FidelityCorpusManifestTests
             row.Source.Should().NotBeNullOrWhiteSpace();
             row.License.Should().NotBeNullOrWhiteSpace();
             row.FeatureTags.Should().NotBeEmpty();
+            row.FeatureTags.Should().OnlyContain(tag => !tag.Contains(','));
             row.Notes.Should().NotBeNullOrWhiteSpace();
 
             DateOnly.TryParseExact(
@@ -65,19 +66,27 @@ public sealed class FidelityCorpusManifestTests
 
         tags.Should().Contain([
             "3d-charts",
+            "activex-controls",
             "allow-edit-ranges",
             "area-charts",
             "autofilter",
             "bar-charts",
+            "budget-actual",
             "cached-results",
             "charts",
             "color-scales",
+            "combo-charts",
             "comments",
             "conditional-formatting",
+            "ctrlprops",
             "data-bars",
+            "data-labels",
             "data-validation",
             "drawings",
+            "dropdowns",
             "embedded-objects",
+            "emoji-labels",
+            "form-controls",
             "formulas",
             "freeze-panes",
             "full-column-references",
@@ -87,7 +96,9 @@ public sealed class FidelityCorpusManifestTests
             "hyperlinks",
             "icon-sets",
             "images",
+            "interactivity",
             "line-charts",
+            "list-controls",
             "lookup-reference",
             "merged-cells",
             "outline-groups",
@@ -102,7 +113,8 @@ public sealed class FidelityCorpusManifestTests
             "structured-references",
             "tables",
             "text-boxes",
-            "themes"
+            "themes",
+            "vml"
         ]);
     }
 
