@@ -768,6 +768,11 @@ public sealed partial class MainWindow : Window
                     // Insert ▸ Comment (reuse New Comment); Insert ▸ Header & Footer (Page Setup).
                     ["insert.comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
                     ["insert.headerFooter"] = () => _ = ShowPageSetupDialogAsync(),
+                    // Page Layout ▸ Themes (Office / Colorful / Grayscale picker).
+                    ["pageLayout.themes"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeColors"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeFonts"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeEffects"] = () => _ = ShowThemesGalleryAsync(),
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
