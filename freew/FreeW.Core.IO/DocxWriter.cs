@@ -31,6 +31,7 @@ public static class DocxWriter
     private const string EndnotesRelationshipId = "rIdEndnotes";
     private const string CommentsRelationshipId = "rIdComments";
     private const string SettingsRelationshipId = "rIdSettings";
+    private const string FontTableRelationshipId = "rIdFontTable";
     private const string ThemeRelationshipId = "rIdTheme1";
     private const string HeaderPartName = "word/header1.xml";
     private const string FooterPartName = "word/footer1.xml";
@@ -101,25 +102,41 @@ public static class DocxWriter
         // documents that need none round-trip exactly as before (no settings part).
         var hasProtection = document.Protection.IsProtected;
         var hasBackground = !string.IsNullOrEmpty(document.Page.BackgroundColorHex);
+
+        // Embedded fonts: each EmbeddedFont family contributes one obfuscated .odttf part per embedded style,
+        // collected up front so word/fontTable.xml, its rels and the font parts all agree on rId/fontN.odttf.
+        // When any font is embedded a settings part is forced (w:embedTrueTypeFonts must live in settings.xml).
+        var embeddedFonts = CollectEmbeddedFonts(document);
+        var hasEmbeddedFonts = embeddedFonts.Count > 0;
+
         var hasSettings = hasProtection
             || document.Page.AutoHyphenation
             || document.Page.DifferentOddEvenPages
-            || hasBackground;
+            || hasBackground
+            || hasEmbeddedFonts;
 
         // A word/theme/theme1.xml part is always emitted (real Word documents always carry one); it
         // serialises the document's DocumentTheme as a real clrScheme/fontScheme/fmtScheme.
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground, hasEmbeddedFonts));
+        // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
+        if (hasEmbeddedFonts)
+        {
+            WritePart(archive, FontTablePartName.TrimStart('/'), BuildFontTable(embeddedFonts));
+            WritePart(archive, "word/_rels/fontTable.xml.rels", BuildFontTableRels(embeddedFonts));
+            foreach (var part in embeddedFonts.SelectMany(f => f.Parts))
+                WriteBinaryPart(archive, "word/fonts/" + part.FileName, ObfuscateFont(part.FontBytes, part.FontKey));
+        }
         if (hasLists)
             WritePart(archive, "word/numbering.xml", BuildNumbering());
         if (hasHeader)
@@ -284,6 +301,48 @@ public static class DocxWriter
         return smartArts;
     }
 
+    /// <summary>
+    /// One obfuscated font part: the style slot (regular/bold/italic/boldItalic), its document-unique
+    /// relationship id (in the fontTable's rels), the file name (relative to <c>word/fonts/</c>), the
+    /// deterministically derived fontKey GUID, and the original (de-obfuscated) font bytes. The writer
+    /// obfuscates <see cref="FontBytes"/> with <see cref="FontKey"/> when emitting the .odttf part.
+    /// </summary>
+    private sealed record FontStylePart(string Slot, string RelationshipId, string FileName, string FontKey, byte[] FontBytes);
+
+    /// <summary>An embedded font family paired with the obfuscated parts for each embedded style.</summary>
+    private sealed record FontTablePart(EmbeddedFont Font, IReadOnlyList<FontStylePart> Parts);
+
+    /// <summary>
+    /// Assigns each embedded font style a relationship id (rIdFontN), a part name (fontN.odttf) and a
+    /// deterministic fontKey GUID (derived from family+style, never random). Styles are walked in a fixed
+    /// order (regular, bold, italic, boldItalic) so the ids are stable. Families carrying no embedded style
+    /// are skipped, so an empty/blank EmbeddedFonts list yields no parts (no fontTable emitted).
+    /// </summary>
+    private static List<FontTablePart> CollectEmbeddedFonts(TextDocument document)
+    {
+        var families = new List<FontTablePart>();
+        var index = 0;
+        foreach (var font in document.EmbeddedFonts)
+        {
+            var parts = new List<FontStylePart>();
+            void Add(string slot, byte[]? bytes)
+            {
+                if (bytes is not { Length: > 0 })
+                    return;
+                index++;
+                var key = DeterministicFontKey(font.Family + "/" + slot);
+                parts.Add(new FontStylePart(slot, $"rIdFont{index}", $"font{index}.odttf", key, bytes));
+            }
+            Add("embedRegular", font.Regular);
+            Add("embedBold", font.Bold);
+            Add("embedItalic", font.Italic);
+            Add("embedBoldItalic", font.BoldItalic);
+            if (parts.Count > 0)
+                families.Add(new FontTablePart(font, parts));
+        }
+        return families;
+    }
+
     private static List<ImagePart> CollectImages(TextDocument document)
     {
         var images = new List<ImagePart>();
@@ -337,7 +396,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasEvenHeader, bool hasEvenFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasEvenHeader, bool hasEvenFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -356,6 +415,11 @@ public static class DocxWriter
             charts.Count > 0
                 ? new XElement(Ct + "Default", new XAttribute("Extension", "xlsx"),
                     new XAttribute("ContentType", SpreadsheetContentType))
+                : null,
+            // A single Default for the odttf extension covers every obfuscated embedded-font part.
+            hasEmbeddedFonts
+                ? new XElement(Ct + "Default", new XAttribute("Extension", "odttf"),
+                    new XAttribute("ContentType", ObfuscatedFontContentType))
                 : null,
             new XElement(Ct + "Override", new XAttribute("PartName", "/word/document.xml"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml")),
@@ -397,6 +461,11 @@ public static class DocxWriter
             hasSettings
                 ? new XElement(Ct + "Override", new XAttribute("PartName", SettingsPartName),
                     new XAttribute("ContentType", SettingsContentType))
+                : null,
+            // word/fontTable.xml declares the embedded-font table (the .odttf parts use the odttf Default above).
+            hasEmbeddedFonts
+                ? new XElement(Ct + "Override", new XAttribute("PartName", FontTablePartName),
+                    new XAttribute("ContentType", FontTableContentType))
                 : null,
             // The theme part is always present (one per document).
             new XElement(Ct + "Override", new XAttribute("PartName", ThemePartName),
@@ -513,7 +582,8 @@ public static class DocxWriter
         bool hasSettings,
         IReadOnlyList<ChartPart> charts,
         IReadOnlyList<EmbeddedObjectPart> embeddedObjects,
-        IReadOnlyList<SmartArtPart> smartArts)
+        IReadOnlyList<SmartArtPart> smartArts,
+        bool hasEmbeddedFonts)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
@@ -525,6 +595,12 @@ public static class DocxWriter
                 new XAttribute("Id", SettingsRelationshipId),
                 new XAttribute("Type", SettingsRelType),
                 new XAttribute("Target", "settings.xml")));
+        // The document→fontTable relationship (the fontTable's own rels reference the .odttf font parts).
+        if (hasEmbeddedFonts)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", FontTableRelationshipId),
+                new XAttribute("Type", FontTableRelType),
+                new XAttribute("Target", "fontTable.xml")));
         // The theme part is always present, so its relationship is unconditional.
         relationships.Add(new XElement(Rel + "Relationship",
             new XAttribute("Id", ThemeRelationshipId),
@@ -2798,10 +2874,13 @@ public static class DocxWriter
     /// least one is needed. Children are emitted in CT_Settings schema order
     /// (displayBackgroundShape → autoHyphenation → evenAndOddHeaders → documentProtection).
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation, bool differentOddEvenPages, bool displayBackground)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation, bool differentOddEvenPages, bool displayBackground, bool embedTrueTypeFonts)
     {
         var settings = new XElement(W + "settings",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
+        // w:embedTrueTypeFonts precedes the other settings children in the CT_Settings schema sequence.
+        if (embedTrueTypeFonts)
+            settings.Add(new XElement(W + "embedTrueTypeFonts"));
         if (displayBackground)
             settings.Add(new XElement(W + "displayBackgroundShape"));
         if (autoHyphenation)
@@ -2813,6 +2892,44 @@ public static class DocxWriter
                 new XAttribute(W + "edit", edit),
                 new XAttribute(W + "enforcement", "1")));
         return new XDocument(settings);
+    }
+
+    /// <summary>
+    /// Builds word/fontTable.xml (w:fonts): one w:font w:name="&lt;Family&gt;" per embedded family, each
+    /// carrying a w:embedRegular/w:embedBold/w:embedItalic/w:embedBoldItalic child per embedded style whose
+    /// r:id points at the obfuscated .odttf part (in the fontTable's own rels) and whose w:fontKey is the
+    /// deterministic GUID used to obfuscate that part.
+    /// </summary>
+    private static XDocument BuildFontTable(IReadOnlyList<FontTablePart> embeddedFonts)
+    {
+        var fonts = new XElement(W + "fonts",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+        foreach (var family in embeddedFonts)
+        {
+            var font = new XElement(W + "font", new XAttribute(W + "name", family.Font.Family));
+            foreach (var part in family.Parts)
+                font.Add(new XElement(W + part.Slot,
+                    new XAttribute(R + "id", part.RelationshipId),
+                    new XAttribute(W + "fontKey", part.FontKey)));
+            fonts.Add(font);
+        }
+        return new XDocument(fonts);
+    }
+
+    /// <summary>
+    /// Builds word/_rels/fontTable.xml.rels: one font relationship (rIdFontN → fonts/fontN.odttf) per
+    /// embedded font style, matching the r:id referenced from each w:embed* in word/fontTable.xml.
+    /// </summary>
+    private static XDocument BuildFontTableRels(IReadOnlyList<FontTablePart> embeddedFonts)
+    {
+        var relationships = new XElement(Rel + "Relationships");
+        foreach (var part in embeddedFonts.SelectMany(f => f.Parts))
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", part.RelationshipId),
+                new XAttribute("Type", FontRelType),
+                new XAttribute("Target", "fonts/" + part.FileName)));
+        return new XDocument(relationships);
     }
 
     /// <summary>
