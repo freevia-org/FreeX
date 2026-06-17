@@ -606,7 +606,7 @@ public sealed class MainWindow : Window
             {
                 IsEditable = true,
                 MinWidth = combo.Width ?? 100,
-                Margin = thickness,
+                Margin = new Thickness(4, 0, 0, 0),
                 IsEnabled = command is not null
             };
             foreach (var item in combo.Items)
@@ -619,13 +619,22 @@ public sealed class MainWindow : Window
             }
             box.SelectionChanged += (_, _) => Apply(box.SelectedItem as string);
             box.KeyDown += (_, e) => { if (e.Key == Key.Enter) Apply(box.Text); };
-            return box;
+
+            var comboContent = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = thickness,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            comboContent.Children.Add(CreateRibbonIcon(control, 16));
+            comboContent.Children.Add(box);
+            return comboContent;
         }
 
         if (control is RibbonToggleButton)
         {
             var id = control.CommandId;
-            var toggle = new ToggleButton { Content = control.Label, Margin = thickness, Padding = padding, MinWidth = 60 };
+            var toggle = new ToggleButton { Content = CreateRibbonButtonContent(control), Margin = thickness, Padding = padding, MinWidth = 64 };
             if (command is IRibbonStatefulCommand stateful)
                 toggle.IsChecked = stateful.GetState().IsChecked;
             // Observe the shared state store so the toggle reflects the current selection live.
@@ -639,9 +648,41 @@ public sealed class MainWindow : Window
             return toggle;
         }
 
-        var button = new Button { Content = control.Label, Margin = thickness, Padding = padding, MinWidth = 60 };
+        var button = new Button { Content = CreateRibbonButtonContent(control), Margin = thickness, Padding = padding, MinWidth = 64 };
         button.Click += (_, _) => Execute();
         button.IsEnabled = command is not null;
         return button;
+    }
+
+    private static UIElement CreateRibbonButtonContent(RibbonControl control)
+    {
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        stack.Children.Add(CreateRibbonIcon(control, 20));
+        stack.Children.Add(new TextBlock
+        {
+            Text = control.Label,
+            FontSize = 11,
+            TextAlignment = System.Windows.TextAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+        return stack;
+    }
+
+    private static FrameworkElement CreateRibbonIcon(RibbonControl control, double size)
+    {
+        var icon = control.Icon ?? new RibbonCommandIcon(RibbonCommandIconKind.Generic);
+        return RibbonIconFactory.CreateCommandIcon(GetCommandIconLookupName(control), icon, size, Brushes.Black);
+    }
+
+    private static string GetCommandIconLookupName(RibbonControl control)
+    {
+        var id = control.CommandId.Value;
+        var lastDot = id.LastIndexOf('.');
+        return lastDot >= 0 && lastDot < id.Length - 1 ? id[(lastDot + 1)..] : id;
     }
 }
