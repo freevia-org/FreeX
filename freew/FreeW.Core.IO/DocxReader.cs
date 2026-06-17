@@ -811,7 +811,9 @@ public static class DocxReader
 
     /// <summary>
     /// Maps each w:num id in word/numbering.xml to a <see cref="ListKind"/> by following its
-    /// abstractNumId to the abstract definition's level-0 w:numFmt (bullet -> Bullet, else Number).
+    /// abstractNumId to the abstract definition. A level-0 w:numFmt of "bullet" -> Bullet; an outline
+    /// definition (w:multiLevelType="multilevel", or whose level-1 lvlText accumulates ancestor
+    /// counters like "%1.%2.") -> MultiLevel; anything else (decimal) -> Number.
     /// </summary>
     private static Dictionary<int, ListKind> ReadNumbering(ZipArchive archive)
     {
@@ -826,11 +828,13 @@ public static class DocxReader
         foreach (var abstractNum in root.Elements(W + "abstractNum"))
         {
             var abstractNumId = ParseInt(abstractNum.Attribute(W + "abstractNumId")?.Value);
-            var level0 = abstractNum.Elements(W + "lvl")
+            var levels = abstractNum.Elements(W + "lvl")
                 .OrderBy(l => ParseInt(l.Attribute(W + "ilvl")?.Value))
-                .FirstOrDefault();
-            var numFmt = level0?.Element(W + "numFmt")?.Attribute(W + "val")?.Value;
-            abstractKinds[abstractNumId] = numFmt == "bullet" ? ListKind.Bullet : ListKind.Number;
+                .ToList();
+            var numFmt = levels.FirstOrDefault()?.Element(W + "numFmt")?.Attribute(W + "val")?.Value;
+            abstractKinds[abstractNumId] = numFmt == "bullet"
+                ? ListKind.Bullet
+                : IsMultiLevel(abstractNum, levels) ? ListKind.MultiLevel : ListKind.Number;
         }
 
         foreach (var num in root.Elements(W + "num"))
@@ -841,6 +845,21 @@ public static class DocxReader
                 map[numId] = kind;
         }
         return map;
+    }
+
+    /// <summary>
+    /// Recognizes an outline/legal numbering definition: either it carries
+    /// w:multiLevelType="multilevel", or its level-1 lvlText accumulates the ancestor counters (it
+    /// references both %1 and %2, as in "%1.%2."), which distinguishes it from a flat decimal list
+    /// whose level-1 text is just "%2.".
+    /// </summary>
+    private static bool IsMultiLevel(XElement abstractNum, IReadOnlyList<XElement> levels)
+    {
+        if (abstractNum.Attribute(W + "multiLevelType")?.Value == "multilevel")
+            return true;
+
+        var level1Text = levels.ElementAtOrDefault(1)?.Element(W + "lvlText")?.Attribute(W + "val")?.Value;
+        return level1Text is not null && level1Text.Contains("%1") && level1Text.Contains("%2");
     }
 
     internal static RunFormatting ReadRunFormatting(XElement? rPr)

@@ -450,6 +450,33 @@ public sealed class DocumentView : RichTextBox
         });
 
     /// <summary>
+    /// Apply (or toggle off) multilevel/legal outline numbering over the selection. If any spanned
+    /// paragraph is not already a <see cref="ListKind.MultiLevel"/> list, all become multilevel lists
+    /// (preserving their <see cref="ParagraphFormatting.ListLevel"/>); otherwise the list decoration is
+    /// cleared back to <see cref="ListKind.None"/>. Reversible via the undo/redo bus, then re-rendered.
+    /// The numbering definition persists to word/numbering.xml as an outline abstract num.
+    /// </summary>
+    public void ApplyMultiLevelList()
+    {
+        var enable = SelectedModelParagraphs().Any(p => p.Formatting.ListKind != ListKind.MultiLevel);
+        FormatSelectedModelParagraphs(f => f with
+        {
+            ListKind = enable ? ListKind.MultiLevel : ListKind.None,
+            ListLevel = enable ? f.ListLevel : 0
+        });
+    }
+
+    /// <summary>
+    /// Change the outline depth (<see cref="ParagraphFormatting.ListLevel"/>) of every list paragraph
+    /// spanned by the selection by <paramref name="delta"/> (e.g. +1 to demote on Tab, -1 to promote on
+    /// Shift+Tab), clamped to 0..8. Non-list paragraphs are unaffected. Reversible via the bus.
+    /// </summary>
+    public void ChangeListLevel(int delta) =>
+        FormatSelectedModelParagraphs(f => f.ListKind == ListKind.None
+            ? f
+            : f with { ListLevel = Math.Clamp(f.ListLevel + delta, 0, 8) });
+
+    /// <summary>
     /// Set the line spacing (a multiplier on the default font size, e.g. 1.0 single / 1.5 / 2.0 double)
     /// on every paragraph spanned by the selection. Routes through the undo/redo bus so it is reversible.
     /// </summary>
@@ -1151,8 +1178,11 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    // Both numbered and multilevel lists render with a decimal marker. WPF's FlowDocument List has no
+    // built-in accumulating outline marker (true "1.1.1" form), so MultiLevel is rendered best-effort
+    // as a plain decimal-per-level marker; the outline definition still round-trips through the docx.
     private static TextMarkerStyle ToMarkerStyle(ListKind kind) =>
-        kind == ListKind.Number ? TextMarkerStyle.Decimal : TextMarkerStyle.Disc;
+        kind is ListKind.Number or ListKind.MultiLevel ? TextMarkerStyle.Decimal : TextMarkerStyle.Disc;
 
     /// <summary>
     /// Applies the page's multi-column layout to a <see cref="FlowDocument"/>. A FlowDocument derives
@@ -1259,6 +1289,10 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    // Recover a ListKind from a WPF List's marker. Decimal markers map back to Number: multilevel lists
+    // also render with a Decimal marker (see ToMarkerStyle), so a MultiLevel list that is edited through
+    // the RichTextBox surface and re-read here degrades to Number. The docx model round-trip preserves
+    // MultiLevel; only an in-editor edit cycle loses the outline distinction (a known best-effort limit).
     private static ListKind FromMarkerStyle(TextMarkerStyle marker) => marker switch
     {
         TextMarkerStyle.Decimal or TextMarkerStyle.LowerLatin or TextMarkerStyle.UpperLatin

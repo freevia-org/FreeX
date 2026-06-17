@@ -4,7 +4,12 @@ namespace FreeW.Core.Model;
 public enum TextAlignment { Left, Center, Right, Justify }
 
 /// <summary>List decoration for a paragraph.</summary>
-public enum ListKind { None, Bullet, Number }
+/// <remarks>
+/// <see cref="MultiLevel"/> is an outline (legal) numbering whose level text accumulates the
+/// ancestors' counters, e.g. <c>1</c>, <c>1.1</c>, <c>1.1.1</c>. It persists as a third
+/// numbering definition in word/numbering.xml; see <c>DocxWriter.BuildNumbering</c>.
+/// </remarks>
+public enum ListKind { None, Bullet, Number, MultiLevel }
 
 /// <summary>Horizontal alignment of text at a paragraph tab stop (maps to OOXML w:tab/@w:val).</summary>
 public enum TabStopAlignment { Left, Center, Right, Decimal }

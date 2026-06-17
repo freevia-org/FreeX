@@ -49,6 +49,7 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.bullets", "Bullets");
                     g.Button("freew.numbering", "Numbering");
+                    g.Button("freew.multilevel-list", "Multilevel List");
                     g.Button("freew.align-left", "Align Left");
                     g.Button("freew.align-center", "Center");
                     g.Button("freew.align-right", "Align Right");

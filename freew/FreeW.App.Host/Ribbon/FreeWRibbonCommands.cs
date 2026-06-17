@@ -88,6 +88,12 @@ internal static class FreeWRibbonCommands
         Routed("freew.align-right", EditingCommands.AlignRight);
         Routed("freew.bullets", EditingCommands.ToggleBullets);
         Routed("freew.numbering", EditingCommands.ToggleNumbering);
+        // Home > Paragraph: apply multilevel/legal outline numbering (1, 1.1, 1.1.1) to the selected
+        // paragraph(s); the outline definition persists to word/numbering.xml. Tab/Shift+Tab demote
+        // and promote the outline depth (ListLevel) of the selected list paragraphs.
+        registry.Register("freew.multilevel-list", new ActionCommand(() => editor.ApplyMultiLevelList()));
+        registry.Register("freew.multilevel-demote", new ActionCommand(() => editor.ChangeListLevel(+1)));
+        registry.Register("freew.multilevel-promote", new ActionCommand(() => editor.ChangeListLevel(-1)));
         Routed("freew.cut", ApplicationCommands.Cut);
         Routed("freew.copy", ApplicationCommands.Copy);
         Routed("freew.paste", ApplicationCommands.Paste);

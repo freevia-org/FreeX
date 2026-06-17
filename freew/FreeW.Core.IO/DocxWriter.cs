@@ -33,10 +33,12 @@ public static class DocxWriter
     private const string FooterPartName = "word/footer1.xml";
 
     // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
-    // abstractNumId 0 / numId 1; decimal numbering uses abstractNumId 1 / numId 2. Each abstract num
-    // defines 9 levels (ilvl 0..8) so ListLevel maps directly to w:ilvl.
+    // abstractNumId 0 / numId 1; decimal numbering uses abstractNumId 1 / numId 2; multilevel (legal
+    // outline) numbering uses abstractNumId 2 / numId 3. Each abstract num defines 9 levels (ilvl 0..8)
+    // so ListLevel maps directly to w:ilvl.
     internal const int BulletNumId = 1;
     internal const int NumberNumId = 2;
+    internal const int MultiLevelNumId = 3;
     private const int ListLevelCount = 9;
 
     public static void Write(TextDocument document, string path)
@@ -799,7 +801,12 @@ public static class DocxWriter
             pPr.Add(new XElement(W + "pageBreakBefore"));
         if (f.ListKind != ListKind.None)
         {
-            var numId = f.ListKind == ListKind.Number ? NumberNumId : BulletNumId;
+            var numId = f.ListKind switch
+            {
+                ListKind.Number => NumberNumId,
+                ListKind.MultiLevel => MultiLevelNumId,
+                _ => BulletNumId
+            };
             var level = Math.Clamp(f.ListLevel, 0, ListLevelCount - 1);
             pPr.Add(new XElement(W + "numPr",
                 new XElement(W + "ilvl", new XAttribute(W + "val", level)),
@@ -1057,23 +1064,43 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Builds word/numbering.xml: two abstract numbering definitions (bullet + decimal), each with
-    /// <see cref="ListLevelCount"/> levels, mapped to w:num ids <see cref="BulletNumId"/>/<see cref="NumberNumId"/>.
+    /// Builds word/numbering.xml: three abstract numbering definitions — bullet (abstractNumId 0),
+    /// decimal (abstractNumId 1) and a multilevel/legal outline (abstractNumId 2) — each with
+    /// <see cref="ListLevelCount"/> levels, mapped to w:num ids <see cref="BulletNumId"/>/
+    /// <see cref="NumberNumId"/>/<see cref="MultiLevelNumId"/>.
     /// </summary>
+    /// <remarks>
+    /// The bullet and decimal definitions reuse one fixed lvlText across every level. The multilevel
+    /// definition instead gives each level its own lvlText that accumulates the ancestor counters —
+    /// level 0 = <c>%1.</c>, level 1 = <c>%1.%2.</c>, level 2 = <c>%1.%2.%3.</c>, … — so Word renders
+    /// the familiar outline form (1, 1.1, 1.1.1). Every multilevel level is w:numFmt="decimal" and the
+    /// indent grows one step (18pt) per level.
+    /// </remarks>
     private static XDocument BuildNumbering()
     {
+        XElement Lvl(int level, string numFmt, string lvlText) =>
+            new(W + "lvl",
+                new XAttribute(W + "ilvl", level),
+                new XElement(W + "start", new XAttribute(W + "val", 1)),
+                new XElement(W + "numFmt", new XAttribute(W + "val", numFmt)),
+                new XElement(W + "lvlText", new XAttribute(W + "val", lvlText)),
+                new XElement(W + "lvlJc", new XAttribute(W + "val", "left")),
+                new XElement(W + "pPr",
+                    new XElement(W + "ind",
+                        new XAttribute(W + "left", PointsToDxa(36 + level * 18)),
+                        new XAttribute(W + "hanging", PointsToDxa(18)))));
+
         XElement AbstractNum(int abstractNumId, string numFmt, string lvlText) =>
             new(W + "abstractNum", new XAttribute(W + "abstractNumId", abstractNumId),
-                Enumerable.Range(0, ListLevelCount).Select(level => new XElement(W + "lvl",
-                    new XAttribute(W + "ilvl", level),
-                    new XElement(W + "start", new XAttribute(W + "val", 1)),
-                    new XElement(W + "numFmt", new XAttribute(W + "val", numFmt)),
-                    new XElement(W + "lvlText", new XAttribute(W + "val", lvlText)),
-                    new XElement(W + "lvlJc", new XAttribute(W + "val", "left")),
-                    new XElement(W + "pPr",
-                        new XElement(W + "ind",
-                            new XAttribute(W + "left", PointsToDxa(36 + level * 18)),
-                            new XAttribute(W + "hanging", PointsToDxa(18)))))));
+                Enumerable.Range(0, ListLevelCount).Select(level => Lvl(level, numFmt, lvlText)));
+
+        // Legal/outline numbering: level n's text is "%1.%2.…%(n+1)." — the dotted run of all ancestor
+        // counters. e.g. level 0 -> "%1.", level 2 -> "%1.%2.%3.".
+        XElement MultiLevelAbstractNum(int abstractNumId) =>
+            new(W + "abstractNum", new XAttribute(W + "abstractNumId", abstractNumId),
+                new XAttribute(W + "multiLevelType", "multilevel"),
+                Enumerable.Range(0, ListLevelCount).Select(level => Lvl(level, "decimal",
+                    string.Concat(Enumerable.Range(1, level + 1).Select(n => $"%{n}.")))));
 
         XElement Num(int numId, int abstractNumId) =>
             new(W + "num", new XAttribute(W + "numId", numId),
@@ -1083,8 +1110,10 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
             AbstractNum(0, "bullet", "•"),
             AbstractNum(1, "decimal", "%1."),
+            MultiLevelAbstractNum(2),
             Num(BulletNumId, 0),
-            Num(NumberNumId, 1));
+            Num(NumberNumId, 1),
+            Num(MultiLevelNumId, 2));
 
         return new XDocument(numbering);
     }
