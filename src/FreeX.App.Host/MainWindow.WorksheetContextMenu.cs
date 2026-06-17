@@ -50,18 +50,14 @@ public partial class MainWindow
         ClearCommentPreview();
 
         var menu = new ContextMenu();
-        foreach (var command in WaterfallChartContextMenuPlanner.BuildCommands(chart, pointIndex))
-        {
-            var item = new MenuItem
-            {
-                Header = command.AccessHeader,
-                IsEnabled = command.IsEnabled,
-                IsCheckable = true,
-                IsChecked = command.IsChecked
-            };
-            item.Click += (_, _) => ToggleWaterfallTotalPoint(chart.Id, pointIndex);
-            menu.Items.Add(item);
-        }
+        // Planner commands → shared declarative RibbonMenu (same model as the cell menu) → WPF items.
+        // The single "Set as Total" item is checkable; its toggle command id dispatches to the undoable toggle.
+        var commands = WaterfallChartContextMenuPlanner.BuildCommands(chart, pointIndex);
+        var ribbonMenu = WaterfallChartContextMenuRibbonAdapter.ToRibbonMenu(commands);
+        WorksheetContextMenuRenderer.AddItemsByCommandId(
+            menu.Items,
+            ribbonMenu.Items,
+            _ => ToggleWaterfallTotalPoint(chart.Id, pointIndex));
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = SheetGrid;

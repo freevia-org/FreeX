@@ -582,13 +582,23 @@ public sealed class MainWindowSheetTabKeyboardTests
         source.Should().Contain("new ActivateSheetDialog(_workbook, _currentSheetId)");
         navRightClick.Should().Contain("e.Handled = true;");
 
-        xaml.Should().Contain("<ContextMenu Opened=\"SheetTabContextMenu_XamlOpened\">");
-        xaml.Should().Contain("Click=\"SheetCtxRename_Click\"");
-        xaml.Should().Contain("Click=\"SheetCtxMoveOrCopy_Click\"");
-        xaml.Should().Contain("Click=\"SheetCtxHide_Click\"");
-        xaml.Should().Contain("Click=\"SheetCtxUnhide_Click\"");
-        xaml.Should().Contain("Click=\"SheetCtxSelectAllSheets_Click\"");
-        xaml.Should().Contain("Click=\"SheetCtxUngroupSheets_Click\"");
+        // The sheet-tab context menu is now built at runtime from the neutral SheetTabContextMenuPlanner
+        // (single-sourced with the Avalonia port) instead of a hand-authored XAML ContextMenu. The tab
+        // chrome attaches the menu on load and dispatches each planner action to the existing handlers.
+        xaml.Should().NotContain("<ContextMenu Opened=\"SheetTabContextMenu_XamlOpened\">");
+        xaml.Should().Contain("Loaded=\"SheetTabChrome_Loaded\"");
+        source.Should().Contain("private void SheetTabChrome_Loaded(object sender, RoutedEventArgs e)");
+        source.Should().Contain("element.ContextMenu = BuildSheetTabContextMenu();");
+        source.Should().Contain("SheetTabContextMenuPlanner.BuildSheetTabCommands()");
+        source.Should().Contain("RibbonTooltip.SetKeyTip(menuItem, command.KeyTip)");
+        source.Should().Contain("RibbonMetadata.SetCommandName(menuItem, command.CommandName)");
+        source.Should().Contain("menu.Opened += SheetTabContextMenu_Opened;");
+        source.Should().Contain("SheetTabContextMenuAction.Rename => SheetCtxRename_Click,");
+        source.Should().Contain("SheetTabContextMenuAction.MoveOrCopy => SheetCtxMoveOrCopy_Click,");
+        source.Should().Contain("SheetTabContextMenuAction.Hide => SheetCtxHide_Click,");
+        source.Should().Contain("SheetTabContextMenuAction.Unhide => SheetCtxUnhide_Click,");
+        source.Should().Contain("SheetTabContextMenuAction.SelectAllSheets => SheetCtxSelectAllSheets_Click,");
+        source.Should().Contain("SheetTabContextMenuAction.UngroupSheets => SheetCtxUngroupSheets_Click,");
 
         static string Slice(string text, string startMarker, string endMarker)
         {

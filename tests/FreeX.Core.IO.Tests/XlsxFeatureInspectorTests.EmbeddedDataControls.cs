@@ -240,16 +240,29 @@ public partial class XlsxFeatureInspectorTests
 
 
     [Fact]
-    public void Inspect_ActiveXAndFormControlPackage_DetectsControls()
+    public void Inspect_ActiveXControlPackage_DetectsControls()
     {
+        // ActiveX controls remain unsupported (not modeled). They must still be flagged.
         using var package = CreatePackage(
             "xl/activeX/activeX1.xml",
-            "xl/activeX/activeX1.bin",
-            "xl/ctrlProps/ctrlProp1.xml");
+            "xl/activeX/activeX1.bin");
 
         var report = XlsxFeatureInspector.Inspect(package);
 
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.FormControls);
+    }
+
+
+    [Fact]
+    public void Inspect_LegacyCtrlPropsPackage_DoesNotFlagFormControls()
+    {
+        // Legacy form controls (ctrlProps) are now modeled + round-trip preserved, so they must
+        // no longer be reported as an unsupported feature.
+        using var package = CreatePackage("xl/ctrlProps/ctrlProp1.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.FormControls);
     }
 
 
@@ -271,8 +284,9 @@ public partial class XlsxFeatureInspectorTests
 
 
     [Fact]
-    public void Inspect_WorksheetControlMetadata_DetectsFormControls()
+    public void Inspect_WorksheetControlMetadata_DoesNotFlagFormControls()
     {
+        // Legacy form controls declared on the worksheet are now supported (modeled + preserved).
         using var package = CreatePackageWithContent(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
                        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -284,12 +298,12 @@ public partial class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Should().Contain(f => f.Kind == XlsxUnsupportedFeatureKind.FormControls);
+        report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.FormControls);
     }
 
 
     [Fact]
-    public void Inspect_DrawingControlMetadata_DetectsFormControls()
+    public void Inspect_DrawingControlMetadata_DoesNotFlagFormControls()
     {
         using var package = CreatePackageWithContent(("xl/drawings/drawing1.xml", """
             <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
@@ -302,12 +316,12 @@ public partial class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Should().Contain(f => f.Kind == XlsxUnsupportedFeatureKind.FormControls);
+        report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.FormControls);
     }
 
 
     [Fact]
-    public void Inspect_VmlFormControlMetadata_DetectsFormControls()
+    public void Inspect_VmlFormControlMetadata_DoesNotFlagFormControls()
     {
         using var package = CreatePackageWithContent(("xl/drawings/vmlDrawing1.vml", """
             <xml xmlns:v="urn:schemas-microsoft-com:vml"
@@ -320,7 +334,7 @@ public partial class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Should().Contain(f => f.Kind == XlsxUnsupportedFeatureKind.FormControls);
+        report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.FormControls);
     }
 
 }

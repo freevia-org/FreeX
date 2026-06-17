@@ -340,9 +340,14 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenu_UsesAccessKeyHeaders()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        // The cell context menu now renders through the shared RibbonMenu model: the planner's
+        // access mnemonic flows command.AccessHeader -> RibbonMenuItem.Header (adapter) ->
+        // WPF MenuItem.Header (renderer). Assert the access header is preserved across that path.
+        var adapterSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("WorksheetContextMenuRibbonAdapter.cs");
+        var rendererSource = DialogSourceTestSupport.ReadHostSources("WorksheetContextMenuRenderer.cs");
 
-        source.Should().Contain("Header = command.AccessHeader");
+        adapterSource.Should().Contain("command.AccessHeader");
+        rendererSource.Should().Contain("Header = accessHeader");
     }
 
     [Fact]
@@ -683,7 +688,7 @@ public sealed partial class MainWindowSourceHygieneTests
     public void WorksheetContextMenuShowNotes_UsesNoteOnlyWorkflow()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
-        var plannerSource = DialogSourceTestSupport.ReadHostSources("WorksheetContextMenuPlanner.cs");
+        var plannerSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("WorksheetContextMenuPlanner.cs");
 
         source.Should().Contain("case WorksheetContextMenuAction.ShowNotes:");
         source.Should().Contain("ReviewShowNotesBtn_Click(this, new RoutedEventArgs());");

@@ -935,7 +935,8 @@
                                           MouseMove="SheetTab_MouseMove"
                                           MouseLeftButtonUp="SheetTab_MouseLeftButtonUp"
                                           LostMouseCapture="SheetTab_LostMouseCapture"
-                                          MouseRightButtonDown="SheetTab_MouseRightButtonDown">
+                                          MouseRightButtonDown="SheetTab_MouseRightButtonDown"
+                                          Loaded="SheetTabChrome_Loaded">
                                         <Grid.Style>
                                             <Style TargetType="Grid">
                                                 <Setter Property="Margin"       Value="-16,0,0,1"/>
@@ -953,24 +954,6 @@
                                                 </Style.Triggers>
                                             </Style>
                                         </Grid.Style>
-                                        <Grid.ContextMenu>
-                                            <ContextMenu Opened="SheetTabContextMenu_XamlOpened">
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_InsertSheet}"    local:RibbonTooltip.KeyTip="I" Click="SheetCtxInsert_Click" local:RibbonMetadata.CommandName="Insert Sheet"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_DeleteSheet}"    local:RibbonTooltip.KeyTip="E" Click="SheetCtxDelete_Click" local:RibbonMetadata.CommandName="Delete Sheet"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Rename}"         local:RibbonTooltip.KeyTip="R" Click="SheetCtxRename_Click" local:RibbonMetadata.CommandName="Rename"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_MoveOrCopy}"      local:RibbonTooltip.KeyTip="M" Click="SheetCtxMoveOrCopy_Click" local:RibbonMetadata.CommandName="Move or Copy"/>
-                                                <Separator/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_ViewCode}"       local:RibbonTooltip.KeyTip="V" IsEnabled="False" local:RibbonMetadata.CommandName="View Code"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_ProtectSheet}"   local:RibbonTooltip.KeyTip="P" Click="SheetCtxProtectSheet_Click" local:RibbonMetadata.CommandName="Protect Sheet"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_TabColor}"      local:RibbonTooltip.KeyTip="T" SubmenuOpened="SheetCtxTabColor_SubmenuOpened" local:RibbonMetadata.CommandName="Tab Color"/>
-                                                <Separator/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Hide}"            local:RibbonTooltip.KeyTip="H" Click="SheetCtxHide_Click" local:RibbonMetadata.CommandName="Hide"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Unhide}"         local:RibbonTooltip.KeyTip="U" Click="SheetCtxUnhide_Click" local:RibbonMetadata.CommandName="Unhide"/>
-                                                <Separator/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_SelectAllSheets}" local:RibbonTooltip.KeyTip="A" Click="SheetCtxSelectAllSheets_Click" local:RibbonMetadata.CommandName="Select All Sheets"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_UngroupSheets}"    local:RibbonTooltip.KeyTip="G" Click="SheetCtxUngroupSheets_Click" local:RibbonMetadata.CommandName="Ungroup Sheets"/>
-                                            </ContextMenu>
-                                        </Grid.ContextMenu>
                                         <Border x:Name="TabBorder"
                                                 CornerRadius="0,0,4,4" Padding="12,4,12,0"
                                                 Margin="8,0,8,0"

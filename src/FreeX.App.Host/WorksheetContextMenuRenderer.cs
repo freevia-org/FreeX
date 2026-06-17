@@ -25,6 +25,63 @@ internal static class WorksheetContextMenuRenderer
             AddItem(target, item, dispatch);
     }
 
+    /// <summary>
+    /// Renders <see cref="RibbonMenuItem"/>s into WPF <see cref="MenuItem"/>s, dispatching leaf clicks by the
+    /// item's raw <see cref="RibbonCommandId"/>. Checkable items (<see cref="RibbonMenuItem.IsChecked"/> non-null)
+    /// render with <c>IsCheckable=true</c> and the carried check state. Used by menus (e.g. the waterfall-chart
+    /// point menu) whose dispatch is not the worksheet <see cref="WorksheetContextMenuAction"/> enum.
+    /// </summary>
+    public static void AddItemsByCommandId(
+        ItemCollection target,
+        System.Collections.Generic.IReadOnlyList<RibbonMenuItem> items,
+        Action<RibbonCommandId> dispatch)
+    {
+        foreach (var item in items)
+            AddItem(target, item, dispatch);
+    }
+
+    private static void AddItem(
+        ItemCollection target,
+        RibbonMenuItem item,
+        Action<RibbonCommandId> dispatch)
+    {
+        if (item.Kind == Free.Shared.Ribbon.RibbonMenuItemKind.Separator)
+        {
+            target.Add(new Separator());
+            return;
+        }
+
+        var accessHeader = item.Header;
+        var cleanHeader = StripAccessMnemonic(accessHeader);
+
+        var menuItem = new MenuItem { Header = accessHeader, IsEnabled = item.IsEnabled };
+        ApplyCheckable(menuItem, item);
+        AutomationProperties.SetName(menuItem, cleanHeader);
+
+        if (item.Children.Count > 0)
+        {
+            foreach (var child in item.Children)
+                AddItem(menuItem.Items, child, dispatch);
+        }
+        else if (item.CommandId is { } commandId)
+        {
+            menuItem.Click += (_, _) => dispatch(commandId);
+        }
+
+        target.Add(menuItem);
+    }
+
+    // Makes the WPF item checkable iff the shared model carries a check state. A null IsChecked leaves the
+    // item as a plain command (preserving the existing worksheet cell-menu behavior verbatim).
+    private static void ApplyCheckable(MenuItem menuItem, RibbonMenuItem item)
+    {
+        if (item.IsChecked is not { } isChecked)
+            return;
+
+        menuItem.IsCheckable = true;
+        menuItem.IsChecked = isChecked;
+    }
+
     private static void AddItem(
         ItemCollection target,
         RibbonMenuItem item,
@@ -43,6 +100,7 @@ internal static class WorksheetContextMenuRenderer
         var action = ResolveAction(item.CommandId);
 
         var menuItem = new MenuItem { Header = accessHeader, IsEnabled = item.IsEnabled };
+        ApplyCheckable(menuItem, item);
         AutomationProperties.SetName(menuItem, cleanHeader);
         AutomationProperties.SetAutomationId(
             menuItem,

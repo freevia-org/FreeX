@@ -53,4 +53,37 @@ public partial class GridRangeTests
         act.Should().Throw<FormatException>()
             .WithMessage("Invalid range notation:*");
     }
+
+    [Fact]
+    public void ParseCellOrRange_SingleCell_ReturnsDegenerateRange()
+    {
+        var sheet = SheetId.New();
+
+        var range = GridRange.ParseCellOrRange("D6", sheet);
+
+        range.Start.Should().Be(new CellAddress(sheet, 6, 4));
+        range.End.Should().Be(new CellAddress(sheet, 6, 4));
+    }
+
+    [Fact]
+    public void ParseCellOrRange_MultiCellRange_ReturnsNormalizedRange()
+    {
+        var sheet = SheetId.New();
+
+        var range = GridRange.ParseCellOrRange("C4:A1", sheet);
+
+        range.Start.Should().Be(new CellAddress(sheet, 1, 1));
+        range.End.Should().Be(new CellAddress(sheet, 4, 3));
+    }
+
+    [Fact]
+    public void ParseCellOrRange_InvalidText_ThrowsFormatException()
+    {
+        var sheet = SheetId.New();
+
+        var act = () => GridRange.ParseCellOrRange("A1:B2:C3", sheet);
+
+        act.Should().Throw<FormatException>()
+            .WithMessage("Invalid range notation:*");
+    }
 }

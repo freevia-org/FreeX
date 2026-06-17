@@ -17,6 +17,18 @@ public static class DocxWriter
     private const string StylesRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
     private const string ImageRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
     private const string HyperlinkRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+    private const string HeaderRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header";
+    private const string FooterRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer";
+
+    private const string HeaderContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml";
+    private const string FooterContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml";
+
+    private const string HeaderRelationshipId = "rIdHeader1";
+    private const string FooterRelationshipId = "rIdFooter1";
+    private const string FootnotesRelationshipId = "rIdFootnotes";
+    private const string CommentsRelationshipId = "rIdComments";
+    private const string HeaderPartName = "word/header1.xml";
+    private const string FooterPartName = "word/footer1.xml";
 
     // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
     // abstractNumId 0 / numId 1; decimal numbering uses abstractNumId 1 / numId 2. Each abstract num
@@ -41,15 +53,39 @@ public static class DocxWriter
         // Emit a numbering part only when at least one paragraph is decorated as a list.
         var hasLists = EnumerateParagraphs(document).Any(p => p.Formatting.ListKind != ListKind.None);
 
+        // A header/footer is only emitted as a part when it carries visible content.
+        var hasHeader = document.Header is { IsEmpty: false };
+        var hasFooter = document.Footer is { IsEmpty: false };
+
+        // A footnotes part is emitted only when the document actually carries footnotes.
+        var hasFootnotes = document.Footnotes.Count > 0;
+
+        // A comments part is emitted only when the document actually carries review comments.
+        var hasComments = document.Comments.Count > 0;
+
+        // The watermark text is persisted best-effort as a custom document property (docProps/custom.xml),
+        // emitted only when a watermark is set.
+        var hasWatermark = !string.IsNullOrEmpty(document.Page.Watermark);
+
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists));
-        WritePart(archive, "_rels/.rels", BuildPackageRels());
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments, hasWatermark));
+        WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks));
+        if (hasWatermark)
+            WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks, hasHeader, hasFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         if (hasLists)
             WritePart(archive, "word/numbering.xml", BuildNumbering());
+        if (hasHeader)
+            WritePart(archive, HeaderPartName, BuildHeaderFooter(W + "hdr", document.Header!));
+        if (hasFooter)
+            WritePart(archive, FooterPartName, BuildHeaderFooter(W + "ftr", document.Footer!));
+        if (hasFootnotes)
+            WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document));
+        if (hasComments)
+            WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document));
         foreach (var image in images)
             WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
     }
@@ -110,7 +146,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasComments, bool hasWatermark) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -128,10 +164,30 @@ public static class DocxWriter
                 ? new XElement(Ct + "Override", new XAttribute("PartName", NumberingPartName),
                     new XAttribute("ContentType", NumberingContentType))
                 : null,
+            hasHeader
+                ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + HeaderPartName),
+                    new XAttribute("ContentType", HeaderContentType))
+                : null,
+            hasFooter
+                ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + FooterPartName),
+                    new XAttribute("ContentType", FooterContentType))
+                : null,
+            hasFootnotes
+                ? new XElement(Ct + "Override", new XAttribute("PartName", FootnotesPartName),
+                    new XAttribute("ContentType", FootnotesContentType))
+                : null,
+            hasComments
+                ? new XElement(Ct + "Override", new XAttribute("PartName", CommentsPartName),
+                    new XAttribute("ContentType", CommentsContentType))
+                : null,
             new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
-                new XAttribute("ContentType", CorePropertiesContentType))));
+                new XAttribute("ContentType", CorePropertiesContentType)),
+            hasWatermark
+                ? new XElement(Ct + "Override", new XAttribute("PartName", CustomPropertiesPartName),
+                    new XAttribute("ContentType", CustomPropertiesContentType))
+                : null));
 
-    private static XDocument BuildPackageRels() => new(
+    private static XDocument BuildPackageRels(bool hasWatermark) => new(
         new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rId1"),
@@ -140,7 +196,27 @@ public static class DocxWriter
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rIdCore"),
                 new XAttribute("Type", CorePropertiesRelType),
-                new XAttribute("Target", "docProps/core.xml"))));
+                new XAttribute("Target", "docProps/core.xml")),
+            hasWatermark
+                ? new XElement(Rel + "Relationship",
+                    new XAttribute("Id", "rIdCustom"),
+                    new XAttribute("Type", CustomPropertiesRelType),
+                    new XAttribute("Target", "docProps/custom.xml"))
+                : null));
+
+    /// <summary>
+    /// Builds docProps/custom.xml carrying the page watermark text as a single named custom property
+    /// (<see cref="WatermarkPropertyName"/>). This is a standards-compliant OPC custom-properties part,
+    /// so the watermark text round-trips even though it is not a true Word VML watermark.
+    /// </summary>
+    private static XDocument BuildCustomProperties(string watermark) => new(
+        new XElement(CustomProps + "Properties",
+            new XAttribute(XNamespace.Xmlns + "vt", VtVariant.NamespaceName),
+            new XElement(CustomProps + "property",
+                new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
+                new XAttribute("pid", "2"),
+                new XAttribute("name", WatermarkPropertyName),
+                new XElement(VtVariant + "lpwstr", watermark))));
 
     /// <summary>Builds docProps/core.xml from <see cref="DocumentProperties"/>, emitting only set values.</summary>
     private static XDocument BuildCoreProperties(DocumentProperties properties)
@@ -178,7 +254,14 @@ public static class DocxWriter
         }
     }
 
-    private static XDocument BuildDocumentRels(IReadOnlyList<ImagePart> images, IReadOnlyDictionary<string, string> hyperlinks, bool includeNumbering)
+    private static XDocument BuildDocumentRels(
+        IReadOnlyList<ImagePart> images,
+        IReadOnlyDictionary<string, string> hyperlinks,
+        bool includeNumbering,
+        bool hasHeader,
+        bool hasFooter,
+        bool hasFootnotes,
+        bool hasComments)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
@@ -190,6 +273,26 @@ public static class DocxWriter
                 new XAttribute("Id", "rIdNumbering"),
                 new XAttribute("Type", NumberingRelType),
                 new XAttribute("Target", "numbering.xml")));
+        if (hasHeader)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", HeaderRelationshipId),
+                new XAttribute("Type", HeaderRel),
+                new XAttribute("Target", "header1.xml")));
+        if (hasFooter)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", FooterRelationshipId),
+                new XAttribute("Type", FooterRel),
+                new XAttribute("Target", "footer1.xml")));
+        if (hasFootnotes)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", FootnotesRelationshipId),
+                new XAttribute("Type", FootnotesRelType),
+                new XAttribute("Target", "footnotes.xml")));
+        if (hasComments)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", CommentsRelationshipId),
+                new XAttribute("Type", CommentsRelType),
+                new XAttribute("Target", "comments.xml")));
         foreach (var image in images)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", image.RelationshipId),
@@ -204,8 +307,17 @@ public static class DocxWriter
         return new XDocument(relationships);
     }
 
-    private static XDocument BuildDocument(TextDocument document, IReadOnlyList<ImagePart> images, IReadOnlyDictionary<string, string> hyperlinks)
+    private static XDocument BuildDocument(
+        TextDocument document,
+        IReadOnlyList<ImagePart> images,
+        IReadOnlyDictionary<string, string> hyperlinks,
+        bool hasHeader,
+        bool hasFooter)
     {
+        // Reset the document-scoped bookmark + revision id counters so ids start at 1 each write.
+        System.Threading.Interlocked.Exchange(ref _bookmarkId, 0);
+        System.Threading.Interlocked.Exchange(ref _revisionId, 0);
+
         // Map each image run to its assigned relationship id by replaying the same walk order.
         var imagesByRun = new Dictionary<Run, ImagePart>();
         var next = 0;
@@ -217,13 +329,109 @@ public static class DocxWriter
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
             body.Add(BuildBlock(block, imagesByRun, hyperlinks));
-        body.Add(BuildSectionProperties(document.Page));
+        body.Add(BuildSectionProperties(document.Page, hasHeader, hasFooter));
 
         return new XDocument(
             new XElement(W + "document",
                 new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                // w14 carries the checkbox content control element (w14:checkbox in a w:sdtPr).
+                new XAttribute(XNamespace.Xmlns + "w14", W14.NamespaceName),
                 body));
+    }
+
+    /// <summary>Builds a header (w:hdr) or footer (w:ftr) part from its model paragraphs.</summary>
+    private static XDocument BuildHeaderFooter(XName rootName, HeaderFooter content)
+    {
+        var root = new XElement(rootName,
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+
+        // Header/footer runs do not carry inline images (the body image walk does not reach them).
+        var noImages = new Dictionary<Run, ImagePart>();
+        var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        if (content.Paragraphs.Count == 0)
+            root.Add(new XElement(W + "p"));
+        else
+            foreach (var paragraph in content.Paragraphs)
+                root.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+
+        return new XDocument(root);
+    }
+
+    /// <summary>
+    /// Builds word/footnotes.xml (w:footnotes). Emits the two conventional separator footnotes
+    /// (w:footnoteSeparator id=-1, w:continuationSeparator id=0) for Word-friendliness, then one
+    /// w:footnote w:id="N" per modelled footnote (ascending id), each holding its paragraphs.
+    /// </summary>
+    private static XDocument BuildFootnotes(TextDocument document)
+    {
+        var footnotes = new XElement(W + "footnotes",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+
+        XElement Separator(int id, string type) =>
+            new(W + "footnote",
+                new XAttribute(W + "type", type),
+                new XAttribute(W + "id", id),
+                new XElement(W + "p",
+                    new XElement(W + "r", new XElement(W + type))));
+
+        footnotes.Add(Separator(-1, "separator"));
+        footnotes.Add(Separator(0, "continuationSeparator"));
+
+        // Footnote paragraphs carry no inline images or hyperlinks (those walks target the body).
+        var noImages = new Dictionary<Run, ImagePart>();
+        var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var footnote in document.Footnotes.Values.OrderBy(f => f.Id))
+        {
+            var element = new XElement(W + "footnote", new XAttribute(W + "id", footnote.Id));
+            if (footnote.Content.Count == 0)
+                element.Add(new XElement(W + "p"));
+            else
+                foreach (var paragraph in footnote.Content)
+                    element.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+            footnotes.Add(element);
+        }
+
+        return new XDocument(footnotes);
+    }
+
+    /// <summary>
+    /// Builds word/comments.xml (w:comments): one w:comment w:id="N" per modelled comment (ascending
+    /// id), each carrying w:author / w:initials and — when set — an explicit w:date, plus the comment's
+    /// paragraphs. The date is only emitted when the model carries one, keeping the writer deterministic.
+    /// </summary>
+    private static XDocument BuildComments(TextDocument document)
+    {
+        var comments = new XElement(W + "comments",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+
+        // Comment paragraphs carry no inline images or hyperlinks (those walks target the body).
+        var noImages = new Dictionary<Run, ImagePart>();
+        var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
+        {
+            var element = new XElement(W + "comment",
+                new XAttribute(W + "id", comment.Id),
+                new XAttribute(W + "author", comment.Author),
+                new XAttribute(W + "initials", comment.Initials));
+            if (comment.DateXml is { Length: > 0 } date)
+                element.Add(new XAttribute(W + "date", date));
+
+            if (comment.Content.Count == 0)
+                element.Add(new XElement(W + "p"));
+            else
+                foreach (var paragraph in comment.Content)
+                    element.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+            comments.Add(element);
+        }
+
+        return new XDocument(comments);
     }
 
     private static XElement BuildBlock(Block block, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks) => block switch
@@ -236,12 +444,25 @@ public static class DocxWriter
     private static XElement BuildTable(Table table, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var tbl = new XElement(W + "tbl", BuildTableProperties(table));
+
+        // The table grid (one w:gridCol per column) follows w:tblPr when explicit widths are known.
+        if (table.ColumnWidthsPt.Count > 0)
+        {
+            var grid = new XElement(W + "tblGrid");
+            foreach (var widthPt in table.ColumnWidthsPt)
+                grid.Add(new XElement(W + "gridCol", new XAttribute(W + "w", PointsToDxa(widthPt))));
+            tbl.Add(grid);
+        }
+
         foreach (var row in table.Rows)
         {
             var tr = new XElement(W + "tr");
             foreach (var cell in row.Cells)
             {
                 var tc = new XElement(W + "tc");
+                var tcPr = BuildCellProperties(cell);
+                if (tcPr is not null)
+                    tc.Add(tcPr);
                 if (cell.Paragraphs.Count == 0)
                     tc.Add(new XElement(W + "p"));
                 else
@@ -282,6 +503,75 @@ public static class DocxWriter
         return tblPr;
     }
 
+    // Cell properties (w:tcPr): emitted only when the cell has an explicit width and/or shading, so
+    // plain cells stay unchanged. Width is w:tcW (dxa); shading mirrors paragraph w:shd (fill colour).
+    private static XElement? BuildCellProperties(TableCell cell)
+    {
+        var tcPr = new XElement(W + "tcPr");
+        if (cell.WidthPt is { } widthPt)
+            tcPr.Add(new XElement(W + "tcW",
+                new XAttribute(W + "w", PointsToDxa(widthPt)),
+                new XAttribute(W + "type", "dxa")));
+        if (cell.ShadingColorHex is { Length: > 0 } shading)
+            tcPr.Add(new XElement(W + "shd",
+                new XAttribute(W + "val", "clear"),
+                new XAttribute(W + "color", "auto"),
+                new XAttribute(W + "fill", shading.TrimStart('#'))));
+        return tcPr.HasElements ? tcPr : null;
+    }
+
+    // Bookmark ids are scoped to the whole document; one monotonically increasing counter keeps
+    // every w:bookmarkStart/w:bookmarkEnd pair's w:id unique across all paragraphs.
+    private static int _bookmarkId;
+
+    // Revision (w:ins/w:del) ids are scoped to the whole document; this counter keeps each wrapper's
+    // w:id unique across all paragraphs. Reset alongside _bookmarkId at the start of each document.
+    private static int _revisionId;
+
+    /// <summary>True when two runs carry the same tracked-change kind, author and date (so they coalesce).</summary>
+    private static bool SameRevision(Run a, Run b) =>
+        a.Revision == b.Revision
+        && string.Equals(a.RevisionAuthor, b.RevisionAuthor, StringComparison.Ordinal)
+        && string.Equals(a.RevisionDateXml, b.RevisionDateXml, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Builds an empty w:ins (insertion) or w:del (deletion) wrapper carrying a unique w:id plus the
+    /// run's author/date attributes. The caller fills it with the wrapped run/hyperlink elements. The
+    /// run is assumed to carry a non-None revision.
+    /// </summary>
+    private static XElement NewRevisionWrapper(Run run)
+    {
+        var name = run.Revision == RevisionKind.Deleted ? "del" : "ins";
+        var wrapper = new XElement(W + name,
+            new XAttribute(W + "id", System.Threading.Interlocked.Increment(ref _revisionId)));
+        if (run.RevisionAuthor is { Length: > 0 } author)
+            wrapper.Add(new XAttribute(W + "author", author));
+        if (run.RevisionDateXml is { Length: > 0 } date)
+            wrapper.Add(new XAttribute(W + "date", date));
+        return wrapper;
+    }
+
+    /// <summary>
+    /// Builds the w:sdtPr (content-control properties) for a content control. Emits w:tag / w:alias when
+    /// set, then the control-kind element: w:text for a plain-text control, or a w14:checkbox carrying the
+    /// checked state (w14:checked val="1"/"0") for a checkbox. This is the minimal valid shape FreeW's own
+    /// reader recovers (see <see cref="DocxReader"/>).
+    /// </summary>
+    private static XElement BuildSdtProperties(ContentControl control)
+    {
+        var sdtPr = new XElement(W + "sdtPr");
+        if (control.Alias is { Length: > 0 } alias)
+            sdtPr.Add(new XElement(W + "alias", new XAttribute(W + "val", alias)));
+        if (control.Tag is { Length: > 0 } tag)
+            sdtPr.Add(new XElement(W + "tag", new XAttribute(W + "val", tag)));
+        if (control.Kind == ContentControlKind.CheckBox)
+            sdtPr.Add(new XElement(W14 + "checkbox",
+                new XElement(W14 + "checked", new XAttribute(W14 + "val", control.Checked ? "1" : "0"))));
+        else
+            sdtPr.Add(new XElement(W + "text"));
+        return sdtPr;
+    }
+
     private static XElement BuildParagraph(Paragraph paragraph, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var p = new XElement(W + "p");
@@ -289,25 +579,138 @@ public static class DocxWriter
         if (pPr is not null)
             p.Add(pPr);
 
-        // Wrap maximal spans of consecutive runs sharing the same hyperlink URL in a single
-        // w:hyperlink referencing the URL's external relationship id.
+        // A bookmarked paragraph is bracketed by a w:bookmarkStart/w:bookmarkEnd pair (siblings of the
+        // runs) sharing one w:id; the start also carries the bookmark's w:name.
+        var bookmarkId = -1;
+        if (paragraph.BookmarkName is { Length: > 0 } bookmarkName)
+        {
+            bookmarkId = System.Threading.Interlocked.Increment(ref _bookmarkId);
+            p.Add(new XElement(W + "bookmarkStart",
+                new XAttribute(W + "id", bookmarkId),
+                new XAttribute(W + "name", bookmarkName)));
+        }
+
+        // Wrap maximal spans of consecutive runs sharing the same hyperlink target in a single
+        // w:hyperlink. External links reference the URL's relationship id (r:id); internal links
+        // reference a bookmark name via w:anchor (no relationship).
+        //
+        // Review comments overlay this: a run carrying a CommentId (other than the textless reference
+        // run) is bracketed by a w:commentRangeStart/End pair sharing that id, emitted as siblings of
+        // the runs. The textless reference run (IsCommentReference) serialises as a w:commentReference
+        // run placed just after the matching range end. Comment-covered runs are not also hyperlinks in
+        // the editor, so the two wrappings do not interleave in practice.
+        //
+        // Tracked changes overlay this again: a run carrying Revision != None is wrapped in a w:ins
+        // (insertion) or w:del (deletion) element carrying the author/date attributes; the wrapped run's
+        // text serialises as w:delText (not w:t) inside a w:del so Word treats it as deleted content.
+        // Consecutive runs sharing the same revision kind/author/date coalesce into one wrapper. The
+        // wrapper sits between the paragraph (or hyperlink) and the run elements, while comment-range and
+        // bookmark markers stay as paragraph-level siblings.
         var i = 0;
         var runs = paragraph.Runs;
+        var openCommentId = (int?)null;
+
+        // The current open revision wrapper (w:ins/w:del) and the run it was opened for; run-level
+        // elements are added through Content(...) so they land inside the wrapper when one is open.
+        XElement? revisionWrapper = null;
+        Run? revisionKey = null;
+
+        void FlushRevision()
+        {
+            if (revisionWrapper is not null)
+            {
+                p.Add(revisionWrapper);
+                revisionWrapper = null;
+                revisionKey = null;
+            }
+        }
+
+        // Route one run-level element (a w:r or w:hyperlink) through the active revision wrapper,
+        // (re)opening or closing it to match the run's revision mark before adding the element.
+        void Content(Run run, XElement element)
+        {
+            if (run.Revision == RevisionKind.None)
+            {
+                FlushRevision();
+                p.Add(element);
+                return;
+            }
+            if (revisionKey is null || !SameRevision(revisionKey, run))
+            {
+                FlushRevision();
+                revisionWrapper = NewRevisionWrapper(run);
+                revisionKey = run;
+            }
+            revisionWrapper!.Add(element);
+        }
+
         while (i < runs.Count)
         {
+            // Update the open comment range to match this run before emitting it. The textless
+            // reference run does not open/extend a range; it only emits the reference marker below.
+            var coveringId = runs[i].IsCommentReference ? null : runs[i].CommentId;
+            if (openCommentId != coveringId)
+            {
+                // Comment range markers are paragraph-level siblings, not revision content.
+                FlushRevision();
+                if (openCommentId is { } closing)
+                    p.Add(new XElement(W + "commentRangeEnd", new XAttribute(W + "id", closing)));
+                if (coveringId is { } opening)
+                    p.Add(new XElement(W + "commentRangeStart", new XAttribute(W + "id", opening)));
+                openCommentId = coveringId;
+            }
+
+            // A content control (w:sdt) wraps the maximal span of consecutive runs sharing the same
+            // ContentControl instance. The wrapped run(s) keep their ordinary w:r form inside w:sdtContent;
+            // the sdt itself still routes through the revision wrapper so a control can sit inside a
+            // tracked change. Content controls are not also hyperlinks/comments in practice.
+            var control = runs[i].Control;
+            if (control is not null)
+            {
+                var head = runs[i];
+                var content = new XElement(W + "sdtContent");
+                while (i < runs.Count && ReferenceEquals(runs[i].Control, control)
+                    && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId
+                    && SameRevision(head, runs[i]))
+                    content.Add(BuildRun(runs[i++], imagesByRun));
+                var sdt = new XElement(W + "sdt", BuildSdtProperties(control), content);
+                Content(head, sdt);
+                continue;
+            }
+
             var url = runs[i].HyperlinkUrl;
+            var anchor = runs[i].HyperlinkAnchor;
             if (url is { Length: > 0 } && hyperlinks.TryGetValue(url, out var relationshipId))
             {
                 var hyperlink = new XElement(W + "hyperlink", new XAttribute(R + "id", relationshipId));
-                while (i < runs.Count && runs[i].HyperlinkUrl == url)
+                var head = runs[i];
+                while (i < runs.Count && runs[i].HyperlinkUrl == url && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
                     hyperlink.Add(BuildRun(runs[i++], imagesByRun));
-                p.Add(hyperlink);
+                Content(head, hyperlink);
+            }
+            else if (anchor is { Length: > 0 })
+            {
+                var hyperlink = new XElement(W + "hyperlink", new XAttribute(W + "anchor", anchor));
+                var head = runs[i];
+                while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
+                    hyperlink.Add(BuildRun(runs[i++], imagesByRun));
+                Content(head, hyperlink);
             }
             else
             {
-                p.Add(BuildRun(runs[i++], imagesByRun));
+                var run = runs[i++];
+                Content(run, BuildRun(run, imagesByRun));
             }
         }
+
+        // Close any still-open revision wrapper, then any still-open comment range, at paragraph end.
+        FlushRevision();
+        if (openCommentId is { } trailing)
+            p.Add(new XElement(W + "commentRangeEnd", new XAttribute(W + "id", trailing)));
+
+        if (bookmarkId >= 0)
+            p.Add(new XElement(W + "bookmarkEnd", new XAttribute(W + "id", bookmarkId)));
+
         return p;
     }
 
@@ -318,6 +721,9 @@ public static class DocxWriter
             pPr.Add(new XElement(W + "pStyle", new XAttribute(W + "val", paragraph.StyleId)));
 
         var f = paragraph.Formatting;
+        // Force a page break before this paragraph (w:pageBreakBefore); Word honours it when paginating.
+        if (f.PageBreakBefore)
+            pPr.Add(new XElement(W + "pageBreakBefore"));
         if (f.ListKind != ListKind.None)
         {
             var numId = f.ListKind == ListKind.Number ? NumberNumId : BulletNumId;
@@ -334,6 +740,19 @@ public static class DocxWriter
                 TextAlignment.Justify => "both",
                 _ => "left"
             })));
+        // Tab stops (w:tabs): one w:tab per stop, position in dxa, alignment via w:val. Mirrors how
+        // w:ind/w:spacing carry their dxa values.
+        if (f.TabStops.Count > 0)
+            pPr.Add(new XElement(W + "tabs",
+                f.TabStops.Select(t => new XElement(W + "tab",
+                    new XAttribute(W + "val", t.Alignment switch
+                    {
+                        TabStopAlignment.Center => "center",
+                        TabStopAlignment.Right => "right",
+                        TabStopAlignment.Decimal => "decimal",
+                        _ => "left"
+                    }),
+                    new XAttribute(W + "pos", PointsToDxa(t.PositionPt))))));
         if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
             pPr.Add(new XElement(W + "spacing",
                 new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)),
@@ -343,7 +762,8 @@ public static class DocxWriter
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)),
                 new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
-        // Paragraph box border: all four edges share one colour/width (w:pBdr), analogous to w:tblBorders.
+        // Paragraph border (w:pBdr): a uniform box (all four edges) by default, or a bottom-only edge
+        // when the border is a horizontal rule. Each edge shares one colour/width, analogous to w:tblBorders.
         if (f.Border is { } border)
         {
             XElement Edge(string name) => new(W + name,
@@ -351,8 +771,9 @@ public static class DocxWriter
                 new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
                 new XAttribute(W + "space", 0),
                 new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
-            pPr.Add(new XElement(W + "pBdr",
-                Edge("top"), Edge("left"), Edge("bottom"), Edge("right")));
+            pPr.Add(border.BottomOnly
+                ? new XElement(W + "pBdr", Edge("bottom"))
+                : new XElement(W + "pBdr", Edge("top"), Edge("left"), Edge("bottom"), Edge("right")));
         }
         // Paragraph shading (background fill), mirroring run-level w:shd highlight.
         if (f.ShadingColorHex is { Length: > 0 } shading)
@@ -366,6 +787,31 @@ public static class DocxWriter
 
     private static XElement BuildRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
     {
+        // A page-number field emits a self-contained w:fldSimple wrapping a run; the wrapped run's
+        // w:t carries the last-known value as fallback text for field-unaware consumers.
+        if (run.FieldKind == RunFieldKind.PageNumber)
+            return new XElement(W + "fldSimple",
+                new XAttribute(W + "instr", " PAGE "),
+                BuildTextRun(run, imagesByRun));
+
+        // A footnote reference is a superscript run carrying a w:footnoteReference (no literal text);
+        // the rPr forces vertAlign=superscript so field-unaware viewers still show a raised marker.
+        if (run.FootnoteId is { } footnoteId)
+            return new XElement(W + "r",
+                new XElement(W + "rPr",
+                    new XElement(W + "vertAlign", new XAttribute(W + "val", "superscript"))),
+                new XElement(W + "footnoteReference", new XAttribute(W + "id", footnoteId)));
+
+        // The textless comment anchor run carries the w:commentReference for its id (no literal text).
+        if (run is { IsCommentReference: true, CommentId: { } commentRefId })
+            return new XElement(W + "r",
+                new XElement(W + "commentReference", new XAttribute(W + "id", commentRefId)));
+
+        return BuildTextRun(run, imagesByRun);
+    }
+
+    private static XElement BuildTextRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
+    {
         var r = new XElement(W + "r");
         var rPr = BuildRunProperties(run.Formatting);
         if (rPr is not null)
@@ -373,7 +819,12 @@ public static class DocxWriter
         if (run.Image is not null && imagesByRun.TryGetValue(run, out var part))
             r.Add(BuildDrawing(part));
         else
-            r.Add(new XElement(W + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), run.Text));
+        {
+            // A tracked deletion stores its text in w:delText (so Word renders it as deleted content);
+            // all other runs use the ordinary w:t element.
+            var textElement = run.Revision == RevisionKind.Deleted ? "delText" : "t";
+            r.Add(new XElement(W + textElement, new XAttribute(XNamespace.Xml + "space", "preserve"), run.Text));
+        }
         return r;
     }
 
@@ -425,10 +876,17 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "i"));
         if (f.Strikethrough)
             rPr.Add(new XElement(W + "strike"));
+        if (f.SmallCaps)
+            rPr.Add(new XElement(W + "smallCaps"));
+        if (f.AllCaps)
+            rPr.Add(new XElement(W + "caps"));
         if (f.Underline)
             rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
         if (f.ColorHex is { Length: > 0 } color)
             rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
+        if (f.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
+            rPr.Add(new XElement(W + "vertAlign",
+                new XAttribute(W + "val", f.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript")));
         if (f.HighlightColorHex is { Length: > 0 } highlight)
             rPr.Add(new XElement(W + "shd",
                 new XAttribute(W + "val", "clear"),
@@ -444,8 +902,19 @@ public static class DocxWriter
         return rPr.HasElements ? rPr : null;
     }
 
-    private static XElement BuildSectionProperties(PageSettings page) =>
+    private static XElement BuildSectionProperties(PageSettings page, bool hasHeader, bool hasFooter) =>
         new(W + "sectPr",
+            // Header/footer references must precede pgSz/pgMar in the sectPr schema order.
+            hasHeader
+                ? new XElement(W + "headerReference",
+                    new XAttribute(W + "type", "default"),
+                    new XAttribute(R + "id", HeaderRelationshipId))
+                : null,
+            hasFooter
+                ? new XElement(W + "footerReference",
+                    new XAttribute(W + "type", "default"),
+                    new XAttribute(R + "id", FooterRelationshipId))
+                : null,
             new XElement(W + "pgSz",
                 new XAttribute(W + "w", PointsToDxa(page.WidthPt)),
                 new XAttribute(W + "h", PointsToDxa(page.HeightPt)),
@@ -454,7 +923,36 @@ public static class DocxWriter
                 new XAttribute(W + "left", PointsToDxa(page.MarginLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(page.MarginRightPt)),
                 new XAttribute(W + "top", PointsToDxa(page.MarginTopPt)),
-                new XAttribute(W + "bottom", PointsToDxa(page.MarginBottomPt))));
+                new XAttribute(W + "bottom", PointsToDxa(page.MarginBottomPt))),
+            // Page border (w:pgBorders): a uniform box on all four edges, offset from the page edge.
+            // Emitted only when set; w:sz is in eighths of a point, matching w:pBdr edges.
+            BuildPageBorders(page.PageBorder),
+            // Equal-width columns: w:cols carries the count (w:num) and inter-column gap (w:space, dxa).
+            // Emitted unconditionally; w:num="1" is harmless and keeps the section shape stable.
+            new XElement(W + "cols",
+                new XAttribute(W + "num", Math.Max(1, page.ColumnCount)),
+                new XAttribute(W + "space", PointsToDxa(page.ColumnSpacingPt))));
+
+    /// <summary>
+    /// Builds the w:pgBorders element (a uniform box on all four edges) for a page border, or null when
+    /// no page border is set. w:offsetFrom="page" with w:space="24" places the border 24pt off the page
+    /// edge — Word's default. Edge widths (w:sz) are in eighths of a point, like w:pBdr.
+    /// </summary>
+    private static XElement? BuildPageBorders(PageBorder? border)
+    {
+        if (border is null)
+            return null;
+
+        XElement Edge(string name) => new(W + name,
+            new XAttribute(W + "val", "single"),
+            new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
+            new XAttribute(W + "space", 24),
+            new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
+
+        return new XElement(W + "pgBorders",
+            new XAttribute(W + "offsetFrom", "page"),
+            Edge("top"), Edge("left"), Edge("bottom"), Edge("right"));
+    }
 
     /// <summary>
     /// Builds word/numbering.xml: two abstract numbering definitions (bullet + decimal), each with

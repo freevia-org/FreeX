@@ -71,6 +71,48 @@ public sealed class WorksheetContextMenuRendererTests
         });
     }
 
+    [Fact]
+    public void AddItemsByCommandId_CheckableItem_RendersIsCheckableWithStateAndDispatchesCommandId()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var ribbonMenu = new RibbonMenu(new[]
+            {
+                new RibbonMenuItem("_Set as Total", CommandId: new RibbonCommandId("WaterfallSetAsTotal"))
+                {
+                    IsChecked = true
+                }
+            });
+
+            var dispatched = new List<RibbonCommandId>();
+            var menu = new ContextMenu();
+            WorksheetContextMenuRenderer.AddItemsByCommandId(menu.Items, ribbonMenu.Items, dispatched.Add);
+
+            var item = menu.Items.OfType<MenuItem>().Should().ContainSingle().Subject;
+            item.IsCheckable.Should().BeTrue();
+            item.IsChecked.Should().BeTrue();
+            AutomationProperties.GetName(item).Should().Be("Set as Total");
+
+            item.RaiseEvent(new System.Windows.RoutedEventArgs(MenuItem.ClickEvent));
+            dispatched.Should().ContainSingle().Which.Should().Be(new RibbonCommandId("WaterfallSetAsTotal"));
+        });
+    }
+
+    [Fact]
+    public void AddItems_NullIsChecked_LeavesItemNonCheckable()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var commands = WorksheetContextMenuPlanner.BuildCommands();
+            var ribbonMenu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
+
+            var menu = new ContextMenu();
+            WorksheetContextMenuRenderer.AddItems(menu.Items, ribbonMenu.Items, _ => { });
+
+            menu.Items.OfType<MenuItem>().First().IsCheckable.Should().BeFalse();
+        });
+    }
+
     private static void AssertEquivalent(
         IReadOnlyList<WorksheetContextMenuCommand> source,
         ItemCollection rendered)

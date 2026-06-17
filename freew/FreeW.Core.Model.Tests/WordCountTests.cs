@@ -89,6 +89,19 @@ public class WordCountTests
         stats.CharactersWithoutSpaces.Should().Be(10);
     }
 
+    // The live status bar reports selection stats from Selection.Text via WordCount.Words /
+    // WordCount.Characters(includeSpaces: true). These assert the helpers over representative
+    // selection strings: empty, single word, and multi-word with punctuation.
+    [Theory]
+    [InlineData("", 0, 0)]
+    [InlineData("hello", 1, 5)]
+    [InlineData("Well, hello there!", 3, 18)]
+    public void SelectionStats_WordsAndCharactersWithSpaces(string selection, int expectedWords, int expectedCharacters)
+    {
+        WordCount.Words(selection).Should().Be(expectedWords);
+        WordCount.Characters(selection, includeSpaces: true).Should().Be(expectedCharacters);
+    }
+
     [Fact]
     public void Of_IncludesTableCellParagraphs()
     {

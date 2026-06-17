@@ -31,6 +31,17 @@ internal static class Program
 
         var xlsxPath = args.Length > 0 ? args[0] : DefaultWorkbookPath;
 
+        if (args.Contains("--validate-only"))
+        {
+            using var d = SpreadsheetDocument.Open(xlsxPath, isEditable: false);
+            var v = new OpenXmlValidator(DOXV.Microsoft365);
+            int n = 0;
+            foreach (var e in v.Validate(d).Where(ev => ev.ErrorType == ValidationErrorType.Schema))
+            { n++; Console.WriteLine($"[{e.Id}] {e.Description} :: {e.Path?.XPath}"); }
+            Console.WriteLine($"TOTAL SCHEMA ERRORS: {n}");
+            return 0;
+        }
+
         var outputDir = Path.Combine(Path.GetTempPath(), "sheetfidelity");
         Directory.CreateDirectory(outputDir);
         var reportPath = Path.Combine(outputDir, "REPORT.txt");
@@ -188,11 +199,13 @@ internal static class Program
 
         Emit($"  Total formula cells (snapshot): {snapshots.Count}");
 
-        // Run recalc
+        // Run recalc. Keep the dependency graph so volatile-taint can be propagated transitively
+        // (cells that don't call a volatile directly but depend on one are still legitimately divergent).
+        var dependencyGraph = new DependencyGraph();
         Exception? recalcException = null;
         try
         {
-            new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()).RecalculateAllFormulas(workbook);
+            new RecalcEngine(dependencyGraph, new FormulaEvaluator()).RecalculateAllFormulas(workbook);
             Emit("  Recalc: completed without exception");
         }
         catch (Exception ex)
@@ -204,8 +217,23 @@ internal static class Program
 
         Emit("");
 
-        // Compare recalc result vs cached
+        // Compare recalc result vs cached. Cells whose cached value CANNOT match a recalc by design are
+        // segregated into separate buckets so the headline mismatch count reflects only GENUINE divergences:
+        //   - VOLATILE: formula calls a non-deterministic builtin (TODAY/NOW/RAND/RANDARRAY/RANDBETWEEN);
+        //     the cached value reflects authoring time, so a differing recalc is expected and correct.
+        //   - VBA-UDF: formula calls a name that is neither a builtin nor a workbook defined-name — a VBA
+        //     user-defined function FreeX cannot evaluate (macros unsupported); recalc errors legitimately.
+        var definedNames = new HashSet<string>(workbook.NamedRanges.Keys, StringComparer.OrdinalIgnoreCase);
         var mismatches = new List<(string Sheet, uint Row, uint Col, string Formula, ScalarValue Cached, ScalarValue Recalc)>();
+        var volatileExcluded = new List<(string Sheet, uint Row, uint Col, string Formula)>();
+        var vbaUdfExcluded = new List<(string Sheet, uint Row, uint Col, string Formula, string UdfName)>();
+
+        // Volatile taint: every formula cell that directly calls a non-deterministic volatile, plus every
+        // cell that transitively depends on one (e.g. COUNTIFS / IF over a "D-TODAY()" column). Such cells'
+        // cached values reflect authoring time and cannot match a recalc — excluded as volatile, not genuine.
+        var volatileTainted = recalcException is null
+            ? ComputeVolatileTaint(workbook, dependencyGraph)
+            : new HashSet<CellAddress>();
 
         if (recalcException is null)
         {
@@ -221,28 +249,66 @@ internal static class Program
                     var cached = snap.Cached;
                     var recalc = cell.Value;
 
-                    if (!ValuesMatch(cached, recalc))
-                        mismatches.Add((sheet.Name, row, col, snap.Formula, cached, recalc));
+                    if (ValuesMatch(cached, recalc))
+                        continue;
+
+                    // Only segregate when CONFIDENT: a volatile-tainted cell (direct or transitive), or an
+                    // unknown call token that is provably neither a builtin nor a defined name.
+                    if (volatileTainted.Contains(new CellAddress(sheet.Id, row, col)))
+                    {
+                        volatileExcluded.Add((sheet.Name, row, col, snap.Formula));
+                        continue;
+                    }
+
+                    if (TryFindUnknownFunctionCall(snap.Formula, definedNames, out var udfName))
+                    {
+                        vbaUdfExcluded.Add((sheet.Name, row, col, snap.Formula, udfName));
+                        continue;
+                    }
+
+                    mismatches.Add((sheet.Name, row, col, snap.Formula, cached, recalc));
                 }
             }
         }
 
         // Per-sheet summary
-        Emit($"  {"Sheet",-30} {"Formula Cells",14} {"Mismatches",12}");
-        Emit($"  {new string('-', 60)}");
+        Emit($"  {"Sheet",-30} {"Formula Cells",14} {"Mismatches",12} {"Volatile",10} {"VBA-UDF",9}");
+        Emit($"  {new string('-', 79)}");
         int workbookFormulas = 0, workbookMismatches = 0;
         foreach (var sheet in workbook.Sheets)
         {
             var sheetFormulas = snapshots.Keys.Count(k => k.SheetName == sheet.Name);
             var sheetMismatches = mismatches.Count(m => m.Sheet == sheet.Name);
+            var sheetVolatile = volatileExcluded.Count(m => m.Sheet == sheet.Name);
+            var sheetUdf = vbaUdfExcluded.Count(m => m.Sheet == sheet.Name);
             if (sheetFormulas > 0)
-                Emit($"  {Trunc(sheet.Name, 30),-30} {sheetFormulas,14} {sheetMismatches,12}");
+                Emit($"  {Trunc(sheet.Name, 30),-30} {sheetFormulas,14} {sheetMismatches,12} {sheetVolatile,10} {sheetUdf,9}");
             workbookFormulas += sheetFormulas;
             workbookMismatches += sheetMismatches;
         }
-        Emit($"  {new string('-', 60)}");
-        Emit($"  {"WORKBOOK TOTAL",-30} {workbookFormulas,14} {workbookMismatches,12}");
+        Emit($"  {new string('-', 79)}");
+        Emit($"  {"WORKBOOK TOTAL",-30} {workbookFormulas,14} {workbookMismatches,12} {volatileExcluded.Count,10} {vbaUdfExcluded.Count,9}");
         Emit("");
+        Emit($"  GENUINE mismatches      : {mismatches.Count}");
+        Emit($"  volatile (excluded)     : {volatileExcluded.Count}");
+        Emit($"  VBA-UDF (excluded)      : {vbaUdfExcluded.Count}");
+        Emit("");
+
+        if (volatileExcluded.Count > 0)
+        {
+            Emit($"  Volatile-excluded examples (cached reflects authoring time; recalc legitimately differs):");
+            foreach (var (sht, row, col, formula) in volatileExcluded.Take(10))
+                Emit($"    {Trunc($"{sht}!{ColToLetter(col)}{row}", 22),-22} {Trunc(formula, 50),-50}");
+            Emit("");
+        }
+
+        if (vbaUdfExcluded.Count > 0)
+        {
+            Emit($"  VBA-UDF-excluded examples (unknown function FreeX cannot evaluate; macros unsupported):");
+            foreach (var (sht, row, col, formula, udf) in vbaUdfExcluded.Take(10))
+                Emit($"    {Trunc($"{sht}!{ColToLetter(col)}{row}", 22),-22} {Trunc($"[{udf}] {formula}", 50),-50}");
+            Emit("");
+        }
 
         // Up to 40 example mismatches, grouped by leading function name
         if (mismatches.Count > 0 && recalcException is null)
@@ -460,6 +526,136 @@ internal static class Program
         ErrorValue ev => ev.ToString(),
         _ => v.ToString() ?? "?"
     };
+
+    // Non-deterministic volatile builtins whose cached value (authoring time) cannot match a recalc.
+    // Deliberately narrower than FreeX's full volatile set (which also includes INDIRECT/OFFSET/CELL/INFO):
+    // those are reference-volatile but still deterministic given the same data, so they are NOT excluded.
+    private static readonly HashSet<string> NonDeterministicVolatileFunctions =
+        new(StringComparer.OrdinalIgnoreCase) { "TODAY", "NOW", "RAND", "RANDARRAY", "RANDBETWEEN" };
+
+    private static bool FormulaCallsNonDeterministicVolatile(string formula)
+    {
+        foreach (var name in EnumerateFunctionCallNames(formula))
+        {
+            if (NonDeterministicVolatileFunctions.Contains(name))
+                return true;
+        }
+
+        return false;
+    }
+
+    // Seeds the taint with every formula cell that directly calls a non-deterministic volatile, then
+    // propagates DOWN to dependents via the populated dependency graph (GetDirectDependents covers both
+    // exact-cell and range references). The result is the full set of cells whose cached value cannot
+    // legitimately match a recalc because a volatile source feeds them.
+    private static HashSet<CellAddress> ComputeVolatileTaint(Workbook workbook, DependencyGraph graph)
+    {
+        var tainted = new HashSet<CellAddress>();
+        var worklist = new Queue<CellAddress>();
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+            {
+                if (cell.HasFormula && cell.FormulaText is not null &&
+                    FormulaCallsNonDeterministicVolatile(cell.FormulaText))
+                {
+                    var addr = new CellAddress(sheet.Id, row, col);
+                    if (tainted.Add(addr))
+                        worklist.Enqueue(addr);
+                }
+            }
+        }
+
+        while (worklist.Count > 0)
+        {
+            var current = worklist.Dequeue();
+            foreach (var dependent in graph.GetDirectDependents(current))
+            {
+                if (tainted.Add(dependent))
+                    worklist.Enqueue(dependent);
+            }
+        }
+
+        return tainted;
+    }
+
+    // Returns the first call token that is neither a built-in function nor a workbook defined-name.
+    // Such a token is a VBA user-defined function FreeX cannot evaluate (macros unsupported).
+    private static bool TryFindUnknownFunctionCall(string formula, HashSet<string> definedNames, out string udfName)
+    {
+        foreach (var name in EnumerateFunctionCallNames(formula))
+        {
+            if (BuiltInFunctions.Exists(name.ToUpperInvariant()))
+                continue;
+            if (definedNames.Contains(name))
+                continue;
+            udfName = name;
+            return true;
+        }
+
+        udfName = string.Empty;
+        return false;
+    }
+
+    // Extracts identifiers that are immediately followed by '(' (i.e. function calls), skipping string
+    // literals and qualified members ('foo.bar(' — the '.'-prefixed segment is a method, not a workbook
+    // function). Sheet-qualified references like "Sheet1!A1" are not call tokens (no trailing '('), so they
+    // are naturally ignored. Conservative by construction: only clear call sites are reported.
+    private static IEnumerable<string> EnumerateFunctionCallNames(string formula)
+    {
+        if (string.IsNullOrEmpty(formula))
+            yield break;
+
+        var i = 0;
+        var n = formula.Length;
+        while (i < n)
+        {
+            var c = formula[i];
+
+            // Skip string literals ("...", with "" as an escaped quote).
+            if (c == '"')
+            {
+                i++;
+                while (i < n)
+                {
+                    if (formula[i] == '"')
+                    {
+                        if (i + 1 < n && formula[i + 1] == '"') { i += 2; continue; }
+                        i++;
+                        break;
+                    }
+                    i++;
+                }
+                continue;
+            }
+
+            // Identifier start: letter or underscore (Excel function/name rules).
+            if (char.IsLetter(c) || c == '_')
+            {
+                var start = i;
+                while (i < n && (char.IsLetterOrDigit(formula[i]) || formula[i] == '_' || formula[i] == '.'))
+                    i++;
+
+                // Look past whitespace for an opening paren — that makes this identifier a call.
+                var j = i;
+                while (j < n && char.IsWhiteSpace(formula[j])) j++;
+                if (j < n && formula[j] == '(')
+                {
+                    var token = formula[start..i];
+                    // A qualified member call (e.g. "Application.Run") is not a workbook-level function name;
+                    // take the leaf after the last '.'. A leaf that's empty is ignored.
+                    var dot = token.LastIndexOf('.');
+                    var leaf = dot >= 0 ? token[(dot + 1)..] : token;
+                    if (leaf.Length > 0)
+                        yield return leaf;
+                }
+                continue;
+            }
+
+            i++;
+        }
+    }
 
     private static string ExtractLeadingFunction(string formula)
     {

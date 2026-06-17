@@ -157,13 +157,39 @@ public sealed partial class FormulaEvaluator
 
     private ScalarValue EvaluateChooseIndexRange(FunctionCallNode node, IEvalContext context, RangeValue indexRange)
     {
+        // Excel broadcasts an array index_num against the selected branches: a 1xN index over
+        // M-row column-vector branches yields an MxN result (the "stack columns" idiom). The result
+        // shape is the broadcast of the index dimensions with every selected branch's dimensions.
         var branchCache = new Dictionary<int, ScalarValue>();
-        var cells = new ScalarValue[indexRange.RowCount, indexRange.ColCount];
 
-        for (int r = 0; r < indexRange.RowCount; r++)
-            for (int c = 0; c < indexRange.ColCount; c++)
+        int rowCount = indexRange.RowCount;
+        int colCount = indexRange.ColCount;
+        foreach (var indexValue in indexRange.Cells)
+        {
+            if (indexValue is ErrorValue) continue;
+            var index = CoerceChooseIndex(indexValue, node.Arguments.Count);
+            if (index is null) continue;
+
+            if (!branchCache.TryGetValue(index.Value, out var selected))
             {
-                var indexValue = indexRange.Cells[r, c];
+                selected = EvaluateArrayOperand(node.Arguments[index.Value], context);
+                branchCache[index.Value] = selected;
+            }
+
+            if (selected is RangeValue branch)
+            {
+                if (!CanBroadcast(rowCount, branch.RowCount) || !CanBroadcast(colCount, branch.ColCount))
+                    return ErrorValue.Value;
+                rowCount = Math.Max(rowCount, branch.RowCount);
+                colCount = Math.Max(colCount, branch.ColCount);
+            }
+        }
+
+        var cells = new ScalarValue[rowCount, colCount];
+        for (int r = 0; r < rowCount; r++)
+            for (int c = 0; c < colCount; c++)
+            {
+                var indexValue = indexRange.Cells[indexRange.RowCount == 1 ? 0 : r, indexRange.ColCount == 1 ? 0 : c];
                 if (indexValue is ErrorValue indexError)
                 {
                     cells[r, c] = indexError;
@@ -177,14 +203,9 @@ public sealed partial class FormulaEvaluator
                     continue;
                 }
 
-                if (!branchCache.TryGetValue(index.Value, out var selected))
-                {
-                    selected = EvaluateArrayOperand(node.Arguments[index.Value], context);
-                    branchCache[index.Value] = selected;
-                }
-
+                var selected = branchCache[index.Value];
                 cells[r, c] = selected is RangeValue selectedRange
-                    ? PickRangeElementForArrayResult(selectedRange, r, c, indexRange.RowCount, indexRange.ColCount)
+                    ? selectedRange.Cells[selectedRange.RowCount == 1 ? 0 : r, selectedRange.ColCount == 1 ? 0 : c]
                     : selected;
             }
 

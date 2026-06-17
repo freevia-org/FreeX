@@ -100,5 +100,22 @@ public readonly record struct GridRange
         return new GridRange(start, end);
     }
 
+    /// <summary>
+    /// Parse a reference that may be either a multi-cell range ("A1:C10") or a single cell ("D6").
+    /// A single-cell reference yields a degenerate 1x1 range. Use this for OOXML references whose
+    /// <c>ref</c> attribute legitimately collapses to one cell (e.g. a pivot table location).
+    /// </summary>
+    public static GridRange ParseCellOrRange(string rangeText, SheetId sheet)
+    {
+        var separator = rangeText.IndexOf(':');
+        if (separator < 0)
+        {
+            var cell = CellAddress.Parse(rangeText, sheet);
+            return new GridRange(cell, cell);
+        }
+
+        return Parse(rangeText, sheet);
+    }
+
     public override string ToString() => $"{Start.ToA1()}:{End.ToA1()}";
 }

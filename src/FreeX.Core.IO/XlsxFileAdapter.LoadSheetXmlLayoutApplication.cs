@@ -209,6 +209,17 @@ public sealed partial class XlsxFileAdapter
                 Kind = sparkline.Kind
             });
         }
+        foreach (var formControl in layout.FormControls)
+        {
+            if (formControl.Anchor is { } anchor)
+            {
+                formControl.Anchor = new GridRange(
+                    new CellAddress(sheet.Id, anchor.Start.Row, anchor.Start.Col),
+                    new CellAddress(sheet.Id, anchor.End.Row, anchor.End.Col));
+            }
+
+            sheet.FormControls.Add(formControl);
+        }
         foreach (var conditionalFormat in layout.AdvancedConditionalFormats)
             sheet.ConditionalFormats.Add(RemapConditionalFormat(conditionalFormat, sheet.Id));
         foreach (var ignoredErrorAddress in layout.IgnoredErrors.ExpandedCells)

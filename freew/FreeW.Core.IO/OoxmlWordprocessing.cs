@@ -8,6 +8,12 @@ internal static class Ooxml
 {
     public static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     public static readonly XNamespace R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+    /// <summary>
+    /// The Office 2010 WordprocessingML extension namespace (w14), used here for the checkbox content
+    /// control element (w14:checkbox) inside a content control's w:sdtPr.
+    /// </summary>
+    public static readonly XNamespace W14 = "http://schemas.microsoft.com/office/word/2010/wordml";
     public static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
     public static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
 
@@ -27,9 +33,27 @@ internal static class Ooxml
     public const string CorePropertiesRelType = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
     public const string CorePropertiesPartName = "/docProps/core.xml";
 
+    // OPC custom properties (docProps/custom.xml): used best-effort to persist the page watermark text.
+    public static readonly XNamespace CustomProps = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+    public static readonly XNamespace VtVariant = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+    public const string CustomPropertiesContentType = "application/vnd.openxmlformats-officedocument.custom-properties+xml";
+    public const string CustomPropertiesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
+    public const string CustomPropertiesPartName = "/docProps/custom.xml";
+
+    /// <summary>The custom-property name under which the FreeW page watermark text is persisted.</summary>
+    public const string WatermarkPropertyName = "FreeWWatermark";
+
     public const string NumberingContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml";
     public const string NumberingRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering";
     public const string NumberingPartName = "/word/numbering.xml";
+
+    public const string FootnotesContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml";
+    public const string FootnotesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes";
+    public const string FootnotesPartName = "/word/footnotes.xml";
+
+    public const string CommentsContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml";
+    public const string CommentsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+    public const string CommentsPartName = "/word/comments.xml";
 
     /// <summary>W3CDTF as used by dcterms:created/modified (UTC, second precision, trailing 'Z').</summary>
     public static string ToW3CDtf(DateTimeOffset value) =>

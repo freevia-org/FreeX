@@ -21,7 +21,25 @@ public sealed class MainWindow : Window
     private DocumentView _editor = null!;
     private TextBlock _titleText = null!;
     private TextBlock _countsText = null!;
+    private Slider _zoomSlider = null!;
+    private TextBlock _zoomLabel = null!;
     private FindReplaceDialog? _findDialog;
+    private RibbonStateStore _stateStore = null!;
+    private Border _navPane = null!;
+    private ListBox _navList = null!;
+    private bool _navPaneVisible;
+
+    // Read mode (distraction-free view) chrome we hide/restore, plus the saved presentation we restore.
+    private Border _titleBar = null!;
+    private UIElement _ribbon = null!;
+    private StatusBar _status = null!;
+    private StatusBarItem _dataFolderItem = null!;
+    private StatusBarItem _zoomItem = null!;
+    private bool _readMode;
+    private bool _navPaneVisibleBeforeReadMode;
+    private Thickness _editorMarginBeforeReadMode;
+    private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
+    private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
 
     public MainWindow()
     {
@@ -36,28 +54,43 @@ public sealed class MainWindow : Window
         _editor = editor;
         editor.LoadModel(CreateSampleDocument());
         var stateStore = new RibbonStateStore();
-        var commands = FreeWRibbonCommands.Build(editor, stateStore, OpenPrintPreview);
+        _stateStore = stateStore;
+        var commands = FreeWRibbonCommands.Build(
+            editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode);
         _file = new FileCommands(this, editor, UpdateTitle);
-        editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); };
+        editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); };
+        // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
+        // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
+        editor.SelectionChanged += (_, _) => UpdateCounts();
         _autosave = new AutosaveCoordinator(editor, _file);
         Loaded += (_, _) => { _autosave.OfferRecovery(this); _autosave.Start(); };
         Closing += (_, _) => _autosave.Stop();
 
         var titleBar = BuildTitleBar();
+        _titleBar = titleBar;
         DockPanel.SetDock(titleBar, Dock.Top);
         root.Children.Add(titleBar);
 
         var ribbon = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
+        _ribbon = ribbon;
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
         var status = new StatusBar();
+        _status = status;
         _countsText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         status.Items.Add(new StatusBarItem { Content = _countsText });
         status.Items.Add(new Separator());
-        status.Items.Add(new StatusBarItem { Content = $"Data folder: {ResolveDataFolderLabel()}" });
+        _dataFolderItem = new StatusBarItem { Content = $"Data folder: {ResolveDataFolderLabel()}" };
+        status.Items.Add(_dataFolderItem);
+        _zoomItem = new StatusBarItem { HorizontalAlignment = HorizontalAlignment.Right, Content = BuildZoomControl() };
+        status.Items.Add(_zoomItem);
         DockPanel.SetDock(status, Dock.Bottom);
         root.Children.Add(status);
+
+        var navPane = BuildNavPane();
+        DockPanel.SetDock(navPane, Dock.Left);
+        root.Children.Add(navPane);
 
         root.Children.Add(editor);
 
@@ -75,6 +108,7 @@ public sealed class MainWindow : Window
 
         UpdateTitle();
         UpdateCounts();
+        RefreshOutline();
 
         Content = root;
     }
@@ -127,13 +161,210 @@ public sealed class MainWindow : Window
         _titleText.Text = $"{name} — FreeW";
     }
 
-    // Recompute live word/character/paragraph counts from the editor's committed model and show them
-    // in the status bar. Cheap enough to run on every edit (TextChanged) and on document load.
+    // Recompute the live status-bar counts. When there is a non-empty selection, show that selection's
+    // word + character totals (via the pure WordCount helpers over Selection.Text); otherwise fall back
+    // to the whole-document word/character/paragraph counts. Cheap enough to run on every edit
+    // (TextChanged), on selection change, and on document load.
     private void UpdateCounts()
     {
+        var selectionText = _editor.Selection.Text;
+        if (!string.IsNullOrEmpty(selectionText))
+        {
+            var words = WordCount.Words(selectionText);
+            var characters = WordCount.Characters(selectionText, includeSpaces: true);
+            _countsText.Text = $"Selection: {words} words, {characters} characters";
+            return;
+        }
+
         _editor.CommitToModel();
         var stats = WordCount.Of(_editor.Model);
         _countsText.Text = $"Words: {stats.Words}   Characters: {stats.CharactersWithSpaces}   Paragraphs: {stats.Paragraphs}";
+    }
+
+    // The left navigation pane: a header plus a ListBox of heading outline entries (indented by level).
+    // Collapsed by default; ToggleNavPane shows/hides it. Selecting an entry scrolls that heading into
+    // view in the editor and moves the caret there (see RefreshOutline / OnOutlineSelected).
+    private UIElement BuildNavPane()
+    {
+        _navList = new ListBox
+        {
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent
+        };
+        _navList.SelectionChanged += OnOutlineSelected;
+
+        var header = new TextBlock
+        {
+            Text = "Navigation",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 8, 10, 6)
+        };
+
+        var layout = new DockPanel { Width = 240 };
+        DockPanel.SetDock(header, Dock.Top);
+        layout.Children.Add(header);
+        layout.Children.Add(_navList);
+
+        _navPane = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
+            BorderThickness = new Thickness(0, 0, 1, 0),
+            Visibility = Visibility.Collapsed,
+            Child = layout
+        };
+        return _navPane;
+    }
+
+    // Show/hide the navigation pane and push the new checked-state into the ribbon state store so the
+    // View > Navigation Pane toggle button stays in sync. Refreshes the outline when the pane appears.
+    private void ToggleNavPane()
+    {
+        _navPaneVisible = !_navPaneVisible;
+        _navPane.Visibility = _navPaneVisible ? Visibility.Visible : Visibility.Collapsed;
+        _stateStore.SetChecked("freew.nav-pane", _navPaneVisible);
+        if (_navPaneVisible)
+            RefreshOutline();
+    }
+
+    // Read mode (distraction-free view): hide the ribbon, title bar, navigation pane, and the status
+    // bar's non-essential extras (data folder + zoom), then constrain the editor to a centered, roomy
+    // reading column. Toggling off restores every hidden element to exactly what it was before (including
+    // whether the nav pane had been open) and returns the editor to its original full-width presentation.
+    // The toggle state is mirrored into the shared RibbonStateStore so the View > Read Mode button stays
+    // in sync, exactly like the navigation-pane toggle.
+    private void ToggleReadMode()
+    {
+        _readMode = !_readMode;
+        if (_readMode)
+        {
+            // Remember the normal layout so we can put it back verbatim when read mode is switched off.
+            _navPaneVisibleBeforeReadMode = _navPaneVisible;
+            _editorMarginBeforeReadMode = _editor.Margin;
+            _editorMaxWidthBeforeReadMode = _editor.MaxWidth;
+            _editorAlignmentBeforeReadMode = _editor.HorizontalAlignment;
+
+            _titleBar.Visibility = Visibility.Collapsed;
+            _ribbon.Visibility = Visibility.Collapsed;
+            _dataFolderItem.Visibility = Visibility.Collapsed;
+            _zoomItem.Visibility = Visibility.Collapsed;
+
+            // Collapse the navigation pane while reading (without disturbing its remembered state).
+            _navPane.Visibility = Visibility.Collapsed;
+
+            // A centered, comfortable reading column: cap the width and add generous breathing room.
+            _editor.HorizontalAlignment = HorizontalAlignment.Center;
+            _editor.MaxWidth = 760;
+            _editor.Margin = new Thickness(40, 40, 40, 40);
+        }
+        else
+        {
+            _titleBar.Visibility = Visibility.Visible;
+            _ribbon.Visibility = Visibility.Visible;
+            _dataFolderItem.Visibility = Visibility.Visible;
+            _zoomItem.Visibility = Visibility.Visible;
+
+            // Restore the editor's original full-width presentation.
+            _editor.HorizontalAlignment = _editorAlignmentBeforeReadMode;
+            _editor.MaxWidth = _editorMaxWidthBeforeReadMode;
+            _editor.Margin = _editorMarginBeforeReadMode;
+
+            // Restore the navigation pane to whatever it was before entering read mode.
+            _navPane.Visibility = _navPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        _stateStore.SetChecked("freew.read-mode", _readMode);
+    }
+
+    // Recompute the heading outline from the editor's committed model and repopulate the nav list.
+    // Cheap, and skipped entirely while the pane is hidden. Each list item carries its OutlineEntry so
+    // a selection can map straight back to the model block index.
+    private void RefreshOutline()
+    {
+        if (_navList is null || !_navPaneVisible)
+            return;
+
+        _editor.CommitToModel();
+        var outline = DocumentOutline.Of(_editor.Model);
+
+        // Repopulate without triggering a navigation jump from the resulting selection reset.
+        _navList.SelectionChanged -= OnOutlineSelected;
+        _navList.Items.Clear();
+        foreach (var entry in outline)
+            _navList.Items.Add(new OutlineItem(entry));
+        _navList.SelectionChanged += OnOutlineSelected;
+    }
+
+    // Clicking an outline entry scrolls the matching heading into view and moves the caret there by
+    // mapping the entry's model block index onto the editor's FlowDocument (DocumentView.BringBlockIntoView).
+    private void OnOutlineSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (_navList.SelectedItem is OutlineItem item)
+            _editor.BringBlockIntoView(item.Entry.BlockIndex);
+    }
+
+    // A nav-list row: indents the heading text by its outline level and remembers the source entry
+    // (so a click can map back to the model block index). ToString drives the default ListBox display.
+    private sealed class OutlineItem(OutlineEntry entry)
+    {
+        public OutlineEntry Entry { get; } = entry;
+
+        public override string ToString()
+        {
+            var text = Entry.Text.Length > 0 ? Entry.Text : "(untitled)";
+            return new string(' ', Entry.Level * 4) + text;
+        }
+    }
+
+    // A status-bar zoom control: a [-] button, a 50%..200% slider, a [+] button, and a live percentage
+    // label. All three drive DocumentView.ZoomLevel; ZoomChanged feeds the slider/label back so the
+    // control stays in sync with other zoom sources (e.g. Ctrl+MouseWheel in the editor).
+    private UIElement BuildZoomControl()
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+        Button ZoomButton(string label, Action onClick)
+        {
+            var button = new Button { Content = label, Width = 22, Padding = new Thickness(0), Margin = new Thickness(2, 0, 2, 0) };
+            button.Click += (_, _) => onClick();
+            return button;
+        }
+
+        _zoomSlider = new Slider
+        {
+            Minimum = ZoomLevels.Min,
+            Maximum = ZoomLevels.Max,
+            Value = _editor.ZoomLevel,
+            Width = 120,
+            VerticalAlignment = VerticalAlignment.Center,
+            TickFrequency = ZoomLevels.Step,
+            SmallChange = ZoomLevels.Step,
+            LargeChange = ZoomLevels.Step,
+            ToolTip = "Zoom"
+        };
+        _zoomSlider.ValueChanged += (_, e) => _editor.ZoomLevel = e.NewValue;
+
+        _zoomLabel = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 2, 0),
+            MinWidth = 38,
+            TextAlignment = System.Windows.TextAlignment.Right,
+            Text = $"{ZoomLevels.ToPercent(_editor.ZoomLevel)}%"
+        };
+
+        // Keep the slider + label in sync no matter how zoom changes (buttons, wheel, or the slider itself).
+        _editor.ZoomChanged += (_, factor) =>
+        {
+            _zoomSlider.Value = factor;
+            _zoomLabel.Text = $"{ZoomLevels.ToPercent(factor)}%";
+        };
+
+        panel.Children.Add(ZoomButton("−", () => _editor.ZoomLevel = ZoomLevels.StepDown(_editor.ZoomLevel)));
+        panel.Children.Add(_zoomSlider);
+        panel.Children.Add(ZoomButton("+", () => _editor.ZoomLevel = ZoomLevels.StepUp(_editor.ZoomLevel)));
+        panel.Children.Add(_zoomLabel);
+        return panel;
     }
 
     private void Print()
@@ -149,11 +380,9 @@ public sealed class MainWindow : Window
         if (dialog.ShowDialog() != true)
             return;
 
-        // Build a fresh, page-settings-aware FlowDocument (display-only clone of the editor content)
-        // and let its paginator break the flow into pages at the model's geometry.
-        var printDoc = PrintLayout.BuildPaginatedDocument(_editor);
-        var paginator = ((System.Windows.Documents.IDocumentPaginatorSource)printDoc).DocumentPaginator;
-        paginator.PageSize = new Size(pageWidth, pageHeight);
+        // Build a fresh, page-settings-aware paginator (display-only clone of the editor content),
+        // breaking the flow into pages at the model's geometry and overlaying any header/footer.
+        var paginator = PrintLayout.BuildPaginator(_editor);
         dialog.PrintDocument(paginator, "FreeW Document");
     }
 

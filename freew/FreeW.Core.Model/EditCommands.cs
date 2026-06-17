@@ -68,6 +68,36 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
         (Paragraph)context.Document.Blocks[index];
 }
 
+/// <summary>
+/// Set a paragraph's <see cref="Paragraph.StyleId"/> (the named style it resolves formatting through),
+/// snapshotting the previous style id for undo. Setting <paramref name="styleId"/> to null clears the
+/// style back to the document defaults.
+/// </summary>
+public sealed class SetParagraphStyleCommand(int index, string? styleId) : IDocumentCommand
+{
+    private string? _previous;
+    private bool _applied;
+
+    public string Label => "Apply Style";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var paragraph = ParagraphAt(context, index);
+        _previous = paragraph.StyleId;
+        paragraph.StyleId = styleId;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_applied)
+            ParagraphAt(context, index).StyleId = _previous;
+    }
+
+    private static Paragraph ParagraphAt(IDocumentCommandContext context, int index) =>
+        (Paragraph)context.Document.Blocks[index];
+}
+
 /// <summary>Replace one run's formatting, snapshotting the previous value for undo.</summary>
 public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, RunFormatting formatting) : IDocumentCommand
 {
@@ -86,6 +116,35 @@ public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, Ru
     {
         if (_previous is not null)
             ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs[runIndex].Formatting = _previous;
+    }
+}
+
+/// <summary>
+/// Replace a paragraph's run list wholesale (snapshotting the prior runs for undo). Used by edits
+/// that restructure a paragraph's runs — e.g. applying a drop cap, which splits the first run so the
+/// leading letter becomes its own enlarged run. The replacement runs are produced by
+/// <paramref name="rebuild"/> from the paragraph; on undo the exact original run objects are restored.
+/// </summary>
+public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Paragraph> rebuild) : IDocumentCommand
+{
+    private List<Run>? _previous;
+
+    public string Label => "Format";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var paragraph = (Paragraph)context.Document.Blocks[paragraphIndex];
+        _previous = [.. paragraph.Runs];
+        rebuild(paragraph);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null)
+            return;
+        var runs = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs;
+        runs.Clear();
+        runs.AddRange(_previous);
     }
 }
 

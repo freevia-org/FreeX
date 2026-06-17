@@ -226,6 +226,12 @@ public static partial class ChartRenderer
 
         // Column / Line: one series per data column
         List<DataPoint>? firstSeriesPoints = null;
+        // For clustered (grouped) Column charts each non-overlay series gets a disjoint sub-slot
+        // within the category so the bars sit side by side rather than overdrawing each other.
+        var clusteredColumnCount = chart.Type is ChartType.Column or ChartType.ThreeDColumn
+            ? CountClusteredBarSeries(chart, dataStartCol, endCol)
+            : 0;
+        var clusteredColumnOrdinal = 0;
         for (uint col = dataStartCol; col <= endCol; col++)
         {
             if (ShouldSkipScatterXColumn(chart, col, dataStartCol))
@@ -296,13 +302,15 @@ public static partial class ChartRenderer
                 ApplyNativeDataLabelStyle(series, chart, theme);
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
                 var colHalfWidth = ColumnBarHalfWidth(chart);
+                var (clusterLeft, clusterRight) = ClusteredBarOffsets(colHalfWidth, clusteredColumnOrdinal, clusteredColumnCount);
+                clusteredColumnOrdinal++;
                 var i = 0;
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
                     if (cellLookup.TryGetValue((r, col), out var cell)
                         && TryGetChartNumericValue(cell, out var v))
                     {
-                        series.Items.Add(new RectangleBarItem(i - colHalfWidth, Math.Min(0, v), i + colHalfWidth, Math.Max(0, v)));
+                        series.Items.Add(new RectangleBarItem(i + clusterLeft, Math.Min(0, v), i + clusterRight, Math.Max(0, v)));
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
                             AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
@@ -311,7 +319,7 @@ public static partial class ChartRenderer
                         && cellLookup.TryGetValue((r, col), out cell)
                         && IsChartBlank(cell))
                     {
-                        series.Items.Add(new RectangleBarItem(i - colHalfWidth, 0, i + colHalfWidth, 0));
+                        series.Items.Add(new RectangleBarItem(i + clusterLeft, 0, i + clusterRight, 0));
                         trendPoints?.Add(new DataPoint(i, 0));
                         if (ShouldUseAnnotationLabels(chart))
                             AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, 0, 0);
