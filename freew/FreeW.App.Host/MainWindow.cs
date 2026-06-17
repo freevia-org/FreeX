@@ -913,12 +913,10 @@ public sealed class MainWindow : Window
         // freew.* ids (otherwise every button would fall back to the generic glyph).
         FreeWRibbonIcons.Install();
 
-        var tabs = new TabControl
-        {
-            Background = Brushes.White,
-            BorderThickness = new Thickness(0),
-            MinHeight = 116
-        };
+        // Flat Word/FreeX ribbon tabs come from the shared library so any app on the shared ribbon gets
+        // the look automatically (no border, transparent headers, hover wash, selected tab filled white
+        // with a colored accent underline). See RibbonTabControlFactory.
+        var tabs = RibbonTabControlFactory.Create();
 
         // The renderer resolves its button/group styles and surface brushes via TryFindResource on the
         // supplied resource host. Merge FreeW's ribbon styles into the TabControl so those lookups
