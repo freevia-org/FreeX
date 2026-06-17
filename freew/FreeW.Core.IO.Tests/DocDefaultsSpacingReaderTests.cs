@@ -76,4 +76,19 @@ public class DocDefaultsSpacingReaderTests
         var doc = Read("<w:p><w:pPr><w:spacing w:after=\"100\" w:afterAutospacing=\"1\"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>");
         Assert.True(FirstFormatting(doc).SpaceAfterPt >= 12, "auto spacing should be ~one line, not the 5pt literal");
     }
+
+    [Fact]
+    public void ConsecutiveAutospacingParagraphs_SuppressSpaceBetween()
+    {
+        // Word suppresses automatic spacing between two consecutive auto-spaced paragraphs; the auto space
+        // survives only before the first and after the last of the block.
+        const string auto = "<w:pPr><w:spacing w:before=\"100\" w:beforeAutospacing=\"1\" w:after=\"100\" w:afterAutospacing=\"1\"/></w:pPr>";
+        var doc = Read($"<w:p>{auto}<w:r><w:t>one</w:t></w:r></w:p><w:p>{auto}<w:r><w:t>two</w:t></w:r></w:p>");
+        var paras = doc.Blocks.OfType<Paragraph>().ToList();
+
+        Assert.Equal(0, paras[0].Formatting.SpaceAfterPt, 1);    // between: suppressed
+        Assert.Equal(0, paras[1].Formatting.SpaceBeforePt, 1);   // between: suppressed
+        Assert.True(paras[0].Formatting.SpaceBeforePt >= 12);    // block start: kept
+        Assert.True(paras[1].Formatting.SpaceAfterPt >= 12);     // block end: kept
+    }
 }

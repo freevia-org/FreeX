@@ -40,12 +40,35 @@ public static class DocxReader
         var body = documentXml.Root?.Element(W + "body");
         if (body is not null)
         {
+            // Word suppresses automatic paragraph spacing (w:before/afterAutospacing) BETWEEN two
+            // consecutive auto-spaced paragraphs — a block (e.g. an HTML-paste list) reads as tight, with
+            // the auto space only before the first and after the last. Track the flags across the body so
+            // the between-space can be dropped; otherwise FreeW spaces every item and runs much looser than
+            // Word down the page.
+            Paragraph? prevPara = null;
+            var prevAfterAuto = false;
             foreach (var element in body.Elements())
             {
                 if (element.Name == W + "p")
-                    document.Blocks.Add(ReadParagraph(element, archive, imageRelationships, hyperlinkRelationships, numbering, capturePreservedNumbering: true, preservedDrawingTarget: document));
+                {
+                    var para = ReadParagraph(element, archive, imageRelationships, hyperlinkRelationships, numbering, capturePreservedNumbering: true, preservedDrawingTarget: document);
+                    document.Blocks.Add(para);
+                    var sp = element.Element(W + "pPr")?.Element(W + "spacing");
+                    var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
+                    if (prevPara is not null && prevAfterAuto && beforeAuto)
+                    {
+                        prevPara.Formatting = prevPara.Formatting with { SpaceAfterPt = 0 };
+                        para.Formatting = para.Formatting with { SpaceBeforePt = 0 };
+                    }
+                    prevPara = para;
+                    prevAfterAuto = sp?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
+                }
                 else if (element.Name == W + "tbl")
+                {
                     document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, document));
+                    prevPara = null;
+                    prevAfterAuto = false;
+                }
             }
         }
 
