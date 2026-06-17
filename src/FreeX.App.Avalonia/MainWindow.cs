@@ -761,6 +761,9 @@ public sealed partial class MainWindow : Window
                     ["home.deleteCells"] = () => _ = ShowDeleteCellsDialogAsync(),
                     // Home ▸ Styles: Cell Styles gallery.
                     ["home.cellStyles"] = () => _ = ShowCellStylesGalleryAsync(),
+                    // Review ▸ Delete Comment; View ▸ Split.
+                    ["review.deleteComment"] = DeleteActiveCellComment,
+                    ["view.split"] = SplitPanesAtActiveCell,
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
