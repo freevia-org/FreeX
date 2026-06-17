@@ -141,6 +141,20 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         new(shape.HasText ? shape.PlainText : string.Empty) { Shape = shape };
 
     /// <summary>
+    /// Optional inline WordArt (decorative text). When non-null this run serialises as an inline
+    /// <c>w:drawing</c> wrapping a <c>wps:wsp</c> text box whose run carries DrawingML text effects (fill
+    /// gradient / outline / shadow chosen by the WordArt style preset) on its <c>a:rPr</c>, rather than
+    /// literal text. The run's <see cref="Text"/> mirrors the WordArt text so effect-unaware consumers still
+    /// render something. Modelled at the run level — mirroring <see cref="Shape"/> and <see cref="Image"/> —
+    /// so WordArt round-trips through the existing run flow without a new block type.
+    /// </summary>
+    public WordArt? WordArt { get; set; }
+
+    /// <summary>Creates a run that carries inline WordArt. Its <see cref="Text"/> mirrors the WordArt text.</summary>
+    public static Run FromWordArt(WordArt wordArt) =>
+        new(wordArt.Text) { WordArt = wordArt };
+
+    /// <summary>
     /// Optional inline chart (DrawingML). When non-null this run is an inline chart rather than literal
     /// text: on save it serialises as a separate chart part (<c>word/charts/chartN.xml</c>) referenced by an
     /// inline <c>w:drawing</c> in the run sequence, exactly as <see cref="Image"/> serialises a picture.

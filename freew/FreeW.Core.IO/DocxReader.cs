@@ -663,6 +663,22 @@ public static class DocxReader
             return;
         }
 
+        // A w:drawing wrapping a wps:wsp text box whose run a:rPr carries DrawingML text effects is WordArt.
+        // Checked BEFORE ReadShape because a WordArt text box is also a wps:wsp (so the shape reader would
+        // otherwise claim it); the text effects on the run's a:rPr are what distinguish the two.
+        var wordArt = ReadWordArt(r);
+        if (wordArt is not null)
+        {
+            var wordArtRun = Run.FromWordArt(wordArt);
+            wordArtRun.HyperlinkUrl = hyperlinkUrl;
+            wordArtRun.HyperlinkAnchor = hyperlinkAnchor;
+            wordArtRun.HyperlinkTooltip = hyperlinkTooltip;
+            wordArtRun.CommentId = commentId;
+            ApplyRevision(wordArtRun);
+            paragraph.Runs.Add(wordArtRun);
+            return;
+        }
+
         // A w:drawing wrapping a wps:wsp (not a pic:pic) is an inline shape / text box.
         var shape = ReadShape(r, archive, imageRelationships);
         if (shape is not null)
@@ -921,6 +937,55 @@ public static class DocxReader
         "page" => VerticalAnchor.Page,
         _ => VerticalAnchor.Paragraph,
     };
+
+    /// <summary>
+    /// Reads inline WordArt from a run, if present: a w:drawing/wp:inline/.../wps:wsp text box whose single
+    /// run's a:rPr (== w:rPr, since the same w:r is used) carries DrawingML text effects (a:solidFill,
+    /// a:gradFill, a:ln or a:effectLst). Recovers the text, the font size (w:sz in half-points) and infers
+    /// the <see cref="WordArtStyle"/> preset from which effect is present. Returns null when the drawing is a
+    /// plain shape (no text effects) or not a wsp at all, so the ordinary shape/image paths keep working.
+    ///
+    /// SIMPLIFICATION: the preset is inferred from the *kind* of effect present (gradient → GradientFill,
+    /// outline → Outline, shadow → Shadow, else FillBlue), not from exact colour values — colours are fixed
+    /// per preset by the writer, so this is lossless for FreeW-authored WordArt.
+    /// </summary>
+    private static WordArt? ReadWordArt(XElement run)
+    {
+        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
+        var wsp = inline?.Descendants(Wps + "wsp").FirstOrDefault();
+        var txbxContent = wsp?.Element(Wps + "txbx")?.Element(W + "txbxContent");
+        if (txbxContent is null)
+            return null;
+
+        // The WordArt run's properties: the first w:r/w:rPr inside the text box. WordArt is identified by a
+        // DrawingML text effect sitting directly under that w:rPr.
+        var rPr = txbxContent.Descendants(W + "r").FirstOrDefault()?.Element(W + "rPr");
+        if (rPr is null || InferWordArtStyle(rPr) is not { } style)
+            return null;
+
+        var text = string.Concat(txbxContent.Descendants(W + "t").Select(t => t.Value));
+        var fontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value) ?? 36;
+
+        return new WordArt(text, style, fontSizePt);
+    }
+
+    /// <summary>
+    /// Infers a <see cref="WordArtStyle"/> from the DrawingML text effects under a WordArt run's w:rPr, or
+    /// null when none are present (so the element is a plain shape, not WordArt). Gradient fill → GradientFill,
+    /// solid fill + outline → Outline, solid fill + shadow → Shadow, plain solid fill → FillBlue.
+    /// </summary>
+    private static WordArtStyle? InferWordArtStyle(XElement rPr)
+    {
+        if (rPr.Element(A + "gradFill") is not null)
+            return WordArtStyle.GradientFill;
+        if (rPr.Element(A + "ln") is not null)
+            return WordArtStyle.Outline;
+        if (rPr.Element(A + "effectLst") is not null)
+            return WordArtStyle.Shadow;
+        if (rPr.Element(A + "solidFill") is not null)
+            return WordArtStyle.FillBlue;
+        return null;
+    }
 
     /// <summary>
     /// Reads an inline DrawingML shape / text box (w:drawing → wp:inline → a:graphic/a:graphicData → wps:wsp)
