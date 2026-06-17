@@ -1,4 +1,5 @@
 using FreeW.App.Avalonia.Editing;
+using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
 
@@ -45,6 +46,8 @@ internal static class FreeWRibbon
                 });
                 tab.Group("paragraph", "Paragraph", null, 80, g =>
                 {
+                    g.Toggle("freew.bullets", "Bullets");
+                    g.Toggle("freew.numbering", "Numbering");
                     g.Button("freew.align-left", "Left");
                     g.Button("freew.align-center", "Center");
                     g.Button("freew.align-right", "Right");
@@ -73,6 +76,8 @@ internal static class FreeWRibbon
         registry.Register("freew.bold", new RelayCommand(editor.ToggleBold));
         registry.Register("freew.italic", new RelayCommand(editor.ToggleItalic));
         registry.Register("freew.underline", new RelayCommand(editor.ToggleUnderline));
+        registry.Register("freew.bullets", new RelayCommand(() => editor.ToggleList(ListKind.Bullet)));
+        registry.Register("freew.numbering", new RelayCommand(() => editor.ToggleList(ListKind.Number)));
         registry.Register("freew.align-left", new RelayCommand(() => editor.SetAlignment(TextAlignment.Left)));
         registry.Register("freew.align-center", new RelayCommand(() => editor.SetAlignment(TextAlignment.Center)));
         registry.Register("freew.align-right", new RelayCommand(() => editor.SetAlignment(TextAlignment.Right)));

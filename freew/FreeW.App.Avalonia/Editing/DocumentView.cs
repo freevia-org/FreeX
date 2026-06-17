@@ -848,6 +848,15 @@ public sealed class DocumentView : Control
 
     public void SetSelectionFontSize(double points) => ApplyRunFormatting(f => f with { FontSizePt = points });
 
+    /// <summary>Toggle the current paragraph's list kind (bullet/number); re-applying the same kind clears it.</summary>
+    public void ToggleList(ListKind kind)
+    {
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return;
+        var newKind = paragraph.Formatting.ListKind == kind ? ListKind.None : kind;
+        _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, paragraph.Formatting with { ListKind = newKind }));
+    }
+
     /// <summary>Apply a quick paragraph style (font size + weight) to the whole current paragraph.</summary>
     public void ApplyQuickStyle(double fontSizePoints, bool bold)
     {
