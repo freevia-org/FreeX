@@ -54,6 +54,53 @@ public sealed partial class XlsxChartPartReaderTests
     }
 
     [Fact]
+    public void TryReadSupportedChart_PieSliceShadeAndTint_ResolveToDistinctColors()
+    {
+        // Contextures file 03: both slices reference accent6 but with shade (darker) vs tint (lighter)
+        // luminance modulation. They must read into distinct signed tints so the slices render distinct.
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = ParseChartXml("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:pieChart>
+                    <c:varyColors val="1"/>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                      <c:dPt>
+                        <c:idx val="0"/>
+                        <c:spPr><a:solidFill><a:schemeClr val="accent6"><a:shade val="76000"/></a:schemeClr></a:solidFill></c:spPr>
+                      </c:dPt>
+                      <c:dPt>
+                        <c:idx val="1"/>
+                        <c:spPr><a:solidFill><a:schemeClr val="accent6"><a:tint val="77000"/></a:schemeClr></a:solidFill></c:spPr>
+                      </c:dPt>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$3</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$3</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:pieChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        var slice0 = chart.PointFillColors.Single(p => p.PointIndex == 0);
+        var slice1 = chart.PointFillColors.Single(p => p.PointIndex == 1);
+        slice0.FillThemeColor!.Value.Slot.Should().Be(WorkbookThemeColorSlot.Accent6);
+        slice1.FillThemeColor!.Value.Slot.Should().Be(WorkbookThemeColorSlot.Accent6);
+        // shade 76000 -> darker (negative); tint 77000 -> lighter (positive); distinct.
+        slice0.FillThemeColor!.Value.Tint.Should().BeLessThan(0);
+        slice1.FillThemeColor!.Value.Tint.Should().BeGreaterThan(0);
+        slice0.ResolveFillColor(WorkbookTheme.Office).Should()
+            .NotBe(slice1.ResolveFillColor(WorkbookTheme.Office));
+    }
+
+    [Fact]
     public void TryReadSupportedChart_ReadsPiePerPointFillColors()
     {
         var sheetId = new SheetId(Guid.NewGuid());

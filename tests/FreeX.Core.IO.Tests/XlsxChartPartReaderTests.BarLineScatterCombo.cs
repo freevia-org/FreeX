@@ -56,6 +56,78 @@ public sealed partial class XlsxChartPartReaderTests
     }
 
     [Fact]
+    public void TryReadSupportedChart_ShadedTargetBandCombo_LineAtIndexZeroSparseColumnsAndDateAxis()
+    {
+        // Mirrors Contextures file 04: stacked-column helper band (T_Low idx1 col D transparent
+        // spacer + Target idx2 col E shaded), Qty line at idx 0 col B, skipping col C; date axis numFmt.
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = ParseChartXml("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:grouping val="stacked"/>
+                    <c:ser>
+                      <c:idx val="1"/>
+                      <c:order val="1"/>
+                      <c:tx><c:strRef><c:f>Sheet1!$D$3</c:f></c:strRef></c:tx>
+                      <c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>
+                      <c:cat><c:numRef><c:f>Sheet1!$A$4:$A$9</c:f></c:numRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$D$4:$D$9</c:f></c:numRef></c:val>
+                    </c:ser>
+                    <c:ser>
+                      <c:idx val="2"/>
+                      <c:order val="2"/>
+                      <c:tx><c:strRef><c:f>Sheet1!$E$3</c:f></c:strRef></c:tx>
+                      <c:spPr><a:solidFill><a:srgbClr val="FFE699"/></a:solidFill></c:spPr>
+                      <c:cat><c:numRef><c:f>Sheet1!$A$4:$A$9</c:f></c:numRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$E$4:$E$9</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                  <c:lineChart>
+                    <c:grouping val="standard"/>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$3</c:f></c:strRef></c:tx>
+                      <c:cat><c:numRef><c:f>Sheet1!$A$4:$A$9</c:f></c:numRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$4:$B$9</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:lineChart>
+                  <c:dateAx>
+                    <c:numFmt formatCode="[$-409]d\-mmm;@" sourceLinked="1"/>
+                  </c:dateAx>
+                  <c:valAx>
+                    <c:numFmt formatCode="General" sourceLinked="1"/>
+                  </c:valAx>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        var result = XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart);
+
+        result.Should().BeTrue();
+        chart.Type.Should().Be(ChartType.StackedColumn);
+        // The Qty line at idx 0 must survive (not be dropped as "index <= 0").
+        chart.ComboLineSeriesIndexes.Should().Contain(0);
+        chart.UseComboLineForSecondarySeries.Should().BeTrue();
+        // The date axis numFmt is captured for category formatting.
+        chart.XAxisNumberFormatCode.Should().Be("[$-409]d\\-mmm;@");
+        chart.XAxisIsDateAxis.Should().BeTrue();
+        // Sparse value columns are mapped to their real series idx.
+        chart.SeriesColumnMappings.Should().Contain(m => m.SeriesXmlIndex == 0 && m.ValueColumn == 2); // Qty -> B
+        chart.SeriesColumnMappings.Should().Contain(m => m.SeriesXmlIndex == 1 && m.ValueColumn == 4); // T_Low -> D
+        chart.SeriesColumnMappings.Should().Contain(m => m.SeriesXmlIndex == 2 && m.ValueColumn == 5); // Target -> E
+        // The transparent spacer (idx1) carries NoFill + NoLine.
+        var spacer = chart.SeriesFormats.Single(f => f.SeriesIndex == 1);
+        spacer.NoFill.Should().BeTrue();
+        spacer.NoLine.Should().BeTrue();
+    }
+
+    [Fact]
     public void TryReadSupportedChart_BarLineScatterCombo_MultipleBarSeriesWithComboIndexes()
     {
         var sheetId = new SheetId(Guid.NewGuid());

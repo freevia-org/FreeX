@@ -371,7 +371,8 @@ public sealed partial class ChartRendererTests
             DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
             ShowDataLabels = true,
             DataLabelPosition = ChartDataLabelPosition.InsideEnd,
-            DataLabelAngle = 45
+            DataLabelAngle = 45,
+            ShowLegend = false
         };
 
         var model = BuildPlotModel(chart, new ViewportModel(
@@ -404,7 +405,8 @@ public sealed partial class ChartRendererTests
             DataLabelPosition = ChartDataLabelPosition.OutsideEnd,
             DataLabelAngle = 37,
             ShowDataLabelCategoryName = true,
-            ShowDataLabelPercentage = true
+            ShowDataLabelPercentage = true,
+            ShowLegend = false
         };
 
         var model = BuildPlotModel(chart, new ViewportModel(

@@ -36,7 +36,10 @@ public partial class GridView
         IReadOnlyList<TimelineModel>? NativeTimelines,
         int NativeTimelineCount,
         IReadOnlyList<DrawingObjectZOrderEntry>? DrawingObjectZOrder,
-        int DrawingObjectZOrderCount);
+        int DrawingObjectZOrderCount,
+        IReadOnlyList<FormControlModel>? FormControls,
+        int FormControlCount,
+        int FormControlStamp);
 
     private void RenderDrawingObjectLayersWithCache(DrawingContext dc)
     {
@@ -116,6 +119,8 @@ public partial class GridView
             RenderPictures(dc);
             RenderTextBoxes(dc);
         }
+
+        RenderFormControls(dc);
     }
 
     private DrawingObjectLayerCacheKey CreateDrawingObjectLayerCacheKey() =>
@@ -144,7 +149,10 @@ public partial class GridView
             NativeTimelines,
             NativeTimelines?.Count ?? 0,
             DrawingObjectZOrder,
-            DrawingObjectZOrder?.Count ?? 0);
+            DrawingObjectZOrder?.Count ?? 0,
+            FormControls,
+            FormControls?.Count ?? 0,
+            CalculateFormControlLayerStamp(FormControls));
 
     private static int CalculateDrawingShapeLayerStamp(IReadOnlyList<DrawingShapeModel>? shapes)
     {
@@ -231,6 +239,24 @@ public partial class GridView
             hash.Add(textBox.OutlineColor);
             hash.Add(textBox.FillThemeColor);
             hash.Add(textBox.OutlineThemeColor);
+        }
+
+        return hash.ToHashCode();
+    }
+
+    private static int CalculateFormControlLayerStamp(IReadOnlyList<FormControlModel>? controls)
+    {
+        if (controls is null || controls.Count == 0)
+            return 0;
+
+        var hash = new HashCode();
+        foreach (var control in controls)
+        {
+            hash.Add(control.Kind);
+            hash.Add(control.Anchor);
+            hash.Add(control.Name);
+            hash.Add(control.IsChecked);
+            hash.Add(control.Value);
         }
 
         return hash.ToHashCode();

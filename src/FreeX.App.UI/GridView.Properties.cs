@@ -242,6 +242,15 @@ public partial class GridView
         set => SetValue(NativeTimelinesProperty, value);
     }
 
+    public static readonly DependencyProperty FormControlsProperty =
+        DependencyProperty.Register(nameof(FormControls), typeof(IReadOnlyList<FormControlModel>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnDrawingObjectLayerInputChanged));
+    public IReadOnlyList<FormControlModel>? FormControls
+    {
+        get => (IReadOnlyList<FormControlModel>?)GetValue(FormControlsProperty);
+        set => SetValue(FormControlsProperty, value);
+    }
+
     public static readonly DependencyProperty ObjectDisplayModeProperty =
         DependencyProperty.Register(nameof(ObjectDisplayMode), typeof(GridObjectDisplayMode), typeof(GridView),
             new FrameworkPropertyMetadata(GridObjectDisplayMode.All, FrameworkPropertyMetadataOptions.AffectsRender, OnDrawingObjectLayerInputChanged));
