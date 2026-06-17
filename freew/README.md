@@ -218,8 +218,10 @@ print-layout detail. The model/IO still round-trip these faithfully; the live vi
 
 ### Not implemented
 
-FreeW deliberately does **not** implement: equations / OMML, charts, SmartArt, OLE-embedded objects,
-and macros/VBA. Cloud / Microsoft 365 account integration is out of scope — FreeW is local-file by default.
+FreeW deliberately does **not** implement: SmartArt, OLE-embedded objects, and macros/VBA. Cloud /
+Microsoft 365 account integration is out of scope — FreeW is local-file by default. (Basic inline OMML
+equations and self-contained, cache-based DrawingML charts — bar/column/line/pie — *are* supported and
+round-trip through docx.)
 
 ---
 

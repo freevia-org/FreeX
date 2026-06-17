@@ -52,6 +52,9 @@ public static class DocxWriter
         // Assign a relationship + media id to every inline image up front so document.xml, the
         // document relationships and the media parts all agree on rId/imageN.png.
         var images = CollectImages(document);
+        // Assign a relationship + part name to every inline chart the same way (charts are a separate XML
+        // part referenced from the run drawing by r:id, mirroring how images add a media part + r:embed).
+        var charts = CollectCharts(document);
         // Assign an external relationship id to every distinct hyperlink target the same way.
         var hyperlinks = CollectHyperlinks(document);
         // Emit a numbering part only when at least one paragraph is decorated as a list.
@@ -81,13 +84,13 @@ public static class DocxWriter
         var hasSettings = hasProtection || document.Page.AutoHyphenation;
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks, hasHeader, hasFooter));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, hyperlinks, hasHeader, hasFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         if (hasSettings)
             WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation));
@@ -105,10 +108,31 @@ public static class DocxWriter
             WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document));
         foreach (var image in images)
             WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
+        foreach (var chart in charts)
+            WritePart(archive, "word/charts/" + chart.FileName, BuildChartSpace(chart.Chart));
     }
 
     /// <summary>An inline image paired with the relationship id, media file name and a unique drawing id.</summary>
     private sealed record ImagePart(InlineImage Image, string RelationshipId, string FileName, uint DrawingId);
+
+    /// <summary>
+    /// An inline chart paired with the document relationship id, chart part file name (relative to
+    /// <c>word/charts/</c>) and a unique drawing id, mirroring <see cref="ImagePart"/>.
+    /// </summary>
+    private sealed record ChartPart(Chart Chart, string RelationshipId, string FileName, uint DrawingId);
+
+    private static List<ChartPart> CollectCharts(TextDocument document)
+    {
+        var charts = new List<ChartPart>();
+        foreach (var paragraph in EnumerateParagraphs(document))
+            foreach (var run in paragraph.Runs)
+                if (run.Chart is { } chart)
+                {
+                    var index = charts.Count + 1;
+                    charts.Add(new ChartPart(chart, $"rIdChart{index}", $"chart{index}.xml", (uint)index));
+                }
+        return charts;
+    }
 
     private static List<ImagePart> CollectImages(TextDocument document)
     {
@@ -163,7 +187,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -210,7 +234,11 @@ public static class DocxWriter
             hasWatermark
                 ? new XElement(Ct + "Override", new XAttribute("PartName", CustomPropertiesPartName),
                     new XAttribute("ContentType", CustomPropertiesContentType))
-                : null));
+                : null,
+            // One Override per chart part declares the DrawingML chart content type.
+            charts.Select(chart => new XElement(Ct + "Override",
+                new XAttribute("PartName", "/word/charts/" + chart.FileName),
+                new XAttribute("ContentType", ChartContentType)))));
 
     private static XDocument BuildPackageRels(bool hasWatermark) => new(
         new XElement(Rel + "Relationships",
@@ -288,7 +316,8 @@ public static class DocxWriter
         bool hasFootnotes,
         bool hasEndnotes,
         bool hasComments,
-        bool hasSettings)
+        bool hasSettings,
+        IReadOnlyList<ChartPart> charts)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
@@ -335,6 +364,11 @@ public static class DocxWriter
                 new XAttribute("Id", image.RelationshipId),
                 new XAttribute("Type", ImageRel),
                 new XAttribute("Target", "media/" + image.FileName)));
+        foreach (var chart in charts)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", chart.RelationshipId),
+                new XAttribute("Type", ChartRelType),
+                new XAttribute("Target", "charts/" + chart.FileName)));
         foreach (var (url, relationshipId) in hyperlinks)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", relationshipId),
@@ -347,6 +381,7 @@ public static class DocxWriter
     private static XDocument BuildDocument(
         TextDocument document,
         IReadOnlyList<ImagePart> images,
+        IReadOnlyList<ChartPart> charts,
         IReadOnlyDictionary<string, string> hyperlinks,
         bool hasHeader,
         bool hasFooter)
@@ -358,17 +393,26 @@ public static class DocxWriter
         // spaces never overlap. Each shape BuildRun emits takes the next id.
         System.Threading.Interlocked.Exchange(ref _shapeDrawingId, images.Count);
 
-        // Map each image run to its assigned relationship id by replaying the same walk order.
+        // Map each image/chart run to its assigned part by replaying the same walk order CollectImages /
+        // CollectCharts used, so document.xml and the rels agree on which rId belongs to which run.
         var imagesByRun = new Dictionary<Run, ImagePart>();
-        var next = 0;
+        var chartsByRun = new Dictionary<Run, ChartPart>();
+        var nextImage = 0;
+        var nextChart = 0;
         foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
+            {
                 if (run.Image is not null)
-                    imagesByRun[run] = images[next++];
+                    imagesByRun[run] = images[nextImage++];
+                if (run.Chart is not null)
+                    chartsByRun[run] = charts[nextChart++];
+            }
+
+        var drawings = new RunDrawings(imagesByRun, chartsByRun);
 
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
-            body.Add(BuildBlock(block, imagesByRun, hyperlinks));
+            body.Add(BuildBlock(block, drawings, hyperlinks));
         body.Add(BuildSectionProperties(document.Page, hasHeader, hasFooter));
 
         return new XDocument(
@@ -386,6 +430,20 @@ public static class DocxWriter
                 body));
     }
 
+    /// <summary>
+    /// Bundles the per-run image and chart part maps so the run builders can resolve either inline drawing
+    /// from one parameter (rather than threading two dictionaries through every helper). Empty maps are
+    /// shared by header/footer/footnote builders whose runs never carry body drawings.
+    /// </summary>
+    private sealed record RunDrawings(
+        IReadOnlyDictionary<Run, ImagePart> Images,
+        IReadOnlyDictionary<Run, ChartPart> Charts)
+    {
+        public static readonly RunDrawings None = new(
+            new Dictionary<Run, ImagePart>(),
+            new Dictionary<Run, ChartPart>());
+    }
+
     /// <summary>Builds a header (w:hdr) or footer (w:ftr) part from its model paragraphs.</summary>
     private static XDocument BuildHeaderFooter(XName rootName, HeaderFooter content)
     {
@@ -394,14 +452,14 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
 
         // Header/footer runs do not carry inline images (the body image walk does not reach them).
-        var noImages = new Dictionary<Run, ImagePart>();
+        var noDrawings = RunDrawings.None;
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         if (content.Paragraphs.Count == 0)
             root.Add(new XElement(W + "p"));
         else
             foreach (var paragraph in content.Paragraphs)
-                root.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+                root.Add(BuildParagraph(paragraph, noDrawings, noHyperlinks));
 
         return new XDocument(root);
     }
@@ -428,7 +486,7 @@ public static class DocxWriter
         footnotes.Add(Separator(0, "continuationSeparator"));
 
         // Footnote paragraphs carry no inline images or hyperlinks (those walks target the body).
-        var noImages = new Dictionary<Run, ImagePart>();
+        var noDrawings = RunDrawings.None;
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var footnote in document.Footnotes.Values.OrderBy(f => f.Id))
@@ -438,7 +496,7 @@ public static class DocxWriter
                 element.Add(new XElement(W + "p"));
             else
                 foreach (var paragraph in footnote.Content)
-                    element.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+                    element.Add(BuildParagraph(paragraph, noDrawings, noHyperlinks));
             footnotes.Add(element);
         }
 
@@ -468,7 +526,7 @@ public static class DocxWriter
         endnotes.Add(Separator(0, "continuationSeparator"));
 
         // Endnote paragraphs carry no inline images or hyperlinks (those walks target the body).
-        var noImages = new Dictionary<Run, ImagePart>();
+        var noDrawings = RunDrawings.None;
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var endnote in document.Endnotes.Values.OrderBy(e => e.Id))
@@ -478,7 +536,7 @@ public static class DocxWriter
                 element.Add(new XElement(W + "p"));
             else
                 foreach (var paragraph in endnote.Content)
-                    element.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+                    element.Add(BuildParagraph(paragraph, noDrawings, noHyperlinks));
             endnotes.Add(element);
         }
 
@@ -497,7 +555,7 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
 
         // Comment paragraphs carry no inline images or hyperlinks (those walks target the body).
-        var noImages = new Dictionary<Run, ImagePart>();
+        var noDrawings = RunDrawings.None;
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
@@ -513,17 +571,17 @@ public static class DocxWriter
                 element.Add(new XElement(W + "p"));
             else
                 foreach (var paragraph in comment.Content)
-                    element.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+                    element.Add(BuildParagraph(paragraph, noDrawings, noHyperlinks));
             comments.Add(element);
         }
 
         return new XDocument(comments);
     }
 
-    private static XElement BuildBlock(Block block, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks) => block switch
+    private static XElement BuildBlock(Block block, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks) => block switch
     {
-        Table table => BuildTable(table, imagesByRun, hyperlinks),
-        Paragraph paragraph => BuildParagraph(paragraph, imagesByRun, hyperlinks),
+        Table table => BuildTable(table, drawings, hyperlinks),
+        Paragraph paragraph => BuildParagraph(paragraph, drawings, hyperlinks),
         _ => new XElement(W + "p")
     };
 
@@ -533,7 +591,7 @@ public static class DocxWriter
     private const string HeaderFill = "D9E2F3";
     private const string BandedFill = "F2F2F2";
 
-    private static XElement BuildTable(Table table, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
+    private static XElement BuildTable(Table table, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var tbl = new XElement(W + "tbl", BuildTableProperties(table));
 
@@ -574,7 +632,7 @@ public static class DocxWriter
                     tc.Add(new XElement(W + "p"));
                 else
                     foreach (var paragraph in cell.Paragraphs)
-                        tc.Add(BuildParagraph(isHeaderRow ? BoldHeaderParagraph(paragraph) : paragraph, imagesByRun, hyperlinks));
+                        tc.Add(BuildParagraph(isHeaderRow ? BoldHeaderParagraph(paragraph) : paragraph, drawings, hyperlinks));
                 tr.Add(tc);
             }
             tbl.Add(tr);
@@ -612,6 +670,7 @@ public static class DocxWriter
             {
                 Image = run.Image,
                 Equation = run.Equation,
+                Chart = run.Chart,
                 HyperlinkUrl = run.HyperlinkUrl,
                 HyperlinkAnchor = run.HyperlinkAnchor,
                 HyperlinkTooltip = run.HyperlinkTooltip,
@@ -759,7 +818,7 @@ public static class DocxWriter
         return sdtPr;
     }
 
-    private static XElement BuildParagraph(Paragraph paragraph, IReadOnlyDictionary<Run, ImagePart> imagesByRun, IReadOnlyDictionary<string, string> hyperlinks)
+    private static XElement BuildParagraph(Paragraph paragraph, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks)
     {
         var p = new XElement(W + "p");
         var pPr = BuildParagraphProperties(paragraph);
@@ -859,7 +918,7 @@ public static class DocxWriter
                 while (i < runs.Count && ReferenceEquals(runs[i].Control, control)
                     && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId
                     && SameRevision(head, runs[i]))
-                    content.Add(BuildRun(runs[i++], imagesByRun));
+                    content.Add(BuildRun(runs[i++], drawings));
                 var sdt = new XElement(W + "sdt", BuildSdtProperties(control), content);
                 Content(head, sdt);
                 continue;
@@ -875,7 +934,7 @@ public static class DocxWriter
                     hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
                 while (i < runs.Count && runs[i].HyperlinkUrl == url && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
-                    hyperlink.Add(BuildRun(runs[i++], imagesByRun));
+                    hyperlink.Add(BuildRun(runs[i++], drawings));
                 Content(head, hyperlink);
             }
             else if (anchor is { Length: > 0 })
@@ -885,13 +944,13 @@ public static class DocxWriter
                     hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
                 while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
-                    hyperlink.Add(BuildRun(runs[i++], imagesByRun));
+                    hyperlink.Add(BuildRun(runs[i++], drawings));
                 Content(head, hyperlink);
             }
             else
             {
                 var run = runs[i++];
-                Content(run, BuildRun(run, imagesByRun));
+                Content(run, BuildRun(run, drawings));
             }
         }
 
@@ -1035,7 +1094,7 @@ public static class DocxWriter
         _ => null
     };
 
-    private static XElement BuildRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
+    private static XElement BuildRun(Run run, RunDrawings drawings)
     {
         // An inline equation serialises as an m:oMath emitted in place of the run (a paragraph-level
         // sibling of w:r, never wrapped in one), carrying its math fragments as m:r/m:sSup/m:f.
@@ -1059,7 +1118,7 @@ public static class DocxWriter
         if (FieldInstruction(run.FieldKind) is { } instruction)
             return new XElement(W + "fldSimple",
                 new XAttribute(W + "instr", instruction),
-                BuildTextRun(run, imagesByRun));
+                BuildTextRun(run, drawings));
 
         // A footnote reference is a superscript run carrying a w:footnoteReference (no literal text).
         // Carry the run's real formatting (forcing vertAlign=superscript) so a bold/coloured/sized
@@ -1076,7 +1135,7 @@ public static class DocxWriter
             return new XElement(W + "r",
                 new XElement(W + "commentReference", new XAttribute(W + "id", commentRefId)));
 
-        return BuildTextRun(run, imagesByRun);
+        return BuildTextRun(run, drawings);
     }
 
     // A textless marker run (footnote/endnote reference): carries the run's own formatting forced to
@@ -1091,14 +1150,16 @@ public static class DocxWriter
         return r;
     }
 
-    private static XElement BuildTextRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
+    private static XElement BuildTextRun(Run run, RunDrawings drawings)
     {
         var r = new XElement(W + "r");
         var rPr = BuildRunProperties(run.Formatting);
         if (rPr is not null)
             r.Add(rPr);
-        if (run.Image is not null && imagesByRun.TryGetValue(run, out var part))
-            r.Add(BuildDrawing(part));
+        if (run.Image is not null && drawings.Images.TryGetValue(run, out var imagePart))
+            r.Add(BuildDrawing(imagePart));
+        else if (run.Chart is not null && drawings.Charts.TryGetValue(run, out var chartPart))
+            r.Add(BuildChartDrawing(chartPart));
         else
         {
             // A tracked deletion stores its text in w:delText (so Word renders it as deleted content);
@@ -1225,7 +1286,7 @@ public static class DocxWriter
         {
             var txbxContent = new XElement(W + "txbxContent");
             foreach (var paragraph in shape.TextParagraphs)
-                txbxContent.Add(BuildParagraph(paragraph, EmptyImages, EmptyHyperlinks));
+                txbxContent.Add(BuildParagraph(paragraph, RunDrawings.None, EmptyHyperlinks));
             wsp.Add(new XElement(Wps + "txbx", txbxContent));
         }
 
@@ -1247,9 +1308,211 @@ public static class DocxWriter
                         wsp))));
     }
 
-    /// <summary>Empty image/hyperlink maps for building text-box body paragraphs (they carry neither).</summary>
-    private static readonly Dictionary<Run, ImagePart> EmptyImages = new();
+    /// <summary>Empty hyperlink map for building text-box body paragraphs (they carry no document rels).</summary>
     private static readonly Dictionary<string, string> EmptyHyperlinks = new();
+
+    /// <summary>
+    /// Builds the inline chart drawing: w:drawing/wp:inline/a:graphic/a:graphicData(uri=chart)/c:chart
+    /// referencing the chart part by relationship id (r:id). Mirrors <see cref="BuildDrawing"/> for images,
+    /// but the graphicData wraps a c:chart reference rather than a pic:pic. The c namespace is declared on
+    /// the c:chart element so the reference is self-describing.
+    /// </summary>
+    private static XElement BuildChartDrawing(ChartPart part)
+    {
+        var cx = PointsToEmu(part.Chart.WidthPt);
+        var cy = PointsToEmu(part.Chart.HeightPt);
+        var name = $"Chart {part.DrawingId}";
+
+        return new XElement(W + "drawing",
+            new XElement(Wp + "inline",
+                new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                new XAttribute("distT", 0), new XAttribute("distB", 0),
+                new XAttribute("distL", 0), new XAttribute("distR", 0),
+                new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(Wp + "effectExtent",
+                    new XAttribute("l", 0), new XAttribute("t", 0),
+                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", name)),
+                new XElement(A + "graphic",
+                    new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                    new XElement(A + "graphicData",
+                        new XAttribute("uri", ChartGraphicDataUri),
+                        new XElement(C + "chart",
+                            new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
+                            new XAttribute(R + "id", part.RelationshipId))))));
+    }
+
+    /// <summary>
+    /// Builds a self-contained DrawingML chart part (c:chartSpace) for <paramref name="chart"/>. Emits one
+    /// plot area holding a single chart type (c:barChart for column/bar, c:lineChart for line,
+    /// c:pieChart for pie) with the document's series, plus a category-axis / value-axis pair for the
+    /// cartesian kinds. Category labels and series values are embedded as literal caches (c:strCache /
+    /// c:numCache) so the chart needs no companion workbook part.
+    /// SIMPLIFICATION (W3 milestone): no c:externalData / embedded xlsx is referenced — the caches are the
+    /// sole data source. Word renders and round-trips this fine; only "Edit Data" in Word is unavailable.
+    /// </summary>
+    private static XDocument BuildChartSpace(Chart chart)
+    {
+        // Stable axis ids referenced by the plot's series-holding chart element (cartesian kinds only).
+        const long catAxisId = 111111111L;
+        const long valAxisId = 222222222L;
+
+        var plotContent = chart.Kind == ChartKind.Pie
+            ? BuildPieChart(chart)
+            : BuildCartesianChart(chart, catAxisId, valAxisId);
+
+        var plotArea = new XElement(C + "plotArea",
+            new XElement(C + "layout"),
+            plotContent);
+        if (chart.Kind != ChartKind.Pie)
+        {
+            plotArea.Add(BuildCategoryAxis(catAxisId, valAxisId));
+            plotArea.Add(BuildValueAxis(valAxisId, catAxisId));
+        }
+
+        var chartElement = new XElement(C + "chart");
+        if (chart.Title is { Length: > 0 } title)
+        {
+            chartElement.Add(BuildChartTitle(title));
+            chartElement.Add(new XElement(C + "autoTitleDeleted", new XAttribute(C + "val", "0")));
+        }
+        else
+        {
+            chartElement.Add(new XElement(C + "autoTitleDeleted", new XAttribute(C + "val", "1")));
+        }
+        chartElement.Add(plotArea);
+        chartElement.Add(new XElement(C + "plotVisOnly", new XAttribute(C + "val", "1")));
+
+        return new XDocument(
+            new XElement(C + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                chartElement));
+    }
+
+    /// <summary>Builds a c:title carrying a single rich-text run with the chart title text.</summary>
+    private static XElement BuildChartTitle(string title) =>
+        new(C + "title",
+            new XElement(C + "tx",
+                new XElement(C + "rich",
+                    new XElement(A + "bodyPr"),
+                    new XElement(A + "lstStyle"),
+                    new XElement(A + "p",
+                        new XElement(A + "r",
+                            new XElement(A + "t", title))))),
+            new XElement(C + "overlay", new XAttribute(C + "val", "0")));
+
+    /// <summary>
+    /// Builds the c:barChart (column or bar) or c:lineChart element holding the chart's series and the
+    /// axis-id back-references. barDir distinguishes column (vertical bars) from bar (horizontal).
+    /// </summary>
+    private static XElement BuildCartesianChart(Chart chart, long catAxisId, long valAxisId)
+    {
+        XElement root;
+        if (chart.Kind == ChartKind.Line)
+        {
+            root = new XElement(C + "lineChart",
+                new XElement(C + "grouping", new XAttribute(C + "val", "standard")));
+        }
+        else
+        {
+            root = new XElement(C + "barChart",
+                new XElement(C + "barDir", new XAttribute(C + "val", chart.Kind == ChartKind.Bar ? "bar" : "col")),
+                new XElement(C + "grouping", new XAttribute(C + "val", "clustered")));
+        }
+
+        for (var i = 0; i < chart.Series.Count; i++)
+            root.Add(BuildSeries(chart, chart.Series[i], i));
+
+        root.Add(new XElement(C + "axId", new XAttribute(C + "val", catAxisId)));
+        root.Add(new XElement(C + "axId", new XAttribute(C + "val", valAxisId)));
+        return root;
+    }
+
+    /// <summary>Builds the c:pieChart element holding the chart's first series (pie has no axes).</summary>
+    private static XElement BuildPieChart(Chart chart)
+    {
+        var pie = new XElement(C + "pieChart",
+            new XElement(C + "varyColors", new XAttribute(C + "val", "1")));
+        if (chart.Series.Count > 0)
+            pie.Add(BuildSeries(chart, chart.Series[0], 0));
+        return pie;
+    }
+
+    /// <summary>
+    /// Builds one c:ser: its index/order, an optional c:tx (series name) string cache, the shared category
+    /// labels (c:cat → c:strRef/c:strCache) and the numeric values (c:val → c:numRef/c:numCache). The
+    /// caches embed the data literally so the chart is self-contained.
+    /// </summary>
+    private static XElement BuildSeries(Chart chart, ChartSeries series, int index)
+    {
+        var ser = new XElement(C + "ser",
+            new XElement(C + "idx", new XAttribute(C + "val", index)),
+            new XElement(C + "order", new XAttribute(C + "val", index)));
+
+        if (series.Name is { Length: > 0 } name)
+            ser.Add(new XElement(C + "tx",
+                new XElement(C + "strRef",
+                    new XElement(C + "f", $"Sheet1!$B${index + 1}"),
+                    new XElement(C + "strCache",
+                        new XElement(C + "ptCount", new XAttribute(C + "val", 1)),
+                        new XElement(C + "pt", new XAttribute(C + "idx", 0),
+                            new XElement(C + "v", name))))));
+
+        ser.Add(BuildCategoryCache(chart.Categories));
+        ser.Add(BuildValueCache(series.Values));
+        return ser;
+    }
+
+    /// <summary>Builds c:cat → c:strRef/c:strCache: the shared category labels as a literal string cache.</summary>
+    private static XElement BuildCategoryCache(IReadOnlyList<string> categories)
+    {
+        var cache = new XElement(C + "strCache",
+            new XElement(C + "ptCount", new XAttribute(C + "val", categories.Count)));
+        for (var i = 0; i < categories.Count; i++)
+            cache.Add(new XElement(C + "pt", new XAttribute(C + "idx", i),
+                new XElement(C + "v", categories[i])));
+
+        return new XElement(C + "cat",
+            new XElement(C + "strRef",
+                new XElement(C + "f", $"Sheet1!$A$1:$A${Math.Max(1, categories.Count)}"),
+                cache));
+    }
+
+    /// <summary>Builds c:val → c:numRef/c:numCache: the series values as a literal number cache.</summary>
+    private static XElement BuildValueCache(IReadOnlyList<double> values)
+    {
+        var cache = new XElement(C + "numCache",
+            new XElement(C + "formatCode", "General"),
+            new XElement(C + "ptCount", new XAttribute(C + "val", values.Count)));
+        for (var i = 0; i < values.Count; i++)
+            cache.Add(new XElement(C + "pt", new XAttribute(C + "idx", i),
+                new XElement(C + "v", values[i].ToString(System.Globalization.CultureInfo.InvariantCulture))));
+
+        return new XElement(C + "val",
+            new XElement(C + "numRef",
+                new XElement(C + "f", $"Sheet1!$B$1:$B${Math.Max(1, values.Count)}"),
+                cache));
+    }
+
+    /// <summary>Builds the c:catAx (category axis) referencing its own id and cross-referencing the value axis.</summary>
+    private static XElement BuildCategoryAxis(long axisId, long crossAxisId) =>
+        new(C + "catAx",
+            new XElement(C + "axId", new XAttribute(C + "val", axisId)),
+            new XElement(C + "scaling", new XElement(C + "orientation", new XAttribute(C + "val", "minMax"))),
+            new XElement(C + "delete", new XAttribute(C + "val", "0")),
+            new XElement(C + "axPos", new XAttribute(C + "val", "b")),
+            new XElement(C + "crossAx", new XAttribute(C + "val", crossAxisId)));
+
+    /// <summary>Builds the c:valAx (value axis) referencing its own id and cross-referencing the category axis.</summary>
+    private static XElement BuildValueAxis(long axisId, long crossAxisId) =>
+        new(C + "valAx",
+            new XElement(C + "axId", new XAttribute(C + "val", axisId)),
+            new XElement(C + "scaling", new XElement(C + "orientation", new XAttribute(C + "val", "minMax"))),
+            new XElement(C + "delete", new XAttribute(C + "val", "0")),
+            new XElement(C + "axPos", new XAttribute(C + "val", "l")),
+            new XElement(C + "crossAx", new XAttribute(C + "val", crossAxisId)));
 
     private static XElement? BuildRunProperties(RunFormatting f)
     {
