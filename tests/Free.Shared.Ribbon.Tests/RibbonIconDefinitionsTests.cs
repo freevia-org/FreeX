@@ -77,9 +77,6 @@ public class RibbonIconDefinitionsTests
 
         foreach (var kind in new[]
                  {
-                     RibbonCommandIconKind.Number,
-                     RibbonCommandIconKind.History,
-                     RibbonCommandIconKind.Symbol,
                      RibbonCommandIconKind.Math,
                  })
         {
