@@ -18,11 +18,14 @@ public class SmartArtRoundTripTests
     private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace Dsp = "http://schemas.microsoft.com/office/drawing/2008/diagram";
 
     private const string DataContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml";
     private const string LayoutContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml";
     private const string StyleContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml";
     private const string ColorsContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml";
+    private const string DrawingContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml";
+    private const string DrawingRelType = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
 
     private static TextDocument RoundTrip(TextDocument document)
     {
@@ -174,6 +177,76 @@ public class SmartArtRoundTripTests
         var cellParagraph = ((Table)read.Blocks.Single()).Rows[0].Cells[0].Paragraphs.Single();
         var diagram = cellParagraph.Runs.Single(r => r.SmartArt is not null).SmartArt!;
         diagram.Nodes.Select(n => n.Text).Should().Equal("Cell A", "Cell B");
+    }
+
+    [Fact]
+    public void Diagram_RenderedDrawingPart_ContentTypeAndDataRelAndDataModelExt_ArePresent()
+    {
+        // F2: a fifth part (word/diagrams/drawing1.xml — dsp:drawing) carries pre-laid-out shapes, referenced
+        // from the data part via a diagramDrawing relationship + a dgm:dataModelExt inside the data model.
+        var docx = WriteBytes(SingleDiagramDocument(SmartArt.Create(SmartArtKind.List, ["One", "Two", "Three"])));
+
+        // The drawing part exists in the package.
+        using (var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read))
+            zip.GetEntry("word/diagrams/drawing1.xml").Should().NotBeNull("the rendered-geometry part must be emitted");
+
+        // [Content_Types].xml declares the drawing Override.
+        var overrides = EntryXml(docx, "[Content_Types].xml").Root!.Elements(Ct + "Override").ToList();
+        overrides.Should().Contain(o =>
+            o.Attribute("PartName")!.Value == "/word/diagrams/drawing1.xml" &&
+            o.Attribute("ContentType")!.Value == DrawingContentType);
+
+        // The data part's own .rels carries a diagramDrawing relationship to drawing1.xml.
+        var dataRels = EntryXml(docx, "word/diagrams/_rels/data1.xml.rels");
+        var drawingRel = dataRels.Root!.Elements(Rel + "Relationship")
+            .Single(r => r.Attribute("Type")!.Value == DrawingRelType);
+        drawingRel.Attribute("Target")!.Value.Should().Be("drawing1.xml");
+
+        // The data part carries a dgm:dataModelExt whose relId matches that relationship.
+        var dataXml = EntryXml(docx, "word/diagrams/data1.xml");
+        var ext = dataXml.Descendants(Dgm + "dataModelExt").Single();
+        ext.Attribute("relId")!.Value.Should().Be(drawingRel.Attribute("Id")!.Value);
+        ext.Attribute("minVer").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void RenderedDrawing_HasOneShapePerNode_WithTextAndNonZeroExtent()
+    {
+        var docx = WriteBytes(SingleDiagramDocument(SmartArt.Create(SmartArtKind.List, ["Red", "Green", "Blue"])));
+        var drawing = EntryXml(docx, "word/diagrams/drawing1.xml");
+
+        drawing.Root!.Name.Should().Be(Dsp + "drawing");
+        var shapes = drawing.Descendants(Dsp + "sp").ToList();
+        shapes.Should().HaveCount(3, "one dsp:sp per node");
+
+        // Each shape carries its node text and a non-zero a:xfrm extent.
+        shapes.SelectMany(sp => sp.Descendants(A + "t").Select(t => t.Value))
+            .Should().Contain(["Red", "Green", "Blue"]);
+        foreach (var sp in shapes)
+        {
+            var ext = sp.Descendants(A + "ext").Single();
+            long.Parse(ext.Attribute("cx")!.Value).Should().BeGreaterThan(0);
+            long.Parse(ext.Attribute("cy")!.Value).Should().BeGreaterThan(0);
+        }
+    }
+
+    [Fact]
+    public void Hierarchy_RenderedDrawing_HasShapePerNodeIncludingNestedChildren()
+    {
+        var ceo = new SmartArtNode("CEO");
+        var vpEng = ceo.AddChild("VP Eng");
+        vpEng.AddChild("Lead");
+        ceo.AddChild("VP Sales");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.Nodes.Add(ceo);
+
+        var docx = WriteBytes(SingleDiagramDocument(smartArt));
+        var drawing = EntryXml(docx, "word/diagrams/drawing1.xml");
+
+        // 4 nodes total (CEO, VP Eng, Lead, VP Sales) → 4 shapes.
+        drawing.Descendants(Dsp + "sp").Should().HaveCount(4);
+        drawing.Descendants(A + "t").Select(t => t.Value)
+            .Should().Contain(["CEO", "VP Eng", "Lead", "VP Sales"]);
     }
 
     [Fact]

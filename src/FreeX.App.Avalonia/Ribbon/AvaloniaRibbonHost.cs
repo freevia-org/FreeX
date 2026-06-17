@@ -83,14 +83,29 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Insert ▸ Picture — choose an image file and place it on the sheet.</summary>
     public Action? InsertPicture { get; init; }
 
+    /// <summary>Insert ▸ Shapes — insert the default drawing shape at the active cell.</summary>
+    public Action? InsertShape { get; init; }
+
+    /// <summary>Insert ▸ Text Box — insert a text box at the active cell.</summary>
+    public Action? InsertTextBox { get; init; }
+
     /// <summary>Home ▸ Clipboard ▸ Format Painter — capture the selection's format for a one-shot apply.</summary>
     public Action? FormatPainter { get; init; }
+
+    /// <summary>Home ▸ Font ▸ Size combo — apply the chosen font size (string) to the selection.</summary>
+    public Action<string?>? SetFontSize { get; init; }
+
+    /// <summary>Home ▸ Font ▸ Name combo — apply the chosen font family (string) to the selection.</summary>
+    public Action<string?>? SetFontName { get; init; }
 
     /// <summary>Data ▸ Sort A-Z.</summary>
     public Action? SortAscending { get; init; }
 
     /// <summary>Data ▸ Sort Z-A.</summary>
     public Action? SortDescending { get; init; }
+
+    /// <summary>Data ▸ Filter — toggle the sheet AutoFilter over the selection / current region.</summary>
+    public Action? ToggleFilter { get; init; }
 
     /// <summary>Data ▸ Data Validation (dropdown + dialog menu item).</summary>
     public Action? DataValidation { get; init; }
@@ -145,6 +160,20 @@ internal sealed class RelayRibbonCommand : IRibbonCommand
         => _execute = execute ?? throw new ArgumentNullException(nameof(execute));
 
     public void Execute(RibbonCommandContext context) => _execute();
+}
+
+/// <summary>
+/// An <see cref="IRibbonCommand"/> for value-bearing controls (combo boxes / galleries): invokes a
+/// host-supplied callback with the control's selected value (<see cref="RibbonCommandContext.SelectedValue"/>).
+/// </summary>
+internal sealed class RelayValueRibbonCommand : IRibbonCommand
+{
+    private readonly Action<string?> _execute;
+
+    public RelayValueRibbonCommand(Action<string?> execute)
+        => _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+
+    public void Execute(RibbonCommandContext context) => _execute(context.SelectedValue);
 }
 
 /// <summary>A do-nothing command — enough to mark a control as registered/enabled.</summary>
@@ -473,9 +502,17 @@ internal static class SampleRibbon
         Bind("data.quickAnalysis", callbacks.QuickAnalysis);
         Bind("insert.pivotTable", callbacks.InsertPivotTable);
         Bind("insert.picture", callbacks.InsertPicture);
+        Bind("insert.shapes", callbacks.InsertShape);
+        Bind("insert.textBox", callbacks.InsertTextBox);
         Bind("home.formatPainter", callbacks.FormatPainter);
+
+        if (callbacks.SetFontSize is { } setFontSize)
+            registry.Register(new RibbonCommandId("home.fontSize"), new RelayValueRibbonCommand(setFontSize));
+        if (callbacks.SetFontName is { } setFontName)
+            registry.Register(new RibbonCommandId("home.fontName"), new RelayValueRibbonCommand(setFontName));
         Bind("data.sortAsc", callbacks.SortAscending);
         Bind("data.sortDesc", callbacks.SortDescending);
+        Bind("data.filter", callbacks.ToggleFilter);
         Bind("data.validation", callbacks.DataValidation);
         Bind("data.validationDialog", callbacks.DataValidation);
 

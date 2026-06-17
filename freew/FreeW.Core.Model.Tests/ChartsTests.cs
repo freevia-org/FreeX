@@ -78,4 +78,41 @@ public class ChartsTests
         chart.Series.Should().HaveCount(2);
         chart.Series[1].Values.Should().Equal(3.0, 4.0);
     }
+
+    [Theory]
+    [InlineData(ChartKind.Scatter)]
+    [InlineData(ChartKind.Area)]
+    [InlineData(ChartKind.Doughnut)]
+    public void Create_SupportsRicherChartKinds(ChartKind kind)
+    {
+        var chart = Chart.Create(kind, ["A", "B"], [1.0, 2.0]);
+
+        chart.Kind.Should().Be(kind);
+        chart.Series.Single().Values.Should().Equal(1.0, 2.0);
+    }
+
+    [Fact]
+    public void Chart_LegendAndAxisTitles_DefaultToOff()
+    {
+        var chart = new Chart();
+
+        chart.ShowLegend.Should().BeFalse();
+        chart.CategoryAxisTitle.Should().BeNull();
+        chart.ValueAxisTitle.Should().BeNull();
+    }
+
+    [Fact]
+    public void Chart_LegendAndAxisTitles_AreSettable()
+    {
+        var chart = new Chart
+        {
+            ShowLegend = true,
+            CategoryAxisTitle = "Quarter",
+            ValueAxisTitle = "USD",
+        };
+
+        chart.ShowLegend.Should().BeTrue();
+        chart.CategoryAxisTitle.Should().Be("Quarter");
+        chart.ValueAxisTitle.Should().Be("USD");
+    }
 }

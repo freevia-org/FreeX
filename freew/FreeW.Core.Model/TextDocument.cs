@@ -1132,6 +1132,15 @@ public sealed class TextDocument
     /// </summary>
     public List<IndexEntry> IndexEntries { get; } = [];
 
+    /// <summary>
+    /// The fonts embedded in the document, one <see cref="EmbeddedFont"/> per family. Empty (the default)
+    /// means no fonts are embedded, so no <c>word/fontTable.xml</c> part is emitted and existing documents
+    /// round-trip unchanged. When non-empty the writer emits the fontTable part, the obfuscated
+    /// <c>word/fonts/fontN.odttf</c> font parts and <c>w:embedTrueTypeFonts</c> in word/settings.xml; the
+    /// reader de-obfuscates the parts back into the original font bytes here.
+    /// </summary>
+    public List<EmbeddedFont> EmbeddedFonts { get; } = [];
+
     /// <summary>The body's paragraphs (top-level only; table cell paragraphs are not included).</summary>
     public IEnumerable<Paragraph> Paragraphs => Blocks.OfType<Paragraph>();
 

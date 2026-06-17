@@ -2008,6 +2008,46 @@ public sealed class WorkbookSession
 
     public bool CanSortSelectedRange => SelectedRange.RowCount > 1;
 
+    /// <summary>True when the active sheet currently has an AutoFilter (filter dropdowns) enabled.</summary>
+    public bool ActiveSheetHasAutoFilter => ActiveSheet.AutoFilter is not null;
+
+    /// <summary>
+    /// Toggles the active sheet's AutoFilter over the effective range: the existing AutoFilter range when one
+    /// is set (to disable it), the current region around a single-cell selection, or the selected range.
+    /// Mirrors the desktop host's <c>AutoFilterToggleRangePlanner</c>.
+    /// </summary>
+    public WorkbookCellEditResult ToggleSelectedRangeAutoFilter() =>
+        ExecuteReviewCommand(new ToggleWorksheetAutoFilterCommand(ActiveSheet.Id, ResolveAutoFilterToggleRange()));
+
+    private GridRange ResolveAutoFilterToggleRange()
+    {
+        var sheet = ActiveSheet;
+        if (sheet.AutoFilter?.Reference is { } reference && !string.IsNullOrWhiteSpace(reference))
+        {
+            try
+            {
+                return GridRange.Parse(reference, sheet.Id);
+            }
+            catch (FormatException)
+            {
+                // Fall through to selection-based resolution below.
+            }
+            catch (ArgumentException)
+            {
+                // Fall through to selection-based resolution below.
+            }
+        }
+
+        var selection = SelectedRange;
+        if (selection.RowCount == 1 && selection.ColCount == 1 &&
+            SelectionRangeService.GetCurrentRegion(sheet, ActiveCell) is { RowCount: > 1 } region)
+        {
+            return region;
+        }
+
+        return selection;
+    }
+
     public WorkbookCellEditResult SortSelectedRange(bool ascending)
     {
         if (!CanSortSelectedRange)
@@ -2329,6 +2369,12 @@ public sealed class WorkbookSession
 
     public WorkbookCellEditResult SetSelectedRangeFontColor(CellColor fontColor) =>
         ApplySelectedRangeStyle(new StyleDiff(FontColor: fontColor));
+
+    /// <summary>Applies a font family (typeface) to the selection. A blank name is a no-op success.</summary>
+    public WorkbookCellEditResult SetSelectedRangeFontName(string fontName) =>
+        string.IsNullOrWhiteSpace(fontName)
+            ? new WorkbookCellEditResult(true, null, [], null)
+            : ApplySelectedRangeStyle(new StyleDiff(FontName: fontName.Trim()));
 
     public WorkbookCellEditResult SetSelectedRangeFillColor(CellColor fillColor) =>
         ApplySelectedRangeStyle(new StyleDiff(FillColor: fillColor));

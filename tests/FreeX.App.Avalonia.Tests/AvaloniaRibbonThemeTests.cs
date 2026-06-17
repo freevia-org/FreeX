@@ -1,10 +1,13 @@
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 
+using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.Ribbon.Avalonia;
 
@@ -56,5 +59,25 @@ public sealed class AvaloniaRibbonThemeTests
         AvaloniaRibbonRenderer.ApplyRibbonTheme(tabControl);
 
         Assert.True(tabControl.Styles.Count >= 3);
+    });
+
+    [Fact]
+    public Task FontSizeCombo_Selection_ExecutesCommandWithChosenValue() => RunOnUiThread(() =>
+    {
+        string? applied = null;
+        var definition = SampleRibbon.BuildDefinition();
+        var registry = SampleRibbon.BuildRegistry(
+            () => null, _ => { }, new AvaloniaRibbonHostCallbacks { SetFontSize = v => applied = v });
+
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
+
+        var combo = ribbon.GetLogicalDescendants()
+            .OfType<ComboBox>()
+            .First(c => (string?)c.Tag == "home.fontSize");
+
+        // Initial index 0 was suppressed at build; a user pick (index change) applies the chosen size.
+        combo.SelectedIndex = combo.SelectedIndex + 1;
+
+        Assert.False(string.IsNullOrEmpty(applied));
     });
 }

@@ -26,6 +26,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("data.quickAnalysis")]
     [InlineData("data.sortAsc")]
     [InlineData("data.sortDesc")]
+    [InlineData("data.filter")]
     [InlineData("data.validation")]
     [InlineData("data.validationDialog")]
     [InlineData("home.cut")]
@@ -128,6 +129,52 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
+    public void SetFontSize_BindsFontSizeCombo_AndPassesSelectedValue()
+    {
+        string? applied = null;
+        var registry = SampleRibbon.BuildRegistry(
+            () => null, _ => { }, new AvaloniaRibbonHostCallbacks { SetFontSize = v => applied = v });
+
+        Assert.True(registry.TryGet(new RibbonCommandId("home.fontSize"), out var command));
+        Assert.IsType<RelayValueRibbonCommand>(command);
+
+        command!.Execute(RibbonCommandContext.ForSelectedValue("14"));
+        Assert.Equal("14", applied);
+    }
+
+    [Fact]
+    public void WithoutSetFontSize_FontSizeComboStaysNoOp()
+    {
+        var registry = SampleRibbon.BuildRegistry(() => null, _ => { });
+
+        Assert.True(registry.TryGet(new RibbonCommandId("home.fontSize"), out var command));
+        Assert.IsType<NoOpRibbonCommand>(command);
+    }
+
+    [Fact]
+    public void SetFontName_BindsFontNameCombo_AndPassesSelectedValue()
+    {
+        string? applied = null;
+        var registry = SampleRibbon.BuildRegistry(
+            () => null, _ => { }, new AvaloniaRibbonHostCallbacks { SetFontName = v => applied = v });
+
+        Assert.True(registry.TryGet(new RibbonCommandId("home.fontName"), out var command));
+        Assert.IsType<RelayValueRibbonCommand>(command);
+
+        command!.Execute(RibbonCommandContext.ForSelectedValue("Arial"));
+        Assert.Equal("Arial", applied);
+    }
+
+    [Fact]
+    public void WithoutSetFontName_FontNameComboStaysNoOp()
+    {
+        var registry = SampleRibbon.BuildRegistry(() => null, _ => { });
+
+        Assert.True(registry.TryGet(new RibbonCommandId("home.fontName"), out var command));
+        Assert.IsType<NoOpRibbonCommand>(command);
+    }
+
+    [Fact]
     public void InsertTable_BindsBothRibbonAndHomeButtons_ToTheSameAction()
     {
         var count = 0;
@@ -149,6 +196,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         QuickAnalysis = () => { },
         SortAscending = () => { },
         SortDescending = () => { },
+        ToggleFilter = () => { },
         DataValidation = () => { },
         Cut = () => { },
         Copy = () => { },

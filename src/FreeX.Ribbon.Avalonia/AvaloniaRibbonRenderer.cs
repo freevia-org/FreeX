@@ -272,6 +272,17 @@ public static class AvaloniaRibbonRenderer
                 box.Items.Add(item);
             if (combo.Items.Count > 0)
                 box.SelectedIndex = 0;
+
+            // A user pick executes the control's command, passing the chosen value so the host applies it
+            // (e.g. font size). The initial programmatic SelectedIndex is suppressed by a ready flag.
+            var ready = false;
+            box.SelectionChanged += (_, _) =>
+            {
+                if (ready)
+                    ExecuteWithValue(control.CommandId, registry, box.SelectedItem as string);
+            };
+            ready = true;
+
             ApplyEnablement(box, control, registry);
             return box;
         }
@@ -419,6 +430,14 @@ public static class AvaloniaRibbonRenderer
             return;
         if (registry.TryGet(commandId, out var command) && command is not null)
             command.Execute(RibbonCommandContext.Empty);
+    }
+
+    private static void ExecuteWithValue(RibbonCommandId commandId, IRibbonCommandRegistry? registry, string? value)
+    {
+        if (registry is null)
+            return;
+        if (registry.TryGet(commandId, out var command) && command is not null)
+            command.Execute(RibbonCommandContext.ForSelectedValue(value));
     }
 
     private static bool HasMenu(RibbonControl control) =>
