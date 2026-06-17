@@ -13,10 +13,7 @@ public partial class MainWindow
     private readonly System.Windows.Controls.StackPanel HomeRibbonPanel = new();
     private readonly System.Windows.Controls.ComboBox FontNameBox = new();
     private readonly System.Windows.Controls.ComboBox FontSizeBox = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton BoldButton = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton ItalicButton = new();
     private readonly System.Windows.Controls.Primitives.ToggleButton UnderlineButton = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton StrikeButton = new();
     private readonly System.Windows.Controls.Button BordersMenuButton = new();
     private readonly System.Windows.Controls.Button OrientationPickerButton = new();
     private readonly System.Windows.Controls.ComboBox NumberFormatBox = new();
@@ -64,21 +61,12 @@ public partial class MainWindow
         RibbonMetadata.SetCommandName(FontSizeBox, "Font Size");
         RibbonBackplaneControls["Font Size"] = FontSizeBox;
         RibbonBackplaneControlNames["Font Size"] = "FontSizeBox";
-        try { RegisterName("BoldButton", BoldButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(BoldButton, "Bold");
-        RibbonBackplaneControls["Bold"] = BoldButton;
         RibbonBackplaneControlNames["Bold"] = "BoldButton";
-        try { RegisterName("ItalicButton", ItalicButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ItalicButton, "Italic");
-        RibbonBackplaneControls["Italic"] = ItalicButton;
         RibbonBackplaneControlNames["Italic"] = "ItalicButton";
         try { RegisterName("UnderlineButton", UnderlineButton); } catch (System.ArgumentException) { }
         RibbonMetadata.SetCommandName(UnderlineButton, "Underline");
         RibbonBackplaneControls["Underline"] = UnderlineButton;
         RibbonBackplaneControlNames["Underline"] = "UnderlineButton";
-        try { RegisterName("StrikeButton", StrikeButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(StrikeButton, "Strikethrough");
-        RibbonBackplaneControls["Strikethrough"] = StrikeButton;
         RibbonBackplaneControlNames["Strikethrough"] = "StrikeButton";
         try { RegisterName("BordersMenuButton", BordersMenuButton); } catch (System.ArgumentException) { }
         RibbonMetadata.SetCommandName(BordersMenuButton, "Borders");
