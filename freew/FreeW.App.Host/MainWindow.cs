@@ -106,6 +106,11 @@ public sealed class MainWindow : Window
         InputBindings.Add(new KeyBinding(findReplace, new KeyGesture(Key.F, ModifierKeys.Control)));
         InputBindings.Add(new KeyBinding(findReplace, new KeyGesture(Key.H, ModifierKeys.Control)));
 
+        // Ctrl+Shift+V: Paste Text Only (paste-special), the Word-standard shortcut.
+        var pastePlain = new RoutedUICommand("Paste Text Only", "PastePlain", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(pastePlain, (_, _) => _editor.PastePlainText()));
+        InputBindings.Add(new KeyBinding(pastePlain, new KeyGesture(Key.V, ModifierKeys.Control | ModifierKeys.Shift)));
+
         UpdateTitle();
         UpdateCounts();
         RefreshOutline();
@@ -192,6 +197,11 @@ public sealed class MainWindow : Window
             Background = Brushes.Transparent
         };
         _navList.SelectionChanged += OnOutlineSelected;
+
+        // Right-click an outline entry to restructure it: Promote/Demote change the heading's style
+        // (reversible, like the styles dropdown) and Collapse/Expand hide/show its body in the editor
+        // view only. Each item maps the selected OutlineEntry's model block index onto the DocumentView.
+        _navList.ContextMenu = BuildOutlineContextMenu();
 
         var header = new TextBlock
         {
@@ -301,6 +311,35 @@ public sealed class MainWindow : Window
     {
         if (_navList.SelectedItem is OutlineItem item)
             _editor.BringBlockIntoView(item.Entry.BlockIndex);
+    }
+
+    // The outline-entry context menu (Promote / Demote / Collapse / Expand). Each item acts on the
+    // currently selected OutlineEntry, mapping its model block index onto the editor's heading commands,
+    // then refreshes the outline so promoted/demoted levels and collapse markers update.
+    private ContextMenu BuildOutlineContextMenu()
+    {
+        var menu = new ContextMenu();
+        menu.Items.Add(OutlineMenuItem("Promote", entry => _editor.PromoteHeading(entry.BlockIndex)));
+        menu.Items.Add(OutlineMenuItem("Demote", entry => _editor.DemoteHeading(entry.BlockIndex)));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(OutlineMenuItem("Collapse", entry => _editor.CollapseHeading(entry.BlockIndex)));
+        menu.Items.Add(OutlineMenuItem("Expand", entry => _editor.ExpandHeading(entry.BlockIndex)));
+        return menu;
+    }
+
+    // Build one outline context-menu item that runs `action` against the selected outline entry. A no-op
+    // when nothing is selected. The outline is refreshed afterwards so the nav list reflects the change.
+    private MenuItem OutlineMenuItem(string header, Action<OutlineEntry> action)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) =>
+        {
+            if (_navList.SelectedItem is not OutlineItem selected)
+                return;
+            action(selected.Entry);
+            RefreshOutline();
+        };
+        return item;
     }
 
     // A nav-list row: indents the heading text by its outline level and remembers the source entry

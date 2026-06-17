@@ -1,0 +1,295 @@
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.PageLayout;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Avalonia.Dialogs;
+
+/// <summary>
+/// Non-UI glue between the portable <see cref="PageContentLayout"/> and the Avalonia print-preview
+/// canvas. It flattens one page's ordered render instructions (page background, cell fills, gridlines,
+/// per-edge cell borders, cell/heading/header-footer text) into a renderer-agnostic, ordered list of
+/// paint primitives (filled rectangles, line segments, positioned text runs). The canvas code only
+/// turns each primitive into an Avalonia shape, so all of the layout-to-primitive math is unit-tested
+/// directly without a running UI.
+///
+/// It also owns the page-enumeration / navigation math (page count from the pagination plan plus
+/// clamped prev/next stepping) so the window's Prev/Next buttons stay in range without UI state logic.
+/// </summary>
+
+/// <summary>The kind of paint primitive a <see cref="PrintPreviewPaintInstruction"/> represents.</summary>
+public enum PrintPreviewPaintKind
+{
+    /// <summary>A filled (and optionally unfilled) rectangle: page background or a cell fill.</summary>
+    Rectangle,
+
+    /// <summary>A single straight stroked line: a gridline or one cell-border edge.</summary>
+    Line,
+
+    /// <summary>A positioned single-line text run: cell text, a heading label, or a header/footer band.</summary>
+    Text,
+}
+
+/// <summary>
+/// One backend-agnostic paint primitive. Only the fields relevant to <see cref="Kind"/> are populated;
+/// the rest carry their defaults. Colors are <see cref="PresentationRgb"/> so no platform color type
+/// leaks through; a null <see cref="Fill"/>/<see cref="Stroke"/> means "do not paint that aspect".
+/// </summary>
+public readonly record struct PrintPreviewPaintInstruction(
+    PrintPreviewPaintKind Kind,
+    double X1,
+    double Y1,
+    double X2,
+    double Y2,
+    PresentationRgb? Fill,
+    PresentationRgb? Stroke,
+    double StrokeThickness,
+    string Text,
+    PageTextFont Font,
+    PageTextAlignment Alignment)
+{
+    /// <summary>A filled/outlined rectangle from a top-left corner plus size.</summary>
+    public static PrintPreviewPaintInstruction Rectangle(
+        LayoutRect bounds,
+        PresentationRgb? fill,
+        PresentationRgb? stroke = null,
+        double strokeThickness = 0) =>
+        new(
+            PrintPreviewPaintKind.Rectangle,
+            bounds.Left,
+            bounds.Top,
+            bounds.Width,
+            bounds.Height,
+            fill,
+            stroke,
+            strokeThickness,
+            "",
+            default,
+            PageTextAlignment.Left);
+
+    /// <summary>A stroked line segment between two points.</summary>
+    public static PrintPreviewPaintInstruction Line(
+        LayoutPoint start,
+        LayoutPoint end,
+        PresentationRgb stroke,
+        double strokeThickness) =>
+        new(
+            PrintPreviewPaintKind.Line,
+            start.X,
+            start.Y,
+            end.X,
+            end.Y,
+            null,
+            stroke,
+            strokeThickness,
+            "",
+            default,
+            PageTextAlignment.Left);
+
+    /// <summary>A text run whose top-left origin is (<paramref name="origin"/>), laid out in a box of the given width.</summary>
+    public static PrintPreviewPaintInstruction TextRun(
+        LayoutPoint origin,
+        double width,
+        string text,
+        PageTextFont font,
+        PageTextAlignment alignment) =>
+        new(
+            PrintPreviewPaintKind.Text,
+            origin.X,
+            origin.Y,
+            width,
+            0,
+            null,
+            null,
+            0,
+            text,
+            font,
+            alignment);
+
+    /// <summary>Rectangle top-left X (or line start X, or text origin X).</summary>
+    public double Left => X1;
+
+    /// <summary>Rectangle top-left Y (or line start Y, or text origin Y).</summary>
+    public double Top => Y1;
+
+    /// <summary>Rectangle width (or text box width).</summary>
+    public double Width => X2;
+
+    /// <summary>Rectangle height.</summary>
+    public double Height => Y2;
+}
+
+/// <summary>The flattened paint primitives for one preview page plus the page rectangle to size the surface.</summary>
+public sealed record PrintPreviewPagePainting(
+    int PageNumber,
+    LayoutRect PageBounds,
+    IReadOnlyList<PrintPreviewPaintInstruction> Instructions);
+
+public static class PrintPreviewInstructionBuilder
+{
+    /// <summary>Stroke color for printed gridlines, matching the source print renderer's light gray.</summary>
+    public static readonly PresentationRgb GridLineColor = new(208, 208, 208);
+
+    /// <summary>Fill behind row/column headings, mirroring the page-content builder's heading band.</summary>
+    public static readonly PresentationRgb HeadingFill = PageContentRenderModelBuilder.HeadingFill;
+
+    /// <summary>Black text for headings and (default) header/footer bands.</summary>
+    public static readonly PresentationRgb HeadingTextColor = new(0, 0, 0);
+
+    /// <summary>White page background painted under every page.</summary>
+    public static readonly PresentationRgb PageBackground = new(255, 255, 255);
+
+    /// <summary>Font used for heading labels and header/footer bands, matching the page-content builder.</summary>
+    public static readonly PageTextFont BandFont = new(
+        PageContentRenderModelBuilder.PrintFontFamily,
+        PageContentRenderModelBuilder.PrintFontSize,
+        Bold: false,
+        Italic: false,
+        HeadingTextColor);
+
+    /// <summary>
+    /// Flattens one page's <see cref="PageContentLayout"/> into an ordered list of paint primitives.
+    /// Paint order mirrors the source print renderer: page background, heading band fills, cell fills,
+    /// gridlines, cell border edges, then all text (headings, cells, header/footer bands) on top.
+    /// </summary>
+    public static PrintPreviewPagePainting Build(PageContentLayout layout)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+
+        var instructions = new List<PrintPreviewPaintInstruction>();
+
+        // 1. Page background.
+        instructions.Add(PrintPreviewPaintInstruction.Rectangle(layout.PageBounds, PageBackground));
+
+        // 2. Heading band fills (behind heading labels), painted before content like the source renderer.
+        foreach (var heading in layout.ColumnHeadings)
+            instructions.Add(PrintPreviewPaintInstruction.Rectangle(heading.Bounds, HeadingFill));
+        foreach (var heading in layout.RowHeadings)
+            instructions.Add(PrintPreviewPaintInstruction.Rectangle(heading.Bounds, HeadingFill));
+
+        // 3. Cell fills.
+        foreach (var cell in layout.Cells)
+        {
+            if (cell.Fill is { } fill)
+                instructions.Add(PrintPreviewPaintInstruction.Rectangle(cell.Bounds, fill));
+        }
+
+        // 4. Gridlines.
+        foreach (var line in layout.GridLines)
+            instructions.Add(PrintPreviewPaintInstruction.Line(line.Start, line.End, GridLineColor, 1));
+
+        // 5. Cell border edges (each visible edge as its own line so clipped edges are skipped).
+        foreach (var cell in layout.Cells)
+            AddCellBorders(instructions, cell);
+
+        // 6. Heading text.
+        foreach (var heading in layout.ColumnHeadings)
+            instructions.Add(PrintPreviewPaintInstruction.TextRun(
+                heading.TextOrigin, heading.Bounds.Width, heading.Label, BandFont, PageTextAlignment.Center));
+        foreach (var heading in layout.RowHeadings)
+            instructions.Add(PrintPreviewPaintInstruction.TextRun(
+                heading.TextOrigin, heading.Bounds.Width, heading.Label, BandFont, PageTextAlignment.Center));
+
+        // 7. Cell text.
+        foreach (var cell in layout.Cells)
+        {
+            if (!string.IsNullOrEmpty(cell.Text))
+                instructions.Add(PrintPreviewPaintInstruction.TextRun(
+                    cell.TextOrigin, cell.Bounds.Width, cell.Text, cell.Font, cell.Alignment));
+        }
+
+        // 8. Header / footer bands.
+        foreach (var run in layout.HeaderRuns)
+            instructions.Add(PrintPreviewPaintInstruction.TextRun(
+                run.TextOrigin, run.Bounds.Width, run.Text, BandFont, run.Alignment));
+        foreach (var run in layout.FooterRuns)
+            instructions.Add(PrintPreviewPaintInstruction.TextRun(
+                run.TextOrigin, run.Bounds.Width, run.Text, BandFont, run.Alignment));
+
+        return new PrintPreviewPagePainting(layout.PageNumber, layout.PageBounds, instructions);
+    }
+
+    private static void AddCellBorders(ICollection<PrintPreviewPaintInstruction> instructions, PageCellBlock cell)
+    {
+        var borders = cell.Borders;
+        if (!borders.HasAny)
+            return;
+
+        var b = cell.Bounds;
+        if (borders.Top.IsVisible)
+            AddEdge(instructions, b.Left, b.Top, b.Right, b.Top, borders.Top);
+        if (borders.Bottom.IsVisible)
+            AddEdge(instructions, b.Left, b.Bottom, b.Right, b.Bottom, borders.Bottom);
+        if (borders.Left.IsVisible)
+            AddEdge(instructions, b.Left, b.Top, b.Left, b.Bottom, borders.Left);
+        if (borders.Right.IsVisible)
+            AddEdge(instructions, b.Right, b.Top, b.Right, b.Bottom, borders.Right);
+    }
+
+    private static void AddEdge(
+        ICollection<PrintPreviewPaintInstruction> instructions,
+        double x1,
+        double y1,
+        double x2,
+        double y2,
+        PageBorderEdge edge) =>
+        instructions.Add(PrintPreviewPaintInstruction.Line(
+            new LayoutPoint(x1, y1),
+            new LayoutPoint(x2, y2),
+            edge.Color,
+            BorderThickness(edge.Style)));
+
+    /// <summary>Maps a model border style to a stroke thickness in device-independent pixels.</summary>
+    public static double BorderThickness(BorderStyle style) =>
+        style switch
+        {
+            BorderStyle.Thick => 3,
+            BorderStyle.Medium => 2,
+            BorderStyle.Double => 2,
+            BorderStyle.None => 0,
+            _ => 1,
+        };
+
+    /// <summary>Whether a model border style is drawn as a dashed stroke.</summary>
+    public static bool IsDashed(BorderStyle style) =>
+        style is BorderStyle.Dashed or BorderStyle.Dotted;
+}
+
+/// <summary>
+/// Page-enumeration / navigation math for the print-preview window: the page count comes from the
+/// pagination plan, and prev/next stepping is clamped into range so the window never asks the page
+/// builder for an out-of-range index. Pure value logic, unit-tested without a UI.
+/// </summary>
+public readonly record struct PrintPreviewPageNavigator(int PageCount, int CurrentIndex)
+{
+    /// <summary>Creates a navigator over <paramref name="pageCount"/> pages positioned at the first page.</summary>
+    public static PrintPreviewPageNavigator Create(int pageCount) =>
+        new(Math.Max(0, pageCount), 0);
+
+    /// <summary>Whether there is at least one page to show.</summary>
+    public bool HasPages => PageCount > 0;
+
+    /// <summary>The 1-based page number of the current page (1 when there are no pages).</summary>
+    public int CurrentPageNumber => HasPages ? CurrentIndex + 1 : 1;
+
+    /// <summary>Whether a previous page exists (so the Prev button should be enabled).</summary>
+    public bool CanGoPrevious => CurrentIndex > 0;
+
+    /// <summary>Whether a next page exists (so the Next button should be enabled).</summary>
+    public bool CanGoNext => CurrentIndex < PageCount - 1;
+
+    /// <summary>Returns a navigator one page earlier, clamped to the first page.</summary>
+    public PrintPreviewPageNavigator Previous() =>
+        this with { CurrentIndex = Math.Max(0, CurrentIndex - 1) };
+
+    /// <summary>Returns a navigator one page later, clamped to the last page.</summary>
+    public PrintPreviewPageNavigator Next() =>
+        this with { CurrentIndex = Math.Min(Math.Max(0, PageCount - 1), CurrentIndex + 1) };
+
+    /// <summary>Returns a navigator positioned at <paramref name="index"/>, clamped into range.</summary>
+    public PrintPreviewPageNavigator JumpTo(int index) =>
+        this with { CurrentIndex = HasPages ? Math.Clamp(index, 0, PageCount - 1) : 0 };
+
+    /// <summary>"Page X of N" caption for the navigation label.</summary>
+    public string Caption => $"Page {CurrentPageNumber} of {Math.Max(1, PageCount)}";
+}

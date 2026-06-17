@@ -4,19 +4,34 @@ namespace FreeW.Core.Model;
 public enum TextAlignment { Left, Center, Right, Justify }
 
 /// <summary>List decoration for a paragraph.</summary>
-public enum ListKind { None, Bullet, Number }
+/// <remarks>
+/// <see cref="MultiLevel"/> is an outline (legal) numbering whose level text accumulates the
+/// ancestors' counters, e.g. <c>1</c>, <c>1.1</c>, <c>1.1.1</c>. It persists as a third
+/// numbering definition in word/numbering.xml; see <c>DocxWriter.BuildNumbering</c>.
+/// </remarks>
+public enum ListKind { None, Bullet, Number, MultiLevel }
 
 /// <summary>Horizontal alignment of text at a paragraph tab stop (maps to OOXML w:tab/@w:val).</summary>
 public enum TabStopAlignment { Left, Center, Right, Decimal }
 
 /// <summary>
+/// Leader fill drawn across the empty space a tab character jumps over (maps to OOXML
+/// w:tab/@w:leader). <see cref="None"/> leaves the gap blank.
+/// </summary>
+public enum TabLeader { None, Dots, Dashes, Underline }
+
+/// <summary>
 /// Immutable paragraph tab stop (pPr/w:tabs/w:tab). Round-trips to docx as a single
-/// <c>w:tab</c> with <c>w:pos</c> in dxa (twentieths of a point) and <c>w:val</c> giving the
-/// alignment.
+/// <c>w:tab</c> with <c>w:pos</c> in dxa (twentieths of a point), <c>w:val</c> giving the
+/// alignment, and an optional <c>w:leader</c> for the fill drawn across the tab gap.
 /// </summary>
 /// <param name="PositionPt">Tab-stop position from the left margin, in points.</param>
 /// <param name="Alignment">How text aligns at the stop.</param>
-public sealed record TabStop(double PositionPt, TabStopAlignment Alignment = TabStopAlignment.Left);
+/// <param name="Leader">Fill drawn across the tab gap; <see cref="TabLeader.None"/> leaves it blank.</param>
+public sealed record TabStop(
+    double PositionPt,
+    TabStopAlignment Alignment = TabStopAlignment.Left,
+    TabLeader Leader = TabLeader.None);
 
 /// <summary>
 /// Vertical alignment of a run's glyphs relative to the baseline (rPr/w:vertAlign). Maps to docx
@@ -110,6 +125,36 @@ public sealed record ParagraphFormatting
     /// paragraph.
     /// </summary>
     public bool PageBreakBefore { get; init; }
+
+    /// <summary>
+    /// When true, this paragraph is kept on the same page as the one that follows it
+    /// (pPr/w:keepNext). Defaults to false so existing paragraphs are unaffected. Round-trips to docx
+    /// as the <c>w:keepNext</c> toggle, mirroring <see cref="PageBreakBefore"/>; the editor maps it to
+    /// WPF <c>Paragraph.KeepWithNext</c>.
+    /// </summary>
+    public bool KeepWithNext { get; init; }
+
+    /// <summary>
+    /// When true, all lines of this paragraph are kept together on a single page rather than split
+    /// across a page boundary (pPr/w:keepLines). Defaults to false so existing paragraphs are
+    /// unaffected. Round-trips to docx as the <c>w:keepLines</c> toggle, mirroring
+    /// <see cref="PageBreakBefore"/>; the editor maps it to WPF <c>Paragraph.KeepTogether</c>.
+    /// </summary>
+    public bool KeepLinesTogether { get; init; }
+
+    /// <summary>
+    /// When true, widow/orphan control is enabled for this paragraph (pPr/w:widowControl), preventing a
+    /// single first/last line from being stranded alone on a page. Round-trips to docx as the
+    /// <c>w:widowControl</c> toggle, mirroring <see cref="PageBreakBefore"/>.
+    /// <para>
+    /// Defaults to <c>false</c>. Note: real Word enables widow control by default; FreeW intentionally
+    /// keeps it off by default so that existing documents/round-trips are unchanged (a paragraph with no
+    /// explicit <c>w:widowControl</c> reads back as false here, not Word's implicit on). The WPF
+    /// FlowDocument has no widow-control property, so this flag is carried through the model/docx only
+    /// (preserved across an editor edit/commit cycle via the paragraph's Tag).
+    /// </para>
+    /// </summary>
+    public bool WidowControl { get; init; }
 
     /// <summary>
     /// Paragraph shading (background fill) as an RRGGBB hex (e.g. <c>"#FFFF00"</c>). Null means no

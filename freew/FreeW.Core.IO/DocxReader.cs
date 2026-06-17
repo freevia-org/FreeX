@@ -54,9 +54,67 @@ public static class DocxReader
 
         ReadHeaderFooter(documentXml, archive, document, imageRelationships, hyperlinkRelationships);
         ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
+        ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, imageRelationships, hyperlinkRelationships);
+        ReadSettings(archive, document);
 
         return document;
+    }
+
+    /// <summary>
+    /// Resolves the settings part (via the officeDocument's "/settings" relationship, falling back to the
+    /// conventional word/settings.xml path), loads w:settings, and maps w:documentProtection/@w:edit back
+    /// into <see cref="TextDocument.Protection"/> and the w:autoHyphenation toggle into
+    /// <see cref="PageSettings.AutoHyphenation"/>. A missing part — or one without an enforced
+    /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>; a missing
+    /// autoHyphenation leaves it disabled.
+    /// </summary>
+    private static void ReadSettings(ZipArchive archive, TextDocument document)
+    {
+        var settingsXml = LoadPart(archive, ResolveSettingsPartPath(archive) ?? "word/settings.xml");
+        var root = settingsXml?.Root;
+        if (root is null)
+            return;
+
+        // Automatic hyphenation (w:autoHyphenation) is an on/off toggle: present + not explicitly off.
+        document.Page.AutoHyphenation = ReadToggle(root, "autoHyphenation");
+
+        var protection = root.Element(W + "documentProtection");
+        if (protection is null)
+            return;
+
+        // Honour protection only when enforced (w:enforcement on/absent-with-edit); an explicit
+        // enforcement="0"/"off"/"false" means the restriction is not active, so treat it as None.
+        var enforcement = protection.Attribute(W + "enforcement")?.Value;
+        if (enforcement is "0" or "false" or "off")
+            return;
+
+        var mode = ProtectionModeFromEditToken(protection.Attribute(W + "edit")?.Value);
+        if (mode != ProtectionMode.None)
+            document.Protection = new ProtectionSettings(mode);
+    }
+
+    /// <summary>
+    /// Finds the settings part path from the document relationships (the rel whose Type ends with
+    /// "/settings"), resolved relative to the word/ folder. Returns null when no such relationship exists.
+    /// </summary>
+    private static string? ResolveSettingsPartPath(ZipArchive archive)
+    {
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return null;
+
+        foreach (var rel in relationships)
+        {
+            var type = rel.Attribute("Type")?.Value;
+            if (type is null || !type.EndsWith("/settings", StringComparison.Ordinal))
+                continue;
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(target))
+                return "word/" + target.TrimStart('/');
+        }
+        return null;
     }
 
     /// <summary>
@@ -130,6 +188,41 @@ public static class DocxReader
     }
 
     /// <summary>
+    /// Loads word/endnotes.xml (if present) into <see cref="TextDocument.Endnotes"/>, reconstructing
+    /// each w:endnote's paragraphs. The conventional separator endnotes (type separator /
+    /// continuationSeparator, ids -1 and 0) are skipped — only real content endnotes are kept. Mirrors
+    /// <see cref="ReadFootnotes"/>.
+    /// </summary>
+    private static void ReadEndnotes(
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+    {
+        var endnotesXml = LoadPart(archive, "word/endnotes.xml");
+        var root = endnotesXml?.Root;
+        if (root is null)
+            return;
+
+        var noNumbering = new Dictionary<int, ListKind>();
+        foreach (var element in root.Elements(W + "endnote"))
+        {
+            var type = element.Attribute(W + "type")?.Value;
+            if (type is "separator" or "continuationSeparator")
+                continue;
+            if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
+                continue;
+
+            var endnote = new Endnote(id);
+            foreach (var p in element.Elements(W + "p"))
+                endnote.Content.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+            if (endnote.Content.Count == 0)
+                endnote.Content.Add(new Paragraph());
+            document.Endnotes[id] = endnote;
+        }
+    }
+
+    /// <summary>
     /// Resolves the default header/footer references in w:sectPr (r:id → document rels → part path),
     /// loads those parts (w:hdr / w:ftr) and reconstructs <see cref="TextDocument.Header"/> / Footer.
     /// </summary>
@@ -157,6 +250,16 @@ public static class DocxReader
 
         // Page border (w:pgBorders) lives in the same w:sectPr; recover it into PageSettings.PageBorder.
         document.Page.PageBorder = ReadPageBorder(sectPr.Element(W + "pgBorders"));
+
+        // Line numbering (w:lnNumType) lives in the same w:sectPr; recover the mode + interval.
+        ReadLineNumbering(sectPr.Element(W + "lnNumType"), document.Page);
+
+        // Page vertical alignment (w:vAlign): map the val token back ("both"→Justified); absent → Top.
+        document.Page.VerticalAlignment =
+            VerticalAlignmentFromToken(sectPr.Element(W + "vAlign")?.Attribute(W + "val")?.Value);
+
+        // "Different first page" (w:titlePg): a bare toggle; absent → false.
+        document.Page.DifferentFirstPage = ReadToggle(sectPr, "titlePg");
 
         var partsById = ReadHeaderFooterRelationships(archive);
 
@@ -279,8 +382,9 @@ public static class DocxReader
                 var anchor = child.Attribute(W + "anchor")?.Value;
                 var id = child.Attribute(R + "id")?.Value;
                 var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
+                var tooltip = child.Attribute(W + "tooltip")?.Value;
                 foreach (var r in child.Elements(W + "r"))
-                    AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null, commentId: activeCommentId);
+                    AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null, commentId: activeCommentId, hyperlinkTooltip: tooltip);
             }
             else if (child.Name == W + "ins" || child.Name == W + "del")
             {
@@ -300,8 +404,9 @@ public static class DocxReader
                         var hAnchor = revChild.Attribute(W + "anchor")?.Value;
                         var hId = revChild.Attribute(R + "id")?.Value;
                         var hUrl = hId is not null && hyperlinkRelationships.TryGetValue(hId, out var hTarget) ? hTarget : null;
+                        var hTooltip = revChild.Attribute(W + "tooltip")?.Value;
                         foreach (var r in revChild.Elements(W + "r"))
-                            AddRun(paragraph, r, archive, imageRelationships, hUrl, hUrl is null ? hAnchor : null, commentId: activeCommentId, revision: revision);
+                            AddRun(paragraph, r, archive, imageRelationships, hUrl, hUrl is null ? hAnchor : null, commentId: activeCommentId, revision: revision, hyperlinkTooltip: hTooltip);
                     }
                 }
             }
@@ -337,8 +442,11 @@ public static class DocxReader
     }
 
     /// <summary>
-    /// Reads a w:fldSimple. A " PAGE " field becomes a page-number field run; any other field is
-    /// flattened to its cached display text (the text inside the wrapped run) so nothing is lost.
+    /// Reads a w:fldSimple. A recognised field (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES) becomes a
+    /// field run carrying that kind plus its cached display text; the kind is matched off the leading
+    /// instruction keyword so formatting switches (e.g. <c>DATE \@ "d MMMM yyyy"</c>) are tolerated. Any
+    /// other field is flattened to its cached display text (the text inside the wrapped run) so nothing
+    /// is lost.
     /// </summary>
     private static void AddSimpleField(Paragraph paragraph, XElement fldSimple)
     {
@@ -347,14 +455,36 @@ public static class DocxReader
         var text = string.Concat(fldSimple.Descendants(W + "t").Select(t => t.Value));
         var formatting = ReadRunFormatting(inner?.Element(W + "rPr"));
 
-        if (instruction.Trim().Equals("PAGE", StringComparison.OrdinalIgnoreCase))
+        if (FieldKindFor(instruction) is { } kind)
         {
-            paragraph.Runs.Add(new Run(text.Length > 0 ? text : "1", formatting) { FieldKind = RunFieldKind.PageNumber });
+            // PAGE keeps its historic "1" fallback when no cached value was written; the rest are happy
+            // with whatever cached text the field carried (possibly empty).
+            var fallback = kind == RunFieldKind.PageNumber && text.Length == 0 ? "1" : text;
+            paragraph.Runs.Add(new Run(fallback, formatting) { FieldKind = kind });
         }
         else if (text.Length > 0)
         {
             paragraph.Runs.Add(new Run(text, formatting));
         }
+    }
+
+    /// <summary>
+    /// Maps a w:fldSimple/@w:instr to a <see cref="RunFieldKind"/> by its leading keyword, tolerating
+    /// surrounding whitespace and trailing field switches. Returns null for unrecognised fields.
+    /// </summary>
+    private static RunFieldKind? FieldKindFor(string instruction)
+    {
+        var keyword = instruction.Trim().Split(' ', '\t', '\\')[0];
+        return keyword.ToUpperInvariant() switch
+        {
+            "PAGE" => RunFieldKind.PageNumber,
+            "DATE" => RunFieldKind.Date,
+            "TIME" => RunFieldKind.Time,
+            "FILENAME" => RunFieldKind.FileName,
+            "AUTHOR" => RunFieldKind.Author,
+            "NUMPAGES" => RunFieldKind.NumPages,
+            _ => null
+        };
     }
 
     /// <summary>
@@ -398,7 +528,8 @@ public static class DocxReader
         string? hyperlinkAnchor,
         int? commentId = null,
         RevisionInfo revision = default,
-        ContentControl? control = null)
+        ContentControl? control = null,
+        string? hyperlinkTooltip = null)
     {
         void ApplyRevision(Run run)
         {
@@ -412,7 +543,7 @@ public static class DocxReader
         var image = ReadImage(r, archive, imageRelationships);
         if (image is not null)
         {
-            var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId };
+            var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
             ApplyRevision(imageRun);
             paragraph.Runs.Add(imageRun);
             return;
@@ -428,6 +559,16 @@ public static class DocxReader
             return;
         }
 
+        // A run wrapping a w:endnoteReference is an endnote marker; recover its id into the model.
+        var endnoteRef = r.Element(W + "endnoteReference");
+        if (endnoteRef is not null && int.TryParse(endnoteRef.Attribute(W + "id")?.Value, out var endnoteId))
+        {
+            var endnoteRun = Run.EndnoteReference(endnoteId, ReadRunFormatting(r.Element(W + "rPr")));
+            ApplyRevision(endnoteRun);
+            paragraph.Runs.Add(endnoteRun);
+            return;
+        }
+
         // A tracked deletion stores its text in w:delText; ordinary/inserted runs use w:t.
         var text = string.Concat(r.Elements(W + "t").Select(t => t.Value))
             + string.Concat(r.Elements(W + "delText").Select(t => t.Value));
@@ -435,7 +576,7 @@ public static class DocxReader
             text += "\t";
         if (text.Length == 0)
             return;
-        var textRun = new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId, Control = control };
+        var textRun = new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId, Control = control };
         ApplyRevision(textRun);
         paragraph.Runs.Add(textRun);
     }
@@ -449,8 +590,24 @@ public static class DocxReader
     {
         var table = new Table();
 
-        var borders = tbl.Element(W + "tblPr")?.Element(W + "tblBorders");
-        table.Formatting = TableFormatting.Default with { Borders = ReadBorders(borders) };
+        var tblPr = tbl.Element(W + "tblPr");
+        var borders = tblPr?.Element(W + "tblBorders");
+
+        // The table-style toggles round-trip via w:tblLook (HeaderRow=firstRow, BandedRows=noHBand="0")
+        // and, for RepeatHeaderRow, via w:trPr/w:tblHeader on the first row. See DocxWriter.BuildTable.
+        var tblLook = tblPr?.Element(W + "tblLook");
+        var headerRow = tblLook?.Attribute(W + "firstRow")?.Value == "1";
+        var bandedRows = tblLook?.Attribute(W + "noHBand")?.Value == "0";
+        var firstRow = tbl.Elements(W + "tr").FirstOrDefault();
+        var repeatHeader = firstRow?.Element(W + "trPr")?.Element(W + "tblHeader") is not null;
+
+        table.Formatting = TableFormatting.Default with
+        {
+            Borders = ReadBorders(borders),
+            HeaderRow = headerRow,
+            BandedRows = bandedRows,
+            RepeatHeaderRow = repeatHeader
+        };
 
         // The table grid (w:tblGrid/w:gridCol) carries per-column widths in dxa.
         var grid = tbl.Element(W + "tblGrid");
@@ -460,9 +617,14 @@ public static class DocxReader
                 table.ColumnWidthsPt.Add(DxaToPoints(gridCol.Attribute(W + "w")?.Value));
         }
 
+        var rowIndex = 0;
         foreach (var tr in tbl.Elements(W + "tr"))
         {
             var row = new TableRow();
+            // Cells in styled rows carry the style fill (header/banded) we wrote; recognise and strip it so
+            // it reads back as style-derived shading, not as an explicit per-cell colour.
+            var isStyleHeader = headerRow && rowIndex == 0;
+            var isStyleBanded = bandedRows && !isStyleHeader && IsBandedBodyRow(rowIndex, headerRow);
             foreach (var tc in tr.Elements(W + "tc"))
             {
                 var cell = new TableCell();
@@ -473,7 +635,28 @@ public static class DocxReader
                     if (width is not null)
                         cell.WidthPt = DxaToPoints(width);
                     var shading = tcPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
-                    cell.ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#');
+                    var normalized = shading is null or "auto" ? null : shading.TrimStart('#');
+                    // Drop the style-derived header/banded fill so it doesn't masquerade as cell shading.
+                    if (normalized is not null
+                        && !(isStyleHeader && string.Equals(normalized, StyleHeaderFill, StringComparison.OrdinalIgnoreCase))
+                        && !(isStyleBanded && string.Equals(normalized, StyleBandedFill, StringComparison.OrdinalIgnoreCase)))
+                        cell.ShadingColorHex = "#" + normalized;
+
+                    // Horizontal merge: w:gridSpan w:val="N". Absent (or <2) means no span.
+                    var gridSpan = tcPr.Element(W + "gridSpan")?.Attribute(W + "val")?.Value;
+                    if (gridSpan is not null && int.TryParse(gridSpan, out var span) && span > 1)
+                        cell.GridSpan = span;
+
+                    // Vertical merge: w:vMerge with w:val="restart" starts a run; a w:vMerge with no
+                    // value (or "continue") is absorbed into the restart above it.
+                    var vMerge = tcPr.Element(W + "vMerge");
+                    if (vMerge is not null)
+                    {
+                        var vVal = vMerge.Attribute(W + "val")?.Value;
+                        cell.VerticalMerge = vVal == "restart"
+                            ? VerticalMergeState.Restart
+                            : VerticalMergeState.Continue;
+                    }
                 }
                 foreach (var p in tc.Elements(W + "p"))
                     cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, numbering));
@@ -482,9 +665,22 @@ public static class DocxReader
                 row.Cells.Add(cell);
             }
             table.Rows.Add(row);
+            rowIndex++;
         }
 
         return table;
+    }
+
+    // The style fills DocxWriter emits for header / banded rows (RRGGBB, no '#'); recognised on read so
+    // they don't read back as explicit per-cell shading.
+    private const string StyleHeaderFill = "D9E2F3";
+    private const string StyleBandedFill = "F2F2F2";
+
+    /// <summary>Mirror of DocxWriter's banding rule: which body row (2nd, 4th, ...) carries the band fill.</summary>
+    private static bool IsBandedBodyRow(int rowIndex, bool hasHeader)
+    {
+        var bodyIndex = hasHeader ? rowIndex - 1 : rowIndex;
+        return bodyIndex >= 0 && bodyIndex % 2 == 1;
     }
 
     private static bool ReadBorders(XElement? tblBorders)
@@ -598,11 +794,19 @@ public static class DocxReader
 
         // w:pageBreakBefore is a toggle: present (and not val="false"/"0") means a page break is forced.
         var pageBreakBefore = ReadToggle(pPr, "pageBreakBefore");
+        // Flow control toggles read the same way as pageBreakBefore. widowControl is read literally:
+        // absent means false (FreeW does not apply Word's implicit default-on), keeping round-trips stable.
+        var keepWithNext = ReadToggle(pPr, "keepNext");
+        var keepLinesTogether = ReadToggle(pPr, "keepLines");
+        var widowControl = ReadToggle(pPr, "widowControl");
 
         return ParagraphFormatting.Default with
         {
             Border = ReadParagraphBorder(pPr.Element(W + "pBdr")),
             PageBreakBefore = pageBreakBefore,
+            KeepWithNext = keepWithNext,
+            KeepLinesTogether = keepLinesTogether,
+            WidowControl = widowControl,
             ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
             Alignment = jc switch
             {
@@ -624,8 +828,9 @@ public static class DocxReader
 
     /// <summary>
     /// Reads paragraph tab stops (w:tabs) into the model list, one <see cref="TabStop"/> per w:tab.
-    /// Positions come from w:pos (dxa -> points); the alignment from w:val. "clear" stops (which
-    /// remove an inherited stop) carry no real position and are skipped. Returns an empty list if absent.
+    /// Positions come from w:pos (dxa -> points); the alignment from w:val; the optional leader fill
+    /// from w:leader (absent -> <see cref="TabLeader.None"/>). "clear" stops (which remove an inherited
+    /// stop) carry no real position and are skipped. Returns an empty list if absent.
     /// </summary>
     private static IReadOnlyList<TabStop> ReadTabStops(XElement? tabs)
     {
@@ -644,7 +849,14 @@ public static class DocxReader
                 "decimal" => TabStopAlignment.Decimal,
                 _ => TabStopAlignment.Left
             };
-            stops.Add(new TabStop(DxaToPoints(tab.Attribute(W + "pos")?.Value), alignment));
+            var leader = tab.Attribute(W + "leader")?.Value switch
+            {
+                "dot" => TabLeader.Dots,
+                "hyphen" => TabLeader.Dashes,
+                "underscore" => TabLeader.Underline,
+                _ => TabLeader.None
+            };
+            stops.Add(new TabStop(DxaToPoints(tab.Attribute(W + "pos")?.Value), alignment, leader));
         }
         return stops;
     }
@@ -695,8 +907,41 @@ public static class DocxReader
     }
 
     /// <summary>
+    /// Reads line numbering (w:lnNumType) into <paramref name="page"/>. Absent leaves the default
+    /// (<see cref="LineNumberMode.None"/>). @w:restart="newPage" maps to RestartEachPage; anything else
+    /// (including the default "continuous") maps to Continuous. @w:countBy sets the interval (min 1).
+    /// </summary>
+    private static void ReadLineNumbering(XElement? lnNumType, PageSettings page)
+    {
+        if (lnNumType is null)
+            return;
+
+        page.LineNumberMode = lnNumType.Attribute(W + "restart")?.Value == "newPage"
+            ? LineNumberMode.RestartEachPage
+            : LineNumberMode.Continuous;
+
+        if (int.TryParse(lnNumType.Attribute(W + "countBy")?.Value, out var countBy) && countBy >= 1)
+            page.LineNumberCountBy = countBy;
+    }
+
+    /// <summary>
+    /// Maps a w:vAlign/@w:val token back to a <see cref="PageVerticalAlignment"/> ("both"→Justified).
+    /// A null/unknown token (including the absent default and "top") maps to
+    /// <see cref="PageVerticalAlignment.Top"/>.
+    /// </summary>
+    private static PageVerticalAlignment VerticalAlignmentFromToken(string? token) => token switch
+    {
+        "center" => PageVerticalAlignment.Center,
+        "both" => PageVerticalAlignment.Justified,
+        "bottom" => PageVerticalAlignment.Bottom,
+        _ => PageVerticalAlignment.Top
+    };
+
+    /// <summary>
     /// Maps each w:num id in word/numbering.xml to a <see cref="ListKind"/> by following its
-    /// abstractNumId to the abstract definition's level-0 w:numFmt (bullet -> Bullet, else Number).
+    /// abstractNumId to the abstract definition. A level-0 w:numFmt of "bullet" -> Bullet; an outline
+    /// definition (w:multiLevelType="multilevel", or whose level-1 lvlText accumulates ancestor
+    /// counters like "%1.%2.") -> MultiLevel; anything else (decimal) -> Number.
     /// </summary>
     private static Dictionary<int, ListKind> ReadNumbering(ZipArchive archive)
     {
@@ -711,11 +956,13 @@ public static class DocxReader
         foreach (var abstractNum in root.Elements(W + "abstractNum"))
         {
             var abstractNumId = ParseInt(abstractNum.Attribute(W + "abstractNumId")?.Value);
-            var level0 = abstractNum.Elements(W + "lvl")
+            var levels = abstractNum.Elements(W + "lvl")
                 .OrderBy(l => ParseInt(l.Attribute(W + "ilvl")?.Value))
-                .FirstOrDefault();
-            var numFmt = level0?.Element(W + "numFmt")?.Attribute(W + "val")?.Value;
-            abstractKinds[abstractNumId] = numFmt == "bullet" ? ListKind.Bullet : ListKind.Number;
+                .ToList();
+            var numFmt = levels.FirstOrDefault()?.Element(W + "numFmt")?.Attribute(W + "val")?.Value;
+            abstractKinds[abstractNumId] = numFmt == "bullet"
+                ? ListKind.Bullet
+                : IsMultiLevel(abstractNum, levels) ? ListKind.MultiLevel : ListKind.Number;
         }
 
         foreach (var num in root.Elements(W + "num"))
@@ -726,6 +973,21 @@ public static class DocxReader
                 map[numId] = kind;
         }
         return map;
+    }
+
+    /// <summary>
+    /// Recognizes an outline/legal numbering definition: either it carries
+    /// w:multiLevelType="multilevel", or its level-1 lvlText accumulates the ancestor counters (it
+    /// references both %1 and %2, as in "%1.%2."), which distinguishes it from a flat decimal list
+    /// whose level-1 text is just "%2.".
+    /// </summary>
+    private static bool IsMultiLevel(XElement abstractNum, IReadOnlyList<XElement> levels)
+    {
+        if (abstractNum.Attribute(W + "multiLevelType")?.Value == "multilevel")
+            return true;
+
+        var level1Text = levels.ElementAtOrDefault(1)?.Element(W + "lvlText")?.Attribute(W + "val")?.Value;
+        return level1Text is not null && level1Text.Contains("%1") && level1Text.Contains("%2");
     }
 
     internal static RunFormatting ReadRunFormatting(XElement? rPr)

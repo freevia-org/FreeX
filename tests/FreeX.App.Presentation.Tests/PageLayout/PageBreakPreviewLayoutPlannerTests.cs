@@ -1,0 +1,221 @@
+using FluentAssertions;
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.PageLayout;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Presentation.Tests.PageLayout;
+
+public sealed class PageBreakPreviewLayoutPlannerTests
+{
+    [Fact]
+    public void Calculate_BuildsPagesAndAutomaticBreakLinesForPreviewRange()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            Enumerable.Range(1, 70).Select(row => new RowMetric((uint)row, (row - 1) * 20, 20)).ToList(),
+            Enumerable.Range(1, 20).Select(col => new ColMetric((uint)col, (col - 1) * 40, 40)).ToList(),
+            null,
+            []);
+        var previewRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 70, 20));
+
+        var layout = PageBreakPreviewLayoutPlanner.Calculate(
+            viewport,
+            previewRange,
+            rowPageBreaks: null,
+            columnPageBreaks: null,
+            WorksheetPageOrder.DownThenOver,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            actualWidth: 900,
+            actualHeight: 1500);
+
+        layout.Pages.Should().HaveCount(4);
+        layout.Pages.Select(page => page.PageNumber).Should().Equal(1, 3, 2, 4);
+        layout.Pages.Should().OnlyContain(page => page.Bounds.Width > 0 && page.Bounds.Height > 0);
+        layout.OutsidePrintAreaMasks.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void Calculate_MarksOffscreenPageLayoutTopAndBottomEdgesNotVisible()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            Enumerable.Range(10, 11).Select(row => new RowMetric((uint)row, (row - 10) * 20, 20)).ToList(),
+            Enumerable.Range(1, 5).Select(col => new ColMetric((uint)col, (col - 1) * 40, 40)).ToList(),
+            null,
+            []);
+        var printArea = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 40, 5));
+
+        var layout = PageBreakPreviewLayoutPlanner.Calculate(
+            viewport,
+            printArea,
+            rowPageBreaks: null,
+            columnPageBreaks: null,
+            WorksheetPageOrder.DownThenOver,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            actualWidth: 230,
+            actualHeight: 238);
+
+        var page = layout.Pages.Should().ContainSingle().Which;
+        page.Bounds.Top.Should().Be(18);
+        page.Bounds.Bottom.Should().Be(238);
+        page.VisibleEdges.Top.Should().BeFalse();
+        page.VisibleEdges.Bottom.Should().BeFalse();
+        page.VisibleEdges.Left.Should().BeTrue();
+        page.VisibleEdges.Right.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Calculate_MarksPageLayoutBoundaryEdgesOnlyWhenDocumentRowsAreVisible()
+    {
+        var sheetId = SheetId.New();
+        var printArea = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 40, 5));
+
+        var topViewport = CreatePageLayoutViewport(firstRow: 1, rowCount: 12);
+        var topPage = CalculateSinglePage(topViewport, printArea);
+        topPage.VisibleEdges.Top.Should().BeTrue();
+        topPage.VisibleEdges.Bottom.Should().BeFalse();
+
+        var bottomViewport = CreatePageLayoutViewport(firstRow: 30, rowCount: 11);
+        var bottomPage = CalculateSinglePage(bottomViewport, printArea);
+        bottomPage.VisibleEdges.Top.Should().BeFalse();
+        bottomPage.VisibleEdges.Bottom.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Calculate_ReturnsEmptyLayoutWhenPrintAreaIsNull()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0)],
+            [new ColMetric(1, 40, 0)],
+            null,
+            []);
+
+        var layout = PageBreakPreviewLayoutPlanner.Calculate(
+            viewport,
+            printArea: null,
+            rowPageBreaks: null,
+            columnPageBreaks: null,
+            WorksheetPageOrder.DownThenOver,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            actualWidth: 900,
+            actualHeight: 1500);
+
+        _ = sheetId;
+        layout.Pages.Should().BeEmpty();
+        layout.OutsidePrintAreaMasks.Should().BeEmpty();
+        layout.AutomaticBreakLines.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Calculate_PlacesHorizontalBreakLinesBetweenRowPages()
+    {
+        var sheetId = SheetId.New();
+        // 70 rows, A4 narrow margins -> automatic horizontal break(s) inside the visible region.
+        var viewport = new ViewportModel(
+            [],
+            Enumerable.Range(1, 70).Select(row => new RowMetric((uint)row, 20, (row - 1) * 20.0)).ToList(),
+            Enumerable.Range(1, 5).Select(col => new ColMetric((uint)col, 40, (col - 1) * 40.0)).ToList(),
+            null,
+            []);
+        var previewRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 70, 5));
+
+        var layout = PageBreakPreviewLayoutPlanner.Calculate(
+            viewport,
+            previewRange,
+            rowPageBreaks: null,
+            columnPageBreaks: null,
+            WorksheetPageOrder.DownThenOver,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            actualWidth: 400,
+            actualHeight: 2000);
+
+        layout.AutomaticBreakLines.Should().NotBeEmpty();
+        layout.AutomaticBreakLines.Should().OnlyContain(line =>
+            Math.Abs(line.Start.Y - line.End.Y) < 0.0001 && line.End.X > line.Start.X);
+    }
+
+    [Fact]
+    public void CalculateWatermarkFontSize_ClampsToLegibleRange()
+    {
+        PageBreakPreviewLayoutPlanner.CalculateWatermarkFontSize(new LayoutRect(0, 0, 50, 50))
+            .Should().Be(24.0);
+        PageBreakPreviewLayoutPlanner.CalculateWatermarkFontSize(new LayoutRect(0, 0, 2000, 2000))
+            .Should().Be(96.0);
+        PageBreakPreviewLayoutPlanner.CalculateWatermarkFontSize(new LayoutRect(0, 0, 400, 300))
+            .Should().Be(54.0);
+    }
+
+    private static ViewportModel CreatePageLayoutViewport(int firstRow, int rowCount) =>
+        new(
+            [],
+            Enumerable.Range(firstRow, rowCount)
+                .Select(row => new RowMetric((uint)row, (row - firstRow) * 20, 20))
+                .ToList(),
+            Enumerable.Range(1, 5)
+                .Select(col => new ColMetric((uint)col, (col - 1) * 40, 40))
+                .ToList(),
+            null,
+            []);
+
+    private static PageBreakPreviewPageLayout CalculateSinglePage(ViewportModel viewport, GridRange printArea) =>
+        PageBreakPreviewLayoutPlanner.Calculate(
+                viewport,
+                printArea,
+                rowPageBreaks: null,
+                columnPageBreaks: null,
+                WorksheetPageOrder.DownThenOver,
+                WorksheetScaleToFit.Default,
+                printTitleRows: null,
+                printTitleColumns: null,
+                WorksheetPaperSize.A4,
+                WorksheetPageOrientation.Portrait,
+                WorksheetPageMargins.Narrow,
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                actualWidth: 230,
+                actualHeight: 238)
+            .Pages
+            .Should()
+            .ContainSingle()
+            .Which;
+}

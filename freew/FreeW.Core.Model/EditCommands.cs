@@ -44,6 +44,48 @@ public sealed class DeleteParagraphCommand(int index) : IDocumentCommand
     }
 }
 
+/// <summary>
+/// Replace the contiguous span of blocks [<paramref name="index"/>, <paramref name="index"/> +
+/// <paramref name="count"/>) with <paramref name="replacement"/>, snapshotting the removed blocks so
+/// undo restores the exact originals at their original position. The building block for edits that
+/// restructure a run of body blocks in one reversible step — reordering paragraphs after a sort, or
+/// swapping a paragraph span for a table (and vice versa) in the text/table converters. The span is
+/// clamped to the body so a stale index can never throw.
+/// </summary>
+public sealed class ReplaceBlocksCommand(int index, int count, IReadOnlyList<Block> replacement) : IDocumentCommand
+{
+    private Block[]? _removed;
+    private int _appliedAt = -1;
+
+    public string Label => "Edit";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var blocks = context.Document.Blocks;
+        var at = Math.Clamp(index, 0, blocks.Count);
+        var take = Math.Clamp(count, 0, blocks.Count - at);
+
+        _appliedAt = at;
+        _removed = new Block[take];
+        for (var i = 0; i < take; i++)
+            _removed[i] = blocks[at + i];
+
+        blocks.RemoveRange(at, take);
+        blocks.InsertRange(at, replacement);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_removed is null || _appliedAt < 0)
+            return;
+        var blocks = context.Document.Blocks;
+        blocks.RemoveRange(_appliedAt, replacement.Count);
+        blocks.InsertRange(_appliedAt, _removed);
+        _removed = null;
+        _appliedAt = -1;
+    }
+}
+
 /// <summary>Replace a paragraph's formatting, snapshotting the previous value for undo.</summary>
 public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting formatting) : IDocumentCommand
 {
@@ -287,6 +329,197 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
             cells.Insert(at, cell);
         }
         _removed = null;
+    }
+}
+
+/// <summary>
+/// Merge a contiguous horizontal run of cells in one row of the table at <paramref name="blockIndex"/>.
+/// The cells <c>[firstColumn, lastColumn]</c> of row <paramref name="rowIndex"/> collapse into the
+/// left-most cell: its <see cref="TableCell.GridSpan"/> grows to cover the run (summing the merged
+/// cells' spans) and the absorbed cells are dropped from the row. The full original row is snapshotted
+/// so undo restores it exactly (cells, spans, and content). No-op if the run is empty or out of range.
+/// </summary>
+public sealed class MergeCellsHorizontalCommand(int blockIndex, int rowIndex, int firstColumn, int lastColumn) : IDocumentCommand
+{
+    private TableCell[]? _removedRow;
+    private int _survivorColumn = -1;
+    private int _survivorSpan = 1;
+
+    public string Label => "Merge Cells";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        var cells = table.Rows[rowIndex].Cells;
+        var first = Math.Clamp(Math.Min(firstColumn, lastColumn), 0, cells.Count - 1);
+        var last = Math.Clamp(Math.Max(firstColumn, lastColumn), 0, cells.Count - 1);
+        if (first >= last)
+            return;
+
+        // Snapshot the row layout and the survivor's original span so undo restores both (the survivor
+        // is one of the snapshotted cell instances, so its span must be remembered separately).
+        _removedRow = [.. cells];
+        _survivorColumn = first;
+        var survivor = cells[first];
+        _survivorSpan = survivor.GridSpan;
+
+        var totalSpan = 0;
+        for (var c = first; c <= last; c++)
+            totalSpan += Math.Max(1, cells[c].GridSpan);
+        survivor.GridSpan = totalSpan;
+
+        for (var c = last; c > first; c--)
+            cells.RemoveAt(c);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_removedRow is null)
+            return;
+        var cells = InsertTableRowCommand.TableAt(context, blockIndex).Rows[rowIndex].Cells;
+        if (_survivorColumn >= 0 && _survivorColumn < _removedRow.Length)
+            _removedRow[_survivorColumn].GridSpan = _survivorSpan;
+        cells.Clear();
+        cells.AddRange(_removedRow);
+        _removedRow = null;
+        _survivorColumn = -1;
+    }
+}
+
+/// <summary>
+/// Merge a contiguous vertical run of cells in one column of the table at <paramref name="blockIndex"/>.
+/// The cell at <c>(firstRow, columnIndex)</c> becomes the merge head
+/// (<see cref="VerticalMergeState.Restart"/>) and the cells directly below it down to
+/// <paramref name="lastRow"/> become <see cref="VerticalMergeState.Continue"/>. The previous merge
+/// states of every touched cell are snapshotted so undo restores them. No-op if the run is empty or
+/// out of range.
+/// </summary>
+public sealed class MergeCellsVerticalCommand(int blockIndex, int columnIndex, int firstRow, int lastRow) : IDocumentCommand
+{
+    private (int Row, VerticalMergeState State)[]? _previous;
+
+    public string Label => "Merge Cells";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        var first = Math.Min(firstRow, lastRow);
+        var last = Math.Max(firstRow, lastRow);
+        if (first < 0 || last >= table.Rows.Count || first >= last)
+            return;
+
+        var snapshot = new List<(int, VerticalMergeState)>();
+        for (var r = first; r <= last; r++)
+        {
+            var cells = table.Rows[r].Cells;
+            if (columnIndex < 0 || columnIndex >= cells.Count)
+                return;
+            snapshot.Add((r, cells[columnIndex].VerticalMerge));
+        }
+
+        _previous = [.. snapshot];
+        table.Rows[first].Cells[columnIndex].VerticalMerge = VerticalMergeState.Restart;
+        for (var r = first + 1; r <= last; r++)
+            table.Rows[r].Cells[columnIndex].VerticalMerge = VerticalMergeState.Continue;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null)
+            return;
+        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        foreach (var (row, state) in _previous)
+        {
+            if (row < table.Rows.Count && columnIndex < table.Rows[row].Cells.Count)
+                table.Rows[row].Cells[columnIndex].VerticalMerge = state;
+        }
+        _previous = null;
+    }
+}
+
+/// <summary>
+/// Split a previously merged cell at <c>(rowIndex, columnIndex)</c> in the table at
+/// <paramref name="blockIndex"/> back into single cells. A horizontal merge (GridSpan &gt; 1) is undone
+/// by resetting the cell's span to 1 and re-adding the dropped empty cells to its right. A vertical
+/// merge head (<see cref="VerticalMergeState.Restart"/>) is undone by clearing its merge state and the
+/// <see cref="VerticalMergeState.Continue"/> cells below it in the same grid column. The prior state is
+/// snapshotted so undo re-merges. No-op if the cell is not merged.
+/// </summary>
+public sealed class SplitCellCommand(int blockIndex, int rowIndex, int columnIndex) : IDocumentCommand
+{
+    private int _restoredSpan = 1;
+    private int _splitColumn = -1;
+    private (int Row, int Column, VerticalMergeState State)[]? _verticalPrevious;
+    private bool _appliedHorizontal;
+
+    public string Label => "Split Cell";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        var cells = table.Rows[rowIndex].Cells;
+        if (columnIndex < 0 || columnIndex >= cells.Count)
+            return;
+        var cell = cells[columnIndex];
+
+        // Horizontal split: collapse GridSpan back to 1, re-adding the absorbed empty cells.
+        if (cell.GridSpan > 1)
+        {
+            _restoredSpan = cell.GridSpan;
+            _splitColumn = columnIndex;
+            cell.GridSpan = 1;
+            for (var i = 1; i < _restoredSpan; i++)
+                cells.Insert(columnIndex + i, new TableCell(string.Empty));
+            _appliedHorizontal = true;
+        }
+
+        // Vertical split: clear the restart head and the continue cells beneath it in the same column.
+        if (cell.VerticalMerge == VerticalMergeState.Restart)
+        {
+            var snapshot = new List<(int, int, VerticalMergeState)> { (rowIndex, columnIndex, VerticalMergeState.Restart) };
+            cell.VerticalMerge = VerticalMergeState.None;
+            for (var r = rowIndex + 1; r < table.Rows.Count; r++)
+            {
+                var below = table.Rows[r].Cells;
+                if (columnIndex >= below.Count || below[columnIndex].VerticalMerge != VerticalMergeState.Continue)
+                    break;
+                snapshot.Add((r, columnIndex, VerticalMergeState.Continue));
+                below[columnIndex].VerticalMerge = VerticalMergeState.None;
+            }
+            _verticalPrevious = [.. snapshot];
+        }
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+
+        if (_appliedHorizontal && _splitColumn >= 0 && rowIndex < table.Rows.Count)
+        {
+            var cells = table.Rows[rowIndex].Cells;
+            for (var i = _restoredSpan - 1; i >= 1; i--)
+            {
+                if (_splitColumn + i < cells.Count)
+                    cells.RemoveAt(_splitColumn + i);
+            }
+            if (_splitColumn < cells.Count)
+                cells[_splitColumn].GridSpan = _restoredSpan;
+            _appliedHorizontal = false;
+        }
+
+        if (_verticalPrevious is not null)
+        {
+            foreach (var (row, column, state) in _verticalPrevious)
+            {
+                if (row < table.Rows.Count && column < table.Rows[row].Cells.Count)
+                    table.Rows[row].Cells[column].VerticalMerge = state;
+            }
+            _verticalPrevious = null;
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Compression;
+using System.Xml.Linq;
 
 namespace FreeW.Core.IO.Tests;
 
@@ -11,6 +12,17 @@ public class DocxRoundTripTests
         DocxWriter.Write(document, stream);
         stream.Position = 0;
         return DocxReader.Read(stream);
+    }
+
+    /// <summary>Writes the document and parses word/document.xml as an XDocument for structural assertions.</summary>
+    private static XDocument WriteDocumentXml(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/document.xml")!.Open();
+        return XDocument.Load(entry);
     }
 
     [Fact]
@@ -46,6 +58,37 @@ public class DocxRoundTripTests
         });
         result.Styles["Heading2"].Name.Should().Be("Heading 2");
         result.Styles["Subtitle"].Run.Italic.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CustomStyle_CreatedViaStyleManager_RoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+
+        // A custom style created through the pure StyleManager ops round-trips via the existing
+        // styles.xml writer (no docx I/O changes needed) and the paragraph keeps its StyleId.
+        var custom = StyleManager.CreateStyle(
+            doc, "My Callout", basedOnId: "Normal",
+            new RunFormatting { Bold = true, Italic = true, FontSizePt = 13, ColorHex = "#C00000" },
+            new ParagraphFormatting { Alignment = TextAlignment.Center, SpaceBeforePt = 6 });
+
+        doc.Blocks.Add(new Paragraph("Styled body") { StyleId = custom.Id });
+
+        var result = RoundTrip(doc);
+
+        // The custom style survives in the catalog (styles.xml) with its name, based-on chain and run
+        // (character) formatting — the same properties the existing styles writer persists for built-ins.
+        result.Styles.Should().ContainKey(custom.Id);
+        var read = result.Styles[custom.Id];
+        read.Name.Should().Be("My Callout");
+        read.BasedOnStyleId.Should().Be("Normal");
+        read.Run.Bold.Should().BeTrue();
+        read.Run.Italic.Should().BeTrue();
+        read.Run.FontSizePt.Should().Be(13);
+        read.Run.ColorHex.Should().Be("#C00000");
+
+        // The paragraph still references the custom style id after the round-trip.
+        result.Paragraphs.Should().ContainSingle(p => p.StyleId == custom.Id);
     }
 
     [Fact]
@@ -218,6 +261,76 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void TabStops_RoundTrip_WithEachLeaderKind()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("leaders")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops =
+                [
+                    new TabStop(36, TabStopAlignment.Left, TabLeader.Dots),
+                    new TabStop(108, TabStopAlignment.Center, TabLeader.Dashes),
+                    new TabStop(216, TabStopAlignment.Right, TabLeader.Underline),
+                    new TabStop(324, TabStopAlignment.Decimal, TabLeader.None)
+                ]
+            }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        // TabStop is a record, so structural equality covers position + alignment + leader together.
+        formatting.TabStops.Should().Equal(
+            new TabStop(36, TabStopAlignment.Left, TabLeader.Dots),
+            new TabStop(108, TabStopAlignment.Center, TabLeader.Dashes),
+            new TabStop(216, TabStopAlignment.Right, TabLeader.Underline),
+            new TabStop(324, TabStopAlignment.Decimal, TabLeader.None));
+    }
+
+    [Fact]
+    public void TabStops_WithoutLeader_DefaultToNone()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain stop")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops = [new TabStop(180, TabStopAlignment.Right)]
+            }
+        });
+
+        var stop = RoundTrip(doc).Paragraphs.First().Formatting.TabStops.Single();
+
+        stop.Leader.Should().Be(TabLeader.None);
+    }
+
+    [Fact]
+    public void TabStopLeader_EmitsWLeaderAttribute_OnlyWhenSet()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("leaders")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops =
+                [
+                    new TabStop(36, TabStopAlignment.Left, TabLeader.Dots),
+                    new TabStop(108, TabStopAlignment.Left, TabLeader.None)
+                ]
+            }
+        });
+
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var tabs = WriteDocumentXml(doc).Descendants(ns + "tab").ToList();
+
+        tabs.Should().HaveCount(2);
+        tabs[0].Attribute(ns + "leader")!.Value.Should().Be("dot");
+        // A None leader writes no w:leader attribute, so leaderless stops stay byte-identical to before.
+        tabs[1].Attribute(ns + "leader").Should().BeNull();
+    }
+
+    [Fact]
     public void ParagraphBorder_RoundTrips()
     {
         var doc = new TextDocument();
@@ -261,6 +374,84 @@ public class DocxRoundTripTests
 
         page.PageBorder.Should().BeNull();
         page.Watermark.Should().BeNull();
+    }
+
+    [Fact]
+    public void LineNumbers_Continuous_RoundTripsModeAndCountBy()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("numbered lines"));
+        doc.Page.LineNumberMode = LineNumberMode.Continuous;
+        doc.Page.LineNumberCountBy = 5;
+
+        var page = RoundTrip(doc).Page;
+
+        page.LineNumberMode.Should().Be(LineNumberMode.Continuous);
+        page.LineNumberCountBy.Should().Be(5);
+    }
+
+    [Fact]
+    public void LineNumbers_RestartEachPage_RoundTripsModeAndCountBy()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("numbered lines"));
+        doc.Page.LineNumberMode = LineNumberMode.RestartEachPage;
+        doc.Page.LineNumberCountBy = 2;
+
+        var page = RoundTrip(doc).Page;
+
+        page.LineNumberMode.Should().Be(LineNumberMode.RestartEachPage);
+        page.LineNumberCountBy.Should().Be(2);
+    }
+
+    [Fact]
+    public void DefaultPage_HasNoLineNumbering()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        var page = RoundTrip(doc).Page;
+
+        page.LineNumberMode.Should().Be(LineNumberMode.None);
+        page.LineNumberCountBy.Should().Be(1);
+    }
+
+    [Fact]
+    public void DefaultPage_EmitsNoLnNumTypeElement()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = reader.ReadToEnd();
+
+        documentXml.Should().NotContain("lnNumType");
+    }
+
+    [Fact]
+    public void LineNumbers_EmitsLnNumTypeInSectPr()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Two-line counted body."));
+        doc.Page.LineNumberMode = LineNumberMode.RestartEachPage;
+        doc.Page.LineNumberCountBy = 3;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = reader.ReadToEnd();
+
+        documentXml.Should().Contain("w:lnNumType");
+        documentXml.Should().Contain("w:countBy=\"3\"");
+        documentXml.Should().Contain("w:restart=\"newPage\"");
     }
 
     [Fact]
@@ -329,6 +520,55 @@ public class DocxRoundTripTests
         doc.Blocks.Add(new Paragraph("plain"));
 
         RoundTrip(doc).Paragraphs.First().Formatting.PageBreakBefore.Should().BeFalse();
+    }
+
+    [Fact]
+    public void KeepWithNext_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("keep with next")
+        {
+            Formatting = ParagraphFormatting.Default with { KeepWithNext = true }
+        });
+
+        RoundTrip(doc).Paragraphs.First().Formatting.KeepWithNext.Should().BeTrue();
+    }
+
+    [Fact]
+    public void KeepLinesTogether_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("keep lines together")
+        {
+            Formatting = ParagraphFormatting.Default with { KeepLinesTogether = true }
+        });
+
+        RoundTrip(doc).Paragraphs.First().Formatting.KeepLinesTogether.Should().BeTrue();
+    }
+
+    [Fact]
+    public void WidowControl_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("widow control")
+        {
+            Formatting = ParagraphFormatting.Default with { WidowControl = true }
+        });
+
+        RoundTrip(doc).Paragraphs.First().Formatting.WidowControl.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlainParagraph_HasNoFlowControl()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain"));
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.KeepWithNext.Should().BeFalse();
+        formatting.KeepLinesTogether.Should().BeFalse();
+        formatting.WidowControl.Should().BeFalse();
     }
 
     [Fact]
@@ -458,6 +698,133 @@ public class DocxRoundTripTests
         var readTable = result.Blocks.OfType<Table>().Single();
         readTable.Formatting.Borders.Should().BeFalse();
         readTable.Rows[0].Cells[0].PlainText.Should().Be("x");
+    }
+
+    [Fact]
+    public void Table_HorizontalMerge_GridSpanRoundTrips()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(1, 3);
+        // Merge the first two cells of the row: the survivor spans two grid columns, the absorbed cell
+        // is dropped (mirroring DocumentView.MergeSelectedCells).
+        table.Rows[0].Cells[0] = new TableCell("merged") { GridSpan = 2 };
+        table.Rows[0].Cells.RemoveAt(1);
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.Rows[0].Cells.Should().HaveCount(2);
+        readTable.Rows[0].Cells[0].PlainText.Should().Be("merged");
+        readTable.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        readTable.Rows[0].Cells[1].GridSpan.Should().Be(1);
+    }
+
+    [Fact]
+    public void Table_VerticalMerge_VMergeRoundTrips()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(2, 2);
+        // Merge the left column down a row: top cell restarts, the one below continues.
+        table.Rows[0].Cells[0] = new TableCell("top") { VerticalMerge = VerticalMergeState.Restart };
+        table.Rows[1].Cells[0] = new TableCell(string.Empty) { VerticalMerge = VerticalMergeState.Continue };
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+        readTable.Rows[0].Cells[0].PlainText.Should().Be("top");
+        readTable.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+        // The other column is untouched.
+        readTable.Rows[0].Cells[1].VerticalMerge.Should().Be(VerticalMergeState.None);
+        readTable.Rows[1].Cells[1].VerticalMerge.Should().Be(VerticalMergeState.None);
+    }
+
+    [Fact]
+    public void Table_PlainCells_HaveDefaultSpansAfterRoundTrip()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(2, 2);
+        table.Rows[0].Cells[0] = new TableCell("a");
+        table.Rows[0].Cells[1] = new TableCell("b");
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.Rows.SelectMany(r => r.Cells)
+            .Should().OnlyContain(c => c.GridSpan == 1 && c.VerticalMerge == VerticalMergeState.None);
+    }
+
+    [Fact]
+    public void Table_StyleToggles_RoundTrip()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(3, 2);
+        table.Rows[0].Cells[0] = new TableCell("H1");
+        table.Rows[0].Cells[1] = new TableCell("H2");
+        table.Rows[1].Cells[0] = new TableCell("a1");
+        table.Rows[1].Cells[1] = new TableCell("a2");
+        table.Rows[2].Cells[0] = new TableCell("b1");
+        table.Rows[2].Cells[1] = new TableCell("b2");
+        table.Formatting = TableFormatting.Default with
+        {
+            HeaderRow = true,
+            BandedRows = true,
+            RepeatHeaderRow = true
+        };
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.Formatting.HeaderRow.Should().BeTrue();
+        readTable.Formatting.BandedRows.Should().BeTrue();
+        readTable.Formatting.RepeatHeaderRow.Should().BeTrue();
+
+        // The style fills (header + banded) are style-derived, not explicit per-cell shading, so they
+        // must not read back as ShadingColorHex on any cell.
+        readTable.Rows.SelectMany(r => r.Cells)
+            .Should().OnlyContain(c => c.ShadingColorHex == null);
+        readTable.Rows[0].Cells.Select(c => c.PlainText).Should().Equal("H1", "H2");
+        readTable.Rows[2].Cells.Select(c => c.PlainText).Should().Equal("b1", "b2");
+    }
+
+    [Fact]
+    public void Table_HeaderRow_EmitsBoldShadedTblHeader()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(2, 1);
+        table.Rows[0].Cells[0] = new TableCell("Head");
+        table.Rows[1].Cells[0] = new TableCell("Body");
+        table.Formatting = TableFormatting.Default with { HeaderRow = true, RepeatHeaderRow = true };
+        doc.Blocks.Add(table);
+
+        var xml = WriteDocumentXml(doc);
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var tbl = xml.Descendants(ns + "tbl").Single();
+
+        // tblLook persists the HeaderRow flag, the first row carries tblHeader (repeat), and its cell is
+        // shaded with the header fill and contains a bold run.
+        tbl.Element(ns + "tblPr")!.Element(ns + "tblLook")!.Attribute(ns + "firstRow")!.Value.Should().Be("1");
+        var firstRow = tbl.Elements(ns + "tr").First();
+        firstRow.Element(ns + "trPr")!.Element(ns + "tblHeader").Should().NotBeNull();
+        firstRow.Descendants(ns + "shd").First().Attribute(ns + "fill")!.Value.Should().Be("D9E2F3");
+        firstRow.Descendants(ns + "b").Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void Table_PlainTable_StyleTogglesAllFalse()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(2, 2);
+        doc.Blocks.Add(table);
+
+        var readTable = RoundTrip(doc).Blocks.OfType<Table>().Single();
+        readTable.Formatting.HeaderRow.Should().BeFalse();
+        readTable.Formatting.BandedRows.Should().BeFalse();
+        readTable.Formatting.RepeatHeaderRow.Should().BeFalse();
     }
 
     [Fact]
@@ -766,6 +1133,91 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Hyperlink_RoundTrips_WithTooltip()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("see "));
+        paragraph.Runs.Add(new Run("the docs")
+        {
+            HyperlinkUrl = "https://example.com/docs",
+            HyperlinkTooltip = "Open the documentation"
+        });
+        paragraph.Runs.Add(new Run(" now"));
+        doc.Blocks.Add(paragraph);
+
+        var runs = RoundTrip(doc).Paragraphs.First().Runs;
+
+        runs.Select(r => r.Text).Should().Equal("see ", "the docs", " now");
+        var linked = runs.Single(r => r.Text == "the docs");
+        linked.HyperlinkUrl.Should().Be("https://example.com/docs");
+        linked.HyperlinkTooltip.Should().Be("Open the documentation");
+        runs[0].HyperlinkTooltip.Should().BeNull();
+        runs[2].HyperlinkTooltip.Should().BeNull();
+    }
+
+    [Fact]
+    public void Hyperlink_WithTooltip_WritesTooltipAttribute()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("link")
+        {
+            HyperlinkUrl = "https://example.com/page",
+            HyperlinkTooltip = "Tip text"
+        });
+        doc.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var xml = docReader.ReadToEnd();
+        xml.Should().Contain("tooltip=\"Tip text\"");
+    }
+
+    [Fact]
+    public void Hyperlink_WithoutTooltip_OmitsTooltipAttribute()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("link") { HyperlinkUrl = "https://example.com/page" });
+        doc.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        docReader.ReadToEnd().Should().NotContain("tooltip");
+    }
+
+    [Fact]
+    public void InternalLink_RoundTrips_WithTooltip()
+    {
+        var doc = new TextDocument();
+        var linking = new Paragraph();
+        linking.Runs.Add(new Run("jump to "));
+        linking.Runs.Add(new Run("Section 1")
+        {
+            HyperlinkAnchor = "Section1",
+            HyperlinkTooltip = "Go to section one"
+        });
+        doc.Blocks.Add(linking);
+        doc.Blocks.Add(new Paragraph("the target") { BookmarkName = "Section1" });
+
+        var runs = RoundTrip(doc).Paragraphs.First().Runs;
+
+        var linked = runs.Single(r => r.Text == "Section 1");
+        linked.HyperlinkAnchor.Should().Be("Section1");
+        linked.HyperlinkUrl.Should().BeNull();
+        linked.HyperlinkTooltip.Should().Be("Go to section one");
+    }
+
+    [Fact]
     public void BulletList_RoundTrips_ListKindAndLevel()
     {
         var doc = new TextDocument();
@@ -793,6 +1245,74 @@ public class DocxRoundTripTests
 
         formatting.ListKind.Should().Be(ListKind.Number);
         formatting.ListLevel.Should().Be(2);
+    }
+
+    [Fact]
+    public void MultiLevelList_RoundTrips_ListKindAndLevel()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("outline item")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel, ListLevel = 2 }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        formatting.ListLevel.Should().Be(2);
+    }
+
+    [Fact]
+    public void MultiLevelList_DoesNotChangeBulletOrDecimalRoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("bullet")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet, ListLevel = 0 }
+        });
+        doc.Blocks.Add(new Paragraph("decimal")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number, ListLevel = 1 }
+        });
+        doc.Blocks.Add(new Paragraph("outline")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel, ListLevel = 1 }
+        });
+
+        var paragraphs = RoundTrip(doc).Paragraphs.ToList();
+
+        paragraphs[0].Formatting.ListKind.Should().Be(ListKind.Bullet);
+        paragraphs[1].Formatting.ListKind.Should().Be(ListKind.Number);
+        paragraphs[2].Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        paragraphs[2].Formatting.ListLevel.Should().Be(1);
+    }
+
+    [Fact]
+    public void MultiLevelList_WritesOutlineAbstractDefinition()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("outline item")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel }
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var numReader = new StreamReader(zip.GetEntry("word/numbering.xml")!.Open());
+        var numbering = numReader.ReadToEnd();
+
+        // The outline abstract num is tagged multilevel and accumulates ancestor counters in its
+        // level text: %1. / %1.%2. / %1.%2.%3. , and the multilevel list maps to numId 3.
+        numbering.Should().Contain("multiLevelType");
+        numbering.Should().Contain("multilevel");
+        numbering.Should().Contain("%1.%2.");
+        numbering.Should().Contain("%1.%2.%3.");
+
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        docReader.ReadToEnd().Should().Contain("w:val=\"3\"");
     }
 
     [Fact]
@@ -883,6 +1403,105 @@ public class DocxRoundTripTests
         runs[0].Text.Should().Be("Page ");
         runs[0].FieldKind.Should().Be(RunFieldKind.None);
         runs[1].FieldKind.Should().Be(RunFieldKind.PageNumber);
+    }
+
+    [Theory]
+    [InlineData(RunFieldKind.Date, "6/17/2026")]
+    [InlineData(RunFieldKind.Time, "9:41 AM")]
+    [InlineData(RunFieldKind.FileName, "Report.docx")]
+    [InlineData(RunFieldKind.Author, "Ada Lovelace")]
+    [InlineData(RunFieldKind.NumPages, "12")]
+    public void DocumentField_RoundTrips_KindAndCachedText(RunFieldKind kind, string cached)
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Value: "));
+        paragraph.Runs.Add(new Run(cached) { FieldKind = kind });
+        doc.Blocks.Add(paragraph);
+
+        var result = RoundTrip(doc);
+
+        var runs = result.Paragraphs.Single().Runs;
+        runs[0].Text.Should().Be("Value: ");
+        runs[0].FieldKind.Should().Be(RunFieldKind.None);
+        runs[1].FieldKind.Should().Be(kind);
+        runs[1].Text.Should().Be(cached);
+    }
+
+    [Fact]
+    public void DocumentField_Factories_RoundTrip()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.DateField("6/17/2026"));
+        paragraph.Runs.Add(Run.TimeField("9:41 AM"));
+        paragraph.Runs.Add(Run.FileNameField("Report.docx"));
+        paragraph.Runs.Add(Run.AuthorField("Ada Lovelace"));
+        paragraph.Runs.Add(Run.NumPagesField("12"));
+        paragraph.Runs.Add(Run.PageNumberField());
+        doc.Blocks.Add(paragraph);
+
+        var runs = RoundTrip(doc).Paragraphs.Single().Runs;
+
+        runs.Select(r => r.FieldKind).Should().Equal(
+            RunFieldKind.Date, RunFieldKind.Time, RunFieldKind.FileName,
+            RunFieldKind.Author, RunFieldKind.NumPages, RunFieldKind.PageNumber);
+        runs[0].Text.Should().Be("6/17/2026");
+        runs[1].Text.Should().Be("9:41 AM");
+        runs[2].Text.Should().Be("Report.docx");
+        runs[3].Text.Should().Be("Ada Lovelace");
+        runs[4].Text.Should().Be("12");
+        // PAGE keeps its historic "1" fallback.
+        runs[5].Text.Should().Be("1");
+    }
+
+    [Fact]
+    public void DocumentField_DateWithFormatSwitch_MapsByLeadingKeyword()
+    {
+        // A DATE field with a Word formatting switch in its instruction must still map back to Date.
+        using var stream = new MemoryStream();
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        // Rewrite the document part, injecting a fldSimple with a switch, to exercise the reader path.
+        var rewritten = InjectFieldInstruction(stream, " DATE \\@ \"d MMMM yyyy\" ", "17 June 2026");
+        rewritten.Position = 0;
+        var result = DocxReader.Read(rewritten);
+
+        var fieldRun = result.Paragraphs.SelectMany(p => p.Runs)
+            .Single(r => r.FieldKind != RunFieldKind.None);
+        fieldRun.FieldKind.Should().Be(RunFieldKind.Date);
+        fieldRun.Text.Should().Be("17 June 2026");
+    }
+
+    // Helper: rebuilds the docx in-memory, appending a paragraph carrying a w:fldSimple with the given
+    // instruction + cached text, so a reader-only path (instruction switches) can be exercised.
+    private static MemoryStream InjectFieldInstruction(Stream source, string instruction, string cached)
+    {
+        var output = new MemoryStream();
+        source.CopyTo(output);
+        output.Position = 0;
+        using (var archive = new ZipArchive(output, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = archive.GetEntry("word/document.xml")!;
+            string xml;
+            using (var reader = new StreamReader(entry.Open()))
+                xml = reader.ReadToEnd();
+
+            const string w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+            var field = $"<w:p xmlns:w=\"{w}\"><w:fldSimple w:instr=\"{System.Security.SecurityElement.Escape(instruction)}\">" +
+                        $"<w:r><w:t>{System.Security.SecurityElement.Escape(cached)}</w:t></w:r></w:fldSimple></w:p>";
+            xml = xml.Replace("</w:body>", field + "</w:body>");
+
+            entry.Delete();
+            var fresh = archive.CreateEntry("word/document.xml");
+            using var writer = new StreamWriter(fresh.Open());
+            writer.Write(xml);
+        }
+        output.Position = 0;
+        return output;
     }
 
     [Fact]
@@ -1061,6 +1680,105 @@ public class DocxRoundTripTests
         zip.GetEntry("word/footnotes.xml").Should().BeNull();
 
         DocxReader.Read(new MemoryStream(stream.ToArray())).Footnotes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Endnote_Reference_And_Content_RoundTrip()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("See note"));
+        body.Runs.Add(Run.EndnoteReference(1));
+        doc.Blocks.Add(body);
+        doc.Endnotes[1] = new Endnote(1, "The endnote text.");
+
+        var result = RoundTrip(doc);
+
+        // The body reference run keeps its id and renders as a superscript marker.
+        var reference = result.Paragraphs.First().Runs.Single(r => r.EndnoteId is not null);
+        reference.EndnoteId.Should().Be(1);
+        reference.Formatting.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+
+        // The endnote content is recovered intact.
+        result.Endnotes.Should().ContainKey(1);
+        result.Endnotes[1].PlainText.Should().Be("The endnote text.");
+    }
+
+    [Fact]
+    public void Endnotes_Package_HasPartContentTypeAndRelationship()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Body"));
+        body.Runs.Add(Run.EndnoteReference(1));
+        doc.Blocks.Add(body);
+        doc.Endnotes[1] = new Endnote(1, "An endnote.");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/endnotes.xml").Should().NotBeNull();
+
+        using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+        var contentTypes = ctReader.ReadToEnd();
+        contentTypes.Should().Contain("/word/endnotes.xml");
+        contentTypes.Should().Contain("wordprocessingml.endnotes+xml");
+
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        var rels = relsReader.ReadToEnd();
+        rels.Should().Contain("relationships/endnotes");
+        rels.Should().Contain("endnotes.xml");
+
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = docReader.ReadToEnd();
+        documentXml.Should().Contain("endnoteReference");
+
+        using var endnotesReader = new StreamReader(zip.GetEntry("word/endnotes.xml")!.Open());
+        var endnotesXml = endnotesReader.ReadToEnd();
+        endnotesXml.Should().Contain("An endnote.");
+        endnotesXml.Should().Contain("w:id=\"1\"");
+    }
+
+    [Fact]
+    public void NoEndnotes_DoesNotEmitPart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/endnotes.xml").Should().BeNull();
+
+        DocxReader.Read(new MemoryStream(stream.ToArray())).Endnotes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Footnotes_And_Endnotes_CoexistAndRoundTrip()
+    {
+        var doc = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("Text"));
+        body.Runs.Add(Run.FootnoteReference(1));
+        body.Runs.Add(Run.EndnoteReference(1));
+        doc.Blocks.Add(body);
+        doc.Footnotes[1] = new Footnote(1, "A footnote.");
+        doc.Endnotes[1] = new Endnote(1, "An endnote.");
+
+        var result = RoundTrip(doc);
+
+        result.Footnotes.Should().ContainKey(1);
+        result.Footnotes[1].PlainText.Should().Be("A footnote.");
+        result.Endnotes.Should().ContainKey(1);
+        result.Endnotes[1].PlainText.Should().Be("An endnote.");
+
+        var runs = result.Paragraphs.First().Runs;
+        runs.Should().ContainSingle(r => r.FootnoteId == 1);
+        runs.Should().ContainSingle(r => r.EndnoteId == 1);
     }
 
     [Fact]
@@ -1401,5 +2119,235 @@ public class DocxRoundTripTests
         using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
         var documentXml = docReader.ReadToEnd();
         documentXml.Should().NotContain("<w:sdt");
+    }
+
+    [Theory]
+    [InlineData(ProtectionMode.ReadOnly, "readOnly")]
+    [InlineData(ProtectionMode.CommentsOnly, "comments")]
+    [InlineData(ProtectionMode.TrackChangesOnly, "trackedChanges")]
+    public void DocumentProtection_RoundTrips_EachMode(ProtectionMode mode, string expectedEdit)
+    {
+        var doc = new TextDocument { Protection = new ProtectionSettings(mode) };
+        doc.Blocks.Add(new Paragraph("Protected body"));
+
+        // The written settings part carries the expected w:edit token and enforcement.
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var settingsReader = new StreamReader(zip.GetEntry("word/settings.xml")!.Open());
+            var settingsXml = settingsReader.ReadToEnd();
+            settingsXml.Should().Contain("documentProtection");
+            settingsXml.Should().Contain($"w:edit=\"{expectedEdit}\"");
+            settingsXml.Should().Contain("w:enforcement=\"1\"");
+        }
+
+        // And it reads back to the same protection mode.
+        stream.Position = 0;
+        var result = DocxReader.Read(stream);
+        result.Protection.Mode.Should().Be(mode);
+        result.Protection.IsProtected.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DocumentProtection_Package_HasSettingsPart_ContentType_AndRelationship()
+    {
+        var doc = new TextDocument { Protection = new ProtectionSettings(ProtectionMode.ReadOnly) };
+        doc.Blocks.Add(new Paragraph("Locked"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/settings.xml").Should().NotBeNull();
+
+        using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+        var contentTypes = ctReader.ReadToEnd();
+        contentTypes.Should().Contain("/word/settings.xml");
+        contentTypes.Should().Contain("application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml");
+
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        var rels = relsReader.ReadToEnd();
+        rels.Should().Contain("settings.xml");
+        rels.Should().Contain("http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings");
+    }
+
+    [Fact]
+    public void NoProtection_EmitsNoSettingsPart_AndReadsBackNone()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Unprotected body"));
+        doc.Protection.Mode.Should().Be(ProtectionMode.None); // default
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            // No settings part, content-type override, or relationship is emitted for an unprotected doc.
+            zip.GetEntry("word/settings.xml").Should().BeNull();
+
+            using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+            ctReader.ReadToEnd().Should().NotContain("settings+xml");
+
+            using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+            relsReader.ReadToEnd().Should().NotContain("/relationships/settings");
+        }
+
+        stream.Position = 0;
+        var result = DocxReader.Read(stream);
+        result.Protection.Mode.Should().Be(ProtectionMode.None);
+        result.Protection.IsProtected.Should().BeFalse();
+    }
+
+    // --- Page setup polish: hyphenation (settings.xml), vertical alignment + titlePg (sectPr) ---
+
+    [Fact]
+    public void AutoHyphenation_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hyphenate me"));
+        doc.Page.AutoHyphenation = true;
+
+        var page = RoundTrip(doc).Page;
+
+        page.AutoHyphenation.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AutoHyphenation_EmitsSettingsPart_WithAutoHyphenationToggle()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hyphenate me"));
+        doc.Page.AutoHyphenation = true;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/settings.xml").Should().NotBeNull();
+
+        using var settingsReader = new StreamReader(zip.GetEntry("word/settings.xml")!.Open());
+        settingsReader.ReadToEnd().Should().Contain("autoHyphenation");
+
+        using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+        ctReader.ReadToEnd().Should().Contain("wordprocessingml.settings+xml");
+
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        relsReader.ReadToEnd().Should().Contain("relationships/settings");
+    }
+
+    [Fact]
+    public void DefaultPage_HasNoHyphenation_AndNoSettingsPart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            // Unprotected + no hyphenation => no settings part at all (existing behaviour preserved).
+            zip.GetEntry("word/settings.xml").Should().BeNull();
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).Page.AutoHyphenation.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(PageVerticalAlignment.Top)]
+    [InlineData(PageVerticalAlignment.Center)]
+    [InlineData(PageVerticalAlignment.Justified)]
+    [InlineData(PageVerticalAlignment.Bottom)]
+    public void PageVerticalAlignment_RoundTrips(PageVerticalAlignment alignment)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("vertically aligned"));
+        doc.Page.VerticalAlignment = alignment;
+
+        RoundTrip(doc).Page.VerticalAlignment.Should().Be(alignment);
+    }
+
+    [Fact]
+    public void PageVerticalAlignment_Justified_EmitsVAlignBoth()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("spread me"));
+        doc.Page.VerticalAlignment = PageVerticalAlignment.Justified;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = reader.ReadToEnd();
+
+        documentXml.Should().Contain("w:vAlign");
+        documentXml.Should().Contain("w:val=\"both\"");
+    }
+
+    [Fact]
+    public void DefaultPage_TopAlignment_EmitsNoVAlign()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+        doc.Page.VerticalAlignment.Should().Be(PageVerticalAlignment.Top); // default
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        reader.ReadToEnd().Should().NotContain("vAlign");
+    }
+
+    [Fact]
+    public void DifferentFirstPage_RoundTrips_AndEmitsTitlePg()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("first page differs"));
+        doc.Page.DifferentFirstPage = true;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+            reader.ReadToEnd().Should().Contain("w:titlePg");
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).Page.DifferentFirstPage.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DefaultPage_HasNoTitlePg()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+            reader.ReadToEnd().Should().NotContain("titlePg");
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).Page.DifferentFirstPage.Should().BeFalse();
     }
 }

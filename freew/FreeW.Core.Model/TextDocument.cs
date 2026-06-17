@@ -42,6 +42,14 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public string? HyperlinkAnchor { get; set; }
 
     /// <summary>
+    /// Optional ScreenTip (tooltip) shown when hovering the hyperlink. Applies to either an external
+    /// (<see cref="HyperlinkUrl"/>) or internal (<see cref="HyperlinkAnchor"/>) link. When set it
+    /// serialises as the <c>w:tooltip</c> attribute on the wrapping <c>w:hyperlink</c>. Defaults to
+    /// null so existing hyperlinks (without a ScreenTip) round-trip unchanged.
+    /// </summary>
+    public string? HyperlinkTooltip { get; set; }
+
+    /// <summary>
     /// When set, this run is a simple field rather than literal text — e.g. a PAGE field whose value
     /// is the current page number. The run's <see cref="Text"/> doubles as cached/fallback display
     /// text (the last computed value), so non-field-aware consumers still render something sensible.
@@ -54,6 +62,14 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// is the id. Serialises as a superscript run wrapping a w:footnoteReference w:id="N".
     /// </summary>
     public int? FootnoteId { get; set; }
+
+    /// <summary>
+    /// When set, this run is an endnote reference marker pointing at the endnote with this id in
+    /// <see cref="TextDocument.Endnotes"/>. It carries no literal text of its own; the marker number
+    /// is the id. Serialises as a superscript run wrapping a w:endnoteReference w:id="N". Mirrors
+    /// <see cref="FootnoteId"/> but collected at the document end (word/endnotes.xml).
+    /// </summary>
+    public int? EndnoteId { get; set; }
 
     /// <summary>
     /// When set, this run is covered by the review comment with this id in
@@ -110,6 +126,41 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         new("1", formatting) { FieldKind = RunFieldKind.PageNumber };
 
     /// <summary>
+    /// Creates a DATE field run. <paramref name="cached"/> is the last-computed display text, kept as a
+    /// fallback for field-unaware consumers; the app layer may resolve it to the current date at render.
+    /// </summary>
+    public static Run DateField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.Date };
+
+    /// <summary>
+    /// Creates a TIME field run. <paramref name="cached"/> is the last-computed display text, kept as a
+    /// fallback for field-unaware consumers; the app layer may resolve it to the current time at render.
+    /// </summary>
+    public static Run TimeField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.Time };
+
+    /// <summary>
+    /// Creates a FILENAME field run. <paramref name="cached"/> is the last-computed display text, kept as
+    /// a fallback; the app layer may resolve it to the current document's file name at render.
+    /// </summary>
+    public static Run FileNameField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.FileName };
+
+    /// <summary>
+    /// Creates an AUTHOR field run. <paramref name="cached"/> is the last-computed display text, kept as a
+    /// fallback; the app layer may resolve it from <see cref="DocumentProperties.Author"/> at render.
+    /// </summary>
+    public static Run AuthorField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.Author };
+
+    /// <summary>
+    /// Creates a NUMPAGES field run. <paramref name="cached"/> is the last-computed display text, kept as
+    /// a fallback; the app layer may resolve it to a best-effort page count at render.
+    /// </summary>
+    public static Run NumPagesField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.NumPages };
+
+    /// <summary>
     /// Creates a footnote-reference run for the footnote with id <paramref name="footnoteId"/>. The
     /// run renders as a superscript marker; its <see cref="Text"/> mirrors the id for field-unaware
     /// consumers. The matching content lives in <see cref="TextDocument.Footnotes"/>.
@@ -119,6 +170,18 @@ public sealed class Run(string text, RunFormatting? formatting = null)
             formatting ?? new RunFormatting { VerticalAlign = VerticalAlign.Superscript })
         {
             FootnoteId = footnoteId
+        };
+
+    /// <summary>
+    /// Creates an endnote-reference run for the endnote with id <paramref name="endnoteId"/>. The
+    /// run renders as a superscript marker; its <see cref="Text"/> mirrors the id for field-unaware
+    /// consumers. The matching content lives in <see cref="TextDocument.Endnotes"/>.
+    /// </summary>
+    public static Run EndnoteReference(int endnoteId, RunFormatting? formatting = null) =>
+        new(endnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            formatting ?? new RunFormatting { VerticalAlign = VerticalAlign.Superscript })
+        {
+            EndnoteId = endnoteId
         };
 
     /// <summary>
@@ -195,6 +258,21 @@ public sealed class Footnote(int id)
 }
 
 /// <summary>
+/// A single endnote: an id (matching a body <see cref="Run.EndnoteId"/>) and its block content,
+/// a list of paragraphs. Maps onto a w:endnote element inside word/endnotes.xml. Mirrors
+/// <see cref="Footnote"/> but collected at the document end.
+/// </summary>
+public sealed class Endnote(int id)
+{
+    public int Id { get; } = id;
+    public List<Paragraph> Content { get; } = [];
+
+    public Endnote(int id, string text) : this(id) => Content.Add(new Paragraph(text));
+
+    public string PlainText => string.Join("\n", Content.Select(p => p.PlainText));
+}
+
+/// <summary>
 /// A single review comment: an id (matching the body runs' <see cref="Run.CommentId"/>), an author
 /// and initials, an optional explicit date, and the comment's block content as a list of paragraphs.
 /// Maps onto a w:comment element inside word/comments.xml. The date is an explicit model value (never
@@ -254,13 +332,35 @@ public sealed class Source
 }
 
 /// <summary>
+/// A marked index entry: a single term the document wants to list in its generated index (see
+/// <see cref="DocumentIndex"/>). Kept deliberately small (just the <see cref="Term"/>) and as a model
+/// side-store on <see cref="TextDocument.IndexEntries"/> rather than a run-level mark, so marking text
+/// for the index never disturbs run storage and needs no docx I/O changes — the generated index is
+/// ordinary styled paragraphs that already round-trip.
+/// </summary>
+public sealed class IndexEntry
+{
+    /// <summary>The term to list in the index. Trimmed of surrounding whitespace at construction.</summary>
+    public string Term { get; }
+
+    public IndexEntry(string term) => Term = (term ?? string.Empty).Trim();
+}
+
+/// <summary>
 /// The kind of simple field a <see cref="Run"/> represents. <see cref="None"/> is an ordinary text
-/// run; <see cref="PageNumber"/> maps to a WordprocessingML PAGE field (w:fldSimple w:instr=" PAGE ").
+/// run; the others each map to a WordprocessingML simple field (w:fldSimple) whose w:instr is the
+/// matching keyword — e.g. <see cref="PageNumber"/> is " PAGE ", <see cref="Date"/> is " DATE ".
+/// The run's <see cref="Run.Text"/> doubles as the field's cached/last-computed display value.
 /// </summary>
 public enum RunFieldKind
 {
     None,
-    PageNumber
+    PageNumber,
+    Date,
+    Time,
+    FileName,
+    Author,
+    NumPages
 }
 
 /// <summary>
@@ -326,11 +426,40 @@ public sealed class TableCell
     /// </summary>
     public double? WidthPt { get; set; }
 
+    /// <summary>
+    /// Horizontal merge: how many grid columns this cell spans (<c>tc/tcPr/w:gridSpan w:val</c>). The
+    /// default of <c>1</c> means no horizontal merge, so existing tables are unaffected. When merging
+    /// cells horizontally the surviving (left-most) cell's <see cref="GridSpan"/> is increased and the
+    /// absorbed cells are dropped from the row.
+    /// </summary>
+    public int GridSpan { get; set; } = 1;
+
+    /// <summary>
+    /// Vertical merge state (<c>tc/tcPr/w:vMerge</c>). <see cref="VerticalMergeState.None"/> (the default)
+    /// means the cell is not part of a vertical merge, so existing tables are unaffected.
+    /// <see cref="VerticalMergeState.Restart"/> is the top cell of a merged run (<c>w:vMerge w:val="restart"</c>)
+    /// and <see cref="VerticalMergeState.Continue"/> is a cell below it that is absorbed into the restart
+    /// cell (<c>w:vMerge</c> with no value / <c>w:val="continue"</c>).
+    /// </summary>
+    public VerticalMergeState VerticalMerge { get; set; } = VerticalMergeState.None;
+
     public TableCell() { }
 
     public TableCell(string text) => Paragraphs.Add(new Paragraph(text));
 
     public string PlainText => string.Join("\n", Paragraphs.Select(p => p.PlainText));
+}
+
+/// <summary>
+/// Vertical-merge state of a table cell (<c>tc/tcPr/w:vMerge</c>). <see cref="None"/> means the cell
+/// stands alone; <see cref="Restart"/> begins a vertically merged run (the cell whose content survives);
+/// <see cref="Continue"/> is a cell below the restart that is visually absorbed into it.
+/// </summary>
+public enum VerticalMergeState
+{
+    None,
+    Restart,
+    Continue
 }
 
 /// <summary>A table row: an ordered sequence of cells (w:tr).</summary>
@@ -339,10 +468,33 @@ public sealed class TableRow
     public List<TableCell> Cells { get; } = [];
 }
 
-/// <summary>Minimal table-level formatting. Currently just whether cell borders are drawn.</summary>
+/// <summary>
+/// Minimal table-level formatting: whether cell borders are drawn plus the three table-style toggles.
+/// <see cref="HeaderRow"/> styles the first row as a header (bold + shaded fill); <see cref="BandedRows"/>
+/// shades alternate body rows; <see cref="RepeatHeaderRow"/> repeats the header row across page breaks.
+/// All three default to false so existing tables round-trip unchanged.
+/// </summary>
 public sealed record TableFormatting
 {
     public bool Borders { get; init; } = true;
+
+    /// <summary>
+    /// When true, the first row is styled as a header (its cells render bold over a light shaded fill).
+    /// Round-trips via <c>w:tblPr/w:tblLook w:firstRow="1"</c>. Default false.
+    /// </summary>
+    public bool HeaderRow { get; init; }
+
+    /// <summary>
+    /// When true, alternate body rows are shaded with a light fill (banded rows). Round-trips via
+    /// <c>w:tblPr/w:tblLook w:noHBand="0"</c> (vs <c>"1"</c> when off). Default false.
+    /// </summary>
+    public bool BandedRows { get; init; }
+
+    /// <summary>
+    /// When true, the header (first) row repeats at the top of each page the table spans. Round-trips
+    /// via <c>w:trPr/w:tblHeader</c> on the first row. Default false.
+    /// </summary>
+    public bool RepeatHeaderRow { get; init; }
 
     public static readonly TableFormatting Default = new();
 }
@@ -414,6 +566,37 @@ public sealed class DocumentProperties
 }
 
 /// <summary>
+/// How the document restricts editing (document protection, w:settings/w:documentProtection).
+/// <see cref="None"/> is an unprotected document (the default — no settings part is emitted);
+/// <see cref="ReadOnly"/> locks the whole document against edits; <see cref="CommentsOnly"/> permits
+/// only the insertion of comments; <see cref="TrackChangesOnly"/> permits edits but forces them to be
+/// tracked revisions. Maps onto w:documentProtection/@w:edit ("readOnly"/"comments"/"trackedChanges").
+/// </summary>
+public enum ProtectionMode
+{
+    None,
+    ReadOnly,
+    CommentsOnly,
+    TrackChangesOnly
+}
+
+/// <summary>
+/// Document protection (restrict-editing) settings, mapping onto word/settings.xml's
+/// w:documentProtection. Immutable so it round-trips cleanly and can be shared; the default
+/// (<see cref="ProtectionMode.None"/>, see <see cref="Unprotected"/>) leaves existing documents
+/// unaffected — no settings part is emitted and the reader maps a missing/absent protection to None.
+/// When <see cref="Mode"/> is not None the writer emits w:documentProtection with w:enforcement="1".
+/// </summary>
+public sealed record ProtectionSettings(ProtectionMode Mode = ProtectionMode.None)
+{
+    /// <summary>The default, unprotected settings (<see cref="ProtectionMode.None"/>).</summary>
+    public static readonly ProtectionSettings Unprotected = new(ProtectionMode.None);
+
+    /// <summary>True when the document is protected in some mode (i.e. not <see cref="ProtectionMode.None"/>).</summary>
+    public bool IsProtected => Mode != ProtectionMode.None;
+}
+
+/// <summary>
 /// A page header or footer: an ordered list of paragraphs shown in the top (header) or bottom
 /// (footer) margin of every page. Maps onto a WordprocessingML header/footer part (w:hdr / w:ftr).
 /// A footer paragraph may contain a page-number field run (see <see cref="Run.PageNumberField"/>).
@@ -438,6 +621,33 @@ public sealed class HeaderFooter
 /// existing documents are unaffected. Mirrors how <see cref="ParagraphBorder"/> is modelled.
 /// </summary>
 public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.0);
+
+/// <summary>
+/// How (and whether) lines are numbered in the page margin (w:sectPr/w:lnNumType).
+/// <see cref="None"/> emits no w:lnNumType (the default — existing documents are unaffected);
+/// <see cref="Continuous"/> numbers lines continuously across pages (w:restart="continuous");
+/// <see cref="RestartEachPage"/> restarts numbering at 1 on every page (w:restart="newPage").
+/// </summary>
+public enum LineNumberMode
+{
+    None,
+    Continuous,
+    RestartEachPage
+}
+
+/// <summary>
+/// How page content is aligned vertically within the text area (w:sectPr/w:vAlign).
+/// <see cref="Top"/> is the default ("top", or no w:vAlign emitted — existing documents are unaffected);
+/// <see cref="Center"/> centres the content ("center"); <see cref="Justified"/> spreads it to fill the page
+/// ("both"); <see cref="Bottom"/> aligns to the bottom ("bottom").
+/// </summary>
+public enum PageVerticalAlignment
+{
+    Top,
+    Center,
+    Justified,
+    Bottom
+}
 
 /// <summary>Page geometry for a section (points; US Letter with 1in margins by default).</summary>
 public sealed class PageSettings
@@ -475,6 +685,47 @@ public sealed class PageSettings
     /// and rendered as an editor/preview visual. Nullable so existing documents are unaffected.
     /// </summary>
     public string? Watermark { get; set; }
+
+    /// <summary>
+    /// Line-numbering mode shown in the left page margin (w:sectPr/w:lnNumType). Defaults to
+    /// <see cref="LineNumberMode.None"/> so existing documents round-trip unchanged — no w:lnNumType
+    /// is emitted. When not None the writer emits w:lnNumType with the matching w:restart, and the
+    /// print preview draws line numbers in the margin.
+    /// </summary>
+    public LineNumberMode LineNumberMode { get; set; } = LineNumberMode.None;
+
+    /// <summary>
+    /// The interval at which line numbers are shown (w:lnNumType/@w:countBy): every Nth line is
+    /// numbered. Defaults to 1 (every line). Only meaningful when <see cref="LineNumberMode"/> is not
+    /// <see cref="LineNumberMode.None"/>. Always at least 1.
+    /// </summary>
+    public int LineNumberCountBy { get; set; } = 1;
+
+    /// <summary>
+    /// Whether automatic hyphenation is enabled for the document (word/settings.xml's
+    /// w:autoHyphenation toggle). Defaults to false so existing documents are unaffected — no
+    /// w:autoHyphenation is emitted (and the settings part is only emitted when something needs it).
+    /// When true the writer emits w:autoHyphenation and the reader maps it back here.
+    /// </summary>
+    public bool AutoHyphenation { get; set; }
+
+    /// <summary>
+    /// How page content is aligned vertically within the text area (w:sectPr/w:vAlign). Defaults to
+    /// <see cref="PageVerticalAlignment.Top"/> so existing documents round-trip unchanged — no
+    /// w:vAlign is emitted. When not Top the writer emits w:vAlign with the matching value
+    /// (Justified→"both") and the reader maps it back here. Note: this is a docx round-trip + Word
+    /// honoured setting; FreeW's fixed-page print preview does not currently re-flow content to reflect
+    /// the alignment (a known view limitation — Word applies it on open).
+    /// </summary>
+    public PageVerticalAlignment VerticalAlignment { get; set; } = PageVerticalAlignment.Top;
+
+    /// <summary>
+    /// Whether the section uses a distinct first-page header/footer (w:sectPr/w:titlePg toggle).
+    /// Defaults to false so existing documents are unaffected — no w:titlePg is emitted. When true the
+    /// writer emits w:titlePg so Word honours "different first page"; FreeW stores a single
+    /// header/footer (a genuinely separate first-page header part is out of scope).
+    /// </summary>
+    public bool DifferentFirstPage { get; set; }
 }
 
 /// <summary>
@@ -507,6 +758,14 @@ public sealed class TextDocument
     public DocumentProperties Properties { get; } = new();
 
     /// <summary>
+    /// Document protection (restrict-editing) settings. Defaults to
+    /// <see cref="ProtectionSettings.Unprotected"/> (<see cref="ProtectionMode.None"/>) so existing
+    /// documents are unaffected and no word/settings.xml part is emitted. When set to a protected mode
+    /// the writer emits w:settings/w:documentProtection and the reader maps it back here.
+    /// </summary>
+    public ProtectionSettings Protection { get; set; } = ProtectionSettings.Unprotected;
+
+    /// <summary>
     /// The document's footnotes, keyed by footnote id (matching <see cref="Run.FootnoteId"/> on the
     /// body reference runs). Maps to word/footnotes.xml (w:footnotes / w:footnote w:id="N"). Empty
     /// when the document has no footnotes, in which case no footnotes part is emitted.
@@ -515,6 +774,16 @@ public sealed class TextDocument
 
     /// <summary>The next unused footnote id (1-based; ignores the reserved separator ids -1 and 0).</summary>
     public int NextFootnoteId() => Footnotes.Count == 0 ? 1 : Math.Max(0, Footnotes.Keys.Max()) + 1;
+
+    /// <summary>
+    /// The document's endnotes, keyed by endnote id (matching <see cref="Run.EndnoteId"/> on the
+    /// body reference runs). Maps to word/endnotes.xml (w:endnotes / w:endnote w:id="N"). Empty
+    /// when the document has no endnotes, in which case no endnotes part is emitted.
+    /// </summary>
+    public Dictionary<int, Endnote> Endnotes { get; } = [];
+
+    /// <summary>The next unused endnote id (1-based; ignores the reserved separator ids -1 and 0).</summary>
+    public int NextEndnoteId() => Endnotes.Count == 0 ? 1 : Math.Max(0, Endnotes.Keys.Max()) + 1;
 
     /// <summary>
     /// The document's review comments, keyed by comment id (matching the body runs' <see cref="Run.CommentId"/>).
@@ -533,6 +802,14 @@ public sealed class TextDocument
     /// in-text citations and the bibliography are ordinary text/paragraphs that already round-trip.
     /// </summary>
     public List<Source> Sources { get; } = [];
+
+    /// <summary>
+    /// The terms marked for the document index, in mark order. <see cref="DocumentIndex.Build(TextDocument)"/>
+    /// renders the distinct, alphabetically sorted terms as ordinary styled paragraphs. Like
+    /// <see cref="Sources"/> these are pure model data (no docx part of their own) — the generated index is
+    /// ordinary styled paragraphs that already round-trip. Empty when nothing has been marked.
+    /// </summary>
+    public List<IndexEntry> IndexEntries { get; } = [];
 
     /// <summary>The body's paragraphs (top-level only; table cell paragraphs are not included).</summary>
     public IEnumerable<Paragraph> Paragraphs => Blocks.OfType<Paragraph>();
@@ -613,5 +890,9 @@ public sealed class TextDocument
         };
         // The built-in figure/table caption style (round-trips via styles.xml like the others).
         Styles[Captions.StyleId] = Captions.BuildCaptionStyle();
+        // The built-in index heading/entry styles used by DocumentIndex (round-trip via styles.xml).
+        DocumentIndex.EnsureStyles(this);
+        // The built-in table-of-figures heading/entry styles used by TableOfFigures (round-trip via styles.xml).
+        TableOfFigures.EnsureStyles(this);
     }
 }

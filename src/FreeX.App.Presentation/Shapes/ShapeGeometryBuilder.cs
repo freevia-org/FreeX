@@ -1,0 +1,355 @@
+using FreeX.App.Presentation.Charts;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Presentation.Shapes;
+
+/// <summary>
+/// Portable, framework-free builder for drawing-shape outlines, shared by the desktop hosts. Given a
+/// <see cref="DrawingShapeKind"/> and a bounds rectangle, it returns pure vertex/segment geometry
+/// (see <see cref="ShapeGeometry"/>) faithful to the source factory's math: polygons are listed as
+/// fractional vertices of the bounds, rounded forms use elliptical arcs, and crossing bars are
+/// emitted as rotated-rectangle vertices. The renderers convert the result into their own paths.
+///
+/// Bounds with negative width/height are normalized to a positive-size rectangle before layout
+/// (the equivalent of a horizontal/vertical flip about the rectangle's center), matching how the
+/// hosts hand flipped shapes to this math.
+/// </summary>
+public static class ShapeGeometryBuilder
+{
+    /// <summary>Builds the outline of <paramref name="kind"/> within <paramref name="bounds"/>.</summary>
+    public static ShapeGeometry Build(DrawingShapeKind kind, LayoutRect bounds)
+    {
+        var rect = Normalize(bounds);
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return ShapeGeometry.Empty;
+
+        return kind switch
+        {
+            DrawingShapeKind.RoundedRectangle => RoundedRectangle(rect, CornerRadius(rect)),
+            DrawingShapeKind.Ellipse => Ellipse(rect),
+            DrawingShapeKind.Line => OpenPath(rect, [(0.02, 0.02), (0.98, 0.98)]),
+            DrawingShapeKind.ElbowConnector => OpenPath(rect, [(0.05, 0.18), (0.55, 0.18), (0.55, 0.82), (0.95, 0.82)]),
+            DrawingShapeKind.CurvedConnector => CurvedConnector(rect),
+            DrawingShapeKind.Triangle => Polygon(rect, [(0.5, 0), (1, 1), (0, 1)]),
+            DrawingShapeKind.RightTriangle => Polygon(rect, [(0, 0), (1, 1), (0, 1)]),
+            DrawingShapeKind.Diamond => Polygon(rect, [(0.5, 0), (1, 0.5), (0.5, 1), (0, 0.5)]),
+            DrawingShapeKind.Parallelogram => Polygon(rect, [(0.2, 0), (1, 0), (0.8, 1), (0, 1)]),
+            DrawingShapeKind.Trapezoid => Polygon(rect, [(0.2, 0), (0.8, 0), (1, 1), (0, 1)]),
+            DrawingShapeKind.Pentagon => Polygon(rect, [(0.5, 0), (1, 0.38), (0.82, 1), (0.18, 1), (0, 0.38)]),
+            DrawingShapeKind.Hexagon => Polygon(rect, [(0.25, 0), (0.75, 0), (1, 0.5), (0.75, 1), (0.25, 1), (0, 0.5)]),
+            DrawingShapeKind.Octagon => Polygon(rect, [(0.3, 0), (0.7, 0), (1, 0.3), (1, 0.7), (0.7, 1), (0.3, 1), (0, 0.7), (0, 0.3)]),
+            DrawingShapeKind.Cross or DrawingShapeKind.PlusSign => Plus(rect),
+            DrawingShapeKind.RightArrow => Polygon(rect, [(0, 0.25), (0.62, 0.25), (0.62, 0), (1, 0.5), (0.62, 1), (0.62, 0.75), (0, 0.75)]),
+            DrawingShapeKind.LeftArrow => Polygon(rect, [(1, 0.25), (0.38, 0.25), (0.38, 0), (0, 0.5), (0.38, 1), (0.38, 0.75), (1, 0.75)]),
+            DrawingShapeKind.UpArrow => Polygon(rect, [(0.25, 1), (0.25, 0.38), (0, 0.38), (0.5, 0), (1, 0.38), (0.75, 0.38), (0.75, 1)]),
+            DrawingShapeKind.DownArrow => Polygon(rect, [(0.25, 0), (0.75, 0), (0.75, 0.62), (1, 0.62), (0.5, 1), (0, 0.62), (0.25, 0.62)]),
+            DrawingShapeKind.LeftRightArrow => Polygon(rect, [(0, 0.5), (0.24, 0), (0.24, 0.28), (0.76, 0.28), (0.76, 0), (1, 0.5), (0.76, 1), (0.76, 0.72), (0.24, 0.72), (0.24, 1)]),
+            DrawingShapeKind.UpDownArrow => Polygon(rect, [(0.5, 0), (1, 0.24), (0.72, 0.24), (0.72, 0.76), (1, 0.76), (0.5, 1), (0, 0.76), (0.28, 0.76), (0.28, 0.24), (0, 0.24)]),
+            DrawingShapeKind.MinusSign => Minus(rect),
+            DrawingShapeKind.MultiplySign => Multiply(rect),
+            DrawingShapeKind.DivideSign => Divide(rect),
+            DrawingShapeKind.EqualSign => Equal(rect),
+            DrawingShapeKind.NotEqualSign => NotEqual(rect),
+            DrawingShapeKind.FlowchartDecision => Polygon(rect, [(0.5, 0), (1, 0.5), (0.5, 1), (0, 0.5)]),
+            DrawingShapeKind.FlowchartData => Polygon(rect, [(0.22, 0), (1, 0), (0.78, 1), (0, 1)]),
+            DrawingShapeKind.FlowchartPredefinedProcess => FlowchartPredefinedProcess(rect),
+            DrawingShapeKind.FlowchartDocument => FlowchartDocument(rect),
+            DrawingShapeKind.FlowchartTerminator => RoundedRectangle(rect, Math.Max(1, rect.Height / 2)),
+            DrawingShapeKind.Star5 => Star(rect, 5, 0.42),
+            DrawingShapeKind.Star8 => Star(rect, 8, 0.46),
+            DrawingShapeKind.Explosion => Star(rect, 12, 0.62, startAngle: (-Math.PI / 2) + 0.08),
+            DrawingShapeKind.Ribbon => Ribbon(rect),
+            DrawingShapeKind.Wave => Wave(rect),
+            DrawingShapeKind.RectangularCallout => Polygon(rect, [(0, 0), (1, 0), (1, 0.72), (0.64, 0.72), (0.48, 1), (0.42, 0.72), (0, 0.72)]),
+            DrawingShapeKind.RoundedRectangularCallout => RoundedCallout(rect),
+            DrawingShapeKind.OvalCallout => OvalCallout(rect),
+            DrawingShapeKind.LineCallout => LineCallout(rect),
+            _ => Rectangle(rect)
+        };
+    }
+
+    private static LayoutRect Normalize(LayoutRect bounds) =>
+        LayoutRect.FromCorners(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
+
+    private static double CornerRadius(LayoutRect rect) =>
+        Math.Clamp(Math.Min(rect.Width, rect.Height) * 0.18, 2, 18);
+
+    private static LayoutPoint P(LayoutRect rect, double x, double y) =>
+        new(rect.Left + (rect.Width * x), rect.Top + (rect.Height * y));
+
+    private static ShapeGeometry Single(ShapeContour contour) => new([contour]);
+
+    private static ShapeGeometry Polygon(LayoutRect rect, IReadOnlyList<(double X, double Y)> points)
+    {
+        if (points.Count == 0)
+            return ShapeGeometry.Empty;
+
+        var start = P(rect, points[0].X, points[0].Y);
+        var segments = new ShapeSegment[points.Count - 1];
+        for (var i = 1; i < points.Count; i++)
+            segments[i - 1] = ShapeSegment.LineTo(P(rect, points[i].X, points[i].Y));
+
+        return Single(new ShapeContour(start, segments, Closed: true, Filled: true));
+    }
+
+    private static ShapeContour PolygonContour(LayoutRect rect, IReadOnlyList<(double X, double Y)> points)
+    {
+        var start = P(rect, points[0].X, points[0].Y);
+        var segments = new ShapeSegment[points.Count - 1];
+        for (var i = 1; i < points.Count; i++)
+            segments[i - 1] = ShapeSegment.LineTo(P(rect, points[i].X, points[i].Y));
+
+        return new ShapeContour(start, segments, Closed: true, Filled: true);
+    }
+
+    private static ShapeGeometry OpenPath(LayoutRect rect, IReadOnlyList<(double X, double Y)> points)
+    {
+        if (points.Count == 0)
+            return ShapeGeometry.Empty;
+
+        return Single(OpenPathContour(rect, points));
+    }
+
+    private static ShapeContour OpenPathContour(LayoutRect rect, IReadOnlyList<(double X, double Y)> points)
+    {
+        var start = P(rect, points[0].X, points[0].Y);
+        var segments = new ShapeSegment[points.Count - 1];
+        for (var i = 1; i < points.Count; i++)
+            segments[i - 1] = ShapeSegment.LineTo(P(rect, points[i].X, points[i].Y));
+
+        return new ShapeContour(start, segments, Closed: false, Filled: false);
+    }
+
+    private static ShapeGeometry Rectangle(LayoutRect rect) => Single(RectangleContour(rect));
+
+    private static ShapeContour RectangleContour(LayoutRect rect) =>
+        PolygonContour(rect, [(0, 0), (1, 0), (1, 1), (0, 1)]);
+
+    private static ShapeContour RectangleContour(double left, double top, double width, double height)
+    {
+        var start = new LayoutPoint(left, top);
+        ShapeSegment[] segments =
+        [
+            ShapeSegment.LineTo(new LayoutPoint(left + width, top)),
+            ShapeSegment.LineTo(new LayoutPoint(left + width, top + height)),
+            ShapeSegment.LineTo(new LayoutPoint(left, top + height))
+        ];
+        return new ShapeContour(start, segments, Closed: true, Filled: true);
+    }
+
+    private static ShapeGeometry RoundedRectangle(LayoutRect rect, double radius) =>
+        Single(RoundedRectangleContour(rect, radius));
+
+    private static ShapeContour RoundedRectangleContour(LayoutRect rect, double radius)
+    {
+        var rx = Math.Min(radius, rect.Width / 2);
+        var ry = Math.Min(radius, rect.Height / 2);
+        var l = rect.Left;
+        var t = rect.Top;
+        var r = rect.Right;
+        var b = rect.Bottom;
+
+        var start = new LayoutPoint(l + rx, t);
+        ShapeSegment[] segments =
+        [
+            ShapeSegment.LineTo(new LayoutPoint(r - rx, t)),
+            ShapeSegment.ArcTo(new LayoutPoint(r, t + ry), rx, ry, sweepClockwise: true),
+            ShapeSegment.LineTo(new LayoutPoint(r, b - ry)),
+            ShapeSegment.ArcTo(new LayoutPoint(r - rx, b), rx, ry, sweepClockwise: true),
+            ShapeSegment.LineTo(new LayoutPoint(l + rx, b)),
+            ShapeSegment.ArcTo(new LayoutPoint(l, b - ry), rx, ry, sweepClockwise: true),
+            ShapeSegment.LineTo(new LayoutPoint(l, t + ry)),
+            ShapeSegment.ArcTo(new LayoutPoint(l + rx, t), rx, ry, sweepClockwise: true)
+        ];
+        return new ShapeContour(start, segments, Closed: true, Filled: true);
+    }
+
+    private static ShapeGeometry Ellipse(LayoutRect rect) => Single(EllipseContour(rect));
+
+    private static ShapeContour EllipseContour(LayoutRect rect) =>
+        EllipseContour(rect.Left, rect.Top, rect.Width, rect.Height);
+
+    private static ShapeContour EllipseContour(double left, double top, double width, double height)
+    {
+        var rx = width / 2;
+        var ry = height / 2;
+        var cx = left + rx;
+        var cy = top + ry;
+
+        // Two semicircular arcs from the left extreme, across the right extreme, back to the start.
+        var start = new LayoutPoint(cx - rx, cy);
+        ShapeSegment[] segments =
+        [
+            ShapeSegment.ArcTo(new LayoutPoint(cx + rx, cy), rx, ry, sweepClockwise: true),
+            ShapeSegment.ArcTo(new LayoutPoint(cx - rx, cy), rx, ry, sweepClockwise: true)
+        ];
+        return new ShapeContour(start, segments, Closed: true, Filled: true);
+    }
+
+    private static ShapeGeometry CurvedConnector(LayoutRect rect)
+    {
+        var start = P(rect, 0.05, 0.18);
+        ShapeSegment[] segments =
+        [
+            ShapeSegment.BezierTo(P(rect, 0.36, 0.04), P(rect, 0.52, 0.88), P(rect, 0.95, 0.82))
+        ];
+        return Single(new ShapeContour(start, segments, Closed: false, Filled: false));
+    }
+
+    private static ShapeGeometry Plus(LayoutRect rect) =>
+        Polygon(rect, [(0.35, 0), (0.65, 0), (0.65, 0.35), (1, 0.35), (1, 0.65), (0.65, 0.65), (0.65, 1), (0.35, 1), (0.35, 0.65), (0, 0.65), (0, 0.35), (0.35, 0.35)]);
+
+    private static ShapeContour MinusContour(LayoutRect rect) =>
+        RectangleContour(rect.Left, rect.Top + (rect.Height * 0.38), rect.Width, rect.Height * 0.24);
+
+    private static ShapeGeometry Minus(LayoutRect rect) => Single(MinusContour(rect));
+
+    private static ShapeGeometry Multiply(LayoutRect rect)
+    {
+        var thickness = Math.Min(rect.Width, rect.Height) * 0.16;
+        return new ShapeGeometry([RotatedBar(rect, thickness, 45), RotatedBar(rect, thickness, -45)]);
+    }
+
+    private static ShapeGeometry Divide(LayoutRect rect)
+    {
+        var dotSize = Math.Min(rect.Width, rect.Height) * 0.16;
+        return new ShapeGeometry(
+        [
+            MinusContour(rect),
+            EllipseContour(rect.Left + (rect.Width * 0.5) - (dotSize / 2), rect.Top + (rect.Height * 0.12), dotSize, dotSize),
+            EllipseContour(rect.Left + (rect.Width * 0.5) - (dotSize / 2), rect.Top + (rect.Height * 0.72), dotSize, dotSize)
+        ]);
+    }
+
+    private static IReadOnlyList<ShapeContour> EqualContours(LayoutRect rect) =>
+    [
+        RectangleContour(rect.Left, rect.Top + (rect.Height * 0.28), rect.Width, rect.Height * 0.18),
+        RectangleContour(rect.Left, rect.Top + (rect.Height * 0.56), rect.Width, rect.Height * 0.18)
+    ];
+
+    private static ShapeGeometry Equal(LayoutRect rect) => new(EqualContours(rect));
+
+    private static ShapeGeometry NotEqual(LayoutRect rect)
+    {
+        var contours = new List<ShapeContour>(EqualContours(rect))
+        {
+            RotatedBar(rect, Math.Min(rect.Width, rect.Height) * 0.12, -63)
+        };
+        return new ShapeGeometry(contours);
+    }
+
+    /// <summary>
+    /// A horizontal bar across the middle of <paramref name="rect"/>, rotated by
+    /// <paramref name="degrees"/> about the rectangle center. Returns the four rotated corner
+    /// vertices as a closed quad (the source applies a rotation transform to an axis-aligned bar).
+    /// </summary>
+    private static ShapeContour RotatedBar(LayoutRect rect, double thickness, double degrees)
+    {
+        var left = rect.Left + (rect.Width * 0.08);
+        var top = rect.Top + (rect.Height * 0.5) - (thickness / 2);
+        var width = rect.Width * 0.84;
+        var cx = rect.Left + (rect.Width / 2);
+        var cy = rect.Top + (rect.Height / 2);
+        var radians = degrees * Math.PI / 180;
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+
+        LayoutPoint Rotate(double x, double y)
+        {
+            var dx = x - cx;
+            var dy = y - cy;
+            return new LayoutPoint(cx + (dx * cos) - (dy * sin), cy + (dx * sin) + (dy * cos));
+        }
+
+        var p0 = Rotate(left, top);
+        var p1 = Rotate(left + width, top);
+        var p2 = Rotate(left + width, top + thickness);
+        var p3 = Rotate(left, top + thickness);
+
+        ShapeSegment[] segments =
+        [
+            ShapeSegment.LineTo(p1),
+            ShapeSegment.LineTo(p2),
+            ShapeSegment.LineTo(p3)
+        ];
+        return new ShapeContour(p0, segments, Closed: true, Filled: true);
+    }
+
+    private static ShapeGeometry FlowchartPredefinedProcess(LayoutRect rect) =>
+        new(
+        [
+            RectangleContour(rect),
+            OpenPathContour(rect, [(0.18, 0), (0.18, 1)]),
+            OpenPathContour(rect, [(0.82, 0), (0.82, 1)])
+        ]);
+
+    private static ShapeGeometry FlowchartDocument(LayoutRect rect)
+    {
+        var start = P(rect, 0, 0);
+        ShapeSegment[] segments =
+        [
+            ShapeSegment.LineTo(P(rect, 1, 0)),
+            ShapeSegment.LineTo(P(rect, 1, 0.82)),
+            ShapeSegment.BezierTo(P(rect, 0.72, 0.72), P(rect, 0.48, 0.98), P(rect, 0.22, 0.86)),
+            ShapeSegment.BezierTo(P(rect, 0.12, 0.82), P(rect, 0.05, 0.80), P(rect, 0, 0.86))
+        ];
+        return Single(new ShapeContour(start, segments, Closed: true, Filled: true));
+    }
+
+    private static ShapeGeometry Star(LayoutRect rect, int points, double innerRadius, double startAngle = -Math.PI / 2)
+    {
+        var vertices = new (double X, double Y)[points * 2];
+        for (var i = 0; i < vertices.Length; i++)
+        {
+            var radius = i % 2 == 0 ? 0.5 : 0.5 * innerRadius;
+            var angle = startAngle + (i * Math.PI / points);
+            vertices[i] = (0.5 + (Math.Cos(angle) * radius), 0.5 + (Math.Sin(angle) * radius));
+        }
+
+        return Polygon(rect, vertices);
+    }
+
+    private static ShapeGeometry Ribbon(LayoutRect rect) =>
+        Polygon(rect, [(0.08, 0.22), (0.92, 0.22), (0.92, 0.06), (1, 0.24), (0.92, 0.42), (0.92, 0.78), (0.08, 0.78), (0.08, 0.94), (0, 0.76), (0.08, 0.58)]);
+
+    private static ShapeGeometry Wave(LayoutRect rect)
+    {
+        var start = P(rect, 0, 0.45);
+        ShapeSegment[] segments =
+        [
+            ShapeSegment.BezierTo(P(rect, 0.22, 0.12), P(rect, 0.38, 0.78), P(rect, 0.58, 0.45)),
+            ShapeSegment.BezierTo(P(rect, 0.74, 0.18), P(rect, 0.88, 0.24), P(rect, 1, 0.36)),
+            ShapeSegment.LineTo(P(rect, 1, 0.72)),
+            ShapeSegment.BezierTo(P(rect, 0.78, 0.56), P(rect, 0.58, 1.02), P(rect, 0.36, 0.72)),
+            ShapeSegment.BezierTo(P(rect, 0.18, 0.48), P(rect, 0.08, 0.62), P(rect, 0, 0.74))
+        ];
+        return Single(new ShapeContour(start, segments, Closed: true, Filled: true));
+    }
+
+    private static ShapeGeometry RoundedCallout(LayoutRect rect)
+    {
+        var body = new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height * 0.74);
+        return new ShapeGeometry(
+        [
+            RoundedRectangleContour(body, CornerRadius(body)),
+            PolygonContour(rect, [(0.42, 0.72), (0.64, 0.72), (0.48, 1)])
+        ]);
+    }
+
+    private static ShapeGeometry OvalCallout(LayoutRect rect)
+    {
+        var body = new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height * 0.78);
+        return new ShapeGeometry(
+        [
+            EllipseContour(body),
+            PolygonContour(rect, [(0.42, 0.70), (0.64, 0.70), (0.48, 1)])
+        ]);
+    }
+
+    private static ShapeGeometry LineCallout(LayoutRect rect) =>
+        new(
+        [
+            RectangleContour(rect.Left + (rect.Width * 0.24), rect.Top, rect.Width * 0.76, rect.Height * 0.58),
+            OpenPathContour(rect, [(0.02, 1), (0.24, 0.58)])
+        ]);
+}

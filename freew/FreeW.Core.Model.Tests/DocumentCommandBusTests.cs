@@ -263,4 +263,88 @@ public class DocumentCommandBusTests
         image.WidthPt.Should().Be(200);
         image.HeightPt.Should().Be(100);
     }
+
+    [Fact]
+    public void MergeCellsHorizontal_SetsGridSpan_DropsCells_AndReverts()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(1, 3);
+        table.Rows[0].Cells[0] = new TableCell("a");
+        table.Rows[0].Cells[1] = new TableCell("b");
+        table.Rows[0].Cells[2] = new TableCell("c");
+        doc.Blocks.Add(table);
+
+        bus.Execute(new MergeCellsHorizontalCommand(0, rowIndex: 0, firstColumn: 0, lastColumn: 1));
+        table.Rows[0].Cells.Should().HaveCount(2);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[0].PlainText.Should().Be("a");
+        table.Rows[0].Cells[1].PlainText.Should().Be("c");
+
+        bus.Undo();
+        table.Rows[0].Cells.Should().HaveCount(3);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+        table.Rows[0].Cells.Select(c => c.PlainText).Should().Equal("a", "b", "c");
+
+        bus.Redo();
+        table.Rows[0].Cells.Should().HaveCount(2);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+    }
+
+    [Fact]
+    public void MergeCellsVertical_SetsRestartAndContinue_AndReverts()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(2, 2);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new MergeCellsVerticalCommand(0, columnIndex: 0, firstRow: 0, lastRow: 1));
+        table.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+        table.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+
+        bus.Undo();
+        table.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.None);
+        table.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.None);
+
+        bus.Redo();
+        table.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+        table.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+    }
+
+    [Fact]
+    public void SplitCell_UndoesHorizontalMerge_AndIsReversible()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(1, 2);
+        // Start from a horizontally merged cell (span 2, single cell in the row).
+        table.Rows[0].Cells[0] = new TableCell("merged") { GridSpan = 2 };
+        table.Rows[0].Cells.RemoveAt(1);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new SplitCellCommand(0, rowIndex: 0, columnIndex: 0));
+        table.Rows[0].Cells.Should().HaveCount(2);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+        table.Rows[0].Cells[1].GridSpan.Should().Be(1);
+
+        bus.Undo();
+        table.Rows[0].Cells.Should().HaveCount(1);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+    }
+
+    [Fact]
+    public void SplitCell_UndoesVerticalMerge_AndIsReversible()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(2, 1);
+        table.Rows[0].Cells[0].VerticalMerge = VerticalMergeState.Restart;
+        table.Rows[1].Cells[0].VerticalMerge = VerticalMergeState.Continue;
+        doc.Blocks.Add(table);
+
+        bus.Execute(new SplitCellCommand(0, rowIndex: 0, columnIndex: 0));
+        table.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.None);
+        table.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.None);
+
+        bus.Undo();
+        table.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+        table.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+    }
 }

@@ -94,7 +94,11 @@ internal static class PrintLayout
         var paginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
         paginator.PageSize = new Size(pageWidth, pageHeight);
 
-        return new HeaderFooterPaginator(paginator, editor.Model, page);
+        // The line height used to estimate text lines for margin line numbering. The editor's
+        // FlowDocument FontSize is already in DIP; WPF lays a line out at ~1.33x the font size
+        // (LineHeight defaults to FontSize * 4/3).
+        var lineHeightDip = editor.Document.FontSize * (4.0 / 3.0);
+        return new HeaderFooterPaginator(paginator, editor.Model, page, lineHeightDip);
     }
 
     /// <summary>
@@ -138,7 +142,8 @@ internal static class PrintLayout
 /// margin and footer into the bottom margin of every produced page. A page-number field in the
 /// header/footer is rendered with the live 1-based page number for that page.
 /// </summary>
-internal sealed class HeaderFooterPaginator(DocumentPaginator inner, TextDocument model, PageSettings page) : DocumentPaginator
+internal sealed class HeaderFooterPaginator(
+    DocumentPaginator inner, TextDocument model, PageSettings page, double lineHeightDip = 0) : DocumentPaginator
 {
     public override bool IsPageCountValid => inner.IsPageCountValid;
     public override int PageCount => inner.PageCount;
@@ -150,8 +155,9 @@ internal sealed class HeaderFooterPaginator(DocumentPaginator inner, TextDocumen
         var basePage = inner.GetPage(pageNumber);
         var hasWatermark = !string.IsNullOrEmpty(page.Watermark);
         var hasBorder = page.PageBorder is not null;
+        var hasLineNumbers = page.LineNumberMode != LineNumberMode.None && lineHeightDip > 0;
         if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
-            && !hasWatermark && !hasBorder)
+            && !hasWatermark && !hasBorder && !hasLineNumbers)
             return basePage;
 
         var size = basePage.Size;
@@ -162,6 +168,8 @@ internal sealed class HeaderFooterPaginator(DocumentPaginator inner, TextDocumen
         visual.Children.Add(basePage.Visual);
         if (hasBorder)
             visual.Children.Add(BuildPageBorder(page.PageBorder!, size));
+        if (hasLineNumbers)
+            visual.Children.Add(BuildLineNumbers(basePage, pageNumber));
 
         var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);
         var contentWidth = Math.Max(0, size.Width - marginLeft - PageLayout.PointsToDip(page.MarginRightPt));
@@ -199,6 +207,60 @@ internal sealed class HeaderFooterPaginator(DocumentPaginator inner, TextDocumen
         var rect = new Rect(inset, inset, Math.Max(0, size.Width - 2 * inset), Math.Max(0, size.Height - 2 * inset));
         using (var dc = visual.RenderOpen())
             dc.DrawRectangle(null, pen, rect);
+        return visual;
+    }
+
+    /// <summary>
+    /// Draws line numbers down the left margin of a page (w:lnNumType). Lines are detected best-effort:
+    /// the page's text content box (the laid-out content area for this page) is divided by the
+    /// estimated line height to get how many text lines this page holds, and a number is drawn at the
+    /// baseline of each one. Only every Nth line (countBy) shows a number. For RestartEachPage the count
+    /// restarts at 1 on each page; for Continuous the start is carried forward by estimating a uniform
+    /// lines-per-page from the printable height (pageNumber * linesPerPage + local index).
+    /// </summary>
+    private DrawingVisual BuildLineNumbers(DocumentPage basePage, int zeroBasedPageNumber)
+    {
+        var visual = new DrawingVisual();
+        var content = basePage.ContentBox;
+        if (content.Height <= 0 || lineHeightDip <= 0)
+            return visual;
+
+        var linesThisPage = Math.Max(1, (int)Math.Floor(content.Height / lineHeightDip));
+        var countBy = Math.Max(1, page.LineNumberCountBy);
+
+        // For continuous numbering, estimate how many lines a full printable column holds so prior
+        // pages' line counts can be carried forward without re-paginating them.
+        var printableHeightDip = PageLayout.PointsToDip(
+            page.HeightPt - page.MarginTopPt - page.MarginBottomPt);
+        var linesPerPage = Math.Max(1, (int)Math.Floor(printableHeightDip / lineHeightDip));
+        var startLine = page.LineNumberMode == LineNumberMode.RestartEachPage
+            ? 0
+            : zeroBasedPageNumber * linesPerPage;
+
+        // Place numbers just left of the content box (in the left margin), right-aligned to a small gutter.
+        var gutterRight = Math.Max(0, content.Left - PageLayout.PointsToDip(6));
+
+        using var dc = visual.RenderOpen();
+        for (var i = 0; i < linesThisPage; i++)
+        {
+            var lineNumber = startLine + i + 1; // 1-based
+            if (lineNumber % countBy != 0)
+                continue;
+
+            var formatted = new FormattedText(
+                lineNumber.ToString(System.Globalization.CultureInfo.CurrentCulture),
+                System.Globalization.CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                new Typeface("Calibri"),
+                PageLayout.PointsToDip(9.0),
+                new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)),
+                1.0);
+
+            var y = content.Top + i * lineHeightDip;
+            var x = Math.Max(0, gutterRight - formatted.Width);
+            dc.DrawText(formatted, new Point(x, y));
+        }
+
         return visual;
     }
 

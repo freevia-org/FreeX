@@ -16,6 +16,8 @@ internal static class FreeWRibbon
                 tab.Group("clipboard", "Clipboard", "C", 100, g =>
                 {
                     g.Button("freew.paste", "Paste");
+                    g.Button("freew.paste-plain", "Paste Text Only");
+                    g.Button("freew.paste-merge", "Merge Formatting");
                     g.Button("freew.cut", "Cut");
                     g.Button("freew.copy", "Copy");
                     g.Button("freew.format-painter", "Format Painter");
@@ -49,6 +51,7 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.bullets", "Bullets");
                     g.Button("freew.numbering", "Numbering");
+                    g.Button("freew.multilevel-list", "Multilevel List");
                     g.Button("freew.align-left", "Align Left");
                     g.Button("freew.align-center", "Center");
                     g.Button("freew.align-right", "Align Right");
@@ -59,8 +62,14 @@ internal static class FreeWRibbon
                     });
                     g.Button("freew.space-before-toggle", "Space Before");
                     g.Button("freew.space-after-toggle", "Space After");
+                    g.Button("freew.indent-increase", "Increase Indent");
+                    g.Button("freew.indent-decrease", "Decrease Indent");
+                    g.Button("freew.paragraph-dialog", "Paragraph…");
                     g.Button("freew.para-border", "Border");
                     g.Button("freew.para-shading", "Shading");
+                    g.Button("freew.keep-with-next", "Keep with Next");
+                    g.Button("freew.keep-lines", "Keep Lines Together");
+                    g.Button("freew.widow-control", "Widow/Orphan Control");
                 });
                 tab.Group("styles", "Styles", "S", 70, g =>
                 {
@@ -72,6 +81,8 @@ internal static class FreeWRibbon
                     g.Button("freew.style-normal", "Normal");
                     g.Button("freew.style-heading1", "Heading 1");
                     g.Button("freew.style-title", "Title");
+                    g.Button("freew.new-style", "New Style");
+                    g.Button("freew.manage-styles", "Manage Styles");
                 });
             })
             .Tab("insert", "Insert", "N", tab =>
@@ -92,6 +103,11 @@ internal static class FreeWRibbon
                     g.Button("freew.table-insert-col", "Insert Column");
                     g.Button("freew.table-delete-col", "Delete Column");
                     g.Button("freew.cell-shading", "Cell Shading");
+                    g.Button("freew.merge-cells", "Merge Cells");
+                    g.Button("freew.split-cell", "Split Cell");
+                    g.Button("freew.table-header-row", "Header Row");
+                    g.Button("freew.table-banded-rows", "Banded Rows");
+                    g.Button("freew.table-repeat-header", "Repeat Header");
                 });
                 tab.Group("illustrations", "Illustrations", "I", 80, g =>
                 {
@@ -102,6 +118,9 @@ internal static class FreeWRibbon
                 tab.Group("links", "Links", "K", 70, g =>
                 {
                     g.Button("freew.hyperlink", "Link");
+                    g.Button("freew.edit-hyperlink", "Edit Hyperlink");
+                    g.Button("freew.remove-hyperlink", "Remove Hyperlink");
+                    g.Button("freew.hyperlink-tooltip", "ScreenTip");
                     g.Button("freew.bookmark", "Bookmark");
                     g.Button("freew.link-bookmark", "Link to Bookmark");
                 });
@@ -113,12 +132,22 @@ internal static class FreeWRibbon
                 tab.Group("references", "References", "R", 65, g =>
                 {
                     g.Button("freew.footnote", "Footnote");
+                    g.Button("freew.endnote", "Endnote");
                     g.Button("freew.toc", "Table of Contents");
                     g.Button("freew.toc-refresh", "Update TOC");
                     g.Button("freew.citation", "Citation");
+                    g.ComboBox("freew.citation-style", "Citation Style", c => c with
+                    {
+                        Items = new[] { "APA", "MLA", "Chicago" },
+                        Width = 90
+                    });
                     g.Button("freew.bibliography", "Bibliography");
                     g.Button("freew.caption", "Caption");
                     g.Button("freew.cross-reference", "Cross-reference");
+                    g.Button("freew.index-mark", "Mark Entry");
+                    g.Button("freew.index-insert", "Insert Index");
+                    g.Button("freew.tof", "Table of Figures");
+                    g.Button("freew.tof-refresh", "Update Figures");
                 });
                 tab.Group("controls", "Controls", "O", 62, g =>
                 {
@@ -135,6 +164,7 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.symbol", "Symbol");
                     g.Button("freew.datetime", "Date & Time");
+                    g.Button("freew.field", "Field");
                 });
             })
             .Tab("layout", "Layout", "L", tab =>
@@ -145,6 +175,10 @@ internal static class FreeWRibbon
                     g.Button("freew.orientation", "Orientation");
                     g.Button("freew.size", "Size");
                     g.Button("freew.columns", "Columns");
+                    g.Button("freew.line-numbers", "Line Numbers");
+                    g.Button("freew.hyphenation", "Hyphenation");
+                    g.Button("freew.page-valign", "Vertical Align");
+                    g.Button("freew.different-first-page", "Different First Page");
                 });
                 tab.Group("page-background", "Page Background", "B", 95, g =>
                 {
@@ -154,6 +188,12 @@ internal static class FreeWRibbon
                 tab.Group("preview", "Preview", "V", 90, g =>
                 {
                     g.Button("freew.print-preview", "Print Preview");
+                });
+                tab.Group("data", "Data", "D", 88, g =>
+                {
+                    g.Button("freew.sort", "Sort");
+                    g.Button("freew.text-to-table", "Text to Table");
+                    g.Button("freew.table-to-text", "Table to Text");
                 });
             })
             .Tab("design", "Design", "G", tab =>
@@ -172,10 +212,30 @@ internal static class FreeWRibbon
                 tab.Group("show", "Show", "S", 100, g =>
                 {
                     g.Toggle("freew.nav-pane", "Navigation Pane");
+                    g.Toggle("freew.formatting-marks", "Show ¶");
                 });
                 tab.Group("views", "Views", "V", 90, g =>
                 {
                     g.Toggle("freew.read-mode", "Read Mode");
+                });
+            })
+            .Tab("mailings", "Mailings", "M", tab =>
+            {
+                tab.Group("merge-data", "Start Mail Merge", "D", 100, g =>
+                {
+                    g.Button("freew.merge-data", "Set Data");
+                });
+                tab.Group("merge-write", "Write & Insert Fields", "W", 90, g =>
+                {
+                    g.Button("freew.merge-field", "Insert Merge Field");
+                });
+                tab.Group("merge-preview", "Preview Results", "P", 80, g =>
+                {
+                    g.Button("freew.merge-preview", "Preview Record");
+                });
+                tab.Group("merge-finish", "Finish", "F", 70, g =>
+                {
+                    g.Button("freew.merge-finish", "Finish & Merge");
                 });
             })
             .Tab("review", "Review", "R", tab =>
@@ -183,6 +243,8 @@ internal static class FreeWRibbon
                 tab.Group("proofing", "Proofing", "P", 100, g =>
                 {
                     g.Button("freew.statistics", "Word Count");
+                    g.Toggle("freew.spellcheck-toggle", "Spell Check");
+                    g.Button("freew.add-to-dictionary", "Add to Dictionary");
                 });
                 tab.Group("comments", "Comments", "C", 100, g =>
                 {
@@ -193,6 +255,18 @@ internal static class FreeWRibbon
                     g.Toggle("freew.track-changes", "Track Changes");
                     g.Button("freew.accept-all", "Accept All");
                     g.Button("freew.reject-all", "Reject All");
+                });
+                tab.Group("protect", "Protect", "T", 90, g =>
+                {
+                    g.Toggle("freew.restrict-editing", "Restrict Editing");
+                });
+                tab.Group("compare", "Compare", "M", 80, g =>
+                {
+                    g.Button("freew.compare", "Compare");
+                });
+                tab.Group("inspect", "Inspect", "I", 80, g =>
+                {
+                    g.Button("freew.inspect-document", "Inspect Document");
                 });
             })
             .Build();

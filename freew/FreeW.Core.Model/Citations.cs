@@ -1,27 +1,46 @@
-using System.Globalization;
-
 namespace FreeW.Core.Model;
+
+/// <summary>
+/// The bibliographic style governing how <see cref="Citations"/> renders in-text citations,
+/// bibliography entries, and the bibliography heading. The numeric values are stable so a chosen
+/// style can be persisted, and <see cref="CitationStyle.Apa"/> is the default (value 0) so an
+/// unset/zero value matches the original author–year behaviour.
+/// </summary>
+public enum CitationStyle
+{
+    /// <summary>American Psychological Association (author–date). The original FreeW behaviour.</summary>
+    Apa = 0,
+
+    /// <summary>Modern Language Association (author–page; FreeW has no page, so author-only in-text).</summary>
+    Mla = 1,
+
+    /// <summary>Chicago (author–date variant).</summary>
+    Chicago = 2,
+}
 
 /// <summary>
 /// Pure, WPF-free formatting of in-text citations and a bibliography from a document's
 /// <see cref="TextDocument.Sources"/>. Lives in the model project so it is fully unit-testable
 /// without any UI.
 /// <para>
-/// The citation style is a simple, consistent author–year style (loosely APA-flavoured):
+/// Formatting is selected by a <see cref="CitationStyle"/>. The no-argument-style overloads default to
+/// <see cref="CitationStyle.Apa"/>, which is the original author–year behaviour, so existing call sites
+/// are unaffected. Each style is documented on the overload that takes a <see cref="CitationStyle"/>.
 /// </para>
 /// <list type="bullet">
-/// <item><b>In-text</b> (<see cref="FormatInText(Source)"/>): <c>(Author, Year)</c>. With only an
-/// author it is <c>(Author)</c>; with only a year, <c>(Year)</c>; with neither (but a tag) it falls
-/// back to <c>(Tag)</c>, else <c>(Unknown)</c>.</item>
-/// <item><b>Bibliography entry</b> (<see cref="FormatBibliographyEntry(Source)"/>):
-/// <c>Author. (Year). Title. Publisher.</c> — each segment is omitted when its field is empty, so a
-/// source with only a title renders as just <c>Title.</c></item>
+/// <item><b>In-text</b> (<see cref="FormatInText(Source, CitationStyle)"/>) — APA: <c>(Author, Year)</c>;
+/// MLA: <c>(Author)</c> (no page field in FreeW's <see cref="Source"/>); Chicago (author–date):
+/// <c>(Author Year)</c>. All degrade gracefully when fields are missing.</item>
+/// <item><b>Bibliography entry</b> (<see cref="FormatBibliographyEntry(Source, CitationStyle)"/>) —
+/// APA: <c>Author. (Year). Title. Publisher.</c>; MLA / Chicago: <c>Author. Title. Publisher, Year.</c>
+/// Each segment is omitted when its field is empty.</item>
 /// </list>
 /// <para>
-/// <see cref="BuildBibliography(TextDocument)"/> produces ordinary styled <see cref="Paragraph"/>s — a
-/// "Bibliography" heading followed by one paragraph per source, sorted by author — using dedicated
-/// bibliography style ids so they render with distinct formatting, round-trip through docx as normal
-/// styled paragraphs (no I/O changes needed), and can be located again for a refresh via
+/// <see cref="BuildBibliography(TextDocument, CitationStyle)"/> produces ordinary styled
+/// <see cref="Paragraph"/>s — a heading (<c>References</c> for APA, <c>Works Cited</c> for MLA,
+/// <c>Bibliography</c> for Chicago) followed by one paragraph per source, sorted by author — using
+/// dedicated bibliography style ids so they render with distinct formatting, round-trip through docx as
+/// normal styled paragraphs (no I/O changes needed), and can be located again for a refresh via
 /// <see cref="IsBibliographyParagraph(Block)"/>. Deterministic and side-effect free.
 /// </para>
 /// </summary>
@@ -30,17 +49,46 @@ public static class Citations
     /// <summary>Style id of the bibliography's heading paragraph.</summary>
     public const string HeadingStyleId = "BibliographyHeading";
 
-    /// <summary>Display text of the bibliography's heading paragraph.</summary>
-    public const string HeadingText = "Bibliography";
+    /// <summary>
+    /// Display text of the bibliography's heading paragraph for the default
+    /// (<see cref="CitationStyle.Apa"/>) style. See <see cref="HeadingTextFor(CitationStyle)"/> for the
+    /// style-specific heading.
+    /// </summary>
+    public const string HeadingText = "References";
 
     /// <summary>Style id of each bibliography entry paragraph.</summary>
     public const string EntryStyleId = "BibliographyEntry";
 
     /// <summary>
-    /// Formats a source as an in-text citation: <c>(Author, Year)</c>, gracefully degrading when a
-    /// field is missing — <c>(Author)</c>, <c>(Year)</c>, <c>(Tag)</c> or <c>(Unknown)</c>.
+    /// The bibliography heading text for <paramref name="style"/>: <c>References</c> (APA),
+    /// <c>Works Cited</c> (MLA), or <c>Bibliography</c> (Chicago).
     /// </summary>
-    public static string FormatInText(Source source)
+    public static string HeadingTextFor(CitationStyle style) => style switch
+    {
+        CitationStyle.Mla => "Works Cited",
+        CitationStyle.Chicago => "Bibliography",
+        _ => "References",
+    };
+
+    /// <summary>
+    /// Formats a source as an in-text citation using the default <see cref="CitationStyle.Apa"/> style:
+    /// <c>(Author, Year)</c>, gracefully degrading to <c>(Author)</c>, <c>(Year)</c>, <c>(Tag)</c> or
+    /// <c>(Unknown)</c> when fields are missing.
+    /// </summary>
+    public static string FormatInText(Source source) => FormatInText(source, CitationStyle.Apa);
+
+    /// <summary>
+    /// Formats a source as an in-text citation in the given <paramref name="style"/>:
+    /// <list type="bullet">
+    /// <item><b>APA</b>: <c>(Author, Year)</c> (author and year separated by a comma).</item>
+    /// <item><b>MLA</b>: <c>(Author)</c> — MLA is author–page, but FreeW's <see cref="Source"/> carries no
+    /// page, so only the author appears; with no author it falls back to the year/tag.</item>
+    /// <item><b>Chicago</b> (author–date): <c>(Author Year)</c> (author and year separated by a space).</item>
+    /// </list>
+    /// All styles degrade gracefully: with only one of author/year present that value is used; with
+    /// neither, the tag is used, else <c>Unknown</c>.
+    /// </summary>
+    public static string FormatInText(Source source, CitationStyle style)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -48,30 +96,67 @@ public static class Citations
         var year = source.Year?.Trim() ?? string.Empty;
 
         string inner;
-        if (author.Length > 0 && year.Length > 0)
-            inner = $"{author}, {year}";
+        if (style == CitationStyle.Mla)
+        {
+            // MLA is author–page; with no page field, cite the author alone, degrading to year/tag.
+            if (author.Length > 0)
+                inner = author;
+            else if (year.Length > 0)
+                inner = year;
+            else
+                inner = FallbackTag(source);
+        }
+        else if (author.Length > 0 && year.Length > 0)
+        {
+            // APA separates author and year with a comma; Chicago author–date uses a space.
+            inner = style == CitationStyle.Chicago ? $"{author} {year}" : $"{author}, {year}";
+        }
         else if (author.Length > 0)
             inner = author;
         else if (year.Length > 0)
             inner = year;
         else
-        {
-            var tag = source.Tag?.Trim() ?? string.Empty;
-            inner = tag.Length > 0 ? tag : "Unknown";
-        }
+            inner = FallbackTag(source);
 
         return $"({inner})";
     }
 
+    private static string FallbackTag(Source source)
+    {
+        var tag = source.Tag?.Trim() ?? string.Empty;
+        return tag.Length > 0 ? tag : "Unknown";
+    }
+
     /// <summary>
-    /// Formats a source as a bibliography entry: <c>Author. (Year). Title. Publisher.</c> Each segment
-    /// is emitted only when its field is non-empty, so missing fields are dropped cleanly. A source with
-    /// no populated fields yields an empty string.
+    /// Formats a source as a bibliography entry using the default <see cref="CitationStyle.Apa"/> style:
+    /// <c>Author. (Year). Title. Publisher.</c> Each segment is emitted only when its field is non-empty,
+    /// so missing fields are dropped cleanly. A source with no populated fields yields an empty string.
     /// </summary>
-    public static string FormatBibliographyEntry(Source source)
+    public static string FormatBibliographyEntry(Source source) =>
+        FormatBibliographyEntry(source, CitationStyle.Apa);
+
+    /// <summary>
+    /// Formats a source as a bibliography entry in the given <paramref name="style"/>:
+    /// <list type="bullet">
+    /// <item><b>APA</b>: <c>Author. (Year). Title. Publisher.</c> (year, parenthesised, after the author).</item>
+    /// <item><b>MLA</b>: <c>Author. Title. Publisher, Year.</c> (publisher and year as the final segment).</item>
+    /// <item><b>Chicago</b>: <c>Author. Title. Publisher, Year.</c> (same ordering as MLA).</item>
+    /// </list>
+    /// Each segment is emitted only when its field is non-empty, so missing fields are dropped cleanly. A
+    /// source with no populated fields yields an empty string.
+    /// </summary>
+    public static string FormatBibliographyEntry(Source source, CitationStyle style)
     {
         ArgumentNullException.ThrowIfNull(source);
 
+        return style == CitationStyle.Apa
+            ? FormatApaEntry(source)
+            : FormatAuthorTitlePublisherYearEntry(source);
+    }
+
+    // APA: Author. (Year). Title. Publisher.
+    private static string FormatApaEntry(Source source)
+    {
         var segments = new List<string>(4);
 
         var author = source.Author?.Trim() ?? string.Empty;
@@ -93,6 +178,32 @@ public static class Citations
         return string.Join(" ", segments);
     }
 
+    // MLA / Chicago: Author. Title. Publisher, Year.
+    // Publisher and Year combine into a single final segment ("Publisher, Year." / "Publisher." / "Year.").
+    private static string FormatAuthorTitlePublisherYearEntry(Source source)
+    {
+        var segments = new List<string>(3);
+
+        var author = source.Author?.Trim() ?? string.Empty;
+        if (author.Length > 0)
+            segments.Add(WithPeriod(author));
+
+        var title = source.Title?.Trim() ?? string.Empty;
+        if (title.Length > 0)
+            segments.Add(WithPeriod(title));
+
+        var publisher = source.Publisher?.Trim() ?? string.Empty;
+        var year = source.Year?.Trim() ?? string.Empty;
+        if (publisher.Length > 0 && year.Length > 0)
+            segments.Add($"{publisher}, {year}.");
+        else if (publisher.Length > 0)
+            segments.Add(WithPeriod(publisher));
+        else if (year.Length > 0)
+            segments.Add($"{year}.");
+
+        return string.Join(" ", segments);
+    }
+
     // Append a terminating period to a free-text segment, unless it already ends with sentence-ending
     // punctuation (so values like "Knuth, D." are not doubled to "Knuth, D..").
     private static string WithPeriod(string value)
@@ -102,19 +213,28 @@ public static class Citations
     }
 
     /// <summary>
-    /// Builds the bibliography paragraphs for <paramref name="document"/>: a "Bibliography" heading
-    /// (<see cref="HeadingStyleId"/>) followed by one paragraph per source (<see cref="EntryStyleId"/>),
-    /// sorted by author (case-insensitive, ordinal), then by title and tag as stable tie-breakers. A
-    /// document with no sources yields just the heading paragraph. Deterministic and side-effect free —
-    /// it never mutates <paramref name="document"/>.
+    /// Builds the bibliography paragraphs for <paramref name="document"/> using the default
+    /// <see cref="CitationStyle.Apa"/> style. See <see cref="BuildBibliography(TextDocument, CitationStyle)"/>.
     /// </summary>
-    public static IReadOnlyList<Paragraph> BuildBibliography(TextDocument document)
+    public static IReadOnlyList<Paragraph> BuildBibliography(TextDocument document) =>
+        BuildBibliography(document, CitationStyle.Apa);
+
+    /// <summary>
+    /// Builds the bibliography paragraphs for <paramref name="document"/> in the given
+    /// <paramref name="style"/>: a heading (<see cref="HeadingStyleId"/>) whose text is the
+    /// style-specific <see cref="HeadingTextFor(CitationStyle)"/> (<c>References</c>/<c>Works Cited</c>/
+    /// <c>Bibliography</c>), followed by one paragraph per source (<see cref="EntryStyleId"/>) formatted in
+    /// <paramref name="style"/>, sorted by author (case-insensitive, ordinal), then by title and tag as
+    /// stable tie-breakers. A document with no sources yields just the heading paragraph. Deterministic and
+    /// side-effect free — it never mutates <paramref name="document"/>.
+    /// </summary>
+    public static IReadOnlyList<Paragraph> BuildBibliography(TextDocument document, CitationStyle style)
     {
         ArgumentNullException.ThrowIfNull(document);
 
         var paragraphs = new List<Paragraph>
         {
-            new(HeadingText) { StyleId = HeadingStyleId }
+            new(HeadingTextFor(style)) { StyleId = HeadingStyleId }
         };
 
         var ordered = document.Sources
@@ -123,7 +243,7 @@ public static class Citations
             .ThenBy(s => s.Tag?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase);
 
         foreach (var source in ordered)
-            paragraphs.Add(new Paragraph(FormatBibliographyEntry(source)) { StyleId = EntryStyleId });
+            paragraphs.Add(new Paragraph(FormatBibliographyEntry(source, style)) { StyleId = EntryStyleId });
 
         return paragraphs;
     }

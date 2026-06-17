@@ -32,6 +32,7 @@ internal sealed class FileCommands(Window window, DocumentView editor, Action on
         {
             editor.LoadModel(DocxReader.Read(snapshotPath));
             _currentPath = originalPath;
+            editor.CurrentFileName = originalPath is null ? null : Path.GetFileName(originalPath);
             IsDirty = true;
             onChanged();
         }
@@ -54,6 +55,7 @@ internal sealed class FileCommands(Window window, DocumentView editor, Action on
     {
         editor.LoadModel(TextDocument.CreateEmpty());
         _currentPath = null;
+        editor.CurrentFileName = null;
         IsDirty = false;
         onChanged();
     }
@@ -128,6 +130,8 @@ internal sealed class FileCommands(Window window, DocumentView editor, Action on
     private void SetSaved(string path)
     {
         _currentPath = path;
+        // Surface the file name to the editor so FILENAME field runs resolve to it at render.
+        editor.CurrentFileName = Path.GetFileName(path);
         IsDirty = false;
         try
         {
