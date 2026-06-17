@@ -116,6 +116,7 @@ internal static class FreeWRibbon
                 tab.Group("references", "References", "R", 65, g =>
                 {
                     g.Button("freew.footnote", "Footnote");
+                    g.Button("freew.endnote", "Endnote");
                     g.Button("freew.toc", "Table of Contents");
                     g.Button("freew.toc-refresh", "Update TOC");
                     g.Button("freew.citation", "Citation");

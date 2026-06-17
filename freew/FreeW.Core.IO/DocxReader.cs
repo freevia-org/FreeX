@@ -54,6 +54,7 @@ public static class DocxReader
 
         ReadHeaderFooter(documentXml, archive, document, imageRelationships, hyperlinkRelationships);
         ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
+        ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, imageRelationships, hyperlinkRelationships);
         ReadSettings(archive, document);
 
@@ -174,6 +175,41 @@ public static class DocxReader
             if (footnote.Content.Count == 0)
                 footnote.Content.Add(new Paragraph());
             document.Footnotes[id] = footnote;
+        }
+    }
+
+    /// <summary>
+    /// Loads word/endnotes.xml (if present) into <see cref="TextDocument.Endnotes"/>, reconstructing
+    /// each w:endnote's paragraphs. The conventional separator endnotes (type separator /
+    /// continuationSeparator, ids -1 and 0) are skipped — only real content endnotes are kept. Mirrors
+    /// <see cref="ReadFootnotes"/>.
+    /// </summary>
+    private static void ReadEndnotes(
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+    {
+        var endnotesXml = LoadPart(archive, "word/endnotes.xml");
+        var root = endnotesXml?.Root;
+        if (root is null)
+            return;
+
+        var noNumbering = new Dictionary<int, ListKind>();
+        foreach (var element in root.Elements(W + "endnote"))
+        {
+            var type = element.Attribute(W + "type")?.Value;
+            if (type is "separator" or "continuationSeparator")
+                continue;
+            if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
+                continue;
+
+            var endnote = new Endnote(id);
+            foreach (var p in element.Elements(W + "p"))
+                endnote.Content.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+            if (endnote.Content.Count == 0)
+                endnote.Content.Add(new Paragraph());
+            document.Endnotes[id] = endnote;
         }
     }
 
@@ -476,6 +512,16 @@ public static class DocxReader
             var footnoteRun = Run.FootnoteReference(footnoteId, ReadRunFormatting(r.Element(W + "rPr")));
             ApplyRevision(footnoteRun);
             paragraph.Runs.Add(footnoteRun);
+            return;
+        }
+
+        // A run wrapping a w:endnoteReference is an endnote marker; recover its id into the model.
+        var endnoteRef = r.Element(W + "endnoteReference");
+        if (endnoteRef is not null && int.TryParse(endnoteRef.Attribute(W + "id")?.Value, out var endnoteId))
+        {
+            var endnoteRun = Run.EndnoteReference(endnoteId, ReadRunFormatting(r.Element(W + "rPr")));
+            ApplyRevision(endnoteRun);
+            paragraph.Runs.Add(endnoteRun);
             return;
         }
 

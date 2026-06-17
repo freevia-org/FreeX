@@ -128,6 +128,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
         // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
         registry.Register("freew.footnote", new InsertFootnoteCommand(editor));
+        // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.
+        registry.Register("freew.endnote", new InsertEndnoteCommand(editor));
         // Insert tab — References: generate a Table of Contents from the heading outline at the caret,
         // and rebuild it in place (remove the prior TOC region + re-insert). Both route through the bus.
         registry.Register("freew.toc", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));
@@ -892,6 +894,21 @@ internal static class FreeWRibbonCommands
                 return; // cancelled or empty — nothing to anchor a footnote to
             editor.Focus();
             editor.InsertFootnote(text.Trim());
+        }
+    }
+
+    // Insert > References > Endnote: prompt for the endnote text, then insert an endnote reference
+    // at the caret. The view allocates the next id, stores the content and drops a superscript marker.
+    private sealed class InsertEndnoteCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var text = TextPrompt.Ask(Window.GetWindow(editor), "Insert Endnote", "Endnote text:", string.Empty);
+            if (string.IsNullOrWhiteSpace(text))
+                return; // cancelled or empty — nothing to anchor an endnote to
+            editor.Focus();
+            editor.InsertEndnote(text.Trim());
         }
     }
 

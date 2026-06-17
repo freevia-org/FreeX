@@ -1287,6 +1287,9 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
                 break;
+            case WpfRun { Tag: EndnoteMarker endnoteMarker }:
+                modelParagraph.Runs.Add(ModelRun.EndnoteReference(endnoteMarker.EndnoteId));
+                break;
             case WpfRun { Tag: CommentMarker { IsReference: true } reference }:
                 // The textless comment anchor: round-trips as a comment-reference run.
                 modelParagraph.Runs.Add(ModelRun.CommentReference(reference.CommentId));
@@ -1506,6 +1509,9 @@ public sealed class DocumentView : RichTextBox
 
         if (run.FootnoteId is { } footnoteId)
             return BuildFootnoteReference(footnoteId, document);
+
+        if (run.EndnoteId is { } endnoteId)
+            return BuildEndnoteReference(endnoteId, document);
 
         // The textless comment anchor round-trips as an empty, tagged run carrying its reference flag.
         if (run is { IsCommentReference: true, CommentId: { } refId })
@@ -1775,6 +1781,28 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Carried on a footnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
     private sealed record FootnoteMarker(int FootnoteId);
 
+    /// <summary>
+    /// Renders an endnote reference as a small superscript marker showing the endnote number, tagged
+    /// with an <see cref="EndnoteMarker"/> so <see cref="ReadInline"/> can recover the id on commit.
+    /// A tooltip surfaces the endnote text when the document carries it. Mirrors
+    /// <see cref="BuildFootnoteReference"/>.
+    /// </summary>
+    private static WpfRun BuildEndnoteReference(int endnoteId, TextDocument document)
+    {
+        var marker = new WpfRun(endnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture))
+        {
+            BaselineAlignment = BaselineAlignment.Superscript,
+            FontSize = (document.DefaultRun.FontSizePt ?? DefaultFontSizePt) * PxPerPoint * SuperSubScale,
+            Tag = new EndnoteMarker(endnoteId)
+        };
+        if (document.Endnotes.TryGetValue(endnoteId, out var endnote) && endnote.PlainText is { Length: > 0 } text)
+            marker.ToolTip = text;
+        return marker;
+    }
+
+    /// <summary>Carried on an endnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
+    private sealed record EndnoteMarker(int EndnoteId);
+
     /// <summary>Renders an inline image as an InlineUIContainer hosting a WPF Image (PNG-decoded).</summary>
     private static InlineUIContainer BuildImageRun(InlineImage image)
     {
@@ -1861,6 +1889,35 @@ public sealed class DocumentView : RichTextBox
         _model.Footnotes[id] = footnote;
 
         var marker = BuildFootnoteReference(id, _model);
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
+        if (paragraph is null)
+        {
+            paragraph = new WpfParagraph();
+            Document.Blocks.Add(paragraph);
+        }
+        paragraph.Inlines.Add(marker);
+
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Inserts an endnote at the caret: allocates the next endnote id, stores <paramref name="text"/>
+    /// as the endnote's content in the model, and drops a superscript reference marker at the caret.
+    /// Re-renders so the marker round-trips through the model on the next commit. Mirrors
+    /// <see cref="InsertFootnote"/> but collected at the document end (word/endnotes.xml).
+    /// </summary>
+    public void InsertEndnote(string text)
+    {
+        CommitToModel();
+
+        var id = _model.NextEndnoteId();
+        var endnote = new Endnote(id);
+        endnote.Content.Add(new ModelParagraph(text));
+        _model.Endnotes[id] = endnote;
+
+        var marker = BuildEndnoteReference(id, _model);
         var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
         var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
         if (paragraph is null)
