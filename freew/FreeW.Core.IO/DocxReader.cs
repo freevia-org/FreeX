@@ -1137,6 +1137,17 @@ public static class DocxReader
             return;
         }
 
+        // A manual page break (w:br w:type="page") forces the following content onto a new page. It is
+        // emitted as its own break-only run; recover it as a page-break run (otherwise it — and any
+        // text-less run holding it — would be dropped, making FreeW under-paginate versus Word).
+        if (r.Elements(W + "br").Any(b => b.Attribute(W + "type")?.Value == "page"))
+        {
+            var breakRun = Run.PageBreak();
+            breakRun.Formatting = ReadRunFormatting(r.Element(W + "rPr"));
+            ApplyRevision(breakRun);
+            paragraph.Runs.Add(breakRun);
+        }
+
         // A tracked deletion stores its text in w:delText; ordinary/inserted runs use w:t.
         var text = string.Concat(r.Elements(W + "t").Select(t => t.Value))
             + string.Concat(r.Elements(W + "delText").Select(t => t.Value));

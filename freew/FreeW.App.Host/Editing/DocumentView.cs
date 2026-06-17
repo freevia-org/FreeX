@@ -2332,6 +2332,9 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
                 break;
+            case WpfRun { Tag: PageBreakMarker }:
+                modelParagraph.Runs.Add(ModelRun.PageBreak());
+                break;
             case WpfRun { Tag: EndnoteMarker endnoteMarker }:
                 modelParagraph.Runs.Add(ModelRun.EndnoteReference(endnoteMarker.EndnoteId));
                 break;
@@ -2700,6 +2703,11 @@ public sealed class DocumentView : RichTextBox
             // TextAlignment is interpreted relative to FlowDirection, the model's default (Left = leading)
             // alignment lands at the right edge — matching Word's default for a bidi paragraph.
             FlowDirection = paraFmt.Rtl ? System.Windows.FlowDirection.RightToLeft : System.Windows.FlowDirection.LeftToRight,
+            // Start this paragraph on a new page in the paginator (print/preview) when it forces a break
+            // before it (w:pageBreakBefore) or carries a manual page-break run (w:br type=page). The
+            // editor's continuous RichTextBox ignores BreakPageBefore, so this only affects the paginated
+            // output — which previously honoured neither, leaving FreeW badly under-paginated vs Word.
+            BreakPageBefore = paraFmt.PageBreakBefore || paragraph.Runs.Any(r => r.IsPageBreak),
             TextAlignment = ToWpfAlignment(paraFmt.Alignment),
             // WPF's Block.Margin (unlike FrameworkElement.Margin) rejects negative components with an
             // ArgumentException, so clamp at >= 0. Real docs do carry negative indents/spacing (e.g. a
@@ -2811,6 +2819,12 @@ public sealed class DocumentView : RichTextBox
         // The textless comment anchor round-trips as an empty, tagged run carrying its reference flag.
         if (run is { IsCommentReference: true, CommentId: { } refId })
             return new WpfRun(string.Empty) { Tag = new RunMarkers(Comment: new CommentMarker(refId, IsReference: true)) };
+
+        // A manual page break renders as an empty, tagged run; the containing paragraph carries the actual
+        // BreakPageBefore (set in BuildParagraph). The tag lets ReadInline recover it on commit so the break
+        // survives an edit/commit cycle (mirroring the footnote/endnote markers).
+        if (run.IsPageBreak)
+            return new WpfRun(string.Empty) { Tag = new PageBreakMarker() };
 
         var fmt = Resolve(run, paragraph, document);
         var wpf = new WpfRun(run.Text)
@@ -3108,6 +3122,9 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Carried on a footnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
     private sealed record FootnoteMarker(int FootnoteId);
+
+    /// <summary>Carried on a manual page-break WPF run's Tag so CommitToModel can round-trip it.</summary>
+    private sealed record PageBreakMarker;
 
     /// <summary>
     /// Renders an endnote reference as a small superscript marker showing the endnote number, tagged

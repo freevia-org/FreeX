@@ -1857,6 +1857,17 @@ public static class DocxWriter
             return new XElement(W + "r",
                 new XElement(W + "commentReference", new XAttribute(W + "id", commentRefId)));
 
+        // A manual page break serialises as a (text-less) run wrapping w:br w:type="page".
+        if (run.IsPageBreak)
+        {
+            var br = new XElement(W + "r");
+            var brPr = BuildRunProperties(run.Formatting);
+            if (brPr is not null)
+                br.Add(brPr);
+            br.Add(new XElement(W + "br", new XAttribute(W + "type", "page")));
+            return br;
+        }
+
         return BuildTextRun(run, drawings);
     }
 
