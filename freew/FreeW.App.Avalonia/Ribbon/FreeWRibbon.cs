@@ -16,6 +16,9 @@ internal static class FreeWRibbon
     public static readonly string[] FontSizes =
         ["8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36", "48", "72"];
 
+    public static readonly string[] FontFamilies =
+        ["Calibri", "Arial", "Times New Roman", "Inter", "Verdana", "Georgia", "Courier New"];
+
     public static RibbonDefinition BuildDefinition() =>
         new RibbonDefinitionBuilder()
             .Tab("file", "File", "F", tab =>
@@ -34,6 +37,7 @@ internal static class FreeWRibbon
                 });
                 tab.Group("font", "Font", null, 90, g =>
                 {
+                    g.ComboBox("freew.font-family", "Font", c => c with { Items = FontFamilies, Width = 128 });
                     g.Toggle("freew.bold", "Bold");
                     g.Toggle("freew.italic", "Italic");
                     g.Toggle("freew.underline", "Underline");
@@ -82,6 +86,11 @@ internal static class FreeWRibbon
         {
             if (double.TryParse(value, out var points) && points > 0)
                 editor.SetSelectionFontSize(points);
+        }));
+        registry.Register("freew.font-family", new RelayValueCommand(value =>
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                editor.SetSelectionFontFamily(value);
         }));
         registry.Register("freew.open", new RelayCommand(callbacks.Open));
         registry.Register("freew.save", new RelayCommand(callbacks.Save));
