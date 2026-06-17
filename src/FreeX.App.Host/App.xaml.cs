@@ -31,6 +31,7 @@ public partial class App : Application
         AppLocalization.ApplyAppLanguage(options.AppLanguage);
         AppLocalization.ApplyCurrentCultureToWpf();
         ShellStrings.Current = new FreeXShellStrings();
+        BackstageStrings.Current = new FreeXBackstageStrings();
         DialogSizing.RegisterAppDialogSizing();
 
         // Configure Serilog — resolve the log directory under LocalApplicationData so that

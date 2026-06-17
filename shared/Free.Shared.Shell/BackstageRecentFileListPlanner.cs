@@ -1,7 +1,7 @@
 using System.Globalization;
-using FreeX.App.Services;
+using Free.Shared.AppServices;
 
-namespace FreeX.App.Host;
+namespace Free.Shared.Shell;
 
 public sealed record BackstageRecentFileListPlan(
     IReadOnlyList<RecentFileViewModel> AllItems,
@@ -87,17 +87,17 @@ public sealed class RecentFileViewModel
         LastOpenedText = FormatDate(entry.LastOpened);
         IsPinned = entry.IsPinned;
         OpenAutomationName = IsPinned
-            ? UiText.Format("Backstage_Recent_OpenPinnedFileAutomationName", FileName)
-            : UiText.Format("Backstage_Recent_OpenRecentFileAutomationName", FileName);
-        OpenAutomationHelpText = UiText.Format("Backstage_Recent_OpenAutomationHelpText", Path);
+            ? BackstageStrings.Current.Format("Backstage_Recent_OpenPinnedFileAutomationName", FileName)
+            : BackstageStrings.Current.Format("Backstage_Recent_OpenRecentFileAutomationName", FileName);
+        OpenAutomationHelpText = BackstageStrings.Current.Format("Backstage_Recent_OpenAutomationHelpText", Path);
         PinAutomationName = IsPinned
-            ? UiText.Format("Backstage_Recent_UnpinAutomationName", FileName)
-            : UiText.Format("Backstage_Recent_PinAutomationName", FileName);
+            ? BackstageStrings.Current.Format("Backstage_Recent_UnpinAutomationName", FileName)
+            : BackstageStrings.Current.Format("Backstage_Recent_PinAutomationName", FileName);
         PinAutomationHelpText = IsPinned
-            ? UiText.Get("Backstage_Recent_UnpinHelpText")
-            : UiText.Get("Backstage_Recent_PinHelpText");
-        RemoveAutomationName = UiText.Format("Backstage_Recent_RemoveAutomationName", FileName);
-        RemoveAutomationHelpText = UiText.Get("Backstage_Recent_RemoveAutomationHelpText");
+            ? BackstageStrings.Current.Get("Backstage_Recent_UnpinHelpText")
+            : BackstageStrings.Current.Get("Backstage_Recent_PinHelpText");
+        RemoveAutomationName = BackstageStrings.Current.Format("Backstage_Recent_RemoveAutomationName", FileName);
+        RemoveAutomationHelpText = BackstageStrings.Current.Get("Backstage_Recent_RemoveAutomationHelpText");
     }
 
     private static string FormatDate(DateTimeOffset timestamp)
@@ -106,24 +106,24 @@ public sealed class RecentFileViewModel
         var now = DateTimeOffset.Now;
         var diff = now - localTimestamp;
         if (diff.TotalHours < 1)
-            return UiText.Get("Backstage_Recent_LastOpenedJustNow");
+            return BackstageStrings.Current.Get("Backstage_Recent_LastOpenedJustNow");
 
-        var time = localTimestamp.ToString(UiText.Get("Backstage_Recent_LastOpenedTimeFormat"), CultureInfo.CurrentCulture);
+        var time = localTimestamp.ToString(BackstageStrings.Current.Get("Backstage_Recent_LastOpenedTimeFormat"), CultureInfo.CurrentCulture);
         if (diff.TotalDays < 1)
-            return UiText.Format("Backstage_Recent_LastOpenedTodayAt", time);
+            return BackstageStrings.Current.Format("Backstage_Recent_LastOpenedTodayAt", time);
 
         if (diff.TotalDays < 2)
-            return UiText.Format("Backstage_Recent_LastOpenedYesterdayAt", time);
+            return BackstageStrings.Current.Format("Backstage_Recent_LastOpenedYesterdayAt", time);
 
         if (diff.TotalDays < 7)
         {
             var dayName = localTimestamp.ToString("dddd", CultureInfo.CurrentCulture);
-            return UiText.Format("Backstage_Recent_LastOpenedWeekdayAt", dayName, time);
+            return BackstageStrings.Current.Format("Backstage_Recent_LastOpenedWeekdayAt", dayName, time);
         }
 
         var formatKey = localTimestamp.Year == now.Year
             ? "Backstage_Recent_LastOpenedDateFormat"
             : "Backstage_Recent_LastOpenedDateWithYearFormat";
-        return localTimestamp.ToString(UiText.Get(formatKey), CultureInfo.CurrentCulture);
+        return localTimestamp.ToString(BackstageStrings.Current.Get(formatKey), CultureInfo.CurrentCulture);
     }
 }
