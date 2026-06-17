@@ -340,6 +340,7 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock _statusText = new();
     private readonly TextBlock _selectionStatsText = new();
     private readonly TextBlock _zoomText = new();
+    private readonly StackPanel _statusBarRegion = new();
     private readonly TextBlock _cellAddressText = new();
     private readonly TextBox _formulaBox = new();
     private readonly Button _openButton = new();
@@ -1803,6 +1804,16 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(_zoomText, "Zoom");
         AutomationProperties.SetHelpText(_zoomText, "Shows the active worksheet zoom.");
 
+        _statusBarRegion.Orientation = Orientation.Horizontal;
+        _statusBarRegion.Spacing = 12;
+        _statusBarRegion.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _statusBarRegion.Children.Add(_statusText);
+        _statusBarRegion.Children.Add(_selectionStatsText);
+        _statusBarRegion.Children.Add(_zoomText);
+        AutomationProperties.SetAutomationId(_statusBarRegion, "StatusBarRegion");
+        AutomationProperties.SetName(_statusBarRegion, "Status bar");
+        _statusBarRegion.ContextMenu = BuildStatusBarCustomizeContextMenu();
+
         _openButton.Content = "Open";
         _openButton.Padding = new Thickness(10, 4);
         _openButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -2185,9 +2196,7 @@ public sealed partial class MainWindow : Window
                     _alignRightButton,
                     _cellAddressText,
                     _formulaBox,
-                    _statusText,
-                    _selectionStatsText,
-                    _zoomText,
+                    _statusBarRegion,
                 },
             },
         };
@@ -2233,9 +2242,7 @@ public sealed partial class MainWindow : Window
             _formulaBox.SelectionEnd = Math.Min(formulaSelectionEnd, _formulaBox.Text?.Length ?? 0);
         }
 
-        _statusText.Text = status;
-        _selectionStatsText.Text = _session.SelectionStatsText;
-        _zoomText.Text = FormatZoomPercent(_session.ZoomPercent);
+        ApplyStatusBarModel(status);
         _statusText.Foreground = ShouldUseWarningStatusColor(status)
             ? Brush(143, 74, 18)
             : Brush(67, 113, 83);
