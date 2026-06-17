@@ -167,6 +167,22 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public static Run FromChart(Chart chart) => new(string.Empty) { Chart = chart };
 
     /// <summary>
+    /// Optional inline embedded OLE object (e.g. an embedded Excel sheet). When non-null this run is an
+    /// embedded object rather than literal text: on save it serialises as a classic <c>w:object</c> wrapping
+    /// a VML <c>v:shape</c>/<c>o:OLEObject</c>, with the payload bytes written to a separate embeddings part
+    /// (<c>word/embeddings/oleObjectN.bin</c>) referenced by relationship id and the presentation icon
+    /// written as a media part — mirroring how <see cref="Chart"/> and <see cref="Image"/> serialise as
+    /// referenced parts. Carries no literal text of its own. Modelled at the run level — mirroring
+    /// <see cref="Chart"/> and <see cref="Image"/> — so embedded objects round-trip through the existing run
+    /// flow without a new block type.
+    /// </summary>
+    public EmbeddedObject? EmbeddedObject { get; set; }
+
+    /// <summary>Creates a run that carries an inline embedded OLE object instead of text.</summary>
+    public static Run FromEmbeddedObject(EmbeddedObject embeddedObject) =>
+        new(string.Empty) { EmbeddedObject = embeddedObject };
+
+    /// <summary>
     /// Optional external hyperlink target (absolute URL). When non-null the run is wrapped in a
     /// w:hyperlink on save, with the URL stored as an external relationship, and rendered as a link.
     /// Mutually exclusive with <see cref="HyperlinkAnchor"/>: a run links either externally or

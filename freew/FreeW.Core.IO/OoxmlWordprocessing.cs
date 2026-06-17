@@ -48,6 +48,22 @@ internal static class Ooxml
     /// <summary>The a:graphicData/@uri that marks a DrawingML graphic frame as a chart.</summary>
     public const string ChartGraphicDataUri = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
+    /// <summary>
+    /// The VML namespaces used by a classic embedded OLE object's presentation markup. <c>v</c> carries the
+    /// <c>v:shape</c>/<c>v:imagedata</c> (the on-page icon) and <c>o</c> carries the <c>o:OLEObject</c>
+    /// (Type/ProgID/ShapeID/relationship). Declared on the document root so embedded objects serialise and
+    /// parse like the other inline run features.
+    /// </summary>
+    public static readonly XNamespace V = "urn:schemas-microsoft-com:vml";
+    public static readonly XNamespace O = "urn:schemas-microsoft-com:office:office";
+
+    /// <summary>The OPC content type + relationship type for an embedded OLE object's binary part.</summary>
+    public const string OleObjectContentType = "application/vnd.openxmlformats-officedocument.oleObject";
+    public const string OleObjectRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject";
+
+    /// <summary>The relationship type for an inline image / OLE presentation media part (shared with pictures).</summary>
+    public const string ImageRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+
     // OPC core properties (docProps/core.xml): Dublin Core + the cp / dcterms / xsi vocabularies.
     public static readonly XNamespace Cp = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
     public static readonly XNamespace Dc = "http://purl.org/dc/elements/1.1/";
