@@ -56,4 +56,13 @@ public sealed class ChartRenderingTests
         var rects = LogicalDescendants<System.Windows.Shapes.Rectangle>(view.Document);
         Assert.True(rects.Count >= 6, $"expected >= 6 bar rectangles, got {rects.Count}");
     }
+
+    [StaFact]
+    public void ColumnChart_DrawsValueGridlines()
+    {
+        var view = ViewWithChart(ChartKind.Column);
+        // 4 horizontal gridlines + 1 baseline axis line; without gridlines there would be just the axis.
+        var lines = LogicalDescendants<System.Windows.Shapes.Line>(view.Document);
+        Assert.True(lines.Count >= 5, $"expected gridlines + axis (>= 5 lines), got {lines.Count}");
+    }
 }

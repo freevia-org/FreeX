@@ -106,6 +106,9 @@ public sealed class MainWindow : Window
         // Keep maximized content from spilling under the screen edges (WindowChrome quirk).
         StateChanged += (_, _) => OnWindowStateChanged();
         SourceInitialized += (_, _) => OnWindowStateChanged();
+        // A borderless WindowChrome shell does not inherit the Win11 rounded frame automatically; ask DWM
+        // for it once the HWND exists so FreeW's corners match FreeX (no-op on Windows 10/older).
+        SourceInitialized += (_, _) => WindowCornerHelper.ApplyRoundedCorners(this);
 
         // The shared, app-neutral window-chrome styles (flat buttons, caption buttons, status buttons),
         // ported from FreeX and merged so both apps reuse the same look. App-specific ribbon brushes/styles
@@ -151,7 +154,9 @@ public sealed class MainWindow : Window
 
         var titleBar = BuildTitleBar();
         _titleBar = titleBar;
-        chromeStack.Children.Add(titleBar);
+        // The title bar is composed into the OUTER grid (below), in its own top row ABOVE the Backstage
+        // overlay, so opening the File screen never hides the caption / QAT / window buttons. Only the
+        // ribbon goes into the chrome stack here.
 
         var (ribbon, ribbonTabs) = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
         _ribbon = ribbon;
@@ -244,15 +249,26 @@ public sealed class MainWindow : Window
             OnClosed: () => { },
             DataFolder: ResolveDataFolderLabel));
 
-        var shell = new Grid();
-        shell.Children.Add(root);
-        shell.Children.Add(_backstage);
-        Content = shell;
+        // Compose the window. The title bar occupies its own top row of the OUTER grid, always above the
+        // Backstage; `belowTitle` stacks the Backstage overlay over the 3-row body (ribbon + document +
+        // status), so the File screen covers those but leaves the title bar visible (Word behaviour).
+        var belowTitle = new Grid();
+        belowTitle.Children.Add(root);
+        belowTitle.Children.Add(_backstage);
+
+        var outer = new Grid();
+        outer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                  // title bar
+        outer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // body + backstage
+        Grid.SetRow(_titleBar, 0);
+        outer.Children.Add(_titleBar);
+        Grid.SetRow(belowTitle, 1);
+        outer.Children.Add(belowTitle);
+        Content = outer;
 
         // V5 KeyTips: pressing Alt overlays Word-style letter badges over the ribbon tabs, then over the
         // active tab's controls, so the ribbon is fully keyboard-navigable. The overlay walks the rendered
-        // ribbon and draws its badges on the shell grid (which spans the whole client area).
-        KeyTipsOverlay.Install(this, _ribbonTabs, shell);
+        // ribbon and draws its badges on the outer grid (which spans the whole client area).
+        KeyTipsOverlay.Install(this, _ribbonTabs, outer);
     }
 
     // Show the Word-style Backstage (File screen) over the document.

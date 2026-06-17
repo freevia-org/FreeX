@@ -3678,6 +3678,17 @@ public sealed class DocumentView : RichTextBox
         StrokeThickness = 1
     };
 
+    /// <summary>Faint horizontal value gridlines across the plot (matching Word), drawn behind the data.</summary>
+    private static void DrawChartGridlines(Canvas plot, double plotH, double w)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
+        for (var i = 1; i <= 4; i++)
+        {
+            var y = plotH - plotH * i / 4.0;
+            plot.Children.Add(new System.Windows.Shapes.Line { X1 = 0, Y1 = y, X2 = w, Y2 = y, Stroke = brush, StrokeThickness = 1 });
+        }
+    }
+
     /// <summary>Grouped column (vertical) or bar (horizontal) chart over all series, with category labels.</summary>
     private static void DrawBarChart(Canvas plot, Chart chart, double w, double h, bool horizontal)
     {
@@ -3694,6 +3705,7 @@ public sealed class DocumentView : RichTextBox
             var groupW = w / cats;
             var gap = groupW * 0.15;
             var barW = Math.Max(1, (groupW - 2 * gap) / seriesCount);
+            DrawChartGridlines(plot, plotH, w);
             plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
             for (var c = 0; c < cats; c++)
             {
@@ -3756,6 +3768,7 @@ public sealed class DocumentView : RichTextBox
         var max = ChartMax(chart);
         const double labelStrip = 14;
         var plotH = Math.Max(8, h - labelStrip);
+        DrawChartGridlines(plot, plotH, w);
         plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
 
         double X(int c) => cats == 1 ? w / 2 : (c + 0.5) * (w / cats);
@@ -5269,14 +5282,36 @@ public sealed class DocumentView : RichTextBox
 
     private static ParagraphFormatting Resolve(ModelParagraph paragraph, TextDocument document)
     {
-        // Explicit paragraph formatting wins; otherwise fall back to the style's paragraph props.
+        var p = paragraph.Formatting;
+        // Per-property cascade: direct paragraph formatting wins; for any presentation property the
+        // paragraph leaves at the model default, inherit the paragraph style's value (Word's cascade).
+        // The previous all-or-nothing rule fell back to FreeW's hardcoded defaults for a paragraph that set
+        // ANY property (e.g. a list kind), ignoring the style's spacing/indents. List membership, breaks
+        // and toggles stay paragraph-intrinsic. (Value-typed formatting can't distinguish "explicitly the
+        // default" from "unset", so a property explicitly set to the default value inherits the style; the
+        // fully-correct fix is nullable formatting recording only explicit props — a larger refactor.)
         if (paragraph.StyleId is { } id && document.Styles.TryGetValue(id, out var style))
         {
             var sp = style.Paragraph;
-            var p = paragraph.Formatting;
-            return p == ParagraphFormatting.Default ? sp : p;
+            if (p == ParagraphFormatting.Default)
+                return sp;
+            var d = ParagraphFormatting.Default;
+            return p with
+            {
+                Alignment = p.Alignment != d.Alignment ? p.Alignment : sp.Alignment,
+                SpaceBeforePt = p.SpaceBeforePt != d.SpaceBeforePt ? p.SpaceBeforePt : sp.SpaceBeforePt,
+                SpaceAfterPt = p.SpaceAfterPt != d.SpaceAfterPt ? p.SpaceAfterPt : sp.SpaceAfterPt,
+                LineSpacing = p.LineSpacing != d.LineSpacing ? p.LineSpacing : sp.LineSpacing,
+                LineRule = p.LineRule != d.LineRule ? p.LineRule : sp.LineRule,
+                LineHeightPt = p.LineHeightPt != d.LineHeightPt ? p.LineHeightPt : sp.LineHeightPt,
+                IndentLeftPt = p.IndentLeftPt != d.IndentLeftPt ? p.IndentLeftPt : sp.IndentLeftPt,
+                IndentRightPt = p.IndentRightPt != d.IndentRightPt ? p.IndentRightPt : sp.IndentRightPt,
+                FirstLineIndentPt = p.FirstLineIndentPt != d.FirstLineIndentPt ? p.FirstLineIndentPt : sp.FirstLineIndentPt,
+                Border = p.Border ?? sp.Border,
+                ShadingColorHex = p.ShadingColorHex ?? sp.ShadingColorHex,
+            };
         }
-        return paragraph.Formatting;
+        return p;
     }
 
     private static RunFormatting StyleRun(ModelParagraph paragraph, TextDocument document) =>

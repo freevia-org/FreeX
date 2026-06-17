@@ -100,6 +100,7 @@ public static partial class XlsxChartPartReader
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
+                XlsxChartDataLabelReader.ApplyRangeDataLabels(series, seriesIndex, result);
                 XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
                 XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;

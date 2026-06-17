@@ -7,6 +7,39 @@ internal static class XlsxChartDataLabelReader
 {
     private static readonly XNamespace ChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    private static readonly XNamespace Chart2012Ns = "http://schemas.microsoft.com/office/drawing/2012/chart";
+
+    /// <summary>
+    /// Reads Excel's "Value From Cells" data-label strings for a series
+    /// (<c>c15:datalabelsRange</c> under the series <c>extLst</c>) and appends them to
+    /// <see cref="ChartModel.RangeDataLabels"/>. These literal cached strings (e.g.
+    /// <c>"👍 10%"</c>) override the numeric value Excel would otherwise display.
+    /// </summary>
+    public static void ApplyRangeDataLabels(XElement series, int seriesIndex, ChartModel chart)
+    {
+        var rangeCache = series
+            .Element(ChartNs + "extLst")?
+            .Elements(ChartNs + "ext")
+            .Select(ext => ext.Element(Chart2012Ns + "datalabelsRange"))
+            .FirstOrDefault(range => range is not null)?
+            .Element(Chart2012Ns + "dlblRangeCache");
+        if (rangeCache is null)
+            return;
+
+        foreach (var point in rangeCache.Elements(ChartNs + "pt"))
+        {
+            if (!int.TryParse(point.Attribute("idx")?.Value, out var pointIndex) || pointIndex < 0)
+                continue;
+
+            var text = point.Element(ChartNs + "v")?.Value;
+            if (string.IsNullOrEmpty(text))
+                continue;
+
+            chart.RangeDataLabels.RemoveAll(existing =>
+                existing.SeriesIndex == seriesIndex && existing.PointIndex == pointIndex);
+            chart.RangeDataLabels.Add(new ChartRangeDataLabel(seriesIndex, pointIndex, text));
+        }
+    }
 
     public static void ApplyDataLabels(XElement? plotArea, ChartModel chart)
     {
