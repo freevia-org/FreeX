@@ -104,12 +104,15 @@ internal static class FreeWRibbon
             {
                 tab.Group("pages", "Pages", "P", 100, g =>
                 {
-                    g.Icon("freew.cover-page", "Cover Page", RibbonCommandIconKind.CoverPage);
-                    g.Icon("freew.blank-page", "Blank Page", RibbonCommandIconKind.OnePage);
-                    g.Icon("freew.horizontal-rule", "Horizontal Rule", RibbonCommandIconKind.HorizontalRule);
-                    g.Icon("freew.page-break", "Page Break", RibbonCommandIconKind.PageBreak);
-                    g.Icon("freew.drop-cap", "Drop Cap", RibbonCommandIconKind.DropCap);
+                    // Word shows the Pages group as labelled icon+label rows — use Medium so the labels read.
+                    g.Medium("freew.cover-page", "Cover Page", RibbonCommandIconKind.CoverPage);
+                    g.Medium("freew.blank-page", "Blank Page", RibbonCommandIconKind.OnePage);
+                    g.Medium("freew.page-break", "Page Break", RibbonCommandIconKind.PageBreak);
+                    g.RowBreak();
+                    g.Medium("freew.horizontal-rule", "Horizontal Rule", RibbonCommandIconKind.HorizontalRule);
+                    g.Medium("freew.drop-cap", "Drop Cap", RibbonCommandIconKind.DropCap);
                 });
+                // Single-command group → unmistakable Large hero button.
                 tab.Group("tables", "Tables", "T", 90, g => g.Large("freew.table", "Table", RibbonCommandIconKind.Table, dropdown: true));
                 tab.Group("table-tools", "Table Tools", "B", 85, g =>
                 {
@@ -144,28 +147,34 @@ internal static class FreeWRibbon
                         m.Item("freew.shape-textbox", "Text Box", "T");
                     });
                 });
+                // Media is a compact icon cluster (Word keeps these small), kept icon-only so the dense
+                // 12-group Insert tab fits without collapsing the trailing groups at ~1500-1600px.
                 tab.Group("media", "Media", "M", 78, g =>
                 {
                     g.Icon("freew.equation", "Equation", RibbonCommandIconKind.Equation);
                     g.Icon("freew.chart", "Chart", RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
                     g.Icon("freew.wordart", "WordArt", RibbonCommandIconKind.WordArt);
+                    g.RowBreak();
                     g.Icon("freew.smartart", "SmartArt", RibbonCommandIconKind.SmartArt);
                     g.Icon("freew.object", "Object", RibbonCommandIconKind.Object);
                 });
+                // Links/Quick Parts/References are dense, lower-priority clusters (Word keeps them compact),
+                // so they stay icon-only — this also keeps the 12-group Insert tab fitting at ~1500-1600px.
                 tab.Group("links", "Links", "K", 70, g =>
                 {
                     g.Icon("freew.hyperlink", "Link", RibbonCommandIconKind.Link);
+                    g.Icon("freew.bookmark", "Bookmark", RibbonCommandIconKind.Bookmark);
                     g.Icon("freew.edit-hyperlink", "Edit Hyperlink", RibbonCommandIconKind.Link);
+                    g.RowBreak();
                     g.Icon("freew.remove-hyperlink", "Remove Hyperlink", RibbonCommandIconKind.Link);
                     g.Icon("freew.hyperlink-tooltip", "ScreenTip", RibbonCommandIconKind.Info);
-                    g.Icon("freew.bookmark", "Bookmark", RibbonCommandIconKind.Bookmark);
                     g.Icon("freew.link-bookmark", "Link to Bookmark", RibbonCommandIconKind.Bookmark);
                     g.Icon("freew.bookmark-manager", "Bookmark Manager", RibbonCommandIconKind.Bookmark);
                 });
                 tab.Group("quick-parts", "Quick Parts", "Q", 67, g =>
                 {
-                    g.Icon("freew.save-quickpart", "Save Selection", RibbonCommandIconKind.QuickParts);
                     g.Icon("freew.insert-quickpart", "Insert Quick Part", RibbonCommandIconKind.QuickParts);
+                    g.Icon("freew.save-quickpart", "Save Selection", RibbonCommandIconKind.QuickParts);
                     g.Icon("freew.insert-file", "Text from File", RibbonCommandIconKind.TextFromFile);
                 });
                 tab.Group("references", "References", "R", 65, g =>
@@ -191,30 +200,32 @@ internal static class FreeWRibbon
                 });
                 tab.Group("controls", "Controls", "O", 62, g =>
                 {
-                    g.Icon("freew.cc-text", "Text Control", RibbonCommandIconKind.TextBox);
-                    g.Icon("freew.cc-checkbox", "Check Box", RibbonCommandIconKind.CheckBox);
+                    g.Medium("freew.cc-text", "Text Control", RibbonCommandIconKind.TextBox);
+                    g.Medium("freew.cc-checkbox", "Check Box", RibbonCommandIconKind.CheckBox);
                 });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {
-                    g.Icon("freew.header", "Header", RibbonCommandIconKind.Header);
-                    g.Icon("freew.footer", "Footer", RibbonCommandIconKind.Footer);
-                    g.Icon("freew.page-number", "Page Number", RibbonCommandIconKind.PageNumber);
+                    // Small group → labelled Medium buttons, Word-style.
+                    g.Medium("freew.header", "Header", RibbonCommandIconKind.Header);
+                    g.Medium("freew.footer", "Footer", RibbonCommandIconKind.Footer);
+                    g.Medium("freew.page-number", "Page Number", RibbonCommandIconKind.PageNumber);
                 });
                 tab.Group("symbols", "Symbols", "Y", 50, g =>
                 {
-                    g.Icon("freew.symbol", "Symbol", RibbonCommandIconKind.Symbol);
-                    g.Icon("freew.datetime", "Date & Time", RibbonCommandIconKind.Date);
-                    g.Icon("freew.field", "Field", RibbonCommandIconKind.Field);
+                    g.Medium("freew.symbol", "Symbol", RibbonCommandIconKind.Symbol);
+                    g.Medium("freew.datetime", "Date & Time", RibbonCommandIconKind.Date);
+                    g.Medium("freew.field", "Field", RibbonCommandIconKind.Field);
                 });
             })
             .Tab("layout", "Layout", "L", tab =>
             {
                 tab.Group("page-setup", "Page Setup", "P", 100, g =>
                 {
+                    // Margins is the hero; the remaining page-setup dropdowns read as labelled Medium rows.
                     g.Large("freew.margins", "Margins", RibbonCommandIconKind.Margins, dropdown: true);
-                    g.Icon("freew.orientation", "Orientation", RibbonCommandIconKind.Orientation, dropdown: true);
-                    g.Icon("freew.size", "Size", RibbonCommandIconKind.OnePage, dropdown: true);
-                    g.Icon("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, dropdown: true);
+                    g.Medium("freew.orientation", "Orientation", RibbonCommandIconKind.Orientation, dropdown: true);
+                    g.Medium("freew.size", "Size", RibbonCommandIconKind.OnePage, dropdown: true);
+                    g.Medium("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, dropdown: true);
                     g.RowBreak();
                     g.Icon("freew.line-numbers", "Line Numbers", RibbonCommandIconKind.Number);
                     g.Icon("freew.hyphenation", "Hyphenation", RibbonCommandIconKind.Hyphenation);
@@ -223,18 +234,21 @@ internal static class FreeWRibbon
                 });
                 tab.Group("page-background", "Page Background", "B", 95, g =>
                 {
-                    g.Icon("freew.page-border", "Page Border", RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border);
-                    g.Icon("freew.watermark", "Watermark", RibbonCommandIconKind.Watermark);
+                    // Two commands → labelled Medium buttons.
+                    g.Medium("freew.page-border", "Page Border", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
+                    g.Medium("freew.watermark", "Watermark", RibbonCommandIconKind.Watermark);
                 });
+                // Single-command group → Large.
                 tab.Group("preview", "Preview", "V", 90, g =>
                 {
                     g.Large("freew.print-preview", "Print Preview", RibbonCommandIconKind.Print);
                 });
                 tab.Group("data", "Data", "D", 88, g =>
                 {
-                    g.Icon("freew.sort", "Sort", RibbonCommandIconKind.Sort);
-                    g.Icon("freew.text-to-table", "Text to Table", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
-                    g.Icon("freew.table-to-text", "Table to Text", RibbonCommandIconKind.TextFunction);
+                    // Small group → labelled Medium buttons.
+                    g.Medium("freew.sort", "Sort", RibbonCommandIconKind.Sort);
+                    g.Medium("freew.text-to-table", "Text to Table", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
+                    g.Medium("freew.table-to-text", "Table to Text", RibbonCommandIconKind.TextFunction);
                 });
             })
             .Tab("design", "Design", "G", tab =>
@@ -251,15 +265,16 @@ internal static class FreeWRibbon
             })
             .Tab("view", "View", "W", tab =>
             {
+                // Small toggle groups → labelled Medium toggles so Print Layout / Read Mode read clearly.
                 tab.Group("views", "Views", "V", 100, g =>
                 {
-                    g.IconToggle("freew.print-layout", "Print Layout", RibbonCommandIconKind.PrintLayout);
-                    g.IconToggle("freew.read-mode", "Read Mode", RibbonCommandIconKind.ReadMode);
+                    g.MediumToggle("freew.print-layout", "Print Layout", RibbonCommandIconKind.PrintLayout);
+                    g.MediumToggle("freew.read-mode", "Read Mode", RibbonCommandIconKind.ReadMode);
                 });
                 tab.Group("show", "Show", "S", 90, g =>
                 {
-                    g.IconToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
-                    g.IconToggle("freew.formatting-marks", "Show ¶", RibbonCommandIconKind.FormattingMarks);
+                    g.MediumToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
+                    g.MediumToggle("freew.formatting-marks", "Show ¶", RibbonCommandIconKind.FormattingMarks);
                 });
             })
             .Tab("mailings", "Mailings", "M", tab =>
@@ -268,13 +283,14 @@ internal static class FreeWRibbon
                 {
                     g.Large("freew.merge-data", "Set Data", RibbonCommandIconKind.Recipients);
                 });
+                // Each Mailings group is a single command → Large hero button, like Word.
                 tab.Group("merge-write", "Write & Insert Fields", "W", 90, g =>
                 {
-                    g.Icon("freew.merge-field", "Insert Merge Field", RibbonCommandIconKind.MergeField);
+                    g.Large("freew.merge-field", "Insert Merge Field", RibbonCommandIconKind.MergeField);
                 });
                 tab.Group("merge-preview", "Preview Results", "P", 80, g =>
                 {
-                    g.Icon("freew.merge-preview", "Preview Record", RibbonCommandIconKind.PreviewResults);
+                    g.Large("freew.merge-preview", "Preview Results", RibbonCommandIconKind.PreviewResults);
                 });
                 tab.Group("merge-finish", "Finish", "F", 70, g =>
                 {
@@ -285,32 +301,38 @@ internal static class FreeWRibbon
             {
                 tab.Group("proofing", "Proofing", "P", 100, g =>
                 {
+                    // Word Count hero, then the two proofing toggles/commands as labelled Medium rows.
                     g.Large("freew.statistics", "Word Count", RibbonCommandIconKind.WordCount);
-                    g.IconToggle("freew.spellcheck-toggle", "Spell Check", RibbonCommandIconKind.Spelling);
-                    g.Icon("freew.add-to-dictionary", "Add to Dictionary", RibbonCommandIconKind.Book);
+                    g.MediumToggle("freew.spellcheck-toggle", "Spelling & Grammar", RibbonCommandIconKind.Spelling);
+                    g.Medium("freew.add-to-dictionary", "Add to Dictionary", RibbonCommandIconKind.Book);
                 });
+                // Single-command group → Large.
                 tab.Group("comments", "Comments", "C", 95, g =>
                 {
                     g.Large("freew.new-comment", "New Comment", RibbonCommandIconKind.Comment);
                 });
                 tab.Group("tracking", "Tracking", "G", 90, g =>
                 {
-                    g.IconToggle("freew.track-changes", "Track Changes", RibbonCommandIconKind.History);
-                    g.Icon("freew.accept-all", "Accept All", RibbonCommandIconKind.AcceptChange);
-                    g.Icon("freew.reject-all", "Reject All", RibbonCommandIconKind.RejectChange);
+                    // Track Changes is the big toggle; Accept/Reject read as labelled Medium rows.
+                    g.MediumToggle("freew.track-changes", "Track Changes", RibbonCommandIconKind.History);
+                    g.Medium("freew.accept-all", "Accept All", RibbonCommandIconKind.AcceptChange);
+                    g.Medium("freew.reject-all", "Reject All", RibbonCommandIconKind.RejectChange);
                 });
+                // Single-command group → labelled Medium toggle (Word shows Restrict Editing labelled).
                 tab.Group("protect", "Protect", "T", 85, g =>
                 {
-                    g.IconToggle("freew.restrict-editing", "Restrict Editing", RibbonCommandIconKind.Protect);
+                    g.MediumToggle("freew.restrict-editing", "Restrict Editing", RibbonCommandIconKind.Protect);
                 });
+                // Single-command group → Large.
                 tab.Group("compare", "Compare", "M", 80, g =>
                 {
-                    g.Icon("freew.compare", "Compare", RibbonCommandIconKind.Compare);
+                    g.Large("freew.compare", "Compare", RibbonCommandIconKind.Compare);
                 });
                 tab.Group("inspect", "Inspect", "I", 75, g =>
                 {
-                    g.Icon("freew.inspect-document", "Inspect Document", RibbonCommandIconKind.Search);
-                    g.Icon("freew.check-accessibility", "Check Accessibility", RibbonCommandIconKind.Accessibility);
+                    // Two commands → labelled Medium buttons.
+                    g.Medium("freew.inspect-document", "Inspect Document", RibbonCommandIconKind.Search);
+                    g.Medium("freew.check-accessibility", "Check Accessibility", RibbonCommandIconKind.Accessibility);
                 });
             })
             .Build();
