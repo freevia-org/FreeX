@@ -3413,7 +3413,7 @@ public sealed partial class MainWindow : Window
             BeginFormulaEdit(address);
             args.Handled = true;
         };
-        return border;
+        return DecorateAutoFilterHeaderCell(border, address);
     }
 
     /// <summary>
