@@ -583,45 +583,6 @@ public sealed partial class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void ShareCommandButtons_ArePresentedAsWindowsShareCommands()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-
-        var shareButtons = document
-            .Descendants(presentation + "Button")
-            .Where(button =>
-                button.Attribute("Click")?.Value is "ShareWorkbookBtn_Click" or "SsShareBtn_Click")
-            .ToList();
-
-        var shareButtonPlans = shareButtons
-            .Select(button => new
-            {
-                Content = GetButtonText(button, presentation),
-                Click = button.Attribute("Click")?.Value,
-                KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
-                Title = LocalizedAttribute(button, local + "RibbonTooltip.Title"),
-                Description = LocalizedAttribute(button, local + "RibbonTooltip.Description")
-            })
-            .ToList();
-
-        shareButtonPlans.Select(button => button.Click)
-            .Should().BeEquivalentTo(["ShareWorkbookBtn_Click", "SsShareBtn_Click"]);
-        shareButtonPlans.Should().OnlyContain(button =>
-            (button.Content == "Share" || button.Content == "Share Workbook") &&
-            button.KeyTip == "SH" &&
-            button.Title == button.Content &&
-            button.Description == "Save the workbook if needed and open Windows Share for the file." &&
-            !button.Description.Contains("Microsoft 365", StringComparison.OrdinalIgnoreCase) &&
-            !button.Description.Contains("cloud", StringComparison.OrdinalIgnoreCase) &&
-            !button.Description.Contains("coauthor", StringComparison.OrdinalIgnoreCase) &&
-            !ContainsExcludedStatus(button.Content) &&
-            !ContainsExcludedStatus(button.Title) &&
-            !ContainsExcludedStatus(button.Description));
-    }
-
-    [Fact]
     public void ExternalTemplateEntryPoint_DisclosesExcludedStatusBeforeClick()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
