@@ -42,6 +42,14 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public string? HyperlinkAnchor { get; set; }
 
     /// <summary>
+    /// Optional ScreenTip (tooltip) shown when hovering the hyperlink. Applies to either an external
+    /// (<see cref="HyperlinkUrl"/>) or internal (<see cref="HyperlinkAnchor"/>) link. When set it
+    /// serialises as the <c>w:tooltip</c> attribute on the wrapping <c>w:hyperlink</c>. Defaults to
+    /// null so existing hyperlinks (without a ScreenTip) round-trip unchanged.
+    /// </summary>
+    public string? HyperlinkTooltip { get; set; }
+
+    /// <summary>
     /// When set, this run is a simple field rather than literal text — e.g. a PAGE field whose value
     /// is the current page number. The run's <see cref="Text"/> doubles as cached/fallback display
     /// text (the last computed value), so non-field-aware consumers still render something sensible.
@@ -627,6 +635,20 @@ public enum LineNumberMode
     RestartEachPage
 }
 
+/// <summary>
+/// How page content is aligned vertically within the text area (w:sectPr/w:vAlign).
+/// <see cref="Top"/> is the default ("top", or no w:vAlign emitted — existing documents are unaffected);
+/// <see cref="Center"/> centres the content ("center"); <see cref="Justified"/> spreads it to fill the page
+/// ("both"); <see cref="Bottom"/> aligns to the bottom ("bottom").
+/// </summary>
+public enum PageVerticalAlignment
+{
+    Top,
+    Center,
+    Justified,
+    Bottom
+}
+
 /// <summary>Page geometry for a section (points; US Letter with 1in margins by default).</summary>
 public sealed class PageSettings
 {
@@ -678,6 +700,32 @@ public sealed class PageSettings
     /// <see cref="LineNumberMode.None"/>. Always at least 1.
     /// </summary>
     public int LineNumberCountBy { get; set; } = 1;
+
+    /// <summary>
+    /// Whether automatic hyphenation is enabled for the document (word/settings.xml's
+    /// w:autoHyphenation toggle). Defaults to false so existing documents are unaffected — no
+    /// w:autoHyphenation is emitted (and the settings part is only emitted when something needs it).
+    /// When true the writer emits w:autoHyphenation and the reader maps it back here.
+    /// </summary>
+    public bool AutoHyphenation { get; set; }
+
+    /// <summary>
+    /// How page content is aligned vertically within the text area (w:sectPr/w:vAlign). Defaults to
+    /// <see cref="PageVerticalAlignment.Top"/> so existing documents round-trip unchanged — no
+    /// w:vAlign is emitted. When not Top the writer emits w:vAlign with the matching value
+    /// (Justified→"both") and the reader maps it back here. Note: this is a docx round-trip + Word
+    /// honoured setting; FreeW's fixed-page print preview does not currently re-flow content to reflect
+    /// the alignment (a known view limitation — Word applies it on open).
+    /// </summary>
+    public PageVerticalAlignment VerticalAlignment { get; set; } = PageVerticalAlignment.Top;
+
+    /// <summary>
+    /// Whether the section uses a distinct first-page header/footer (w:sectPr/w:titlePg toggle).
+    /// Defaults to false so existing documents are unaffected — no w:titlePg is emitted. When true the
+    /// writer emits w:titlePg so Word honours "different first page"; FreeW stores a single
+    /// header/footer (a genuinely separate first-page header part is out of scope).
+    /// </summary>
+    public bool DifferentFirstPage { get; set; }
 }
 
 /// <summary>

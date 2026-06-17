@@ -64,13 +64,22 @@ public static class DocxReader
     /// <summary>
     /// Resolves the settings part (via the officeDocument's "/settings" relationship, falling back to the
     /// conventional word/settings.xml path), loads w:settings, and maps w:documentProtection/@w:edit back
-    /// into <see cref="TextDocument.Protection"/>. A missing part — or one without an enforced
-    /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>.
+    /// into <see cref="TextDocument.Protection"/> and the w:autoHyphenation toggle into
+    /// <see cref="PageSettings.AutoHyphenation"/>. A missing part — or one without an enforced
+    /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>; a missing
+    /// autoHyphenation leaves it disabled.
     /// </summary>
     private static void ReadSettings(ZipArchive archive, TextDocument document)
     {
         var settingsXml = LoadPart(archive, ResolveSettingsPartPath(archive) ?? "word/settings.xml");
-        var protection = settingsXml?.Root?.Element(W + "documentProtection");
+        var root = settingsXml?.Root;
+        if (root is null)
+            return;
+
+        // Automatic hyphenation (w:autoHyphenation) is an on/off toggle: present + not explicitly off.
+        document.Page.AutoHyphenation = ReadToggle(root, "autoHyphenation");
+
+        var protection = root.Element(W + "documentProtection");
         if (protection is null)
             return;
 
@@ -245,6 +254,13 @@ public static class DocxReader
         // Line numbering (w:lnNumType) lives in the same w:sectPr; recover the mode + interval.
         ReadLineNumbering(sectPr.Element(W + "lnNumType"), document.Page);
 
+        // Page vertical alignment (w:vAlign): map the val token back ("both"→Justified); absent → Top.
+        document.Page.VerticalAlignment =
+            VerticalAlignmentFromToken(sectPr.Element(W + "vAlign")?.Attribute(W + "val")?.Value);
+
+        // "Different first page" (w:titlePg): a bare toggle; absent → false.
+        document.Page.DifferentFirstPage = ReadToggle(sectPr, "titlePg");
+
         var partsById = ReadHeaderFooterRelationships(archive);
 
         document.Header = ReadHeaderFooterPart(
@@ -366,8 +382,9 @@ public static class DocxReader
                 var anchor = child.Attribute(W + "anchor")?.Value;
                 var id = child.Attribute(R + "id")?.Value;
                 var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
+                var tooltip = child.Attribute(W + "tooltip")?.Value;
                 foreach (var r in child.Elements(W + "r"))
-                    AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null, commentId: activeCommentId);
+                    AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null, commentId: activeCommentId, hyperlinkTooltip: tooltip);
             }
             else if (child.Name == W + "ins" || child.Name == W + "del")
             {
@@ -387,8 +404,9 @@ public static class DocxReader
                         var hAnchor = revChild.Attribute(W + "anchor")?.Value;
                         var hId = revChild.Attribute(R + "id")?.Value;
                         var hUrl = hId is not null && hyperlinkRelationships.TryGetValue(hId, out var hTarget) ? hTarget : null;
+                        var hTooltip = revChild.Attribute(W + "tooltip")?.Value;
                         foreach (var r in revChild.Elements(W + "r"))
-                            AddRun(paragraph, r, archive, imageRelationships, hUrl, hUrl is null ? hAnchor : null, commentId: activeCommentId, revision: revision);
+                            AddRun(paragraph, r, archive, imageRelationships, hUrl, hUrl is null ? hAnchor : null, commentId: activeCommentId, revision: revision, hyperlinkTooltip: hTooltip);
                     }
                 }
             }
@@ -510,7 +528,8 @@ public static class DocxReader
         string? hyperlinkAnchor,
         int? commentId = null,
         RevisionInfo revision = default,
-        ContentControl? control = null)
+        ContentControl? control = null,
+        string? hyperlinkTooltip = null)
     {
         void ApplyRevision(Run run)
         {
@@ -524,7 +543,7 @@ public static class DocxReader
         var image = ReadImage(r, archive, imageRelationships);
         if (image is not null)
         {
-            var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId };
+            var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
             ApplyRevision(imageRun);
             paragraph.Runs.Add(imageRun);
             return;
@@ -557,7 +576,7 @@ public static class DocxReader
             text += "\t";
         if (text.Length == 0)
             return;
-        var textRun = new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, CommentId = commentId, Control = control };
+        var textRun = new Run(text, ReadRunFormatting(r.Element(W + "rPr"))) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId, Control = control };
         ApplyRevision(textRun);
         paragraph.Runs.Add(textRun);
     }
@@ -904,6 +923,19 @@ public static class DocxReader
         if (int.TryParse(lnNumType.Attribute(W + "countBy")?.Value, out var countBy) && countBy >= 1)
             page.LineNumberCountBy = countBy;
     }
+
+    /// <summary>
+    /// Maps a w:vAlign/@w:val token back to a <see cref="PageVerticalAlignment"/> ("both"→Justified).
+    /// A null/unknown token (including the absent default and "top") maps to
+    /// <see cref="PageVerticalAlignment.Top"/>.
+    /// </summary>
+    private static PageVerticalAlignment VerticalAlignmentFromToken(string? token) => token switch
+    {
+        "center" => PageVerticalAlignment.Center,
+        "both" => PageVerticalAlignment.Justified,
+        "bottom" => PageVerticalAlignment.Bottom,
+        _ => PageVerticalAlignment.Top
+    };
 
     /// <summary>
     /// Maps each w:num id in word/numbering.xml to a <see cref="ListKind"/> by following its

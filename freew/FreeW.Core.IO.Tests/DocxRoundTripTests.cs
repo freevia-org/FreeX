@@ -61,6 +61,37 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void CustomStyle_CreatedViaStyleManager_RoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+
+        // A custom style created through the pure StyleManager ops round-trips via the existing
+        // styles.xml writer (no docx I/O changes needed) and the paragraph keeps its StyleId.
+        var custom = StyleManager.CreateStyle(
+            doc, "My Callout", basedOnId: "Normal",
+            new RunFormatting { Bold = true, Italic = true, FontSizePt = 13, ColorHex = "#C00000" },
+            new ParagraphFormatting { Alignment = TextAlignment.Center, SpaceBeforePt = 6 });
+
+        doc.Blocks.Add(new Paragraph("Styled body") { StyleId = custom.Id });
+
+        var result = RoundTrip(doc);
+
+        // The custom style survives in the catalog (styles.xml) with its name, based-on chain and run
+        // (character) formatting — the same properties the existing styles writer persists for built-ins.
+        result.Styles.Should().ContainKey(custom.Id);
+        var read = result.Styles[custom.Id];
+        read.Name.Should().Be("My Callout");
+        read.BasedOnStyleId.Should().Be("Normal");
+        read.Run.Bold.Should().BeTrue();
+        read.Run.Italic.Should().BeTrue();
+        read.Run.FontSizePt.Should().Be(13);
+        read.Run.ColorHex.Should().Be("#C00000");
+
+        // The paragraph still references the custom style id after the round-trip.
+        result.Paragraphs.Should().ContainSingle(p => p.StyleId == custom.Id);
+    }
+
+    [Fact]
     public void RunFormatting_RoundTrips()
     {
         var doc = new TextDocument();
@@ -1102,6 +1133,91 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Hyperlink_RoundTrips_WithTooltip()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("see "));
+        paragraph.Runs.Add(new Run("the docs")
+        {
+            HyperlinkUrl = "https://example.com/docs",
+            HyperlinkTooltip = "Open the documentation"
+        });
+        paragraph.Runs.Add(new Run(" now"));
+        doc.Blocks.Add(paragraph);
+
+        var runs = RoundTrip(doc).Paragraphs.First().Runs;
+
+        runs.Select(r => r.Text).Should().Equal("see ", "the docs", " now");
+        var linked = runs.Single(r => r.Text == "the docs");
+        linked.HyperlinkUrl.Should().Be("https://example.com/docs");
+        linked.HyperlinkTooltip.Should().Be("Open the documentation");
+        runs[0].HyperlinkTooltip.Should().BeNull();
+        runs[2].HyperlinkTooltip.Should().BeNull();
+    }
+
+    [Fact]
+    public void Hyperlink_WithTooltip_WritesTooltipAttribute()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("link")
+        {
+            HyperlinkUrl = "https://example.com/page",
+            HyperlinkTooltip = "Tip text"
+        });
+        doc.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var xml = docReader.ReadToEnd();
+        xml.Should().Contain("tooltip=\"Tip text\"");
+    }
+
+    [Fact]
+    public void Hyperlink_WithoutTooltip_OmitsTooltipAttribute()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("link") { HyperlinkUrl = "https://example.com/page" });
+        doc.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        docReader.ReadToEnd().Should().NotContain("tooltip");
+    }
+
+    [Fact]
+    public void InternalLink_RoundTrips_WithTooltip()
+    {
+        var doc = new TextDocument();
+        var linking = new Paragraph();
+        linking.Runs.Add(new Run("jump to "));
+        linking.Runs.Add(new Run("Section 1")
+        {
+            HyperlinkAnchor = "Section1",
+            HyperlinkTooltip = "Go to section one"
+        });
+        doc.Blocks.Add(linking);
+        doc.Blocks.Add(new Paragraph("the target") { BookmarkName = "Section1" });
+
+        var runs = RoundTrip(doc).Paragraphs.First().Runs;
+
+        var linked = runs.Single(r => r.Text == "Section 1");
+        linked.HyperlinkAnchor.Should().Be("Section1");
+        linked.HyperlinkUrl.Should().BeNull();
+        linked.HyperlinkTooltip.Should().Be("Go to section one");
+    }
+
+    [Fact]
     public void BulletList_RoundTrips_ListKindAndLevel()
     {
         var doc = new TextDocument();
@@ -2085,5 +2201,153 @@ public class DocxRoundTripTests
         var result = DocxReader.Read(stream);
         result.Protection.Mode.Should().Be(ProtectionMode.None);
         result.Protection.IsProtected.Should().BeFalse();
+    }
+
+    // --- Page setup polish: hyphenation (settings.xml), vertical alignment + titlePg (sectPr) ---
+
+    [Fact]
+    public void AutoHyphenation_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hyphenate me"));
+        doc.Page.AutoHyphenation = true;
+
+        var page = RoundTrip(doc).Page;
+
+        page.AutoHyphenation.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AutoHyphenation_EmitsSettingsPart_WithAutoHyphenationToggle()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hyphenate me"));
+        doc.Page.AutoHyphenation = true;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/settings.xml").Should().NotBeNull();
+
+        using var settingsReader = new StreamReader(zip.GetEntry("word/settings.xml")!.Open());
+        settingsReader.ReadToEnd().Should().Contain("autoHyphenation");
+
+        using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+        ctReader.ReadToEnd().Should().Contain("wordprocessingml.settings+xml");
+
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        relsReader.ReadToEnd().Should().Contain("relationships/settings");
+    }
+
+    [Fact]
+    public void DefaultPage_HasNoHyphenation_AndNoSettingsPart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            // Unprotected + no hyphenation => no settings part at all (existing behaviour preserved).
+            zip.GetEntry("word/settings.xml").Should().BeNull();
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).Page.AutoHyphenation.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(PageVerticalAlignment.Top)]
+    [InlineData(PageVerticalAlignment.Center)]
+    [InlineData(PageVerticalAlignment.Justified)]
+    [InlineData(PageVerticalAlignment.Bottom)]
+    public void PageVerticalAlignment_RoundTrips(PageVerticalAlignment alignment)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("vertically aligned"));
+        doc.Page.VerticalAlignment = alignment;
+
+        RoundTrip(doc).Page.VerticalAlignment.Should().Be(alignment);
+    }
+
+    [Fact]
+    public void PageVerticalAlignment_Justified_EmitsVAlignBoth()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("spread me"));
+        doc.Page.VerticalAlignment = PageVerticalAlignment.Justified;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = reader.ReadToEnd();
+
+        documentXml.Should().Contain("w:vAlign");
+        documentXml.Should().Contain("w:val=\"both\"");
+    }
+
+    [Fact]
+    public void DefaultPage_TopAlignment_EmitsNoVAlign()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+        doc.Page.VerticalAlignment.Should().Be(PageVerticalAlignment.Top); // default
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        reader.ReadToEnd().Should().NotContain("vAlign");
+    }
+
+    [Fact]
+    public void DifferentFirstPage_RoundTrips_AndEmitsTitlePg()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("first page differs"));
+        doc.Page.DifferentFirstPage = true;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+            reader.ReadToEnd().Should().Contain("w:titlePg");
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).Page.DifferentFirstPage.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DefaultPage_HasNoTitlePg()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+            reader.ReadToEnd().Should().NotContain("titlePg");
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).Page.DifferentFirstPage.Should().BeFalse();
     }
 }

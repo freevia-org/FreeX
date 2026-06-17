@@ -145,6 +145,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-size", new ImageSizeCommand(editor));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
+        // Insert tab — Links: manage the hyperlink at the caret — change its URL, remove it, or set a ScreenTip.
+        registry.Register("freew.edit-hyperlink", new EditHyperlinkCommand(editor));
+        registry.Register("freew.remove-hyperlink", new RemoveHyperlinkCommand(editor));
+        registry.Register("freew.hyperlink-tooltip", new HyperlinkTooltipCommand(editor));
         // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
         registry.Register("freew.footnote", new InsertFootnoteCommand(editor));
         // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.
@@ -229,6 +233,11 @@ internal static class FreeWRibbonCommands
         // it as tracked changes (insertions/deletions relative to the opened "original").
         registry.Register("freew.compare", new CompareDocumentsCommand(editor));
 
+        // Review tab — Inspect Document: report the metadata the document carries (comments, tracked
+        // changes, document properties, bookmarks) via the pure DocumentInspector, and let the user
+        // selectively remove categories. Applied removals mutate editor.Model in place and re-render.
+        registry.Register("freew.inspect-document", new InspectDocumentCommand(editor));
+
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
         registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false));
@@ -291,6 +300,12 @@ internal static class FreeWRibbonCommands
         // (reversible via the bus), then re-renders so the style's run/paragraph formatting resolves.
         registry.Register("freew.style", new ApplyParagraphStyleCommand(editor));
 
+        // Home > Styles: New Style opens a dialog capturing name + formatting + based-on, creates a custom
+        // DocumentStyle via the pure StyleManager and applies it to the selection. Manage Styles lets the
+        // user modify or delete the catalog's styles (built-ins are guarded against deletion).
+        registry.Register("freew.new-style", new NewStyleCommand(editor));
+        registry.Register("freew.manage-styles", new ManageStylesCommand(editor));
+
         // Design > Document Formatting: the Themes dropdown. Picking a theme name applies that built-in
         // colour/font scheme to the document's style catalog (rewriting heading/title colours + fonts and
         // the body face) and re-renders so the change is visible at once.
@@ -317,6 +332,15 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.columns", new ColumnCountCommand(editor));
         // Line Numbers: cycle None -> Continuous -> RestartEachPage -> None (shown in print preview).
         registry.Register("freew.line-numbers", new LineNumberCommand(editor));
+
+        // Page setup polish — all three mutate PageSettings via ApplyPageSettings (commit + re-render)
+        // and round-trip through docx save.
+        //  - Hyphenation: toggle automatic hyphenation (settings.xml w:autoHyphenation).
+        //  - Page Vertical Alignment: cycle Top -> Center -> Justified (-> Bottom) (sectPr w:vAlign).
+        //  - Different First Page: toggle a distinct first-page header/footer (sectPr w:titlePg).
+        registry.Register("freew.hyphenation", new HyphenationCommand(editor));
+        registry.Register("freew.page-valign", new PageVerticalAlignmentCommand(editor));
+        registry.Register("freew.different-first-page", new DifferentFirstPageCommand(editor));
 
         // Layout tab — Page Background: toggle a whole-page border (w:pgBorders) and set/clear the
         // page watermark. Both mutate PageSettings via ApplyPageSettings (commit + re-render) and
@@ -542,6 +566,76 @@ internal static class FreeWRibbonCommands
 
         private static string Compact(string value) => value.Replace(" ", string.Empty);
     }
+
+    // Home > Styles: New Style. Opens a dialog capturing a name + a few formatting options + a based-on
+    // style, then creates a custom DocumentStyle via the pure StyleManager and applies it to the
+    // selection through the same reversible StyleId path the styles dropdown uses. Newly created styles
+    // appear in the Style dropdown after reopening the document (the ribbon combo's item list is built
+    // once from the immutable definition); the create + immediate apply is the must-have and works now.
+    private sealed class NewStyleCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var catalog = StyleNamesById(editor.Model);
+            var def = StyleDialog.AskNew(owner, catalog, editor.CurrentParagraphStyleId);
+            if (def is null)
+                return;
+
+            var created = StyleManager.CreateStyle(editor.Model, def.Name, def.BasedOnId, def.Run, def.Paragraph);
+            editor.Focus();
+            editor.SetParagraphStyle(created.Id);
+        }
+    }
+
+    // Home > Styles: Manage Styles. Lists the document's styles; the selected one can be modified (name is
+    // fixed, formatting/based-on editable), deleted (built-ins are refused by StyleManager), or applied to
+    // the selection. Pragmatic by design — the pure StyleManager carries the rules; this is the surface.
+    private sealed class ManageStylesCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+
+            while (true)
+            {
+                var action = ManageStylesDialog.Ask(owner, editor.Model, editor.CurrentParagraphStyleId);
+                if (action is null)
+                    return;
+
+                switch (action)
+                {
+                    case ManageStyleAction.Apply apply:
+                        editor.Focus();
+                        editor.SetParagraphStyle(apply.StyleId);
+                        return;
+
+                    case ManageStyleAction.Delete del:
+                        StyleManager.DeleteStyle(editor.Model, del.StyleId);
+                        editor.RefreshStyles();
+                        continue; // reopen the list so the user sees the removal
+
+                    case ManageStyleAction.Modify mod:
+                        if (!editor.Model.Styles.TryGetValue(mod.StyleId, out var existing))
+                            continue;
+                        var def = StyleDialog.AskModify(owner, StyleNamesById(editor.Model), existing);
+                        if (def is null)
+                            continue;
+                        StyleManager.ModifyStyle(editor.Model, mod.StyleId,
+                            run: def.Run, para: def.Paragraph, basedOnId: def.BasedOnId,
+                            clearBasedOn: def.BasedOnId is null);
+                        editor.RefreshStyles();
+                        continue;
+                }
+            }
+        }
+    }
+
+    // The document's style catalog as id -> display name, for the dialogs' based-on / style lists.
+    private static IReadOnlyDictionary<string, string> StyleNamesById(TextDocument model) =>
+        model.Styles.ToDictionary(kv => kv.Key, kv => kv.Value.Name);
 
     // Design > Document Formatting: apply a built-in document theme. The dropdown's value is a theme
     // name (e.g. "Slate"); this resolves it to a DocumentTheme in the catalog and asks the view to
@@ -811,6 +905,35 @@ internal static class FreeWRibbonCommands
             });
     }
 
+    // Toggles automatic hyphenation (settings.xml w:autoHyphenation). Routes through ApplyPageSettings so
+    // the editor commits pending edits, mutates PageSettings.AutoHyphenation, and re-renders.
+    private sealed class HyphenationCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.AutoHyphenation = !page.AutoHyphenation);
+    }
+
+    // Cycles page vertical alignment Top -> Center -> Justified -> Top (sectPr w:vAlign). Routes through
+    // ApplyPageSettings so the editor commits pending edits, mutates PageSettings, and re-renders.
+    private sealed class PageVerticalAlignmentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.VerticalAlignment = page.VerticalAlignment switch
+            {
+                PageVerticalAlignment.Top => PageVerticalAlignment.Center,
+                PageVerticalAlignment.Center => PageVerticalAlignment.Justified,
+                _ => PageVerticalAlignment.Top
+            });
+    }
+
+    // Toggles "different first page" (sectPr w:titlePg). Routes through ApplyPageSettings so the editor
+    // commits pending edits, mutates PageSettings.DifferentFirstPage, and re-renders.
+    private sealed class DifferentFirstPageCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.DifferentFirstPage = !page.DifferentFirstPage);
+    }
+
     // Inserts a table at the caret. Delegates to the view, which routes through the undo/redo bus.
     private sealed class InsertTableCommand(DocumentView editor, int rows, int columns) : IRibbonCommand
     {
@@ -908,6 +1031,49 @@ internal static class FreeWRibbonCommands
             var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed);
             if (!string.IsNullOrWhiteSpace(url))
                 editor.ApplyHyperlink(url!.Trim());
+        }
+    }
+
+    // Insert > Links > Edit Hyperlink: prompt for a new URL (seeded from the caret link's current URL),
+    // then re-target the hyperlink at the caret. A no-op when the caret is not on a link.
+    private sealed class EditHyperlinkCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (!editor.IsCaretOnHyperlink())
+                return;
+            var seed = editor.HyperlinkUrlAtCaret() is { Length: > 0 } current ? current : "https://";
+            var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, "Edit Hyperlink", "Address:");
+            if (!string.IsNullOrWhiteSpace(url))
+                editor.EditHyperlink(url!.Trim());
+        }
+    }
+
+    // Insert > Links > Remove Hyperlink: strip the hyperlink at the caret, leaving its text. No-op off a link.
+    private sealed class RemoveHyperlinkCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.RemoveHyperlink();
+        }
+    }
+
+    // Insert > Links > ScreenTip: prompt for a ScreenTip (seeded from the current one) and set it on the
+    // hyperlink at the caret. A blank entry clears the ScreenTip. No-op when the caret is not on a link.
+    private sealed class HyperlinkTooltipCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (!editor.IsCaretOnHyperlink())
+                return;
+            var seed = editor.HyperlinkTooltipAtCaret() ?? string.Empty;
+            var tip = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, "Set ScreenTip", "ScreenTip:");
+            // A null result is a cancel (leave unchanged); an empty/blank string clears the ScreenTip.
+            if (tip is not null)
+                editor.SetHyperlinkTooltip(tip);
         }
     }
 
@@ -1263,6 +1429,23 @@ internal static class FreeWRibbonCommands
                 MessageBox.Show(owner, $"Could not compare the documents:\n{ex.Message}",
                     "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+    }
+
+    // Review > Inspect Document: commit pending edits, run the pure DocumentInspector over the model, and
+    // open the inspector dialog reporting what was found. If the user ticks categories and clicks Remove,
+    // apply the matching removal ops to editor.Model (mutating in place) and re-render the cleaned document.
+    private sealed class InspectDocumentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.CommitToModel();
+            var result = DocumentInspector.Inspect(editor.Model);
+            var choice = DocumentInspectorDialog.Show(Window.GetWindow(editor), result);
+            if (choice is null)
+                return; // cancelled or nothing selected
+
+            editor.ApplyInspectorRemovals(choice.Comments, choice.Revisions, choice.Properties, choice.Bookmarks);
         }
     }
 
@@ -2456,10 +2639,11 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // A tiny modal dialog asking for a URL. Returns the entered text, or null if cancelled.
+    // A tiny modal dialog asking for a single line of text (a URL, a ScreenTip, …). Returns the entered
+    // text, or null if cancelled. Title/label default to the insert-link wording for existing callers.
     private static class HyperlinkPrompt
     {
-        public static string? Ask(Window? owner, string seed)
+        public static string? Ask(Window? owner, string seed, string title = "Insert Link", string label = "Address:")
         {
             var box = new System.Windows.Controls.TextBox
             {
@@ -2472,7 +2656,7 @@ internal static class FreeWRibbonCommands
             string? result = null;
             var dialog = new Window
             {
-                Title = "Insert Link",
+                Title = title,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -2493,7 +2677,7 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Address:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(box);
             panel.Children.Add(buttons);
             dialog.Content = panel;
