@@ -103,6 +103,9 @@ internal static class FreeWRibbon
                     g.Button("freew.cell-shading", "Cell Shading");
                     g.Button("freew.merge-cells", "Merge Cells");
                     g.Button("freew.split-cell", "Split Cell");
+                    g.Button("freew.table-header-row", "Header Row");
+                    g.Button("freew.table-banded-rows", "Banded Rows");
+                    g.Button("freew.table-repeat-header", "Repeat Header");
                 });
                 tab.Group("illustrations", "Illustrations", "I", 80, g =>
                 {

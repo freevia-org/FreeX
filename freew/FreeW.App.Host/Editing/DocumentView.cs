@@ -565,6 +565,43 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Toggle the header-row style (bold + shaded first row) on the table containing the caret. Commits
+    /// pending edits, flips <see cref="TableFormatting.HeaderRow"/> on the model table, and re-renders so
+    /// the styling shows immediately and round-trips through save. No-op outside a table.
+    /// </summary>
+    public void ToggleTableHeaderRow() =>
+        UpdateCaretTableFormatting(f => f with { HeaderRow = !f.HeaderRow });
+
+    /// <summary>
+    /// Toggle banded-row shading (alternate body rows shaded) on the table containing the caret. Commits
+    /// pending edits, flips <see cref="TableFormatting.BandedRows"/>, and re-renders. No-op outside a table.
+    /// </summary>
+    public void ToggleTableBandedRows() =>
+        UpdateCaretTableFormatting(f => f with { BandedRows = !f.BandedRows });
+
+    /// <summary>
+    /// Toggle whether the header (first) row repeats across page breaks on the table containing the caret.
+    /// Commits pending edits, flips <see cref="TableFormatting.RepeatHeaderRow"/>, and re-renders. No-op
+    /// outside a table.
+    /// </summary>
+    public void ToggleTableRepeatHeaderRow() =>
+        UpdateCaretTableFormatting(f => f with { RepeatHeaderRow = !f.RepeatHeaderRow });
+
+    /// <summary>
+    /// Apply <paramref name="update"/> to the formatting of the table containing the caret (direct model
+    /// set + re-render), mirroring <see cref="SetCaretCellShading"/>. No-op outside a table.
+    /// </summary>
+    private void UpdateCaretTableFormatting(Func<TableFormatting, TableFormatting> update)
+    {
+        CommitToModel();
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        table.Formatting = update(table.Formatting);
+        Render();
+    }
+
+    /// <summary>
     /// Resize the currently selected inline image to <paramref name="widthPt"/> points wide, scaling
     /// the height to preserve aspect ratio. Routes through the bus (undoable). No-op without a selection.
     /// </summary>
@@ -1759,6 +1796,14 @@ public sealed class DocumentView : RichTextBox
     {
         var table = new ModelTable();
 
+        // Recover the table-style toggles stashed by BuildTable (WPF FlowDocument tables can't express
+        // header/banded/repeat as table-level state, so they ride along on the Tag). Borders are still
+        // reconstructed from the view below so a user toggling borders is honoured.
+        var stashed = wpfTable.Tag as TableFormatting;
+        var headerRow = stashed?.HeaderRow ?? false;
+        var bandedRows = stashed?.BandedRows ?? false;
+        var repeatHeader = stashed?.RepeatHeaderRow ?? false;
+
         // Preserve column widths (column-level in WPF) so the docx tblGrid round-trips through edit.
         foreach (var column in wpfTable.Columns)
         {
@@ -1791,13 +1836,25 @@ public sealed class DocumentView : RichTextBox
         {
             foreach (var wpfRow in rowGroup.Rows)
             {
+                var isHeaderRow = headerRow && rowIndex == 0;
+                var isBandedRow = bandedRows && !isHeaderRow && IsBandedBodyRow(rowIndex, headerRow);
                 var row = modelRows[rowIndex];
                 foreach (var wpfCell in wpfRow.Cells)
                 {
                     var span = Math.Max(1, wpfCell.ColumnSpan);
+                    // The header/banded style fills are rendered chrome, not user shading: don't capture
+                    // them back as explicit cell shading (they re-derive from the toggles on render/save).
+                    string? cellShading = null;
+                    if (wpfCell.Background is SolidColorBrush shading)
+                    {
+                        var isStyleFill = (isHeaderRow && ColorsEqual(shading.Color, HeaderRowFill))
+                            || (isBandedRow && ColorsEqual(shading.Color, BandedRowFill));
+                        if (!isStyleFill)
+                            cellShading = ToHex(shading.Color);
+                    }
                     var cell = new ModelTableCell
                     {
-                        ShadingColorHex = wpfCell.Background is SolidColorBrush shading ? ToHex(shading.Color) : null,
+                        ShadingColorHex = cellShading,
                         GridSpan = span
                     };
                     foreach (var cellBlock in wpfCell.Blocks)
@@ -1840,6 +1897,13 @@ public sealed class DocumentView : RichTextBox
 
         foreach (var row in modelRows)
             table.Rows.Add(row);
+
+        table.Formatting = table.Formatting with
+        {
+            HeaderRow = headerRow,
+            BandedRows = bandedRows,
+            RepeatHeaderRow = repeatHeader
+        };
         return table;
     }
 
@@ -1857,6 +1921,9 @@ public sealed class DocumentView : RichTextBox
         return row.Cells.Count;
     }
 
+    private static bool ColorsEqual(Color a, Color b) =>
+        a.R == b.R && a.G == b.G && a.B == b.B;
+
     // --- model -> view ---
 
     private static System.Windows.Documents.Block BuildBlock(ModelBlock block, TextDocument document) => block switch
@@ -1866,9 +1933,16 @@ public sealed class DocumentView : RichTextBox
         _ => BuildParagraph(new ModelParagraph(), document)
     };
 
+    // The light fills used to render the table-style toggles (mirroring DocxWriter's header/banded fills).
+    private static readonly Color HeaderRowFill = Color.FromRgb(0xD9, 0xE2, 0xF3);
+    private static readonly Color BandedRowFill = Color.FromRgb(0xF2, 0xF2, 0xF2);
+
     private static WpfTable BuildTable(ModelTable table, TextDocument document)
     {
-        var wpf = new WpfTable();
+        // Stash the model's table formatting on the WPF table so the flags survive the view->model
+        // round-trip (CommitToModel's ReadTable reconstructs Borders from the view but recovers the
+        // header/banded/repeat toggles from this Tag, which WPF FlowDocument tables can't express).
+        var wpf = new WpfTable { Tag = table.Formatting };
         var columns = table.ColumnCount;
         for (var c = 0; c < columns; c++)
         {
@@ -1888,10 +1962,13 @@ public sealed class DocumentView : RichTextBox
             wpf.BorderThickness = new Thickness(0.5);
         }
 
+        var fmt = table.Formatting;
         var group = new TableRowGroup();
         for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
             var modelRow = table.Rows[rowIndex];
+            var isHeaderRow = fmt.HeaderRow && rowIndex == 0;
+            var isBandedRow = fmt.BandedRows && !isHeaderRow && IsBandedBodyRow(rowIndex, fmt.HeaderRow);
             var wpfRow = new WpfTableRow();
             // Track the running grid-column position so vertical-merge runs can be matched up by
             // column even when earlier cells span multiple grid columns.
@@ -1924,8 +2001,15 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.BorderBrush = borderBrush;
                     wpfCell.BorderThickness = new Thickness(0.5);
                 }
+                // The cell's explicit shading wins; otherwise apply the header/banded style fill.
                 if (modelCell.ShadingColorHex is { Length: > 0 } cellShading)
                     wpfCell.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(cellShading));
+                else if (isHeaderRow)
+                    wpfCell.Background = new SolidColorBrush(HeaderRowFill);
+                else if (isBandedRow)
+                    wpfCell.Background = new SolidColorBrush(BandedRowFill);
+                if (isHeaderRow)
+                    wpfCell.FontWeight = FontWeights.Bold;
                 if (modelCell.Paragraphs.Count == 0)
                 {
                     wpfCell.Blocks.Add(BuildParagraph(new ModelParagraph(), document));
@@ -1974,6 +2058,13 @@ public sealed class DocumentView : RichTextBox
             column += span;
         }
         return null;
+    }
+
+    /// <summary>Mirror of DocxWriter's banding rule: which body row (2nd, 4th, ...) is shaded.</summary>
+    private static bool IsBandedBodyRow(int rowIndex, bool hasHeader)
+    {
+        var bodyIndex = hasHeader ? rowIndex - 1 : rowIndex;
+        return bodyIndex >= 0 && bodyIndex % 2 == 1;
     }
 
     private static WpfParagraph BuildParagraph(ModelParagraph paragraph, TextDocument document)

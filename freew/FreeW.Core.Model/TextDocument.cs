@@ -460,10 +460,33 @@ public sealed class TableRow
     public List<TableCell> Cells { get; } = [];
 }
 
-/// <summary>Minimal table-level formatting. Currently just whether cell borders are drawn.</summary>
+/// <summary>
+/// Minimal table-level formatting: whether cell borders are drawn plus the three table-style toggles.
+/// <see cref="HeaderRow"/> styles the first row as a header (bold + shaded fill); <see cref="BandedRows"/>
+/// shades alternate body rows; <see cref="RepeatHeaderRow"/> repeats the header row across page breaks.
+/// All three default to false so existing tables round-trip unchanged.
+/// </summary>
 public sealed record TableFormatting
 {
     public bool Borders { get; init; } = true;
+
+    /// <summary>
+    /// When true, the first row is styled as a header (its cells render bold over a light shaded fill).
+    /// Round-trips via <c>w:tblPr/w:tblLook w:firstRow="1"</c>. Default false.
+    /// </summary>
+    public bool HeaderRow { get; init; }
+
+    /// <summary>
+    /// When true, alternate body rows are shaded with a light fill (banded rows). Round-trips via
+    /// <c>w:tblPr/w:tblLook w:noHBand="0"</c> (vs <c>"1"</c> when off). Default false.
+    /// </summary>
+    public bool BandedRows { get; init; }
+
+    /// <summary>
+    /// When true, the header (first) row repeats at the top of each page the table spans. Round-trips
+    /// via <c>w:trPr/w:tblHeader</c> on the first row. Default false.
+    /// </summary>
+    public bool RepeatHeaderRow { get; init; }
 
     public static readonly TableFormatting Default = new();
 }

@@ -134,6 +134,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.split-cell", new ActionCommand(() => { editor.Focus(); editor.SplitCell(); }));
         // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
         registry.Register("freew.cell-shading", new CellShadingCommand(editor));
+        // Insert tab — Table Tools: table-style toggles applied to the caret's table (sets model + re-renders).
+        registry.Register("freew.table-header-row", new ActionCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
+        registry.Register("freew.table-banded-rows", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
+        registry.Register("freew.table-repeat-header", new ActionCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
 
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
         registry.Register("freew.picture", new InsertPictureCommand(editor));

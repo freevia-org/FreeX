@@ -571,8 +571,24 @@ public static class DocxReader
     {
         var table = new Table();
 
-        var borders = tbl.Element(W + "tblPr")?.Element(W + "tblBorders");
-        table.Formatting = TableFormatting.Default with { Borders = ReadBorders(borders) };
+        var tblPr = tbl.Element(W + "tblPr");
+        var borders = tblPr?.Element(W + "tblBorders");
+
+        // The table-style toggles round-trip via w:tblLook (HeaderRow=firstRow, BandedRows=noHBand="0")
+        // and, for RepeatHeaderRow, via w:trPr/w:tblHeader on the first row. See DocxWriter.BuildTable.
+        var tblLook = tblPr?.Element(W + "tblLook");
+        var headerRow = tblLook?.Attribute(W + "firstRow")?.Value == "1";
+        var bandedRows = tblLook?.Attribute(W + "noHBand")?.Value == "0";
+        var firstRow = tbl.Elements(W + "tr").FirstOrDefault();
+        var repeatHeader = firstRow?.Element(W + "trPr")?.Element(W + "tblHeader") is not null;
+
+        table.Formatting = TableFormatting.Default with
+        {
+            Borders = ReadBorders(borders),
+            HeaderRow = headerRow,
+            BandedRows = bandedRows,
+            RepeatHeaderRow = repeatHeader
+        };
 
         // The table grid (w:tblGrid/w:gridCol) carries per-column widths in dxa.
         var grid = tbl.Element(W + "tblGrid");
@@ -582,9 +598,14 @@ public static class DocxReader
                 table.ColumnWidthsPt.Add(DxaToPoints(gridCol.Attribute(W + "w")?.Value));
         }
 
+        var rowIndex = 0;
         foreach (var tr in tbl.Elements(W + "tr"))
         {
             var row = new TableRow();
+            // Cells in styled rows carry the style fill (header/banded) we wrote; recognise and strip it so
+            // it reads back as style-derived shading, not as an explicit per-cell colour.
+            var isStyleHeader = headerRow && rowIndex == 0;
+            var isStyleBanded = bandedRows && !isStyleHeader && IsBandedBodyRow(rowIndex, headerRow);
             foreach (var tc in tr.Elements(W + "tc"))
             {
                 var cell = new TableCell();
@@ -595,7 +616,12 @@ public static class DocxReader
                     if (width is not null)
                         cell.WidthPt = DxaToPoints(width);
                     var shading = tcPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
-                    cell.ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#');
+                    var normalized = shading is null or "auto" ? null : shading.TrimStart('#');
+                    // Drop the style-derived header/banded fill so it doesn't masquerade as cell shading.
+                    if (normalized is not null
+                        && !(isStyleHeader && string.Equals(normalized, StyleHeaderFill, StringComparison.OrdinalIgnoreCase))
+                        && !(isStyleBanded && string.Equals(normalized, StyleBandedFill, StringComparison.OrdinalIgnoreCase)))
+                        cell.ShadingColorHex = "#" + normalized;
 
                     // Horizontal merge: w:gridSpan w:val="N". Absent (or <2) means no span.
                     var gridSpan = tcPr.Element(W + "gridSpan")?.Attribute(W + "val")?.Value;
@@ -620,9 +646,22 @@ public static class DocxReader
                 row.Cells.Add(cell);
             }
             table.Rows.Add(row);
+            rowIndex++;
         }
 
         return table;
+    }
+
+    // The style fills DocxWriter emits for header / banded rows (RRGGBB, no '#'); recognised on read so
+    // they don't read back as explicit per-cell shading.
+    private const string StyleHeaderFill = "D9E2F3";
+    private const string StyleBandedFill = "F2F2F2";
+
+    /// <summary>Mirror of DocxWriter's banding rule: which body row (2nd, 4th, ...) carries the band fill.</summary>
+    private static bool IsBandedBodyRow(int rowIndex, bool hasHeader)
+    {
+        var bodyIndex = hasHeader ? rowIndex - 1 : rowIndex;
+        return bodyIndex >= 0 && bodyIndex % 2 == 1;
     }
 
     private static bool ReadBorders(XElement? tblBorders)

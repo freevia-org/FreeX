@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Compression;
+using System.Xml.Linq;
 
 namespace FreeW.Core.IO.Tests;
 
@@ -11,6 +12,17 @@ public class DocxRoundTripTests
         DocxWriter.Write(document, stream);
         stream.Position = 0;
         return DocxReader.Read(stream);
+    }
+
+    /// <summary>Writes the document and parses word/document.xml as an XDocument for structural assertions.</summary>
+    private static XDocument WriteDocumentXml(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/document.xml")!.Open();
+        return XDocument.Load(entry);
     }
 
     [Fact]
@@ -642,6 +654,76 @@ public class DocxRoundTripTests
         var readTable = result.Blocks.OfType<Table>().Single();
         readTable.Rows.SelectMany(r => r.Cells)
             .Should().OnlyContain(c => c.GridSpan == 1 && c.VerticalMerge == VerticalMergeState.None);
+    }
+
+    [Fact]
+    public void Table_StyleToggles_RoundTrip()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(3, 2);
+        table.Rows[0].Cells[0] = new TableCell("H1");
+        table.Rows[0].Cells[1] = new TableCell("H2");
+        table.Rows[1].Cells[0] = new TableCell("a1");
+        table.Rows[1].Cells[1] = new TableCell("a2");
+        table.Rows[2].Cells[0] = new TableCell("b1");
+        table.Rows[2].Cells[1] = new TableCell("b2");
+        table.Formatting = TableFormatting.Default with
+        {
+            HeaderRow = true,
+            BandedRows = true,
+            RepeatHeaderRow = true
+        };
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.Formatting.HeaderRow.Should().BeTrue();
+        readTable.Formatting.BandedRows.Should().BeTrue();
+        readTable.Formatting.RepeatHeaderRow.Should().BeTrue();
+
+        // The style fills (header + banded) are style-derived, not explicit per-cell shading, so they
+        // must not read back as ShadingColorHex on any cell.
+        readTable.Rows.SelectMany(r => r.Cells)
+            .Should().OnlyContain(c => c.ShadingColorHex == null);
+        readTable.Rows[0].Cells.Select(c => c.PlainText).Should().Equal("H1", "H2");
+        readTable.Rows[2].Cells.Select(c => c.PlainText).Should().Equal("b1", "b2");
+    }
+
+    [Fact]
+    public void Table_HeaderRow_EmitsBoldShadedTblHeader()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(2, 1);
+        table.Rows[0].Cells[0] = new TableCell("Head");
+        table.Rows[1].Cells[0] = new TableCell("Body");
+        table.Formatting = TableFormatting.Default with { HeaderRow = true, RepeatHeaderRow = true };
+        doc.Blocks.Add(table);
+
+        var xml = WriteDocumentXml(doc);
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var tbl = xml.Descendants(ns + "tbl").Single();
+
+        // tblLook persists the HeaderRow flag, the first row carries tblHeader (repeat), and its cell is
+        // shaded with the header fill and contains a bold run.
+        tbl.Element(ns + "tblPr")!.Element(ns + "tblLook")!.Attribute(ns + "firstRow")!.Value.Should().Be("1");
+        var firstRow = tbl.Elements(ns + "tr").First();
+        firstRow.Element(ns + "trPr")!.Element(ns + "tblHeader").Should().NotBeNull();
+        firstRow.Descendants(ns + "shd").First().Attribute(ns + "fill")!.Value.Should().Be("D9E2F3");
+        firstRow.Descendants(ns + "b").Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void Table_PlainTable_StyleTogglesAllFalse()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(2, 2);
+        doc.Blocks.Add(table);
+
+        var readTable = RoundTrip(doc).Blocks.OfType<Table>().Single();
+        readTable.Formatting.HeaderRow.Should().BeFalse();
+        readTable.Formatting.BandedRows.Should().BeFalse();
+        readTable.Formatting.RepeatHeaderRow.Should().BeFalse();
     }
 
     [Fact]
