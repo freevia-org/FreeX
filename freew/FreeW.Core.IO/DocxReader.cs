@@ -1307,7 +1307,9 @@ public static class DocxReader
         var drawing = run.Element(W + "drawing");
         var container = drawing?.Element(Wp + "inline") ?? drawing?.Element(Wp + "anchor");
         if (container is null)
-            return null;
+            // No DrawingML picture: try the legacy VML form (w:pict/v:shape/v:imagedata), used by older
+            // Word documents. Returns null when the run carries neither.
+            return ReadVmlImage(run, archive, imageRelationships);
 
         var blip = container.Descendants(A + "blip").FirstOrDefault();
         var relationshipId = blip?.Attribute(R + "embed")?.Value;
@@ -1340,6 +1342,40 @@ public static class DocxReader
             ApplyFloatingPosition(container, image);
 
         return image;
+    }
+
+    /// <summary>
+    /// Reads a legacy VML picture (<c>w:pict/v:shape|v:rect/v:imagedata[@r:id]</c>) into an
+    /// <see cref="InlineImage"/>, if present. Older Word documents embed images this way instead of
+    /// DrawingML; the media resolves through the same relationship map and the size comes from the VML
+    /// shape's CSS <c>style</c> (width/height). Returns null when the run carries no VML image.
+    /// </summary>
+    private static InlineImage? ReadVmlImage(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
+    {
+        var pict = run.Element(W + "pict");
+        if (pict is null)
+            return null;
+
+        // v:shape is the common case; v:rect (and other VML shapes) can also carry a v:imagedata fill.
+        var shape = pict.Elements(V + "shape").FirstOrDefault(s => s.Element(V + "imagedata") is not null)
+            ?? pict.Elements(V + "rect").FirstOrDefault(s => s.Element(V + "imagedata") is not null)
+            ?? pict.Descendants(V + "imagedata").FirstOrDefault()?.Parent;
+        var relationshipId = shape?.Element(V + "imagedata")?.Attribute(R + "id")?.Value
+            ?? shape?.Element(V + "imagedata")?.Attribute(O + "relid")?.Value;
+        if (relationshipId is null || !imageRelationships.TryGetValue(relationshipId, out var target))
+            return null;
+
+        var bytes = LoadMedia(archive, target);
+        if (bytes is null)
+            return null;
+
+        var (widthPt, heightPt) = ParseVmlShapeSize(shape?.Attribute("style")?.Value);
+        var format = ResolveImageFormat(target, bytes);
+        var alt = shape?.Attribute(O + "title")?.Value ?? shape?.Element(V + "imagedata")?.Attribute(O + "title")?.Value;
+        return new InlineImage(bytes, widthPt, heightPt, format)
+        {
+            AltText = string.IsNullOrEmpty(alt) ? null : alt,
+        };
     }
 
     /// <summary>
