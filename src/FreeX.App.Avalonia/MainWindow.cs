@@ -746,6 +746,9 @@ public sealed partial class MainWindow : Window
                     ["pageLayout.scale"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.width"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.height"] = () => _ = ShowPageSetupDialogAsync(),
+                    // Review: New Note / New Comment on the active cell.
+                    ["review.newNote"] = () => _ = ShowNewNoteDialogAsync(),
+                    ["review.newComment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
