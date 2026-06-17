@@ -2677,6 +2677,10 @@ public sealed partial class MainWindow : Window
         // drawing-object early-out — so they render even when no other objects exist.
         AddSlicerTimelineOverlays(overlay, viewport);
 
+        // Legacy form controls (checkbox/option/spinner/scrollbar/groupbox/label) live on the sheet,
+        // not in viewport.DrawingObjects — paint them before the early-out so they render standalone.
+        AddFormControlOverlays(overlay, viewport);
+
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;
 
