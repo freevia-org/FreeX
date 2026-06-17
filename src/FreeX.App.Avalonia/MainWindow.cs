@@ -707,6 +707,11 @@ public sealed partial class MainWindow : Window
                     // View tab (Window group) + Formulas tab.
                     ["view.unhide"] = () => _ = UnhideSheetAsync(),
                     ["formulas.showFormulas"] = ToggleShowFormulas,
+                    // Formulas Function Library category buttons open the function picker.
+                    ["formulas.lookupReference"] = InsertFunction,
+                    ["formulas.mathTrig"] = InsertFunction,
+                    ["formulas.moreFunctions"] = InsertFunction,
+                    ["formulas.recentlyUsed"] = InsertFunction,
                     // Data tab (Sort & Filter / Tools / Forecast / Outline groups).
                     ["data.advancedFilter"] = () => _ = ShowAdvancedFilterDialogAsync(),
                     ["data.flashFill"] = FlashFillSelectedRange,

@@ -183,6 +183,9 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("view.unhide")]
     [InlineData("view.split")]
     [InlineData("pageLayout.printTitles")]
+    [InlineData("formulas.mathTrig")]
+    [InlineData("formulas.lookupReference")]
+    [InlineData("insert.pivotChart")]
     public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
     {
         // The id exists in the ribbon definition (else it is not a NoOp default to begin with) ...
