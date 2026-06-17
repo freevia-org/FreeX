@@ -164,17 +164,34 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-align-left", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
         registry.Register("freew.image-align-center", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
         registry.Register("freew.image-align-right", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
-        // Insert tab — Illustrations: insert a sample DrawingML text box (a preset-geometry shape carrying
-        // text) at the caret. Round-trips through docx as an inline w:drawing/wps:wsp (see DocxWriter/Reader).
-        registry.Register("freew.shapes", new ActionCommand(() =>
+        // Insert tab — Illustrations > Shapes: a small gallery of preset DrawingML shapes. Each menu item
+        // inserts the matching Shape (preset geometry, or a text box carrying placeholder text) at the caret
+        // via DocumentView.InsertShape. Round-trips through docx as an inline w:drawing/wps:wsp (see
+        // DocxWriter/Reader). The top-level "freew.shapes" id only opens the menu (no direct insert).
+        registry.Register("freew.shape-rectangle", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertShape(FreeW.Core.Model.Shape.Preset(FreeW.Core.Model.ShapeKind.Rectangle, widthPt: 120, heightPt: 80, fillColorHex: "#DCE6F1"));
+        }));
+        registry.Register("freew.shape-rounded", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertShape(FreeW.Core.Model.Shape.Preset(FreeW.Core.Model.ShapeKind.RoundedRectangle, widthPt: 120, heightPt: 80, fillColorHex: "#DCE6F1"));
+        }));
+        registry.Register("freew.shape-ellipse", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertShape(FreeW.Core.Model.Shape.Preset(FreeW.Core.Model.ShapeKind.Ellipse, widthPt: 100, heightPt: 100, fillColorHex: "#DCE6F1"));
+        }));
+        registry.Register("freew.shape-textbox", new ActionCommand(() =>
         {
             editor.Focus();
             editor.InsertShape(FreeW.Core.Model.Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
         }));
-        // Insert tab — Media: drop a sample equation / chart / WordArt object at the caret. Each routes
-        // through the editor's undoable insert path (mirroring freew.shapes) and round-trips through docx
-        // (the model + IO already exist; this surfaces them in the ribbon). Sample content is a starting
-        // point the user can replace.
+        // Insert tab — Media: drop a sample equation / chart / WordArt / SmartArt / OLE object at the caret.
+        // Each routes through the editor's undoable insert path (mirroring InsertShape) and round-trips
+        // through docx (the model + IO already exist; this surfaces them in the ribbon). Sample content is a
+        // starting point the user can replace.
         registry.Register("freew.equation", new ActionCommand(() =>
         {
             editor.Focus();
@@ -194,6 +211,16 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             editor.InsertWordArt(WordArt.Create("WordArt", WordArtStyle.GradientFill));
+        }));
+        registry.Register("freew.smartart", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertSmartArt(SmartArt.Create(SmartArtKind.Process, ["First", "Second", "Third"]));
+        }));
+        registry.Register("freew.object", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertEmbeddedObject(SampleEmbeddedObject());
         }));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
@@ -1525,6 +1552,14 @@ internal static class FreeWRibbonCommands
         equation.Runs.Add(MathRun.Superscript("c", "2"));
         return equation;
     }
+
+    // A sample embedded OLE object for the Insert > Media > Object ribbon button: a small "Package"-ProgID
+    // payload (a generic embedded package — Word's default for an unknown embedded file). Iconless; the
+    // editor renders a labelled placeholder in its place. A starting point the user can replace.
+    private static EmbeddedObject SampleEmbeddedObject() =>
+        EmbeddedObject.Create(
+            System.Text.Encoding.UTF8.GetBytes("FreeW embedded object placeholder."),
+            progId: "Package");
 
     // Review > Proofing > Add to Dictionary: take the misspelled word the caret currently sits on, add
     // it to FreeW's custom dictionary (persisted to the .lex file under the data folder), and re-read the
