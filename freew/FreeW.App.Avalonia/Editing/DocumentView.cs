@@ -170,9 +170,11 @@ public sealed class DocumentView : Control
         var cells = paragraph.StyleId is null
             ? rawCells
             : rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph) }).ToList();
-        var alignment = paragraph.Formatting.Alignment;
-        var spaceAfter = paragraph.Formatting.SpaceAfterPt * PxPerPoint;
+        var pf = ResolveParagraphFmt(paragraph);
+        var alignment = pf.Alignment;
+        var spaceAfter = pf.SpaceAfterPt * PxPerPoint;
         var availableWidth = Math.Max(60, textWidth - leftInset);
+        y += pf.SpaceBeforePt * PxPerPoint;
 
         if (marker is not null)
         {
@@ -1093,6 +1095,23 @@ public sealed class DocumentView : Control
             SmallCaps = raw.SmallCaps || s.SmallCaps,
             AllCaps = raw.AllCaps || s.AllCaps,
         };
+    }
+
+    /// <summary>Cascade the paragraph's named-style paragraph formatting (alignment + space-before)
+    /// under the paragraph's own values; the paragraph's explicit values win.</summary>
+    private ParagraphFormatting ResolveParagraphFmt(Paragraph paragraph)
+    {
+        if (paragraph.StyleId is { } id && _doc.Styles.TryGetValue(id, out var style))
+        {
+            var sp = style.Paragraph;
+            return paragraph.Formatting with
+            {
+                Alignment = paragraph.Formatting.Alignment == TextAlignment.Left ? sp.Alignment : paragraph.Formatting.Alignment,
+                SpaceBeforePt = paragraph.Formatting.SpaceBeforePt <= 0 ? sp.SpaceBeforePt : paragraph.Formatting.SpaceBeforePt,
+            };
+        }
+
+        return paragraph.Formatting;
     }
 
     private static RunFormatting ActiveFormatting(Paragraph paragraph, int offset)

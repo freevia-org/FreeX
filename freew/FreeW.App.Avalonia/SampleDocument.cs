@@ -37,6 +37,7 @@ internal static class SampleDocument
             Id = "Heading1",
             Name = "Heading 1",
             Run = RunFormatting.Default with { Bold = true, FontSizePt = 16, ColorHex = "#2B5797" },
+            Paragraph = ParagraphFormatting.Default with { SpaceBeforePt = 12, SpaceAfterPt = 6 },
         };
         var heading = new Paragraph { StyleId = "Heading1" };
         heading.Runs.Add(new Run("This heading is styled by the document style (resolved at render)."));
