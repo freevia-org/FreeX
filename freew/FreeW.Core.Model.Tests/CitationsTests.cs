@@ -156,4 +156,136 @@ public class CitationsTests
         doc.Styles.Should().ContainKey(Citations.HeadingStyleId);
         doc.Styles.Should().ContainKey(Citations.EntryStyleId);
     }
+
+    // --- Style-aware formatting (APA / MLA / Chicago) -------------------------------------------------
+
+    [Fact]
+    public void FormatInText_DefaultOverload_MatchesApaBehaviour()
+    {
+        var source = new Source { Author = "Knuth", Year = "1997" };
+
+        // The no-style overload must keep producing the original APA author–year form.
+        Citations.FormatInText(source).Should().Be("(Knuth, 1997)");
+        Citations.FormatInText(source).Should().Be(Citations.FormatInText(source, CitationStyle.Apa));
+    }
+
+    [Fact]
+    public void FormatInText_PerStyle_ProducesDistinctDocumentedForms()
+    {
+        var source = new Source { Author = "Knuth", Year = "1997" };
+
+        // APA: (Author, Year) — comma between author and year.
+        Citations.FormatInText(source, CitationStyle.Apa).Should().Be("(Knuth, 1997)");
+        // MLA: author–page, but FreeW has no page, so (Author) only.
+        Citations.FormatInText(source, CitationStyle.Mla).Should().Be("(Knuth)");
+        // Chicago (author–date): (Author Year) — space between author and year.
+        Citations.FormatInText(source, CitationStyle.Chicago).Should().Be("(Knuth 1997)");
+    }
+
+    [Fact]
+    public void FormatInText_Mla_NoAuthor_FallsBackToYearThenTag()
+    {
+        Citations.FormatInText(new Source { Year = "1997" }, CitationStyle.Mla).Should().Be("(1997)");
+        Citations.FormatInText(new Source { Tag = "Anon42" }, CitationStyle.Mla).Should().Be("(Anon42)");
+        Citations.FormatInText(new Source(), CitationStyle.Mla).Should().Be("(Unknown)");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_DefaultOverload_MatchesApaBehaviour()
+    {
+        var source = new Source
+        {
+            Author = "Knuth, D.",
+            Year = "1997",
+            Title = "The Art of Computer Programming",
+            Publisher = "Addison-Wesley"
+        };
+
+        Citations.FormatBibliographyEntry(source)
+            .Should().Be(Citations.FormatBibliographyEntry(source, CitationStyle.Apa));
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_PerStyle_ProducesDistinctDocumentedForms()
+    {
+        var source = new Source
+        {
+            Author = "Knuth, D.",
+            Year = "1997",
+            Title = "The Art of Computer Programming",
+            Publisher = "Addison-Wesley"
+        };
+
+        // APA: Author. (Year). Title. Publisher.
+        Citations.FormatBibliographyEntry(source, CitationStyle.Apa)
+            .Should().Be("Knuth, D. (1997). The Art of Computer Programming. Addison-Wesley.");
+        // MLA: Author. Title. Publisher, Year.
+        Citations.FormatBibliographyEntry(source, CitationStyle.Mla)
+            .Should().Be("Knuth, D. The Art of Computer Programming. Addison-Wesley, 1997.");
+        // Chicago: Author. Title. Publisher, Year. (same ordering as MLA).
+        Citations.FormatBibliographyEntry(source, CitationStyle.Chicago)
+            .Should().Be("Knuth, D. The Art of Computer Programming. Addison-Wesley, 1997.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_AuthorTitlePublisherYear_OmitsEmptySegmentsCleanly()
+    {
+        // Year present, publisher missing -> "... Year." (no stray comma).
+        Citations.FormatBibliographyEntry(
+                new Source { Author = "Brown", Title = "Work", Year = "2001" }, CitationStyle.Mla)
+            .Should().Be("Brown. Work. 2001.");
+
+        // Publisher present, year missing -> "... Publisher."
+        Citations.FormatBibliographyEntry(
+                new Source { Author = "Brown", Title = "Work", Publisher = "Acme" }, CitationStyle.Chicago)
+            .Should().Be("Brown. Work. Acme.");
+
+        // No populated fields -> empty string, in every style.
+        Citations.FormatBibliographyEntry(new Source(), CitationStyle.Mla).Should().BeEmpty();
+        Citations.FormatBibliographyEntry(new Source(), CitationStyle.Chicago).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void HeadingTextFor_IsStyleSpecific()
+    {
+        Citations.HeadingTextFor(CitationStyle.Apa).Should().Be("References");
+        Citations.HeadingTextFor(CitationStyle.Mla).Should().Be("Works Cited");
+        Citations.HeadingTextFor(CitationStyle.Chicago).Should().Be("Bibliography");
+
+        // The default heading constant tracks the APA (default) style.
+        Citations.HeadingText.Should().Be("References");
+    }
+
+    [Fact]
+    public void BuildBibliography_DefaultOverload_MatchesApa()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Sources.Add(new Source { Author = "Adams", Year = "1979", Title = "Guide" });
+
+        var byDefault = Citations.BuildBibliography(doc).Select(p => p.PlainText);
+        var apa = Citations.BuildBibliography(doc, CitationStyle.Apa).Select(p => p.PlainText);
+
+        byDefault.Should().Equal(apa);
+    }
+
+    [Fact]
+    public void BuildBibliography_PerStyle_UsesStyleHeadingAndEntries()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Sources.Add(new Source { Author = "Adams", Year = "1979", Title = "Guide", Publisher = "Pan" });
+
+        Citations.BuildBibliography(doc, CitationStyle.Apa).Select(p => p.PlainText).Should().Equal(
+            "References",
+            "Adams. (1979). Guide. Pan.");
+
+        Citations.BuildBibliography(doc, CitationStyle.Mla).Select(p => p.PlainText).Should().Equal(
+            "Works Cited",
+            "Adams. Guide. Pan, 1979.");
+
+        Citations.BuildBibliography(doc, CitationStyle.Chicago).Select(p => p.PlainText).Should().Equal(
+            "Bibliography",
+            "Adams. Guide. Pan, 1979.");
+    }
 }

@@ -2793,6 +2793,13 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    /// <summary>
+    /// The active bibliographic style (APA / MLA / Chicago) used when inserting in-text citations and the
+    /// bibliography. Selected via the References group's "Citation Style" combo box; defaults to APA, which
+    /// is the original author–year behaviour.
+    /// </summary>
+    public CitationStyle ActiveCitationStyle { get; set; } = CitationStyle.Apa;
+
     /// <summary>The document's bibliographic sources (Insert &gt; Citation reads/writes this list).</summary>
     public IReadOnlyList<Source> Sources
     {
@@ -2830,7 +2837,7 @@ public sealed class DocumentView : RichTextBox
     public void InsertCitation(Source source)
     {
         ArgumentNullException.ThrowIfNull(source);
-        InsertText(Citations.FormatInText(source));
+        InsertText(Citations.FormatInText(source, ActiveCitationStyle));
     }
 
     /// <summary>
@@ -2851,7 +2858,7 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
 
-        var bibliography = Citations.BuildBibliography(_model);
+        var bibliography = Citations.BuildBibliography(_model, ActiveCitationStyle);
         foreach (var paragraph in bibliography)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
     }

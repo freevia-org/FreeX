@@ -131,6 +131,11 @@ internal static class FreeWRibbon
                     g.Button("freew.toc", "Table of Contents");
                     g.Button("freew.toc-refresh", "Update TOC");
                     g.Button("freew.citation", "Citation");
+                    g.ComboBox("freew.citation-style", "Citation Style", c => c with
+                    {
+                        Items = new[] { "APA", "MLA", "Chicago" },
+                        Width = 90
+                    });
                     g.Button("freew.bibliography", "Bibliography");
                     g.Button("freew.caption", "Caption");
                     g.Button("freew.cross-reference", "Cross-reference");
