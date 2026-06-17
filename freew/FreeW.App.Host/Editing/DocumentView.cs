@@ -82,6 +82,102 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public bool AutoCorrectEnabled { get; set; } = true;
 
+    /// <summary>
+    /// Whether the editor's built-in spell checking (red squiggles) is on. Mirrors
+    /// <see cref="System.Windows.Controls.SpellCheck.IsEnabled"/> on this control so the Review ribbon's
+    /// Spell Check toggle can flip it and read it back.
+    /// </summary>
+    public bool SpellCheckEnabled
+    {
+        get => SpellCheck.IsEnabled;
+        set => SpellCheck.IsEnabled = value;
+    }
+
+    /// <summary>Turn the editor's spell checking on/off and return the new state. Used by the Review ribbon.</summary>
+    public bool ToggleSpellCheck()
+    {
+        SpellCheck.IsEnabled = !SpellCheck.IsEnabled;
+        return SpellCheck.IsEnabled;
+    }
+
+    /// <summary>
+    /// Register a custom dictionary (<c>.lex</c>) file with this control's spell checker so the words it
+    /// contains stop being flagged as misspellings. WPF reads the file at registration time, so callers
+    /// add the file path once after the on-disk dictionary exists; re-registering after the file changes
+    /// (see <see cref="RefreshCustomDictionary"/>) picks up newly added words. A null/blank/non-existent
+    /// path is ignored, and a duplicate registration is skipped. Best-effort: a failure to register never
+    /// disrupts editing.
+    /// </summary>
+    public void RegisterCustomDictionary(string? lexFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(lexFilePath) || !File.Exists(lexFilePath))
+            return;
+        try
+        {
+            var uri = new Uri(lexFilePath, UriKind.Absolute);
+            var dictionaries = SpellCheck.CustomDictionaries;
+            if (!dictionaries.Contains(uri))
+                dictionaries.Add(uri);
+            _customDictionaryUri = uri;
+        }
+        catch
+        {
+            // Registering a custom dictionary is best-effort; never block editing on it.
+        }
+    }
+
+    // The currently-registered custom dictionary Uri (null until RegisterCustomDictionary succeeds),
+    // remembered so RefreshCustomDictionary can drop and re-add it to reload the file's contents.
+    private Uri? _customDictionaryUri;
+
+    /// <summary>
+    /// Re-read the registered custom dictionary file so words just added to it stop being flagged. WPF
+    /// snapshots the <c>.lex</c> file when it is added to <c>CustomDictionaries</c>, so to pick up new
+    /// words we remove and re-add the same Uri. No-op when no dictionary has been registered yet.
+    /// </summary>
+    public void RefreshCustomDictionary()
+    {
+        if (_customDictionaryUri is not { } uri)
+            return;
+        try
+        {
+            var dictionaries = SpellCheck.CustomDictionaries;
+            if (dictionaries.Contains(uri))
+                dictionaries.Remove(uri);
+            if (File.Exists(uri.LocalPath))
+                dictionaries.Add(uri);
+        }
+        catch
+        {
+            // Best-effort refresh; leave the existing registration in place on failure.
+        }
+    }
+
+    /// <summary>
+    /// The misspelled word the caret currently sits in/next to, or null when the caret is not on a
+    /// spelling error (or spell checking is off). Used by the Review ribbon's "Add to Dictionary"
+    /// command to learn which word to add. Reads the WPF <see cref="SpellingError"/> at the caret and
+    /// returns the underlying text via the surrounding <see cref="TextRange"/>.
+    /// </summary>
+    public string? MisspelledWordAtCaret()
+    {
+        if (!SpellCheck.IsEnabled || CaretPosition is not { } caret)
+            return null;
+
+        // GetSpellingErrorRange returns the TextRange covering the flagged word, or null when the
+        // position is not on a spelling error. Probe the caret, then a position just before it, so a
+        // caret resting at the end of a misspelling still finds the word.
+        var range = GetSpellingErrorRange(caret)
+            ?? (caret.GetNextInsertionPosition(LogicalDirection.Backward) is { } prev
+                ? GetSpellingErrorRange(prev)
+                : null);
+        if (range is null)
+            return null;
+
+        var word = range.Text?.Trim();
+        return string.IsNullOrEmpty(word) ? null : word;
+    }
+
     /// <summary>Raised whenever <see cref="ZoomLevel"/> changes; carries the new factor (1.0 == 100%).</summary>
     public event EventHandler<double>? ZoomChanged;
 
