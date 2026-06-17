@@ -172,6 +172,14 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.accept-all", new ActionCommand(() => { editor.Focus(); editor.AcceptAllRevisions(); }));
         registry.Register("freew.reject-all", new ActionCommand(() => { editor.Focus(); editor.RejectAllRevisions(); }));
 
+        // Review tab — Protect: Restrict Editing. A stateful toggle over document protection: turning it
+        // on locks the document read-only (RichTextBox IsReadOnly) and emits word/settings.xml's
+        // w:documentProtection on save; turning it off clears protection. The toggle reflects whether
+        // the document is currently protected.
+        var restrictEditing = new RestrictEditingToggleCommand(editor);
+        registry.Register("freew.restrict-editing", restrictEditing);
+        stateful.Add(("freew.restrict-editing", restrictEditing));
+
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
         registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false));
@@ -1014,6 +1022,23 @@ internal static class FreeWRibbonCommands
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.TrackChangesEnabled);
+    }
+
+    // Review > Protect > Restrict Editing: a stateful toggle over document protection. Executing flips
+    // the document between unprotected and read-only (the common restrict-editing gesture): turning it
+    // ON makes the RichTextBox read-only and emits word/settings.xml's w:documentProtection on save;
+    // turning it OFF clears protection and restores editing. The checked state reflects whether the
+    // document is currently protected, so the ribbon button shows the lock state at a glance.
+    private sealed class RestrictEditingToggleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.ToggleReadOnlyProtection();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.Model.Protection.IsProtected);
     }
 
     // Insert > Links > Bookmark: name the caret's paragraph as a bookmark target. Seeds the prompt

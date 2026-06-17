@@ -890,6 +890,56 @@ public sealed class DocumentView : RichTextBox
 
         Document = flow;
         ApplyPageChrome();
+        ApplyProtection();
+    }
+
+    /// <summary>
+    /// Honour the model's document-protection (restrict-editing) state on the editing surface. In
+    /// <see cref="ProtectionMode.ReadOnly"/> the RichTextBox is made read-only and given a faint amber
+    /// frame so the lock is visible. <see cref="ProtectionMode.CommentsOnly"/> and
+    /// <see cref="ProtectionMode.TrackChangesOnly"/> are approximated as read-only too (live
+    /// comments-only / forced-tracking editing is out of scope for the RichTextBox), so any protected
+    /// mode locks typing; <see cref="ProtectionMode.None"/> restores normal editing. Called from
+    /// <see cref="Render"/> (and so from <see cref="LoadModel"/>) and after protection changes.
+    /// </summary>
+    public void ApplyProtection()
+    {
+        var protectedDoc = _model.Protection.IsProtected;
+        IsReadOnly = protectedDoc;
+
+        // A protected document gets a distinct amber frame so the read-only state is visible. An
+        // unprotected document keeps whatever frame ApplyPageChrome set (page border or default grey).
+        if (protectedDoc)
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0x8A, 0x00));
+            BorderThickness = new Thickness(Math.Max(2, BorderThickness.Top));
+        }
+    }
+
+    /// <summary>
+    /// Set the document's protection (restrict-editing) mode, committing pending edits first (only while
+    /// still editable) so they are not lost, then re-rendering so the read-only state and frame update
+    /// immediately. The change round-trips through docx save (word/settings.xml). Used by the Review
+    /// ribbon's Restrict Editing command.
+    /// </summary>
+    public void SetProtection(ProtectionMode mode)
+    {
+        if (!IsReadOnly)
+            CommitToModel();
+        _model.Protection = new ProtectionSettings(mode);
+        Render();
+    }
+
+    /// <summary>
+    /// Cycle the document protection: None → ReadOnly → None. Returns the mode now in effect so the
+    /// caller (the Review ribbon's Restrict Editing button) can report it. A simple on/off toggle of
+    /// read-only protection, the common restrict-editing gesture.
+    /// </summary>
+    public ProtectionMode ToggleReadOnlyProtection()
+    {
+        var next = _model.Protection.Mode == ProtectionMode.None ? ProtectionMode.ReadOnly : ProtectionMode.None;
+        SetProtection(next);
+        return next;
     }
 
     /// <summary>

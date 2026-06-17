@@ -1402,4 +1402,86 @@ public class DocxRoundTripTests
         var documentXml = docReader.ReadToEnd();
         documentXml.Should().NotContain("<w:sdt");
     }
+
+    [Theory]
+    [InlineData(ProtectionMode.ReadOnly, "readOnly")]
+    [InlineData(ProtectionMode.CommentsOnly, "comments")]
+    [InlineData(ProtectionMode.TrackChangesOnly, "trackedChanges")]
+    public void DocumentProtection_RoundTrips_EachMode(ProtectionMode mode, string expectedEdit)
+    {
+        var doc = new TextDocument { Protection = new ProtectionSettings(mode) };
+        doc.Blocks.Add(new Paragraph("Protected body"));
+
+        // The written settings part carries the expected w:edit token and enforcement.
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var settingsReader = new StreamReader(zip.GetEntry("word/settings.xml")!.Open());
+            var settingsXml = settingsReader.ReadToEnd();
+            settingsXml.Should().Contain("documentProtection");
+            settingsXml.Should().Contain($"w:edit=\"{expectedEdit}\"");
+            settingsXml.Should().Contain("w:enforcement=\"1\"");
+        }
+
+        // And it reads back to the same protection mode.
+        stream.Position = 0;
+        var result = DocxReader.Read(stream);
+        result.Protection.Mode.Should().Be(mode);
+        result.Protection.IsProtected.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DocumentProtection_Package_HasSettingsPart_ContentType_AndRelationship()
+    {
+        var doc = new TextDocument { Protection = new ProtectionSettings(ProtectionMode.ReadOnly) };
+        doc.Blocks.Add(new Paragraph("Locked"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/settings.xml").Should().NotBeNull();
+
+        using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+        var contentTypes = ctReader.ReadToEnd();
+        contentTypes.Should().Contain("/word/settings.xml");
+        contentTypes.Should().Contain("application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml");
+
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        var rels = relsReader.ReadToEnd();
+        rels.Should().Contain("settings.xml");
+        rels.Should().Contain("http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings");
+    }
+
+    [Fact]
+    public void NoProtection_EmitsNoSettingsPart_AndReadsBackNone()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Unprotected body"));
+        doc.Protection.Mode.Should().Be(ProtectionMode.None); // default
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            // No settings part, content-type override, or relationship is emitted for an unprotected doc.
+            zip.GetEntry("word/settings.xml").Should().BeNull();
+
+            using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+            ctReader.ReadToEnd().Should().NotContain("settings+xml");
+
+            using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+            relsReader.ReadToEnd().Should().NotContain("/relationships/settings");
+        }
+
+        stream.Position = 0;
+        var result = DocxReader.Read(stream);
+        result.Protection.Mode.Should().Be(ProtectionMode.None);
+        result.Protection.IsProtected.Should().BeFalse();
+    }
 }
