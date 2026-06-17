@@ -26,6 +26,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("data.quickAnalysis")]
     [InlineData("data.sortAsc")]
     [InlineData("data.sortDesc")]
+    [InlineData("data.filter")]
     [InlineData("data.validation")]
     [InlineData("data.validationDialog")]
     [InlineData("home.cut")]
@@ -195,6 +196,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         QuickAnalysis = () => { },
         SortAscending = () => { },
         SortDescending = () => { },
+        ToggleFilter = () => { },
         DataValidation = () => { },
         Cut = () => { },
         Copy = () => { },

@@ -435,6 +435,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
     private readonly NativeMenuItem _flashFillMenuItem = new();
+    private readonly NativeMenuItem _toggleFilterMenuItem = new();
     private readonly NativeMenuItem _advancedFilterMenuItem = new();
     private readonly NativeMenuItem _removeDuplicatesMenuItem = new();
     private readonly NativeMenuItem _subtotalMenuItem = new();
@@ -612,6 +613,7 @@ public sealed partial class MainWindow : Window
                 SetFontName = ApplyRibbonFontName,
                 SortAscending = () => SortSelectedRange(ascending: true),
                 SortDescending = () => SortSelectedRange(ascending: false),
+                ToggleFilter = ToggleAutoFilter,
                 DataValidation = () => _ = ShowDataValidationDialogAsync(),
                 Cut = () => _ = CutSelectedRangeToClipboardAsync(),
                 Copy = () => _ = CopySelectedRangeToClipboardAsync(),
@@ -990,6 +992,9 @@ public sealed partial class MainWindow : Window
         _flashFillMenuItem.Header = "Flash Fill";
         _flashFillMenuItem.Gesture = new KeyGesture(Key.E, KeyModifiers.Control);
         _flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();
+
+        _toggleFilterMenuItem.Header = "Filter";
+        _toggleFilterMenuItem.Click += (_, _) => ToggleAutoFilter();
 
         _advancedFilterMenuItem.Header = "Advanced Filter...";
         _advancedFilterMenuItem.Click += async (_, _) => await ShowAdvancedFilterDialogAsync();
@@ -1382,6 +1387,7 @@ public sealed partial class MainWindow : Window
         dataMenu.Items.Add(_sortDescendingMenuItem);
         dataMenu.Items.Add(_customSortMenuItem);
         dataMenu.Items.Add(_flashFillMenuItem);
+        dataMenu.Items.Add(_toggleFilterMenuItem);
         dataMenu.Items.Add(_advancedFilterMenuItem);
         dataMenu.Items.Add(_removeDuplicatesMenuItem);
         dataMenu.Items.Add(_subtotalMenuItem);
@@ -2197,6 +2203,7 @@ public sealed partial class MainWindow : Window
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _flashFillMenuItem.IsEnabled = isIdle;
+        _toggleFilterMenuItem.IsEnabled = isIdle;
         _advancedFilterMenuItem.IsEnabled = isIdle;
         _removeDuplicatesMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
         _subtotalMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;
@@ -7874,6 +7881,30 @@ public sealed partial class MainWindow : Window
         }
 
         RefreshShell($"Sorted {rangeReference} {(ascending ? "A to Z" : "Z to A")}");
+    }
+
+    /// <summary>
+    /// Toggles the active sheet's AutoFilter (filter dropdowns) over the selection / current region through
+    /// the shared session command path and the Core <see cref="FreeX.Core.Commands.ToggleWorksheetAutoFilterCommand"/>.
+    /// Surfaces the Core guard message (e.g. range must include a header row) on failure.
+    /// </summary>
+    private void ToggleAutoFilter()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var wasEnabled = _session.ActiveSheetHasAutoFilter;
+        var result = _session.ToggleSelectedRangeAutoFilter();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Toggle Filter failed.");
+            return;
+        }
+
+        RefreshShell(wasEnabled ? "Removed filter" : "Added filter");
     }
 
     private async Task ShowSortDialogAsync()

@@ -101,6 +101,9 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Data ▸ Sort Z-A.</summary>
     public Action? SortDescending { get; init; }
 
+    /// <summary>Data ▸ Filter — toggle the sheet AutoFilter over the selection / current region.</summary>
+    public Action? ToggleFilter { get; init; }
+
     /// <summary>Data ▸ Data Validation (dropdown + dialog menu item).</summary>
     public Action? DataValidation { get; init; }
 
@@ -505,6 +508,7 @@ internal static class SampleRibbon
             registry.Register(new RibbonCommandId("home.fontName"), new RelayValueRibbonCommand(setFontName));
         Bind("data.sortAsc", callbacks.SortAscending);
         Bind("data.sortDesc", callbacks.SortDescending);
+        Bind("data.filter", callbacks.ToggleFilter);
         Bind("data.validation", callbacks.DataValidation);
         Bind("data.validationDialog", callbacks.DataValidation);
 
