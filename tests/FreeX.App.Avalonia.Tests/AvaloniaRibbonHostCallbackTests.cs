@@ -99,6 +99,31 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
+    public void ExtraCommands_BindParameterizedMenuItems_AndExecute()
+    {
+        var fired = new List<string>();
+        var callbacks = new AvaloniaRibbonHostCallbacks
+        {
+            ExtraCommands = new Dictionary<string, Action>
+            {
+                ["home.fmtGeneral"] = () => fired.Add("general"),
+                ["home.fmtDate"] = () => fired.Add("date"),
+                ["home.fillYellow"] = () => fired.Add("yellow"),
+            },
+        };
+        var registry = SampleRibbon.BuildRegistry(() => null, _ => { }, callbacks);
+
+        Assert.True(registry.TryGet(new RibbonCommandId("home.fmtGeneral"), out var c));
+        Assert.IsType<RelayRibbonCommand>(c);
+
+        Execute(registry, "home.fmtGeneral");
+        Execute(registry, "home.fmtDate");
+        Execute(registry, "home.fillYellow");
+
+        Assert.Equal(new[] { "general", "date", "yellow" }, fired);
+    }
+
+    [Fact]
     public void InsertTable_BindsBothRibbonAndHomeButtons_ToTheSameAction()
     {
         var count = 0;

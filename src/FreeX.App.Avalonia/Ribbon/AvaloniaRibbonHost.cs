@@ -118,6 +118,13 @@ internal sealed record AvaloniaRibbonHostCallbacks
 
     /// <summary>Home ▸ Number ▸ Comma.</summary>
     public Action? CommaStyle { get; init; }
+
+    /// <summary>
+    /// Additional command-id → action bindings for parameterized menu items the named callbacks do not
+    /// cover (e.g. the Number Format dropdown's General/Number/Currency/Date/Percent items, or the Fill
+    /// Color dropdown's swatch items). Applied after the named callbacks; each id overrides its no-op.
+    /// </summary>
+    public IReadOnlyDictionary<string, Action>? ExtraCommands { get; init; }
 }
 
 /// <summary>An <see cref="IRibbonCommand"/> that invokes a host-supplied callback (e.g. opens a dialog).</summary>
@@ -472,6 +479,10 @@ internal static class SampleRibbon
         Bind("home.currency", callbacks.CurrencyFormat);
         Bind("home.percent", callbacks.PercentFormat);
         Bind("home.comma", callbacks.CommaStyle);
+
+        if (callbacks.ExtraCommands is { } extra)
+            foreach (var (id, action) in extra)
+                Bind(id, action);
     }
 
     /// <summary>

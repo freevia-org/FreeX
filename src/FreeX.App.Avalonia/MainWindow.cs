@@ -615,6 +615,19 @@ public sealed partial class MainWindow : Window
                 CurrencyFormat = ApplySelectedRangeCurrencyFormat,
                 PercentFormat = ApplySelectedRangePercentFormat,
                 CommaStyle = ApplySelectedRangeCommaStyle,
+                ExtraCommands = new Dictionary<string, Action>(StringComparer.Ordinal)
+                {
+                    // Number Format dropdown items.
+                    ["home.fmtGeneral"] = () => ApplySelectedRangeNumberFormat(GeneralNumberFormat, "Applied General format to", "Number format failed."),
+                    ["home.fmtNumber"] = () => ApplySelectedRangeNumberFormat("0.00", "Applied Number format to", "Number format failed."),
+                    ["home.fmtCurrency"] = ApplySelectedRangeCurrencyFormat,
+                    ["home.fmtDate"] = () => ApplySelectedRangeNumberFormat("m/d/yyyy", "Applied Date format to", "Number format failed."),
+                    ["home.fmtPercent"] = ApplySelectedRangePercentFormat,
+                    // Fill Color dropdown items.
+                    ["home.fillNone"] = ClearSelectedRangeFill,
+                    ["home.fillYellow"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
+                    ["home.fillGreen"] = () => ApplySelectedRangeFillColor(new CellColor(198, 239, 206)),
+                },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
