@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <!-- STA + Dispatcher support for the WPF controls under test ([StaFact]/[StaTheory]). -->
+    <PackageReference Include="Xunit.StaFact" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+    <Using Include="FreeW.Core.Model" />
+    <!-- The model and WPF both define Run/Paragraph; alias the model types so test files that also
+         pull in System.Windows.Documents (for caret/TextRange navigation) stay unambiguous. -->
+    <Using Include="FreeW.Core.Model.Run" Alias="Run" />
+    <Using Include="FreeW.Core.Model.Paragraph" Alias="Paragraph" />
+    <Using Include="FreeW.Core.Model.Table" Alias="Table" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FreeW.App.Host\FreeW.App.Host.csproj" />
+  </ItemGroup>
+
+</Project>

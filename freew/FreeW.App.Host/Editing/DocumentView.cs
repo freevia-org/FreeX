@@ -1622,9 +1622,13 @@ public sealed class DocumentView : RichTextBox
         if (end is null || !indexOf.TryGetValue(end, out var endIndex))
             endIndex = startIndex;
 
+        // NumberLeafBlocks numbers the *visible* blocks; map each to its real _model.Blocks index so the
+        // returned indices stay correct when a heading is collapsed before the selection (hidden blocks
+        // are re-spliced into the model on commit — see ModelIndexFromVisible). Identity when nothing is
+        // collapsed.
         var result = new List<int>();
         for (var i = Math.Min(startIndex, endIndex); i <= Math.Max(startIndex, endIndex); i++)
-            result.Add(i);
+            result.Add(ModelIndexFromVisible(i));
         return result;
     }
 
@@ -2136,8 +2140,15 @@ public sealed class DocumentView : RichTextBox
     /// marker), and whether a page break is forced before the paragraph (rendered as a separator, but
     /// otherwise invisible in the FlowDocument). Any field may be empty/null/false; the Tag is only
     /// stamped when at least one is set.
+    /// <para>
+    /// Also carries the paragraph's <see cref="ModelParagraph.StyleId"/>: the FlowDocument resolves a
+    /// style's run/paragraph formatting at render but has no slot for the style <em>name</em>, so without
+    /// this the style id was dropped on every <see cref="CommitToModel"/> — which in turn broke outline
+    /// collapse (heading detection is by style id) after a commit. Stamping it here makes the style id
+    /// round-trip through an edit/commit cycle.
+    /// </para>
     /// </summary>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null);
 
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
@@ -2200,13 +2211,36 @@ public sealed class DocumentView : RichTextBox
             _model.Blocks.Add(_hiddenBlocks[hiddenIndex++].Block);
     }
 
+    // Map a *visible* block ordinal (as produced by NumberLeafBlocks / SelectedModelParagraphIndices,
+    // which only number the rendered FlowDocument blocks) to the matching index in _model.Blocks after a
+    // commit. With outline collapse active, MergeHiddenBlocks re-splices each hidden block back in front
+    // of the visible block at its VisibleOffset, so the i-th visible block sits at (i + the number of
+    // hidden blocks anchored at or before it). With nothing collapsed _hiddenBlocks is empty and this is
+    // the identity, leaving the non-collapsed path unchanged. Fixes the index drift where a paragraph
+    // command (style/format/comment/revision) mis-targeted when a heading was collapsed before the
+    // selection.
+    private int ModelIndexFromVisible(int visibleIndex)
+    {
+        if (_hiddenBlocks.Count == 0 || visibleIndex < 0)
+            return visibleIndex;
+        var shift = 0;
+        foreach (var (visibleOffset, _) in _hiddenBlocks)
+        {
+            if (visibleOffset <= visibleIndex)
+                shift++;
+        }
+        return visibleIndex + shift;
+    }
+
     private static ModelParagraph ReadParagraph(WpfParagraph wpfParagraph, TextDocument document)
     {
         var modelParagraph = new ModelParagraph
         {
             Formatting = ReadParagraphFormatting(wpfParagraph, document),
-            // The bookmark name (an invisible marker) is preserved across edits via the paragraph Tag.
-            BookmarkName = wpfParagraph.Tag is ParagraphTag { BookmarkName: { Length: > 0 } name } ? name : null
+            // The bookmark name and style id (invisible markers with no FlowDocument slot) are preserved
+            // across edits via the paragraph Tag (see ParagraphTag).
+            BookmarkName = wpfParagraph.Tag is ParagraphTag { BookmarkName: { Length: > 0 } name } ? name : null,
+            StyleId = wpfParagraph.Tag is ParagraphTag { StyleId: { Length: > 0 } styleId } ? styleId : null
         };
         foreach (var inline in wpfParagraph.Inlines)
             ReadInline(modelParagraph, inline, hyperlinkUrl: null, hyperlinkAnchor: null);
@@ -2293,48 +2327,39 @@ public sealed class DocumentView : RichTextBox
                     FieldKind = fieldMarker.Kind
                 });
                 break;
-            case WpfRun { Tag: CommentMarker { IsReference: true } reference }:
+            case WpfRun { Tag: RunMarkers { Comment: { IsReference: true } reference } }:
                 // The textless comment anchor: round-trips as a comment-reference run.
                 modelParagraph.Runs.Add(ModelRun.CommentReference(reference.CommentId));
                 break;
-            case WpfRun { Tag: CommentMarker { IsReference: false } covered } commentedRun when commentedRun.Text.Length > 0:
-                // A commented text run: recover its formatting but drop the injected review highlight
-                // (it is view-only chrome) and carry the comment id on the model run.
-                modelParagraph.Runs.Add(new ModelRun(commentedRun.Text, ReadRunFormatting(commentedRun) with { HighlightColorHex = null })
+            case WpfRun { Tag: RunMarkers markers } markedRun when markedRun.Text.Length > 0:
+                // A run carrying any combination of comment / content-control / revision marks. Recover its
+                // formatting, strip the view-only chrome each facet injected (review highlight, control
+                // shade, revision colour/decoration), and carry every facet back onto the model run so a
+                // run that is, say, both commented and tracked-changed survives the round-trip intact.
+                var markedFmt = ReadRunFormatting(markedRun);
+                if (markers.Revision is { } rev)
+                    markedFmt = StripRevisionChrome(markedFmt, rev.Kind);
+                // Comment and content-control both inject a background; clear it so it isn't mistaken for a
+                // real highlight on commit (matching the prior per-facet behaviour).
+                if (markers.Comment is not null || markers.Control is not null)
+                    markedFmt = markedFmt with { HighlightColorHex = null };
+
+                // For a checkbox the run text holds the (possibly toggled) ☒/☐ glyph; keep the control's
+                // checked state in sync with the glyph so an in-place toggle round-trips.
+                var control = markers.Control?.Control;
+                if (control is { Kind: ContentControlKind.CheckBox })
+                    control = control with { Checked = markedRun.Text == ModelContentControl.CheckedGlyph };
+
+                modelParagraph.Runs.Add(new ModelRun(markedRun.Text, markedFmt)
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
                     HyperlinkTooltip = hyperlinkTooltip,
-                    CommentId = covered.CommentId
-                });
-                break;
-            case WpfRun { Tag: ContentControlMarker ccMarker } controlRun when controlRun.Text.Length > 0:
-                // A content-control run: recover its formatting but drop the injected control shade
-                // (view-only chrome) and carry the control back onto the model run. For a checkbox the
-                // run text already holds the (possibly toggled) ☒/☐ glyph; keep the marker's control in
-                // sync with that glyph so a click that toggled the glyph round-trips its checked state.
-                var control = ccMarker.Control;
-                if (control.Kind == ContentControlKind.CheckBox)
-                    control = control with { Checked = controlRun.Text == ModelContentControl.CheckedGlyph };
-                modelParagraph.Runs.Add(new ModelRun(controlRun.Text, ReadRunFormatting(controlRun) with { HighlightColorHex = null })
-                {
-                    HyperlinkUrl = hyperlinkUrl,
-                    HyperlinkAnchor = hyperlinkAnchor,
-                    HyperlinkTooltip = hyperlinkTooltip,
-                    Control = control
-                });
-                break;
-            case WpfRun { Tag: RevisionMarker marker } revisedRun when revisedRun.Text.Length > 0:
-                // A tracked-change run: recover its formatting but strip the injected revision colour and
-                // the kind's decoration (view-only chrome), carrying the revision mark back onto the model.
-                modelParagraph.Runs.Add(new ModelRun(revisedRun.Text, StripRevisionChrome(ReadRunFormatting(revisedRun), marker.Kind))
-                {
-                    HyperlinkUrl = hyperlinkUrl,
-                    HyperlinkAnchor = hyperlinkAnchor,
-                    HyperlinkTooltip = hyperlinkTooltip,
-                    Revision = marker.Kind,
-                    RevisionAuthor = marker.Author,
-                    RevisionDateXml = marker.DateXml
+                    CommentId = markers.Comment?.CommentId,
+                    Control = control,
+                    Revision = markers.Revision?.Kind ?? RevisionKind.None,
+                    RevisionAuthor = markers.Revision?.Author,
+                    RevisionDateXml = markers.Revision?.DateXml
                 });
                 break;
             case WpfRun run when run.Text.Length > 0:
@@ -2674,8 +2699,8 @@ public sealed class DocumentView : RichTextBox
         // paragraph's Tag (a ParagraphTag) and read them back verbatim on commit; the round-trip is exact.
         // WidowControl has no FlowDocument property either, so it joins the Tag alongside tab stops,
         // bookmark name and page-break-before; carried verbatim and recovered on commit.
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl)
-            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl);
+        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 })
+            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl, paragraph.StyleId);
 
         foreach (var run in paragraph.Runs)
             wpf.Inlines.Add(BuildRun(run, paragraph, document));
@@ -2702,7 +2727,7 @@ public sealed class DocumentView : RichTextBox
 
         // The textless comment anchor round-trips as an empty, tagged run carrying its reference flag.
         if (run is { IsCommentReference: true, CommentId: { } refId })
-            return new WpfRun(string.Empty) { Tag = new CommentMarker(refId, IsReference: true) };
+            return new WpfRun(string.Empty) { Tag = new RunMarkers(Comment: new CommentMarker(refId, IsReference: true)) };
 
         var fmt = Resolve(run, paragraph, document);
         var wpf = new WpfRun(run.Text)
@@ -2754,7 +2779,7 @@ public sealed class DocumentView : RichTextBox
             decorations.Add(run.Revision == RevisionKind.Deleted
                 ? TextDecorations.Strikethrough[0]
                 : TextDecorations.Underline[0]);
-            wpf.Tag = new RevisionMarker(run.Revision, run.RevisionAuthor, run.RevisionDateXml);
+            AddMarker(wpf, m => m with { Revision = new RevisionMarker(run.Revision, run.RevisionAuthor, run.RevisionDateXml) });
         }
 
         if (decorations.Count > 0)
@@ -2793,8 +2818,30 @@ public sealed class DocumentView : RichTextBox
     private static readonly Color RevisionColor = Color.FromRgb(0xC0, 0x00, 0x40);
 
     /// <summary>
-    /// Carried on a tracked-change WPF run's Tag so CommitToModel can round-trip its revision kind,
-    /// author and date. Mirrors how CommentMarker/FootnoteMarker preserve their marks across an edit.
+    /// Composite review/control marker carried on a WPF run's <see cref="WpfRun.Tag"/>. A single run can
+    /// simultaneously be a tracked change, sit inside a comment range, and live inside a content control,
+    /// so each facet is held independently here rather than overwriting a single-purpose Tag (the prior
+    /// bug, where the last writer won and the other marks were lost on the next <see cref="CommitToModel"/>).
+    /// Every non-null facet is recovered in <see cref="ReadInline"/>. Facets that are mutually exclusive
+    /// with these marks (image/shape/field/footnote/endnote) keep using their own dedicated Tag types and
+    /// never share a run with these.
+    /// </summary>
+    private sealed record RunMarkers(
+        RevisionMarker? Revision = null,
+        CommentMarker? Comment = null,
+        ContentControlMarker? Control = null);
+
+    /// <summary>
+    /// Merge a marker facet into the run's composite <see cref="RunMarkers"/> Tag (creating it on first
+    /// use), so revision/comment/content-control marks accumulate on the same run instead of clobbering
+    /// each other. Any non-marker Tag is replaced (those run kinds never carry these marks).
+    /// </summary>
+    private static void AddMarker(WpfRun wpf, Func<RunMarkers, RunMarkers> merge) =>
+        wpf.Tag = merge(wpf.Tag as RunMarkers ?? new RunMarkers());
+
+    /// <summary>
+    /// Carried on a tracked-change run inside its <see cref="RunMarkers"/> so CommitToModel can round-trip
+    /// its revision kind, author and date. Mirrors how CommentMarker/FootnoteMarker preserve their marks.
     /// </summary>
     private sealed record RevisionMarker(RevisionKind Kind, string? Author, string? DateXml);
 
@@ -2806,7 +2853,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static void ApplyCommentMarker(WpfRun wpf, int commentId, TextDocument document)
     {
-        wpf.Tag = new CommentMarker(commentId, IsReference: false);
+        AddMarker(wpf, m => m with { Comment = new CommentMarker(commentId, IsReference: false) });
         if (wpf.Background is null)
             wpf.Background = new SolidColorBrush(CommentHighlight);
         if (document.Comments.TryGetValue(commentId, out var comment))
@@ -2841,7 +2888,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static void ApplyContentControlMarker(WpfRun wpf, ModelContentControl control)
     {
-        wpf.Tag = new ContentControlMarker(control);
+        AddMarker(wpf, m => m with { Control = new ContentControlMarker(control) });
         wpf.Background = new SolidColorBrush(ContentControlShade);
         wpf.ToolTip = control.Kind == ContentControlKind.CheckBox
             ? (control.Alias is { Length: > 0 } a ? $"Checkbox: {a}" : "Checkbox content control (click to toggle)")
@@ -2861,12 +2908,12 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static void OnCheckBoxControlClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (sender is not WpfRun { Tag: ContentControlMarker marker } wpf
+        if (sender is not WpfRun { Tag: RunMarkers { Control: { } marker } } wpf
             || marker.Control.Kind != ContentControlKind.CheckBox)
             return;
 
         var toggled = marker.Control with { Checked = !marker.Control.Checked };
-        wpf.Tag = new ContentControlMarker(toggled);
+        AddMarker(wpf, m => m with { Control = new ContentControlMarker(toggled) });
         wpf.Text = toggled.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
         e.Handled = true;
 
@@ -3415,6 +3462,10 @@ public sealed class DocumentView : RichTextBox
             return;
 
         CommitToModel();
+        // Map the visible paragraph ordinal to its real model index (collapsed-heading drift): commit
+        // re-splices hidden blocks back in, so a raw visible index would mis-target with a heading
+        // collapsed before the selection. Identity when nothing is collapsed.
+        paragraphIndex = ModelIndexFromVisible(paragraphIndex);
         if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
             return;
 
@@ -3691,6 +3742,9 @@ public sealed class DocumentView : RichTextBox
             return;
 
         CommitToModel();
+        // Map the visible paragraph ordinal to its real model index (collapsed-heading drift), as in
+        // InsertComment. Identity when nothing is collapsed.
+        paragraphIndex = ModelIndexFromVisible(paragraphIndex);
         if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
             return;
 
