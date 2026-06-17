@@ -429,6 +429,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _insertScatterChartMenuItem = new();
     private readonly NativeMenuItem _insertTableMenuItem = new();
     private readonly NativeMenuItem _insertPivotTableMenuItem = new();
+    private readonly NativeMenuItem _insertPictureMenuItem = new();
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
@@ -603,6 +604,8 @@ public sealed partial class MainWindow : Window
                 ConditionalFormatting = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
                 QuickAnalysis = () => _ = ShowQuickAnalysisDialogAsync(),
                 InsertPivotTable = () => _ = ShowInsertPivotTableDialogAsync(),
+                InsertPicture = () => _ = InsertPictureFromFileAsync(),
+                FormatPainter = () => CaptureFormatPainterSource(persistent: false),
                 SortAscending = () => SortSelectedRange(ascending: true),
                 SortDescending = () => SortSelectedRange(ascending: false),
                 DataValidation = () => _ = ShowDataValidationDialogAsync(),
@@ -964,6 +967,9 @@ public sealed partial class MainWindow : Window
 
         _insertPivotTableMenuItem.Header = "PivotTable...";
         _insertPivotTableMenuItem.Click += async (_, _) => await ShowInsertPivotTableDialogAsync();
+
+        _insertPictureMenuItem.Header = "Picture...";
+        _insertPictureMenuItem.Click += async (_, _) => await InsertPictureFromFileAsync();
 
         _sortAscendingMenuItem.Header = "Sort A to Z";
         _sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);
@@ -1360,6 +1366,8 @@ public sealed partial class MainWindow : Window
         insertMenu.Items.Add(new NativeMenuItemSeparator());
         insertMenu.Items.Add(_insertTableMenuItem);
         insertMenu.Items.Add(_insertPivotTableMenuItem);
+        insertMenu.Items.Add(new NativeMenuItemSeparator());
+        insertMenu.Items.Add(_insertPictureMenuItem);
 
         var dataMenu = new NativeMenu();
         dataMenu.Items.Add(_sortAscendingMenuItem);
@@ -2175,6 +2183,7 @@ public sealed partial class MainWindow : Window
         _insertScatterChartMenuItem.IsEnabled = isIdle;
         _insertTableMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
         _insertPivotTableMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
+        _insertPictureMenuItem.IsEnabled = isIdle && StorageProvider.CanOpen;
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;

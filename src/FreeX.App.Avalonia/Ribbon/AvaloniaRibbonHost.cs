@@ -80,6 +80,12 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Insert ▸ PivotTable — open the Insert PivotTable dialog for the selection.</summary>
     public Action? InsertPivotTable { get; init; }
 
+    /// <summary>Insert ▸ Picture — choose an image file and place it on the sheet.</summary>
+    public Action? InsertPicture { get; init; }
+
+    /// <summary>Home ▸ Clipboard ▸ Format Painter — capture the selection's format for a one-shot apply.</summary>
+    public Action? FormatPainter { get; init; }
+
     /// <summary>Data ▸ Sort A-Z.</summary>
     public Action? SortAscending { get; init; }
 
@@ -466,6 +472,8 @@ internal static class SampleRibbon
         Bind("home.conditional", callbacks.ConditionalFormatting);
         Bind("data.quickAnalysis", callbacks.QuickAnalysis);
         Bind("insert.pivotTable", callbacks.InsertPivotTable);
+        Bind("insert.picture", callbacks.InsertPicture);
+        Bind("home.formatPainter", callbacks.FormatPainter);
         Bind("data.sortAsc", callbacks.SortAscending);
         Bind("data.sortDesc", callbacks.SortDescending);
         Bind("data.validation", callbacks.DataValidation);
