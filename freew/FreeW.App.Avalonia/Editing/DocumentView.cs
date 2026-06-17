@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -24,9 +25,12 @@ public sealed class DocumentView : Control
     private const double TopMargin = 40;
     private const double DefaultFontSizePt = 11;
     private const double FallbackWidth = 816; // 8.5in * 96dpi
+    private const double ListIndentStep = 24;
 
     private readonly Dictionary<string, IBrush> _brushCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PlacedChar> _placed = new();
+    private readonly List<(double X, double Y, string Text, RunFormatting Fmt)> _markers = new();
+    private readonly List<(Rect Rect, IBrush? Fill, bool Border)> _rects = new();
 
     private TextDocument _doc = TextDocument.CreateEmpty();
     private DocumentCommandBus _bus;
@@ -95,27 +99,71 @@ public sealed class DocumentView : Control
     private void Relayout(double width)
     {
         _placed.Clear();
+        _markers.Clear();
+        _rects.Clear();
         var textWidth = Math.Max(120, width - LeftMargin - RightMargin);
         double y = TopMargin;
 
+        var listNumber = 0;
+        var prevList = ListKind.None;
         for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
         {
             var block = _doc.Blocks[blockIndex];
             if (block is Paragraph paragraph)
-                y = LayoutParagraph(blockIndex, paragraph, textWidth, y);
+            {
+                var kind = paragraph.Formatting.ListKind;
+                double inset = 0;
+                string? marker = null;
+                if (kind != ListKind.None)
+                {
+                    var level = Math.Max(0, paragraph.Formatting.ListLevel);
+                    inset = ListIndentStep * (level + 1);
+                    if (kind is ListKind.Number or ListKind.MultiLevel)
+                    {
+                        listNumber = prevList is ListKind.Number or ListKind.MultiLevel ? listNumber + 1 : 1;
+                        marker = $"{listNumber}.";
+                    }
+                    else
+                    {
+                        marker = "•"; // bullet
+                        listNumber = 0;
+                    }
+                }
+                else
+                {
+                    listNumber = 0;
+                }
+
+                prevList = kind;
+                y = LayoutParagraph(blockIndex, paragraph, textWidth, y, inset, marker);
+            }
+            else if (block is Table table)
+            {
+                y = LayoutTable(blockIndex, table, textWidth, y);
+            }
             else
+            {
                 y = LayoutReadOnlyBlock(blockIndex, block, textWidth, y);
+            }
         }
 
         _contentHeight = y + TopMargin;
         _laidOutWidth = width;
     }
 
-    private double LayoutParagraph(int blockIndex, Paragraph paragraph, double textWidth, double y)
+    private double LayoutParagraph(int blockIndex, Paragraph paragraph, double textWidth, double y, double leftInset = 0, string? marker = null)
     {
         var cells = IsEditable(paragraph) ? ParaCells(paragraph) : FallbackCells(paragraph.PlainText);
         var alignment = paragraph.Formatting.Alignment;
         var spaceAfter = paragraph.Formatting.SpaceAfterPt * PxPerPoint;
+        var availableWidth = Math.Max(60, textWidth - leftInset);
+
+        if (marker is not null)
+        {
+            var markerFmt = paragraph.Runs.Count > 0 ? paragraph.Runs[0].Formatting : RunFormatting.Default;
+            var markerWidth = Build(marker, markerFmt).WidthIncludingTrailingWhitespace;
+            _markers.Add((LeftMargin + leftInset - markerWidth - 6, y, marker, markerFmt));
+        }
 
         // Break the cell stream into wrapped lines.
         var lineStart = 0;
@@ -136,10 +184,10 @@ public sealed class DocumentView : Control
             if (cells[i].Ch == ' ')
                 lastBreak = i;
 
-            if (lineWidth + measured[i] > textWidth && i > lineStart)
+            if (lineWidth + measured[i] > availableWidth && i > lineStart)
             {
                 var breakAt = lastBreak >= lineStart ? lastBreak + 1 : i;
-                y = EmitLine(blockIndex, cells, measured, heights, lineStart, breakAt, alignment, textWidth, y);
+                y = EmitLine(blockIndex, cells, measured, heights, lineStart, breakAt, alignment, availableWidth, y, leftInset);
                 lineStart = breakAt;
                 lineWidth = 0;
                 lastBreak = -1;
@@ -151,7 +199,7 @@ public sealed class DocumentView : Control
             i++;
         }
 
-        y = EmitLine(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment, textWidth, y, isLast: true);
+        y = EmitLine(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment, availableWidth, y, leftInset, isLast: true);
         return y + spaceAfter;
     }
 
@@ -163,8 +211,9 @@ public sealed class DocumentView : Control
         int from,
         int to,
         TextAlignment alignment,
-        double textWidth,
+        double availableWidth,
         double y,
+        double leftInset = 0,
         bool isLast = false)
     {
         double lineWidth = 0;
@@ -176,7 +225,7 @@ public sealed class DocumentView : Control
                 lineHeight = heights[c];
         }
 
-        var x = LeftMargin + AlignmentOffset(alignment, textWidth, lineWidth);
+        var x = LeftMargin + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth);
         for (var c = from; c < to; c++)
         {
             _placed.Add(new PlacedChar(blockIndex, c, x, y, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
@@ -216,6 +265,156 @@ public sealed class DocumentView : Control
     private static string TablePlainText(Table table) =>
         string.Join("  |  ", table.Rows.SelectMany(r => r.Cells).Select(c => c.PlainText));
 
+    // ---- Table rendering (read-only grid) -------------------------------------------------------
+
+    private double LayoutTable(int blockIndex, Table table, double textWidth, double y)
+    {
+        var cols = Math.Max(1, table.ColumnCount);
+        var colWidths = ComputeColumnWidths(table, cols, textWidth);
+        var columnLeft = new double[cols + 1];
+        var running = LeftMargin;
+        for (var c = 0; c < cols; c++)
+        {
+            columnLeft[c] = running;
+            running += colWidths[c];
+        }
+        columnLeft[cols] = running;
+
+        const double pad = 5;
+        var borders = table.Formatting.Borders;
+        var headerOffset = table.Formatting.HeaderRow ? 1 : 0;
+        var glyphOffset = 0;
+
+        for (var r = 0; r < table.Rows.Count; r++)
+        {
+            var row = table.Rows[r];
+            var isHeader = table.Formatting.HeaderRow && r == 0;
+            var isBand = table.Formatting.BandedRows && !isHeader && (r - headerOffset) % 2 == 1;
+
+            var measured = new List<(int StartCol, int Span, List<(double Height, List<(char Ch, double W)> Chars)> Lines, RunFormatting Fmt)>();
+            var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
+            var col = 0;
+            foreach (var cell in row.Cells)
+            {
+                if (col >= cols)
+                    break;
+                var span = Math.Clamp(cell.GridSpan <= 0 ? 1 : cell.GridSpan, 1, cols - col);
+                double cellWidth = 0;
+                for (var s = 0; s < span; s++)
+                    cellWidth += colWidths[col + s];
+
+                var fmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
+                    ? cell.Paragraphs[0].Runs[0].Formatting
+                    : RunFormatting.Default;
+                if (isHeader)
+                    fmt = fmt with { Bold = true };
+
+                var lines = WrapCellLines(cell.PlainText, fmt, Math.Max(10, cellWidth - 2 * pad));
+                var cellHeight = lines.Sum(l => l.Height) + 2 * pad;
+                if (cellHeight > rowHeight)
+                    rowHeight = cellHeight;
+
+                measured.Add((col, span, lines, fmt));
+                col += span;
+            }
+
+            foreach (var (startCol, span, lines, fmt) in measured)
+            {
+                double cellWidth = 0;
+                for (var s = 0; s < span; s++)
+                    cellWidth += colWidths[startCol + s];
+                var rect = new Rect(columnLeft[startCol], y, cellWidth, rowHeight);
+                IBrush? fill = isHeader ? HeaderFill : isBand ? BandFill : null;
+                _rects.Add((rect, fill, borders));
+
+                var ty = y + pad;
+                foreach (var (lineHeight, chars) in lines)
+                {
+                    var tx = columnLeft[startCol] + pad;
+                    foreach (var (ch, w) in chars)
+                    {
+                        _placed.Add(new PlacedChar(blockIndex, glyphOffset++, tx, ty, w, lineHeight, fmt, ch, Sentinel: false));
+                        tx += w;
+                    }
+
+                    ty += lineHeight;
+                }
+            }
+
+            y += rowHeight;
+        }
+
+        return y + 8;
+    }
+
+    private static double[] ComputeColumnWidths(Table table, int cols, double textWidth)
+    {
+        var widths = new double[cols];
+        double declared = 0;
+        var declaredCount = 0;
+        for (var c = 0; c < cols; c++)
+        {
+            var cw = c < table.ColumnWidthsPt.Count ? table.ColumnWidthsPt[c] * PxPerPoint : 0;
+            widths[c] = cw;
+            if (cw > 0)
+            {
+                declared += cw;
+                declaredCount++;
+            }
+        }
+
+        var missing = cols - declaredCount;
+        var even = missing > 0 ? Math.Max(40, (textWidth - declared) / missing) : 0;
+        for (var c = 0; c < cols; c++)
+            if (widths[c] <= 0)
+                widths[c] = missing > 0 ? even : textWidth / cols;
+
+        var total = widths.Sum();
+        if (total > textWidth && total > 0)
+        {
+            var scale = textWidth / total;
+            for (var c = 0; c < cols; c++)
+                widths[c] *= scale;
+        }
+
+        return widths;
+    }
+
+    private List<(double Height, List<(char Ch, double W)> Chars)> WrapCellLines(string text, RunFormatting fmt, double maxInner)
+    {
+        var result = new List<(double, List<(char, double)>)>();
+        var lineHeight = Build("Ag", fmt).Height;
+        var current = new List<(char, double)>();
+        double currentWidth = 0;
+        var lastSpace = -1;
+
+        foreach (var ch in text)
+        {
+            var w = Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
+            if (ch == ' ')
+                lastSpace = current.Count;
+            if (currentWidth + w > maxInner && current.Count > 0)
+            {
+                var breakAt = lastSpace > 0 ? lastSpace : current.Count;
+                result.Add((lineHeight, current.Take(breakAt).ToList()));
+                current = current.Skip(breakAt).ToList();
+                currentWidth = current.Sum(c => c.Item2);
+                lastSpace = -1;
+            }
+
+            current.Add((ch, w));
+            currentWidth += w;
+        }
+
+        if (current.Count > 0 || result.Count == 0)
+            result.Add((lineHeight, current));
+        return result;
+    }
+
+    private static IBrush HeaderFill { get; } = new SolidColorBrush(Color.FromRgb(0xDE, 0xE9, 0xF7));
+    private static IBrush BandFill { get; } = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
+    private static Pen TableBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
+
     // ---- Render ---------------------------------------------------------------------------------
 
     public override void Render(DrawingContext context)
@@ -224,6 +423,15 @@ public sealed class DocumentView : Control
             Relayout(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
 
         context.FillRectangle(Brushes.White, new Rect(Bounds.Size));
+
+        // Table fills + borders sit beneath the text.
+        foreach (var (rect, fill, border) in _rects)
+        {
+            if (fill is not null)
+                context.FillRectangle(fill, rect);
+            if (border)
+                context.DrawRectangle(null, TableBorderPen, rect);
+        }
 
         var selection = NormalizedSelection();
         foreach (var pc in _placed)
@@ -242,6 +450,9 @@ public sealed class DocumentView : Control
             if (pc.Fmt.Strikethrough)
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5);
         }
+
+        foreach (var (mx, my, text, fmt) in _markers)
+            context.DrawText(Build(text, fmt), new Point(mx, my));
 
         if (IsFocused && NormalizedSelection() is null && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);
@@ -474,6 +685,70 @@ public sealed class DocumentView : Control
         if (CurrentParagraph() is not { } paragraph)
             return;
         _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, paragraph.Formatting with { Alignment = alignment }));
+    }
+
+    public void SetSelectionFontSize(double points) => ApplyRunFormatting(f => f with { FontSizePt = points });
+
+    public void SetSelectionFontFamily(string family) =>
+        ApplyRunFormatting(f => f with { FontFamily = string.IsNullOrWhiteSpace(family) ? null : family });
+
+    /// <summary>Text spanning the current selection (empty when there is no selection).</summary>
+    public string SelectedText
+    {
+        get
+        {
+            if (NormalizedSelection() is not { } sel)
+                return string.Empty;
+            if (sel.Start.Block == sel.End.Block && _doc.Blocks[sel.Start.Block] is Paragraph p && IsEditable(p))
+            {
+                var cells = ParaCells(p);
+                var a = Math.Clamp(sel.Start.Offset, 0, cells.Count);
+                var b = Math.Clamp(sel.End.Offset, 0, cells.Count);
+                return new string(cells.Skip(a).Take(b - a).Select(c => c.Ch).ToArray());
+            }
+
+            var sb = new StringBuilder();
+            for (var bi = sel.Start.Block; bi <= sel.End.Block && bi < _doc.Blocks.Count; bi++)
+            {
+                if (bi > sel.Start.Block)
+                    sb.Append('\n');
+                sb.Append(_doc.Blocks[bi] is Paragraph para ? para.PlainText : string.Empty);
+            }
+
+            return sb.ToString();
+        }
+    }
+
+    public bool TryDeleteSelection()
+    {
+        if (NormalizedSelection() is null)
+            return false;
+        DeleteSelection();
+        return true;
+    }
+
+    private void ApplyRunFormatting(Func<RunFormatting, RunFormatting> transform)
+    {
+        var sel = NormalizedSelection();
+        if (sel is { } s && s.Start.Block == s.End.Block)
+        {
+            var block = s.Start.Block;
+            if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
+                return;
+            var a = s.Start.Offset;
+            var b = s.End.Offset;
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                var live = ParaCells(p);
+                for (var i = Math.Clamp(a, 0, live.Count); i < Math.Clamp(b, 0, live.Count); i++)
+                    live[i] = live[i] with { Fmt = transform(live[i].Fmt) };
+                SetRuns(p, live);
+            }));
+        }
+        else if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
+        {
+            _bus.Execute(new FormatParagraphRunsCommand(_caret.Block, transform));
+        }
     }
 
     private void ToggleRunFlag(Func<RunFormatting, bool> get, Func<RunFormatting, bool, RunFormatting> set)

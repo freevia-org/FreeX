@@ -29,6 +29,33 @@ public sealed record PreservedPart(
     string? RelationshipType = null);
 
 /// <summary>
+/// One reference from a verbatim-preserved inline drawing (see <see cref="PreservedDrawing"/>) to a
+/// preserved package part: the relationship id the drawing's XML used on read (e.g. the
+/// <c>c:chart/@r:id</c> or <c>cx:chart/@r:id</c>) paired with the absolute name of the
+/// <see cref="PreservedPart"/> it pointed at. The writer assigns that preserved part a fresh document
+/// relationship id and rewrites the matching <c>r:id</c>/<c>r:embed</c> inside the drawing's XML to it, so
+/// the reference resolves against the re-emitted package instead of dangling.
+/// </summary>
+/// <param name="OriginalRelId">The relationship id used inside the preserved drawing XML on read.</param>
+/// <param name="PreservedPartName">The absolute part name of the <see cref="PreservedPart"/> it referenced.</param>
+public readonly record struct PreservedDrawingReference(string OriginalRelId, string PreservedPartName);
+
+/// <summary>
+/// A verbatim-preserved inline <c>w:drawing</c> FreeW does not model — e.g. a <c>w:drawing</c> that references
+/// a chart (or <c>chartex</c>) part whose structure FreeW's reader does not turn into a <see cref="Chart"/>.
+/// Rather than dropping the run (and with it the chart parts + media it references), the whole drawing's XML is
+/// captured here and re-emitted byte-for-byte inside the run, while the chart part(s) + their <c>_rels</c> + the
+/// media they reference travel as <see cref="PreservedParts.Parts"/>. <see cref="References"/> ties the
+/// drawing's relationship ids to those preserved parts so the writer can re-point them at freshly assigned
+/// document relationships.
+/// </summary>
+/// <param name="Xml">The drawing's serialised XML (a <c>w:drawing</c> element), re-emitted verbatim.</param>
+/// <param name="References">
+/// The drawing's references into preserved parts (relationship id → preserved part name), rewritten on write.
+/// </param>
+public sealed record PreservedDrawing(string Xml, IReadOnlyList<PreservedDrawingReference> References);
+
+/// <summary>
 /// The original <c>w:numPr</c> a paragraph carried on read that FreeW does not model as one of its own lists:
 /// the source <c>w:numId</c> and <c>w:ilvl</c>. Captured per paragraph (see
 /// <see cref="Paragraph.PreservedNumbering"/>) so the writer can re-emit the paragraph's numbering pointing at
@@ -80,10 +107,19 @@ public sealed class PreservedParts
     public XElement? OriginalNumbering { get; set; }
 
     /// <summary>
-    /// The unmodelled parts preserved verbatim (customXml items / props / their rels, webSettings), in the
-    /// order they were captured. Empty for an authored-from-scratch document so nothing extra is emitted.
+    /// The unmodelled parts preserved verbatim (customXml items / props / their rels, webSettings, and the
+    /// chart/chartex parts + media referenced by a verbatim-preserved inline drawing), in the order they were
+    /// captured. Empty for an authored-from-scratch document so nothing extra is emitted.
     /// </summary>
     public List<PreservedPart> Parts { get; } = [];
+
+    /// <summary>
+    /// <c>[Content_Types].xml</c> <c>Default</c> declarations (extension → content type) a preserved part relies
+    /// on but FreeW would not otherwise emit — e.g. the <c>png</c>/<c>emf</c> Default a verbatim-preserved chart's
+    /// media part needs when the document carries no other image of that kind. Captured on read so the writer
+    /// re-emits the Default, keeping the preserved part typed. Empty for an authored-from-scratch document.
+    /// </summary>
+    public Dictionary<string, string> ContentTypeDefaults { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>True when nothing is preserved — the authored-from-scratch case.</summary>
     public bool IsEmpty => OriginalSettings is null && OriginalNumbering is null && Parts.Count == 0;

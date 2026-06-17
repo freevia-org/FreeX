@@ -43,9 +43,9 @@ public static class DocxReader
             foreach (var element in body.Elements())
             {
                 if (element.Name == W + "p")
-                    document.Blocks.Add(ReadParagraph(element, archive, imageRelationships, hyperlinkRelationships, numbering, capturePreservedNumbering: true));
+                    document.Blocks.Add(ReadParagraph(element, archive, imageRelationships, hyperlinkRelationships, numbering, capturePreservedNumbering: true, preservedDrawingTarget: document));
                 else if (element.Name == W + "tbl")
-                    document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering));
+                    document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, document));
             }
         }
 
@@ -55,7 +55,7 @@ public static class DocxReader
         ReadHeaderFooter(documentXml, archive, document, hyperlinkRelationships);
         ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
-        ReadComments(archive, document, imageRelationships, hyperlinkRelationships);
+        ReadComments(archive, document, hyperlinkRelationships);
         ReadSettings(archive, document);
         ReadTheme(archive, document);
         ReadEmbeddedFonts(archive, document);
@@ -390,13 +390,18 @@ public static class DocxReader
     private static void ReadComments(
         ZipArchive archive,
         TextDocument document,
-        IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
         var commentsXml = LoadPart(archive, "word/comments.xml");
         var root = commentsXml?.Root;
         if (root is null)
             return;
+
+        // Comment-part images are referenced from word/_rels/comments.xml.rels (NOT document.xml.rels), so a
+        // comment image's r:embed resolves only against the comment part's own relationships. Read that map and
+        // use it (in place of the body's image relationships) so an image inside a comment becomes a real
+        // Run.Image — which the writer re-emits as a comment media part + comments.xml.rels (see BuildComments).
+        var commentRelationships = ReadPartImageRelationships(archive, "word/_rels/comments.xml.rels", "word/");
 
         var noNumbering = new Dictionary<int, ListKind>();
         foreach (var element in root.Elements(W + "comment"))
@@ -411,7 +416,7 @@ public static class DocxReader
                 DateXml = element.Attribute(W + "date")?.Value
             };
             foreach (var p in element.Elements(W + "p"))
-                comment.Content.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+                comment.Content.Add(ReadParagraph(p, archive, commentRelationships, hyperlinkRelationships, noNumbering));
             if (comment.Content.Count == 0)
                 comment.Content.Add(new Paragraph());
             document.Comments[id] = comment;
@@ -770,7 +775,8 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
         IReadOnlyDictionary<int, ListKind> numbering,
-        bool capturePreservedNumbering = false)
+        bool capturePreservedNumbering = false,
+        TextDocument? preservedDrawingTarget = null)
     {
         var paragraph = new Paragraph();
         var pPr = p.Element(W + "pPr");
@@ -816,7 +822,7 @@ public static class DocxReader
                 if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
                     paragraph.Runs.Add(Run.CommentReference(refId));
                 else
-                    AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId);
+                    AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, preservedDrawingTarget: preservedDrawingTarget);
             }
             else if (child.Name == W + "hyperlink")
             {
@@ -825,7 +831,7 @@ public static class DocxReader
                 var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
                 var tooltip = child.Attribute(W + "tooltip")?.Value;
                 foreach (var r in child.Elements(W + "r"))
-                    AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null, commentId: activeCommentId, hyperlinkTooltip: tooltip);
+                    AddRun(paragraph, r, archive, imageRelationships, url, url is null ? anchor : null, commentId: activeCommentId, hyperlinkTooltip: tooltip, preservedDrawingTarget: preservedDrawingTarget);
             }
             else if (child.Name == W + "ins" || child.Name == W + "del")
             {
@@ -839,7 +845,7 @@ public static class DocxReader
                 foreach (var revChild in child.Elements())
                 {
                     if (revChild.Name == W + "r")
-                        AddRun(paragraph, revChild, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, revision: revision);
+                        AddRun(paragraph, revChild, archive, imageRelationships, hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, revision: revision, preservedDrawingTarget: preservedDrawingTarget);
                     else if (revChild.Name == W + "hyperlink")
                     {
                         var hAnchor = revChild.Attribute(W + "anchor")?.Value;
@@ -847,7 +853,7 @@ public static class DocxReader
                         var hUrl = hId is not null && hyperlinkRelationships.TryGetValue(hId, out var hTarget) ? hTarget : null;
                         var hTooltip = revChild.Attribute(W + "tooltip")?.Value;
                         foreach (var r in revChild.Elements(W + "r"))
-                            AddRun(paragraph, r, archive, imageRelationships, hUrl, hUrl is null ? hAnchor : null, commentId: activeCommentId, revision: revision, hyperlinkTooltip: hTooltip);
+                            AddRun(paragraph, r, archive, imageRelationships, hUrl, hUrl is null ? hAnchor : null, commentId: activeCommentId, revision: revision, hyperlinkTooltip: hTooltip, preservedDrawingTarget: preservedDrawingTarget);
                     }
                 }
             }
@@ -862,7 +868,7 @@ public static class DocxReader
                 {
                     foreach (var sdtChild in sdtContent.Elements(W + "r"))
                         AddRun(paragraph, sdtChild, archive, imageRelationships,
-                            hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, control: control);
+                            hyperlinkUrl: null, hyperlinkAnchor: null, commentId: activeCommentId, control: control, preservedDrawingTarget: preservedDrawingTarget);
                 }
             }
             else if (child.Name == W + "fldSimple")
@@ -1011,7 +1017,8 @@ public static class DocxReader
         int? commentId = null,
         RevisionInfo revision = default,
         ContentControl? control = null,
-        string? hyperlinkTooltip = null)
+        string? hyperlinkTooltip = null,
+        TextDocument? preservedDrawingTarget = null)
     {
         void ApplyRevision(Run run)
         {
@@ -1096,6 +1103,20 @@ public static class DocxReader
             return;
         }
 
+        // A body/table run whose w:drawing references a chart (or chartex) part FreeW did NOT model into a
+        // Run.Chart above (e.g. chartex / an unrecognised chart structure) is preserved VERBATIM: the whole
+        // drawing XML is captured into the run, and the chart part(s) + their _rels + the media they reference
+        // travel as PreservedParts so the unread chart round-trips instead of vanishing. Only attempted for
+        // body/table runs (preservedDrawingTarget non-null) — header/footer/comment/note runs do not capture.
+        if (preservedDrawingTarget is not null
+            && CaptureUnmodelledChartDrawing(r, archive, preservedDrawingTarget) is { } preservedDrawing)
+        {
+            var drawingRun = new Run(string.Empty) { PreservedDrawing = preservedDrawing, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(drawingRun);
+            paragraph.Runs.Add(drawingRun);
+            return;
+        }
+
         // A run wrapping a w:footnoteReference is a footnote marker; recover its id into the model.
         var footnoteRef = r.Element(W + "footnoteReference");
         if (footnoteRef is not null && int.TryParse(footnoteRef.Attribute(W + "id")?.Value, out var footnoteId))
@@ -1133,7 +1154,8 @@ public static class DocxReader
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
-        IReadOnlyDictionary<int, ListKind> numbering)
+        IReadOnlyDictionary<int, ListKind> numbering,
+        TextDocument? preservedDrawingTarget = null)
     {
         var table = new Table();
 
@@ -1206,7 +1228,7 @@ public static class DocxReader
                     }
                 }
                 foreach (var p in tc.Elements(W + "p"))
-                    cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, numbering, capturePreservedNumbering: true));
+                    cell.Paragraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, numbering, capturePreservedNumbering: true, preservedDrawingTarget: preservedDrawingTarget));
                 if (cell.Paragraphs.Count == 0)
                     cell.Paragraphs.Add(new Paragraph());
                 row.Cells.Add(cell);
@@ -1601,6 +1623,222 @@ public static class DocxReader
     }
 
     /// <summary>
+    /// Captures a run's inline <c>w:drawing</c> VERBATIM when it references a chart (or <c>chartex</c>) part
+    /// that FreeW did NOT model into a <see cref="Chart"/> above. The chart relationship(s) are resolved against
+    /// <c>document.xml.rels</c>; for each, the chart part, its own <c>_rels</c> and the media those rels point at
+    /// are added to <see cref="TextDocument.Preserved"/> (deduped by part name, carrying their content-type
+    /// Overrides), and the chart relationship is captured as a document-referenced preserved part so the writer
+    /// re-emits the document→chart relationship. The returned <see cref="PreservedDrawing"/> carries the drawing
+    /// XML plus the reference (original rId → preserved chart part) the writer rewrites to the fresh rId.
+    /// Returns null when the drawing references no chart-typed relationship (so the ordinary paths are unaffected).
+    /// </summary>
+    private static PreservedDrawing? CaptureUnmodelledChartDrawing(XElement run, ZipArchive archive, TextDocument document)
+    {
+        var drawing = run.Element(W + "drawing");
+        if (drawing is null)
+            return null;
+
+        // (Id, Type, Target) for every document relationship — used to spot chart/chartEx references and to
+        // resolve part paths (targets are relative to word/, where document.xml.rels lives).
+        var docRels = ReadDocumentRelationships(archive);
+        var contentTypeOverrides = ReadContentTypeOverrides(archive);
+        var contentTypeDefaults = ReadContentTypeDefaults(archive);
+
+        var references = new List<PreservedDrawingReference>();
+        foreach (var descendant in drawing.DescendantsAndSelf())
+        {
+            var relId = descendant.Attribute(R + "id")?.Value ?? descendant.Attribute(R + "embed")?.Value;
+            if (relId is null || !docRels.TryGetValue(relId, out var rel))
+                continue;
+            if (rel.Type is not (ChartRelType or ChartExRelType))
+                continue;
+
+            var partName = ResolveWordRelativePartName(rel.Target);
+            if (partName is null)
+                continue;
+
+            // Capture the chart part itself as a DOCUMENT-referenced preserved part (so BuildDocumentRels emits
+            // the document→chart relationship the rewritten drawing r:id points at), then pull in its satellites.
+            if (CapturePreservedPart(archive, document, partName, contentTypeOverrides, contentTypeDefaults, rel.Type))
+                CaptureReferencedParts(archive, document, partName, contentTypeOverrides, contentTypeDefaults);
+            references.Add(new PreservedDrawingReference(relId, partName));
+        }
+
+        if (references.Count == 0)
+            return null;
+
+        return new PreservedDrawing(drawing.ToString(SaveOptions.DisableFormatting), references);
+    }
+
+    /// <summary>
+    /// Captures a single package part into <see cref="TextDocument.Preserved"/> (byte-for-byte, with its
+    /// content-type Override and optional document relationship type), skipping parts already captured (dedup by
+    /// name). Returns true when the part exists (whether freshly captured or already present), false when absent.
+    /// </summary>
+    private static bool CapturePreservedPart(
+        ZipArchive archive,
+        TextDocument document,
+        string partName,
+        IReadOnlyDictionary<string, string> contentTypeOverrides,
+        IReadOnlyDictionary<string, string> contentTypeDefaults,
+        string? relationshipType)
+    {
+        if (document.Preserved.Parts.Any(p => p.PartName == partName))
+            return true;
+        var bytes = LoadMedia(archive, partName.TrimStart('/'));
+        if (bytes is null)
+            return false;
+        contentTypeOverrides.TryGetValue(partName, out var contentType);
+        document.Preserved.Parts.Add(new PreservedPart(partName, bytes, contentType, relationshipType));
+
+        // A part covered only by a [Content_Types] Default (by extension — e.g. a chart's png/emf media) needs
+        // that Default re-emitted, since FreeW only declares image Defaults for body/header/footer/comment media.
+        if (contentType is null)
+        {
+            var extension = partName.Contains('.') ? partName[(partName.LastIndexOf('.') + 1)..] : null;
+            if (!string.IsNullOrEmpty(extension)
+                && contentTypeDefaults.TryGetValue(extension, out var defaultType)
+                && !document.Preserved.ContentTypeDefaults.ContainsKey(extension))
+                document.Preserved.ContentTypeDefaults[extension] = defaultType;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Follows a part's own <c>_rels</c> (e.g. <c>word/charts/_rels/chart1.xml.rels</c>), capturing the rels
+    /// part itself plus every part it targets (media, colour/style parts, embedded workbooks, …) into
+    /// <see cref="TextDocument.Preserved"/>. Those satellite parts are NOT document-referenced (their rels live in
+    /// the chart part's own _rels, captured verbatim), so they carry no document relationship type. Recurses one
+    /// level into any captured part's own _rels so a chart→media→(no further rels) chain is fully preserved.
+    /// </summary>
+    private static void CaptureReferencedParts(
+        ZipArchive archive,
+        TextDocument document,
+        string partName,
+        IReadOnlyDictionary<string, string> contentTypeOverrides,
+        IReadOnlyDictionary<string, string> contentTypeDefaults)
+    {
+        var relsPartName = RelsPartNameFor(partName);
+        var relsXml = LoadPart(archive, relsPartName.TrimStart('/'));
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return;
+
+        // The part's own _rels is itself preserved (covered by the rels Default content type, so no Override).
+        CapturePreservedPart(archive, document, relsPartName, contentTypeOverrides, contentTypeDefaults, relationshipType: null);
+
+        var baseFolder = FolderOf(partName);
+        foreach (var rel in relationships)
+        {
+            // External targets (TargetMode="External") have no package part to capture.
+            if (rel.Attribute("TargetMode")?.Value == "External")
+                continue;
+            var target = rel.Attribute("Target")?.Value;
+            if (string.IsNullOrEmpty(target))
+                continue;
+            var targetPartName = ResolveRelativePartName(baseFolder, target);
+            if (targetPartName is null || document.Preserved.Parts.Any(p => p.PartName == targetPartName))
+                continue;
+            if (CapturePreservedPart(archive, document, targetPartName, contentTypeOverrides, contentTypeDefaults, relationshipType: null))
+                CaptureReferencedParts(archive, document, targetPartName, contentTypeOverrides, contentTypeDefaults);
+        }
+    }
+
+    /// <summary>
+    /// Reads <c>[Content_Types].xml</c>, mapping each Default's Extension (lower-cased) → ContentType. Used to
+    /// re-emit the Default a verbatim-preserved part relies on (e.g. a chart media part's png/emf Default).
+    /// </summary>
+    private static Dictionary<string, string> ReadContentTypeDefaults(ZipArchive archive)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var ctXml = LoadPart(archive, "[Content_Types].xml");
+        var defaults = ctXml?.Root?.Elements(Ct + "Default");
+        if (defaults is null)
+            return map;
+        foreach (var def in defaults)
+        {
+            var extension = def.Attribute("Extension")?.Value;
+            var contentType = def.Attribute("ContentType")?.Value;
+            if (!string.IsNullOrEmpty(extension) && !string.IsNullOrEmpty(contentType))
+                map[extension] = contentType;
+        }
+        return map;
+    }
+
+    /// <summary>Reads document.xml.rels as id → (Type, Target). Empty when the rels part is absent.</summary>
+    private static Dictionary<string, (string Type, string Target)> ReadDocumentRelationships(ZipArchive archive)
+    {
+        var map = new Dictionary<string, (string, string)>(StringComparer.Ordinal);
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return map;
+        foreach (var rel in relationships)
+        {
+            var id = rel.Attribute("Id")?.Value;
+            var type = rel.Attribute("Type")?.Value;
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(type) && !string.IsNullOrEmpty(target))
+                map[id] = (type, target);
+        }
+        return map;
+    }
+
+    /// <summary>
+    /// Resolves a document-relationship Target (relative to <c>word/</c>) to an absolute part name. A bare
+    /// target (e.g. <c>charts/chart1.xml</c>) lands under <c>/word/</c>; a <c>../</c>-prefixed target steps out
+    /// of word/. Returns null for an absolute or unresolvable target.
+    /// </summary>
+    private static string? ResolveWordRelativePartName(string target) =>
+        ResolveRelativePartName("/word", target);
+
+    /// <summary>
+    /// Resolves <paramref name="target"/> (relative to <paramref name="baseFolder"/>, an absolute folder such as
+    /// <c>/word/charts</c>) to an absolute part name, collapsing <c>../</c> and <c>./</c> segments. A target that
+    /// is already absolute (starts with <c>/</c>) is returned as-is. Returns null when the path escapes the root.
+    /// </summary>
+    private static string? ResolveRelativePartName(string baseFolder, string target)
+    {
+        if (target.StartsWith('/'))
+            return target;
+        var segments = new List<string>(baseFolder.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries));
+        foreach (var segment in target.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".")
+                continue;
+            if (segment == "..")
+            {
+                if (segments.Count == 0)
+                    return null;
+                segments.RemoveAt(segments.Count - 1);
+            }
+            else
+            {
+                segments.Add(segment);
+            }
+        }
+        return "/" + string.Join('/', segments);
+    }
+
+    /// <summary>The absolute folder (no trailing slash) containing <paramref name="partName"/>, e.g.
+    /// <c>/word/charts/chart1.xml</c> → <c>/word/charts</c>.</summary>
+    private static string FolderOf(string partName)
+    {
+        var slash = partName.LastIndexOf('/');
+        return slash <= 0 ? "/" : partName[..slash];
+    }
+
+    /// <summary>The conventional <c>_rels</c> part name for a part, e.g. <c>/word/charts/chart1.xml</c> →
+    /// <c>/word/charts/_rels/chart1.xml.rels</c>.</summary>
+    private static string RelsPartNameFor(string partName)
+    {
+        var slash = partName.LastIndexOf('/');
+        var folder = slash <= 0 ? string.Empty : partName[..slash];
+        var file = slash < 0 ? partName : partName[(slash + 1)..];
+        return $"{folder}/_rels/{file}.rels";
+    }
+
+    /// <summary>
     /// Finds the plot area's single chart-type element and maps it to a <see cref="ChartKind"/>:
     /// c:barChart → Column/Bar (by c:barDir), c:lineChart → Line, c:areaChart → Area, c:pieChart → Pie,
     /// c:doughnutChart → Doughnut, c:scatterChart → Scatter. Returns (null, Column) when none is present.
@@ -1800,6 +2038,37 @@ public static class DocxReader
                 continue;
             // Targets in document rels are relative to the word/ folder.
             map[id] = "word/" + target.TrimStart('/');
+        }
+        return map;
+    }
+
+    /// <summary>
+    /// Maps relationship id → archive entry path for a satellite part's own <c>_rels</c> (e.g.
+    /// <c>word/_rels/comments.xml.rels</c>), resolving each Target relative to <paramref name="baseFolder"/>
+    /// (the folder the relationships are relative to, e.g. <c>word/</c>). External targets are skipped. Returns
+    /// an empty map when the rels part is absent — so a comments part with no image relationships behaves exactly
+    /// as before. Mirrors <see cref="ReadImageRelationships"/> for non-document parts.
+    /// </summary>
+    private static Dictionary<string, string> ReadPartImageRelationships(ZipArchive archive, string relsPath, string baseFolder)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var relsXml = LoadPart(archive, relsPath);
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return map;
+
+        foreach (var rel in relationships)
+        {
+            if (rel.Attribute("TargetMode")?.Value == "External")
+                continue;
+            var id = rel.Attribute("Id")?.Value;
+            var target = rel.Attribute("Target")?.Value;
+            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(target))
+                continue;
+            // Targets are relative to baseFolder; a "../" steps out of it. Collapse to the archive entry path.
+            var resolved = ResolveRelativePartName("/" + baseFolder.Trim('/'), target);
+            if (resolved is not null)
+                map[id] = resolved.TrimStart('/');
         }
         return map;
     }
@@ -2206,7 +2475,13 @@ public static class DocxReader
                 Type = s.Attribute(W + "type")?.Value == "character" ? StyleType.Character : StyleType.Paragraph,
                 BasedOnStyleId = s.Element(W + "basedOn")?.Attribute(W + "val")?.Value,
                 Run = rPr is null ? RunFormatting.Default : ReadRunFormatting(rPr),
-                Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr)
+                Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr),
+                // A style definition can carry numbering via w:pPr/w:numPr (numId + ilvl). FreeW does not model
+                // numbering on a style, so capture the original numPr so the writer can re-emit it against the
+                // preserved numbering.xml (under the same disjoint-id remap as paragraph-level preserved
+                // numbering). Whether it survives the round-trip depends on the merge plan finding a matching
+                // w:num — a numId with no definition is dropped, exactly like a paragraph's preserved numPr.
+                PreservedNumbering = pPr is null ? null : ReadPreservedNumbering(pPr)
             };
         }
     }

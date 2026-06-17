@@ -704,7 +704,8 @@ public sealed partial class MainWindow : Window
                     // Home Number group (added buttons).
                     ["home.increaseDecimal"] = IncreaseSelectedRangeDecimalPlaces,
                     ["home.decreaseDecimal"] = DecreaseSelectedRangeDecimalPlaces,
-                    // Formulas tab (Formula Auditing group).
+                    // View tab (Window group) + Formulas tab.
+                    ["view.unhide"] = () => _ = UnhideSheetAsync(),
                     ["formulas.showFormulas"] = ToggleShowFormulas,
                     // Data tab (Sort & Filter / Tools / Forecast / Outline groups).
                     ["data.advancedFilter"] = () => _ = ShowAdvancedFilterDialogAsync(),
