@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -74,6 +75,7 @@ public partial class MainWindow
             WireDeclarativeStateSync(originals, renderedByName);
             RepointBackplaneNamesToRenderedControls(renderedByName);
             WireRenderedMenuOpenedHandlers(renderedByName);
+            PopulateAndWireRenderedHomeCombos(renderedByName);
 
             if (Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_CAPTURE") == "1")
                 Dispatcher.BeginInvoke(new Action(CaptureDeclarativeRibbon), DispatcherPriority.ContextIdle);
@@ -278,6 +280,103 @@ public partial class MainWindow
             arrangeAll is ButtonBase { ContextMenu: { } arrangeMenu })
         {
             arrangeMenu.Opened += ArrangeAllContextMenu_Opened;
+        }
+    }
+
+    /// <summary>Guards against re-wiring the rendered combos if the ribbon is rebuilt.</summary>
+    private bool _renderedHomeCombosWired;
+
+    /// <summary>
+    /// Populates the three editable Home combos (Font, Font Size, Number Format) on the *rendered*
+    /// declarative ribbon with their full item sources and wires their commit events to the existing
+    /// host handlers. Selecting/typing now drives <see cref="ApplyStyleDiff"/> through the rendered
+    /// control (its <c>sender</c>), so the combos are functional without any hidden backplane stub.
+    /// </summary>
+    private void PopulateAndWireRenderedHomeCombos(IReadOnlyDictionary<string, Control> rendered)
+    {
+        if (rendered.TryGetValue("Font", out var fontControl) && fontControl is ComboBox fontBox)
+        {
+            PopulateRenderedComboItems(fontBox, HomeFontFamilyNames);
+            SetRenderedComboInitialSelection(fontBox,
+                HomeFontFamilyNames.Contains("Calibri") ? "Calibri" : HomeFontFamilyNames.FirstOrDefault());
+            if (!_renderedHomeCombosWired)
+            {
+                fontBox.SelectionChanged += FontNameBox_SelectionChanged;
+                fontBox.KeyDown += FontNameBox_KeyDown;
+                fontBox.LostKeyboardFocus += FontNameBox_LostKeyboardFocus;
+            }
+        }
+
+        if (rendered.TryGetValue("Font Size", out var sizeControl) && sizeControl is ComboBox sizeBox)
+        {
+            PopulateRenderedComboItems(sizeBox, HomeFontSizeOptions);
+            SetRenderedComboInitialSelection(sizeBox, "11");
+            if (!_renderedHomeCombosWired)
+            {
+                sizeBox.SelectionChanged += FontSizeBox_SelectionChanged;
+                sizeBox.KeyDown += FontSizeBox_KeyDown;
+                sizeBox.LostKeyboardFocus += FontSizeBox_LostKeyboardFocus;
+            }
+        }
+
+        if (rendered.TryGetValue("Number Format", out var numberControl) && numberControl is ComboBox numberBox)
+        {
+            PopulateRenderedComboItems(numberBox, HomeNumberFormatLabels);
+            _suppressToolbarSync = true;
+            try
+            {
+                numberBox.SelectedIndex = HomeNumberFormatDropdownPlanner.DefaultSelectionIndex;
+            }
+            finally
+            {
+                _suppressToolbarSync = false;
+            }
+            if (!_renderedHomeCombosWired)
+                numberBox.SelectionChanged += NumberFormatBox_SelectionChanged;
+        }
+
+        _renderedHomeCombosWired = true;
+    }
+
+    /// <summary>System font families (sorted), cached for the rendered Home Font combo.</summary>
+    private static readonly System.Collections.Generic.IReadOnlyList<string> HomeFontFamilyNames =
+        System.Windows.Media.Fonts.SystemFontFamilies
+            .Select(f => f.Source)
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    /// <summary>Default font-size choices for the rendered Home Font Size combo.</summary>
+    private static readonly System.Collections.Generic.IReadOnlyList<string> HomeFontSizeOptions =
+        new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36", "48", "72" };
+
+    /// <summary>Number-format labels for the rendered Home Number Format combo.</summary>
+    private static readonly System.Collections.Generic.IReadOnlyList<string> HomeNumberFormatLabels =
+        HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label).ToArray();
+
+    /// <summary>Replaces a rendered combo's declarative placeholder items with the full host source.</summary>
+    private static void PopulateRenderedComboItems(
+        ComboBox combo,
+        System.Collections.Generic.IReadOnlyList<string> items)
+    {
+        combo.ItemsSource = null;
+        combo.Items.Clear();
+        foreach (var item in items)
+            combo.Items.Add(item);
+    }
+
+    /// <summary>Sets a combo's initial selected item without raising the host commit handlers.</summary>
+    private void SetRenderedComboInitialSelection(ComboBox combo, string? value)
+    {
+        if (value is null) return;
+        _suppressToolbarSync = true;
+        try
+        {
+            combo.SelectedItem = value;
+            combo.Text = value;
+        }
+        finally
+        {
+            _suppressToolbarSync = false;
         }
     }
 

@@ -14,23 +14,22 @@ internal static class FreeWRibbon
         static RibbonButton Icon(RibbonButton button, RibbonCommandIconKind kind, RibbonCommandIconAccent accent = RibbonCommandIconAccent.None) =>
             button with { Icon = new RibbonCommandIcon(kind, accent) };
 
-        static RibbonToggleButton ToggleIcon(RibbonToggleButton toggle, RibbonCommandIconKind kind) =>
-            toggle with { Icon = new RibbonCommandIcon(kind) };
-
         return new RibbonDefinitionBuilder()
             .Tab("home", "Home", "H", tab =>
             {
                 tab.Group("clipboard", "Clipboard", "C", 100, g =>
                 {
-                    g.Button("freew.paste", "Paste", b => Icon(b, RibbonCommandIconKind.Paste));
-                    g.Button("freew.paste-plain", "Paste Text Only", b => Icon(b, RibbonCommandIconKind.Paste));
-                    g.Button("freew.paste-merge", "Merge Formatting", b => Icon(b, RibbonCommandIconKind.Paste));
-                    g.Button("freew.cut", "Cut", b => Icon(b, RibbonCommandIconKind.Cut));
-                    g.Button("freew.copy", "Copy", b => Icon(b, RibbonCommandIconKind.Copy));
-                    g.Button("freew.format-painter", "Format Painter", b => Icon(b, RibbonCommandIconKind.FormatPainter));
+                    // Paste is the hero (Large); the rest stack as labelled medium buttons, like Word.
+                    g.Large("freew.paste", "Paste", RibbonCommandIconKind.Paste, "V");
+                    g.Medium("freew.cut", "Cut", RibbonCommandIconKind.Cut, "X");
+                    g.Medium("freew.copy", "Copy", RibbonCommandIconKind.Copy, "C");
+                    g.Medium("freew.format-painter", "Format Painter", RibbonCommandIconKind.FormatPainter, "FP");
+                    g.Icon("freew.paste-plain", "Paste Text Only", RibbonCommandIconKind.Paste);
+                    g.Icon("freew.paste-merge", "Merge Formatting", RibbonCommandIconKind.Paste);
                 });
                 tab.Group("font", "Font", "F", 90, g =>
                 {
+                    // Row 1: the font name + size combos. Row 2+: compact icon-only buttons, exactly like Word.
                     g.ComboBox("freew.font-family", "Font", c => c with
                     {
                         Items = new[] { "Calibri", "Arial", "Times New Roman", "Georgia", "Consolas", "Verdana", "Cambria" },
@@ -43,44 +42,48 @@ internal static class FreeWRibbon
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
                         Width = 56
                     });
-                    g.Toggle("freew.bold", "Bold", b => ToggleIcon(b, RibbonCommandIconKind.Bold));
-                    g.Toggle("freew.italic", "Italic", b => ToggleIcon(b, RibbonCommandIconKind.Italic));
-                    g.Toggle("freew.underline", "Underline", b => ToggleIcon(b, RibbonCommandIconKind.Underline));
-                    g.Button("freew.superscript", "Superscript", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.subscript", "Subscript", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.smallcaps", "Small Caps", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.allcaps", "All Caps", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.change-case", "Change Case", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.font-color", "Text Colour", b => Icon(b, RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color));
-                    g.Button("freew.highlight", "Highlight", b => Icon(b, RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill));
-                    g.Button("freew.grow-font", "Grow", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.shrink-font", "Shrink", b => Icon(b, RibbonCommandIconKind.Font));
-                    g.Button("freew.clear-formatting", "Clear Formatting", b => Icon(b, RibbonCommandIconKind.Clear));
+                    g.Icon("freew.grow-font", "Grow Font", RibbonCommandIconKind.ArrowUp);
+                    g.Icon("freew.shrink-font", "Shrink Font", RibbonCommandIconKind.ArrowDown);
+                    g.RowBreak();
+                    g.IconToggle("freew.bold", "Bold", RibbonCommandIconKind.Bold, "1");
+                    g.IconToggle("freew.italic", "Italic", RibbonCommandIconKind.Italic, "2");
+                    g.IconToggle("freew.underline", "Underline", RibbonCommandIconKind.Underline, "3");
+                    g.Icon("freew.subscript", "Subscript", RibbonCommandIconKind.Subscript);
+                    g.Icon("freew.superscript", "Superscript", RibbonCommandIconKind.Superscript);
+                    g.Icon("freew.change-case", "Change Case", RibbonCommandIconKind.ChangeCase);
+                    g.Icon("freew.smallcaps", "Small Caps", RibbonCommandIconKind.Font);
+                    g.Icon("freew.allcaps", "All Caps", RibbonCommandIconKind.Font);
+                    g.Icon("freew.highlight", "Text Highlight Colour", RibbonCommandIconKind.Highlight);
+                    g.Icon("freew.font-color", "Font Colour", RibbonCommandIconKind.FontColor);
+                    g.Icon("freew.clear-formatting", "Clear All Formatting", RibbonCommandIconKind.Clear);
                 });
                 tab.Group("paragraph", "Paragraph", "P", 80, g =>
                 {
-                    g.Button("freew.bullets", "Bullets", b => Icon(b, RibbonCommandIconKind.List));
-                    g.Button("freew.numbering", "Numbering", b => Icon(b, RibbonCommandIconKind.Number));
-                    g.Button("freew.multilevel-list", "Multilevel List", b => Icon(b, RibbonCommandIconKind.List));
-                    g.Button("freew.align-left", "Align Left", b => Icon(b, RibbonCommandIconKind.Align));
-                    g.Button("freew.align-center", "Center", b => Icon(b, RibbonCommandIconKind.Align));
-                    g.Button("freew.align-right", "Align Right", b => Icon(b, RibbonCommandIconKind.Align));
-                    g.ComboBox("freew.line-spacing", "Line Spacing", c => c with
+                    // Row 1: list + indent + spacing. Row 2: alignment + shading/borders. Compact icon-only, Word-style.
+                    g.Icon("freew.bullets", "Bullets", RibbonCommandIconKind.Bullets, dropdown: true);
+                    g.Icon("freew.numbering", "Numbering", RibbonCommandIconKind.NumberedList, dropdown: true);
+                    g.Icon("freew.multilevel-list", "Multilevel List", RibbonCommandIconKind.MultilevelList, dropdown: true);
+                    g.Icon("freew.indent-decrease", "Decrease Indent", RibbonCommandIconKind.IndentDecrease);
+                    g.Icon("freew.indent-increase", "Increase Indent", RibbonCommandIconKind.IndentIncrease);
+                    g.RowBreak();
+                    g.Icon("freew.align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
+                    g.Icon("freew.align-center", "Center", RibbonCommandIconKind.AlignCenter);
+                    g.Icon("freew.align-right", "Align Right", RibbonCommandIconKind.AlignRight);
+                    g.Icon("freew.align-justify", "Justify", RibbonCommandIconKind.AlignJustify);
+                    g.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", c => c with
                     {
                         Items = new[] { "1.0", "1.15", "1.5", "2.0" },
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextFunction),
-                        Width = 56
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.LineSpacing),
+                        Width = 52
                     });
-                    g.Button("freew.space-before-toggle", "Space Before", b => Icon(b, RibbonCommandIconKind.TextFunction));
-                    g.Button("freew.space-after-toggle", "Space After", b => Icon(b, RibbonCommandIconKind.TextFunction));
-                    g.Button("freew.indent-increase", "Increase Indent", b => Icon(b, RibbonCommandIconKind.ArrowRight));
-                    g.Button("freew.indent-decrease", "Decrease Indent", b => Icon(b, RibbonCommandIconKind.ArrowLeft));
-                    g.Button("freew.paragraph-dialog", "Paragraph…", b => Icon(b, RibbonCommandIconKind.TextFunction));
-                    g.Button("freew.para-border", "Border", b => Icon(b, RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border));
-                    g.Button("freew.para-shading", "Shading", b => Icon(b, RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill));
-                    g.Button("freew.keep-with-next", "Keep with Next", b => Icon(b, RibbonCommandIconKind.TextFunction));
-                    g.Button("freew.keep-lines", "Keep Lines Together", b => Icon(b, RibbonCommandIconKind.TextFunction));
-                    g.Button("freew.widow-control", "Widow/Orphan Control", b => Icon(b, RibbonCommandIconKind.TextFunction));
+                    g.Icon("freew.para-shading", "Shading", RibbonCommandIconKind.Fill);
+                    g.Icon("freew.para-border", "Borders", RibbonCommandIconKind.Border);
+                    g.Icon("freew.space-before-toggle", "Add Space Before Paragraph", RibbonCommandIconKind.SpaceBefore);
+                    g.Icon("freew.space-after-toggle", "Add Space After Paragraph", RibbonCommandIconKind.SpaceAfter);
+                    g.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
+                    g.Icon("freew.keep-with-next", "Keep with Next", RibbonCommandIconKind.TextFunction);
+                    g.Icon("freew.keep-lines", "Keep Lines Together", RibbonCommandIconKind.TextFunction);
+                    g.Icon("freew.widow-control", "Widow/Orphan Control", RibbonCommandIconKind.TextFunction);
                 });
                 tab.Group("styles", "Styles", "S", 70, g =>
                 {
@@ -101,37 +104,39 @@ internal static class FreeWRibbon
             {
                 tab.Group("pages", "Pages", "P", 100, g =>
                 {
-                    g.Button("freew.cover-page", "Cover Page", b => Icon(b, RibbonCommandIconKind.Page));
-                    g.Button("freew.blank-page", "Blank Page", b => Icon(b, RibbonCommandIconKind.Page));
-                    g.Button("freew.horizontal-rule", "Horizontal Rule", b => Icon(b, RibbonCommandIconKind.Line));
-                    g.Button("freew.page-break", "Page Break", b => Icon(b, RibbonCommandIconKind.PageBreak));
-                    g.Button("freew.drop-cap", "Drop Cap", b => Icon(b, RibbonCommandIconKind.Font));
+                    g.Icon("freew.cover-page", "Cover Page", RibbonCommandIconKind.CoverPage);
+                    g.Icon("freew.blank-page", "Blank Page", RibbonCommandIconKind.OnePage);
+                    g.Icon("freew.horizontal-rule", "Horizontal Rule", RibbonCommandIconKind.HorizontalRule);
+                    g.Icon("freew.page-break", "Page Break", RibbonCommandIconKind.PageBreak);
+                    g.Icon("freew.drop-cap", "Drop Cap", RibbonCommandIconKind.DropCap);
                 });
-                tab.Group("tables", "Tables", "T", 90, g => g.Button("freew.table", "Table", b => Icon(b, RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green)));
+                tab.Group("tables", "Tables", "T", 90, g => g.Large("freew.table", "Table", RibbonCommandIconKind.Table, dropdown: true));
                 tab.Group("table-tools", "Table Tools", "B", 85, g =>
                 {
-                    g.Button("freew.table-insert-row", "Insert Row", b => Icon(b, RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green));
-                    g.Button("freew.table-delete-row", "Delete Row", b => Icon(b, RibbonCommandIconKind.Delete));
-                    g.Button("freew.table-insert-col", "Insert Column", b => Icon(b, RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green));
-                    g.Button("freew.table-delete-col", "Delete Column", b => Icon(b, RibbonCommandIconKind.Delete));
-                    g.Button("freew.cell-shading", "Cell Shading", b => Icon(b, RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill));
-                    g.Button("freew.merge-cells", "Merge Cells", b => Icon(b, RibbonCommandIconKind.Merge));
-                    g.Button("freew.split-cell", "Split Cell", b => Icon(b, RibbonCommandIconKind.Grid));
-                    g.Button("freew.table-header-row", "Header Row", b => Icon(b, RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green));
-                    g.Button("freew.table-banded-rows", "Banded Rows", b => Icon(b, RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green));
-                    g.Button("freew.table-repeat-header", "Repeat Header", b => Icon(b, RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green));
+                    g.Icon("freew.table-insert-row", "Insert Row", RibbonCommandIconKind.Insert, RibbonCommandIconAccent.Green);
+                    g.Icon("freew.table-delete-row", "Delete Row", RibbonCommandIconKind.Delete);
+                    g.Icon("freew.table-insert-col", "Insert Column", RibbonCommandIconKind.Insert, RibbonCommandIconAccent.Green);
+                    g.Icon("freew.table-delete-col", "Delete Column", RibbonCommandIconKind.Delete);
+                    g.RowBreak();
+                    g.Icon("freew.cell-shading", "Cell Shading", RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill);
+                    g.Icon("freew.merge-cells", "Merge Cells", RibbonCommandIconKind.Merge);
+                    g.Icon("freew.split-cell", "Split Cell", RibbonCommandIconKind.Grid);
+                    g.Icon("freew.table-header-row", "Header Row", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
+                    g.Icon("freew.table-banded-rows", "Banded Rows", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
+                    g.Icon("freew.table-repeat-header", "Repeat Header", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
                 });
                 tab.Group("illustrations", "Illustrations", "I", 80, g =>
                 {
-                    g.Button("freew.picture", "Picture", b => Icon(b, RibbonCommandIconKind.Picture));
-                    g.Button("freew.image-size", "Image Size", b => Icon(b, RibbonCommandIconKind.Size));
-                    g.Button("freew.image-alt-text", "Alt Text", b => Icon(b, RibbonCommandIconKind.Info));
-                    g.Button("freew.image-align-left", "Align Left", b => Icon(b, RibbonCommandIconKind.Align));
-                    g.Button("freew.image-align-center", "Align Center", b => Icon(b, RibbonCommandIconKind.Align));
-                    g.Button("freew.image-align-right", "Align Right", b => Icon(b, RibbonCommandIconKind.Align));
+                    g.Large("freew.picture", "Picture", RibbonCommandIconKind.Picture);
+                    g.Icon("freew.image-size", "Image Size", RibbonCommandIconKind.Size);
+                    g.Icon("freew.image-alt-text", "Alt Text", RibbonCommandIconKind.Info);
+                    g.Icon("freew.image-align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
+                    g.RowBreak();
+                    g.Icon("freew.image-align-center", "Align Center", RibbonCommandIconKind.AlignCenter);
+                    g.Icon("freew.image-align-right", "Align Right", RibbonCommandIconKind.AlignRight);
                     // Shapes gallery: a dropdown of the preset shape kinds, each inserting the matching
                     // Shape via DocumentView.InsertShape (the items dispatch their own freew.shape-* ids).
-                    g.Medium("freew.shapes", "Shapes", RibbonCommandIconKind.Rectangle, "SH", menu: m =>
+                    g.Icon("freew.shapes", "Shapes", RibbonCommandIconKind.Shapes, "SH", menu: m =>
                     {
                         m.Item("freew.shape-rectangle", "Rectangle", "R");
                         m.Item("freew.shape-rounded", "Rounded Rectangle", "O");
@@ -141,93 +146,95 @@ internal static class FreeWRibbon
                 });
                 tab.Group("media", "Media", "M", 78, g =>
                 {
-                    g.Button("freew.equation", "Equation", b => Icon(b, RibbonCommandIconKind.Function));
-                    g.Button("freew.chart", "Chart", b => Icon(b, RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green));
-                    g.Button("freew.wordart", "WordArt", b => Icon(b, RibbonCommandIconKind.TextBox));
-                    g.Button("freew.smartart", "SmartArt", b => Icon(b, RibbonCommandIconKind.Group));
-                    g.Button("freew.object", "Object", b => Icon(b, RibbonCommandIconKind.Grid));
+                    g.Icon("freew.equation", "Equation", RibbonCommandIconKind.Equation);
+                    g.Icon("freew.chart", "Chart", RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
+                    g.Icon("freew.wordart", "WordArt", RibbonCommandIconKind.WordArt);
+                    g.Icon("freew.smartart", "SmartArt", RibbonCommandIconKind.SmartArt);
+                    g.Icon("freew.object", "Object", RibbonCommandIconKind.Object);
                 });
                 tab.Group("links", "Links", "K", 70, g =>
                 {
-                    g.Button("freew.hyperlink", "Link");
-                    g.Button("freew.edit-hyperlink", "Edit Hyperlink");
-                    g.Button("freew.remove-hyperlink", "Remove Hyperlink");
-                    g.Button("freew.hyperlink-tooltip", "ScreenTip");
-                    g.Button("freew.bookmark", "Bookmark");
-                    g.Button("freew.link-bookmark", "Link to Bookmark");
-                    g.Button("freew.bookmark-manager", "Bookmark Manager");
+                    g.Icon("freew.hyperlink", "Link", RibbonCommandIconKind.Link);
+                    g.Icon("freew.edit-hyperlink", "Edit Hyperlink", RibbonCommandIconKind.Link);
+                    g.Icon("freew.remove-hyperlink", "Remove Hyperlink", RibbonCommandIconKind.Link);
+                    g.Icon("freew.hyperlink-tooltip", "ScreenTip", RibbonCommandIconKind.Info);
+                    g.Icon("freew.bookmark", "Bookmark", RibbonCommandIconKind.Bookmark);
+                    g.Icon("freew.link-bookmark", "Link to Bookmark", RibbonCommandIconKind.Bookmark);
+                    g.Icon("freew.bookmark-manager", "Bookmark Manager", RibbonCommandIconKind.Bookmark);
                 });
                 tab.Group("quick-parts", "Quick Parts", "Q", 67, g =>
                 {
-                    g.Button("freew.save-quickpart", "Save Selection");
-                    g.Button("freew.insert-quickpart", "Insert Quick Part");
-                    g.Button("freew.insert-file", "Text from File");
+                    g.Icon("freew.save-quickpart", "Save Selection", RibbonCommandIconKind.QuickParts);
+                    g.Icon("freew.insert-quickpart", "Insert Quick Part", RibbonCommandIconKind.QuickParts);
+                    g.Icon("freew.insert-file", "Text from File", RibbonCommandIconKind.TextFromFile);
                 });
                 tab.Group("references", "References", "R", 65, g =>
                 {
-                    g.Button("freew.footnote", "Footnote");
-                    g.Button("freew.endnote", "Endnote");
-                    g.Button("freew.toc", "Table of Contents");
-                    g.Button("freew.toc-refresh", "Update TOC");
-                    g.Button("freew.citation", "Citation");
+                    g.Icon("freew.footnote", "Footnote", RibbonCommandIconKind.Footnote);
+                    g.Icon("freew.endnote", "Endnote", RibbonCommandIconKind.Endnote);
+                    g.Icon("freew.toc", "Table of Contents", RibbonCommandIconKind.TableOfContents);
+                    g.Icon("freew.toc-refresh", "Update TOC", RibbonCommandIconKind.Refresh);
+                    g.Icon("freew.citation", "Citation", RibbonCommandIconKind.Citation);
                     g.ComboBox("freew.citation-style", "Citation Style", c => c with
                     {
                         Items = new[] { "APA", "MLA", "Chicago" },
                         Width = 90
                     });
-                    g.Button("freew.bibliography", "Bibliography");
-                    g.Button("freew.caption", "Caption");
-                    g.Button("freew.cross-reference", "Cross-reference");
-                    g.Button("freew.index-mark", "Mark Entry");
-                    g.Button("freew.index-insert", "Insert Index");
-                    g.Button("freew.tof", "Table of Figures");
-                    g.Button("freew.tof-refresh", "Update Figures");
+                    g.RowBreak();
+                    g.Icon("freew.bibliography", "Bibliography", RibbonCommandIconKind.Bibliography);
+                    g.Icon("freew.caption", "Caption", RibbonCommandIconKind.Caption);
+                    g.Icon("freew.cross-reference", "Cross-reference", RibbonCommandIconKind.CrossReference);
+                    g.Icon("freew.index-mark", "Mark Entry", RibbonCommandIconKind.Index);
+                    g.Icon("freew.index-insert", "Insert Index", RibbonCommandIconKind.Index);
+                    g.Icon("freew.tof", "Table of Figures", RibbonCommandIconKind.TableOfContents);
+                    g.Icon("freew.tof-refresh", "Update Figures", RibbonCommandIconKind.Refresh);
                 });
                 tab.Group("controls", "Controls", "O", 62, g =>
                 {
-                    g.Button("freew.cc-text", "Text Control");
-                    g.Button("freew.cc-checkbox", "Check Box");
+                    g.Icon("freew.cc-text", "Text Control", RibbonCommandIconKind.TextBox);
+                    g.Icon("freew.cc-checkbox", "Check Box", RibbonCommandIconKind.CheckBox);
                 });
                 tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                 {
-                    g.Button("freew.header", "Header");
-                    g.Button("freew.footer", "Footer");
-                    g.Button("freew.page-number", "Page Number");
+                    g.Icon("freew.header", "Header", RibbonCommandIconKind.Header);
+                    g.Icon("freew.footer", "Footer", RibbonCommandIconKind.Footer);
+                    g.Icon("freew.page-number", "Page Number", RibbonCommandIconKind.PageNumber);
                 });
                 tab.Group("symbols", "Symbols", "Y", 50, g =>
                 {
-                    g.Button("freew.symbol", "Symbol");
-                    g.Button("freew.datetime", "Date & Time");
-                    g.Button("freew.field", "Field");
+                    g.Icon("freew.symbol", "Symbol", RibbonCommandIconKind.Symbol);
+                    g.Icon("freew.datetime", "Date & Time", RibbonCommandIconKind.Date);
+                    g.Icon("freew.field", "Field", RibbonCommandIconKind.Field);
                 });
             })
             .Tab("layout", "Layout", "L", tab =>
             {
                 tab.Group("page-setup", "Page Setup", "P", 100, g =>
                 {
-                    g.Button("freew.margins", "Margins", b => Icon(b, RibbonCommandIconKind.Margins));
-                    g.Button("freew.orientation", "Orientation", b => Icon(b, RibbonCommandIconKind.Orientation));
-                    g.Button("freew.size", "Size", b => Icon(b, RibbonCommandIconKind.Page));
-                    g.Button("freew.columns", "Columns", b => Icon(b, RibbonCommandIconKind.TextColumns));
-                    g.Button("freew.line-numbers", "Line Numbers", b => Icon(b, RibbonCommandIconKind.Number));
-                    g.Button("freew.hyphenation", "Hyphenation", b => Icon(b, RibbonCommandIconKind.TextFunction));
-                    g.Button("freew.page-valign", "Vertical Align", b => Icon(b, RibbonCommandIconKind.Align));
-                    g.Button("freew.different-first-page", "Different First Page", b => Icon(b, RibbonCommandIconKind.Page));
+                    g.Large("freew.margins", "Margins", RibbonCommandIconKind.Margins, dropdown: true);
+                    g.Icon("freew.orientation", "Orientation", RibbonCommandIconKind.Orientation, dropdown: true);
+                    g.Icon("freew.size", "Size", RibbonCommandIconKind.OnePage, dropdown: true);
+                    g.Icon("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, dropdown: true);
+                    g.RowBreak();
+                    g.Icon("freew.line-numbers", "Line Numbers", RibbonCommandIconKind.Number);
+                    g.Icon("freew.hyphenation", "Hyphenation", RibbonCommandIconKind.Hyphenation);
+                    g.Icon("freew.page-valign", "Vertical Align", RibbonCommandIconKind.AlignJustify);
+                    g.Icon("freew.different-first-page", "Different First Page", RibbonCommandIconKind.CoverPage);
                 });
                 tab.Group("page-background", "Page Background", "B", 95, g =>
                 {
-                    g.Button("freew.page-border", "Page Border", b => Icon(b, RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border));
-                    g.Button("freew.watermark", "Watermark", b => Icon(b, RibbonCommandIconKind.Page));
+                    g.Icon("freew.page-border", "Page Border", RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border);
+                    g.Icon("freew.watermark", "Watermark", RibbonCommandIconKind.Watermark);
                 });
                 tab.Group("preview", "Preview", "V", 90, g =>
                 {
-                    g.Button("freew.print-preview", "Print Preview", b => Icon(b, RibbonCommandIconKind.Print));
+                    g.Large("freew.print-preview", "Print Preview", RibbonCommandIconKind.Print);
                 });
                 tab.Group("data", "Data", "D", 88, g =>
                 {
-                    g.Button("freew.sort", "Sort", b => Icon(b, RibbonCommandIconKind.Sort));
-                    g.Button("freew.text-to-table", "Text to Table", b => Icon(b, RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green));
-                    g.Button("freew.table-to-text", "Table to Text", b => Icon(b, RibbonCommandIconKind.TextFunction));
+                    g.Icon("freew.sort", "Sort", RibbonCommandIconKind.Sort);
+                    g.Icon("freew.text-to-table", "Text to Table", RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
+                    g.Icon("freew.table-to-text", "Table to Text", RibbonCommandIconKind.TextFunction);
                 });
             })
             .Tab("design", "Design", "G", tab =>
@@ -237,72 +244,73 @@ internal static class FreeWRibbon
                     g.ComboBox("freew.theme", "Themes", c => c with
                     {
                         Items = DocumentTheme.Catalog.Select(t => t.Name).ToArray(),
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme),
                         Width = 140
                     });
                 });
             })
             .Tab("view", "View", "W", tab =>
             {
-                tab.Group("show", "Show", "S", 100, g =>
+                tab.Group("views", "Views", "V", 100, g =>
                 {
-                    g.Toggle("freew.nav-pane", "Navigation Pane");
-                    g.Toggle("freew.formatting-marks", "Show ¶");
+                    g.IconToggle("freew.print-layout", "Print Layout", RibbonCommandIconKind.PrintLayout);
+                    g.IconToggle("freew.read-mode", "Read Mode", RibbonCommandIconKind.ReadMode);
                 });
-                tab.Group("views", "Views", "V", 90, g =>
+                tab.Group("show", "Show", "S", 90, g =>
                 {
-                    g.Toggle("freew.print-layout", "Print Layout");
-                    g.Toggle("freew.read-mode", "Read Mode");
+                    g.IconToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
+                    g.IconToggle("freew.formatting-marks", "Show ¶", RibbonCommandIconKind.FormattingMarks);
                 });
             })
             .Tab("mailings", "Mailings", "M", tab =>
             {
                 tab.Group("merge-data", "Start Mail Merge", "D", 100, g =>
                 {
-                    g.Button("freew.merge-data", "Set Data");
+                    g.Large("freew.merge-data", "Set Data", RibbonCommandIconKind.Recipients);
                 });
                 tab.Group("merge-write", "Write & Insert Fields", "W", 90, g =>
                 {
-                    g.Button("freew.merge-field", "Insert Merge Field");
+                    g.Icon("freew.merge-field", "Insert Merge Field", RibbonCommandIconKind.MergeField);
                 });
                 tab.Group("merge-preview", "Preview Results", "P", 80, g =>
                 {
-                    g.Button("freew.merge-preview", "Preview Record");
+                    g.Icon("freew.merge-preview", "Preview Record", RibbonCommandIconKind.PreviewResults);
                 });
                 tab.Group("merge-finish", "Finish", "F", 70, g =>
                 {
-                    g.Button("freew.merge-finish", "Finish & Merge");
+                    g.Large("freew.merge-finish", "Finish & Merge", RibbonCommandIconKind.FinishMerge);
                 });
             })
             .Tab("review", "Review", "R", tab =>
             {
                 tab.Group("proofing", "Proofing", "P", 100, g =>
                 {
-                    g.Button("freew.statistics", "Word Count");
-                    g.Toggle("freew.spellcheck-toggle", "Spell Check");
-                    g.Button("freew.add-to-dictionary", "Add to Dictionary");
+                    g.Large("freew.statistics", "Word Count", RibbonCommandIconKind.WordCount);
+                    g.IconToggle("freew.spellcheck-toggle", "Spell Check", RibbonCommandIconKind.Spelling);
+                    g.Icon("freew.add-to-dictionary", "Add to Dictionary", RibbonCommandIconKind.Book);
                 });
-                tab.Group("comments", "Comments", "C", 100, g =>
+                tab.Group("comments", "Comments", "C", 95, g =>
                 {
-                    g.Button("freew.new-comment", "New Comment");
+                    g.Large("freew.new-comment", "New Comment", RibbonCommandIconKind.Comment);
                 });
                 tab.Group("tracking", "Tracking", "G", 90, g =>
                 {
-                    g.Toggle("freew.track-changes", "Track Changes");
-                    g.Button("freew.accept-all", "Accept All");
-                    g.Button("freew.reject-all", "Reject All");
+                    g.IconToggle("freew.track-changes", "Track Changes", RibbonCommandIconKind.History);
+                    g.Icon("freew.accept-all", "Accept All", RibbonCommandIconKind.AcceptChange);
+                    g.Icon("freew.reject-all", "Reject All", RibbonCommandIconKind.RejectChange);
                 });
-                tab.Group("protect", "Protect", "T", 90, g =>
+                tab.Group("protect", "Protect", "T", 85, g =>
                 {
-                    g.Toggle("freew.restrict-editing", "Restrict Editing");
+                    g.IconToggle("freew.restrict-editing", "Restrict Editing", RibbonCommandIconKind.Protect);
                 });
                 tab.Group("compare", "Compare", "M", 80, g =>
                 {
-                    g.Button("freew.compare", "Compare");
+                    g.Icon("freew.compare", "Compare", RibbonCommandIconKind.Compare);
                 });
-                tab.Group("inspect", "Inspect", "I", 80, g =>
+                tab.Group("inspect", "Inspect", "I", 75, g =>
                 {
-                    g.Button("freew.inspect-document", "Inspect Document");
-                    g.Button("freew.check-accessibility", "Check Accessibility", b => Icon(b, RibbonCommandIconKind.Accessibility));
+                    g.Icon("freew.inspect-document", "Inspect Document", RibbonCommandIconKind.Search);
+                    g.Icon("freew.check-accessibility", "Check Accessibility", RibbonCommandIconKind.Accessibility);
                 });
             })
             .Build();

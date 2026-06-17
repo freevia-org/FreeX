@@ -54,7 +54,15 @@ internal sealed class StylesGallery : Control
         var swatches = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var (name, id) in gallery.Entries())
             swatches.Children.Add(gallery.BuildSwatch(name, id, large: true));
-        strip.Child = swatches;
+        // Word shows a fixed-width scrollable styles gallery, not the whole list inline. Bound the visible
+        // strip so the group stays compact (and doesn't force the adaptive panel to collapse it).
+        strip.Child = new ScrollViewer
+        {
+            MaxWidth = 300,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = swatches
+        };
         root.Children.Add(strip);
 
         // The "▾" expander drops the full list (every entry, one per row) as a popup.

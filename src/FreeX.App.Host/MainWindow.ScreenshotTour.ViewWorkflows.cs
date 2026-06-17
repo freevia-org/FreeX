@@ -284,16 +284,16 @@ public partial class MainWindow
         _suppressViewOptionSync = true;
         try
         {
-            ViewGridlinesChk.IsChecked = sheet.ShowGridlines;
-            ViewHeadersChk.IsChecked = sheet.ShowHeadings;
-            ViewRulerChk.IsChecked = sheet.ShowRulers;
+            _ribbonState.SetChecked("Gridlines", sheet.ShowGridlines);
+            _ribbonState.SetChecked("Headings", sheet.ShowHeadings);
+            _ribbonState.SetChecked("Ruler", sheet.ShowRulers);
         }
         finally
         {
             _suppressViewOptionSync = false;
         }
 
-        SplitViewBtn.IsChecked = sheet.SplitRow is not null || sheet.SplitColumn is not null;
+        _ribbonState.SetChecked("Split", sheet.SplitRow is not null || sheet.SplitColumn is not null);
         SetViewPanesZoomTourFormulaBarVisible(true);
         SelectViewRibbonTabForTour();
         UpdateViewport();
@@ -436,13 +436,13 @@ public partial class MainWindow
             StatusNormalViewChecked: StatusNormalViewButton.IsChecked == true,
             StatusPageLayoutViewChecked: StatusPageLayoutViewButton.IsChecked == true,
             StatusPageBreakPreviewChecked: StatusPageBreakPreviewButton.IsChecked == true,
-            ViewNormalChecked: ViewNormalButton.IsChecked == true,
-            ViewPageLayoutChecked: ViewPageLayoutButton.IsChecked == true,
-            ViewPageBreakPreviewChecked: ViewPageBreakPreviewButton.IsChecked == true,
-            ViewGridlinesChecked: ViewGridlinesChk.IsChecked == true,
-            ViewHeadingsChecked: ViewHeadersChk.IsChecked == true,
-            ViewRulerChecked: ViewRulerChk.IsChecked == true,
-            SplitButtonChecked: SplitViewBtn.IsChecked == true,
+            ViewNormalChecked: IsRibbonCommandChecked("Normal"),
+            ViewPageLayoutChecked: IsRibbonCommandChecked("Page Layout"),
+            ViewPageBreakPreviewChecked: IsRibbonCommandChecked("Page Break Preview"),
+            ViewGridlinesChecked: IsRibbonCommandChecked("Gridlines"),
+            ViewHeadingsChecked: IsRibbonCommandChecked("Headings"),
+            ViewRulerChecked: IsRibbonCommandChecked("Ruler"),
+            SplitButtonChecked: IsRibbonCommandChecked("Split"),
             WindowArrangement: _workbook.WindowArrangement.ToString(),
             CustomViewCount: _workbook.CustomViews.Count,
             CustomViewNames: _workbook.CustomViews.Select(view => view.Name).ToArray(),

@@ -793,6 +793,42 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>Reads the current label text of a rendered ribbon command button (by CommandName),
+    /// handling both plain-string content and the renderer's icon+label content tree.</summary>
+    private string? GetRenderedRibbonCommandLabel(string commandName)
+    {
+        if (FindRenderedRibbonControl(commandName) is not ButtonBase button)
+            return null;
+
+        return button.Content as string
+            ?? (TryGetRibbonContentLabel(button.Content, out var label) ? label : null);
+    }
+
+    private static bool TryGetRibbonContentLabel(object? content, out string label)
+    {
+        switch (content)
+        {
+            case TextBlock textBlock when RibbonMetadata.IsCommandLabel(textBlock):
+                label = textBlock.Text;
+                return true;
+            case Panel panel:
+                foreach (var child in panel.Children)
+                {
+                    if (TryGetRibbonContentLabel(child, out label))
+                        return true;
+                }
+
+                break;
+            case Decorator decorator:
+                return TryGetRibbonContentLabel(decorator.Child, out label);
+            case ContentControl contentControl when !ReferenceEquals(contentControl.Content, content):
+                return TryGetRibbonContentLabel(contentControl.Content, out label);
+        }
+
+        label = string.Empty;
+        return false;
+    }
+
     private void AlignRibbonIconColumns(RibbonStaticSurfaceSnapshot surface)
     {
         foreach (var stack in surface.StackPanels)

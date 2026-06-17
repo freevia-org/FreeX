@@ -552,15 +552,17 @@ public sealed partial class MainWindowSourceHygieneTests
         var refreshToolbar = ExtractMethodSource(source, "private void RefreshToolbarVisualState()");
 
         // Toolbar visual state now flows through the platform-neutral RibbonStateStore, which dedups
-        // no-op writes internally (so it never churns the renderer-bound controls). Font combos still
-        // mirror onto the legacy backplane combo via SetRibbonComboValue for handler reads.
+        // no-op writes internally (so it never churns the renderer-bound controls). The Font combos are
+        // driven entirely through the rendered declarative combo (no hidden backplane combo), so
+        // SetRibbonComboValue only writes the store value and no longer mirrors onto a stub.
         source.Should().Contain("private void SetRibbonComboValue(");
-        source.Should().Contain("private static void SetSelectedItemIfChanged(");
+        source.Should().NotContain("private static void SetSelectedItemIfChanged(");
         source.Should().Contain("private void RefreshToolbarAfterSelectionChange()");
         refreshToolbar.Should().Contain("_ribbonState.SetChecked(\"Bold\", state.Bold)");
-        refreshToolbar.Should().Contain("SetRibbonComboValue(\"Font\", state.FontName, FontNameBox)");
+        refreshToolbar.Should().Contain("SetRibbonComboValue(\"Font\", state.FontName)");
         refreshToolbar.Should().NotContain("BoldButton.IsChecked = state.Bold");
         refreshToolbar.Should().NotContain("FontNameBox.SelectedItem = state.FontName");
+        refreshToolbar.Should().NotContain(", FontNameBox)");
     }
 
     [Fact]
@@ -989,15 +991,19 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FontDropdownSelection_SyncsThroughStyleDiffToolbarStateAndGridTypeface()
     {
-        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var declarativeSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDeclarative.cs");
         var formattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         var uiStateSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
         var renderSource = DialogSourceTestSupport.ReadAppUiSources("GridView.Rendering.CellStyles.cs");
 
-        xaml.Should().Contain("x:Name=\"FontNameBox\"");
-        xaml.Should().Contain("SelectionChanged=\"FontNameBox_SelectionChanged\"");
+        // The Font combo is now the rendered declarative combo, populated + wired host-side. Selecting
+        // or typing a value drives ApplyStyleDiff through the rendered control's sender.
+        declarativeSource.Should().Contain("PopulateAndWireRenderedHomeCombos(");
+        declarativeSource.Should().Contain("fontBox.SelectionChanged += FontNameBox_SelectionChanged");
+        declarativeSource.Should().Contain("fontBox.LostKeyboardFocus += FontNameBox_LostKeyboardFocus");
+        formattingSource.Should().Contain("(sender as ComboBox)?.SelectedItem is string name");
         formattingSource.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name))");
-        uiStateSource.Should().Contain("SetRibbonComboValue(\"Font\", state.FontName, FontNameBox)");
+        uiStateSource.Should().Contain("SetRibbonComboValue(\"Font\", state.FontName)");
         renderSource.Should().Contain("ResolveCellFontNameForDisplay(style?.FontName)");
         renderSource.Should().Contain("AvailableCellFontNames.Value.Contains");
         renderSource.Should().Contain("new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true)");
@@ -1018,9 +1024,8 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
-        source.Should().Contain("GetSelectedFontSizeText()");
+        source.Should().Contain("GetSelectedFontSizeText(combo)");
         source.Should().Contain("ApplyFontSizeAndFitRows(size)");
-        source.Should().NotContain("FontSizeBox.Text;\r\n        if (WorksheetSizeInputParser.TryParsePositiveSize(text, out var size))\r\n            ApplyStyleDiff(new StyleDiff(FontSize: size));");
         source.Should().Contain("RefreshToolbar();");
     }
 

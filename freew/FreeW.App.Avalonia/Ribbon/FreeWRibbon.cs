@@ -65,6 +65,11 @@ internal static class FreeWRibbon
                     g.Button("freew.redo", "Redo");
                 });
             })
+            .Tab("insert", "Insert", "I", tab =>
+                tab.Group("tables", "Tables", null, 100, g =>
+                {
+                    g.Button("freew.insert-table", "Table");
+                }))
             .Build();
 
     public static RibbonCommandRegistry BuildRegistry(DocumentView editor, RibbonHostCallbacks callbacks)
@@ -87,6 +92,7 @@ internal static class FreeWRibbon
         registry.Register("freew.style-heading1", new RelayCommand(() => editor.ApplyQuickStyle(16, bold: true)));
         registry.Register("freew.style-heading2", new RelayCommand(() => editor.ApplyQuickStyle(14, bold: true)));
         registry.Register("freew.style-title", new RelayCommand(() => editor.ApplyQuickStyle(24, bold: true)));
+        registry.Register("freew.insert-table", new RelayCommand(() => editor.InsertTable(3, 3)));
         registry.Register("freew.font-size", new RelayValueCommand(value =>
         {
             if (double.TryParse(value, out var points) && points > 0)

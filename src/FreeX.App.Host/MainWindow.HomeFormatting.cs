@@ -393,7 +393,7 @@ public partial class MainWindow
     private void FontNameBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        if (FontNameBox.SelectedItem is string name)
+        if ((sender as ComboBox)?.SelectedItem is string name)
             ApplyStyleDiff(new StyleDiff(FontName: name));
     }
 
@@ -402,19 +402,19 @@ public partial class MainWindow
         if (e.Key != Key.Enter) return;
         if (_suppressToolbarSync) return;
 
-        CommitFontNameBoxText();
+        CommitFontNameBoxText(sender as ComboBox);
         e.Handled = true;
     }
 
     private void FontNameBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        CommitFontNameBoxText();
+        CommitFontNameBoxText(sender as ComboBox);
     }
 
-    private void CommitFontNameBoxText()
+    private void CommitFontNameBoxText(ComboBox? combo)
     {
-        var name = FontNameBox.Text?.Trim();
+        var name = combo?.Text?.Trim();
         if (!string.IsNullOrWhiteSpace(name))
             ApplyStyleDiff(new StyleDiff(FontName: name));
     }
@@ -422,7 +422,7 @@ public partial class MainWindow
     private void FontSizeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        CommitFontSizeBoxText(preferSelectedItem: true);
+        CommitFontSizeBoxText(sender as ComboBox, preferSelectedItem: true);
     }
 
     private void FontSizeBox_KeyDown(object sender, KeyEventArgs e)
@@ -430,25 +430,25 @@ public partial class MainWindow
         if (e.Key != Key.Enter) return;
         if (_suppressToolbarSync) return;
 
-        CommitFontSizeBoxText();
+        CommitFontSizeBoxText(sender as ComboBox);
         e.Handled = true;
     }
 
     private void FontSizeBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        CommitFontSizeBoxText();
+        CommitFontSizeBoxText(sender as ComboBox);
     }
 
-    private void CommitFontSizeBoxText(bool preferSelectedItem = false)
+    private void CommitFontSizeBoxText(ComboBox? combo, bool preferSelectedItem = false)
     {
-        var text = preferSelectedItem ? GetSelectedFontSizeText() : FontSizeBox.Text;
-        if (WorksheetSizeInputParser.TryParsePositiveSize(text, out var size))
+        var text = preferSelectedItem ? GetSelectedFontSizeText(combo) : combo?.Text;
+        if (text is not null && WorksheetSizeInputParser.TryParsePositiveSize(text, out var size))
             ApplyFontSizeAndFitRows(size);
     }
 
-    private string GetSelectedFontSizeText() =>
-        FontSizeBox.SelectedItem as string ?? FontSizeBox.Text;
+    private static string? GetSelectedFontSizeText(ComboBox? combo) =>
+        combo?.SelectedItem as string ?? combo?.Text;
 
     private void FontColorBtn_Click(object sender, RoutedEventArgs e) => ApplySelectedFontColor();
 
@@ -534,13 +534,14 @@ public partial class MainWindow
     private void NumberFormatBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        var selectedIndex = NumberFormatBox.SelectedIndex;
+        if (sender is not ComboBox combo) return;
+        var selectedIndex = combo.SelectedIndex;
         if (selectedIndex < 0 || selectedIndex >= HomeNumberFormatDropdownPlanner.Options.Count) return;
 
         var option = HomeNumberFormatDropdownPlanner.Options[selectedIndex];
         if (option.OpensFormatCellsDialog)
         {
-            ResetNumberFormatBoxSelection();
+            ResetNumberFormatBoxSelection(combo);
             OpenFormatCellsDialog(FormatCellsDialogTab.Number);
             return;
         }
@@ -549,12 +550,12 @@ public partial class MainWindow
             ApplyStyleDiff(new StyleDiff(NumberFormat: code));
     }
 
-    private void ResetNumberFormatBoxSelection()
+    private void ResetNumberFormatBoxSelection(ComboBox combo)
     {
         _suppressToolbarSync = true;
         try
         {
-            NumberFormatBox.SelectedIndex = HomeNumberFormatDropdownPlanner.DefaultSelectionIndex;
+            combo.SelectedIndex = HomeNumberFormatDropdownPlanner.DefaultSelectionIndex;
         }
         finally
         {

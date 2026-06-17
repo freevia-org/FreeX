@@ -899,6 +899,15 @@ public sealed class DocumentView : Control
 
     public void SetSelectionFontSize(double points) => ApplyRunFormatting(f => f with { FontSizePt = points });
 
+    /// <summary>Insert a bordered table (with a header row) after the current block. Cells edit on double-click.</summary>
+    public void InsertTable(int rows, int columns)
+    {
+        var table = Table.Create(Math.Max(1, rows), Math.Max(1, columns));
+        table.Formatting = TableFormatting.Default with { Borders = true, HeaderRow = true };
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertBlockCommand(insertAt, table));
+    }
+
     /// <summary>Toggle the current paragraph's list kind (bullet/number); re-applying the same kind clears it.</summary>
     public void ToggleList(ListKind kind)
     {
