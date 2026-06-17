@@ -25,4 +25,12 @@
     <Using Include="Free.Shared.Shell" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="SharpVectors.Wpf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Resources\CommandIconsSvg\**\*.svg" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
