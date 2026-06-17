@@ -607,6 +607,7 @@ public sealed partial class MainWindow : Window
                 InsertPicture = () => _ = InsertPictureFromFileAsync(),
                 FormatPainter = () => CaptureFormatPainterSource(persistent: false),
                 SetFontSize = ApplyRibbonFontSize,
+                SetFontName = ApplyRibbonFontName,
                 SortAscending = () => SortSelectedRange(ascending: true),
                 SortDescending = () => SortSelectedRange(ascending: false),
                 DataValidation = () => _ = ShowDataValidationDialogAsync(),
@@ -11953,6 +11954,33 @@ public sealed partial class MainWindow : Window
         }
 
         RefreshShell($"Set font size {size:0.##} for {rangeReference}");
+    }
+
+    /// <summary>
+    /// Applies a font family chosen from the ribbon Font Name combo to the selection. A blank/whitespace
+    /// value is ignored.
+    /// </summary>
+    private void ApplyRibbonFontName(string? fontName)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (string.IsNullOrWhiteSpace(fontName))
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeFontName(fontName);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Set Font failed.");
+            return;
+        }
+
+        RefreshShell($"Set font {fontName.Trim()} for {rangeReference}");
     }
 
     private void IncreaseSelectedRangeFontSize()

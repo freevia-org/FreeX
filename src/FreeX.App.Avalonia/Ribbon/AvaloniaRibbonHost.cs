@@ -89,6 +89,9 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Home ▸ Font ▸ Size combo — apply the chosen font size (string) to the selection.</summary>
     public Action<string?>? SetFontSize { get; init; }
 
+    /// <summary>Home ▸ Font ▸ Name combo — apply the chosen font family (string) to the selection.</summary>
+    public Action<string?>? SetFontName { get; init; }
+
     /// <summary>Data ▸ Sort A-Z.</summary>
     public Action? SortAscending { get; init; }
 
@@ -494,6 +497,8 @@ internal static class SampleRibbon
 
         if (callbacks.SetFontSize is { } setFontSize)
             registry.Register(new RibbonCommandId("home.fontSize"), new RelayValueRibbonCommand(setFontSize));
+        if (callbacks.SetFontName is { } setFontName)
+            registry.Register(new RibbonCommandId("home.fontName"), new RelayValueRibbonCommand(setFontName));
         Bind("data.sortAsc", callbacks.SortAscending);
         Bind("data.sortDesc", callbacks.SortDescending);
         Bind("data.validation", callbacks.DataValidation);
