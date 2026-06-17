@@ -424,8 +424,11 @@ public static class DocxReader
     }
 
     /// <summary>
-    /// Reads a w:fldSimple. A " PAGE " field becomes a page-number field run; any other field is
-    /// flattened to its cached display text (the text inside the wrapped run) so nothing is lost.
+    /// Reads a w:fldSimple. A recognised field (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES) becomes a
+    /// field run carrying that kind plus its cached display text; the kind is matched off the leading
+    /// instruction keyword so formatting switches (e.g. <c>DATE \@ "d MMMM yyyy"</c>) are tolerated. Any
+    /// other field is flattened to its cached display text (the text inside the wrapped run) so nothing
+    /// is lost.
     /// </summary>
     private static void AddSimpleField(Paragraph paragraph, XElement fldSimple)
     {
@@ -434,14 +437,36 @@ public static class DocxReader
         var text = string.Concat(fldSimple.Descendants(W + "t").Select(t => t.Value));
         var formatting = ReadRunFormatting(inner?.Element(W + "rPr"));
 
-        if (instruction.Trim().Equals("PAGE", StringComparison.OrdinalIgnoreCase))
+        if (FieldKindFor(instruction) is { } kind)
         {
-            paragraph.Runs.Add(new Run(text.Length > 0 ? text : "1", formatting) { FieldKind = RunFieldKind.PageNumber });
+            // PAGE keeps its historic "1" fallback when no cached value was written; the rest are happy
+            // with whatever cached text the field carried (possibly empty).
+            var fallback = kind == RunFieldKind.PageNumber && text.Length == 0 ? "1" : text;
+            paragraph.Runs.Add(new Run(fallback, formatting) { FieldKind = kind });
         }
         else if (text.Length > 0)
         {
             paragraph.Runs.Add(new Run(text, formatting));
         }
+    }
+
+    /// <summary>
+    /// Maps a w:fldSimple/@w:instr to a <see cref="RunFieldKind"/> by its leading keyword, tolerating
+    /// surrounding whitespace and trailing field switches. Returns null for unrecognised fields.
+    /// </summary>
+    private static RunFieldKind? FieldKindFor(string instruction)
+    {
+        var keyword = instruction.Trim().Split(' ', '\t', '\\')[0];
+        return keyword.ToUpperInvariant() switch
+        {
+            "PAGE" => RunFieldKind.PageNumber,
+            "DATE" => RunFieldKind.Date,
+            "TIME" => RunFieldKind.Time,
+            "FILENAME" => RunFieldKind.FileName,
+            "AUTHOR" => RunFieldKind.Author,
+            "NUMPAGES" => RunFieldKind.NumPages,
+            _ => null
+        };
     }
 
     /// <summary>

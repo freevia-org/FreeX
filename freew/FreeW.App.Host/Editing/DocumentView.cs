@@ -44,6 +44,15 @@ public sealed class DocumentView : RichTextBox
     private const double SuperSubScale = 0.65;
 
     private TextDocument _model = TextDocument.CreateEmpty();
+
+    /// <summary>
+    /// The file name a FILENAME field resolves to during the current <see cref="Render"/> pass. Set from
+    /// <see cref="CurrentFileName"/> at the top of Render so the otherwise-static run builders can resolve
+    /// it without threading it through every signature; thread-static to keep it isolated per render call.
+    /// </summary>
+    [ThreadStatic]
+    private static string? _renderFileName;
+
     private readonly DocumentCommandBus _commands;
     private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
     private double _zoomLevel = ZoomLevels.Default;
@@ -92,6 +101,13 @@ public sealed class DocumentView : RichTextBox
     }
 
     public TextDocument Model => _model;
+
+    /// <summary>
+    /// The current document's file name (without path), used to resolve FILENAME field runs at render.
+    /// Null/empty when the document is unsaved, in which case a FILENAME field falls back to its cached
+    /// text. The host sets this when a document is opened or saved; the model/IO never see it.
+    /// </summary>
+    public string? CurrentFileName { get; set; }
 
     /// <summary>
     /// When true (the default), as-you-type smart typing corrections (smart quotes, dashes, symbols,
@@ -1237,6 +1253,8 @@ public sealed class DocumentView : RichTextBox
 
     private void Render()
     {
+        // Expose the current file name to the static run builders for this render pass (FILENAME fields).
+        _renderFileName = CurrentFileName;
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
@@ -1599,6 +1617,18 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: EndnoteMarker endnoteMarker }:
                 modelParagraph.Runs.Add(ModelRun.EndnoteReference(endnoteMarker.EndnoteId));
                 break;
+            case WpfRun { Tag: FieldMarker fieldMarker } fieldRun:
+                // A document field round-trips its kind; the run's visible text is the last-resolved
+                // value, which we keep as the cached fallback (matching Word's cached-field behaviour).
+                // If the run somehow lost its text, fall back to the marker's stored cached value.
+                var cachedText = fieldRun.Text.Length > 0 ? fieldRun.Text : fieldMarker.Cached;
+                modelParagraph.Runs.Add(new ModelRun(cachedText, ReadRunFormatting(fieldRun))
+                {
+                    HyperlinkUrl = hyperlinkUrl,
+                    HyperlinkAnchor = hyperlinkAnchor,
+                    FieldKind = fieldMarker.Kind
+                });
+                break;
             case WpfRun { Tag: CommentMarker { IsReference: true } reference }:
                 // The textless comment anchor: round-trips as a comment-reference run.
                 modelParagraph.Runs.Add(ModelRun.CommentReference(reference.CommentId));
@@ -1821,6 +1851,9 @@ public sealed class DocumentView : RichTextBox
 
         if (run.EndnoteId is { } endnoteId)
             return BuildEndnoteReference(endnoteId, document);
+
+        if (run.FieldKind != RunFieldKind.None)
+            return BuildFieldRun(run, document);
 
         // The textless comment anchor round-trips as an empty, tagged run carrying its reference flag.
         if (run is { IsCommentReference: true, CommentId: { } refId })
@@ -2111,6 +2144,76 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Carried on an endnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
     private sealed record EndnoteMarker(int EndnoteId);
+
+    /// <summary>
+    /// Renders a document field run (DATE/TIME/FILENAME/AUTHOR/NUMPAGES/PAGE) as a WPF run showing the
+    /// resolved value, tagged with a <see cref="FieldMarker"/> so <see cref="ReadInline"/> can recover
+    /// the kind on commit. DATE/TIME resolve to the current date/time in this app layer (never in the
+    /// model/IO); AUTHOR comes from the document properties; FILENAME from the current file name; the
+    /// rest fall back to the run's cached text. The marker keeps the original cached text so an unsaved
+    /// FILENAME (or an unresolved field) round-trips its last-known value rather than going blank.
+    /// </summary>
+    private static WpfRun BuildFieldRun(ModelRun run, TextDocument document)
+    {
+        var display = ResolveFieldText(run.FieldKind, run.Text, document, _renderFileName);
+        var fmt = run.Formatting ?? document.DefaultRun;
+        var wpf = new WpfRun(display)
+        {
+            FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
+            Tag = new FieldMarker(run.FieldKind, run.Text)
+        };
+        if (fmt.FontFamily is { Length: > 0 } family)
+            wpf.FontFamily = new FontFamily(family);
+        if (fmt.FontSizePt is { } size)
+            wpf.FontSize = size * PxPerPoint;
+        if (TryParseColor(fmt.ColorHex, out var color))
+            wpf.Foreground = new SolidColorBrush(color);
+        wpf.ToolTip = run.FieldKind + " field";
+        return wpf;
+    }
+
+    /// <summary>
+    /// Resolves a field's display text in the app layer. DATE/TIME use the current date/time; AUTHOR uses
+    /// <see cref="DocumentProperties.Author"/>; FILENAME uses <paramref name="fileName"/>; PAGE/NUMPAGES
+    /// and any unresolved value fall back to <paramref name="cached"/> (the last-computed text). This is
+    /// the only place date/time is read — the model and docx IO stay deterministic.
+    /// </summary>
+    private static string ResolveFieldText(RunFieldKind kind, string cached, TextDocument document, string? fileName)
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        return kind switch
+        {
+            RunFieldKind.Date => DateTime.Now.ToString("d", culture),
+            RunFieldKind.Time => DateTime.Now.ToString("t", culture),
+            RunFieldKind.Author => document.Properties.Author is { Length: > 0 } author ? author : cached,
+            RunFieldKind.FileName => fileName is { Length: > 0 } name ? name : cached,
+            _ => cached
+        };
+    }
+
+    /// <summary>
+    /// Carried on a field WPF run's Tag so CommitToModel can round-trip the field kind and its cached
+    /// (last-computed) text. The WPF run's visible text is the resolved value; the cached text is what
+    /// the model keeps so a re-resolve next render is possible and field-unaware consumers still render.
+    /// </summary>
+    private sealed record FieldMarker(RunFieldKind Kind, string Cached);
+
+    /// <summary>
+    /// Inserts a document field run of the given <paramref name="kind"/> at the caret. The field is built
+    /// with an initially-resolved cached value (DATE/TIME/AUTHOR/FILENAME) so it carries a sensible
+    /// fallback even before the next render; it then round-trips through the model and docx as a field.
+    /// </summary>
+    public void InsertField(RunFieldKind kind)
+    {
+        Focus();
+        if (kind == RunFieldKind.None)
+            return;
+        var cached = ResolveFieldText(kind, string.Empty, _model, CurrentFileName);
+        var run = new ModelRun(cached) { FieldKind = kind };
+        var inline = BuildFieldRun(run, _model);
+        InsertInlineAtCaret(inline);
+    }
 
     /// <summary>Renders an inline image as an InlineUIContainer hosting a WPF Image (PNG-decoded).</summary>
     private static InlineUIContainer BuildImageRun(InlineImage image)

@@ -214,6 +214,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false));
         registry.Register("freew.footer", new HeaderFooterCommand(editor, isFooter: true));
         registry.Register("freew.page-number", new InsertPageNumberCommand(editor));
+        registry.Register("freew.field", new InsertFieldCommand(editor));
 
         // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
         // insert it at the caret as ordinary text (flows through the normal edit/undo path).
@@ -2113,6 +2114,88 @@ internal static class FreeWRibbonCommands
 
             model.Footer = footer;
             editor.Focus();
+        }
+    }
+
+    // Insert > Field: open a small picker listing the document field kinds (Date, Time, File Name,
+    // Author, Number of Pages, Page Number) and drop the chosen field run at the caret.
+    private sealed class InsertFieldCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var kind = FieldPickerDialog.Ask(Window.GetWindow(editor));
+            if (kind is not { } chosen)
+                return; // cancelled
+            editor.InsertField(chosen);
+        }
+    }
+
+    // A small modal dialog listing the insertable document field kinds. Returns the chosen
+    // RunFieldKind, or null if cancelled.
+    private static class FieldPickerDialog
+    {
+        private sealed record Choice(string Label, RunFieldKind Kind);
+
+        public static RunFieldKind? Ask(Window? owner)
+        {
+            var choices = new[]
+            {
+                new Choice("Date", RunFieldKind.Date),
+                new Choice("Time", RunFieldKind.Time),
+                new Choice("File Name", RunFieldKind.FileName),
+                new Choice("Author", RunFieldKind.Author),
+                new Choice("Number of Pages", RunFieldKind.NumPages),
+                new Choice("Page Number", RunFieldKind.PageNumber),
+            };
+
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 240,
+                MinHeight = 140,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            foreach (var choice in choices)
+                list.Items.Add(choice.Label);
+            list.SelectedIndex = 0;
+
+            RunFieldKind? result = null;
+            var dialog = new Window
+            {
+                Title = "Insert Field",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            void Commit()
+            {
+                if (list.SelectedIndex >= 0)
+                    result = choices[list.SelectedIndex].Kind;
+                dialog.DialogResult = true;
+            }
+            ok.Click += (_, _) => Commit();
+            list.MouseDoubleClick += (_, _) => Commit();
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 240 };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Choose a field to insert:", Margin = new Thickness(0, 0, 0, 8) });
+            panel.Children.Add(list);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 

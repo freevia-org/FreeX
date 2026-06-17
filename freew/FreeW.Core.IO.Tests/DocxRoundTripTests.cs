@@ -1031,6 +1031,105 @@ public class DocxRoundTripTests
         runs[1].FieldKind.Should().Be(RunFieldKind.PageNumber);
     }
 
+    [Theory]
+    [InlineData(RunFieldKind.Date, "6/17/2026")]
+    [InlineData(RunFieldKind.Time, "9:41 AM")]
+    [InlineData(RunFieldKind.FileName, "Report.docx")]
+    [InlineData(RunFieldKind.Author, "Ada Lovelace")]
+    [InlineData(RunFieldKind.NumPages, "12")]
+    public void DocumentField_RoundTrips_KindAndCachedText(RunFieldKind kind, string cached)
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Value: "));
+        paragraph.Runs.Add(new Run(cached) { FieldKind = kind });
+        doc.Blocks.Add(paragraph);
+
+        var result = RoundTrip(doc);
+
+        var runs = result.Paragraphs.Single().Runs;
+        runs[0].Text.Should().Be("Value: ");
+        runs[0].FieldKind.Should().Be(RunFieldKind.None);
+        runs[1].FieldKind.Should().Be(kind);
+        runs[1].Text.Should().Be(cached);
+    }
+
+    [Fact]
+    public void DocumentField_Factories_RoundTrip()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.DateField("6/17/2026"));
+        paragraph.Runs.Add(Run.TimeField("9:41 AM"));
+        paragraph.Runs.Add(Run.FileNameField("Report.docx"));
+        paragraph.Runs.Add(Run.AuthorField("Ada Lovelace"));
+        paragraph.Runs.Add(Run.NumPagesField("12"));
+        paragraph.Runs.Add(Run.PageNumberField());
+        doc.Blocks.Add(paragraph);
+
+        var runs = RoundTrip(doc).Paragraphs.Single().Runs;
+
+        runs.Select(r => r.FieldKind).Should().Equal(
+            RunFieldKind.Date, RunFieldKind.Time, RunFieldKind.FileName,
+            RunFieldKind.Author, RunFieldKind.NumPages, RunFieldKind.PageNumber);
+        runs[0].Text.Should().Be("6/17/2026");
+        runs[1].Text.Should().Be("9:41 AM");
+        runs[2].Text.Should().Be("Report.docx");
+        runs[3].Text.Should().Be("Ada Lovelace");
+        runs[4].Text.Should().Be("12");
+        // PAGE keeps its historic "1" fallback.
+        runs[5].Text.Should().Be("1");
+    }
+
+    [Fact]
+    public void DocumentField_DateWithFormatSwitch_MapsByLeadingKeyword()
+    {
+        // A DATE field with a Word formatting switch in its instruction must still map back to Date.
+        using var stream = new MemoryStream();
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        // Rewrite the document part, injecting a fldSimple with a switch, to exercise the reader path.
+        var rewritten = InjectFieldInstruction(stream, " DATE \\@ \"d MMMM yyyy\" ", "17 June 2026");
+        rewritten.Position = 0;
+        var result = DocxReader.Read(rewritten);
+
+        var fieldRun = result.Paragraphs.SelectMany(p => p.Runs)
+            .Single(r => r.FieldKind != RunFieldKind.None);
+        fieldRun.FieldKind.Should().Be(RunFieldKind.Date);
+        fieldRun.Text.Should().Be("17 June 2026");
+    }
+
+    // Helper: rebuilds the docx in-memory, appending a paragraph carrying a w:fldSimple with the given
+    // instruction + cached text, so a reader-only path (instruction switches) can be exercised.
+    private static MemoryStream InjectFieldInstruction(Stream source, string instruction, string cached)
+    {
+        var output = new MemoryStream();
+        source.CopyTo(output);
+        output.Position = 0;
+        using (var archive = new ZipArchive(output, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = archive.GetEntry("word/document.xml")!;
+            string xml;
+            using (var reader = new StreamReader(entry.Open()))
+                xml = reader.ReadToEnd();
+
+            const string w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+            var field = $"<w:p xmlns:w=\"{w}\"><w:fldSimple w:instr=\"{System.Security.SecurityElement.Escape(instruction)}\">" +
+                        $"<w:r><w:t>{System.Security.SecurityElement.Escape(cached)}</w:t></w:r></w:fldSimple></w:p>";
+            xml = xml.Replace("</w:body>", field + "</w:body>");
+
+            entry.Delete();
+            var fresh = archive.CreateEntry("word/document.xml");
+            using var writer = new StreamWriter(fresh.Open());
+            writer.Write(xml);
+        }
+        output.Position = 0;
+        return output;
+    }
+
     [Fact]
     public void HeaderFooter_RunFormatting_RoundTrips()
     {
