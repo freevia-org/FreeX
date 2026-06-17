@@ -175,11 +175,24 @@ public sealed class MainWindow : Window
 
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.F && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+        var ctrl = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+        if (!ctrl)
+            return;
+
+        switch (e.Key)
         {
-            ToggleFindBar(show: true);
-            e.Handled = true;
+            case Key.F: ToggleFindBar(show: true); e.Handled = true; break;
+            case Key.N: NewDocument(); e.Handled = true; break;
+            case Key.O: _ = OpenAsync(); e.Handled = true; break;
+            case Key.S: _ = SaveAsync(); e.Handled = true; break;
         }
+    }
+
+    private void NewDocument()
+    {
+        _editor.LoadDocument(TextDocument.CreateEmpty());
+        _currentPath = null;
+        Title = "FreeW";
     }
 
     private void ToggleFindBar(bool show)
