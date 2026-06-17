@@ -176,6 +176,10 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("home.alignTop")]
     [InlineData("home.increaseIndent")]
     [InlineData("home.increaseDecimal")]
+    [InlineData("data.flashFill")]
+    [InlineData("data.removeDuplicates")]
+    [InlineData("data.advancedFilter")]
+    [InlineData("data.whatIf")]
     public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
     {
         // The id exists in the ribbon definition (else it is not a NoOp default to begin with) ...
