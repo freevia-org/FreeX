@@ -683,6 +683,24 @@ public sealed partial class MainWindow : Window
                     ["view.pageBreakPreview"] = TogglePageBreakPreview,
                     ["view.formulaBar"] = ToggleFormulaBarVisibility,
                     ["view.pageLayoutView"] = SetPageLayoutView,
+                    // Home tab merge variants + Paste Special.
+                    ["home.mergeCells"] = () => _ = MergeSelectedRangeAsync(),
+                    ["home.mergeAcross"] = () => _ = MergeAcrossSelectedRangeAsync(),
+                    ["home.unmerge"] = UnmergeSelectedRange,
+                    ["home.pasteSpecial"] = () => _ = ShowPasteSpecialDialogAsync(),
+                    // Home tab "More Colors..." pickers.
+                    ["home.fillMore"] = ShowMoreFillColorDialog,
+                    ["home.fontColorMore"] = ShowMoreFontColorDialog,
+                    // Data tab tools.
+                    ["data.reapply"] = ReapplyCurrentFilterSort,
+                    ["data.circleInvalid"] = CircleInvalidData,
+                    ["data.clearCircles"] = ClearValidationCircles,
+                    ["data.getData"] = GetDataNotSupported,
+                    ["data.refresh"] = RefreshAllNotSupported,
+                    // Page Layout sheet options (view + print) and Review ▸ Show Notes.
+                    ["pageLayout.gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
+                    ["pageLayout.headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
+                    ["review.showNotes"] = () => _ = ShowNotesListAsync(),
                     // Home tab (Editing group).
                     ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
                     ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
@@ -2750,6 +2768,9 @@ public sealed partial class MainWindow : Window
         // Formula-auditing trace arrows live in an app-side set, not in viewport.DrawingObjects —
         // paint them before the early-out so they render even with no other drawing objects.
         AddFormulaTraceArrowOverlay(overlay, viewport);
+
+        // Data ▸ Circle Invalid Data overlay is also app-side — paint before the early-out.
+        AddValidationCircleOverlay(overlay, viewport);
 
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;
