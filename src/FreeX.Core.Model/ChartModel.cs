@@ -289,6 +289,17 @@ public sealed class ChartModel
     /// positional column scan". See <see cref="ChartSeriesColumnMapping"/>.
     /// </summary>
     public List<ChartSeriesColumnMapping> SeriesColumnMappings { get; set; } = [];
+
+    /// <summary>
+    /// The chart-XML series indexes (<c>&lt;c:idx&gt;</c>) in the order the series are DECLARED in
+    /// the chart XML (i.e. the order the <c>&lt;c:ser&gt;</c> elements appear across every plot
+    /// group). This is the "legend position" order that OOXML <c>&lt;c:legendEntry&gt;&lt;c:idx&gt;</c>
+    /// references — Excel can declare series out of idx order (e.g. a combo chart whose line series
+    /// has idx 0 but is declared last). Empty means "declaration order equals positional/idx order"
+    /// (the legacy single-plot-group case), in which case legend-entry deletes match the series idx
+    /// directly. See <see cref="ChartLegendEntryModel"/>.
+    /// </summary>
+    public List<int> SeriesPlotOrder { get; set; } = [];
     public List<int> ComboLineSeriesIndexes { get; set; } = [];
     public List<int> ComboScatterSeriesIndexes { get; set; } = [];
     public List<ChartSeriesFormat> SeriesFormats { get; set; } = [];

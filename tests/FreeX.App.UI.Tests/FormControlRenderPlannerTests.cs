@@ -56,6 +56,88 @@ public sealed class FormControlRenderPlannerTests
     }
 
     [Fact]
+    public void TryCreateAnchorRange_PrefersPreservedSubCellOffsetsWhenPresent()
+    {
+        var control = new FormControlModel
+        {
+            Anchor = Range(9, 6, 11, 6),
+            // 0-based EMU offsets (as preserved by the IO mapper).
+            AnchorOffsets = new DrawingAnchorRange(
+                new DrawingAnchorPoint(5, 171450, 8, 171450),
+                new DrawingAnchorPoint(5, 476250, 10, 19050)),
+        };
+
+        var created = FormControlRenderPlanner.TryCreateAnchorRange(control, out var anchor);
+
+        created.Should().BeTrue();
+        anchor!.From.Column.Should().Be(5);
+        anchor.From.Row.Should().Be(8);
+        anchor.From.ColumnOffsetEmu.Should().Be(171450);
+        anchor.From.RowOffsetEmu.Should().Be(171450);
+        anchor.To.Column.Should().Be(5);
+        anchor.To.Row.Should().Be(10);
+        anchor.To.ColumnOffsetEmu.Should().Be(476250);
+        anchor.To.RowOffsetEmu.Should().Be(19050);
+    }
+
+    [Fact]
+    public void TryCreateAnchorRange_FallsBackToWholeCellWhenOffsetsAbsent()
+    {
+        var control = new FormControlModel { Anchor = Range(3, 2, 5, 4), AnchorOffsets = null };
+
+        FormControlRenderPlanner.TryCreateAnchorRange(control, out var anchor).Should().BeTrue();
+        anchor!.From.Column.Should().Be(1);
+        anchor.From.ColumnOffsetEmu.Should().Be(0);
+        anchor.To.Column.Should().Be(3);
+        anchor.To.RowOffsetEmu.Should().Be(0);
+    }
+
+    [Fact]
+    public void HasSubCellOffsets_TrueOnlyWhenOffsetsPreserved()
+    {
+        var withOffsets = new FormControlModel
+        {
+            Anchor = Range(1, 1, 1, 1),
+            AnchorOffsets = new DrawingAnchorRange(
+                new DrawingAnchorPoint(0, 100, 0, 100),
+                new DrawingAnchorPoint(0, 200, 0, 200)),
+        };
+        var withoutOffsets = new FormControlModel { Anchor = Range(1, 1, 1, 1) };
+
+        FormControlRenderPlanner.HasSubCellOffsets(withOffsets).Should().BeTrue();
+        FormControlRenderPlanner.HasSubCellOffsets(withoutOffsets).Should().BeFalse();
+    }
+
+    [Fact]
+    public void OffsetAwareRect_PlacesControlWithinCellNotFlushToGrid()
+    {
+        // Single column (col6, 60px wide) spanning rows 9..11 (each 20px).
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(9, 20, 0), new RowMetric(10, 20, 20), new RowMetric(11, 20, 40)],
+            [new ColMetric(6, 60, 0)]);
+        // from col6 row9 +18px(171450 EMU), to col6 row11 +50px col / +2px row.
+        var offsetAnchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(5, 171450, 8, 171450),
+            new DrawingAnchorPoint(5, 476250, 10, 19050));
+
+        var created = GridDrawingObjectPlanner.TryCreateDrawingAnchorRect(
+            viewport,
+            offsetAnchor,
+            rowHeaderWidth: 0,
+            columnHeaderHeight: 0,
+            out var rect);
+
+        created.Should().BeTrue();
+        // left = col6.left(0) + 18px; top = row9.top(0) + 18px.
+        rect.Left.Should().BeApproximately(18, 0.01);
+        rect.Top.Should().BeApproximately(18, 0.01);
+        // right = col6.left(0) + 50px; bottom = row11.top(40) + 2px = 42.
+        rect.Width.Should().BeApproximately(50 - 18, 0.01);
+        rect.Height.Should().BeApproximately(42 - 18, 0.01);
+    }
+
+    [Fact]
     public void TryCreateAnchorRange_ReturnsFalseWhenAnchorMissing()
     {
         var control = new FormControlModel { Anchor = null };

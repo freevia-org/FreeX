@@ -254,6 +254,7 @@ public partial class GridView
         {
             hash.Add(control.Kind);
             hash.Add(control.Anchor);
+            hash.Add(control.AnchorOffsets);
             hash.Add(control.Name);
             hash.Add(control.IsChecked);
             hash.Add(control.Value);

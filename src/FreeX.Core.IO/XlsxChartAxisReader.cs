@@ -55,7 +55,17 @@ internal static class XlsxChartAxisReader
         chart.HideYAxis = ReadBool(valueAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
         chart.YAxisPosition = FromXlsxAxisPosition(valueAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Left);
         ApplyAxisTitleFormatting(valueAxis, chart, isXAxis: false);
-        ApplyValueAxisProperties(valueAxis, chart, useXAxis: false);
+        // For bar-direction charts the value axis is HORIZONTAL (rendered at the bottom / X), so its
+        // scaling (min/max/units/log/number-format) belongs to the X-axis bounds — that is where the
+        // renderer (CreateCategoryAxis on Y + value LinearAxis on Bottom) and the sanitizer
+        // (SupportsXAxisBounds(Bar)==true) read it from. Routing it to Y* would be wiped by the
+        // sanitizer (SupportsYAxisBounds(Bar)==false), silently dropping e.g. a fixed 0..1 progress
+        // axis. Column/line/etc. keep the value axis on Y as before.
+        var valueAxisOnX = chart.Type is ChartType.Bar
+            or ChartType.StackedBar
+            or ChartType.PercentStackedBar
+            or ChartType.ThreeDBar;
+        ApplyValueAxisProperties(valueAxis, chart, useXAxis: valueAxisOnX);
         ApplyAxisLabelFormatting(valueAxis, chart, useXAxis: false);
     }
 
