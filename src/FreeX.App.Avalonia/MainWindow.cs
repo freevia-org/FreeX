@@ -775,6 +775,8 @@ public sealed partial class MainWindow : Window
                     ["pageLayout.themeEffects"] = () => _ = ShowThemesGalleryAsync(),
                     // Insert ▸ Symbol.
                     ["insert.symbol"] = () => _ = ShowSymbolPickerAsync(),
+                    // Formulas ▸ Error Checking.
+                    ["formulas.errorChecking"] = CheckFormulaErrors,
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
