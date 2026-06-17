@@ -705,12 +705,11 @@ public static class DocxWriter
         bool hasEvenHeader,
         bool hasEvenFooter)
     {
-        // Reset the document-scoped bookmark + revision id counters so ids start at 1 each write.
-        System.Threading.Interlocked.Exchange(ref _bookmarkId, 0);
-        System.Threading.Interlocked.Exchange(ref _revisionId, 0);
-        // Seed the shape docPr counter just above the image drawing ids (1..imageCount) so the two id
-        // spaces never overlap. Each shape BuildRun emits takes the next id.
-        System.Threading.Interlocked.Exchange(ref _shapeDrawingId, images.Count);
+        // Per-write id state, local to this BuildDocument invocation so concurrent writes never race.
+        // Bookmark + revision ids start at 1; the shape docPr counter is seeded just above the image
+        // drawing ids (1..imageCount) so the two id spaces never overlap. Each shape BuildRun emits takes
+        // the next id.
+        var ids = new IdAllocator(shapeDrawingSeed: images.Count);
 
         // Map each image/chart run to its assigned part by replaying the same walk order CollectImages /
         // CollectCharts used, so document.xml and the rels agree on which rId belongs to which run.
@@ -735,7 +734,7 @@ public static class DocxWriter
                     smartArtsByRun[run] = smartArts[nextSmartArt++];
             }
 
-        var drawings = new RunDrawings(imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun);
+        var drawings = new RunDrawings(imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids);
 
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
@@ -771,21 +770,46 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Bundles the per-run image and chart part maps so the run builders can resolve either inline drawing
-    /// from one parameter (rather than threading two dictionaries through every helper). Empty maps are
-    /// shared by header/footer/footnote builders whose runs never carry body drawings.
+    /// Per-write id state, created once at the top of each <see cref="BuildDocument"/> (and once per
+    /// independent part such as a header/footer/footnote/text-box) so concurrent <see cref="Write(TextDocument, Stream)"/>
+    /// calls are fully isolated — there is NO shared mutable static counter state. Bookmark and revision
+    /// (w:ins/w:del) ids are document-scoped monotonic counters starting at 1; the inline-shape wp:docPr
+    /// counter is seeded just above the image drawing ids (1..imageCount) so shape ids never collide with
+    /// image ids. All three were previously static fields shared across writes (the concurrency defect).
+    /// </summary>
+    private sealed class IdAllocator
+    {
+        private int _bookmarkId;
+        private int _revisionId;
+        private int _shapeDrawingId;
+
+        public IdAllocator(int shapeDrawingSeed = 0) => _shapeDrawingId = shapeDrawingSeed;
+
+        public int NextBookmarkId() => ++_bookmarkId;
+        public int NextRevisionId() => ++_revisionId;
+        public int NextShapeDrawingId() => ++_shapeDrawingId;
+    }
+
+    /// <summary>
+    /// Bundles the per-run image and chart part maps plus the per-write <see cref="IdAllocator"/> so the
+    /// run builders can resolve any inline drawing and allocate document-scoped ids from one parameter
+    /// (rather than threading dictionaries and counters through every helper). <see cref="Empty"/> builds a
+    /// fresh instance — with its own allocator — for header/footer/footnote/text-box paragraphs whose runs
+    /// never carry body drawings; it is a factory (not a shared static) so those builds stay isolated too.
     /// </summary>
     private sealed record RunDrawings(
         IReadOnlyDictionary<Run, ImagePart> Images,
         IReadOnlyDictionary<Run, ChartPart> Charts,
         IReadOnlyDictionary<Run, EmbeddedObjectPart> EmbeddedObjects,
-        IReadOnlyDictionary<Run, SmartArtPart> SmartArts)
+        IReadOnlyDictionary<Run, SmartArtPart> SmartArts,
+        IdAllocator Ids)
     {
-        public static readonly RunDrawings None = new(
+        public static RunDrawings Empty() => new(
             new Dictionary<Run, ImagePart>(),
             new Dictionary<Run, ChartPart>(),
             new Dictionary<Run, EmbeddedObjectPart>(),
-            new Dictionary<Run, SmartArtPart>());
+            new Dictionary<Run, SmartArtPart>(),
+            new IdAllocator());
     }
 
     /// <summary>Builds a header (w:hdr) or footer (w:ftr) part from its model paragraphs.</summary>
@@ -796,7 +820,7 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
 
         // Header/footer runs do not carry inline images (the body image walk does not reach them).
-        var noDrawings = RunDrawings.None;
+        var noDrawings = RunDrawings.Empty();
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         if (content.Paragraphs.Count == 0)
@@ -830,7 +854,7 @@ public static class DocxWriter
         footnotes.Add(Separator(0, "continuationSeparator"));
 
         // Footnote paragraphs carry no inline images or hyperlinks (those walks target the body).
-        var noDrawings = RunDrawings.None;
+        var noDrawings = RunDrawings.Empty();
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var footnote in document.Footnotes.Values.OrderBy(f => f.Id))
@@ -870,7 +894,7 @@ public static class DocxWriter
         endnotes.Add(Separator(0, "continuationSeparator"));
 
         // Endnote paragraphs carry no inline images or hyperlinks (those walks target the body).
-        var noDrawings = RunDrawings.None;
+        var noDrawings = RunDrawings.Empty();
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var endnote in document.Endnotes.Values.OrderBy(e => e.Id))
@@ -899,7 +923,7 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
 
         // Comment paragraphs carry no inline images or hyperlinks (those walks target the body).
-        var noDrawings = RunDrawings.None;
+        var noDrawings = RunDrawings.Empty();
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
@@ -1104,20 +1128,6 @@ public static class DocxWriter
         return tcPr.HasElements ? tcPr : null;
     }
 
-    // Bookmark ids are scoped to the whole document; one monotonically increasing counter keeps
-    // every w:bookmarkStart/w:bookmarkEnd pair's w:id unique across all paragraphs.
-    private static int _bookmarkId;
-
-    // Revision (w:ins/w:del) ids are scoped to the whole document; this counter keeps each wrapper's
-    // w:id unique across all paragraphs. Reset alongside _bookmarkId at the start of each document.
-    private static int _revisionId;
-
-    // Inline-shape wp:docPr ids are scoped to the whole document. Shapes carry no relationship/media (so
-    // they are not in the image walk), and their docPr id must not collide with the image drawing ids
-    // (1..imageCount). This counter is seeded just above the image count at the start of each document and
-    // incremented once per shape as BuildRun emits it (the paragraph walk order is deterministic).
-    private static int _shapeDrawingId;
-
     /// <summary>True when two runs carry the same tracked-change kind, author and date (so they coalesce).</summary>
     private static bool SameRevision(Run a, Run b) =>
         a.Revision == b.Revision
@@ -1129,11 +1139,11 @@ public static class DocxWriter
     /// run's author/date attributes. The caller fills it with the wrapped run/hyperlink elements. The
     /// run is assumed to carry a non-None revision.
     /// </summary>
-    private static XElement NewRevisionWrapper(Run run)
+    private static XElement NewRevisionWrapper(Run run, IdAllocator ids)
     {
         var name = run.Revision == RevisionKind.Deleted ? "del" : "ins";
         var wrapper = new XElement(W + name,
-            new XAttribute(W + "id", System.Threading.Interlocked.Increment(ref _revisionId)));
+            new XAttribute(W + "id", ids.NextRevisionId()));
         if (run.RevisionAuthor is { Length: > 0 } author)
             wrapper.Add(new XAttribute(W + "author", author));
         if (run.RevisionDateXml is { Length: > 0 } date)
@@ -1174,7 +1184,7 @@ public static class DocxWriter
         var bookmarkId = -1;
         if (paragraph.BookmarkName is { Length: > 0 } bookmarkName)
         {
-            bookmarkId = System.Threading.Interlocked.Increment(ref _bookmarkId);
+            bookmarkId = drawings.Ids.NextBookmarkId();
             p.Add(new XElement(W + "bookmarkStart",
                 new XAttribute(W + "id", bookmarkId),
                 new XAttribute(W + "name", bookmarkName)));
@@ -1228,7 +1238,7 @@ public static class DocxWriter
             if (revisionKey is null || !SameRevision(revisionKey, run))
             {
                 FlushRevision();
-                revisionWrapper = NewRevisionWrapper(run);
+                revisionWrapper = NewRevisionWrapper(run, drawings.Ids);
                 revisionKey = run;
             }
             revisionWrapper!.Add(element);
@@ -1452,7 +1462,7 @@ public static class DocxWriter
             var rPr = BuildRunProperties(run.Formatting);
             if (rPr is not null)
                 sr.Add(rPr);
-            sr.Add(BuildShapeDrawing(shape));
+            sr.Add(BuildShapeDrawing(shape, drawings.Ids));
             return sr;
         }
 
@@ -1464,7 +1474,7 @@ public static class DocxWriter
             var rPr = BuildRunProperties(run.Formatting);
             if (rPr is not null)
                 wr.Add(rPr);
-            wr.Add(BuildWordArtDrawing(wordArt));
+            wr.Add(BuildWordArtDrawing(wordArt, drawings.Ids));
             return wr;
         }
 
@@ -1707,13 +1717,13 @@ public static class DocxWriter
     /// Builds an inline DrawingML shape / text box: w:drawing/wp:inline/a:graphic/a:graphicData[uri=wps]/
     /// wps:wsp, carrying a wps:spPr (preset geometry + optional a:solidFill) and, for a text box, a
     /// wps:txbx/w:txbxContent holding the body paragraphs. The shape's wp:docPr id comes from the
-    /// document-scoped <see cref="_shapeDrawingId"/> counter so it never collides with image drawing ids.
+    /// per-write shape docPr counter so it never collides with image drawing ids.
     /// </summary>
-    private static XElement BuildShapeDrawing(Shape shape)
+    private static XElement BuildShapeDrawing(Shape shape, IdAllocator ids)
     {
         var cx = PointsToEmu(shape.WidthPt);
         var cy = PointsToEmu(shape.HeightPt);
-        var docPrId = System.Threading.Interlocked.Increment(ref _shapeDrawingId);
+        var docPrId = ids.NextShapeDrawingId();
         var name = $"{shape.Kind}{(uint)docPrId}";
 
         // wps:spPr: position/size (a:xfrm), preset geometry, then optional solid fill.
@@ -1732,12 +1742,14 @@ public static class DocxWriter
             spPr);
 
         // A text box carries its body paragraphs in wps:txbx/w:txbxContent. Body paragraphs do not carry
-        // inline images or document hyperlinks, so they build against empty maps.
+        // inline images or document hyperlinks, so they build against empty maps — but they DO share the
+        // surrounding write's IdAllocator so nested bookmark/revision/shape ids continue the same sequence.
         if (shape.HasText)
         {
             var txbxContent = new XElement(W + "txbxContent");
+            var nested = RunDrawings.Empty() with { Ids = ids };
             foreach (var paragraph in shape.TextParagraphs)
-                txbxContent.Add(BuildParagraph(paragraph, RunDrawings.None, EmptyHyperlinks));
+                txbxContent.Add(BuildParagraph(paragraph, nested, EmptyHyperlinks));
             wsp.Add(new XElement(Wps + "txbx", txbxContent));
         }
 
@@ -1774,9 +1786,9 @@ public static class DocxWriter
     /// whose single text run carries DrawingML text effects on its a:rPr. The effects are chosen by the
     /// WordArt style preset: a solid or gradient text fill (a:solidFill/a:gradFill), an outline (a:ln),
     /// and/or an outer shadow (a:effectLst/a:outerShdw). The wp:docPr id comes from the document-scoped
-    /// <see cref="_shapeDrawingId"/> counter (shared with shapes) so it never collides with image ids.
+    /// per-write shape docPr counter (shared with shapes) so it never collides with image ids.
     /// </summary>
-    private static XElement BuildWordArtDrawing(WordArt wordArt)
+    private static XElement BuildWordArtDrawing(WordArt wordArt, IdAllocator ids)
     {
         // WordArt has no intrinsic geometry size in the FreeW model; derive a sensible text-box extent from
         // the font size and text length so the inline drawing has a non-zero extent (Word recomputes it).
@@ -1784,7 +1796,7 @@ public static class DocxWriter
         var widthPt = Math.Max(1, wordArt.Text.Length) * wordArt.FontSizePt * 0.62;
         var cx = PointsToEmu(widthPt);
         var cy = PointsToEmu(heightPt);
-        var docPrId = System.Threading.Interlocked.Increment(ref _shapeDrawingId);
+        var docPrId = ids.NextShapeDrawingId();
         var name = $"WordArt{(uint)docPrId}";
 
         // A plain text-box rect carries the WordArt; the decorative effects live on the run's a:rPr.
