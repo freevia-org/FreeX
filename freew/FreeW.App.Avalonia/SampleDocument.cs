@@ -39,8 +39,18 @@ internal static class SampleDocument
         AddListItem(doc, "Toggle bold, italic, underline.", ListKind.Number);
         AddListItem(doc, "Undo and redo every edit.", ListKind.Number);
 
+        var table = Table.Create(3, 3);
+        table.Formatting = TableFormatting.Default with { HeaderRow = true, BandedRows = true, Borders = true };
+        SetCell(table, 0, 0, "Capability"); SetCell(table, 0, 1, "Windows"); SetCell(table, 0, 2, "Linux");
+        SetCell(table, 1, 0, "Edit + DOCX"); SetCell(table, 1, 1, "Yes"); SetCell(table, 1, 2, "Yes");
+        SetCell(table, 2, 0, "Ribbon"); SetCell(table, 2, 1, "Yes"); SetCell(table, 2, 2, "Yes");
+        doc.Blocks.Add(table);
+
         return doc;
     }
+
+    private static void SetCell(Table table, int row, int column, string text) =>
+        table.Rows[row].Cells[column] = new TableCell(text);
 
     private static void AddListItem(TextDocument doc, string text, ListKind kind)
     {

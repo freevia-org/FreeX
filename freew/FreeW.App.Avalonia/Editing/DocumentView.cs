@@ -30,6 +30,7 @@ public sealed class DocumentView : Control
     private readonly Dictionary<string, IBrush> _brushCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PlacedChar> _placed = new();
     private readonly List<(double X, double Y, string Text, RunFormatting Fmt)> _markers = new();
+    private readonly List<(Rect Rect, IBrush? Fill, bool Border)> _rects = new();
 
     private TextDocument _doc = TextDocument.CreateEmpty();
     private DocumentCommandBus _bus;
@@ -99,6 +100,7 @@ public sealed class DocumentView : Control
     {
         _placed.Clear();
         _markers.Clear();
+        _rects.Clear();
         var textWidth = Math.Max(120, width - LeftMargin - RightMargin);
         double y = TopMargin;
 
@@ -134,6 +136,10 @@ public sealed class DocumentView : Control
 
                 prevList = kind;
                 y = LayoutParagraph(blockIndex, paragraph, textWidth, y, inset, marker);
+            }
+            else if (block is Table table)
+            {
+                y = LayoutTable(blockIndex, table, textWidth, y);
             }
             else
             {
@@ -259,6 +265,156 @@ public sealed class DocumentView : Control
     private static string TablePlainText(Table table) =>
         string.Join("  |  ", table.Rows.SelectMany(r => r.Cells).Select(c => c.PlainText));
 
+    // ---- Table rendering (read-only grid) -------------------------------------------------------
+
+    private double LayoutTable(int blockIndex, Table table, double textWidth, double y)
+    {
+        var cols = Math.Max(1, table.ColumnCount);
+        var colWidths = ComputeColumnWidths(table, cols, textWidth);
+        var columnLeft = new double[cols + 1];
+        var running = LeftMargin;
+        for (var c = 0; c < cols; c++)
+        {
+            columnLeft[c] = running;
+            running += colWidths[c];
+        }
+        columnLeft[cols] = running;
+
+        const double pad = 5;
+        var borders = table.Formatting.Borders;
+        var headerOffset = table.Formatting.HeaderRow ? 1 : 0;
+        var glyphOffset = 0;
+
+        for (var r = 0; r < table.Rows.Count; r++)
+        {
+            var row = table.Rows[r];
+            var isHeader = table.Formatting.HeaderRow && r == 0;
+            var isBand = table.Formatting.BandedRows && !isHeader && (r - headerOffset) % 2 == 1;
+
+            var measured = new List<(int StartCol, int Span, List<(double Height, List<(char Ch, double W)> Chars)> Lines, RunFormatting Fmt)>();
+            var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
+            var col = 0;
+            foreach (var cell in row.Cells)
+            {
+                if (col >= cols)
+                    break;
+                var span = Math.Clamp(cell.GridSpan <= 0 ? 1 : cell.GridSpan, 1, cols - col);
+                double cellWidth = 0;
+                for (var s = 0; s < span; s++)
+                    cellWidth += colWidths[col + s];
+
+                var fmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
+                    ? cell.Paragraphs[0].Runs[0].Formatting
+                    : RunFormatting.Default;
+                if (isHeader)
+                    fmt = fmt with { Bold = true };
+
+                var lines = WrapCellLines(cell.PlainText, fmt, Math.Max(10, cellWidth - 2 * pad));
+                var cellHeight = lines.Sum(l => l.Height) + 2 * pad;
+                if (cellHeight > rowHeight)
+                    rowHeight = cellHeight;
+
+                measured.Add((col, span, lines, fmt));
+                col += span;
+            }
+
+            foreach (var (startCol, span, lines, fmt) in measured)
+            {
+                double cellWidth = 0;
+                for (var s = 0; s < span; s++)
+                    cellWidth += colWidths[startCol + s];
+                var rect = new Rect(columnLeft[startCol], y, cellWidth, rowHeight);
+                IBrush? fill = isHeader ? HeaderFill : isBand ? BandFill : null;
+                _rects.Add((rect, fill, borders));
+
+                var ty = y + pad;
+                foreach (var (lineHeight, chars) in lines)
+                {
+                    var tx = columnLeft[startCol] + pad;
+                    foreach (var (ch, w) in chars)
+                    {
+                        _placed.Add(new PlacedChar(blockIndex, glyphOffset++, tx, ty, w, lineHeight, fmt, ch, Sentinel: false));
+                        tx += w;
+                    }
+
+                    ty += lineHeight;
+                }
+            }
+
+            y += rowHeight;
+        }
+
+        return y + 8;
+    }
+
+    private static double[] ComputeColumnWidths(Table table, int cols, double textWidth)
+    {
+        var widths = new double[cols];
+        double declared = 0;
+        var declaredCount = 0;
+        for (var c = 0; c < cols; c++)
+        {
+            var cw = c < table.ColumnWidthsPt.Count ? table.ColumnWidthsPt[c] * PxPerPoint : 0;
+            widths[c] = cw;
+            if (cw > 0)
+            {
+                declared += cw;
+                declaredCount++;
+            }
+        }
+
+        var missing = cols - declaredCount;
+        var even = missing > 0 ? Math.Max(40, (textWidth - declared) / missing) : 0;
+        for (var c = 0; c < cols; c++)
+            if (widths[c] <= 0)
+                widths[c] = missing > 0 ? even : textWidth / cols;
+
+        var total = widths.Sum();
+        if (total > textWidth && total > 0)
+        {
+            var scale = textWidth / total;
+            for (var c = 0; c < cols; c++)
+                widths[c] *= scale;
+        }
+
+        return widths;
+    }
+
+    private List<(double Height, List<(char Ch, double W)> Chars)> WrapCellLines(string text, RunFormatting fmt, double maxInner)
+    {
+        var result = new List<(double, List<(char, double)>)>();
+        var lineHeight = Build("Ag", fmt).Height;
+        var current = new List<(char, double)>();
+        double currentWidth = 0;
+        var lastSpace = -1;
+
+        foreach (var ch in text)
+        {
+            var w = Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
+            if (ch == ' ')
+                lastSpace = current.Count;
+            if (currentWidth + w > maxInner && current.Count > 0)
+            {
+                var breakAt = lastSpace > 0 ? lastSpace : current.Count;
+                result.Add((lineHeight, current.Take(breakAt).ToList()));
+                current = current.Skip(breakAt).ToList();
+                currentWidth = current.Sum(c => c.Item2);
+                lastSpace = -1;
+            }
+
+            current.Add((ch, w));
+            currentWidth += w;
+        }
+
+        if (current.Count > 0 || result.Count == 0)
+            result.Add((lineHeight, current));
+        return result;
+    }
+
+    private static IBrush HeaderFill { get; } = new SolidColorBrush(Color.FromRgb(0xDE, 0xE9, 0xF7));
+    private static IBrush BandFill { get; } = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
+    private static Pen TableBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
+
     // ---- Render ---------------------------------------------------------------------------------
 
     public override void Render(DrawingContext context)
@@ -267,6 +423,15 @@ public sealed class DocumentView : Control
             Relayout(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
 
         context.FillRectangle(Brushes.White, new Rect(Bounds.Size));
+
+        // Table fills + borders sit beneath the text.
+        foreach (var (rect, fill, border) in _rects)
+        {
+            if (fill is not null)
+                context.FillRectangle(fill, rect);
+            if (border)
+                context.DrawRectangle(null, TableBorderPen, rect);
+        }
 
         var selection = NormalizedSelection();
         foreach (var pc in _placed)
