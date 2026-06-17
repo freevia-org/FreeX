@@ -3188,14 +3188,27 @@ public sealed class DocumentView : RichTextBox
         InsertInlineAtCaret(inline);
     }
 
-    /// <summary>Renders an inline image as an InlineUIContainer hosting a WPF Image (PNG-decoded).</summary>
+    /// <summary>
+    /// Renders an inline image as an InlineUIContainer hosting a WPF Image. The image bytes are decoded
+    /// crash-proof: a raster format goes through WPF's WIC pipeline; WMF/EMF metafiles are rendered
+    /// best-effort via GDI+ (see <see cref="TryDecodeMetafile"/>). Any decode failure (e.g. a format WIC
+    /// cannot handle, or corrupt bytes) is caught and a sized placeholder box is shown in the image's
+    /// place instead of throwing, so one un-decodable image never fails the whole document render. The
+    /// element keeps the model <see cref="InlineImage"/> on its <c>Tag</c> either way, so the run still
+    /// round-trips through <see cref="CommitToModel"/> unchanged.
+    /// </summary>
     private static InlineUIContainer BuildImageRun(InlineImage image)
     {
+        var widthPx = image.WidthPt * PxPerPoint;
+        var heightPx = image.HeightPt * PxPerPoint;
+
+        var source = DecodeImage(image) ?? BuildImagePlaceholder(image, widthPx, heightPx);
+
         var element = new Image
         {
-            Source = DecodePng(image.PngBytes),
-            Width = image.WidthPt * PxPerPoint,
-            Height = image.HeightPt * PxPerPoint,
+            Source = source,
+            Width = widthPx,
+            Height = heightPx,
             Stretch = Stretch.Fill,
             Tag = image // carries the model image so CommitToModel can round-trip it
         };
@@ -3208,15 +3221,149 @@ public sealed class DocumentView : RichTextBox
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
     }
 
-    private static BitmapImage DecodePng(byte[] bytes)
+    /// <summary>
+    /// Decode an inline image's bytes into a WPF <see cref="ImageSource"/>, returning null (never throwing)
+    /// when the bytes cannot be decoded. WMF/EMF metafiles are routed through GDI+
+    /// (<see cref="TryDecodeMetafile"/>); everything else goes through WPF's WIC decoder. A null result
+    /// signals <see cref="BuildImageRun"/> to render a placeholder in the image's place.
+    /// </summary>
+    private static ImageSource? DecodeImage(InlineImage image)
     {
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.StreamSource = new MemoryStream(bytes);
-        bitmap.EndInit();
+        var bytes = image.Bytes;
+        if (bytes is null || bytes.Length == 0)
+            return null;
+
+        try
+        {
+            if (image.Format is ImageFormat.Wmf or ImageFormat.Emf)
+                return TryDecodeMetafile(bytes);
+
+            return DecodeRaster(bytes);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or FileFormatException
+            or System.Runtime.InteropServices.ExternalException or ArgumentException
+            or InvalidOperationException or IOException or OutOfMemoryException)
+        {
+            // WIC and GDI+ throw a small family of exceptions for an undecodable/corrupt image: WIC raises
+            // NotSupportedException ("No imaging component suitable...") for WMF/EMF, and GDI+ raises
+            // ExternalException ("A generic error occurred in GDI+") / ArgumentException / OutOfMemoryException
+            // for malformed metafile bytes. (ExternalException covers its COMException subclass too.) Swallow
+            // them so the rest of the document still renders; the caller draws a placeholder instead.
+            return null;
+        }
+    }
+
+    // Decode raster image bytes (PNG/JPEG/GIF/BMP/TIFF/…) via WPF's WIC pipeline. OnLoad caching reads the
+    // whole stream up front so the MemoryStream can be discarded immediately and the result frozen.
+    private static BitmapSource DecodeRaster(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes);
+        var frame = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+        frame.Freeze();
+        return frame;
+    }
+
+    /// <summary>Backwards-compatible alias kept for callers that decode a known-PNG (e.g. embedded-object icons).</summary>
+    private static BitmapSource DecodePng(byte[] bytes) => DecodeRaster(bytes);
+
+    /// <summary>
+    /// Best-effort render of a WMF/EMF metafile to a WPF <see cref="BitmapSource"/> via GDI+: load the
+    /// bytes as a <see cref="System.Drawing.Imaging.Metafile"/>, draw it onto a
+    /// <see cref="System.Drawing.Bitmap"/> at the metafile's natural pixel size, then convert that bitmap
+    /// to a frozen <see cref="BitmapSource"/>. Returns null when the metafile reports no usable size.
+    /// GDI+ is Windows-only, but this is a net10.0-windows WPF app so it is always available here.
+    /// Limitation: rasterises the vector metafile at a fixed resolution (it is then stretched to the
+    /// image's point size), and exotic metafile records that GDI+ cannot play back are dropped; any GDI+
+    /// failure throws and is caught by <see cref="DecodeImage"/>, which falls back to the placeholder.
+    /// </summary>
+    private static BitmapSource? TryDecodeMetafile(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes);
+        using var metafile = new System.Drawing.Imaging.Metafile(stream);
+
+        var width = metafile.Width;
+        var height = metafile.Height;
+        if (width <= 0 || height <= 0)
+            return null;
+
+        using var bitmap = new System.Drawing.Bitmap(width, height);
+        using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+        {
+            graphics.Clear(System.Drawing.Color.White);
+            graphics.DrawImage(metafile, 0, 0, width, height);
+        }
+
+        var hBitmap = bitmap.GetHbitmap();
+        try
+        {
+            var source = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
+                hBitmap,
+                IntPtr.Zero,
+                Int32Rect.Empty,
+                BitmapSizeOptions.FromEmptyOptions());
+            source.Freeze();
+            return source;
+        }
+        finally
+        {
+            NativeMethods.DeleteObject(hBitmap);
+        }
+    }
+
+    /// <summary>
+    /// Build a bordered placeholder <see cref="BitmapSource"/> shown in place of an image whose bytes
+    /// could not be decoded. Sized to the image's pixel box, it draws a light-grey filled rectangle with a
+    /// dashed border and a small centred caption naming the format (e.g. "WMF image"), so the rest of the
+    /// document renders normally and the user sees where the un-decodable picture sits.
+    /// </summary>
+    private static BitmapSource BuildImagePlaceholder(InlineImage image, double widthPx, double heightPx)
+    {
+        // Guard against zero/negative sizes so RenderTargetBitmap always gets a valid (>=1px) surface.
+        var w = Math.Max(1.0, widthPx);
+        var h = Math.Max(1.0, heightPx);
+
+        var caption = $"{image.Format.ToString().ToUpperInvariant()} image";
+
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            var fill = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
+            fill.Freeze();
+            var stroke = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0));
+            stroke.Freeze();
+            var pen = new Pen(stroke, 1) { DashStyle = new DashStyle(new double[] { 4, 2 }, 0) };
+            pen.Freeze();
+
+            var rect = new Rect(0.5, 0.5, Math.Max(1.0, w - 1), Math.Max(1.0, h - 1));
+            dc.DrawRectangle(fill, pen, rect);
+
+            // Draw the caption centred, but only when there is room for it (tiny placeholders stay blank).
+            var text = new FormattedText(
+                caption,
+                System.Globalization.CultureInfo.CurrentUICulture,
+                FlowDirection.LeftToRight,
+                new Typeface("Segoe UI"),
+                11,
+                stroke,
+                1.0);
+            if (text.Width + 4 <= w && text.Height + 2 <= h)
+                dc.DrawText(text, new System.Windows.Point((w - text.Width) / 2, (h - text.Height) / 2));
+        }
+
+        var bitmap = new RenderTargetBitmap(
+            (int)Math.Ceiling(w), (int)Math.Ceiling(h), 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
         bitmap.Freeze();
         return bitmap;
+    }
+
+    // P/Invoke for releasing the GDI HBITMAP produced by Bitmap.GetHbitmap in TryDecodeMetafile (the
+    // managed Bitmap does not own it, so it must be freed explicitly to avoid a GDI handle leak).
+    private static class NativeMethods
+    {
+        [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        public static extern bool DeleteObject(IntPtr hObject);
     }
 
     /// <summary>
