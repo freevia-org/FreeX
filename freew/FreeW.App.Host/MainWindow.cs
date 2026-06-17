@@ -42,8 +42,14 @@ public sealed class MainWindow : Window
     private ListBox _navList = null!;
     private bool _navPaneVisible;
 
-    // The maximize/restore caption button's glyph, swapped when the window state changes.
-    private Path _maxRestoreGlyph = null!;
+    // Identity/palette for the shared window shell (FreeX navy title bar, teal "W" badge).
+    private static readonly ShellChromeOptions ChromeOptions = new()
+    {
+        BadgeLetter = "W",
+        TitleBarColor = Color.FromRgb(0x17, 0x32, 0x4D),
+        BadgeColor = Color.FromRgb(0x0F, 0x6D, 0x8C),
+        CaptionHeight = 34
+    };
 
     // The grey "desk" the Print-Layout page floats on. Frozen so it can back the editor cheaply.
     private static readonly Brush WorkspaceBrush = CreateWorkspaceBrush();
@@ -89,34 +95,11 @@ public sealed class MainWindow : Window
         Height = 720;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
-        // Custom window chrome: a single integrated title bar with embedded window buttons (like FreeX),
-        // replacing the default OS caption + the separate blue command strip. WindowChrome lets the client
-        // area extend into the caption region while preserving native drag/resize/snap behaviour; the top
-        // 34px act as the draggable caption except where IsHitTestVisibleInChrome is set (the buttons).
-        WindowStyle = WindowStyle.None;
-        ResizeMode = ResizeMode.CanResize;
-        WindowChrome.SetWindowChrome(this, new WindowChrome
-        {
-            CaptionHeight = 34,
-            ResizeBorderThickness = new Thickness(5),
-            CornerRadius = new CornerRadius(0),
-            GlassFrameThickness = new Thickness(0),
-            UseAeroCaptionButtons = false
-        });
-        // Keep maximized content from spilling under the screen edges (WindowChrome quirk).
-        StateChanged += (_, _) => OnWindowStateChanged();
-        SourceInitialized += (_, _) => OnWindowStateChanged();
-        // A borderless WindowChrome shell does not inherit the Win11 rounded frame automatically; ask DWM
-        // for it once the HWND exists so FreeW's corners match FreeX (no-op on Windows 10/older).
-        SourceInitialized += (_, _) => WindowCornerHelper.ApplyRoundedCorners(this);
-
-        // The shared, app-neutral window-chrome styles (flat buttons, caption buttons, status buttons),
-        // ported from FreeX and merged so both apps reuse the same look. App-specific ribbon brushes/styles
-        // still come from FreeWRibbonResources, merged where the ribbon is built.
-        Resources.MergedDictionaries.Add(new ResourceDictionary
-        {
-            Source = new Uri("/Free.Shared.Ribbon.Wpf;component/SharedChromeResources.xaml", UriKind.Relative)
-        });
+        // Build the borderless WindowChrome shell — custom integrated title bar with embedded window
+        // buttons, Win11 rounded corners, the maximized inset, and the shared chrome styles — from the
+        // shared tier, so FreeW assembles its window from shared parts instead of re-coding the chrome.
+        // App-specific ribbon brushes/styles still come from FreeWRibbonResources (merged at the ribbon).
+        ShellChrome.ConfigureWindow(this, ChromeOptions);
 
         // Root layout is an explicit 3-row grid so the footer (#3) is unambiguously a full-width row BELOW
         // the body. Row 0 = window chrome (title bar + ribbon, stacked), row 1 = body (nav pane + workspace,
@@ -152,11 +135,14 @@ public sealed class MainWindow : Window
         Loaded += (_, _) => { _autosave.OfferRecovery(this); _autosave.Start(); };
         Closing += (_, _) => _autosave.Stop();
 
-        var titleBar = BuildTitleBar();
-        _titleBar = titleBar;
-        // The title bar is composed into the OUTER grid (below), in its own top row ABOVE the Backstage
-        // overlay, so opening the File screen never hides the caption / QAT / window buttons. Only the
-        // ribbon goes into the chrome stack here.
+        // The title bar comes from the shared shell; the host fills its QAT slot and keeps the title text.
+        // It is composed into the OUTER grid (below), in its own top row ABOVE the Backstage overlay, so
+        // opening the File screen never hides the caption / QAT / window buttons. Only the ribbon goes into
+        // the chrome stack here.
+        var titleBar = ShellChrome.BuildTitleBar(this, ChromeOptions);
+        _titleBar = titleBar.Root;
+        _titleText = titleBar.TitleText;
+        AddQuickAccessButtons(titleBar.QatHost);
 
         var (ribbon, ribbonTabs) = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
         _ribbon = ribbon;
@@ -274,64 +260,12 @@ public sealed class MainWindow : Window
     // Show the Word-style Backstage (File screen) over the document.
     private void ShowBackstage() => _backstage.Show();
 
-    // The single integrated title bar (#2): the blue command strip IS the window caption. Like FreeX, it
-    // carries the app-icon glyph, a Quick Access Toolbar (Save / Undo / Redo small flat icon buttons), the
-    // centred document title, and the embedded minimize / maximize-restore / close window buttons. The empty
-    // space between the QAT and the window buttons is the WindowChrome drag region. File / New / Open /
-    // Recent / Properties moved into the File ribbon tab's Word-style Backstage.
-    private Border BuildTitleBar()
+    // Fill the shared title bar's Quick Access Toolbar slot with Save / Undo / Redo. Small flat icon
+    // buttons (white vector glyphs on the navy caption) using the shared chrome flat-button style; each is
+    // hit-test-visible so clicks land while WindowChrome owns the caption. Save routes to the file command;
+    // Undo/Redo run the editor's built-in (RichTextBox) history — the same inline undo the keyboard drives.
+    private void AddQuickAccessButtons(StackPanel host)
     {
-        var bar = new DockPanel { LastChildFill = true };
-
-        // ── App icon (a small "W" badge), mirroring FreeX's title-bar app icon. ──
-        var appIcon = new Border
-        {
-            Width = 22,
-            Height = 22,
-            Margin = new Thickness(2, 0, 8, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            // FreeX-family palette: a teal app badge on the deep-navy title bar (FreeXAccentBrush #0F6D8C).
-            Background = new SolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(2),
-            Child = new TextBlock
-            {
-                Text = "W",
-                Foreground = Brushes.White,
-                FontFamily = new FontFamily("Segoe UI"),
-                FontWeight = FontWeights.Bold,
-                FontSize = 13,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            }
-        };
-        DockPanel.SetDock(appIcon, Dock.Left);
-        bar.Children.Add(appIcon);
-
-        // ── Window (caption) buttons, docked right. XAML/right-dock order is right-to-left, so add Close
-        //    first, then Maximize/Restore, then Minimize, to get [_] [▢] [X] left-to-right. ──
-        var closeButton = CaptionButton(CloseGlyph(), "Close", isClose: true);
-        closeButton.Click += (_, _) => Close();
-        DockPanel.SetDock(closeButton, Dock.Right);
-        bar.Children.Add(closeButton);
-
-        _maxRestoreGlyph = MaximizeGlyph();
-        var maxRestoreButton = CaptionButton(_maxRestoreGlyph, "Maximize");
-        maxRestoreButton.Click += (_, _) => ToggleMaximizeRestore();
-        DockPanel.SetDock(maxRestoreButton, Dock.Right);
-        bar.Children.Add(maxRestoreButton);
-
-        var minimizeButton = CaptionButton(MinimizeGlyph(), "Minimize");
-        minimizeButton.Click += (_, _) => WindowState = WindowState.Minimized;
-        DockPanel.SetDock(minimizeButton, Dock.Right);
-        bar.Children.Add(minimizeButton);
-
-        // ── Quick Access Toolbar (Save / Undo / Redo), docked left after the icon, mirroring FreeX's
-        //    title-bar QAT. Small flat icon buttons (white vector glyphs on the blue caption) using the
-        //    shared chrome flat-button style; each is hit-test-visible so clicks land while WindowChrome
-        //    owns the caption. Save routes to the file command; Undo/Redo run WPF's editing commands
-        //    against the focused RichTextBox editing surface (the same inline undo the keyboard uses).
         Button QatButton(RibbonCommandIconKind kind, string tip, Action onClick)
         {
             var button = new Button
@@ -358,84 +292,9 @@ public sealed class MainWindow : Window
             return button;
         }
 
-        var qat = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(2, 0, 8, 0)
-        };
-        qat.Children.Add(QatButton(RibbonCommandIconKind.Save, "Save (Ctrl+S)", () => _file.Save()));
-        qat.Children.Add(QatButton(RibbonCommandIconKind.Undo, "Undo (Ctrl+Z)", Undo));
-        qat.Children.Add(QatButton(RibbonCommandIconKind.Redo, "Redo (Ctrl+Y)", Redo));
-        DockPanel.SetDock(qat, Dock.Left);
-        bar.Children.Add(qat);
-
-        // ── Centred document title fills the remaining (draggable) caption space. ──
-        _titleText = new TextBlock
-        {
-            Foreground = Brushes.White,
-            FontSize = 12,
-            FontWeight = FontWeights.SemiBold,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        };
-        bar.Children.Add(_titleText);
-
-        return new Border
-        {
-            // FreeX title-bar brush (#17324D — deep navy), matching FreeXTitleBarBrush.
-            Background = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
-            Padding = new Thickness(8, 0, 0, 0),
-            Height = 34,
-            Child = bar
-        };
-    }
-
-    // A min/max/close caption button carrying a vector glyph, styled by the shared caption styles.
-    private Button CaptionButton(Path glyph, string automationName, bool isClose = false)
-    {
-        var button = new Button
-        {
-            Style = (Style)FindResource(isClose ? "ChromeCaptionCloseButtonStyle" : "ChromeCaptionButtonStyle"),
-            Content = glyph,
-            ToolTip = automationName
-        };
-        AutomationProperties.SetName(button, automationName);
-        return button;
-    }
-
-    private static Path MinimizeGlyph() => CaptionGlyph("M0,5 H10");
-    private static Path MaximizeGlyph() => CaptionGlyph("M0.5,0.5 H9.5 V9.5 H0.5 Z");
-    private static Path CloseGlyph() => CaptionGlyph("M0,0 L10,10 M10,0 L0,10");
-
-    private static Path CaptionGlyph(string data) => new()
-    {
-        Data = Geometry.Parse(data),
-        Stroke = Brushes.White,
-        StrokeThickness = 1,
-        Width = 10,
-        Height = 10,
-        Stretch = Stretch.None,
-        SnapsToDevicePixels = true,
-        HorizontalAlignment = HorizontalAlignment.Center,
-        VerticalAlignment = VerticalAlignment.Center
-    };
-
-    private void ToggleMaximizeRestore()
-        => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
-
-    // Keep the maximize/restore glyph in sync, and pad the client area when maximized so WindowChrome
-    // doesn't clip content under the (invisible) resize border off-screen.
-    private void OnWindowStateChanged()
-    {
-        if (_maxRestoreGlyph is not null)
-            _maxRestoreGlyph.Data = WindowState == WindowState.Maximized
-                ? Geometry.Parse("M2.5,0.5 H9.5 V7.5 M0.5,2.5 H7.5 V9.5 H0.5 Z")
-                : Geometry.Parse("M0.5,0.5 H9.5 V9.5 H0.5 Z");
-
-        if (Content is FrameworkElement fe)
-            fe.Margin = WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
+        host.Children.Add(QatButton(RibbonCommandIconKind.Save, "Save (Ctrl+S)", () => _file.Save()));
+        host.Children.Add(QatButton(RibbonCommandIconKind.Undo, "Undo (Ctrl+Z)", Undo));
+        host.Children.Add(QatButton(RibbonCommandIconKind.Redo, "Redo (Ctrl+Y)", Redo));
     }
 
     private void UpdateTitle()
