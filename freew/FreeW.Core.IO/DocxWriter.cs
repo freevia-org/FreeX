@@ -101,11 +101,16 @@ public static class DocxWriter
         var embeddedFonts = CollectEmbeddedFonts(document);
         var hasEmbeddedFonts = embeddedFonts.Count > 0;
 
+        // A preserved original settings part (captured on read) forces a settings part too, so unmodelled
+        // settings survive the round-trip even when none of FreeW's own settings-triggering features are on.
+        var hasPreservedSettings = document.Preserved.OriginalSettings is not null;
+
         var hasSettings = hasProtection
             || document.Page.AutoHyphenation
             || document.Page.DifferentOddEvenPages
             || hasBackground
-            || hasEmbeddedFonts;
+            || hasEmbeddedFonts
+            || hasPreservedSettings;
 
         // A word/theme/theme1.xml part is always emitted (real Word documents always carry one); it
         // serialises the document's DocumentTheme as a real clrScheme/fontScheme/fmtScheme.
@@ -120,17 +125,17 @@ public static class DocxWriter
             .ToList();
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, hasLists, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, hasLists, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground, hasEmbeddedFonts));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground, hasEmbeddedFonts, document.Preserved.OriginalSettings));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
         if (hasEmbeddedFonts)
         {
@@ -186,6 +191,12 @@ public static class DocxWriter
             WritePart(archive, "word/diagrams/" + smartArt.ColorsFileName, BuildDiagramColors());
             WritePart(archive, "word/diagrams/" + smartArt.DrawingFileName, BuildDiagramDrawing(smartArt.SmartArt));
         }
+        // Unmodelled-but-preserved parts (customXml/*, word/webSettings.xml): re-emitted byte-for-byte. Their
+        // content-type Overrides and document relationships are added by BuildContentTypes / BuildDocumentRels;
+        // their own _rels (e.g. customXml item rels) are themselves preserved parts, so the whole satellite set
+        // round-trips. Authored-from-scratch documents have none, so nothing extra is written.
+        foreach (var part in document.Preserved.Parts)
+            WriteBinaryPart(archive, part.PartName.TrimStart('/'), part.Bytes);
     }
 
     /// <summary>An inline image paired with the relationship id, media file name and a unique drawing id.</summary>
@@ -551,7 +562,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts) => new(
+    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -643,7 +654,15 @@ public static class DocxWriter
                 new XElement(Ct + "Override",
                     new XAttribute("PartName", "/word/diagrams/" + s.DrawingFileName),
                     new XAttribute("ContentType", DiagramDrawingContentType))
-            })));
+            }),
+            // One Override per preserved part that declares an Override content type (customXml items, their
+            // props and webSettings). Parts covered by a Default (e.g. customXml/_rels/*.rels via the rels
+            // Default) carry no Override, so they are skipped. Authored-from-scratch documents add none.
+            preservedParts
+                .Where(p => p.ContentTypeOverride is not null)
+                .Select(p => new XElement(Ct + "Override",
+                    new XAttribute("PartName", p.PartName),
+                    new XAttribute("ContentType", p.ContentTypeOverride!)))));
 
     private static XDocument BuildPackageRels(bool hasWatermark) => new(
         new XElement(Rel + "Relationships",
@@ -724,7 +743,8 @@ public static class DocxWriter
         IReadOnlyList<ChartPart> charts,
         IReadOnlyList<EmbeddedObjectPart> embeddedObjects,
         IReadOnlyList<SmartArtPart> smartArts,
-        bool hasEmbeddedFonts)
+        bool hasEmbeddedFonts,
+        IReadOnlyList<PreservedPart> preservedParts)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
@@ -818,7 +838,37 @@ public static class DocxWriter
                 new XAttribute("Type", HyperlinkRel),
                 new XAttribute("Target", url),
                 new XAttribute("TargetMode", "External")));
+        // One document relationship per preserved part that the document references directly (customXml items
+        // and webSettings carry a RelationshipType; their props/_rels do not, being referenced from the item's
+        // own _rels instead). The Target is reconstructed relative to word/ (where document.xml lives), so a
+        // /word/* part targets its bare file name and a /customXml/* part targets "../customXml/…".
+        var preservedRelIndex = 0;
+        foreach (var part in preservedParts)
+        {
+            if (part.RelationshipType is null)
+                continue;
+            preservedRelIndex++;
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", $"rIdPreserved{preservedRelIndex}"),
+                new XAttribute("Type", part.RelationshipType),
+                new XAttribute("Target", DocumentRelativeTarget(part.PartName))));
+        }
         return new XDocument(relationships);
+    }
+
+    /// <summary>
+    /// Reconstructs a preserved part's document-relationship Target (relative to <c>word/</c>, where
+    /// document.xml and its rels live) from its absolute part name: a <c>/word/&lt;file&gt;</c> part targets its
+    /// bare file name (e.g. <c>webSettings.xml</c>); any other part targets a path stepping up out of word/
+    /// (e.g. <c>/customXml/item1.xml</c> → <c>../customXml/item1.xml</c>). Mirrors how the reader keyed the
+    /// captured relationship type by the original Target.
+    /// </summary>
+    private static string DocumentRelativeTarget(string partName)
+    {
+        var path = partName.TrimStart('/');
+        return path.StartsWith("word/", StringComparison.Ordinal)
+            ? path["word/".Length..]
+            : "../" + path;
     }
 
     private static XDocument BuildDocument(
@@ -3072,32 +3122,118 @@ public static class DocxWriter
     }
 
     /// <summary>
+    /// The subsequence of the CT_Settings (w:settings) child schema order that FreeW's modelled toggles occupy,
+    /// used to place each overlaid element at its correct position relative to a preserved settings part's
+    /// existing (unmodelled) children. Only the names FreeW emits — plus the immediate neighbours that matter
+    /// for ordering — need listing; any unmodelled element not here keeps its relative position because the
+    /// overlay only inserts FreeW's elements and never reorders the originals. The full schema order
+    /// (ISO/IEC 29500 §17.15.1.78) places these as: displayBackgroundShape … embedTrueTypeFonts …
+    /// documentProtection … autoHyphenation … evenAndOddHeaders.
+    /// </summary>
+    private static readonly string[] CtSettingsOrder =
+    [
+        "writeProtection", "view", "zoom", "removePersonalInformation", "doNotDisplayPageBoundaries",
+        "displayBackgroundShape", "printPostScriptOverText", "printFractionalCharacterWidth", "printFormsData",
+        "embedTrueTypeFonts", "embedSystemFonts", "saveSubsetFonts", "saveFormsData", "mirrorMargins",
+        "alignBordersAndEdges", "bordersDoNotSurroundHeader", "bordersDoNotSurroundFooter", "gutterAtTop",
+        "hideSpellingErrors", "hideGrammaticalErrors", "activeWritingStyle", "proofState", "formsDesign",
+        "attachedTemplate", "linkStyles", "stylePaneFormatFilter", "stylePaneSortMethod", "documentType",
+        "mailMerge", "revisionView", "trackChanges", "doNotTrackMoves", "doNotTrackFormatting",
+        "documentProtection", "autoFormatOverride", "styleLockTheme", "styleLockQFSet", "defaultTabStop",
+        "autoHyphenation", "consecutiveHyphenLimit", "hyphenationZone", "doNotHyphenateCaps", "showEnvelope",
+        "summaryLength", "clickAndTypeStyle", "defaultTableStyle", "evenAndOddHeaders"
+    ];
+
+    /// <summary>
     /// Builds word/settings.xml (w:settings) carrying any combination of: the page-background display
     /// toggle (w:displayBackgroundShape, when <paramref name="displayBackground"/> so Word paints the
     /// w:background), the automatic-hyphenation toggle (w:autoHyphenation), the different-odd/even-headers
-    /// toggle (w:evenAndOddHeaders, when <paramref name="differentOddEvenPages"/>) and the document-protection
-    /// element (w:documentProtection: w:edit + w:enforcement="1"). The caller only emits this part when at
-    /// least one is needed. Children are emitted in CT_Settings schema order
-    /// (displayBackgroundShape → autoHyphenation → evenAndOddHeaders → documentProtection).
+    /// toggle (w:evenAndOddHeaders, when <paramref name="differentOddEvenPages"/>), the embed-TrueType-fonts
+    /// toggle (w:embedTrueTypeFonts) and the document-protection element (w:documentProtection: w:edit +
+    /// w:enforcement="1").
+    ///
+    /// <para>
+    /// When <paramref name="original"/> is null (an authored-from-scratch document) a FRESH minimal part is
+    /// emitted with exactly FreeW's modelled children in CT_Settings schema order — byte-equivalent to before.
+    /// When <paramref name="original"/> is the preserved settings element captured on read, FreeW's modelled
+    /// elements are OVERLAID onto it — each removed then re-inserted at its CT_Settings schema position — so the
+    /// document's unmodelled settings (compat flags, default tab stop, rsids, proofing, …) survive while
+    /// FreeW's features still apply.
+    /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation, bool differentOddEvenPages, bool displayBackground, bool embedTrueTypeFonts)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation, bool differentOddEvenPages, bool displayBackground, bool embedTrueTypeFonts, XElement? original)
     {
-        var settings = new XElement(W + "settings",
-            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
-        // w:embedTrueTypeFonts precedes the other settings children in the CT_Settings schema sequence.
-        if (embedTrueTypeFonts)
-            settings.Add(new XElement(W + "embedTrueTypeFonts"));
-        if (displayBackground)
-            settings.Add(new XElement(W + "displayBackgroundShape"));
-        if (autoHyphenation)
-            settings.Add(new XElement(W + "autoHyphenation"));
-        if (differentOddEvenPages)
-            settings.Add(new XElement(W + "evenAndOddHeaders"));
-        if (ProtectionEditToken(protection.Mode) is { } edit)
-            settings.Add(new XElement(W + "documentProtection",
-                new XAttribute(W + "edit", edit),
-                new XAttribute(W + "enforcement", "1")));
+        // Authored-from-scratch (no preserved settings): emit a fresh minimal part with exactly FreeW's modelled
+        // children in the historical emission order, byte-for-byte as before — no overlay machinery involved.
+        if (original is null)
+        {
+            var fresh = new XElement(W + "settings",
+                new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
+            if (embedTrueTypeFonts)
+                fresh.Add(new XElement(W + "embedTrueTypeFonts"));
+            if (displayBackground)
+                fresh.Add(new XElement(W + "displayBackgroundShape"));
+            if (autoHyphenation)
+                fresh.Add(new XElement(W + "autoHyphenation"));
+            if (differentOddEvenPages)
+                fresh.Add(new XElement(W + "evenAndOddHeaders"));
+            if (ProtectionEditToken(protection.Mode) is { } freshEdit)
+                fresh.Add(new XElement(W + "documentProtection",
+                    new XAttribute(W + "edit", freshEdit),
+                    new XAttribute(W + "enforcement", "1")));
+            return new XDocument(fresh);
+        }
+
+        // Preserved settings: overlay each modelled element onto a clone of the original (never mutating the
+        // model). Each is removed (so we replace, not duplicate) then re-inserted at its CT_Settings schema
+        // position; an element whose feature is off is simply removed, since the modelled value — not the
+        // preserved one — is authoritative for these five. Unmodelled settings keep their place.
+        var settings = new XElement(original);
+        OverlaySetting(settings, "embedTrueTypeFonts", embedTrueTypeFonts ? new XElement(W + "embedTrueTypeFonts") : null);
+        OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
+        OverlaySetting(settings, "autoHyphenation", autoHyphenation ? new XElement(W + "autoHyphenation") : null);
+        OverlaySetting(settings, "evenAndOddHeaders", differentOddEvenPages ? new XElement(W + "evenAndOddHeaders") : null);
+        OverlaySetting(settings, "documentProtection",
+            ProtectionEditToken(protection.Mode) is { } edit
+                ? new XElement(W + "documentProtection",
+                    new XAttribute(W + "edit", edit),
+                    new XAttribute(W + "enforcement", "1"))
+                : null);
         return new XDocument(settings);
+    }
+
+    /// <summary>
+    /// Replaces (or removes) the w:&lt;localName&gt; child of a w:settings element with
+    /// <paramref name="replacement"/>: any existing element of that name is removed first, then — when a
+    /// replacement is supplied — it is inserted at the element's CT_Settings schema position (after the last
+    /// existing child that sorts at or before it, mirroring the schema sequence). Unmodelled children keep their
+    /// relative order because only FreeW's modelled elements are inserted.
+    /// </summary>
+    private static void OverlaySetting(XElement settings, string localName, XElement? replacement)
+    {
+        settings.Elements(W + localName).Remove();
+        if (replacement is null)
+            return;
+
+        var targetIndex = Array.IndexOf(CtSettingsOrder, localName);
+        // With no known schema index, append (degrade gracefully rather than mis-order); with one, insert after
+        // the last existing child whose own schema index is <= the target (unknown children sort as "after all
+        // known", so they never displace a known insertion point).
+        XElement? insertAfter = null;
+        if (targetIndex >= 0)
+            foreach (var child in settings.Elements())
+            {
+                var childIndex = child.Name.Namespace == W
+                    ? Array.IndexOf(CtSettingsOrder, child.Name.LocalName)
+                    : -1;
+                if (childIndex >= 0 && childIndex <= targetIndex)
+                    insertAfter = child;
+            }
+
+        if (insertAfter is null)
+            settings.AddFirst(replacement);
+        else
+            insertAfter.AddAfterSelf(replacement);
     }
 
     /// <summary>

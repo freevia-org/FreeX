@@ -1365,6 +1365,15 @@ public sealed class TextDocument
     /// </summary>
     public List<EmbeddedFont> EmbeddedFonts { get; } = [];
 
+    /// <summary>
+    /// Package parts FreeW does not model but preserves verbatim across a docx round-trip: the original
+    /// <c>word/settings.xml</c> (overlaid with FreeW's modelled toggles on write) plus pass-through parts such
+    /// as <c>customXml/*</c> and <c>word/webSettings.xml</c>. Empty (the default) for a document authored from
+    /// scratch, so such a document emits none of these and round-trips byte-equivalently to before. Populated by
+    /// <see cref="FreeW.Core.IO.DocxReader"/> on read and re-emitted by the writer.
+    /// </summary>
+    public PreservedParts Preserved { get; } = new();
+
     /// <summary>The body's paragraphs (top-level only; table cell paragraphs are not included).</summary>
     public IEnumerable<Paragraph> Paragraphs => Blocks.OfType<Paragraph>();
 
