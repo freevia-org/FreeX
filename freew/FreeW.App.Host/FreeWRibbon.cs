@@ -198,6 +198,10 @@ internal static class FreeWRibbon
                 {
                     g.Toggle("freew.restrict-editing", "Restrict Editing");
                 });
+                tab.Group("compare", "Compare", "M", 80, g =>
+                {
+                    g.Button("freew.compare", "Compare");
+                });
             })
             .Build();
 }
