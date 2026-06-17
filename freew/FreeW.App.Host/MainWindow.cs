@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -50,6 +51,7 @@ public sealed class MainWindow : Window
     // Read mode (distraction-free view) chrome we hide/restore, plus the saved presentation we restore.
     private Border _titleBar = null!;
     private UIElement _ribbon = null!;
+    private TabControl _ribbonTabs = null!;
     private StatusBar _status = null!;
     private StatusBarItem _dataFolderItem = null!;
     private StatusBarItem _viewSwitchItem = null!;
@@ -95,8 +97,9 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(titleBar, Dock.Top);
         root.Children.Add(titleBar);
 
-        var ribbon = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
+        var (ribbon, ribbonTabs) = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
         _ribbon = ribbon;
+        _ribbonTabs = ribbonTabs;
         DockPanel.SetDock(ribbon, Dock.Top);
         root.Children.Add(ribbon);
 
@@ -207,6 +210,11 @@ public sealed class MainWindow : Window
         shell.Children.Add(root);
         shell.Children.Add(_backstage);
         Content = shell;
+
+        // V5 KeyTips: pressing Alt overlays Word-style letter badges over the ribbon tabs, then over the
+        // active tab's controls, so the ribbon is fully keyboard-navigable. The overlay walks the rendered
+        // ribbon and draws its badges on the shell grid (which spans the whole client area).
+        KeyTipsOverlay.Install(this, _ribbonTabs, shell);
     }
 
     // Show the Word-style Backstage (File screen) over the document.
@@ -676,7 +684,7 @@ public sealed class MainWindow : Window
     // group-label borders and vector glyphs). Command behavior and live toggle state flow through the
     // FreeW command registry + IRibbonStateStore exactly as before.
 
-    private static UIElement BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
+    private (UIElement Ribbon, TabControl Tabs) BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
         // Install FreeW's command-id → glyph mapping so the shared renderer draws meaningful icons for
         // freew.* ids (otherwise every button would fall back to the generic glyph).
@@ -699,23 +707,98 @@ public sealed class MainWindow : Window
 
         foreach (var tab in definition.Tabs)
         {
-            var item = new TabItem
-            {
-                Header = tab.Header,
-                Content = RibbonWpfRenderer.BuildTabContent(tab, tabs, registry, stateStore)
-            };
+            var content = RibbonWpfRenderer.BuildTabContent(tab, tabs, registry, stateStore);
+
+            // V5 galleries: inject the live-preview Word-style galleries into the rendered group content.
+            // The shared renderer stamps each group's grid with its catalog id (RibbonMetadata.CatalogId),
+            // so we find the target group and prepend a custom gallery control into its content lane. This
+            // keeps the galleries entirely app-side (custom WPF content) without a shared RibbonGallery type.
+            if (tab.Id == "home")
+                // Drop the placeholder Style combo (the gallery supersedes it) but keep the group's
+                // New Style / Manage Styles buttons, prepending the live-preview gallery before them.
+                InjectGallery(content, "styles", StylesGallery.Build(_editor), removeKind: RemoveKind.Combos);
+            if (tab.Id == "design")
+                // The Design > themes group's only control is the placeholder Themes combo; replace it
+                // wholesale with the Themes gallery plus the theme-colours gallery.
+                InjectGallery(content, "themes", ThemeGallery.BuildThemes(_editor), removeKind: RemoveKind.All,
+                    extra: ThemeGallery.BuildColours(_editor));
+
+            var item = new TabItem { Header = tab.Header, Content = content };
             tabs.Items.Add(item);
         }
 
         if (tabs.Items.Count > 0)
             tabs.SelectedIndex = 0;
 
-        return new Border
+        var border = new Border
         {
             Background = Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = tabs
         };
+        return (border, tabs);
+    }
+
+    // What of a group's original rendered controls to drop before injecting a gallery.
+    private enum RemoveKind { None, Combos, All }
+
+    // Find the group grid carrying CatalogId == groupId in the freshly built tab content and prepend the
+    // gallery into its content lane (row 0). `removeKind` controls which of the group's original
+    // placeholder controls are removed first: All clears the lane (the gallery fully owns the group);
+    // Combos drops only ComboBox columns (so a placeholder combo the gallery supersedes goes away while
+    // command buttons like New Style / Manage Styles remain). An optional `extra` gallery is appended
+    // after the first (e.g. the Design theme-colours strip).
+    private static void InjectGallery(DependencyObject content, string groupId, FrameworkElement gallery, RemoveKind removeKind, FrameworkElement? extra = null)
+    {
+        var grid = FindGroupGrid(content, groupId);
+        if (grid is null)
+            return;
+
+        // Row 0 of the group grid holds the content lane (a horizontal StackPanel of columns/controls).
+        var lane = grid.Children.OfType<FrameworkElement>().FirstOrDefault(c => Grid.GetRow(c) == 0) as Panel;
+        if (lane is null)
+            return;
+
+        if (removeKind == RemoveKind.All)
+        {
+            lane.Children.Clear();
+        }
+        else if (removeKind == RemoveKind.Combos)
+        {
+            // Each lane column is its own StackPanel; the renderer packs combos into combo-only columns,
+            // so a column whose children are all ComboBoxes is a placeholder-combo column to drop.
+            var toRemove = lane.Children.OfType<Panel>()
+                .Where(col => col.Children.Count > 0 && col.Children.OfType<UIElement>().All(c => c is ComboBox))
+                .ToList();
+            foreach (var col in toRemove)
+                lane.Children.Remove(col);
+        }
+
+        var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 2, 2, 0) };
+        host.Children.Add(gallery);
+        if (extra is not null)
+            host.Children.Add(extra);
+        lane.Children.Insert(0, host);
+    }
+
+    // Find the group content grid stamped with the given catalog id, walking the renderer's known
+    // structure: the tab content is a Border whose child is a RibbonAdaptivePanel whose children are
+    // RibbonGroupHosts. Each host's Content is the group grid (which carries the catalog id). This walks
+    // the logical structure the renderer built eagerly, so it works before the visual tree is realized
+    // (unlike VisualTreeHelper, which would see nothing until the ribbon is measured/rendered).
+    private static Grid? FindGroupGrid(DependencyObject root, string groupId)
+    {
+        var panel = (root as Border)?.Child as Panel;
+        if (panel is null)
+            return null;
+
+        foreach (var child in panel.Children)
+        {
+            if (child is RibbonGroupHost host && host.Content is Grid grid
+                && RibbonMetadata.GetCatalogId(grid) == groupId)
+                return grid;
+        }
+        return null;
     }
 }
