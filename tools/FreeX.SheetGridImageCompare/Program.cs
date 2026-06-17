@@ -237,6 +237,7 @@ internal static class Program
             Pictures        = sheet.Pictures,
             DrawingShapes   = sheet.DrawingShapes,
             TextBoxes       = sheet.TextBoxes,
+            FormControls    = sheet.FormControls,
             Sparklines      = sheet.Sparklines,
             MergedRegions   = sheet.MergedRegions,
             WorksheetBackground = null,

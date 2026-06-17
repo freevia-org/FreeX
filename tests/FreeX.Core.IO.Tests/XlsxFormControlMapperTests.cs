@@ -64,6 +64,74 @@ public class XlsxFormControlMapperTests
     }
 
     [Fact]
+    public void ParseVmlAnchor_ConvertsPixelOffsetsToEmuZeroBasedRange()
+    {
+        // VML x:Anchor: leftCol,leftColOff,topRow,topRowOff,rightCol,rightColOff,bottomRow,bottomRowOff
+        // (cells are 0-based; offsets are PIXELS). Mirrors the todo-sheet Check Box 1: 5,18,8,18,5,50,10,2.
+        var anchor = XlsxFormControlMapper.ParseVmlAnchor("5,18,8,18,5,50,10,2");
+
+        anchor.Should().NotBeNull();
+        anchor!.From.Column.Should().Be(5);
+        anchor.From.Row.Should().Be(8);
+        anchor.From.ColumnOffsetEmu.Should().Be(18 * 9525);
+        anchor.From.RowOffsetEmu.Should().Be(18 * 9525);
+        anchor.To.Column.Should().Be(5);
+        anchor.To.Row.Should().Be(10);
+        anchor.To.ColumnOffsetEmu.Should().Be(50 * 9525);
+        anchor.To.RowOffsetEmu.Should().Be(2 * 9525);
+    }
+
+    [Fact]
+    public void ParseVmlAnchor_ReturnsNullForMalformedInput()
+    {
+        XlsxFormControlMapper.ParseVmlAnchor("not,enough").Should().BeNull();
+        XlsxFormControlMapper.ParseVmlAnchor(null).Should().BeNull();
+        XlsxFormControlMapper.ParseVmlAnchor("a,b,c,d,e,f,g,h").Should().BeNull();
+    }
+
+    [Fact]
+    public void ReadAnchorWithOffsets_ControlPrAnchor_PreservesEmuSubCellOffsets()
+    {
+        // The worksheet controlPr/anchor carries from/to col/row plus xdr:colOff/rowOff in EMU.
+        var anchor = XElement.Parse(
+            """
+            <anchor xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                    xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                    moveWithCells="1">
+              <from><xdr:col>5</xdr:col><xdr:colOff>171450</xdr:colOff><xdr:row>8</xdr:row><xdr:rowOff>171450</xdr:rowOff></from>
+              <to><xdr:col>5</xdr:col><xdr:colOff>476250</xdr:colOff><xdr:row>10</xdr:row><xdr:rowOff>19050</xdr:rowOff></to>
+            </anchor>
+            """);
+
+        var offsets = XlsxFormControlMapper.ReadAnchorOffsets(anchor);
+
+        offsets.Should().NotBeNull();
+        offsets!.From.Column.Should().Be(5);
+        offsets.From.Row.Should().Be(8);
+        offsets.From.ColumnOffsetEmu.Should().Be(171450);
+        offsets.From.RowOffsetEmu.Should().Be(171450);
+        offsets.To.Column.Should().Be(5);
+        offsets.To.Row.Should().Be(10);
+        offsets.To.ColumnOffsetEmu.Should().Be(476250);
+        offsets.To.RowOffsetEmu.Should().Be(19050);
+    }
+
+    [Fact]
+    public void ReadAnchorOffsets_ReturnsNullWhenOffsetsAbsent()
+    {
+        // No colOff/rowOff -> offsets default to 0 but still represent the cell range; absent col/row -> null.
+        var anchor = XElement.Parse(
+            """
+            <anchor xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                    xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing">
+              <from><xdr:col>2</xdr:col><xdr:row>3</xdr:row></from>
+            </anchor>
+            """);
+
+        XlsxFormControlMapper.ReadAnchorOffsets(anchor).Should().BeNull();
+    }
+
+    [Fact]
     public void ReadControlProperties_DropDown_ParsesSelectionAndListFillRange()
     {
         var formControlPr = XElement.Parse(
