@@ -18,14 +18,7 @@ public partial class MainWindow
     private readonly System.Windows.Controls.Primitives.ToggleButton UnderlineButton = new();
     private readonly System.Windows.Controls.Primitives.ToggleButton StrikeButton = new();
     private readonly System.Windows.Controls.Button BordersMenuButton = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton AlignTopBtn = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton AlignMiddleBtn = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton AlignBottomBtn = new();
     private readonly System.Windows.Controls.Button OrientationPickerButton = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton WrapTextBtn = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton AlignLeftBtn = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton AlignCenterBtn = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton AlignRightBtn = new();
     private readonly System.Windows.Controls.ComboBox NumberFormatBox = new();
     private readonly System.Windows.Controls.ContextMenu FormatTableGalleryMenu = new();
     private readonly System.Windows.Controls.Button ShapesBtn = new();
@@ -56,17 +49,7 @@ public partial class MainWindow
     private readonly System.Windows.Controls.CheckBox ViewHeadersChk = new();
     private readonly System.Windows.Controls.CheckBox ViewRulerChk = new();
     private readonly System.Windows.Controls.CheckBox ViewFormulaBarChk = new();
-    private readonly System.Windows.Controls.Button ViewNewWindowBtn = new();
     private readonly System.Windows.Controls.Primitives.ToggleButton SplitViewBtn = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton ViewSideBySideBtn = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton ViewSynchronousScrollingBtn = new();
-    private readonly System.Windows.Controls.Button ViewSwitchWindowsBtn = new();
-    private readonly System.Windows.Controls.Button ViewHideWindowBtn = new();
-    private readonly System.Windows.Controls.Button ViewUnhideWindowBtn = new();
-    private readonly System.Windows.Controls.Button ViewResetWindowPositionBtn = new();
-    private readonly System.Windows.Controls.Button ShapeFormatGradientButton = new();
-    private readonly System.Windows.Controls.Button ShapeFormatEffectsButton = new();
-    private readonly System.Windows.Controls.Button PictureFormatCropButton = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatCropMenuItem = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatResetCropMenuItem = new();
     private readonly System.Windows.Controls.CheckBox TableDesignTotalRowBtn = new();
@@ -116,37 +99,16 @@ public partial class MainWindow
         RibbonMetadata.SetCommandName(BordersMenuButton, "Borders");
         RibbonBackplaneControls["Borders"] = BordersMenuButton;
         RibbonBackplaneControlNames["Borders"] = "BordersMenuButton";
-        try { RegisterName("AlignTopBtn", AlignTopBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(AlignTopBtn, "Top Align");
-        RibbonBackplaneControls["Top Align"] = AlignTopBtn;
         RibbonBackplaneControlNames["Top Align"] = "AlignTopBtn";
-        try { RegisterName("AlignMiddleBtn", AlignMiddleBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(AlignMiddleBtn, "Middle Align");
-        RibbonBackplaneControls["Middle Align"] = AlignMiddleBtn;
         RibbonBackplaneControlNames["Middle Align"] = "AlignMiddleBtn";
-        try { RegisterName("AlignBottomBtn", AlignBottomBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(AlignBottomBtn, "Bottom Align");
-        RibbonBackplaneControls["Bottom Align"] = AlignBottomBtn;
         RibbonBackplaneControlNames["Bottom Align"] = "AlignBottomBtn";
         try { RegisterName("OrientationPickerButton", OrientationPickerButton); } catch (System.ArgumentException) { }
         RibbonMetadata.SetCommandName(OrientationPickerButton, "Orientation");
         RibbonBackplaneControls["Orientation"] = OrientationPickerButton;
         RibbonBackplaneControlNames["Orientation"] = "OrientationPickerButton";
-        try { RegisterName("WrapTextBtn", WrapTextBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(WrapTextBtn, "Wrap Text");
-        RibbonBackplaneControls["Wrap Text"] = WrapTextBtn;
         RibbonBackplaneControlNames["Wrap Text"] = "WrapTextBtn";
-        try { RegisterName("AlignLeftBtn", AlignLeftBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(AlignLeftBtn, "Align Left");
-        RibbonBackplaneControls["Align Left"] = AlignLeftBtn;
         RibbonBackplaneControlNames["Align Left"] = "AlignLeftBtn";
-        try { RegisterName("AlignCenterBtn", AlignCenterBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(AlignCenterBtn, "Center");
-        RibbonBackplaneControls["Center"] = AlignCenterBtn;
         RibbonBackplaneControlNames["Center"] = "AlignCenterBtn";
-        try { RegisterName("AlignRightBtn", AlignRightBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(AlignRightBtn, "Align Right");
-        RibbonBackplaneControls["Align Right"] = AlignRightBtn;
         RibbonBackplaneControlNames["Align Right"] = "AlignRightBtn";
         try { RegisterName("NumberFormatBox", NumberFormatBox); } catch (System.ArgumentException) { }
         RibbonMetadata.SetCommandName(NumberFormatBox, "Number Format");
@@ -265,49 +227,19 @@ public partial class MainWindow
         RibbonMetadata.SetCommandName(ViewFormulaBarChk, "Formula Bar");
         RibbonBackplaneControls["Formula Bar"] = ViewFormulaBarChk;
         RibbonBackplaneControlNames["Formula Bar"] = "ViewFormulaBarChk";
-        try { RegisterName("ViewNewWindowBtn", ViewNewWindowBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ViewNewWindowBtn, "New Window");
-        RibbonBackplaneControls["New Window"] = ViewNewWindowBtn;
         RibbonBackplaneControlNames["New Window"] = "ViewNewWindowBtn";
         try { RegisterName("SplitViewBtn", SplitViewBtn); } catch (System.ArgumentException) { }
         RibbonMetadata.SetCommandName(SplitViewBtn, "Split");
         RibbonBackplaneControls["Split"] = SplitViewBtn;
         RibbonBackplaneControlNames["Split"] = "SplitViewBtn";
-        try { RegisterName("ViewSideBySideBtn", ViewSideBySideBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ViewSideBySideBtn, "View Side by Side");
-        RibbonBackplaneControls["View Side by Side"] = ViewSideBySideBtn;
         RibbonBackplaneControlNames["View Side by Side"] = "ViewSideBySideBtn";
-        try { RegisterName("ViewSynchronousScrollingBtn", ViewSynchronousScrollingBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ViewSynchronousScrollingBtn, "Synchronous Scrolling");
-        RibbonBackplaneControls["Synchronous Scrolling"] = ViewSynchronousScrollingBtn;
         RibbonBackplaneControlNames["Synchronous Scrolling"] = "ViewSynchronousScrollingBtn";
-        try { RegisterName("ViewSwitchWindowsBtn", ViewSwitchWindowsBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ViewSwitchWindowsBtn, "Switch Windows");
-        RibbonBackplaneControls["Switch Windows"] = ViewSwitchWindowsBtn;
         RibbonBackplaneControlNames["Switch Windows"] = "ViewSwitchWindowsBtn";
-        try { RegisterName("ViewHideWindowBtn", ViewHideWindowBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ViewHideWindowBtn, "Hide");
-        RibbonBackplaneControls["Hide"] = ViewHideWindowBtn;
         RibbonBackplaneControlNames["Hide"] = "ViewHideWindowBtn";
-        try { RegisterName("ViewUnhideWindowBtn", ViewUnhideWindowBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ViewUnhideWindowBtn, "Unhide");
-        RibbonBackplaneControls["Unhide"] = ViewUnhideWindowBtn;
         RibbonBackplaneControlNames["Unhide"] = "ViewUnhideWindowBtn";
-        try { RegisterName("ViewResetWindowPositionBtn", ViewResetWindowPositionBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ViewResetWindowPositionBtn, "Reset Window Position");
-        RibbonBackplaneControls["Reset Window Position"] = ViewResetWindowPositionBtn;
         RibbonBackplaneControlNames["Reset Window Position"] = "ViewResetWindowPositionBtn";
-        try { RegisterName("ShapeFormatGradientButton", ShapeFormatGradientButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ShapeFormatGradientButton, "Shape Gradient");
-        RibbonBackplaneControls["Shape Gradient"] = ShapeFormatGradientButton;
         RibbonBackplaneControlNames["Shape Gradient"] = "ShapeFormatGradientButton";
-        try { RegisterName("ShapeFormatEffectsButton", ShapeFormatEffectsButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ShapeFormatEffectsButton, "Shape Effects");
-        RibbonBackplaneControls["Shape Effects"] = ShapeFormatEffectsButton;
         RibbonBackplaneControlNames["Shape Effects"] = "ShapeFormatEffectsButton";
-        try { RegisterName("PictureFormatCropButton", PictureFormatCropButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(PictureFormatCropButton, "Crop Picture");
-        RibbonBackplaneControls["Crop Picture"] = PictureFormatCropButton;
         RibbonBackplaneControlNames["Crop Picture"] = "PictureFormatCropButton";
         try { RegisterName("PictureFormatCropMenuItem", PictureFormatCropMenuItem); } catch (System.ArgumentException) { }
         RibbonMetadata.SetCommandName(PictureFormatCropMenuItem, "Crop");

@@ -146,7 +146,18 @@ public sealed class AvaloniaRibbonHostCallbackTests
 
         Assert.Contains("Function Library", groups);
         Assert.Contains("Defined Names", groups);
+        Assert.Contains("Formula Auditing", groups);
         Assert.Contains("Calculation", groups);
+    }
+
+    [Fact]
+    public void BuildDefinition_ReviewTab_HasNotesAndProtectGroups()
+    {
+        var review = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "Review");
+        var groups = review.Groups.Select(g => g.Header).ToList();
+
+        Assert.Contains("Notes", groups);
+        Assert.Contains("Protect", groups);
     }
 
     [Theory]
@@ -173,6 +184,36 @@ public sealed class AvaloniaRibbonHostCallbackTests
         });
         Assert.True(wired.TryGet(new RibbonCommandId(commandId), out var command));
         Assert.IsType<RelayRibbonCommand>(command);
+    }
+
+    [Fact]
+    public void BuildDefinition_HomeTab_MatchesWindowsGroups()
+    {
+        var home = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "Home");
+        var groups = home.Groups.Select(g => g.Header).ToList();
+
+        foreach (var expected in new[] { "Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing" })
+            Assert.Contains(expected, groups);
+    }
+
+    [Fact]
+    public void BuildDefinition_DataTab_HasForecastAndOutlineGroups()
+    {
+        var data = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "Data");
+        var groups = data.Groups.Select(g => g.Header).ToList();
+
+        Assert.Contains("Forecast", groups);
+        Assert.Contains("Outline", groups);
+    }
+
+    [Fact]
+    public void BuildDefinition_InsertTab_MatchesWindowsGroups()
+    {
+        var insert = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "Insert");
+        var groups = insert.Groups.Select(g => g.Header).ToList();
+
+        foreach (var expected in new[] { "Tables", "Charts", "Sparklines", "Filters", "Links", "Comments", "Text", "Symbols" })
+            Assert.Contains(expected, groups);
     }
 
     [Fact]

@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=FreeW
+GenericName=Word Processor
+Comment=Open, edit, and save documents
+Exec=freew %F
+TryExec=freew
+Icon=io.github.tony-xmelon.freew
+Terminal=false
+Categories=Office;WordProcessor;
+MimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/msword;
+StartupNotify=true
+StartupWMClass=FreeW
+Keywords=word;document;docx;writer;text;

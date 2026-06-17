@@ -680,6 +680,18 @@ public sealed partial class MainWindow : Window
                     ["view.zoomToSelection"] = ZoomToSelection,
                     ["view.freezePanes"] = FreezePanesAtActiveCell,
                     ["view.pageBreakPreview"] = TogglePageBreakPreview,
+                    // Home tab (Editing group).
+                    ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
+                    ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
+                    ["home.clear"] = ClearSelectedRangeContents,
+                    ["home.findSelect"] = () => _ = ShowFindDialogAsync(),
+                    // Insert tab (Links / Text groups).
+                    ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
+                    // Formulas tab (Formula Auditing group).
+                    ["formulas.showFormulas"] = ToggleShowFormulas,
+                    // Data tab (Forecast / Outline groups).
+                    ["data.forecastSheet"] = () => _ = ShowForecastSheetDialogAsync(),
+                    ["data.subtotal"] = () => _ = ShowSubtotalDialogAsync(),
                     // Page Layout tab (Page Setup dialog covers margins/orientation/size).
                     ["pageLayout.margins"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.orientation"] = () => _ = ShowPageSetupDialogAsync(),
