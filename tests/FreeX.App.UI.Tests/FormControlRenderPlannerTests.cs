@@ -154,13 +154,53 @@ public sealed class FormControlRenderPlannerTests
     [InlineData(FormControlKind.ScrollBar, true)]
     [InlineData(FormControlKind.Label, true)]
     [InlineData(FormControlKind.GroupBox, true)]
-    [InlineData(FormControlKind.Button, false)]
-    [InlineData(FormControlKind.DropDown, false)]
-    [InlineData(FormControlKind.ListBox, false)]
+    [InlineData(FormControlKind.Button, true)]
+    [InlineData(FormControlKind.DropDown, true)]
+    [InlineData(FormControlKind.ListBox, true)]
     [InlineData(FormControlKind.Unknown, false)]
     public void IsRenderable_MatchesImplementedControlKinds(FormControlKind kind, bool expected)
     {
         FormControlRenderPlanner.IsRenderable(kind).Should().Be(expected);
+    }
+
+    [Fact]
+    public void GetDropDownButtonRect_PlacesSquareButtonFlushAgainstRightEdge()
+    {
+        var rect = new Rect(10, 20, 120, 21);
+
+        var button = FormControlRenderPlanner.GetDropDownButtonRect(rect);
+
+        // Button is a square sized to the control height, flush against the right edge.
+        button.Width.Should().BeApproximately(21, 0.01);
+        button.Height.Should().BeApproximately(21, 0.01);
+        button.Right.Should().BeApproximately(rect.Right, 0.01);
+        button.Top.Should().BeApproximately(rect.Top, 0.01);
+    }
+
+    [Fact]
+    public void GetDropDownButtonRect_ClampsButtonWidthToHalfWhenControlIsNarrow()
+    {
+        // A short, tall control: the button must not consume the whole box.
+        var rect = new Rect(0, 0, 12, 40);
+
+        var button = FormControlRenderPlanner.GetDropDownButtonRect(rect);
+
+        button.Width.Should().BeLessThanOrEqualTo(rect.Width / 2 + 0.01);
+        button.Right.Should().BeApproximately(rect.Right, 0.01);
+    }
+
+    [Fact]
+    public void GetDropDownTextRect_OccupiesAreaLeftOfButton()
+    {
+        var rect = new Rect(10, 20, 120, 21);
+        var button = FormControlRenderPlanner.GetDropDownButtonRect(rect);
+
+        var textRect = FormControlRenderPlanner.GetDropDownTextRect(rect, button);
+
+        textRect.Left.Should().BeApproximately(rect.Left, 0.01);
+        textRect.Right.Should().BeApproximately(button.Left, 0.01);
+        textRect.Top.Should().BeApproximately(rect.Top, 0.01);
+        textRect.Height.Should().BeApproximately(rect.Height, 0.01);
     }
 
     [Fact]

@@ -21,6 +21,8 @@ public partial class GridView
     private static readonly Pen FormControlHighlightPen = CreateFrozenPen(MakeBrush(255, 255, 255), 1);
     private static readonly Pen FormControlShadowPen = CreateFrozenPen(MakeBrush(128, 128, 128), 1);
     private static readonly Pen FormControlDarkShadowPen = CreateFrozenPen(MakeBrush(105, 105, 105), 1);
+    // Faint horizontal row separators inside a list-box well.
+    private static readonly Pen FormControlListRowPen = CreateFrozenPen(MakeBrush(224, 224, 224), 1);
 
     private const double FormControlGlyphSize = 13;
 
@@ -95,7 +97,69 @@ public partial class GridView
             case FormControlKind.Label:
                 DrawFormLabel(dc, control, rect, pixelsPerDip);
                 break;
+            case FormControlKind.DropDown:
+                DrawFormDropDown(dc, control, rect, pixelsPerDip);
+                break;
+            case FormControlKind.ListBox:
+                DrawFormListBox(dc, rect);
+                break;
+            case FormControlKind.Button:
+                DrawFormButton(dc, control, rect, pixelsPerDip);
+                break;
         }
+    }
+
+    private void DrawFormDropDown(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
+    {
+        // White field with a thin border, a grey raised drop-down button (down-triangle) flush right,
+        // and the selected item text in the field when resolvable (best-effort: blank otherwise).
+        dc.DrawRectangle(FormControlBoxFillBrush, FormControlBoxBorderPen, rect);
+
+        var button = FormControlRenderPlanner.GetDropDownButtonRect(rect);
+        DrawFormControlRaisedButton(dc, button);
+        DrawFormTriangle(dc, button, pointingUp: false);
+
+        var text = FormControlRenderPlanner.GetCaption(control);
+        if (!string.IsNullOrEmpty(text))
+        {
+            var textRect = FormControlRenderPlanner.GetDropDownTextRect(rect, button);
+            DrawFormControlCaption(dc, text, textRect, textRect.Left + 3, pixelsPerDip);
+        }
+    }
+
+    private static void DrawFormListBox(DrawingContext dc, Rect rect)
+    {
+        // A bordered white box with faint row lines, matching Excel's list-box well.
+        dc.DrawRectangle(FormControlBoxFillBrush, FormControlBoxBorderPen, rect);
+
+        const double rowHeight = 15;
+        for (var y = rect.Top + rowHeight; y < rect.Bottom - 1; y += rowHeight)
+            dc.DrawLine(FormControlListRowPen, new Point(rect.Left + 1, y), new Point(rect.Right - 1, y));
+    }
+
+    private void DrawFormButton(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
+    {
+        // A 3-D raised push-button face with the caption centered.
+        DrawFormControlRaisedButton(dc, rect);
+
+        var caption = FormControlRenderPlanner.GetCaption(control);
+        if (string.IsNullOrEmpty(caption))
+            return;
+
+        var text = GetDrawingObjectText(
+            caption,
+            FormControlCaptionBrush,
+            11,
+            Math.Max(1, rect.Width - 6),
+            Math.Max(1, rect.Height),
+            pixelsPerDip,
+            TextTrimming.CharacterEllipsis);
+        var textLeft = rect.Left + Math.Max(0, (rect.Width - text.Width) / 2);
+        var textTop = rect.Top + Math.Max(0, (rect.Height - text.Height) / 2);
+
+        dc.PushClip(GetDrawingObjectClipGeometry(rect));
+        dc.DrawText(text, new Point(textLeft, textTop));
+        dc.Pop();
     }
 
     private void DrawFormCheckBox(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
