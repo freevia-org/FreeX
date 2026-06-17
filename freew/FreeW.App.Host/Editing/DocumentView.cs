@@ -1800,7 +1800,10 @@ public sealed class DocumentView : RichTextBox
             if (blocks[i] is ModelParagraph { Formatting.ListKind: not ListKind.None } first)
             {
                 var kind = first.Formatting.ListKind;
-                var list = new WpfList { MarkerStyle = ToMarkerStyle(kind) };
+                // Stash the exact model ListKind on the list's Tag: WPF renders Number and MultiLevel with
+                // the same Decimal marker, so ReadList recovers the kind from this Tag rather than inferring
+                // it from the marker (which can't tell MultiLevel from Number) — see ReadList/FromMarkerStyle.
+                var list = new WpfList { MarkerStyle = ToMarkerStyle(kind), Tag = kind };
                 while (i < blocks.Count
                     && !hidden.Contains(i)
                     && blocks[i] is ModelParagraph { Formatting.ListKind: var k } listParagraph
@@ -2251,7 +2254,10 @@ public sealed class DocumentView : RichTextBox
     // depth as ListLevel. ListItems may hold nested Lists (deeper levels) alongside paragraphs.
     private static void ReadList(IList<ModelBlock> target, WpfList wpfList, TextDocument document, int level = 0)
     {
-        var kind = FromMarkerStyle(wpfList.MarkerStyle);
+        // Prefer the exact ListKind stashed on the Tag at render (Render stamps it because WPF renders
+        // Number and MultiLevel with the same Decimal marker); fall back to inferring it from the marker
+        // for lists the user created fresh in the editor (which carry no Tag).
+        var kind = wpfList.Tag is ListKind tagged ? tagged : FromMarkerStyle(wpfList.MarkerStyle);
         foreach (var item in wpfList.ListItems)
         {
             foreach (var itemBlock in item.Blocks)
@@ -2274,10 +2280,10 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
-    // Recover a ListKind from a WPF List's marker. Decimal markers map back to Number: multilevel lists
-    // also render with a Decimal marker (see ToMarkerStyle), so a MultiLevel list that is edited through
-    // the RichTextBox surface and re-read here degrades to Number. The docx model round-trip preserves
-    // MultiLevel; only an in-editor edit cycle loses the outline distinction (a known best-effort limit).
+    // Recover a ListKind from a WPF List's marker, used only as a fallback for lists with no stashed
+    // kind on their Tag (i.e. lists the user created fresh in the editor). A rendered model list carries
+    // its exact ListKind on the list Tag (see Render/ReadList), so a MultiLevel list survives an in-editor
+    // edit cycle; this marker-based inference can't tell MultiLevel from Number (both use Decimal).
     private static ListKind FromMarkerStyle(TextMarkerStyle marker) => marker switch
     {
         TextMarkerStyle.Decimal or TextMarkerStyle.LowerLatin or TextMarkerStyle.UpperLatin
@@ -2331,11 +2337,14 @@ public sealed class DocumentView : RichTextBox
                 // The textless comment anchor: round-trips as a comment-reference run.
                 modelParagraph.Runs.Add(ModelRun.CommentReference(reference.CommentId));
                 break;
-            case WpfRun { Tag: RunMarkers markers } markedRun when markedRun.Text.Length > 0:
+            case WpfRun { Tag: RunMarkers markers } markedRun
+                when markedRun.Text.Length > 0 || markers.Comment is not null || markers.Control is not null:
                 // A run carrying any combination of comment / content-control / revision marks. Recover its
                 // formatting, strip the view-only chrome each facet injected (review highlight, control
                 // shade, revision colour/decoration), and carry every facet back onto the model run so a
-                // run that is, say, both commented and tracked-changed survives the round-trip intact.
+                // run that is, say, both commented and tracked-changed survives the round-trip intact. A run
+                // whose text was emptied but that still carries a comment or content-control marker is kept
+                // as a zero-length marked run rather than dropped, so the marker is not lost on commit.
                 var markedFmt = ReadRunFormatting(markedRun);
                 if (markers.Revision is { } rev)
                     markedFmt = StripRevisionChrome(markedFmt, rev.Kind);
@@ -2418,15 +2427,26 @@ public sealed class DocumentView : RichTextBox
                 foreach (var wpfCell in wpfRow.Cells)
                 {
                     var span = Math.Max(1, wpfCell.ColumnSpan);
-                    // The header/banded style fills are rendered chrome, not user shading: don't capture
-                    // them back as explicit cell shading (they re-derive from the toggles on render/save).
-                    string? cellShading = null;
-                    if (wpfCell.Background is SolidColorBrush shading)
+                    string? cellShading;
+                    if (wpfCell.Tag is TableCellTag tag)
                     {
+                        // A rendered cell carries its author-set shading verbatim on the Tag, so honour it
+                        // directly: this distinguishes real shading that happens to equal the header/banded
+                        // style fill (which the colour heuristic below would wrongly strip) from a style fill.
+                        cellShading = tag.ShadingColorHex is { Length: > 0 } stashedShading ? stashedShading : null;
+                    }
+                    else if (wpfCell.Background is SolidColorBrush shading)
+                    {
+                        // A cell the user created fresh in the editor has no Tag: fall back to inferring
+                        // shading from the background, excluding the header/banded style fills (rendered
+                        // chrome, not user shading — they re-derive from the toggles on render/save).
                         var isStyleFill = (isHeaderRow && ColorsEqual(shading.Color, HeaderRowFill))
                             || (isBandedRow && ColorsEqual(shading.Color, BandedRowFill));
-                        if (!isStyleFill)
-                            cellShading = ToHex(shading.Color);
+                        cellShading = isStyleFill ? null : ToHex(shading.Color);
+                    }
+                    else
+                    {
+                        cellShading = null;
                     }
                     var cell = new ModelTableCell
                     {
@@ -2513,6 +2533,14 @@ public sealed class DocumentView : RichTextBox
     private static readonly Color HeaderRowFill = Color.FromRgb(0xD9, 0xE2, 0xF3);
     private static readonly Color BandedRowFill = Color.FromRgb(0xF2, 0xF2, 0xF2);
 
+    /// <summary>
+    /// Carried on a rendered <see cref="WpfTableCell"/>'s Tag so <see cref="ReadTable"/> can recover the
+    /// cell's <em>author-set</em> shading on commit. The rendered background alone is ambiguous — real
+    /// shading can equal the header/banded style fill — so the model value is stashed verbatim here and the
+    /// colour-equality heuristic is used only for cells the user created fresh in the editor (no Tag).
+    /// </summary>
+    private sealed record TableCellTag(string? ShadingColorHex);
+
     private static WpfTable BuildTable(ModelTable table, TextDocument document)
     {
         // Stash the model's table formatting on the WPF table so the flags survive the view->model
@@ -2577,6 +2605,11 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.BorderBrush = borderBrush;
                     wpfCell.BorderThickness = new Thickness(0.5);
                 }
+                // Stash the model's author-set shading on the cell Tag so ReadTable can tell it apart from
+                // a style-derived header/banded fill on commit — a colour-equality heuristic alone can't,
+                // and would strip real shading that happens to match the style fill (see ReadTable).
+                wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex);
+
                 // The cell's explicit shading wins; otherwise apply the header/banded style fill.
                 if (modelCell.ShadingColorHex is { Length: > 0 } cellShading)
                     wpfCell.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(cellShading));
@@ -2723,7 +2756,17 @@ public sealed class DocumentView : RichTextBox
             return BuildEndnoteReference(endnoteId, document);
 
         if (run.FieldKind != RunFieldKind.None)
-            return BuildFieldRun(run, document);
+        {
+            // A field run can also carry a hyperlink (e.g. a PAGE/DATE field placed inside a link). Wrap
+            // the resolved field run in the same Hyperlink chrome ordinary runs get so its link survives
+            // the next CommitToModel (ReadInline's FieldMarker case carries the url/anchor back).
+            var fieldRun = BuildFieldRun(run, document);
+            if (run.HyperlinkUrl is { Length: > 0 } fieldUrl)
+                return BuildHyperlink(fieldRun, fieldUrl, run.HyperlinkTooltip);
+            if (run.HyperlinkAnchor is { Length: > 0 } fieldAnchor)
+                return BuildInternalHyperlink(fieldRun, fieldAnchor, run.HyperlinkTooltip);
+            return fieldRun;
+        }
 
         // The textless comment anchor round-trips as an empty, tagged run carrying its reference flag.
         if (run is { IsCommentReference: true, CommentId: { } refId })
