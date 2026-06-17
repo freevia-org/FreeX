@@ -967,6 +967,13 @@ public static class DocxWriter
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", shading.TrimStart('#'))));
 
+        // A section break carried by this paragraph: the section's w:sectPr is the LAST child of w:pPr
+        // (schema order), marking this paragraph as the end of a non-final section. Non-final sections do
+        // not reference header/footer parts (only the body-level section does in FreeW). Reuses the shared
+        // sectPr builder so per-section properties are emitted from one code path.
+        if (paragraph.SectionBreak is { } section)
+            pPr.Add(BuildSectionProperties(section.Page, hasHeader: false, hasFooter: false, section.BreakKind));
+
         return pPr.HasElements ? pPr : null;
     }
 
@@ -1153,7 +1160,19 @@ public static class DocxWriter
         return rPr.HasElements ? rPr : null;
     }
 
-    private static XElement BuildSectionProperties(PageSettings page, bool hasHeader, bool hasFooter) =>
+    /// <summary>
+    /// Builds a w:sectPr for one section's <paramref name="page"/> settings. Used for both the final
+    /// (body-level) section and each non-final section (whose sectPr lives in its last paragraph's pPr),
+    /// so the per-section properties are emitted from one place rather than duplicated.
+    /// <paramref name="hasHeader"/>/<paramref name="hasFooter"/> wire the default header/footer references
+    /// (only the body-level section references them in FreeW). <paramref name="breakKind"/>, when non-null,
+    /// emits the section's w:type (the break kind that begins it); the body-level final section passes null.
+    /// </summary>
+    private static XElement BuildSectionProperties(
+        PageSettings page,
+        bool hasHeader,
+        bool hasFooter,
+        SectionBreakKind? breakKind = null) =>
         new(W + "sectPr",
             // Header/footer references must precede pgSz/pgMar in the sectPr schema order.
             hasHeader
@@ -1165,6 +1184,11 @@ public static class DocxWriter
                 ? new XElement(W + "footerReference",
                     new XAttribute(W + "type", "default"),
                     new XAttribute(R + "id", FooterRelationshipId))
+                : null,
+            // The section break kind (w:type) precedes pgSz in the schema. "nextPage" is Word's default and
+            // is emitted explicitly only for non-final sections (the body-level final section passes null).
+            breakKind is { } kind
+                ? new XElement(W + "type", new XAttribute(W + "val", SectionBreakToken(kind)))
                 : null,
             new XElement(W + "pgSz",
                 new XAttribute(W + "w", PointsToDxa(page.WidthPt)),
@@ -1195,6 +1219,15 @@ public static class DocxWriter
             // "Different first page" (w:titlePg): a toggle emitted only when set, after w:vAlign. FreeW
             // still stores a single header/footer; the flag lets Word honour a distinct first-page header.
             page.DifferentFirstPage ? new XElement(W + "titlePg") : null);
+
+    /// <summary>Maps a <see cref="SectionBreakKind"/> to its w:sectPr/w:type w:val token.</summary>
+    private static string SectionBreakToken(SectionBreakKind kind) => kind switch
+    {
+        SectionBreakKind.Continuous => "continuous",
+        SectionBreakKind.EvenPage => "evenPage",
+        SectionBreakKind.OddPage => "oddPage",
+        _ => "nextPage"
+    };
 
     /// <summary>Maps a <see cref="PageVerticalAlignment"/> to its w:vAlign w:val token (Justified→"both").</summary>
     private static string VerticalAlignmentToken(PageVerticalAlignment alignment) => alignment switch
