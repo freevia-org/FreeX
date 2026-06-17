@@ -127,6 +127,18 @@ public sealed class RibbonGroupBuilder
         return this;
     }
 
+    /// <summary>A medium toggle button: small icon with a label to the right (labelled on/off command).</summary>
+    public RibbonGroupBuilder MediumToggle(string commandId, string label, RibbonCommandIconKind icon, string? keyTip = null)
+    {
+        _controls.Add(new RibbonToggleButton(commandId, label) with
+        {
+            PreferredLayout = RibbonCommandLayoutKind.Medium,
+            Icon = new RibbonCommandIcon(icon),
+            KeyTip = keyTip
+        });
+        return this;
+    }
+
     private RibbonGroupBuilder AddSized(RibbonCommandLayoutKind layout, string commandId, string label, RibbonCommandIconKind icon, string? keyTip, bool dropdown, Action<RibbonMenuBuilder>? menu, RibbonCommandIconAccent accent = RibbonCommandIconAccent.None)
     {
         RibbonMenu? builtMenu = null;
