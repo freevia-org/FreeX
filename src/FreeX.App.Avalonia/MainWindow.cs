@@ -488,6 +488,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _bordersMenuItem = new();
     private readonly NativeMenuItem _cellStylesMenuItem = new();
     private readonly NativeMenuItem _formatCellsMenuItem = new();
+    private readonly NativeMenuItem _conditionalFormattingMenuItem = new();
     private readonly NativeMenuItem _horizontalTextMenuItem = new();
     private readonly NativeMenuItem _angleCounterclockwiseMenuItem = new();
     private readonly NativeMenuItem _angleClockwiseMenuItem = new();
@@ -1362,6 +1363,9 @@ public sealed partial class MainWindow : Window
         formatMenu.Items.Add(_bordersMenuItem);
         formatMenu.Items.Add(_cellStylesMenuItem);
         formatMenu.Items.Add(_formatCellsMenuItem);
+        _conditionalFormattingMenuItem.Header = "Conditional Formatting";
+        _conditionalFormattingMenuItem.Menu = CreateNativeConditionalFormatMenu();
+        formatMenu.Items.Add(_conditionalFormattingMenuItem);
         formatMenu.Items.Add(new NativeMenuItemSeparator());
         formatMenu.Items.Add(_horizontalTextMenuItem);
         formatMenu.Items.Add(_angleCounterclockwiseMenuItem);
