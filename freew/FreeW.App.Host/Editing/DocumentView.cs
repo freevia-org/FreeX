@@ -2897,6 +2897,76 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Insert a Table of Figures (or Table of Tables) generated from the document's <see cref="CaptionLabel"/>
+    /// captions at the caret's block (else at the document end), routed one-by-one through the undo/redo bus
+    /// so the insert is reversible — mirroring <see cref="InsertTableOfContents"/>. The paragraphs carry
+    /// dedicated styles (registered via <see cref="TableOfFigures.EnsureStyles"/>) which both give them
+    /// distinct formatting and mark the region for <see cref="RefreshTableOfFigures"/>.
+    /// </summary>
+    public void InsertTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
+    {
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+        TableOfFigures.EnsureStyles(_model);
+
+        // Insert at the caret's block (a table of figures reads as front-/back-matter); fall back to the end.
+        var index = CaretBlockIndex();
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+
+        InsertTableOfFiguresAt(index, label);
+    }
+
+    /// <summary>
+    /// Rebuild the Table of Figures: remove the previously inserted region (paragraphs carrying a
+    /// table-of-figures style, see <see cref="TableOfFigures.IsTableOfFiguresParagraph"/>) and re-insert a
+    /// freshly generated one at the same position. With no existing region this behaves like
+    /// <see cref="InsertTableOfFigures"/>, inserting at the document end. Every removal/insert is reversible
+    /// through the undo/redo bus.
+    /// </summary>
+    public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
+    {
+        CommitToModel();
+        TableOfFigures.EnsureStyles(_model);
+
+        // Find the first existing table-of-figures paragraph (the marker region anchor).
+        var first = -1;
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            if (TableOfFigures.IsTableOfFiguresParagraph(_model.Blocks[i]))
+            {
+                first = i;
+                break;
+            }
+        }
+
+        var insertAt = first >= 0 ? first : _model.Blocks.Count;
+
+        // Remove every existing table-of-figures paragraph (reversible). Collect first to avoid mutating
+        // while scanning, then delete from the end so earlier indices stay valid.
+        var indices = new List<int>();
+        for (var i = 0; i < _model.Blocks.Count; i++)
+        {
+            if (TableOfFigures.IsTableOfFiguresParagraph(_model.Blocks[i]))
+                indices.Add(i);
+        }
+        for (var i = indices.Count - 1; i >= 0; i--)
+            _commands.Execute(new DeleteParagraphCommand(indices[i]));
+
+        InsertTableOfFiguresAt(insertAt, label);
+    }
+
+    // Insert the freshly built table-of-figures paragraphs starting at block index `at`, one reversible
+    // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
+    private void InsertTableOfFiguresAt(int at, CaptionLabel label)
+    {
+        var entries = TableOfFigures.Build(_model, label);
+        var index = Math.Clamp(at, 0, _model.Blocks.Count);
+        foreach (var paragraph in entries)
+            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+    }
+
+    /// <summary>
     /// True when the caret currently sits inside a table block. Used by the Insert Caption command to
     /// default the caption label to <see cref="CaptionLabel.Table"/> for tables (else Figure).
     /// </summary>

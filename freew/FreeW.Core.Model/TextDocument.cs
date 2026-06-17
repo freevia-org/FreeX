@@ -844,5 +844,7 @@ public sealed class TextDocument
         Styles[Captions.StyleId] = Captions.BuildCaptionStyle();
         // The built-in index heading/entry styles used by DocumentIndex (round-trip via styles.xml).
         DocumentIndex.EnsureStyles(this);
+        // The built-in table-of-figures heading/entry styles used by TableOfFigures (round-trip via styles.xml).
+        TableOfFigures.EnsureStyles(this);
     }
 }
