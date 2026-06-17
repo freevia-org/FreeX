@@ -761,6 +761,16 @@ public sealed class DocumentView : Control
 
     public void SetSelectionFontSize(double points) => ApplyRunFormatting(f => f with { FontSizePt = points });
 
+    /// <summary>Apply a quick paragraph style (font size + weight) to the whole current paragraph.</summary>
+    public void ApplyQuickStyle(double fontSizePoints, bool bold)
+    {
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return;
+        _bus.Execute(new FormatParagraphRunsCommand(
+            _caret.Block,
+            f => f with { FontSizePt = fontSizePoints, Bold = bold }));
+    }
+
     public void SetSelectionFontFamily(string family) =>
         ApplyRunFormatting(f => f with { FontFamily = string.IsNullOrWhiteSpace(family) ? null : family });
 
