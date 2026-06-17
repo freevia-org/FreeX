@@ -194,6 +194,10 @@ internal static class FreeWRibbon
                     g.Button("freew.accept-all", "Accept All");
                     g.Button("freew.reject-all", "Reject All");
                 });
+                tab.Group("compare", "Compare", "M", 80, g =>
+                {
+                    g.Button("freew.compare", "Compare");
+                });
             })
             .Build();
 }

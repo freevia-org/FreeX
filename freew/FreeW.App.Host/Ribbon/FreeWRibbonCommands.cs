@@ -8,6 +8,7 @@ using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
+using FreeW.Core.IO;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -171,6 +172,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.track-changes", new TrackChangesToggleCommand(editor));
         registry.Register("freew.accept-all", new ActionCommand(() => { editor.Focus(); editor.AcceptAllRevisions(); }));
         registry.Register("freew.reject-all", new ActionCommand(() => { editor.Focus(); editor.RejectAllRevisions(); }));
+
+        // Review tab — Compare: open a second .docx and load a comparison of the current document against
+        // it as tracked changes (insertions/deletions relative to the opened "original").
+        registry.Register("freew.compare", new CompareDocumentsCommand(editor));
 
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
@@ -1014,6 +1019,53 @@ internal static class FreeWRibbonCommands
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.TrackChangesEnabled);
+    }
+
+    // Review > Compare: prompt the user to open a second .docx, read it, and load a comparison of the
+    // current document against it into the editor. The opened document is treated as the "original" and
+    // the current document as the "revised"; differences load as tracked insertions/deletions (rendered
+    // with the existing track-changes styling). The author comes from the document Author property
+    // (falling back to the OS user); the revision date is stamped at compare time (UI side, not the pure
+    // helper). Pending edits are committed first so the comparison reflects the on-screen text.
+    private sealed class CompareDocumentsCommand(DocumentView editor) : IRibbonCommand
+    {
+        private const string Filter = "Word documents (*.docx)|*.docx|All files (*.*)|*.*";
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+            var dialog = new OpenFileDialog
+            {
+                Filter = Filter,
+                DefaultExt = ".docx",
+                Title = "Compare With Document"
+            };
+            if (dialog.ShowDialog(owner) != true)
+                return;
+
+            try
+            {
+                editor.CommitToModel();
+                var original = DocxReader.Read(dialog.FileName);
+                var revised = editor.Model;
+
+                var author = revised.Properties.Author;
+                if (string.IsNullOrWhiteSpace(author))
+                    author = Environment.UserName;
+                author = author?.Trim() ?? string.Empty;
+
+                var dateXml = DateTimeOffset.UtcNow.ToString(
+                    "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+
+                var compared = DocumentCompare.Compare(original, revised, author, dateXml);
+                editor.LoadModel(compared);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(owner, $"Could not compare the documents:\n{ex.Message}",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
     }
 
     // Insert > Links > Bookmark: name the caret's paragraph as a bookmark target. Seeds the prompt
