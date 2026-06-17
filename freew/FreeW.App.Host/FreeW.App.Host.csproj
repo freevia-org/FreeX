@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Wpf\Free.Shared.Ribbon.Wpf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Commands\Free.Shared.Commands.csproj" />
@@ -23,6 +24,14 @@
     <Using Include="Free.Shared.Ribbon" />
     <Using Include="Free.Shared.AppServices" />
     <Using Include="Free.Shared.Shell" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpVectors.Wpf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Resources\CommandIconsSvg\**\*.svg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

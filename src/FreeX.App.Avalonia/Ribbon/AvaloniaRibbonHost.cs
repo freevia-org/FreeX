@@ -21,7 +21,7 @@ internal static class AvaloniaRibbonHost
     /// <param name="session">Accessor for the live workbook session the format commands act on.</param>
     /// <param name="setStatus">Host refresh hook (redraws the grid and reports a status line).</param>
     public static Control Build(Func<WorkbookSession?> session, Action<string> setStatus)
-        => Build(session, setStatus, openTextToColumns: null, openConsolidate: null);
+        => Build(session, setStatus, new AvaloniaRibbonHostCallbacks());
 
     /// <summary>
     /// Builds the ribbon control, additionally wiring the Data-tab <c>Text to Columns</c> and
@@ -33,16 +33,98 @@ internal static class AvaloniaRibbonHost
         Action<string> setStatus,
         Action? openTextToColumns,
         Action? openConsolidate)
-    {
-        var registry = SampleRibbon.BuildRegistry(session, setStatus);
-        if (openTextToColumns is not null)
-            registry.Register(new RibbonCommandId("data.textToColumns"), new RelayRibbonCommand(openTextToColumns));
-        if (openConsolidate is not null)
-            registry.Register(new RibbonCommandId("data.consolidate"), new RelayRibbonCommand(openConsolidate));
+        => Build(session, setStatus, new AvaloniaRibbonHostCallbacks
+        {
+            OpenTextToColumns = openTextToColumns,
+            OpenConsolidate = openConsolidate,
+        });
 
+    /// <summary>
+    /// Builds the ribbon control, wiring every host dialog/action the shell exposes through
+    /// <paramref name="callbacks"/>. Each non-null callback overrides its control's no-op registration with
+    /// a <see cref="RelayRibbonCommand"/>; null callbacks (e.g. in the smoke harness) leave the no-op.
+    /// </summary>
+    public static Control Build(
+        Func<WorkbookSession?> session,
+        Action<string> setStatus,
+        AvaloniaRibbonHostCallbacks callbacks)
+    {
+        var registry = SampleRibbon.BuildRegistry(session, setStatus, callbacks);
         var definition = SampleRibbon.BuildDefinition();
         return AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
     }
+}
+
+/// <summary>
+/// Host-supplied actions the Avalonia ribbon binds to. Each maps one (or more) ribbon command id(s) to a
+/// shell handler — opening a dialog or running a selection command. Kept as a record of nullable
+/// <see cref="Action"/>s so the smoke harness (and tests) can build the ribbon with none of them wired.
+/// </summary>
+internal sealed record AvaloniaRibbonHostCallbacks
+{
+    /// <summary>Data ▸ Text to Columns.</summary>
+    public Action? OpenTextToColumns { get; init; }
+
+    /// <summary>Data ▸ Consolidate.</summary>
+    public Action? OpenConsolidate { get; init; }
+
+    /// <summary>Insert ▸ Table and Home ▸ Format as Table — create a structured table from the selection.</summary>
+    public Action? InsertTable { get; init; }
+
+    /// <summary>Home ▸ Conditional — open the conditional-format New Rule editor.</summary>
+    public Action? ConditionalFormatting { get; init; }
+
+    /// <summary>Data ▸ Quick Analysis — open the Quick Analysis popup for the selection.</summary>
+    public Action? QuickAnalysis { get; init; }
+
+    /// <summary>Data ▸ Sort A-Z.</summary>
+    public Action? SortAscending { get; init; }
+
+    /// <summary>Data ▸ Sort Z-A.</summary>
+    public Action? SortDescending { get; init; }
+
+    /// <summary>Data ▸ Data Validation (dropdown + dialog menu item).</summary>
+    public Action? DataValidation { get; init; }
+
+    /// <summary>Home ▸ Clipboard ▸ Cut.</summary>
+    public Action? Cut { get; init; }
+
+    /// <summary>Home ▸ Clipboard ▸ Copy.</summary>
+    public Action? Copy { get; init; }
+
+    /// <summary>Home ▸ Clipboard ▸ Paste (split-button primary + Paste menu item).</summary>
+    public Action? Paste { get; init; }
+
+    /// <summary>Home ▸ Alignment ▸ Align Left.</summary>
+    public Action? AlignLeft { get; init; }
+
+    /// <summary>Home ▸ Alignment ▸ Center.</summary>
+    public Action? AlignCenter { get; init; }
+
+    /// <summary>Home ▸ Alignment ▸ Align Right.</summary>
+    public Action? AlignRight { get; init; }
+
+    /// <summary>Home ▸ Alignment ▸ Wrap Text.</summary>
+    public Action? WrapText { get; init; }
+
+    /// <summary>Home ▸ Alignment ▸ Merge &amp; Center (split-button primary + menu item).</summary>
+    public Action? MergeAndCenter { get; init; }
+
+    /// <summary>Home ▸ Number ▸ Currency.</summary>
+    public Action? CurrencyFormat { get; init; }
+
+    /// <summary>Home ▸ Number ▸ Percent.</summary>
+    public Action? PercentFormat { get; init; }
+
+    /// <summary>Home ▸ Number ▸ Comma.</summary>
+    public Action? CommaStyle { get; init; }
+
+    /// <summary>
+    /// Additional command-id → action bindings for parameterized menu items the named callbacks do not
+    /// cover (e.g. the Number Format dropdown's General/Number/Currency/Date/Percent items, or the Fill
+    /// Color dropdown's swatch items). Applied after the named callbacks; each id overrides its no-op.
+    /// </summary>
+    public IReadOnlyDictionary<string, Action>? ExtraCommands { get; init; }
 }
 
 /// <summary>An <see cref="IRibbonCommand"/> that invokes a host-supplied callback (e.g. opens a dialog).</summary>
@@ -325,12 +407,22 @@ internal static class SampleRibbon
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Consolidate),
                     });
+                    g.Button("data.quickAnalysis", "Quick Analysis", c => c with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Logical),
+                    });
                 });
             })
             .Build();
     }
 
     public static IRibbonCommandRegistry BuildRegistry(Func<WorkbookSession?> session, Action<string> setStatus)
+        => BuildRegistry(session, setStatus, new AvaloniaRibbonHostCallbacks());
+
+    public static IRibbonCommandRegistry BuildRegistry(
+        Func<WorkbookSession?> session,
+        Action<string> setStatus,
+        AvaloniaRibbonHostCallbacks callbacks)
     {
         var registry = new RibbonCommandRegistry();
         foreach (var id in EnumerateCommandIds(BuildDefinition()))
@@ -345,7 +437,52 @@ internal static class SampleRibbon
         // Override the Insert ▸ Charts controls with a real insert action: each maps its command id to a
         // ChartType, runs the Core AddChartCommand over the selection, and refreshes so the chart paints.
         RegisterChartCommands(registry, session, setStatus);
+
+        // Override the controls whose behavior lives in the Avalonia shell (dialogs / selection commands)
+        // with host callbacks, so the declarative ribbon invokes the same handlers as the native menus.
+        ApplyHostCallbacks(registry, callbacks);
         return registry;
+    }
+
+    /// <summary>
+    /// Binds each non-null host callback to its ribbon command id(s) via a <see cref="RelayRibbonCommand"/>,
+    /// replacing the no-op registration. Null callbacks leave the no-op so the smoke harness still builds.
+    /// </summary>
+    private static void ApplyHostCallbacks(IRibbonCommandRegistry registry, AvaloniaRibbonHostCallbacks callbacks)
+    {
+        void Bind(string id, Action? action)
+        {
+            if (action is not null)
+                registry.Register(new RibbonCommandId(id), new RelayRibbonCommand(action));
+        }
+
+        Bind("data.textToColumns", callbacks.OpenTextToColumns);
+        Bind("data.consolidate", callbacks.OpenConsolidate);
+        Bind("insert.table", callbacks.InsertTable);
+        Bind("home.formatAsTable", callbacks.InsertTable);
+        Bind("home.conditional", callbacks.ConditionalFormatting);
+        Bind("data.quickAnalysis", callbacks.QuickAnalysis);
+        Bind("data.sortAsc", callbacks.SortAscending);
+        Bind("data.sortDesc", callbacks.SortDescending);
+        Bind("data.validation", callbacks.DataValidation);
+        Bind("data.validationDialog", callbacks.DataValidation);
+
+        Bind("home.cut", callbacks.Cut);
+        Bind("home.copy", callbacks.Copy);
+        Bind("home.paste", callbacks.Paste);
+        Bind("home.alignLeft", callbacks.AlignLeft);
+        Bind("home.alignCenter", callbacks.AlignCenter);
+        Bind("home.alignRight", callbacks.AlignRight);
+        Bind("home.wrapText", callbacks.WrapText);
+        Bind("home.merge", callbacks.MergeAndCenter);
+        Bind("home.mergeCenter", callbacks.MergeAndCenter);
+        Bind("home.currency", callbacks.CurrencyFormat);
+        Bind("home.percent", callbacks.PercentFormat);
+        Bind("home.comma", callbacks.CommaStyle);
+
+        if (callbacks.ExtraCommands is { } extra)
+            foreach (var (id, action) in extra)
+                Bind(id, action);
     }
 
     /// <summary>

@@ -374,6 +374,8 @@ public static class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
                 // w14 carries the checkbox content control element (w14:checkbox in a w:sdtPr).
                 new XAttribute(XNamespace.Xmlns + "w14", W14.NamespaceName),
+                // m carries inline equations (m:oMath and its children).
+                new XAttribute(XNamespace.Xmlns + "m", M.NamespaceName),
                 body));
     }
 
@@ -602,6 +604,7 @@ public static class DocxWriter
             copy.Runs.Add(new Run(run.Text, run.Formatting with { Bold = true })
             {
                 Image = run.Image,
+                Equation = run.Equation,
                 HyperlinkUrl = run.HyperlinkUrl,
                 HyperlinkAnchor = run.HyperlinkAnchor,
                 HyperlinkTooltip = run.HyperlinkTooltip,
@@ -1014,6 +1017,11 @@ public static class DocxWriter
 
     private static XElement BuildRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
     {
+        // An inline equation serialises as an m:oMath emitted in place of the run (a paragraph-level
+        // sibling of w:r, never wrapped in one), carrying its math fragments as m:r/m:sSup/m:f.
+        if (run.Equation is { } equation)
+            return BuildOMath(equation);
+
         // A document field emits a self-contained w:fldSimple wrapping a run; the wrapped run's w:t
         // carries the last-known/cached value as fallback text for field-unaware consumers. The
         // w:instr keyword identifies the field kind (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES).
@@ -1022,21 +1030,15 @@ public static class DocxWriter
                 new XAttribute(W + "instr", instruction),
                 BuildTextRun(run, imagesByRun));
 
-        // A footnote reference is a superscript run carrying a w:footnoteReference (no literal text);
-        // the rPr forces vertAlign=superscript so field-unaware viewers still show a raised marker.
+        // A footnote reference is a superscript run carrying a w:footnoteReference (no literal text).
+        // Carry the run's real formatting (forcing vertAlign=superscript) so a bold/coloured/sized
+        // marker is preserved rather than discarded.
         if (run.FootnoteId is { } footnoteId)
-            return new XElement(W + "r",
-                new XElement(W + "rPr",
-                    new XElement(W + "vertAlign", new XAttribute(W + "val", "superscript"))),
-                new XElement(W + "footnoteReference", new XAttribute(W + "id", footnoteId)));
+            return MarkerRun(run, new XElement(W + "footnoteReference", new XAttribute(W + "id", footnoteId)));
 
-        // An endnote reference is a superscript run carrying a w:endnoteReference (no literal text);
-        // the rPr forces vertAlign=superscript so field-unaware viewers still show a raised marker.
+        // An endnote reference is a superscript run carrying a w:endnoteReference (no literal text).
         if (run.EndnoteId is { } endnoteId)
-            return new XElement(W + "r",
-                new XElement(W + "rPr",
-                    new XElement(W + "vertAlign", new XAttribute(W + "val", "superscript"))),
-                new XElement(W + "endnoteReference", new XAttribute(W + "id", endnoteId)));
+            return MarkerRun(run, new XElement(W + "endnoteReference", new XAttribute(W + "id", endnoteId)));
 
         // The textless comment anchor run carries the w:commentReference for its id (no literal text).
         if (run is { IsCommentReference: true, CommentId: { } commentRefId })
@@ -1044,6 +1046,18 @@ public static class DocxWriter
                 new XElement(W + "commentReference", new XAttribute(W + "id", commentRefId)));
 
         return BuildTextRun(run, imagesByRun);
+    }
+
+    // A textless marker run (footnote/endnote reference): carries the run's own formatting forced to
+    // superscript, then the marker element. Preserves bold/colour/size that a caller put on the marker.
+    private static XElement MarkerRun(Run run, XElement marker)
+    {
+        var r = new XElement(W + "r");
+        var rPr = BuildRunProperties(run.Formatting with { VerticalAlign = VerticalAlign.Superscript });
+        if (rPr is not null)
+            r.Add(rPr);
+        r.Add(marker);
+        return r;
     }
 
     private static XElement BuildTextRun(Run run, IReadOnlyDictionary<Run, ImagePart> imagesByRun)
@@ -1063,6 +1077,37 @@ public static class DocxWriter
         }
         return r;
     }
+
+    /// <summary>
+    /// Builds an inline OMML equation (m:oMath) from an <see cref="Equation"/>. Each fragment maps to its
+    /// OMML element: plain text → m:r/m:t, superscript → m:sSup (m:e base, m:sup exponent), fraction →
+    /// m:f (m:num numerator, m:den denominator). This is the minimal valid shape FreeW's own reader
+    /// recovers (see <see cref="DocxReader"/>).
+    /// </summary>
+    private static XElement BuildOMath(Equation equation)
+    {
+        var oMath = new XElement(M + "oMath");
+        foreach (var run in equation.Runs)
+            oMath.Add(BuildMathRun(run));
+        return oMath;
+    }
+
+    /// <summary>Builds the OMML element for a single math fragment (m:r, m:sSup or m:f).</summary>
+    private static XElement BuildMathRun(MathRun run) => run.Kind switch
+    {
+        MathRunKind.Superscript => new XElement(M + "sSup",
+            new XElement(M + "e", MathText(run.Base)),
+            new XElement(M + "sup", MathText(run.Sup))),
+        MathRunKind.Fraction => new XElement(M + "f",
+            new XElement(M + "num", MathText(run.Numerator)),
+            new XElement(M + "den", MathText(run.Denominator))),
+        _ => MathText(run.Text)
+    };
+
+    /// <summary>Builds an m:r run carrying <paramref name="text"/> in an m:t (xml:space preserved).</summary>
+    private static XElement MathText(string text) =>
+        new(M + "r",
+            new XElement(M + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), text));
 
     /// <summary>Builds an inline picture: w:drawing/wp:inline/a:graphic/pic:pic referencing the blip.</summary>
     private static XElement BuildDrawing(ImagePart part)
@@ -1094,7 +1139,7 @@ public static class DocxWriter
                         new XElement(Pic + "pic",
                             new XAttribute(XNamespace.Xmlns + "pic", Pic.NamespaceName),
                             new XElement(Pic + "nvPicPr",
-                                new XElement(Pic + "cNvPr", new XAttribute("id", 0u), new XAttribute("name", part.FileName)),
+                                new XElement(Pic + "cNvPr", new XAttribute("id", (uint)part.DrawingId), new XAttribute("name", part.FileName)),
                                 new XElement(Pic + "cNvPicPr")),
                             new XElement(Pic + "blipFill",
                                 new XElement(A + "blip", new XAttribute(R + "embed", part.RelationshipId)),
@@ -1109,6 +1154,9 @@ public static class DocxWriter
 
     private static XElement? BuildRunProperties(RunFormatting f)
     {
+        // Children MUST follow the CT_RPr (EG_RPrBase) schema sequence, otherwise Word's strict
+        // validator rejects the run: rFonts, b, i, caps, smallCaps, strike, color, sz, szCs, u, shd,
+        // vertAlign. (FreeW's own reader is order-independent, so order bugs only surface in Word.)
         var rPr = new XElement(W + "rPr");
         if (f.FontFamily is { Length: > 0 } family)
             rPr.Add(new XElement(W + "rFonts", new XAttribute(W + "ascii", family), new XAttribute(W + "hAnsi", family)));
@@ -1116,30 +1164,30 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "b"));
         if (f.Italic)
             rPr.Add(new XElement(W + "i"));
-        if (f.Strikethrough)
-            rPr.Add(new XElement(W + "strike"));
-        if (f.SmallCaps)
-            rPr.Add(new XElement(W + "smallCaps"));
         if (f.AllCaps)
             rPr.Add(new XElement(W + "caps"));
-        if (f.Underline)
-            rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
+        if (f.SmallCaps)
+            rPr.Add(new XElement(W + "smallCaps"));
+        if (f.Strikethrough)
+            rPr.Add(new XElement(W + "strike"));
         if (f.ColorHex is { Length: > 0 } color)
             rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
-        if (f.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
-            rPr.Add(new XElement(W + "vertAlign",
-                new XAttribute(W + "val", f.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript")));
-        if (f.HighlightColorHex is { Length: > 0 } highlight)
-            rPr.Add(new XElement(W + "shd",
-                new XAttribute(W + "val", "clear"),
-                new XAttribute(W + "color", "auto"),
-                new XAttribute(W + "fill", highlight.TrimStart('#'))));
         if (f.FontSizePt is { } size)
         {
             var halfPoints = PointsToHalfPoints(size);
             rPr.Add(new XElement(W + "sz", new XAttribute(W + "val", halfPoints)));
             rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val", halfPoints)));
         }
+        if (f.Underline)
+            rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
+        if (f.HighlightColorHex is { Length: > 0 } highlight)
+            rPr.Add(new XElement(W + "shd",
+                new XAttribute(W + "val", "clear"),
+                new XAttribute(W + "color", "auto"),
+                new XAttribute(W + "fill", highlight.TrimStart('#'))));
+        if (f.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
+            rPr.Add(new XElement(W + "vertAlign",
+                new XAttribute(W + "val", f.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript")));
 
         return rPr.HasElements ? rPr : null;
     }

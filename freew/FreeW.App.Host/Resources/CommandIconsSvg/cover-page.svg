@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Cover Page">
+  <rect width="32" height="32" fill="none"/>
+  <path d="M8 4.5h12l4 4V27H8z" fill="#ffffff" stroke="#242424" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M20 4.5V9h4" fill="none" stroke="#242424" stroke-width="1.1" stroke-linejoin="round"/>
+  <rect x="10.5" y="10.5" width="11" height="4" fill="#dcecff" stroke="#4472c4" stroke-width="1"/>
+  <path d="M11 18h10M11 21h7" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M16 6.8l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2L13.1 9l2-.3z" fill="#ffb900"/>
+</svg>

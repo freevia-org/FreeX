@@ -1,0 +1,62 @@
+name: FreeW CI
+
+# Dedicated build + test gate for the FreeW word processor (freew/, FreeW*.slnx).
+# Runs on PRs to main and on direct pushes to main that touch FreeW or this workflow,
+# mirroring the FreeX `ci.yml` default lane (windows-latest, .NET 10, build Release then
+# test --no-build).
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "freew/**"
+      - "FreeW.slnx"
+      - "shared/**"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/freew-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "freew/**"
+      - "FreeW.slnx"
+      - "shared/**"
+      - ".github/workflows/freew-ci.yml"
+
+concurrency:
+  group: freew-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  freew-tests:
+    name: FreeW test lane
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build (Release, 0 warnings enforced)
+        shell: pwsh
+        run: dotnet build FreeW.slnx --configuration Release
+
+      - name: Test
+        shell: pwsh
+        run: dotnet test FreeW.slnx --configuration Release --no-build

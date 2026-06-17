@@ -428,6 +428,11 @@ public static class DocxReader
             {
                 AddSimpleField(paragraph, child);
             }
+            else if (child.Name == M + "oMath")
+            {
+                // An inline equation: parse the OMML m:oMath into an Equation carried by a run.
+                paragraph.Runs.Add(Run.FromEquation(ReadOMath(child)));
+            }
             else if (child.Name == W + "bookmarkStart")
             {
                 // Capture the first non-internal bookmark name on the paragraph. Word emits an
@@ -467,6 +472,42 @@ public static class DocxReader
             paragraph.Runs.Add(new Run(text, formatting));
         }
     }
+
+    /// <summary>
+    /// Parses an inline OMML equation (m:oMath) into an <see cref="Equation"/>. Recognises m:r (plain
+    /// text), m:sSup (superscript) and m:f (fraction); any other top-level child degrades to the plain
+    /// text of its descendant m:t runs so nothing is lost or throws. Mirrors how the writer emits these
+    /// (see <c>DocxWriter.BuildOMath</c>).
+    /// </summary>
+    private static Equation ReadOMath(XElement oMath)
+    {
+        var equation = new Equation();
+        foreach (var child in oMath.Elements())
+        {
+            if (child.Name == M + "r")
+                equation.Runs.Add(MathRun.PlainText(MathTextOf(child)));
+            else if (child.Name == M + "sSup")
+                equation.Runs.Add(MathRun.Superscript(
+                    MathTextOf(child.Element(M + "e")),
+                    MathTextOf(child.Element(M + "sup"))));
+            else if (child.Name == M + "f")
+                equation.Runs.Add(MathRun.Fraction(
+                    MathTextOf(child.Element(M + "num")),
+                    MathTextOf(child.Element(M + "den"))));
+            else
+            {
+                // Unknown OMML construct: keep its text so the equation degrades rather than disappears.
+                var fallback = MathTextOf(child);
+                if (fallback.Length > 0)
+                    equation.Runs.Add(MathRun.PlainText(fallback));
+            }
+        }
+        return equation;
+    }
+
+    /// <summary>The concatenated text of all descendant m:t runs under <paramref name="element"/> (empty if null).</summary>
+    private static string MathTextOf(XElement? element) =>
+        element is null ? string.Empty : string.Concat(element.Descendants(M + "t").Select(t => t.Value));
 
     /// <summary>
     /// Maps a w:fldSimple/@w:instr to a <see cref="RunFieldKind"/> by its leading keyword, tolerating

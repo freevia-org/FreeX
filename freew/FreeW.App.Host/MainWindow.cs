@@ -3,6 +3,9 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
+using Free.Shared.Ribbon.Wpf;
+using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 
@@ -25,9 +28,21 @@ public sealed class MainWindow : Window
     private TextBlock _zoomLabel = null!;
     private FindReplaceDialog? _findDialog;
     private RibbonStateStore _stateStore = null!;
+    private BackstageView _backstage = null!;
     private Border _navPane = null!;
     private ListBox _navList = null!;
     private bool _navPaneVisible;
+
+    // The grey "desk" the Print-Layout page floats on. Frozen so it can back the editor cheaply.
+    private static readonly Brush WorkspaceBrush = CreateWorkspaceBrush();
+    private Border _workspace = null!;
+
+    private static Brush CreateWorkspaceBrush()
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
+        brush.Freeze();
+        return brush;
+    }
 
     // Read mode (distraction-free view) chrome we hide/restore, plus the saved presentation we restore.
     private Border _titleBar = null!;
@@ -40,6 +55,10 @@ public sealed class MainWindow : Window
     private Thickness _editorMarginBeforeReadMode;
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
+    // Print-Layout sizing the editor applies (page-width Width + drop shadow) which read mode neutralizes
+    // for its reading column and restores on exit, so the two view toggles don't fight over the surface.
+    private double _editorWidthBeforeReadMode = double.NaN;
+    private Effect? _editorEffectBeforeReadMode;
 
     public MainWindow()
     {
@@ -56,7 +75,8 @@ public sealed class MainWindow : Window
         var stateStore = new RibbonStateStore();
         _stateStore = stateStore;
         var commands = FreeWRibbonCommands.Build(
-            editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode);
+            editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode,
+            TogglePrintLayout, () => _editor.PrintLayoutEnabled);
         _file = new FileCommands(this, editor, UpdateTitle);
         editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
@@ -92,7 +112,16 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(navPane, Dock.Left);
         root.Children.Add(navPane);
 
-        root.Children.Add(editor);
+        // Grey "workspace" behind the editor so the Print-Layout page reads as a white sheet floating on a
+        // desk. The editor sizes/centres itself to the page width in Print-Layout mode (see
+        // DocumentView.ApplyPageChrome); the grey shows on either side. In plain/continuous mode the editor
+        // stretches to fill, so the grey is fully covered and the look is unchanged. Purely host chrome.
+        _workspace = new Border
+        {
+            Background = WorkspaceBrush,
+            Child = editor
+        };
+        root.Children.Add(_workspace);
 
         CommandBindings.Add(new CommandBinding(ApplicationCommands.New, (_, _) => _file.New()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, (_, _) => _file.Open()));
@@ -115,8 +144,32 @@ public sealed class MainWindow : Window
         UpdateCounts();
         RefreshOutline();
 
-        Content = root;
+        // Print Layout is the default view (the Word default), so seed the View > Print Layout toggle as
+        // checked to match the editor's initial PrintLayoutEnabled state.
+        _stateStore.SetChecked("freew.print-layout", _editor.PrintLayoutEnabled);
+
+        // The Word-style Backstage (File screen) is a full-window overlay above the document. It is
+        // hidden by default; the File button (title bar) shows it, a back arrow / Esc hides it. It reuses
+        // the host's existing File commands — no file IO is reimplemented in the backstage.
+        _backstage = new BackstageView(_editor, _file, new BackstageActions(
+            New: () => _file.New(),
+            Open: () => _file.Open(),
+            OpenPath: path => _file.OpenPath(path),
+            Save: () => _file.Save(),
+            SaveAs: () => _file.SaveAs(),
+            Print: Print,
+            EditProperties: OpenProperties,
+            OnClosed: () => { },
+            DataFolder: ResolveDataFolderLabel));
+
+        var shell = new Grid();
+        shell.Children.Add(root);
+        shell.Children.Add(_backstage);
+        Content = shell;
     }
+
+    // Show the Word-style Backstage (File screen) over the document.
+    private void ShowBackstage() => _backstage.Show();
 
     private Border BuildTitleBar()
     {
@@ -129,6 +182,18 @@ public sealed class MainWindow : Window
         };
 
         var bar = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+        // The Backstage entry point: opens the full-window Word-style File screen.
+        var fileButton = new Button
+        {
+            Content = "File",
+            Margin = new Thickness(0, 0, 12, 0),
+            Padding = new Thickness(12, 2, 12, 2),
+            FontWeight = FontWeights.SemiBold
+        };
+        fileButton.Click += (_, _) => ShowBackstage();
+        bar.Children.Add(fileButton);
+
         bar.Children.Add(FileButton("New", ApplicationCommands.New));
         bar.Children.Add(FileButton("Open", ApplicationCommands.Open));
         bar.Children.Add(FileButton("Save", ApplicationCommands.Save));
@@ -253,6 +318,8 @@ public sealed class MainWindow : Window
             _editorMarginBeforeReadMode = _editor.Margin;
             _editorMaxWidthBeforeReadMode = _editor.MaxWidth;
             _editorAlignmentBeforeReadMode = _editor.HorizontalAlignment;
+            _editorWidthBeforeReadMode = _editor.Width;
+            _editorEffectBeforeReadMode = _editor.Effect;
 
             _titleBar.Visibility = Visibility.Collapsed;
             _ribbon.Visibility = Visibility.Collapsed;
@@ -263,7 +330,10 @@ public sealed class MainWindow : Window
             _navPane.Visibility = Visibility.Collapsed;
 
             // A centered, comfortable reading column: cap the width and add generous breathing room.
+            // Drop any Print-Layout page sizing/shadow so the reading column owns the surface width.
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
+            _editor.Width = double.NaN;
+            _editor.Effect = null;
             _editor.MaxWidth = 760;
             _editor.Margin = new Thickness(40, 40, 40, 40);
         }
@@ -274,16 +344,28 @@ public sealed class MainWindow : Window
             _dataFolderItem.Visibility = Visibility.Visible;
             _zoomItem.Visibility = Visibility.Visible;
 
-            // Restore the editor's original full-width presentation.
+            // Restore the editor's original presentation (including any Print-Layout page sizing/shadow).
             _editor.HorizontalAlignment = _editorAlignmentBeforeReadMode;
             _editor.MaxWidth = _editorMaxWidthBeforeReadMode;
             _editor.Margin = _editorMarginBeforeReadMode;
+            _editor.Width = _editorWidthBeforeReadMode;
+            _editor.Effect = _editorEffectBeforeReadMode;
 
             // Restore the navigation pane to whatever it was before entering read mode.
             _navPane.Visibility = _navPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
         }
 
         _stateStore.SetChecked("freew.read-mode", _readMode);
+    }
+
+    // View > Print Layout: flip the editor between the Word-style page view (white page on the grey
+    // workspace, margins shown, drop shadow, page-break markers) and the plain/continuous flat view.
+    // DocumentView owns the page presentation; here we only mirror the new checked-state into the shared
+    // RibbonStateStore so the toggle button stays in sync, exactly like the read-mode / nav-pane toggles.
+    private void TogglePrintLayout()
+    {
+        var enabled = _editor.TogglePrintLayout();
+        _stateStore.SetChecked("freew.print-layout", enabled);
     }
 
     // Recompute the heading outline from the editor's committed model and repopulate the nav list.
@@ -512,10 +594,21 @@ public sealed class MainWindow : Window
         return doc;
     }
 
-    // --- Minimal ribbon renderer over the shared RibbonDefinition model ---
+    // --- Real Word-style ribbon, rendered by the shared WPF renderer ---
+    //
+    // BuildRibbon builds a flat tab strip (Home/Insert/Layout/Design/View/Mailings/Review) over the
+    // shared RibbonDefinition model. Each selected tab's body is produced by the shared
+    // Free.Shared.Ribbon.Wpf.RibbonWpfRenderer — the same renderer FreeX uses — so FreeW gets Word's
+    // visual vocabulary (Large hero buttons, Medium icon+label, Small icon-only, group panels, dividers,
+    // group-label borders and vector glyphs). Command behavior and live toggle state flow through the
+    // FreeW command registry + IRibbonStateStore exactly as before.
 
     private static UIElement BuildRibbon(RibbonDefinition definition, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
     {
+        // Install FreeW's command-id → glyph mapping so the shared renderer draws meaningful icons for
+        // freew.* ids (otherwise every button would fall back to the generic glyph).
+        FreeWRibbonIcons.Install();
+
         var tabs = new TabControl
         {
             Background = Brushes.White,
@@ -523,8 +616,23 @@ public sealed class MainWindow : Window
             MinHeight = 116
         };
 
+        // The renderer resolves its button/group styles and surface brushes via TryFindResource on the
+        // supplied resource host. Merge FreeW's ribbon styles into the TabControl so those lookups
+        // resolve (the renderer falls back gracefully for any key it can't find).
+        tabs.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("/FreeW.App.Host;component/Ribbon/FreeWRibbonResources.xaml", UriKind.Relative)
+        });
+
         foreach (var tab in definition.Tabs)
-            tabs.Items.Add(new TabItem { Header = tab.Header, Content = BuildTab(tab, registry, stateStore) });
+        {
+            var item = new TabItem
+            {
+                Header = tab.Header,
+                Content = RibbonWpfRenderer.BuildTabContent(tab, tabs, registry, stateStore)
+            };
+            tabs.Items.Add(item);
+        }
 
         if (tabs.Items.Count > 0)
             tabs.SelectedIndex = 0;
@@ -536,112 +644,5 @@ public sealed class MainWindow : Window
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = tabs
         };
-    }
-
-    private static UIElement BuildTab(RibbonTab tab, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
-    {
-        var lane = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(6, 6, 6, 4)
-        };
-
-        foreach (var group in tab.Groups)
-            lane.Children.Add(BuildGroup(group, registry, stateStore));
-
-        return new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = lane
-        };
-    }
-
-    private static UIElement BuildGroup(RibbonGroup group, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
-    {
-        var controls = new WrapPanel { MaxWidth = 220, Margin = new Thickness(4, 2, 4, 2) };
-        foreach (var control in group.Controls)
-        {
-            var element = BuildControl(control, registry, stateStore);
-            if (element is not null)
-                controls.Children.Add(element);
-        }
-
-        var header = new TextBlock
-        {
-            Text = group.Header,
-            FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 4, 0, 0)
-        };
-
-        var stack = new StackPanel();
-        stack.Children.Add(controls);
-        stack.Children.Add(header);
-
-        return new Border
-        {
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE2, 0xE2, 0xE2)),
-            BorderThickness = new Thickness(0, 0, 1, 0),
-            Padding = new Thickness(6, 4, 6, 2),
-            Child = stack
-        };
-    }
-
-    private static UIElement? BuildControl(RibbonControl control, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
-    {
-        if (control is RibbonSeparator or RibbonRowBreak)
-            return null;
-
-        var thickness = new Thickness(2);
-        var padding = new Thickness(8, 4, 8, 4);
-        registry.TryGet(control.CommandId, out var command);
-
-        void Execute() => command?.Execute(RibbonCommandContext.Empty);
-
-        if (control is RibbonComboBox combo)
-        {
-            var box = new ComboBox
-            {
-                IsEditable = true,
-                MinWidth = combo.Width ?? 100,
-                Margin = thickness,
-                IsEnabled = command is not null
-            };
-            foreach (var item in combo.Items)
-                box.Items.Add(item);
-
-            void Apply(string? value)
-            {
-                if (!string.IsNullOrWhiteSpace(value))
-                    command?.Execute(new RibbonCommandContext(new System.Collections.Generic.Dictionary<string, object?> { ["value"] = value }));
-            }
-            box.SelectionChanged += (_, _) => Apply(box.SelectedItem as string);
-            box.KeyDown += (_, e) => { if (e.Key == Key.Enter) Apply(box.Text); };
-            return box;
-        }
-
-        if (control is RibbonToggleButton)
-        {
-            var id = control.CommandId;
-            var toggle = new ToggleButton { Content = control.Label, Margin = thickness, Padding = padding, MinWidth = 60 };
-            if (command is IRibbonStatefulCommand stateful)
-                toggle.IsChecked = stateful.GetState().IsChecked;
-            // Observe the shared state store so the toggle reflects the current selection live.
-            stateStore.StateChanged += (_, e) =>
-            {
-                if (e.Id == id)
-                    toggle.IsChecked = e.State.IsChecked;
-            };
-            toggle.Click += (_, _) => Execute();
-            toggle.IsEnabled = command is not null;
-            return toggle;
-        }
-
-        var button = new Button { Content = control.Label, Margin = thickness, Padding = padding, MinWidth = 60 };
-        button.Click += (_, _) => Execute();
-        button.IsEnabled = command is not null;
-        return button;
     }
 }

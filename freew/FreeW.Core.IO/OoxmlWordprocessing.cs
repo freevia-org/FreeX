@@ -15,6 +15,12 @@ internal static class Ooxml
     /// control element (w14:checkbox) inside a content control's w:sdtPr.
     /// </summary>
     public static readonly XNamespace W14 = "http://schemas.microsoft.com/office/word/2010/wordml";
+
+    /// <summary>
+    /// The OOXML math namespace (m), used for inline equations (m:oMath / m:r / m:t / m:sSup / m:f).
+    /// Declared on the document root so inline equations serialise and parse like any other run feature.
+    /// </summary>
+    public static readonly XNamespace M = "http://schemas.openxmlformats.org/officeDocument/2006/math";
     public static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
     public static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
 

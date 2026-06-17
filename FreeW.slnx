@@ -4,6 +4,7 @@
     <Project Path="shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
     <Project Path="shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
     <Project Path="shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <Project Path="shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
   </Folder>
   <Folder Name="/freew/">
