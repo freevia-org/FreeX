@@ -254,6 +254,12 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
         registry.Register("freew.para-shading", new ParagraphShadingCommand(editor));
 
+        // Home > Paragraph (Line and Page Breaks): flow-control toggles over the selected paragraph(s).
+        // Each flips its pPr flag (keepNext/keepLines/widowControl) reversibly through the undo/redo bus.
+        registry.Register("freew.keep-with-next", new ActionCommand(() => { editor.Focus(); editor.ToggleKeepWithNext(); }));
+        registry.Register("freew.keep-lines", new ActionCommand(() => { editor.Focus(); editor.ToggleKeepLinesTogether(); }));
+        registry.Register("freew.widow-control", new ActionCommand(() => { editor.Focus(); editor.ToggleWidowControl(); }));
+
         // Layout > Sort: open a small dialog (A→Z / Z→A + case-sensitive option) and sort the selected
         // paragraphs in place through the view's undo/redo bus.
         registry.Register("freew.sort", new SortCommand(editor));

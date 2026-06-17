@@ -67,6 +67,9 @@ internal static class FreeWRibbon
                     g.Button("freew.paragraph-dialog", "Paragraph…");
                     g.Button("freew.para-border", "Border");
                     g.Button("freew.para-shading", "Shading");
+                    g.Button("freew.keep-with-next", "Keep with Next");
+                    g.Button("freew.keep-lines", "Keep Lines Together");
+                    g.Button("freew.widow-control", "Widow/Orphan Control");
                 });
                 tab.Group("styles", "Styles", "S", 70, g =>
                 {

@@ -117,6 +117,36 @@ public sealed record ParagraphFormatting
     public bool PageBreakBefore { get; init; }
 
     /// <summary>
+    /// When true, this paragraph is kept on the same page as the one that follows it
+    /// (pPr/w:keepNext). Defaults to false so existing paragraphs are unaffected. Round-trips to docx
+    /// as the <c>w:keepNext</c> toggle, mirroring <see cref="PageBreakBefore"/>; the editor maps it to
+    /// WPF <c>Paragraph.KeepWithNext</c>.
+    /// </summary>
+    public bool KeepWithNext { get; init; }
+
+    /// <summary>
+    /// When true, all lines of this paragraph are kept together on a single page rather than split
+    /// across a page boundary (pPr/w:keepLines). Defaults to false so existing paragraphs are
+    /// unaffected. Round-trips to docx as the <c>w:keepLines</c> toggle, mirroring
+    /// <see cref="PageBreakBefore"/>; the editor maps it to WPF <c>Paragraph.KeepTogether</c>.
+    /// </summary>
+    public bool KeepLinesTogether { get; init; }
+
+    /// <summary>
+    /// When true, widow/orphan control is enabled for this paragraph (pPr/w:widowControl), preventing a
+    /// single first/last line from being stranded alone on a page. Round-trips to docx as the
+    /// <c>w:widowControl</c> toggle, mirroring <see cref="PageBreakBefore"/>.
+    /// <para>
+    /// Defaults to <c>false</c>. Note: real Word enables widow control by default; FreeW intentionally
+    /// keeps it off by default so that existing documents/round-trips are unchanged (a paragraph with no
+    /// explicit <c>w:widowControl</c> reads back as false here, not Word's implicit on). The WPF
+    /// FlowDocument has no widow-control property, so this flag is carried through the model/docx only
+    /// (preserved across an editor edit/commit cycle via the paragraph's Tag).
+    /// </para>
+    /// </summary>
+    public bool WidowControl { get; init; }
+
+    /// <summary>
     /// Paragraph shading (background fill) as an RRGGBB hex (e.g. <c>"#FFFF00"</c>). Null means no
     /// shading. Round-trips to docx as paragraph shading (<c>pPr/w:shd w:fill</c>), mirroring run
     /// <see cref="RunFormatting.HighlightColorHex"/>.
