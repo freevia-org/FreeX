@@ -394,9 +394,16 @@ public static class RibbonIconDefinitions
         map[RibbonCommandIconKind.View] = window;
 
         // ---- Paste (DrawClipboard) ----
+        // The Office/FreeX Paste glyph: a clipboard (body + clip tab at top) with a pasted page
+        // peeking out of the lower-right carrying two content lines. Matches FreeX's paste.svg shape
+        // (clipboard + page + lines) so FreeW reads as the same Paste icon.
         Add(RibbonCommandIconKind.Paste,
-            Rectangle(6, 6, 13, 15, radius: 1.5),
-            Rectangle(9, 3, 7, 5, radius: 1.5));
+            Rectangle(4, 5, 12, 15, radius: 1.5),
+            Rectangle(7, 3, 6, 4, radius: 1),
+            FilledRectangle(8.5, 2, 3, 2),
+            Rectangle(11, 11, 9, 10, radius: 1),
+            Line(13, 15, 18, 15, 1.1),
+            Line(13, 18, 18, 18, 1.1));
 
         // ---- Fill (DrawFill) ----
         Add(RibbonCommandIconKind.Fill,

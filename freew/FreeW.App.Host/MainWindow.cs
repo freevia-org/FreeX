@@ -59,6 +59,13 @@ public sealed class MainWindow : Window
     private Border _titleBar = null!;
     private UIElement _ribbon = null!;
     private TabControl _ribbonTabs = null!;
+
+    // File ribbon tab (Word-style Backstage entry): the first tab, which opens the Backstage on selection
+    // and reverts to the previously-active content tab. _lastRibbonTabIndex tracks that tab; the suppress
+    // flag guards the programmatic revert from re-entering the SelectionChanged handler.
+    private TabItem _fileTab = null!;
+    private int _lastRibbonTabIndex = 1;
+    private bool _suppressFileTabRevert;
     private Border _status = null!;
     private TextBlock _dataFolderText = null!;
     private FrameworkElement _dataFolderItem = null!;
@@ -250,10 +257,11 @@ public sealed class MainWindow : Window
     // Show the Word-style Backstage (File screen) over the document.
     private void ShowBackstage() => _backstage.Show();
 
-    // The single integrated title bar (#2): the blue command strip IS the window caption. It carries the
-    // app-icon glyph, the File / New / Open / Save / Recent / Properties quick buttons (flat shared style),
-    // the centred document title, and the embedded minimize / maximize-restore / close window buttons.
-    // The empty space between the quick buttons and the window buttons is the WindowChrome drag region.
+    // The single integrated title bar (#2): the blue command strip IS the window caption. Like FreeX, it
+    // carries the app-icon glyph, a Quick Access Toolbar (Save / Undo / Redo small flat icon buttons), the
+    // centred document title, and the embedded minimize / maximize-restore / close window buttons. The empty
+    // space between the QAT and the window buttons is the WindowChrome drag region. File / New / Open /
+    // Recent / Properties moved into the File ribbon tab's Word-style Backstage.
     private Border BuildTitleBar()
     {
         var bar = new DockPanel { LastChildFill = true };
@@ -265,7 +273,8 @@ public sealed class MainWindow : Window
             Height = 22,
             Margin = new Thickness(2, 0, 8, 0),
             VerticalAlignment = VerticalAlignment.Center,
-            Background = new SolidColorBrush(Color.FromRgb(0x1F, 0x43, 0x77)),
+            // FreeX-family palette: a teal app badge on the deep-navy title bar (FreeXAccentBrush #0F6D8C).
+            Background = new SolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C)),
             BorderBrush = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(2),
@@ -301,33 +310,48 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(minimizeButton, Dock.Right);
         bar.Children.Add(minimizeButton);
 
-        // ── Quick command buttons (flat shared style), docked left after the icon. ──
-        Button QuickBtn(string label, Action onClick, bool semiBold = false)
+        // ── Quick Access Toolbar (Save / Undo / Redo), docked left after the icon, mirroring FreeX's
+        //    title-bar QAT. Small flat icon buttons (white vector glyphs on the blue caption) using the
+        //    shared chrome flat-button style; each is hit-test-visible so clicks land while WindowChrome
+        //    owns the caption. Save routes to the file command; Undo/Redo run WPF's editing commands
+        //    against the focused RichTextBox editing surface (the same inline undo the keyboard uses).
+        Button QatButton(RibbonCommandIconKind kind, string tip, Action onClick)
         {
             var button = new Button
             {
-                Content = label,
                 Style = (Style)FindResource("ChromeFlatButtonStyle"),
-                VerticalAlignment = VerticalAlignment.Stretch,
-                Margin = new Thickness(0, 4, 2, 4),
-                FontWeight = semiBold ? FontWeights.SemiBold : FontWeights.Normal
+                VerticalAlignment = VerticalAlignment.Center,
+                Width = 26,
+                Height = 22,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, 0, 1, 0),
+                ToolTip = tip,
+                Content = new RibbonIcon
+                {
+                    Kind = kind,
+                    IconSize = 16,
+                    Foreground = Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
             };
+            AutomationProperties.SetName(button, tip);
             WindowChrome.SetIsHitTestVisibleInChrome(button, true);
             button.Click += (_, _) => onClick();
             return button;
         }
 
-        var quickButtons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Stretch };
-        quickButtons.Children.Add(QuickBtn("File", ShowBackstage, semiBold: true));
-        quickButtons.Children.Add(QuickBtn("New", () => _file.New()));
-        quickButtons.Children.Add(QuickBtn("Open", () => _file.Open()));
-        quickButtons.Children.Add(QuickBtn("Save", () => _file.Save()));
-        var recentButton = QuickBtn("Recent ▾", () => { });
-        recentButton.Click += (_, _) => ShowRecentMenu(recentButton);
-        quickButtons.Children.Add(recentButton);
-        quickButtons.Children.Add(QuickBtn("Properties", OpenProperties));
-        DockPanel.SetDock(quickButtons, Dock.Left);
-        bar.Children.Add(quickButtons);
+        var qat = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 8, 0)
+        };
+        qat.Children.Add(QatButton(RibbonCommandIconKind.Save, "Save (Ctrl+S)", () => _file.Save()));
+        qat.Children.Add(QatButton(RibbonCommandIconKind.Undo, "Undo (Ctrl+Z)", Undo));
+        qat.Children.Add(QatButton(RibbonCommandIconKind.Redo, "Redo (Ctrl+Y)", Redo));
+        DockPanel.SetDock(qat, Dock.Left);
+        bar.Children.Add(qat);
 
         // ── Centred document title fills the remaining (draggable) caption space. ──
         _titleText = new TextBlock
@@ -343,7 +367,8 @@ public sealed class MainWindow : Window
 
         return new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A)),
+            // FreeX title-bar brush (#17324D — deep navy), matching FreeXTitleBarBrush.
+            Background = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
             Padding = new Thickness(8, 0, 0, 0),
             Height = 34,
             Child = bar
@@ -511,7 +536,8 @@ public sealed class MainWindow : Window
 
         _status = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A)),
+            // FreeX status-bar surface (#17324D), matching the title bar (FreeXStatusSurfaceBrush).
+            Background = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
             MinHeight = 26,
             Child = grid
         };
@@ -792,6 +818,22 @@ public sealed class MainWindow : Window
         return panel;
     }
 
+    // QAT Undo / Redo: focus the editing surface and run its built-in (RichTextBox) undo/redo, which is
+    // the same inline history Ctrl+Z / Ctrl+Y drive. Guarded by CanUndo/CanRedo so a no-op stays a no-op.
+    private void Undo()
+    {
+        _editor.Focus();
+        if (_editor.CanUndo)
+            _editor.Undo();
+    }
+
+    private void Redo()
+    {
+        _editor.Focus();
+        if (_editor.CanRedo)
+            _editor.Redo();
+    }
+
     private void Print()
     {
         var dialog = new PrintDialog();
@@ -833,27 +875,6 @@ public sealed class MainWindow : Window
         var dialog = new PropertiesDialog(this, _editor.Model.Properties);
         if (dialog.ShowDialog() == true)
             _file.MarkDirty();
-    }
-
-    private void ShowRecentMenu(Button anchor)
-    {
-        var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
-        var entries = _file.RecentEntries;
-        if (entries.Count == 0)
-        {
-            menu.Items.Add(new MenuItem { Header = "(no recent files)", IsEnabled = false });
-        }
-        else
-        {
-            foreach (var entry in entries.Take(15))
-            {
-                var path = entry.Path;
-                var item = new MenuItem { Header = System.IO.Path.GetFileName(path), ToolTip = path };
-                item.Click += (_, _) => _file.OpenPath(path);
-                menu.Items.Add(item);
-            }
-        }
-        menu.IsOpen = true;
     }
 
     // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.
@@ -926,6 +947,18 @@ public sealed class MainWindow : Window
             Source = new Uri("/FreeW.App.Host;component/Ribbon/FreeWRibbonResources.xaml", UriKind.Relative)
         });
 
+        // ── File tab (Word-style): the FIRST ribbon tab, rendered as an accent-coloured pill. Selecting it
+        //    opens the Backstage overlay rather than swapping the ribbon body to an empty tab. Like FreeX,
+        //    the File tab never *stays* selected: the SelectionChanged handler shows the Backstage and
+        //    immediately reverts the selection to the previously-active content tab (index 1 = Home).
+        _fileTab = new TabItem
+        {
+            Header = "File",
+            Style = BuildFileTabStyle(),
+            Content = null // never shown — selecting it routes to the Backstage instead
+        };
+        tabs.Items.Add(_fileTab);
+
         foreach (var tab in definition.Tabs)
         {
             var content = RibbonWpfRenderer.BuildTabContent(tab, tabs, registry, stateStore);
@@ -948,8 +981,36 @@ public sealed class MainWindow : Window
             tabs.Items.Add(item);
         }
 
-        if (tabs.Items.Count > 0)
-            tabs.SelectedIndex = 0;
+        // Start on Home (index 1; index 0 is the File tab). Remember it as the last "real" tab so File
+        // selection can revert to it.
+        if (tabs.Items.Count > 1)
+        {
+            tabs.SelectedIndex = 1;
+            _lastRibbonTabIndex = 1;
+        }
+
+        // File-tab routing: when the File pill is picked, open the Backstage and bounce the selection back
+        // to the previously-active content tab so the ribbon body never goes blank and File never "sticks".
+        tabs.SelectionChanged += (sender, e) =>
+        {
+            if (!ReferenceEquals(e.OriginalSource, tabs))
+                return; // ignore selection changes bubbling up from inner controls (combos, lists)
+
+            if (_suppressFileTabRevert)
+                return;
+
+            if (ReferenceEquals(tabs.SelectedItem, _fileTab))
+            {
+                _suppressFileTabRevert = true;
+                tabs.SelectedIndex = _lastRibbonTabIndex; // revert immediately so File never stays selected
+                _suppressFileTabRevert = false;
+                ShowBackstage();
+            }
+            else
+            {
+                _lastRibbonTabIndex = tabs.SelectedIndex;
+            }
+        };
 
         var border = new Border
         {
@@ -959,6 +1020,50 @@ public sealed class MainWindow : Window
             Child = tabs
         };
         return (border, tabs);
+    }
+
+    // The accent-coloured File tab style (Word's blue File button look): a solid accent fill with white
+    // text, a darker hover/press, comfortable padding. Distinct from the flat content-tab headers so it
+    // reads as the Backstage entry point. Authored in code to keep parity with the code-only shell.
+    private static Style BuildFileTabStyle()
+    {
+        // FreeX accent (#0F6D8C teal) with a darker hover, so the File pill reads as the accent-coloured
+        // Backstage entry against the deep-navy title bar.
+        var accent = Freeze(Color.FromRgb(0x0F, 0x6D, 0x8C));
+        var accentHover = Freeze(Color.FromRgb(0x0B, 0x55, 0x6E));
+
+        var style = new Style(typeof(TabItem));
+        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(16, 6, 16, 6)));
+        style.Setters.Add(new Setter(Control.FontSizeProperty, 12.0));
+        style.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+        style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
+        style.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0, 0, 2, 0)));
+        style.Setters.Add(new Setter(UIElement.FocusableProperty, true));
+
+        var border = new FrameworkElementFactory(typeof(Border), "FileTabBorder");
+        border.SetValue(Border.BackgroundProperty, accent);
+        border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+        border.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
+
+        var content = new FrameworkElementFactory(typeof(ContentPresenter));
+        content.SetValue(ContentPresenter.ContentSourceProperty, "Header");
+        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        border.AppendChild(content);
+
+        var template = new ControlTemplate(typeof(TabItem)) { VisualTree = border };
+        var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        hover.Setters.Add(new Setter(Border.BackgroundProperty, accentHover, "FileTabBorder"));
+        template.Triggers.Add(hover);
+        style.Setters.Add(new Setter(Control.TemplateProperty, template));
+        return style;
+    }
+
+    private static Brush Freeze(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
 
     // What of a group's original rendered controls to drop before injecting a gallery.

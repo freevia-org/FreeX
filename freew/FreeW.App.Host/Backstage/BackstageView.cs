@@ -22,15 +22,17 @@ namespace FreeW.App.Host.Backstage;
 /// </summary>
 internal sealed class BackstageView : UserControl
 {
-    // Word's File-screen accent and the darker selection/hover bands, matching the app's title bar.
-    private static readonly Color AccentColor = Color.FromRgb(0x2B, 0x57, 0x9A);
-    private static readonly Color AccentSelectedColor = Color.FromRgb(0x1F, 0x43, 0x77);
-    private static readonly Color AccentHoverColor = Color.FromRgb(0x3C, 0x68, 0xAB);
-    private static readonly Color SeparatorColor = Color.FromRgb(0x4A, 0x6E, 0xA8);
+    // Word's File-screen rail + the darker selection/hover bands, matching the app's FreeX-navy title bar
+    // (#17324D). Selection/hover are darker shades of the same navy.
+    private static readonly Color AccentColor = Color.FromRgb(0x17, 0x32, 0x4D);
+    private static readonly Color AccentSelectedColor = Color.FromRgb(0x0F, 0x24, 0x38);
+    private static readonly Color AccentHoverColor = Color.FromRgb(0x26, 0x4B, 0x6B);
+    private static readonly Color SeparatorColor = Color.FromRgb(0x36, 0x55, 0x73);
 
     private static readonly Brush HeadingBrush = Freeze(Color.FromRgb(0x33, 0x33, 0x33));
     private static readonly Brush MutedBrush = Freeze(Color.FromRgb(0x70, 0x70, 0x70));
-    private static readonly Brush LinkBrush = Freeze(AccentColor);
+    // The teal FreeX accent (#0F6D8C) for in-content links, matching the ribbon accent.
+    private static readonly Brush LinkBrush = Freeze(Color.FromRgb(0x0F, 0x6D, 0x8C));
     private static readonly Brush TileBorderBrush = Freeze(Color.FromRgb(0xD0, 0xD7, 0xE5));
 
     private readonly DocumentView _editor;

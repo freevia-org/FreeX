@@ -50,13 +50,16 @@ static int Run(string outDir, string tabArg, double w, double h)
         win.UpdateLayout();
         win.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
 
-        // "backstage" mode: click the title-bar File button to open the Backstage overlay, then capture.
+        // "backstage" mode: select the FIRST ribbon tab (the Word-style File tab) to open the Backstage
+        // overlay, then capture. The File tab routes to ShowBackstage() and bounces selection back, so we
+        // set IsSelected on the first TabItem to trigger that path.
         if (backstageMode)
         {
-            var file = FindButtonByText(win, "File");
-            if (file is not null)
+            var tabs0 = FindTabControl(win);
+            var fileTab = tabs0?.Items.Count > 0 ? tabs0.Items[0] as TabItem : null;
+            if (fileTab is not null)
             {
-                file.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                fileTab.IsSelected = true;
                 win.UpdateLayout();
             }
             // Let the compositor paint the just-shown overlay (RibbonIcon glyphs build on Loaded too).
@@ -67,7 +70,7 @@ static int Run(string outDir, string tabArg, double w, double h)
             var enc0 = new PngBitmapEncoder();
             enc0.Frames.Add(BitmapFrame.Create(bmp0));
             using (var fs0 = File.Create(p0)) enc0.Save(fs0);
-            Console.WriteLine($"captured {p0}{(file is null ? " (File button not found!)" : "")}");
+            Console.WriteLine($"captured {p0}{(fileTab is null ? " (File tab not found!)" : "")}");
             win.Close();
             return 0;
         }
@@ -125,22 +128,6 @@ static TabControl? FindTabControl(DependencyObject root)
     for (int i = 0; i < n; i++)
     {
         var found = FindTabControl(VisualTreeHelper.GetChild(root, i));
-        if (found is not null) return found;
-    }
-    return null;
-}
-
-static System.Windows.Controls.Button? FindButtonByText(DependencyObject root, string text)
-{
-    if (root is System.Windows.Controls.Button b)
-    {
-        var s = b.Content as string ?? (b.Content as System.Windows.Controls.TextBlock)?.Text;
-        if (string.Equals(s, text, StringComparison.OrdinalIgnoreCase)) return b;
-    }
-    int n = VisualTreeHelper.GetChildrenCount(root);
-    for (int i = 0; i < n; i++)
-    {
-        var found = FindButtonByText(VisualTreeHelper.GetChild(root, i), text);
         if (found is not null) return found;
     }
     return null;
