@@ -131,6 +131,15 @@ public sealed class AvaloniaChartRenderer
             case SeriesGeometryKind.PieSlices:
                 RenderPie(canvas, series);
                 break;
+            case SeriesGeometryKind.Bubbles:
+                RenderBubbles(canvas, series);
+                break;
+            case SeriesGeometryKind.RadarPolyline:
+                RenderRadar(canvas, series);
+                break;
+            case SeriesGeometryKind.StockBars:
+                RenderStock(canvas, series);
+                break;
         }
     }
 
@@ -202,6 +211,109 @@ public sealed class AvaloniaChartRenderer
                 Data = BuildSliceGeometry(slice.Arc),
             };
             canvas.Children.Add(path);
+        }
+    }
+
+    private void RenderBubbles(Canvas canvas, SeriesLayout series)
+    {
+        // Excel draws bubbles as semi-transparent filled circles sized by the size dimension.
+        var fill = SeriesFill(series.SeriesIndex, alpha: 0x99);
+        var stroke = SeriesStroke(series.SeriesIndex);
+        foreach (var bubble in series.Bubbles)
+        {
+            var radius = Math.Max(1, bubble.Radius);
+            var marker = new Ellipse
+            {
+                Width = radius * 2,
+                Height = radius * 2,
+                Fill = fill,
+                Stroke = stroke,
+                StrokeThickness = 1,
+            };
+            Canvas.SetLeft(marker, bubble.Center.X - radius);
+            Canvas.SetTop(marker, bubble.Center.Y - radius);
+            canvas.Children.Add(marker);
+        }
+    }
+
+    private void RenderRadar(Canvas canvas, SeriesLayout series)
+    {
+        if (series.Points.Count == 0)
+            return;
+
+        var fill = SeriesFill(series.SeriesIndex, alpha: 0x40);
+        var stroke = SeriesStroke(series.SeriesIndex);
+
+        // Closed polygon connecting the category points back to the first point, with a light fill.
+        var points = new Points();
+        foreach (var p in series.Points)
+            points.Add(new AvaloniaPoint(p.Position.X, p.Position.Y));
+
+        canvas.Children.Add(new AvaloniaPolygon
+        {
+            Fill = fill,
+            Stroke = stroke,
+            StrokeThickness = 2,
+            StrokeJoin = PenLineJoin.Round,
+            Points = points,
+        });
+
+        AddMarkers(canvas, series.Points, SeriesFill(series.SeriesIndex), stroke);
+    }
+
+    private void RenderStock(Canvas canvas, SeriesLayout series)
+    {
+        var stroke = SeriesStroke(series.SeriesIndex);
+        var upFill = SolidBrush(0xFF, 0xFF, 0xFF);
+        var downFill = stroke;
+        const double tickLength = 4;
+
+        foreach (var element in series.StockElements)
+        {
+            // High-low vertical line for every category.
+            canvas.Children.Add(new Line
+            {
+                StartPoint = new AvaloniaPoint(element.X, element.HighY),
+                EndPoint = new AvaloniaPoint(element.X, element.LowY),
+                Stroke = stroke,
+                StrokeThickness = 1,
+            });
+
+            if (element.HasOpen)
+            {
+                // Candlestick: a box spanning open..close, white when up and filled when down.
+                var top = Math.Min(element.OpenY, element.CloseY);
+                var bottom = Math.Max(element.OpenY, element.CloseY);
+                var box = new AvaloniaRectangle
+                {
+                    Width = tickLength * 2,
+                    Height = Math.Max(1, bottom - top),
+                    Fill = element.IsUp ? upFill : downFill,
+                    Stroke = stroke,
+                    StrokeThickness = 1,
+                };
+                Canvas.SetLeft(box, element.X - tickLength);
+                Canvas.SetTop(box, top);
+                canvas.Children.Add(box);
+            }
+            else
+            {
+                // High-low-close: a left open tick and a right close tick on the vertical line.
+                canvas.Children.Add(new Line
+                {
+                    StartPoint = new AvaloniaPoint(element.X - tickLength, element.OpenY),
+                    EndPoint = new AvaloniaPoint(element.X, element.OpenY),
+                    Stroke = stroke,
+                    StrokeThickness = 1,
+                });
+                canvas.Children.Add(new Line
+                {
+                    StartPoint = new AvaloniaPoint(element.X, element.CloseY),
+                    EndPoint = new AvaloniaPoint(element.X + tickLength, element.CloseY),
+                    Stroke = stroke,
+                    StrokeThickness = 1,
+                });
+            }
         }
     }
 
