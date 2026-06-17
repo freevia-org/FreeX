@@ -159,13 +159,12 @@ public sealed partial class MainWindowSourceHygieneTests
     public void ScreenshotTour_ProvidesHomeBordersDropdownEvidenceHook()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
-        var xaml = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "MainWindow.xaml");
 
-        xaml.Should().Contain("x:Name=\"BordersMenuButton\"");
         source.Should().Contain("FREEX_HOME_BORDERS_DROPDOWN_TOUR");
         source.Should().Contain("CaptureHomeBordersDropdownTourAsync");
         source.Should().Contain("home-borders-dropdown-tour");
-        source.Should().Contain("BordersMenuButton.ContextMenu");
+        source.Should().Contain("FindRenderedRibbonControl(\"Borders\") as Button");
+        source.Should().Contain("bordersButton.ContextMenu");
         source.Should().Contain("HomeBordersDropdownTourManifest");
         source.Should().Contain("interactive:home-borders:opened");
         source.Should().Contain("RenderTargetBitmap-context-menu");

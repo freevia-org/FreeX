@@ -11,18 +11,6 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     private readonly System.Windows.Controls.StackPanel HomeRibbonPanel = new();
-    private readonly System.Windows.Controls.Primitives.ToggleButton UnderlineButton = new();
-    private readonly System.Windows.Controls.Button BordersMenuButton = new();
-    private readonly System.Windows.Controls.Button OrientationPickerButton = new();
-    private readonly System.Windows.Controls.ContextMenu FormatTableGalleryMenu = new();
-    private readonly System.Windows.Controls.Button ShapesBtn = new();
-    private readonly System.Windows.Controls.ComboBox PageLayoutScaleWidthBox = new();
-    private readonly System.Windows.Controls.ComboBox PageLayoutScaleHeightBox = new();
-    private readonly System.Windows.Controls.ComboBox PageLayoutScalePercentBox = new();
-    private readonly System.Windows.Controls.MenuItem PictureFormatCropMenuItem = new();
-    private readonly System.Windows.Controls.MenuItem PictureFormatResetCropMenuItem = new();
-    private readonly System.Windows.Controls.ContextMenu TableDesignStyleGalleryMenu = new();
-    private readonly AutomationInvokeButton HelpOnlineButton = new();
 
     /// <summary>Backplane controls that carry a ribbon CommandName, keyed by it.</summary>
     private readonly Dictionary<string, Control> RibbonBackplaneControls = new(System.StringComparer.Ordinal);
@@ -41,21 +29,12 @@ public partial class MainWindow
         RibbonBackplaneControlNames["Font Size"] = "FontSizeBox";
         RibbonBackplaneControlNames["Bold"] = "BoldButton";
         RibbonBackplaneControlNames["Italic"] = "ItalicButton";
-        try { RegisterName("UnderlineButton", UnderlineButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(UnderlineButton, "Underline");
-        RibbonBackplaneControls["Underline"] = UnderlineButton;
         RibbonBackplaneControlNames["Underline"] = "UnderlineButton";
         RibbonBackplaneControlNames["Strikethrough"] = "StrikeButton";
-        try { RegisterName("BordersMenuButton", BordersMenuButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(BordersMenuButton, "Borders");
-        RibbonBackplaneControls["Borders"] = BordersMenuButton;
         RibbonBackplaneControlNames["Borders"] = "BordersMenuButton";
         RibbonBackplaneControlNames["Top Align"] = "AlignTopBtn";
         RibbonBackplaneControlNames["Middle Align"] = "AlignMiddleBtn";
         RibbonBackplaneControlNames["Bottom Align"] = "AlignBottomBtn";
-        try { RegisterName("OrientationPickerButton", OrientationPickerButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(OrientationPickerButton, "Orientation");
-        RibbonBackplaneControls["Orientation"] = OrientationPickerButton;
         RibbonBackplaneControlNames["Orientation"] = "OrientationPickerButton";
         RibbonBackplaneControlNames["Wrap Text"] = "WrapTextBtn";
         RibbonBackplaneControlNames["Align Left"] = "AlignLeftBtn";
@@ -64,22 +43,12 @@ public partial class MainWindow
         // Number Format combo is driven through the rendered declarative combo as well; keep only the
         // x:Name mapping for FindName resolution.
         RibbonBackplaneControlNames["Number Format"] = "NumberFormatBox";
-        try { RegisterName("FormatTableGalleryMenu", FormatTableGalleryMenu); } catch (System.ArgumentException) { }
-        try { RegisterName("ShapesBtn", ShapesBtn); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ShapesBtn, "Shapes");
-        RibbonBackplaneControls["Shapes"] = ShapesBtn;
         RibbonBackplaneControlNames["Shapes"] = "ShapesBtn";
-        try { RegisterName("PageLayoutScaleWidthBox", PageLayoutScaleWidthBox); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(PageLayoutScaleWidthBox, "Scale Width");
-        RibbonBackplaneControls["Scale Width"] = PageLayoutScaleWidthBox;
+        // Page Layout Scale-to-Fit combos are driven through the rendered declarative combos
+        // (populated + wired by PopulateAndWireRenderedPageLayoutCombos); only the x:Name mapping
+        // survives so RepointBackplaneNamesToRenderedControls can resolve FindName to the on-screen control.
         RibbonBackplaneControlNames["Scale Width"] = "PageLayoutScaleWidthBox";
-        try { RegisterName("PageLayoutScaleHeightBox", PageLayoutScaleHeightBox); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(PageLayoutScaleHeightBox, "Scale Height");
-        RibbonBackplaneControls["Scale Height"] = PageLayoutScaleHeightBox;
         RibbonBackplaneControlNames["Scale Height"] = "PageLayoutScaleHeightBox";
-        try { RegisterName("PageLayoutScalePercentBox", PageLayoutScalePercentBox); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(PageLayoutScalePercentBox, "Scale Percent");
-        RibbonBackplaneControls["Scale Percent"] = PageLayoutScalePercentBox;
         RibbonBackplaneControlNames["Scale Percent"] = "PageLayoutScalePercentBox";
         RibbonBackplaneControlNames["View Gridlines"] = "PageLayoutViewGridlinesChk";
         RibbonBackplaneControlNames["Print Gridlines"] = "PageLayoutPrintGridlinesChk";
@@ -116,13 +85,7 @@ public partial class MainWindow
         RibbonBackplaneControlNames["Shape Gradient"] = "ShapeFormatGradientButton";
         RibbonBackplaneControlNames["Shape Effects"] = "ShapeFormatEffectsButton";
         RibbonBackplaneControlNames["Crop Picture"] = "PictureFormatCropButton";
-        try { RegisterName("PictureFormatCropMenuItem", PictureFormatCropMenuItem); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(PictureFormatCropMenuItem, "Crop");
-        RibbonBackplaneControls["Crop"] = PictureFormatCropMenuItem;
         RibbonBackplaneControlNames["Crop"] = "PictureFormatCropMenuItem";
-        try { RegisterName("PictureFormatResetCropMenuItem", PictureFormatResetCropMenuItem); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(PictureFormatResetCropMenuItem, "Reset Crop");
-        RibbonBackplaneControls["Reset Crop"] = PictureFormatResetCropMenuItem;
         RibbonBackplaneControlNames["Reset Crop"] = "PictureFormatResetCropMenuItem";
         RibbonBackplaneControlNames["Total Row"] = "TableDesignTotalRowBtn";
         RibbonBackplaneControlNames["First Column"] = "TableDesignFirstColumnBtn";
@@ -130,10 +93,6 @@ public partial class MainWindow
         RibbonBackplaneControlNames["Banded Rows"] = "TableDesignBandedRowsBtn";
         RibbonBackplaneControlNames["Banded Columns"] = "TableDesignBandedColumnsBtn";
         RibbonBackplaneControlNames["Filter Button"] = "TableDesignFilterButtonBtn";
-        try { RegisterName("TableDesignStyleGalleryMenu", TableDesignStyleGalleryMenu); } catch (System.ArgumentException) { }
-        try { RegisterName("HelpOnlineButton", HelpOnlineButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(HelpOnlineButton, "Help Online");
-        RibbonBackplaneControls["Help Online"] = HelpOnlineButton;
         RibbonBackplaneControlNames["Help Online"] = "HelpOnlineButton";
     }
 }

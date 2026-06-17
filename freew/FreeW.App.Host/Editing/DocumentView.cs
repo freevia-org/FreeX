@@ -2332,6 +2332,9 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
                 break;
+            case WpfRun { Tag: PageBreakMarker }:
+                modelParagraph.Runs.Add(ModelRun.PageBreak());
+                break;
             case WpfRun { Tag: EndnoteMarker endnoteMarker }:
                 modelParagraph.Runs.Add(ModelRun.EndnoteReference(endnoteMarker.EndnoteId));
                 break;
@@ -2696,16 +2699,40 @@ public sealed class DocumentView : RichTextBox
         var paraFmt = Resolve(paragraph, document);
         var wpf = new WpfParagraph
         {
+            // Right-to-left paragraph direction (w:bidi). WPF lays the inline content out RTL and, because
+            // TextAlignment is interpreted relative to FlowDirection, the model's default (Left = leading)
+            // alignment lands at the right edge — matching Word's default for a bidi paragraph.
+            FlowDirection = paraFmt.Rtl ? System.Windows.FlowDirection.RightToLeft : System.Windows.FlowDirection.LeftToRight,
+            // Start this paragraph on a new page in the paginator (print/preview) when it forces a break
+            // before it (w:pageBreakBefore) or carries a manual page-break run (w:br type=page). The
+            // editor's continuous RichTextBox ignores BreakPageBefore, so this only affects the paginated
+            // output — which previously honoured neither, leaving FreeW badly under-paginated vs Word.
+            BreakPageBefore = paraFmt.PageBreakBefore || paragraph.Runs.Any(r => r.IsPageBreak),
             TextAlignment = ToWpfAlignment(paraFmt.Alignment),
+            // WPF's Block.Margin (unlike FrameworkElement.Margin) rejects negative components with an
+            // ArgumentException, so clamp at >= 0. Real docs do carry negative indents/spacing (e.g. a
+            // negative right indent pulling into the margin); WPF cannot represent that as a block margin,
+            // so we render it as 0 rather than crash. The model keeps the original value, so docx
+            // round-trip is unaffected; only the live render clamps. (TextIndent below may stay negative —
+            // a hanging first-line indent is valid there.)
             Margin = new Thickness(
-                paraFmt.IndentLeftPt * PxPerPoint,
-                paraFmt.SpaceBeforePt * PxPerPoint,
-                paraFmt.IndentRightPt * PxPerPoint,
-                paraFmt.SpaceAfterPt * PxPerPoint),
+                Math.Max(0, paraFmt.IndentLeftPt * PxPerPoint),
+                Math.Max(0, paraFmt.SpaceBeforePt * PxPerPoint),
+                Math.Max(0, paraFmt.IndentRightPt * PxPerPoint),
+                Math.Max(0, paraFmt.SpaceAfterPt * PxPerPoint)),
             TextIndent = paraFmt.FirstLineIndentPt * PxPerPoint,
-            LineHeight = paraFmt.LineSpacing > 0
-                ? paraFmt.LineSpacing * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
-                : double.NaN,
+            // Line spacing. For the Multiple rule, LineHeight = multiple x font size. For Exact/AtLeast the
+            // model carries an absolute height in points; WPF only does absolute LineHeight, so both map to
+            // that height — and Exact additionally forces BlockLineHeight so the height is honoured even for
+            // taller content (AtLeast is approximated as exact, the closest FlowDocument behaviour).
+            LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple
+                ? (paraFmt.LineSpacing > 0
+                    ? paraFmt.LineSpacing * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
+                    : double.NaN)
+                : (paraFmt.LineHeightPt > 0 ? paraFmt.LineHeightPt * PxPerPoint : double.NaN),
+            LineStackingStrategy = paraFmt.LineRule == LineSpacingRule.Exact
+                ? LineStackingStrategy.BlockLineHeight
+                : LineStackingStrategy.MaxHeight,
             // Flow control: WPF's Paragraph exposes KeepWithNext/KeepTogether directly, so map them so
             // they survive an edit/commit cycle without a Tag. WidowControl has no FlowDocument slot and
             // is carried on the Tag instead (see below).
@@ -2802,12 +2829,21 @@ public sealed class DocumentView : RichTextBox
         if (run is { IsCommentReference: true, CommentId: { } refId })
             return new WpfRun(string.Empty) { Tag = new RunMarkers(Comment: new CommentMarker(refId, IsReference: true)) };
 
+        // A manual page break renders as an empty, tagged run; the containing paragraph carries the actual
+        // BreakPageBefore (set in BuildParagraph). The tag lets ReadInline recover it on commit so the break
+        // survives an edit/commit cycle (mirroring the footnote/endnote markers).
+        if (run.IsPageBreak)
+            return new WpfRun(string.Empty) { Tag = new PageBreakMarker() };
+
         var fmt = Resolve(run, paragraph, document);
         var wpf = new WpfRun(run.Text)
         {
             FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal
         };
+        // Right-to-left run direction (w:rtl): force this run RTL even inside an LTR paragraph.
+        if (fmt.Rtl)
+            wpf.FlowDirection = System.Windows.FlowDirection.RightToLeft;
         if (fmt.FontFamily is { Length: > 0 } family)
             wpf.FontFamily = new FontFamily(family);
         var fontSizePx = (fmt.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
@@ -2969,6 +3005,13 @@ public sealed class DocumentView : RichTextBox
 
         if (control.Kind == ContentControlKind.CheckBox)
         {
+            // Synthesise the checkbox glyph from the control's checked state and render it in a symbol font.
+            // Word stores the box glyph in the SDT content run using a symbol font (often a Wingdings/MS
+            // Gothic codepoint), so the raw run text rendered in the body font showed nothing. Driving the
+            // glyph from the state (☒/☐ in Segoe UI Symbol, which has U+2610/U+2612) guarantees a visible,
+            // correct checkbox and matches how FreeW renders its own inserted checkboxes.
+            wpf.Text = control.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
+            wpf.FontFamily = new System.Windows.Media.FontFamily("Segoe UI Symbol");
             wpf.Cursor = System.Windows.Input.Cursors.Hand;
             wpf.MouseLeftButtonUp += OnCheckBoxControlClicked;
         }
@@ -3095,6 +3138,9 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Carried on a footnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
     private sealed record FootnoteMarker(int FootnoteId);
+
+    /// <summary>Carried on a manual page-break WPF run's Tag so CommitToModel can round-trip it.</summary>
+    private sealed record PageBreakMarker;
 
     /// <summary>
     /// Renders an endnote reference as a small superscript marker showing the endnote number, tagged
@@ -3265,6 +3311,27 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Backwards-compatible alias kept for callers that decode a known-PNG (e.g. embedded-object icons).</summary>
     private static BitmapSource DecodePng(byte[] bytes) => DecodeRaster(bytes);
+
+    /// <summary>
+    /// Guarded raster decode for byte payloads that are nominally images but may be undecodable (e.g.
+    /// embedded-object icons): returns null instead of throwing, mirroring <see cref="DecodeImage"/>, so a
+    /// bad payload falls back to a placeholder rather than taking down the whole render.
+    /// </summary>
+    private static BitmapSource? TryDecodeRaster(byte[]? bytes)
+    {
+        if (bytes is null || bytes.Length == 0)
+            return null;
+        try
+        {
+            return DecodeRaster(bytes);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or FileFormatException
+            or System.Runtime.InteropServices.ExternalException or ArgumentException
+            or InvalidOperationException or IOException or OutOfMemoryException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Best-effort render of a WMF/EMF metafile to a WPF <see cref="BitmapSource"/> via GDI+: load the
@@ -3475,53 +3542,74 @@ public sealed class DocumentView : RichTextBox
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
     }
 
+    /// <summary>Office-style series/slice colour palette (blue, orange, grey, gold, indigo, green).</summary>
+    private static readonly Color[] ChartPalette =
+    {
+        Color.FromRgb(0x5B, 0x9B, 0xD5), Color.FromRgb(0xED, 0x7D, 0x31),
+        Color.FromRgb(0xA5, 0xA5, 0xA5), Color.FromRgb(0xFF, 0xC0, 0x00),
+        Color.FromRgb(0x44, 0x72, 0xC4), Color.FromRgb(0x70, 0xAD, 0x47)
+    };
+
     /// <summary>
     /// Renders an inline chart as an InlineUIContainer hosting a Border that carries the model
-    /// <see cref="Chart"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The border shows
-    /// a simple labelled bar sketch of the first series as a lightweight visual stand-in for the chart.
+    /// <see cref="Chart"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). Renders **all**
+    /// series, honours the chart <see cref="ChartKind"/> (column / bar / line / area / scatter / pie /
+    /// doughnut), and shows a category-axis + a legend — a lightweight but type-faithful stand-in for the
+    /// DrawingML chart. Sizes the plot Canvas explicitly so the code-positioned children land correctly in
+    /// the headless print/measure pass (there is no live layout to query ActualWidth).
     /// </summary>
     private static InlineUIContainer BuildChartRun(Chart chart)
     {
         var widthPx = chart.WidthPt * PxPerPoint;
         var heightPx = chart.HeightPt * PxPerPoint;
 
-        var stack = new StackPanel { Margin = new Thickness(6) };
+        var root = new DockPanel { Margin = new Thickness(6), LastChildFill = true };
+
         if (!string.IsNullOrEmpty(chart.Title))
-            stack.Children.Add(new TextBlock
+        {
+            var title = new TextBlock
             {
                 Text = chart.Title,
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 0, 0, 4),
                 HorizontalAlignment = HorizontalAlignment.Center
-            });
-
-        // Sketch the first series as a row of proportional bars beneath their category labels.
-        var series = chart.Series.Count > 0 ? chart.Series[0] : new ChartSeries();
-        var max = series.Values.Count > 0 ? Math.Max(1.0, series.Values.Max()) : 1.0;
-        var bars = new Grid { VerticalAlignment = VerticalAlignment.Bottom };
-        var barArea = Math.Max(24, heightPx - 48);
-        for (var i = 0; i < series.Values.Count; i++)
-        {
-            bars.ColumnDefinitions.Add(new ColumnDefinition());
-            var category = i < chart.Categories.Count ? chart.Categories[i] : string.Empty;
-            var column = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(3, 0, 3, 0) };
-            column.Children.Add(new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(0x4E, 0x81, 0xBD)),
-                Height = Math.Max(2, barArea * (series.Values[i] / max)),
-                VerticalAlignment = VerticalAlignment.Bottom
-            });
-            column.Children.Add(new TextBlock
-            {
-                Text = category,
-                FontSize = 10,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 2, 0, 0)
-            });
-            Grid.SetColumn(column, i);
-            bars.Children.Add(column);
+            };
+            DockPanel.SetDock(title, Dock.Top);
+            root.Children.Add(title);
         }
-        stack.Children.Add(bars);
+
+        var showLegend = (chart.ShowLegend || chart.Series.Count > 1) && chart.Series.Count > 0;
+        if (showLegend)
+        {
+            var legend = BuildChartLegend(chart);
+            DockPanel.SetDock(legend, Dock.Bottom);
+            root.Children.Add(legend);
+        }
+
+        var titleH = string.IsNullOrEmpty(chart.Title) ? 0 : 22;
+        var legendH = showLegend ? 22 : 0;
+        var plotW = Math.Max(24, widthPx - 12);
+        var plotH = Math.Max(24, heightPx - 12 - titleH - legendH);
+        var plot = new Canvas { Width = plotW, Height = plotH };
+        switch (chart.Kind)
+        {
+            case ChartKind.Pie:
+            case ChartKind.Doughnut:
+                DrawPieChart(plot, chart, plotW, plotH, doughnut: chart.Kind == ChartKind.Doughnut);
+                break;
+            case ChartKind.Line:
+            case ChartKind.Area:
+            case ChartKind.Scatter:
+                DrawLineChart(plot, chart, plotW, plotH);
+                break;
+            case ChartKind.Bar:
+                DrawBarChart(plot, chart, plotW, plotH, horizontal: true);
+                break;
+            default: // Column
+                DrawBarChart(plot, chart, plotW, plotH, horizontal: false);
+                break;
+        }
+        root.Children.Add(plot);
 
         var element = new Border
         {
@@ -3530,10 +3618,228 @@ public sealed class DocumentView : RichTextBox
             Background = System.Windows.Media.Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
             BorderThickness = new Thickness(1),
-            Child = stack,
+            Child = root,
             Tag = chart // carries the model chart so CommitToModel can round-trip it
         };
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    private static int ChartCategoryCount(Chart chart)
+    {
+        var n = chart.Categories.Count;
+        foreach (var s in chart.Series)
+            n = Math.Max(n, s.Values.Count);
+        return n;
+    }
+
+    private static double ChartMax(Chart chart)
+    {
+        var max = 0.0;
+        foreach (var s in chart.Series)
+            foreach (var v in s.Values)
+                max = Math.Max(max, v);
+        return Math.Max(1.0, max);
+    }
+
+    /// <summary>A centred horizontal legend: a colour swatch + label per series (or per slice for pie).</summary>
+    private static FrameworkElement BuildChartLegend(Chart chart)
+    {
+        var pie = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
+        var labels = pie
+            ? Enumerable.Range(0, ChartCategoryCount(chart))
+                .Select(i => i < chart.Categories.Count && !string.IsNullOrEmpty(chart.Categories[i]) ? chart.Categories[i] : $"Item {i + 1}")
+                .ToList()
+            : chart.Series.Select((s, i) => string.IsNullOrEmpty(s.Name) ? $"Series {i + 1}" : s.Name!).ToList();
+
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+        for (var i = 0; i < labels.Count; i++)
+        {
+            var item = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 0, 6, 0) };
+            item.Children.Add(new System.Windows.Shapes.Rectangle
+            {
+                Width = 10,
+                Height = 10,
+                VerticalAlignment = VerticalAlignment.Center,
+                Fill = new SolidColorBrush(ChartPalette[i % ChartPalette.Length])
+            });
+            item.Children.Add(new TextBlock { Text = labels[i], FontSize = 10, Margin = new Thickness(3, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            panel.Children.Add(item);
+        }
+        return panel;
+    }
+
+    private static System.Windows.Shapes.Line ChartAxisLine(double x1, double y1, double x2, double y2) => new()
+    {
+        X1 = x1,
+        Y1 = y1,
+        X2 = x2,
+        Y2 = y2,
+        Stroke = new SolidColorBrush(Color.FromRgb(0xBF, 0xBF, 0xBF)),
+        StrokeThickness = 1
+    };
+
+    /// <summary>Grouped column (vertical) or bar (horizontal) chart over all series, with category labels.</summary>
+    private static void DrawBarChart(Canvas plot, Chart chart, double w, double h, bool horizontal)
+    {
+        var cats = ChartCategoryCount(chart);
+        if (cats == 0 || chart.Series.Count == 0)
+            return;
+        var seriesCount = chart.Series.Count;
+        var max = ChartMax(chart);
+
+        if (!horizontal)
+        {
+            const double labelStrip = 14;
+            var plotH = Math.Max(8, h - labelStrip);
+            var groupW = w / cats;
+            var gap = groupW * 0.15;
+            var barW = Math.Max(1, (groupW - 2 * gap) / seriesCount);
+            plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
+            for (var c = 0; c < cats; c++)
+            {
+                for (var s = 0; s < seriesCount; s++)
+                {
+                    var vals = chart.Series[s].Values;
+                    if (c >= vals.Count)
+                        continue;
+                    var barH = plotH * (Math.Max(0, vals[c]) / max);
+                    var rect = new System.Windows.Shapes.Rectangle
+                    {
+                        Width = barW * 0.92,
+                        Height = Math.Max(1, barH),
+                        Fill = new SolidColorBrush(ChartPalette[s % ChartPalette.Length])
+                    };
+                    Canvas.SetLeft(rect, c * groupW + gap + s * barW);
+                    Canvas.SetTop(rect, plotH - barH);
+                    plot.Children.Add(rect);
+                }
+                AddCategoryLabel(plot, chart, c, c * groupW, plotH + 1, groupW, System.Windows.TextAlignment.Center);
+            }
+        }
+        else
+        {
+            const double gutter = 42;
+            var plotW = Math.Max(8, w - gutter);
+            var groupH = h / cats;
+            var gap = groupH * 0.15;
+            var barH = Math.Max(1, (groupH - 2 * gap) / seriesCount);
+            plot.Children.Add(ChartAxisLine(gutter, 0, gutter, h));
+            for (var c = 0; c < cats; c++)
+            {
+                for (var s = 0; s < seriesCount; s++)
+                {
+                    var vals = chart.Series[s].Values;
+                    if (c >= vals.Count)
+                        continue;
+                    var barW = plotW * (Math.Max(0, vals[c]) / max);
+                    var rect = new System.Windows.Shapes.Rectangle
+                    {
+                        Width = Math.Max(1, barW),
+                        Height = barH * 0.92,
+                        Fill = new SolidColorBrush(ChartPalette[s % ChartPalette.Length])
+                    };
+                    Canvas.SetLeft(rect, gutter);
+                    Canvas.SetTop(rect, c * groupH + gap + s * barH);
+                    plot.Children.Add(rect);
+                }
+                AddCategoryLabel(plot, chart, c, 0, c * groupH + groupH / 2 - 7, gutter - 3, System.Windows.TextAlignment.Right);
+            }
+        }
+    }
+
+    /// <summary>Multi-series line chart (also used for area/scatter): one polyline per series.</summary>
+    private static void DrawLineChart(Canvas plot, Chart chart, double w, double h)
+    {
+        var cats = ChartCategoryCount(chart);
+        if (cats == 0 || chart.Series.Count == 0)
+            return;
+        var max = ChartMax(chart);
+        const double labelStrip = 14;
+        var plotH = Math.Max(8, h - labelStrip);
+        plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
+
+        double X(int c) => cats == 1 ? w / 2 : (c + 0.5) * (w / cats);
+
+        for (var s = 0; s < chart.Series.Count; s++)
+        {
+            var vals = chart.Series[s].Values;
+            var color = new SolidColorBrush(ChartPalette[s % ChartPalette.Length]);
+            var poly = new System.Windows.Shapes.Polyline
+            {
+                Stroke = color,
+                StrokeThickness = 2,
+                StrokeLineJoin = PenLineJoin.Round
+            };
+            for (var c = 0; c < vals.Count; c++)
+                poly.Points.Add(new System.Windows.Point(X(c), plotH - plotH * (Math.Max(0, vals[c]) / max)));
+            plot.Children.Add(poly);
+        }
+
+        for (var c = 0; c < cats; c++)
+            AddCategoryLabel(plot, chart, c, X(c) - (w / cats) / 2, plotH + 1, w / cats, System.Windows.TextAlignment.Center);
+    }
+
+    /// <summary>Pie (or doughnut) chart over the first series' values, one slice per category.</summary>
+    private static void DrawPieChart(Canvas plot, Chart chart, double w, double h, bool doughnut)
+    {
+        if (chart.Series.Count == 0)
+            return;
+        var vals = chart.Series[0].Values;
+        var total = vals.Where(v => v > 0).Sum();
+        if (total <= 0)
+            return;
+
+        var cx = w / 2;
+        var cy = h / 2;
+        var r = Math.Max(4, Math.Min(w, h) / 2 - 4);
+        var start = -Math.PI / 2; // 12 o'clock
+        for (var i = 0; i < vals.Count; i++)
+        {
+            if (vals[i] <= 0)
+                continue;
+            var sweep = (vals[i] / total) * 2 * Math.PI;
+            var end = start + sweep;
+            var fig = new PathFigure { StartPoint = new System.Windows.Point(cx, cy), IsClosed = true };
+            fig.Segments.Add(new LineSegment(new System.Windows.Point(cx + r * Math.Cos(start), cy + r * Math.Sin(start)), true));
+            fig.Segments.Add(new ArcSegment(
+                new System.Windows.Point(cx + r * Math.Cos(end), cy + r * Math.Sin(end)),
+                new System.Windows.Size(r, r), 0, sweep > Math.PI, SweepDirection.Clockwise, true));
+            var geo = new PathGeometry();
+            geo.Figures.Add(fig);
+            plot.Children.Add(new System.Windows.Shapes.Path
+            {
+                Fill = new SolidColorBrush(ChartPalette[i % ChartPalette.Length]),
+                Stroke = System.Windows.Media.Brushes.White,
+                StrokeThickness = 1,
+                Data = geo
+            });
+            start = end;
+        }
+
+        if (doughnut)
+        {
+            var hole = new System.Windows.Shapes.Ellipse { Width = r, Height = r, Fill = System.Windows.Media.Brushes.White };
+            Canvas.SetLeft(hole, cx - r / 2);
+            Canvas.SetTop(hole, cy - r / 2);
+            plot.Children.Add(hole);
+        }
+    }
+
+    private static void AddCategoryLabel(Canvas plot, Chart chart, int index, double left, double top, double width, System.Windows.TextAlignment align)
+    {
+        if (index >= chart.Categories.Count || string.IsNullOrEmpty(chart.Categories[index]))
+            return;
+        var label = new TextBlock
+        {
+            Text = chart.Categories[index],
+            FontSize = 9,
+            Width = Math.Max(1, width),
+            TextAlignment = align,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        Canvas.SetLeft(label, left);
+        Canvas.SetTop(label, top);
+        plot.Children.Add(label);
     }
 
     /// <summary>Inserts an inline shape / text box at the caret. Size in points; preserved on save.</summary>
@@ -3632,11 +3938,15 @@ public sealed class DocumentView : RichTextBox
         var heightPx = embedded.HeightPt * PxPerPoint;
 
         FrameworkElement content;
-        if (embedded.Icon is { } icon)
+        // The icon bytes are nominally PNG but real OLE objects carry icons in formats WIC cannot decode
+        // (WMF/EMF/uncommon codecs); decode defensively so a bad icon falls back to the ProgID placeholder
+        // instead of throwing NotSupportedException and blanking the whole document.
+        var iconSource = embedded.Icon is { } icon ? TryDecodeRaster(icon.PngBytes) : null;
+        if (iconSource is not null)
         {
             content = new Image
             {
-                Source = DecodePng(icon.PngBytes),
+                Source = iconSource,
                 Stretch = Stretch.Uniform
             };
         }
@@ -4839,6 +5149,8 @@ public sealed class DocumentView : RichTextBox
             SmallCaps = capitals == FontCapitals.SmallCaps,
             AllCaps = capitals == FontCapitals.AllSmallCaps,
             VerticalAlign = verticalAlign,
+            // Right-to-left run direction reads back off the WPF run's FlowDirection (set in BuildRun).
+            Rtl = run.FlowDirection == System.Windows.FlowDirection.RightToLeft,
             FontFamily = run.FontFamily.Source,
             FontSizePt = fontSizePt,
             ColorHex = run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
@@ -4869,12 +5181,26 @@ public sealed class DocumentView : RichTextBox
         return ParagraphFormatting.Default with
         {
             Alignment = FromWpfAlignment(paragraph.TextAlignment),
+            // Right-to-left direction reads straight back off the WPF Paragraph's FlowDirection (set in
+            // BuildParagraph), so an RTL paragraph survives an edit/commit cycle.
+            Rtl = paragraph.FlowDirection == System.Windows.FlowDirection.RightToLeft,
             KeepWithNext = paragraph.KeepWithNext,
             KeepLinesTogether = paragraph.KeepTogether,
             WidowControl = widowControl,
             SpaceBeforePt = paragraph.Margin.Top / PxPerPoint,
             SpaceAfterPt = paragraph.Margin.Bottom / PxPerPoint,
-            LineSpacing = ReadLineSpacing(paragraph.LineHeight, document),
+            // An exact line height (BlockLineHeight, set for the Exact rule) reads back as an absolute
+            // height in points; otherwise the LineHeight is a multiple of the font size.
+            LineRule = paragraph.LineStackingStrategy == LineStackingStrategy.BlockLineHeight
+                ? LineSpacingRule.Exact
+                : LineSpacingRule.Multiple,
+            LineHeightPt = paragraph.LineStackingStrategy == LineStackingStrategy.BlockLineHeight
+                && !double.IsNaN(paragraph.LineHeight)
+                ? paragraph.LineHeight / PxPerPoint
+                : 0,
+            LineSpacing = paragraph.LineStackingStrategy == LineStackingStrategy.BlockLineHeight
+                ? ParagraphFormatting.Default.LineSpacing
+                : ReadLineSpacing(paragraph.LineHeight, document),
             IndentLeftPt = paragraph.Margin.Left / PxPerPoint,
             IndentRightPt = paragraph.Margin.Right / PxPerPoint,
             FirstLineIndentPt = paragraph.TextIndent / PxPerPoint,

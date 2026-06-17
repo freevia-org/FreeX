@@ -1,119 +1,34 @@
+using Free.Shared.AppServices;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-/// <summary>Calculates aggregate statistics for a selection, for the status bar.</summary>
+/// <summary>
+/// Status-bar adapter over the shared, platform-neutral selection-stats pipeline. Aggregate
+/// math is delegated to <see cref="WorkbookSelectionStatsCalculator"/> (the single shared
+/// implementation, also used by the Avalonia app); this type keeps the host's <see cref="Stats"/>
+/// shape (consumed by <c>StatusBarStatsCache</c>) plus the WPF-only ready-status helper.
+/// </summary>
 public static class StatusBarCalculator
 {
     public readonly record struct Stats(double Sum, int Count, int NumericalCount, double? Average, double? Min, double? Max);
 
-    private static readonly Stats EmptyStats = new(0, 0, 0, null, null, null);
+    public static Stats Calculate(Sheet sheet, GridRange range) =>
+        ToStats(WorkbookSelectionStatsCalculator.Calculate(sheet, range));
 
-    public static Stats Calculate(Sheet sheet, GridRange range)
-    {
-        if (range.Start == range.End)
-            return CalculateSingleCell(sheet.GetValue(range.Start.Row, range.Start.Col));
+    public static Stats Combine(Stats left, Stats right) =>
+        ToStats(WorkbookSelectionStatsCalculator.Combine(ToShared(left), ToShared(right)));
 
-        if (sheet.GetUsedRange() is not { } usedRange || !usedRange.Overlaps(range))
-            return EmptyStats;
+    internal static Stats ToStats(WorkbookSelectionStats stats) =>
+        new(stats.Sum, stats.Count, stats.NumericalCount, stats.Average, stats.Min, stats.Max);
 
-        double sum = 0;
-        int count = 0;
-        int numericalCount = 0;
-        double? min = null, max = null;
+    internal static WorkbookSelectionStats ToShared(Stats stats) =>
+        new(stats.Sum, stats.Count, stats.NumericalCount, stats.Average, stats.Min, stats.Max);
 
-        var scanRange = Intersect(range, usedRange);
-
-        long totalCells = scanRange.CellCount;
-
-        if (sheet.CellCount < totalCells)
-        {
-            foreach (var entry in sheet.GetOccupiedCellMap())
-            {
-                var (row, col) = entry.Key;
-                if (Contains(scanRange, row, col))
-                    Accumulate(entry.Value.Value, ref sum, ref count, ref numericalCount, ref min, ref max);
-            }
-        }
-        else
-        {
-            for (var row = scanRange.Start.Row; row <= scanRange.End.Row; row++)
-            {
-                for (var col = scanRange.Start.Col; col <= scanRange.End.Col; col++)
-                    Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max);
-            }
-        }
-
-        double? average = numericalCount > 0 ? sum / numericalCount : null;
-        return new Stats(sum, count, numericalCount, average, min, max);
-    }
-
-    private static Stats CalculateSingleCell(ScalarValue value) =>
-        value switch
-        {
-            BlankValue => EmptyStats,
-            NumberValue number => new Stats(number.Value, 1, 1, number.Value, number.Value, number.Value),
-            _ => new Stats(0, 1, 0, null, null, null)
-        };
-
-    public static Stats Combine(Stats left, Stats right)
-    {
-        var sum = left.Sum + right.Sum;
-        var count = left.Count + right.Count;
-        var numericalCount = left.NumericalCount + right.NumericalCount;
-        double? average = numericalCount > 0 ? sum / numericalCount : null;
-        var min = Min(left.Min, right.Min);
-        var max = Max(left.Max, right.Max);
-        return new Stats(sum, count, numericalCount, average, min, max);
-    }
-
-    private static double? Min(double? left, double? right) =>
-        left.HasValue
-            ? right.HasValue ? Math.Min(left.Value, right.Value) : left
-            : right;
-
-    private static double? Max(double? left, double? right) =>
-        left.HasValue
-            ? right.HasValue ? Math.Max(left.Value, right.Value) : left
-            : right;
-
-    private static GridRange Intersect(GridRange range, GridRange usedRange)
-    {
-        GridRange.TryIntersect(range, usedRange, out var intersection);
-        return intersection;
-    }
-
-    private static bool Contains(GridRange range, uint row, uint col) =>
-        range.Contains(new CellAddress(range.Start.Sheet, row, col));
-
-    private static void Accumulate(
-        ScalarValue value,
-        ref double sum,
-        ref int count,
-        ref int numericalCount,
-        ref double? min,
-        ref double? max)
-    {
-        if (value is not BlankValue)
-            count++;
-
-        if (value is NumberValue nv)
-        {
-            sum += nv.Value;
-            numericalCount++;
-            min = min is null ? nv.Value : Math.Min(min.Value, nv.Value);
-            max = max is null ? nv.Value : Math.Max(max.Value, nv.Value);
-        }
-    }
-
-    public static string FormatNumber(double value)
-    {
-        if (value == Math.Floor(value) && Math.Abs(value) < 1e15)
-            return value.ToString("N0", System.Globalization.CultureInfo.CurrentCulture);
-
-        return value.ToString("G10", System.Globalization.CultureInfo.CurrentCulture);
-    }
+    public static string FormatNumber(double value) =>
+        StatusBarDisplayModelBuilder.FormatNumber(value);
 
     public static string GetReadyStatusText(Sheet sheet, CellAddress activeCell)
     {

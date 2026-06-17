@@ -249,7 +249,7 @@ public sealed partial class ChartRendererTests
         model.Should().BeNull();
     }
 
-    private static int CountVisiblePixels(BitmapSource bitmap)
+    internal static int CountVisiblePixels(BitmapSource bitmap)
     {
         var source = bitmap.Format == PixelFormats.Bgra32
             ? bitmap

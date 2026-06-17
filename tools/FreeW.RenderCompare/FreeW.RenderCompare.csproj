@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Headless FreeW page-render harness for the on-demand DOCX visual-fidelity comparison.
+    Loads each corpus .docx through DocxReader, hosts it in a DocumentView, and rasterizes every
+    paginated page (via the app's real PrintLayout.BuildPaginator print path) to PNG. Not part of any
+    solution/build lane; run on demand alongside the Word ground-truth export. See
+    freew-fidelity-corpus/README.md and docs/fidelity/.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <StartupObject>FreeW.RenderCompare.Program</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\freew\FreeW.App.Host\FreeW.App.Host.csproj" />
+    <ProjectReference Include="..\..\freew\FreeW.Core.IO\FreeW.Core.IO.csproj" />
+    <ProjectReference Include="..\..\freew\FreeW.Core.Model\FreeW.Core.Model.csproj" />
+  </ItemGroup>
+
+</Project>

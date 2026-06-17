@@ -4,10 +4,15 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class StatusBarCalculatorTests
 {
+    private static string ReadSharedCalculatorSource() =>
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "WorkbookSelectionStatsCalculator.cs");
+
     [Fact]
     public void Calculate_SingleCellStatusBypassesRangeScanSetup()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("StatusBarCalculator.cs");
+        // The host StatusBarCalculator is now a thin adapter over the shared selection-stats
+        // calculator, so the single-cell fast path lives with the shared implementation.
+        var source = ReadSharedCalculatorSource();
 
         source.Should().Contain("range.Start == range.End");
         source.Should().Contain("CalculateSingleCell(sheet.GetValue(range.Start.Row, range.Start.Col))");
@@ -16,7 +21,7 @@ public sealed partial class StatusBarCalculatorTests
     [Fact]
     public void Calculate_LargeSelections_ScansSparseCellsWithoutCopyingUsedCellDictionary()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("StatusBarCalculator.cs");
+        var source = ReadSharedCalculatorSource();
 
         source.Should().Contain(
             "GetUsedRange()",

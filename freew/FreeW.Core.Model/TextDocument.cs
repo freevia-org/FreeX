@@ -389,6 +389,16 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public bool IsCommentReference { get; set; }
 
     /// <summary>
+    /// When true, this run is a manual page break (<c>w:br w:type="page"</c>): it carries no text and
+    /// forces the following content onto a new page, mirroring Ctrl+Enter in Word. Modelled as an optional
+    /// run mark like <see cref="IsCommentReference"/>; on save it serialises as a run wrapping
+    /// <c>w:br w:type="page"</c>, and the editor splits the paragraph at the break so the WPF paginator
+    /// starts a new page. Dropping these (the previous behaviour) made FreeW under-paginate badly versus
+    /// Word (e.g. a page-break-only document collapsed to a single page).
+    /// </summary>
+    public bool IsPageBreak { get; set; }
+
+    /// <summary>
     /// Tracked-change (revision) mark on this run. <see cref="RevisionKind.None"/> is an ordinary run;
     /// <see cref="RevisionKind.Inserted"/> is a tracked insertion (serialises wrapped in w:ins, rendered
     /// underlined in the revision colour); <see cref="RevisionKind.Deleted"/> is a tracked deletion (the
@@ -421,6 +431,9 @@ public sealed class Run(string text, RunFormatting? formatting = null)
 
     /// <summary>Creates a run that carries an inline image instead of text.</summary>
     public static Run FromImage(InlineImage image) => new(string.Empty) { Image = image };
+
+    /// <summary>Creates a manual page-break run (<c>w:br w:type="page"</c>).</summary>
+    public static Run PageBreak() => new(string.Empty) { IsPageBreak = true };
 
     /// <summary>Creates a page-number field run (renders as the current page number).</summary>
     public static Run PageNumberField(RunFormatting? formatting = null) =>

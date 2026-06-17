@@ -286,9 +286,10 @@ public partial class MainWindow
 
     private void InitializePageLayoutScaleToFitControls()
     {
-        PageLayoutScaleWidthBox.ItemsSource = PageLayoutInputParser.ScalePageCountOptions;
-        PageLayoutScaleHeightBox.ItemsSource = PageLayoutInputParser.ScalePageCountOptions;
-        PageLayoutScalePercentBox.ItemsSource = PageLayoutInputParser.ScalePercentOptions;
+        // The visible Scale-to-Fit combos are the *rendered* declarative controls; they are populated
+        // and wired by PopulateAndWireRenderedPageLayoutCombos (called from TryApplyDeclarativeRibbon).
+        // This runs on Loaded *before* the ribbon swap, so it just primes the value display once the
+        // rendered combos exist (the swap re-populates and re-syncs them anyway).
         SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId));
     }
 
@@ -298,9 +299,12 @@ public partial class MainWindow
         _suppressToolbarSync = true;
         try
         {
-            SetComboBoxTextIfChanged(PageLayoutScaleWidthBox, PageLayoutInputParser.FormatScalePages(scaleToFit.FitToPagesWide));
-            SetComboBoxTextIfChanged(PageLayoutScaleHeightBox, PageLayoutInputParser.FormatScalePages(scaleToFit.FitToPagesTall));
-            SetComboBoxTextIfChanged(PageLayoutScalePercentBox, PageLayoutInputParser.FormatScalePercent(scaleToFit.ScalePercent));
+            if (FindRenderedRibbonControl("Scale Width") is ComboBox widthBox)
+                SetComboBoxTextIfChanged(widthBox, PageLayoutInputParser.FormatScalePages(scaleToFit.FitToPagesWide));
+            if (FindRenderedRibbonControl("Scale Height") is ComboBox heightBox)
+                SetComboBoxTextIfChanged(heightBox, PageLayoutInputParser.FormatScalePages(scaleToFit.FitToPagesTall));
+            if (FindRenderedRibbonControl("Scale Percent") is ComboBox percentBox)
+                SetComboBoxTextIfChanged(percentBox, PageLayoutInputParser.FormatScalePercent(scaleToFit.ScalePercent));
         }
         finally
         {
@@ -310,65 +314,66 @@ public partial class MainWindow
 
     private void PageLayoutScaleWidthBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_suppressToolbarSync || PageLayoutScaleWidthBox.SelectedItem is null) return;
-        CommitPageLayoutScaleWidthBoxText();
+        if (_suppressToolbarSync || (sender as ComboBox)?.SelectedItem is null) return;
+        CommitPageLayoutScaleWidthBoxText(sender as ComboBox);
     }
 
     private void PageLayoutScaleWidthBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter || _suppressToolbarSync) return;
-        CommitPageLayoutScaleWidthBoxText();
+        CommitPageLayoutScaleWidthBoxText(sender as ComboBox);
         e.Handled = true;
     }
 
     private void PageLayoutScaleWidthBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        CommitPageLayoutScaleWidthBoxText();
+        CommitPageLayoutScaleWidthBoxText(sender as ComboBox);
     }
 
     private void PageLayoutScaleHeightBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_suppressToolbarSync || PageLayoutScaleHeightBox.SelectedItem is null) return;
-        CommitPageLayoutScaleHeightBoxText();
+        if (_suppressToolbarSync || (sender as ComboBox)?.SelectedItem is null) return;
+        CommitPageLayoutScaleHeightBoxText(sender as ComboBox);
     }
 
     private void PageLayoutScaleHeightBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter || _suppressToolbarSync) return;
-        CommitPageLayoutScaleHeightBoxText();
+        CommitPageLayoutScaleHeightBoxText(sender as ComboBox);
         e.Handled = true;
     }
 
     private void PageLayoutScaleHeightBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        CommitPageLayoutScaleHeightBoxText();
+        CommitPageLayoutScaleHeightBoxText(sender as ComboBox);
     }
 
     private void PageLayoutScalePercentBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_suppressToolbarSync || PageLayoutScalePercentBox.SelectedItem is null) return;
-        CommitPageLayoutScalePercentBoxText();
+        if (_suppressToolbarSync || (sender as ComboBox)?.SelectedItem is null) return;
+        CommitPageLayoutScalePercentBoxText(sender as ComboBox);
     }
 
     private void PageLayoutScalePercentBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter || _suppressToolbarSync) return;
-        CommitPageLayoutScalePercentBoxText();
+        CommitPageLayoutScalePercentBoxText(sender as ComboBox);
         e.Handled = true;
     }
 
     private void PageLayoutScalePercentBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        CommitPageLayoutScalePercentBoxText();
+        CommitPageLayoutScalePercentBoxText(sender as ComboBox);
     }
 
-    private void CommitPageLayoutScaleWidthBoxText()
+    private void CommitPageLayoutScaleWidthBoxText(ComboBox? combo)
     {
+        if (combo is null) return;
         var current = _workbook.GetSheet(_currentSheetId)?.ScaleToFit ?? WorksheetScaleToFit.Default;
-        var text = GetComboBoxText(PageLayoutScaleWidthBox);
+        var text = GetComboBoxText(combo);
         if (!PageLayoutInputParser.TryParseScalePages(text, out var wide))
         {
             SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId));
@@ -378,10 +383,11 @@ public partial class MainWindow
         ApplyPageLayoutScaleToFit(CreateScaleToFitFromPageDimensions(current, wide, current.FitToPagesTall));
     }
 
-    private void CommitPageLayoutScaleHeightBoxText()
+    private void CommitPageLayoutScaleHeightBoxText(ComboBox? combo)
     {
+        if (combo is null) return;
         var current = _workbook.GetSheet(_currentSheetId)?.ScaleToFit ?? WorksheetScaleToFit.Default;
-        var text = GetComboBoxText(PageLayoutScaleHeightBox);
+        var text = GetComboBoxText(combo);
         if (!PageLayoutInputParser.TryParseScalePages(text, out var tall))
         {
             SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId));
@@ -391,9 +397,10 @@ public partial class MainWindow
         ApplyPageLayoutScaleToFit(CreateScaleToFitFromPageDimensions(current, current.FitToPagesWide, tall));
     }
 
-    private void CommitPageLayoutScalePercentBoxText()
+    private void CommitPageLayoutScalePercentBoxText(ComboBox? combo)
     {
-        var text = GetComboBoxText(PageLayoutScalePercentBox);
+        if (combo is null) return;
+        var text = GetComboBoxText(combo);
         if (!PageLayoutInputParser.TryParseScalePercent(text, out var percent))
         {
             SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId));

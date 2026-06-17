@@ -1137,6 +1137,40 @@ public static class DocxReader
             return;
         }
 
+        // A legacy form-field checkbox (FORMCHECKBOX): w:fldChar(begin)/w:ffData/w:checkBox. Map it to a
+        // checkbox content control so it renders and round-trips as a checkbox; the field's other runs
+        // (the FORMCHECKBOX instrText and the separate/end fldChar) carry no visible text and are dropped.
+        // Checked state = the w:checked toggle when present, else the w:default toggle.
+        var ffCheckBox = r.Element(W + "fldChar")?.Element(W + "ffData")?.Element(W + "checkBox");
+        if (ffCheckBox is not null)
+        {
+            static bool Toggle(XElement? e) =>
+                e is not null && e.Attribute(W + "val")?.Value is null or "1" or "true" or "on";
+            var isChecked = ffCheckBox.Element(W + "checked") is { } checkedEl
+                ? Toggle(checkedEl)
+                : Toggle(ffCheckBox.Element(W + "default"));
+            var name = r.Element(W + "fldChar")?.Element(W + "ffData")?.Element(W + "name")?.Attribute(W + "val")?.Value;
+            var checkboxRun = Run.CheckBoxControl(isChecked, name);
+            checkboxRun.Formatting = ReadRunFormatting(r.Element(W + "rPr"));
+            checkboxRun.HyperlinkUrl = hyperlinkUrl;
+            checkboxRun.HyperlinkAnchor = hyperlinkAnchor;
+            checkboxRun.CommentId = commentId;
+            ApplyRevision(checkboxRun);
+            paragraph.Runs.Add(checkboxRun);
+            return;
+        }
+
+        // A manual page break (w:br w:type="page") forces the following content onto a new page. It is
+        // emitted as its own break-only run; recover it as a page-break run (otherwise it — and any
+        // text-less run holding it — would be dropped, making FreeW under-paginate versus Word).
+        if (r.Elements(W + "br").Any(b => b.Attribute(W + "type")?.Value == "page"))
+        {
+            var breakRun = Run.PageBreak();
+            breakRun.Formatting = ReadRunFormatting(r.Element(W + "rPr"));
+            ApplyRevision(breakRun);
+            paragraph.Runs.Add(breakRun);
+        }
+
         // A tracked deletion stores its text in w:delText; ordinary/inserted runs use w:t.
         var text = string.Concat(r.Elements(W + "t").Select(t => t.Value))
             + string.Concat(r.Elements(W + "delText").Select(t => t.Value));
@@ -2150,6 +2184,35 @@ public static class DocxReader
         var keepWithNext = ReadToggle(pPr, "keepNext");
         var keepLinesTogether = ReadToggle(pPr, "keepLines");
         var widowControl = ReadToggle(pPr, "widowControl");
+        // Right-to-left paragraph direction (w:bidi), read as a toggle like the flow-control flags.
+        var rtl = ReadToggle(pPr, "bidi");
+
+        // Line spacing (w:spacing/@w:line + @w:lineRule). Only override the model default when w:line is
+        // explicitly present, so paragraphs that inherit spacing keep FreeW's 1.15 default unchanged.
+        var lineRuleAttr = spacing?.Attribute(W + "lineRule")?.Value;
+        var lineVal = spacing?.Attribute(W + "line")?.Value;
+        var lineRule = ParagraphFormatting.Default.LineRule;
+        var lineSpacing = ParagraphFormatting.Default.LineSpacing;
+        var lineHeightPt = 0.0;
+        if (lineVal is not null && double.TryParse(lineVal, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var lineRaw))
+        {
+            switch (lineRuleAttr)
+            {
+                case "exact":
+                    lineRule = LineSpacingRule.Exact;
+                    lineHeightPt = lineRaw / 20.0; // twentieths of a point -> points
+                    break;
+                case "atLeast":
+                    lineRule = LineSpacingRule.AtLeast;
+                    lineHeightPt = lineRaw / 20.0;
+                    break;
+                default: // "auto" or absent -> a multiple, value in 240ths of a line
+                    lineRule = LineSpacingRule.Multiple;
+                    lineSpacing = lineRaw / 240.0;
+                    break;
+            }
+        }
 
         return ParagraphFormatting.Default with
         {
@@ -2158,6 +2221,10 @@ public static class DocxReader
             KeepWithNext = keepWithNext,
             KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
+            Rtl = rtl,
+            LineRule = lineRule,
+            LineSpacing = lineSpacing,
+            LineHeightPt = lineHeightPt,
             ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
             Alignment = jc switch
             {
@@ -2391,6 +2458,7 @@ public static class DocxReader
             Strikethrough = ReadToggle(rPr, "strike"),
             SmallCaps = ReadToggle(rPr, "smallCaps"),
             AllCaps = ReadToggle(rPr, "caps"),
+            Rtl = ReadToggle(rPr, "rtl"),
             FontFamily = rPr.Element(W + "rFonts")?.Attribute(W + "ascii")?.Value,
             FontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value),
             ColorHex = color is null or "auto" ? null : "#" + color.TrimStart('#'),

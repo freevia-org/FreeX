@@ -407,6 +407,16 @@
                 <Canvas x:Name="CommentOverlay"
                         ClipToBounds="True"
                         Panel.ZIndex="30"/>
+                <!-- Full-window chartsheet host: shown instead of the grid when the active sheet
+                     is a chartsheet (a chart-only sheet with no cell grid). -->
+                <Image x:Name="ChartsheetView"
+                       Visibility="Collapsed"
+                       Panel.ZIndex="40"
+                       Stretch="Uniform"
+                       SnapsToDevicePixels="True"
+                       AutomationProperties.AutomationId="ChartsheetView"
+                       AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Worksheet}"
+                       SizeChanged="ChartsheetView_SizeChanged"/>
             </Grid>
 
             <ScrollBar x:Name="VerticalScroll" Grid.Column="1"

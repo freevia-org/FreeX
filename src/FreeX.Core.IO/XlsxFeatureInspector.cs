@@ -207,8 +207,14 @@ public static class XlsxFeatureInspector
             yield break;
         }
 
-        if (normalized.StartsWith("xl/chartsheets/", StringComparison.Ordinal) ||
-            normalized.StartsWith("xl/dialogsheets/", StringComparison.Ordinal) ||
+        if (normalized.StartsWith("xl/chartsheets/", StringComparison.Ordinal))
+        {
+            // Chartsheets (full-page chart-only sheets) are now loaded and modeled as Sheets with
+            // Kind = Chartsheet, so they are no longer flagged as an unsupported sheet type.
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/dialogsheets/", StringComparison.Ordinal) ||
             normalized.StartsWith("xl/macrosheets/", StringComparison.Ordinal))
         {
             yield return Feature(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes);
@@ -440,8 +446,9 @@ public static class XlsxFeatureInspector
             return;
         }
 
-        if (normalizedType.EndsWith("/chartsheet", StringComparison.OrdinalIgnoreCase) ||
-            normalizedType.EndsWith("/dialogsheet", StringComparison.OrdinalIgnoreCase) ||
+        // Chartsheets are loaded and modeled (Kind = Chartsheet), so only dialog/macro sheets
+        // remain unsupported sheet types.
+        if (normalizedType.EndsWith("/dialogsheet", StringComparison.OrdinalIgnoreCase) ||
             normalizedType.EndsWith("/xlmacrosheet", StringComparison.OrdinalIgnoreCase))
         {
             AddFeature(ref result, XlsxUnsupportedFeatureKind.UnsupportedSheetTypes);

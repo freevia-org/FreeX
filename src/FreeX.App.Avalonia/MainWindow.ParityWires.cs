@@ -15,6 +15,17 @@ public sealed partial class MainWindow
             : result.ErrorMessage ?? "Could not delete the comment.");
     }
 
+    /// <summary>Formulas ▸ Error Checking — select formula cells that evaluate to an error.</summary>
+    private void CheckFormulaErrors()
+    {
+        var result = _session.GoToSpecial(
+            GoToSpecialKind.Formulas,
+            new GoToSpecialOptions(GoToSpecialValueTypes.Errors));
+        RefreshShell(result.Success && result.MatchCount > 0
+            ? $"Error checking: selected {result.MatchCount} cell(s) with formula errors."
+            : "Error checking: no formula errors found.");
+    }
+
     /// <summary>View ▸ Normal — leave Page Break Preview.</summary>
     private void SetNormalView()
     {

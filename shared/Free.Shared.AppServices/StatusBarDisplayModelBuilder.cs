@@ -1,0 +1,119 @@
+using System.Collections.Generic;
+using System.Globalization;
+
+namespace Free.Shared.AppServices;
+
+/// <summary>
+/// Builds the neutral <see cref="StatusBarViewModel"/> readout from selection statistics, view
+/// mode and zoom. Ports the formatting logic (including the number-reuse optimization) that used
+/// to live in the WPF-coupled <c>StatusBarDisplayState</c>, but produces <c>bool</c> visibility
+/// and plain strings so any shell can render it.
+/// </summary>
+public static class StatusBarDisplayModelBuilder
+{
+    /// <summary>Builds the "Ready" / cell-mode model with no aggregate readout.</summary>
+    public static StatusBarViewModel Ready(
+        StatusBarViewMode viewMode,
+        int zoomPercent,
+        string readyText) =>
+        new(
+            viewMode,
+            zoomPercent,
+            IsReadyVisible: true,
+            ReadyText: readyText,
+            AreStatsVisible: false,
+            Readouts: StatusBarViewModel.NoReadouts);
+
+    /// <summary>
+    /// Builds the aggregate-stats model for a non-empty selection. Mirrors the previous
+    /// <c>StatusBarDisplayState.Stats</c> behavior: Average/Sum/Min/Max appear only when numeric,
+    /// Count/NumericalCount always appear, and equal numbers reuse the first formatted text.
+    /// </summary>
+    public static StatusBarViewModel Stats(
+        StatusBarViewMode viewMode,
+        int zoomPercent,
+        WorkbookSelectionStats stats,
+        IStatusBarTextProvider textProvider)
+    {
+        ArgumentNullException.ThrowIfNull(textProvider);
+
+        var averageNumber = stats.Average.HasValue
+            ? FormatNumber(stats.Average.Value)
+            : null;
+        var sumNumber = stats.HasNumericalValues
+            ? FormatNumberWithReuse(stats.Sum, stats.Average, averageNumber)
+            : null;
+        var minNumber = stats.Min.HasValue
+            ? FormatNumberWithReuse(stats.Min.Value, stats.Average, averageNumber, stats.Sum, sumNumber)
+            : null;
+        var maxNumber = stats.Max.HasValue
+            ? FormatNumberWithReuse(stats.Max.Value, stats.Average, averageNumber, stats.Sum, sumNumber, stats.Min, minNumber)
+            : null;
+
+        var readouts = new List<StatusBarReadoutItem>(6)
+        {
+            Readout(StatusBarReadoutKind.Average, averageNumber, textProvider),
+            CountReadout(StatusBarReadoutKind.Count, stats.Count, textProvider),
+            CountReadout(StatusBarReadoutKind.NumericalCount, stats.NumericalCount, textProvider),
+            Readout(StatusBarReadoutKind.Sum, sumNumber, textProvider),
+            Readout(StatusBarReadoutKind.Minimum, minNumber, textProvider),
+            Readout(StatusBarReadoutKind.Maximum, maxNumber, textProvider),
+        };
+
+        return new StatusBarViewModel(
+            viewMode,
+            zoomPercent,
+            IsReadyVisible: false,
+            ReadyText: "",
+            AreStatsVisible: true,
+            Readouts: readouts);
+    }
+
+    /// <summary>Formats a number the compact, Excel-like way used across the status bar.</summary>
+    public static string FormatNumber(double value)
+    {
+        if (value == Math.Floor(value) && Math.Abs(value) < 1e15)
+            return value.ToString("N0", CultureInfo.CurrentCulture);
+
+        return value.ToString("G10", CultureInfo.CurrentCulture);
+    }
+
+    private static StatusBarReadoutItem Readout(
+        StatusBarReadoutKind kind,
+        string? formattedNumber,
+        IStatusBarTextProvider textProvider)
+    {
+        var value = formattedNumber is not null
+            ? string.Format(CultureInfo.CurrentCulture, textProvider.GetReadoutFormat(kind), formattedNumber)
+            : "";
+        return new StatusBarReadoutItem(kind, textProvider.GetReadoutLabel(kind), value, IsVisible: value.Length > 0);
+    }
+
+    private static StatusBarReadoutItem CountReadout(
+        StatusBarReadoutKind kind,
+        int count,
+        IStatusBarTextProvider textProvider)
+    {
+        var value = string.Format(CultureInfo.CurrentCulture, textProvider.GetReadoutFormat(kind), count);
+        return new StatusBarReadoutItem(kind, textProvider.GetReadoutLabel(kind), value, IsVisible: true);
+    }
+
+    private static string FormatNumberWithReuse(
+        double value,
+        double? firstValue,
+        string? firstText,
+        double? secondValue = null,
+        string? secondText = null,
+        double? thirdValue = null,
+        string? thirdText = null)
+    {
+        if (firstText is not null && firstValue.HasValue && value.Equals(firstValue.Value))
+            return firstText;
+        if (secondText is not null && secondValue.HasValue && value.Equals(secondValue.Value))
+            return secondText;
+        if (thirdText is not null && thirdValue.HasValue && value.Equals(thirdValue.Value))
+            return thirdText;
+
+        return FormatNumber(value);
+    }
+}

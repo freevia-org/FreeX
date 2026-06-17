@@ -36,8 +36,8 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("new ClearPrintAreaCommand(sheetId)");
         source.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit)");
         source.Should().Contain("InitializePageLayoutScaleToFitControls()");
-        source.Should().Contain("PageLayoutInputParser.ScalePageCountOptions");
-        source.Should().Contain("SyncPageLayoutScaleToFitControls(sheet)");
+        source.Should().Contain("PageLayoutInputParser.TryParseScalePages(text, out var wide)");
+        source.Should().Contain("SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId))");
         source.Should().Contain("CreateScaleToFitFromPageDimensions(current, wide, current.FitToPagesTall)");
         source.Should().Contain("PageBreakSelectionPlanner.Insert(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks)");
         source.Should().Contain("PageBreakSelectionPlanner.Remove(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks)");

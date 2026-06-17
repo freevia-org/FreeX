@@ -430,6 +430,15 @@ public sealed partial class MainWindow
             items.Add(menuItem);
         }
 
+        // Manual item (checkbox) filter for row/column/page fields.
+        if (target.Area is PivotHeaderArea.Row or PivotHeaderArea.Column or PivotHeaderArea.Page)
+        {
+            var itemFilter = new MenuItem { Header = "Filter Items..." };
+            itemFilter.Click += (_, _) => OpenPivotItemFilter(pivot, headers, target);
+            items.Add(new Separator());
+            items.Add(itemFilter);
+        }
+
         var menu = new ContextMenu { ItemsSource = items };
         menu.Open(anchor);
     }
@@ -442,6 +451,10 @@ public sealed partial class MainWindow
         PivotFieldDragValidator validator)
     {
         if (_isOpening || _isSaving)
+            return;
+
+        // Label/Value filters open an in-app dialog (the command factory defers them).
+        if (TryOpenPivotFieldFilter(pivot, headers, target, action))
             return;
 
         var result = PivotHeaderMenuCommandFactory.Create(

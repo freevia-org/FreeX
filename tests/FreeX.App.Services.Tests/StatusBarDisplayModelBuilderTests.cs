@@ -1,0 +1,124 @@
+using FluentAssertions;
+using Free.Shared.AppServices;
+
+namespace FreeX.App.Services.Tests;
+
+public sealed class StatusBarDisplayModelBuilderTests
+{
+    private sealed class TestTextProvider : IStatusBarTextProvider
+    {
+        public string GetReadoutFormat(StatusBarReadoutKind kind) => GetReadoutLabel(kind) + ": {0}";
+
+        public string GetReadoutLabel(StatusBarReadoutKind kind) => kind switch
+        {
+            StatusBarReadoutKind.Average => "Average",
+            StatusBarReadoutKind.Count => "Count",
+            StatusBarReadoutKind.NumericalCount => "Numerical Count",
+            StatusBarReadoutKind.Sum => "Sum",
+            StatusBarReadoutKind.Minimum => "Min",
+            StatusBarReadoutKind.Maximum => "Max",
+            _ => kind.ToString()
+        };
+    }
+
+    private static readonly TestTextProvider Text = new();
+
+    [Fact]
+    public void Ready_HidesStatsAndShowsReadyText()
+    {
+        var model = StatusBarDisplayModelBuilder.Ready(StatusBarViewMode.PageLayout, zoomPercent: 120, "Ready");
+
+        model.IsReadyVisible.Should().BeTrue();
+        model.AreStatsVisible.Should().BeFalse();
+        model.ReadyText.Should().Be("Ready");
+        model.Readouts.Should().BeEmpty();
+        model.ViewMode.Should().Be(StatusBarViewMode.PageLayout);
+        model.ZoomPercent.Should().Be(120);
+    }
+
+    [Fact]
+    public void Stats_FormatsVisibleAggregateReadoutItems()
+    {
+        var stats = new WorkbookSelectionStats(
+            Sum: 12,
+            Count: 4,
+            NumericalCount: 3,
+            Average: 4,
+            Min: 2,
+            Max: 6);
+
+        var model = StatusBarDisplayModelBuilder.Stats(StatusBarViewMode.Normal, zoomPercent: 100, stats, Text);
+
+        model.IsReadyVisible.Should().BeFalse();
+        model.AreStatsVisible.Should().BeTrue();
+        model.ReadyText.Should().BeEmpty();
+        model.FindReadout(StatusBarReadoutKind.Average)!.Value.Value.Should().Be("Average: 4");
+        model.FindReadout(StatusBarReadoutKind.Count)!.Value.Value.Should().Be("Count: 4");
+        model.FindReadout(StatusBarReadoutKind.NumericalCount)!.Value.Value.Should().Be("Numerical Count: 3");
+        model.FindReadout(StatusBarReadoutKind.Sum)!.Value.Value.Should().Be("Sum: 12");
+        model.FindReadout(StatusBarReadoutKind.Minimum)!.Value.Value.Should().Be("Min: 2");
+        model.FindReadout(StatusBarReadoutKind.Maximum)!.Value.Value.Should().Be("Max: 6");
+
+        foreach (var item in model.Readouts)
+            item.IsVisible.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Stats_TextOnlySelectionShowsCountsButHidesNumericReadouts()
+    {
+        var stats = new WorkbookSelectionStats(
+            Sum: 0,
+            Count: 3,
+            NumericalCount: 0,
+            Average: null,
+            Min: null,
+            Max: null);
+
+        var model = StatusBarDisplayModelBuilder.Stats(StatusBarViewMode.Normal, zoomPercent: 100, stats, Text);
+
+        model.FindReadout(StatusBarReadoutKind.Count)!.Value.IsVisible.Should().BeTrue();
+        model.FindReadout(StatusBarReadoutKind.NumericalCount)!.Value.IsVisible.Should().BeTrue();
+        model.FindReadout(StatusBarReadoutKind.NumericalCount)!.Value.Value.Should().Be("Numerical Count: 0");
+
+        model.FindReadout(StatusBarReadoutKind.Average)!.Value.IsVisible.Should().BeFalse();
+        model.FindReadout(StatusBarReadoutKind.Average)!.Value.Value.Should().BeEmpty();
+        model.FindReadout(StatusBarReadoutKind.Sum)!.Value.IsVisible.Should().BeFalse();
+        model.FindReadout(StatusBarReadoutKind.Minimum)!.Value.IsVisible.Should().BeFalse();
+        model.FindReadout(StatusBarReadoutKind.Maximum)!.Value.IsVisible.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Stats_ReusesFirstFormattedNumberWhenAggregatesAreEqual()
+    {
+        // Single numeric cell: Sum == Average == Min == Max == 42; the builder reuses
+        // the first formatted number rather than reformatting each aggregate.
+        var stats = new WorkbookSelectionStats(42, 1, 1, 42, 42, 42);
+
+        var model = StatusBarDisplayModelBuilder.Stats(StatusBarViewMode.Normal, zoomPercent: 100, stats, Text);
+
+        model.FindReadout(StatusBarReadoutKind.Average)!.Value.Value.Should().Be("Average: 42");
+        model.FindReadout(StatusBarReadoutKind.Sum)!.Value.Value.Should().Be("Sum: 42");
+        model.FindReadout(StatusBarReadoutKind.Minimum)!.Value.Value.Should().Be("Min: 42");
+        model.FindReadout(StatusBarReadoutKind.Maximum)!.Value.Value.Should().Be("Max: 42");
+    }
+
+    [Theory]
+    [InlineData(12.5, "12.5")]
+    [InlineData(12.0000000001, "12")]
+    [InlineData(123456789.1234, "123456789.1")]
+    public void FormatNumber_UsesCompactExcelLikeStatusText(double value, string expected)
+    {
+        StatusBarDisplayModelBuilder.FormatNumber(value).Should().Be(expected);
+    }
+
+    [Fact]
+    public void Stats_CarriesViewModeAndZoomThrough()
+    {
+        var stats = new WorkbookSelectionStats(12, 4, 3, 4, 2, 6);
+
+        var model = StatusBarDisplayModelBuilder.Stats(StatusBarViewMode.PageBreak, zoomPercent: 75, stats, Text);
+
+        model.ViewMode.Should().Be(StatusBarViewMode.PageBreak);
+        model.ZoomPercent.Should().Be(75);
+    }
+}

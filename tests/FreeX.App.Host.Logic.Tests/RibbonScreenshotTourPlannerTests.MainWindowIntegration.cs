@@ -232,7 +232,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("ApplyHomeAlignmentNumberTourStyle");
         source.Should().Contain("TryExecuteApplyStyle(range, diff, \"Apply Style\")");
         source.Should().Contain("CreateMergeAndCenterCommand(mergeRange)");
-        source.Should().Contain("OpenRibbonContextMenu(OrientationPickerButton, OrientationPickerButton.ContextMenu)");
+        source.Should().Contain("FindRenderedRibbonControl(\"Orientation\") as Button");
+        source.Should().Contain("OpenRibbonContextMenu(orientationButton, orientationButton.ContextMenu!)");
         source.Should().Contain("new FormatCellsDialog(");
         source.Should().Contain("FormatCellsDialogTab.Alignment");
         source.Should().Contain("FormatCellsDialogTab.Number");
@@ -478,7 +479,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("freex_legal_notices_dialog");
         source.Should().Contain("freex_help_focus_return_status");
         source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"Help\"))");
-        source.Should().Contain("HelpOnlineButton.Focus();");
+        source.Should().Contain("FindRenderedRibbonControl(\"Help Online\")");
+        source.Should().Contain("helpOnlineButton.Focus();");
         source.Should().Contain("CreateExternalLinkOpenFailedMessageForHelpTour");
         source.Should().Contain("AppIssueReporter.CreateIssueUrl(CreateDeterministicIssueReportContextForHelpTour())");
         source.Should().Contain("visual-evidence-session");

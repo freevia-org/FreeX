@@ -669,6 +669,7 @@ public sealed partial class MainWindow : Window
                     ["formulas.defineName"] = DefineName,
                     ["formulas.createFromSelection"] = CreateNamesFromSelection,
                     // Review tab.
+                    ["review.spelling"] = () => _ = ShowSpellingDialogAsync(),
                     ["review.checkAccessibility"] = () => _ = ShowReviewSummaryDialogAsync(focusAccessibility: true),
                     ["review.protectSheet"] = () => _ = ShowProtectSheetDialogAsync(),
                     ["review.protectWorkbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
@@ -680,6 +681,37 @@ public sealed partial class MainWindow : Window
                     ["view.zoomToSelection"] = ZoomToSelection,
                     ["view.freezePanes"] = FreezePanesAtActiveCell,
                     ["view.pageBreakPreview"] = TogglePageBreakPreview,
+                    ["view.formulaBar"] = ToggleFormulaBarVisibility,
+                    ["view.pageLayoutView"] = SetPageLayoutView,
+                    // Home tab merge variants + Paste Special.
+                    ["home.mergeCells"] = () => _ = MergeSelectedRangeAsync(),
+                    ["home.mergeAcross"] = () => _ = MergeAcrossSelectedRangeAsync(),
+                    ["home.unmerge"] = UnmergeSelectedRange,
+                    ["home.pasteSpecial"] = () => _ = ShowPasteSpecialDialogAsync(),
+                    // Home tab "More Colors..." pickers.
+                    ["home.fillMore"] = ShowMoreFillColorDialog,
+                    ["home.fontColorMore"] = ShowMoreFontColorDialog,
+                    // Data tab tools.
+                    ["data.reapply"] = ReapplyCurrentFilterSort,
+                    ["data.circleInvalid"] = CircleInvalidData,
+                    ["data.clearCircles"] = ClearValidationCircles,
+                    ["data.getData"] = GetDataNotSupported,
+                    ["data.refresh"] = RefreshAllNotSupported,
+                    // Page Layout sheet options (view + print) and Review ▸ Show Notes.
+                    ["pageLayout.gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
+                    ["pageLayout.headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
+                    ["review.showNotes"] = () => _ = ShowNotesListAsync(),
+                    // Insert ▸ PivotChart (charts the active pivot's result range).
+                    ["insert.pivotChart"] = InsertPivotChart,
+                    // View ▸ Window group (multi-window).
+                    ["view.newWindow"] = NewWindow,
+                    ["view.arrangeAll"] = ArrangeAllWindows,
+                    ["view.hide"] = HideActiveWindow,
+                    // Review proofing (built-in thesaurus / offline-honest translate) + Insert equation/object.
+                    ["review.thesaurus"] = () => _ = ShowThesaurusDialogAsync(),
+                    ["review.translate"] = () => _ = ShowTranslateDialogAsync(),
+                    ["insert.equation"] = () => _ = ShowEquationDialogAsync(),
+                    ["insert.object"] = ShowInsertObjectUnsupported,
                     // Home tab (Editing group).
                     ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
                     ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
@@ -768,6 +800,27 @@ public sealed partial class MainWindow : Window
                     // Insert ▸ Comment (reuse New Comment); Insert ▸ Header & Footer (Page Setup).
                     ["insert.comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
                     ["insert.headerFooter"] = () => _ = ShowPageSetupDialogAsync(),
+                    // Page Layout ▸ Themes (Office / Colorful / Grayscale picker).
+                    ["pageLayout.themes"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeColors"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeFonts"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeEffects"] = () => _ = ShowThemesGalleryAsync(),
+                    // Insert ▸ Symbol.
+                    ["insert.symbol"] = () => _ = ShowSymbolPickerAsync(),
+                    // Insert ▸ Slicer / Timeline (field picker → AddSlicerCommand / AddTimelineCommand).
+                    ["insert.slicer"] = InsertSlicer,
+                    ["insert.timeline"] = InsertTimeline,
+                    // Formulas ▸ Error Checking.
+                    ["formulas.errorChecking"] = CheckFormulaErrors,
+                    // Formulas ▸ Evaluate Formula (read-only diagnostics dialog).
+                    ["formulas.evaluateFormula"] = () => _ = ShowEvaluateFormulaDialogAsync(),
+                    // Formulas ▸ Formula Auditing trace arrows.
+                    ["formulas.tracePrecedents"] = TraceFormulaPrecedents,
+                    ["formulas.traceDependents"] = TraceFormulaDependents,
+                    ["formulas.removeArrows"] = RemoveFormulaTraceArrows,
+                    // Formulas ▸ Calculation group.
+                    ["formulas.calcOptions"] = ToggleCalculationMode,
+                    ["formulas.calcNow"] = CalculateNow,
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
@@ -2723,6 +2776,13 @@ public sealed partial class MainWindow : Window
         // not in viewport.DrawingObjects — paint them before the early-out so they render standalone.
         AddFormControlOverlays(overlay, viewport);
 
+        // Formula-auditing trace arrows live in an app-side set, not in viewport.DrawingObjects —
+        // paint them before the early-out so they render even with no other drawing objects.
+        AddFormulaTraceArrowOverlay(overlay, viewport);
+
+        // Data ▸ Circle Invalid Data overlay is also app-side — paint before the early-out.
+        AddValidationCircleOverlay(overlay, viewport);
+
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;
 
@@ -2928,27 +2988,49 @@ public sealed partial class MainWindow : Window
     {
         var fill = Brush(drawingObject.FillColor ?? new CellColor(0x5B, 0x9B, 0xD5));
         var stroke = Brush(drawingObject.OutlineColor ?? new CellColor(0x2F, 0x55, 0x97));
-        return drawingObject.ShapeKind switch
+        var w = Math.Max(1, width);
+        var h = Math.Max(1, height);
+        switch (drawingObject.ShapeKind)
         {
-            DrawingShapeKind.Ellipse => new AvaloniaEllipse
+            case DrawingShapeKind.Ellipse:
+                return new AvaloniaEllipse
+                {
+                    Width = w,
+                    Height = h,
+                    Fill = fill,
+                    Stroke = stroke,
+                    StrokeThickness = 1.5,
+                    IsHitTestVisible = false,
+                };
+            case DrawingShapeKind.Line:
+                return CreateDrawingLineVisual(stroke, width);
+        }
+
+        if (drawingObject.ShapeKind is { } shapeKind &&
+            AvaloniaDrawingShapeGeometryFactory.CreateGeometry(shapeKind, w, h) is { } geometry)
+        {
+            return new global::Avalonia.Controls.Shapes.Path
             {
-                Width = Math.Max(1, width),
-                Height = Math.Max(1, height),
+                Data = geometry,
+                // Geometry is authored inside a (0,0,w,h) box, so render it 1:1.
+                Stretch = Stretch.None,
+                Width = w,
+                Height = h,
                 Fill = fill,
                 Stroke = stroke,
                 StrokeThickness = 1.5,
                 IsHitTestVisible = false,
-            },
-            DrawingShapeKind.Line => CreateDrawingLineVisual(stroke, width),
-            _ => new AvaloniaRectangle
-            {
-                Width = Math.Max(1, width),
-                Height = Math.Max(1, height),
-                Fill = fill,
-                Stroke = stroke,
-                StrokeThickness = 1.5,
-                IsHitTestVisible = false,
-            }
+            };
+        }
+
+        return new AvaloniaRectangle
+        {
+            Width = w,
+            Height = h,
+            Fill = fill,
+            Stroke = stroke,
+            StrokeThickness = 1.5,
+            IsHitTestVisible = false,
         };
     }
 

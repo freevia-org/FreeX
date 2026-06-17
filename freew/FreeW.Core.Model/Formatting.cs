@@ -3,6 +3,15 @@ namespace FreeW.Core.Model;
 /// <summary>Paragraph horizontal alignment.</summary>
 public enum TextAlignment { Left, Center, Right, Justify }
 
+/// <summary>
+/// How a paragraph's line spacing is interpreted (pPr/w:spacing/@w:lineRule).
+/// <see cref="Multiple"/> (the default, OOXML <c>auto</c>) treats the spacing value as a multiple of the
+/// line's natural height (1 = single, 1.5, 2 = double). <see cref="Exact"/> (<c>exact</c>) forces an
+/// absolute line height in points regardless of font size, and <see cref="AtLeast"/> (<c>atLeast</c>) uses
+/// the value as a minimum, growing for taller content.
+/// </summary>
+public enum LineSpacingRule { Multiple, AtLeast, Exact }
+
 /// <summary>List decoration for a paragraph.</summary>
 /// <remarks>
 /// <see cref="MultiLevel"/> is an outline (legal) numbering whose level text accumulates the
@@ -129,6 +138,13 @@ public sealed record RunFormatting
     public VerticalAlign VerticalAlign { get; init; } = VerticalAlign.Baseline;
 
     /// <summary>
+    /// Right-to-left run direction (rPr/w:rtl). When true the run's characters lay out right-to-left
+    /// (Arabic/Hebrew). Defaults to false so LTR runs are unaffected and round-trip byte-unchanged.
+    /// Mirrors how <see cref="Bold"/> models a docx toggle element.
+    /// </summary>
+    public bool Rtl { get; init; }
+
+    /// <summary>
     /// Renders lowercase letters as small capitals (rPr/w:smallCaps toggle). Mirrors how
     /// <see cref="Bold"/> models a docx toggle element.
     /// </summary>
@@ -204,9 +220,38 @@ public sealed record RunFormatting
 public sealed record ParagraphFormatting
 {
     public TextAlignment Alignment { get; init; } = TextAlignment.Left;
+
+    /// <summary>
+    /// Right-to-left paragraph direction (pPr/w:bidi). When true the paragraph lays out right-to-left
+    /// (Arabic/Hebrew) and its default alignment is the right edge. Defaults to false so LTR paragraphs are
+    /// unaffected and round-trip byte-unchanged. Maps to WPF <c>FlowDirection.RightToLeft</c> in the editor.
+    /// </summary>
+    public bool Rtl { get; init; }
+
     public double SpaceBeforePt { get; init; }
     public double SpaceAfterPt { get; init; } = 8;
+
+    /// <summary>
+    /// Line spacing as a multiple of the natural line height (pPr/w:spacing/@w:line with
+    /// <c>lineRule="auto"</c>): 1 = single, 1.15 (the default), 1.5, 2 = double. Used only when
+    /// <see cref="LineRule"/> is <see cref="LineSpacingRule.Multiple"/>; for the exact/at-least rules the
+    /// absolute height in <see cref="LineHeightPt"/> applies instead.
+    /// </summary>
     public double LineSpacing { get; init; } = 1.15;
+
+    /// <summary>
+    /// How <see cref="LineSpacing"/> / <see cref="LineHeightPt"/> is interpreted (w:lineRule). Defaults to
+    /// <see cref="LineSpacingRule.Multiple"/> so existing paragraphs are unaffected.
+    /// </summary>
+    public LineSpacingRule LineRule { get; init; } = LineSpacingRule.Multiple;
+
+    /// <summary>
+    /// Absolute line height in points, used when <see cref="LineRule"/> is
+    /// <see cref="LineSpacingRule.Exact"/> or <see cref="LineSpacingRule.AtLeast"/> (w:line with
+    /// <c>lineRule="exact"/"atLeast"</c>, the value in twentieths of a point). Zero (the default) when the
+    /// multiple rule applies.
+    /// </summary>
+    public double LineHeightPt { get; init; }
     public double IndentLeftPt { get; init; }
     public double IndentRightPt { get; init; }
     public double FirstLineIndentPt { get; init; }

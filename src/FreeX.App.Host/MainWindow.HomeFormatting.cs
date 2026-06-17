@@ -1292,11 +1292,21 @@ public partial class MainWindow
             OpenRibbonContextMenu(btn, cm);
     }
 
+    /// <summary>The Home ▸ Format as Table gallery context menu, built imperatively from
+    /// <see cref="TableStyleGalleryPlanner"/>. Attached to the rendered declarative "Format as Table"
+    /// button once the ribbon is built (see <see cref="AttachFormatTableGalleryContextMenu"/>); the
+    /// rendered button's click handler (<see cref="FormatTableBtn_Click"/>) opens it.</summary>
+    private ContextMenu? _formatTableGalleryMenu;
+
     private void PopulateFormatTableGalleryMenu()
     {
-        if (FormatTableGalleryMenu is null || FormatTableGalleryMenu.Items.Count > 0)
+        if (_formatTableGalleryMenu is { Items.Count: > 0 })
+        {
+            AttachFormatTableGalleryContextMenu();
             return;
+        }
 
+        var menu = _formatTableGalleryMenu ??= new ContextMenu();
         var options = TableStyleGalleryPlanner.GetOptions(_workbook.Theme);
         string? currentFamily = null;
         for (var index = 0; index < options.Count; index++)
@@ -1305,9 +1315,9 @@ public partial class MainWindow
             var family = option.Label.Split(' ', 2)[0];
             if (!string.Equals(currentFamily, family, StringComparison.Ordinal))
             {
-                if (FormatTableGalleryMenu.Items.Count > 0)
-                    FormatTableGalleryMenu.Items.Add(new Separator());
-                FormatTableGalleryMenu.Items.Add(CreateFormatTableGallerySectionHeader(family));
+                if (menu.Items.Count > 0)
+                    menu.Items.Add(new Separator());
+                menu.Items.Add(CreateFormatTableGallerySectionHeader(family));
                 currentFamily = family;
             }
 
@@ -1319,7 +1329,21 @@ public partial class MainWindow
             };
             RibbonTooltip.SetKeyTip(menuItem, $"{family[0]}{option.Label[(family.Length + 1)..]}");
             menuItem.Click += FormatTableGalleryMenuItem_Click;
-            FormatTableGalleryMenu.Items.Add(menuItem);
+            menu.Items.Add(menuItem);
+        }
+
+        AttachFormatTableGalleryContextMenu();
+    }
+
+    /// <summary>Attaches the imperatively-built Format as Table gallery menu to the rendered declarative
+    /// "Format as Table" button. No-op until both the menu and the rendered button exist; the rendered
+    /// button's click runs <see cref="FormatTableBtn_Click"/>, which opens this menu.</summary>
+    private void AttachFormatTableGalleryContextMenu()
+    {
+        if (_formatTableGalleryMenu is { } menu &&
+            FindRenderedRibbonControl("Format as Table") is System.Windows.Controls.Primitives.ButtonBase formatTableBtn)
+        {
+            formatTableBtn.ContextMenu = menu;
         }
     }
 
