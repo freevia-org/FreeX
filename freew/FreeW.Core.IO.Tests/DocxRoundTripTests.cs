@@ -410,6 +410,55 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void KeepWithNext_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("keep with next")
+        {
+            Formatting = ParagraphFormatting.Default with { KeepWithNext = true }
+        });
+
+        RoundTrip(doc).Paragraphs.First().Formatting.KeepWithNext.Should().BeTrue();
+    }
+
+    [Fact]
+    public void KeepLinesTogether_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("keep lines together")
+        {
+            Formatting = ParagraphFormatting.Default with { KeepLinesTogether = true }
+        });
+
+        RoundTrip(doc).Paragraphs.First().Formatting.KeepLinesTogether.Should().BeTrue();
+    }
+
+    [Fact]
+    public void WidowControl_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("widow control")
+        {
+            Formatting = ParagraphFormatting.Default with { WidowControl = true }
+        });
+
+        RoundTrip(doc).Paragraphs.First().Formatting.WidowControl.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlainParagraph_HasNoFlowControl()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain"));
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.KeepWithNext.Should().BeFalse();
+        formatting.KeepLinesTogether.Should().BeFalse();
+        formatting.WidowControl.Should().BeFalse();
+    }
+
+    [Fact]
     public void ParagraphShading_RoundTrips()
     {
         var doc = new TextDocument();

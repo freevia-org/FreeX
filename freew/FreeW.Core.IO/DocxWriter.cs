@@ -796,9 +796,21 @@ public static class DocxWriter
             pPr.Add(new XElement(W + "pStyle", new XAttribute(W + "val", paragraph.StyleId)));
 
         var f = paragraph.Formatting;
+        // Flow control toggles, in CT_PPr schema order: keepNext, keepLines, pageBreakBefore,
+        // widowControl. Each is a toggle element emitted only when its model flag is set, mirroring how
+        // w:pageBreakBefore round-trips.
+        // Keep this paragraph on the same page as the next (w:keepNext).
+        if (f.KeepWithNext)
+            pPr.Add(new XElement(W + "keepNext"));
+        // Keep all lines of this paragraph together on one page (w:keepLines).
+        if (f.KeepLinesTogether)
+            pPr.Add(new XElement(W + "keepLines"));
         // Force a page break before this paragraph (w:pageBreakBefore); Word honours it when paginating.
         if (f.PageBreakBefore)
             pPr.Add(new XElement(W + "pageBreakBefore"));
+        // Widow/orphan control (w:widowControl); only emitted when enabled (FreeW defaults it off).
+        if (f.WidowControl)
+            pPr.Add(new XElement(W + "widowControl"));
         if (f.ListKind != ListKind.None)
         {
             var numId = f.ListKind switch

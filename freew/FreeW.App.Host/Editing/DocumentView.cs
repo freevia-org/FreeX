@@ -579,6 +579,36 @@ public sealed class DocumentView : RichTextBox
         });
 
     /// <summary>
+    /// Toggle "keep with next" (pPr/w:keepNext) over the selected paragraphs. If any spanned paragraph
+    /// lacks the flag, all get it; otherwise it is cleared. Reversible via the undo/redo bus.
+    /// </summary>
+    public void ToggleKeepWithNext()
+    {
+        var enable = SelectedModelParagraphs().Any(p => !p.Formatting.KeepWithNext);
+        FormatSelectedModelParagraphs(f => f with { KeepWithNext = enable });
+    }
+
+    /// <summary>
+    /// Toggle "keep lines together" (pPr/w:keepLines) over the selected paragraphs. If any spanned
+    /// paragraph lacks the flag, all get it; otherwise it is cleared. Reversible via the undo/redo bus.
+    /// </summary>
+    public void ToggleKeepLinesTogether()
+    {
+        var enable = SelectedModelParagraphs().Any(p => !p.Formatting.KeepLinesTogether);
+        FormatSelectedModelParagraphs(f => f with { KeepLinesTogether = enable });
+    }
+
+    /// <summary>
+    /// Toggle widow/orphan control (pPr/w:widowControl) over the selected paragraphs. If any spanned
+    /// paragraph lacks the flag, all get it; otherwise it is cleared. Reversible via the undo/redo bus.
+    /// </summary>
+    public void ToggleWidowControl()
+    {
+        var enable = SelectedModelParagraphs().Any(p => !p.Formatting.WidowControl);
+        FormatSelectedModelParagraphs(f => f with { WidowControl = enable });
+    }
+
+    /// <summary>
     /// Apply (or toggle off) multilevel/legal outline numbering over the selection. If any spanned
     /// paragraph is not already a <see cref="ListKind.MultiLevel"/> list, all become multilevel lists
     /// (preserving their <see cref="ParagraphFormatting.ListLevel"/>); otherwise the list decoration is
@@ -1479,7 +1509,7 @@ public sealed class DocumentView : RichTextBox
     /// otherwise invisible in the FlowDocument). Any field may be empty/null/false; the Tag is only
     /// stamped when at least one is set.
     /// </summary>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false);
 
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
@@ -1797,7 +1827,12 @@ public sealed class DocumentView : RichTextBox
             TextIndent = paraFmt.FirstLineIndentPt * PxPerPoint,
             LineHeight = paraFmt.LineSpacing > 0
                 ? paraFmt.LineSpacing * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
-                : double.NaN
+                : double.NaN,
+            // Flow control: WPF's Paragraph exposes KeepWithNext/KeepTogether directly, so map them so
+            // they survive an edit/commit cycle without a Tag. WidowControl has no FlowDocument slot and
+            // is carried on the Tag instead (see below).
+            KeepWithNext = paraFmt.KeepWithNext,
+            KeepTogether = paraFmt.KeepLinesTogether
         };
 
         if (paraFmt.Border is { } border && TryParseColor(border.ColorHex, out var borderColor))
@@ -1832,8 +1867,10 @@ public sealed class DocumentView : RichTextBox
         // invisible marker with no FlowDocument representation either, and page-break-before has no
         // native slot. To avoid losing any of them on an edit/commit cycle, we carry them on the
         // paragraph's Tag (a ParagraphTag) and read them back verbatim on commit; the round-trip is exact.
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore)
-            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore);
+        // WidowControl has no FlowDocument property either, so it joins the Tag alongside tab stops,
+        // bookmark name and page-break-before; carried verbatim and recovered on commit.
+        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl)
+            wpf.Tag = new ParagraphTag(paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl);
 
         foreach (var run in paragraph.Runs)
             wpf.Inlines.Add(BuildRun(run, paragraph, document));
@@ -3076,9 +3113,15 @@ public sealed class DocumentView : RichTextBox
     private static ParagraphFormatting ReadParagraphFormatting(WpfParagraph paragraph, TextDocument document)
     {
         var pageBreakBefore = paragraph.Tag is ParagraphTag { PageBreakBefore: true };
+        // WidowControl rides on the Tag (no FlowDocument property); KeepWithNext/KeepLinesTogether read
+        // straight back off the WPF Paragraph's native properties set in BuildParagraph.
+        var widowControl = paragraph.Tag is ParagraphTag { WidowControl: true };
         return ParagraphFormatting.Default with
         {
             Alignment = FromWpfAlignment(paragraph.TextAlignment),
+            KeepWithNext = paragraph.KeepWithNext,
+            KeepLinesTogether = paragraph.KeepTogether,
+            WidowControl = widowControl,
             SpaceBeforePt = paragraph.Margin.Top / PxPerPoint,
             SpaceAfterPt = paragraph.Margin.Bottom / PxPerPoint,
             LineSpacing = ReadLineSpacing(paragraph.LineHeight, document),
