@@ -77,7 +77,38 @@ public sealed partial class ViewportService
             shape.FlipVertical,
             ShapeKind: shape.Kind,
             FillColor: ResolveShapeFillColor(shape, theme),
-            OutlineColor: ResolveShapeOutlineColor(shape, theme)));
+            OutlineColor: ResolveShapeOutlineColor(shape, theme),
+            Effect: BuildShapeEffect(shape)));
+    }
+
+    // Projects the authored shape effect preset into the render plan using the same parameter
+    // values the WPF grid uses (shadow offset/alpha, glow color/radius, soft-edge radius). Kept here
+    // so every shell renders the same approximation without re-reading the source model.
+    private static DrawingObjectEffect? BuildShapeEffect(DrawingShapeModel shape)
+    {
+        var preset = shape.GetEffectiveEffectPreset();
+        return preset switch
+        {
+            // Outer drop shadow: 3,3 offset, ~23% black (alpha 58/255).
+            DrawingShapeEffectPreset.Shadow => new DrawingObjectEffect(
+                preset, OffsetX: 3, OffsetY: 3, BlurRadius: 4, Opacity: 58d / 255d, Color: new CellColor(0, 0, 0)),
+            // Inner shadow approximated as a tight, low-offset dark shadow.
+            DrawingShapeEffectPreset.InnerShadow => new DrawingObjectEffect(
+                preset, OffsetX: 1, OffsetY: 1, BlurRadius: 3, Opacity: 70d / 255d, Color: new CellColor(0, 0, 0)),
+            // Glow: accent-blue halo, no offset, larger blur (alpha 96/255, radius ~6).
+            DrawingShapeEffectPreset.Glow => new DrawingObjectEffect(
+                preset, BlurRadius: 6, Opacity: 96d / 255d, Color: new CellColor(91, 155, 213)),
+            // Soft edges: small grey feather (alpha 54/255, radius ~8).
+            DrawingShapeEffectPreset.SoftEdges => new DrawingObjectEffect(
+                preset, BlurRadius: 8, Opacity: 54d / 255d, Color: new CellColor(128, 128, 128)),
+            // Bevel / Reflection / 3-D rotation: carry the preset through so the shell can apply a
+            // light shadow approximation; faithful geometry is out of scope for the render plan.
+            DrawingShapeEffectPreset.Bevel or
+            DrawingShapeEffectPreset.Reflection or
+            DrawingShapeEffectPreset.ThreeDRotation => new DrawingObjectEffect(
+                preset, OffsetX: 2, OffsetY: 2, BlurRadius: 3, Opacity: 45d / 255d, Color: new CellColor(0, 0, 0)),
+            _ => null,
+        };
     }
 
     private static void AddPictureBounds(

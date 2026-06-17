@@ -136,7 +136,26 @@ public sealed record DrawingObjectBounds(
     double CropBottom = 0,
     uint SourceRowCount = 0,
     uint SourceColumnCount = 0,
-    IReadOnlyList<PictureCellSnapshot> PictureCells = null!);
+    IReadOnlyList<PictureCellSnapshot> PictureCells = null!,
+    DrawingObjectEffect? Effect = null);
+
+/// <summary>
+/// Render-plan projection of a drawing object's authored visual effect (shadow / glow /
+/// soft-edges / bevel / reflection / 3-D rotation). Kept deliberately minimal: just enough for a
+/// shell to render a believable approximation without re-deriving the source theme effect data.
+/// </summary>
+public sealed record DrawingObjectEffect(
+    DrawingShapeEffectPreset Preset,
+    double OffsetX = 0,
+    double OffsetY = 0,
+    double BlurRadius = 0,
+    double Opacity = 0,
+    CellColor? Color = null)
+{
+    public bool HasShadow => Preset is DrawingShapeEffectPreset.Shadow or DrawingShapeEffectPreset.InnerShadow;
+    public bool HasGlow => Preset == DrawingShapeEffectPreset.Glow;
+    public bool HasSoftEdges => Preset == DrawingShapeEffectPreset.SoftEdges;
+}
 
 public enum DrawingObjectRenderPrimitiveKind
 {
