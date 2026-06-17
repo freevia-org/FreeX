@@ -2,17 +2,19 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:ribbon="clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf">
 
-    <!-- Brushes the shared renderer looks up by key (with graceful fallbacks if absent). -->
+    <!-- Brushes the shared renderer looks up by key (with graceful fallbacks if absent). Values match
+         FreeX's ThemeResources palette so the rendered ribbon group/button chrome reads identically:
+         accent #0F6D8C (teal), accent-dark #17324D (navy), border #DADCE0, soft wash #E6F6FA. -->
     <SolidColorBrush x:Key="FreeXRibbonSurfaceBrush" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="FreeXBorderBrush" Color="#E2E2E2"/>
+    <SolidColorBrush x:Key="FreeXBorderBrush" Color="#DADCE0"/>
     <SolidColorBrush x:Key="FreeXBorderStrongBrush" Color="#B5B5B5"/>
     <SolidColorBrush x:Key="FreeXTextBrush" Color="#1A1A1A"/>
     <SolidColorBrush x:Key="FreeXMutedTextBrush" Color="#707070"/>
-    <SolidColorBrush x:Key="FreeXAccentBrush" Color="#2B579A"/>
-    <SolidColorBrush x:Key="FreeXAccentDarkBrush" Color="#1F4377"/>
-    <SolidColorBrush x:Key="FreeXAccentPressedBrush" Color="#CCE0F5"/>
-    <SolidColorBrush x:Key="FreeXAccentSoftBrush" Color="#EAF1FB"/>
-    <SolidColorBrush x:Key="FreeXRibbonButtonHoverBrush" Color="#EAF1FB"/>
+    <SolidColorBrush x:Key="FreeXAccentBrush" Color="#0F6D8C"/>
+    <SolidColorBrush x:Key="FreeXAccentDarkBrush" Color="#17324D"/>
+    <SolidColorBrush x:Key="FreeXAccentPressedBrush" Color="#CFEAF1"/>
+    <SolidColorBrush x:Key="FreeXAccentSoftBrush" Color="#E6F6FA"/>
+    <SolidColorBrush x:Key="FreeXRibbonButtonHoverBrush" Color="#E6F6FA"/>
 
     <!-- ── Ribbon button styles (mirrors FreeX's RibbonBtn vocabulary) ───────── -->
     <Style x:Key="RibbonBtn" TargetType="Button">

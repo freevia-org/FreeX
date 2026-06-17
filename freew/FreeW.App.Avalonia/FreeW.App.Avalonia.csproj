@@ -8,7 +8,7 @@
     <AssemblyName>FreeW</AssemblyName>
     <ApplicationTitle>FreeW</ApplicationTitle>
     <RootNamespace>FreeW.App.Avalonia</RootNamespace>
-    <RuntimeIdentifiers>linux-x64;linux-arm64;win-x64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>linux-x64;linux-arm64;win-x64;osx-arm64;osx-x64</RuntimeIdentifiers>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
   </PropertyGroup>
 
@@ -28,6 +28,10 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="FreeW.App.Avalonia.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Packaging\macos\FreeW.icns" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

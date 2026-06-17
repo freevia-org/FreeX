@@ -1,6 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework">
+                    xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+                    xmlns:wpf="clr-namespace:Free.Shared.Ribbon.Wpf">
 
     <!-- ════════════════════════════════════════════════════════════════════
          Shared window-chrome resources.
@@ -18,23 +19,33 @@
            ChromeStatusToggleButtonStyle  — clean status-bar toggle button
          ════════════════════════════════════════════════════════════════════ -->
 
-    <!-- ── Brushes (self-contained; tuned to the FreeW #2B579A title bar) ──── -->
+    <!-- ── Brushes (self-contained; tuned to the FreeX #17324D navy title/status bar) ──── -->
     <SolidColorBrush x:Key="ChromeWhiteBrush" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="ChromeTextBrush" Color="#1F1F1F"/>
     <SolidColorBrush x:Key="ChromeMutedTextBrush" Color="#5F6368"/>
     <!-- Flat (light-background) command-button hover/press fills -->
-    <SolidColorBrush x:Key="ChromeButtonHoverBrush" Color="#D6E4F7"/>
-    <SolidColorBrush x:Key="ChromeButtonPressedBrush" Color="#BFD4F0"/>
-    <SolidColorBrush x:Key="ChromeButtonBorderBrush" Color="#9DB8DC"/>
-    <SolidColorBrush x:Key="ChromeAccentBrush" Color="#2B579A"/>
-    <!-- Title-bar / status-bar (dark-background) hover/press fills -->
-    <SolidColorBrush x:Key="ChromeCaptionHoverBrush" Color="#3C68AB"/>
-    <SolidColorBrush x:Key="ChromeCaptionPressedBrush" Color="#1F4377"/>
+    <SolidColorBrush x:Key="ChromeButtonHoverBrush" Color="#D6EEF4"/>
+    <SolidColorBrush x:Key="ChromeButtonPressedBrush" Color="#BFE2EC"/>
+    <SolidColorBrush x:Key="ChromeButtonBorderBrush" Color="#8FC3D2"/>
+    <SolidColorBrush x:Key="ChromeAccentBrush" Color="#0F6D8C"/>
+    <!-- Title-bar / status-bar (dark-background) hover/press fills — FreeX #17324D navy family -->
+    <SolidColorBrush x:Key="ChromeCaptionHoverBrush" Color="#264B6B"/>
+    <SolidColorBrush x:Key="ChromeCaptionPressedBrush" Color="#0F2438"/>
     <SolidColorBrush x:Key="ChromeCaptionButtonBorderBrush" Color="#55FFFFFF"/>
-    <SolidColorBrush x:Key="ChromeCaptionDisabledBrush" Color="#9DB4D2"/>
+    <SolidColorBrush x:Key="ChromeCaptionDisabledBrush" Color="#7E97B4"/>
     <!-- Close-button red hover/press -->
     <SolidColorBrush x:Key="ChromeCloseHoverBrush" Color="#E81123"/>
     <SolidColorBrush x:Key="ChromeClosePressedBrush" Color="#C42B1C"/>
+
+    <!-- ── Backstage sidebar (FreeX Office-backstage navy rail) ─────────────
+         The full-window File-screen nav rail: a dark navy column, light-on-dark
+         entries with an accent hover band and an accent selection band, plus an
+         icon column. The host (BackstageFrame) overrides Background on a per-app
+         basis (FreeW uses its Word #2B579A accent), so these are defaults. -->
+    <SolidColorBrush x:Key="ChromeBackstageSidebarBrush" Color="#10253A"/>
+    <SolidColorBrush x:Key="ChromeBackstageSidebarHoverBrush" Color="#17324D"/>
+    <SolidColorBrush x:Key="ChromeBackstageSidebarSelectedBrush" Color="#0F6D8C"/>
+    <SolidColorBrush x:Key="ChromeBackstageSidebarSeparatorBrush" Color="#24445E"/>
 
     <!-- ════════════════════════════════════════════════════════════════════
          Flat command button — the FreeX "RibbonBtn" look. Transparent until
@@ -324,6 +335,83 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         Backstage sidebar nav button — the FreeX "SsNavBtn" look. Light-on-dark,
+         left-aligned label (with an optional leading icon), transparent until
+         hovered (accent-dark band). Use for the File-screen nav entries.
+
+         The selected entry uses BackstageSidebarNavButtonActive (accent band +
+         semibold). The frame swaps the style on selection. Background/hover are
+         driven through the brush keys above so a host can re-tint the rail.
+         ════════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="BackstageSidebarNavButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource ChromeWhiteBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="Padding" Value="22,9"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bg" Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bg" Property="Background" Value="{DynamicResource ChromeBackstageSidebarHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="bg" Property="Background" Value="{DynamicResource ChromeBackstageSidebarHoverBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="BackstageSidebarNavButtonActive" BasedOn="{StaticResource BackstageSidebarNavButton}" TargetType="Button">
+        <Setter Property="Background" Value="{DynamicResource ChromeBackstageSidebarSelectedBrush}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bg" Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The back-arrow button at the top of the rail: same look, but compact and
+         left-aligned (not stretched). -->
+    <Style x:Key="BackstageSidebarBackButton" BasedOn="{StaticResource BackstageSidebarNavButton}" TargetType="Button">
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="Padding" Value="16,11"/>
+        <Setter Property="FontSize" Value="18"/>
+    </Style>
+
+    <!-- Icon glyph inside a sidebar entry: 22px, white, with a trailing gap to the label. -->
+    <Style x:Key="BackstageSidebarIcon" TargetType="{x:Type wpf:RibbonIcon}">
+        <Setter Property="IconSize" Value="22"/>
+        <Setter Property="Foreground" Value="{StaticResource ChromeWhiteBrush}"/>
+        <Setter Property="Margin" Value="0,0,12,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
 
 </ResourceDictionary>

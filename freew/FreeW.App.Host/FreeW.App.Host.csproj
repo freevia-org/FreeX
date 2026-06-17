@@ -31,7 +31,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Resource Include="Resources\FreeW.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Resources\FreeW.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Resources\CommandIconsSvg\**\*.svg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <ApplicationIcon>Resources\FreeW.ico</ApplicationIcon>
+  </PropertyGroup>
 
 </Project>

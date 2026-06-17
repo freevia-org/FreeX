@@ -2,41 +2,43 @@ using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.AppServices;
+using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.Wpf;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
-using WpfContentControl = System.Windows.Controls.ContentControl;
 
 namespace FreeW.App.Host.Backstage;
 
 /// <summary>
-/// The Word-style Backstage view: the full-window "File" screen. A green vertical nav rail
-/// (Word accent #2B579A) on the left with entries (Info, New, Open, Save, Save As, Print, Export,
-/// Recent, Options, Close); a right content pane that swaps per selected entry.
+/// FreeW's Word-style Backstage (the full-window "File" screen), rebuilt on top of the shared,
+/// app-neutral <see cref="BackstageFrame"/>. FreeW supplies the entries (Info / New / Open / Save /
+/// Save As / Print / Export / Recent / Options / Close) and the content panes; the frame owns the
+/// coloured nav rail, selection/hover, the back-arrow + Esc close, and the FreeX Office-backstage look.
 ///
-/// The view owns no file IO of its own — every action routes back into the host's existing command
-/// implementations through the <see cref="BackstageActions"/> callbacks (the same New/Open/Save/…
-/// MainWindow already wires). It is a code-built <see cref="UserControl"/>, matching the rest of the
-/// FreeW window's code-only UI style, and reuses the app's accent/typography vocabulary.
+/// The view re-tints the rail to FreeW's Word accent (#2B579A) and reimplements no file IO — every
+/// action routes back into the host's existing command implementations through <see cref="BackstageActions"/>.
 /// </summary>
 internal sealed class BackstageView : UserControl
 {
-    // Word's File-screen accent and the darker selection band, matching the app's title-bar accent.
-    private static readonly Brush AccentBrush = Freeze(Color.FromRgb(0x2B, 0x57, 0x9A));
-    private static readonly Brush AccentSelectedBrush = Freeze(Color.FromRgb(0x1F, 0x43, 0x77));
-    private static readonly Brush ContentBrush = Freeze(Color.FromRgb(0xFF, 0xFF, 0xFF));
+    // Word's File-screen rail + the darker selection/hover bands, matching the app's FreeX-navy title bar
+    // (#17324D). Selection/hover are darker shades of the same navy.
+    private static readonly Color AccentColor = Color.FromRgb(0x17, 0x32, 0x4D);
+    private static readonly Color AccentSelectedColor = Color.FromRgb(0x0F, 0x24, 0x38);
+    private static readonly Color AccentHoverColor = Color.FromRgb(0x26, 0x4B, 0x6B);
+    private static readonly Color SeparatorColor = Color.FromRgb(0x36, 0x55, 0x73);
+
     private static readonly Brush HeadingBrush = Freeze(Color.FromRgb(0x33, 0x33, 0x33));
     private static readonly Brush MutedBrush = Freeze(Color.FromRgb(0x70, 0x70, 0x70));
-    private static readonly Brush LinkBrush = Freeze(Color.FromRgb(0x2B, 0x57, 0x9A));
+    // The teal FreeX accent (#0F6D8C) for in-content links, matching the ribbon accent.
+    private static readonly Brush LinkBrush = Freeze(Color.FromRgb(0x0F, 0x6D, 0x8C));
+    private static readonly Brush TileBorderBrush = Freeze(Color.FromRgb(0xD0, 0xD7, 0xE5));
 
     private readonly DocumentView _editor;
     private readonly FileCommands _file;
     private readonly BackstageActions _actions;
-    private readonly WpfContentControl _content;
-    private readonly StackPanel _nav;
-    private Button? _selectedNav;
+    private readonly BackstageFrame _frame;
 
     public BackstageView(DocumentView editor, FileCommands file, BackstageActions actions)
     {
@@ -44,144 +46,54 @@ internal sealed class BackstageView : UserControl
         _file = file;
         _actions = actions;
 
-        Visibility = Visibility.Collapsed;
-        Background = ContentBrush;
-        FocusVisualStyle = null;
-
-        var layout = new Grid();
-        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
-        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        _nav = BuildNavRail();
-        var rail = new Border { Background = AccentBrush, Child = _nav };
-        Grid.SetColumn(rail, 0);
-        layout.Children.Add(rail);
-
-        _content = new WpfContentControl { Margin = new Thickness(40, 28, 40, 28) };
-        Grid.SetColumn(_content, 1);
-        layout.Children.Add(_content);
-
-        Content = layout;
-
-        // Esc returns to the document; the view is focusable so it receives the key while shown.
-        Focusable = true;
-        KeyDown += (_, e) =>
+        _frame = new BackstageFrame();
+        _frame.SetAccent(AccentColor, AccentHoverColor, AccentSelectedColor, SeparatorColor);
+        _frame.SetEntries(BuildEntries());
+        // When the frame closes itself (Esc / back arrow / an action entry), collapse this wrapper too so
+        // the document shows through, then notify the host. Hide() also funnels through here.
+        _frame.Closed += () =>
         {
-            if (e.Key == Key.Escape)
-            {
-                Hide();
-                e.Handled = true;
-            }
+            Visibility = Visibility.Collapsed;
+            _actions.OnClosed();
         };
+
+        // Code-built control: no XAML, just hosts the shared frame edge-to-edge.
+        Padding = new Thickness(0);
+        Background = Brushes.White;
+        Content = _frame;
+        Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>Show the backstage and select the Info entry, refreshing its live content.</summary>
+    /// <summary>Show the backstage, landing on the Info pane with live content.</summary>
     public void Show()
     {
         Visibility = Visibility.Visible;
-        Select("Info");
-        Focus();
+        _frame.Show("Info");
     }
 
-    /// <summary>Hide the backstage and return to the document (via the host's restore callback).</summary>
-    public void Hide()
+    /// <summary>Hide the backstage and return to the document (collapse happens via the frame's Closed event).</summary>
+    public void Hide() => _frame.Hide();
+
+    private System.Collections.Generic.IEnumerable<BackstageEntry> BuildEntries()
     {
-        Visibility = Visibility.Collapsed;
-        _actions.OnClosed();
-    }
-
-    private StackPanel BuildNavRail()
-    {
-        var nav = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
-
-        // A back arrow (returns to the document), then the Word File-screen entries.
-        var back = new Button
-        {
-            Content = "←",
-            FontSize = 18,
-            Foreground = Brushes.White,
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Width = 40,
-            Height = 36,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Cursor = Cursors.Hand,
-            ToolTip = "Back (Esc)"
-        };
-        back.Click += (_, _) => Hide();
-        nav.Children.Add(back);
-
-        AddNav(nav, "Info", () => _content.Content = BuildInfoPane());
-        AddNav(nav, "New", () => { Hide(); _actions.New(); });
-        AddNav(nav, "Open", () => { Hide(); _actions.Open(); });
-        AddNav(nav, "Save", () => { Hide(); _actions.Save(); });
-        AddNav(nav, "Save As", () => { Hide(); _actions.SaveAs(); });
-        AddNav(nav, "Print", () => { Hide(); _actions.Print(); });
-        AddNav(nav, "Export", () => _content.Content = BuildExportPane());
-        AddNav(nav, "Recent", () => _content.Content = BuildRecentPane());
-        AddNav(nav, "Options", () => _content.Content = BuildOptionsPane());
-        AddNav(nav, "Close", () => Hide());
-
-        return nav;
-    }
-
-    private void AddNav(Panel host, string label, Action onSelected)
-    {
-        var button = new Button
-        {
-            Content = label,
-            Tag = label,
-            Foreground = Brushes.White,
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            FontSize = 14,
-            Padding = new Thickness(20, 9, 12, 9),
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Cursor = Cursors.Hand,
-            FocusVisualStyle = null
-        };
-        button.Click += (_, _) =>
-        {
-            SetSelected(button);
-            onSelected();
-        };
-        host.Children.Add(button);
-    }
-
-    // Select a nav entry by its label (used by Show to land on Info).
-    private void Select(string label)
-    {
-        foreach (var child in _nav.Children)
-        {
-            if (child is Button button && (button.Tag as string) == label)
-            {
-                SetSelected(button);
-                button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-                return;
-            }
-        }
-    }
-
-    // Paint the selected nav entry with the darker accent band; clear the previous one.
-    private void SetSelected(Button button)
-    {
-        if (_selectedNav is not null)
-            _selectedNav.Background = Brushes.Transparent;
-        // Action-style entries (New/Open/Save/…) close the backstage, so they shouldn't stay banded.
-        if (button.Tag as string is "Info" or "Export" or "Recent" or "Options")
-        {
-            button.Background = AccentSelectedBrush;
-            _selectedNav = button;
-        }
-        else
-        {
-            _selectedNav = null;
-        }
+        // Pane entries show content and stay highlighted; action entries fire a host callback and close.
+        // The frame closes itself before invoking an action, so each callback just runs the command.
+        yield return BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, BuildInfoPane);
+        yield return BackstageEntry.Command("New", RibbonCommandIconKind.Insert, () => _actions.New());
+        yield return BackstageEntry.Command("Open", RibbonCommandIconKind.GetData, () => _actions.Open());
+        yield return BackstageEntry.Divider();
+        yield return BackstageEntry.Command("Save", RibbonCommandIconKind.Save, () => _actions.Save());
+        yield return BackstageEntry.Command("Save As", RibbonCommandIconKind.Save, () => _actions.SaveAs());
+        yield return BackstageEntry.Command("Print", RibbonCommandIconKind.Print, () => _actions.Print());
+        yield return BackstageEntry.Pane("Export", RibbonCommandIconKind.Share, BuildExportPane);
+        yield return BackstageEntry.Pane("Recent", RibbonCommandIconKind.GetData, BuildRecentPane);
+        yield return BackstageEntry.Pane("New from template", RibbonCommandIconKind.Grid, BuildNewPane);
+        yield return BackstageEntry.Pane("Options", RibbonCommandIconKind.View, BuildOptionsPane, dockBottom: true);
+        yield return BackstageEntry.Command("Close", RibbonCommandIconKind.Previous, () => { }, dockBottom: true);
     }
 
     // ── Info pane ──────────────────────────────────────────────────────────────
-    // Document path + properties, plus cheap word/page/paragraph counts from the pure WordCount helper.
+    // Document path + properties + statistics, an Edit-properties link, plus cheap doc actions.
     private UIElement BuildInfoPane()
     {
         _editor.CommitToModel();
@@ -189,11 +101,11 @@ internal sealed class BackstageView : UserControl
         var stats = WordCount.Of(model);
         var properties = model.Properties;
 
-        var panel = new StackPanel();
+        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Heading("Info"));
 
         var path = _file.CurrentPath;
-        panel.Children.Add(Field("Document", _file.DisplayName + (_file.IsDirty ? " (unsaved changes)" : "")));
+        panel.Children.Add(Field("Document", _file.DisplayName + (_file.IsDirty ? "  (unsaved changes)" : "")));
         panel.Children.Add(Field("Location", path ?? "Not saved yet"));
 
         panel.Children.Add(SubHeading("Properties"));
@@ -202,24 +114,23 @@ internal sealed class BackstageView : UserControl
         panel.Children.Add(Field("Subject", Or(properties.Subject)));
         panel.Children.Add(Field("Keywords", Or(properties.Keywords)));
 
+        var edit = LinkButton("Edit document properties…", () => { Hide(); _actions.EditProperties(); });
+        edit.Margin = new Thickness(0, 8, 0, 0);
+        panel.Children.Add(edit);
+
         panel.Children.Add(SubHeading("Statistics"));
         panel.Children.Add(Field("Words", stats.Words.ToString()));
         panel.Children.Add(Field("Characters", stats.CharactersWithSpaces.ToString()));
         panel.Children.Add(Field("Paragraphs", stats.Paragraphs.ToString()));
 
-        var edit = LinkButton("Edit document properties…", () => { Hide(); _actions.EditProperties(); });
-        edit.Margin = new Thickness(0, 16, 0, 0);
-        panel.Children.Add(edit);
-
         return Scroll(panel);
     }
 
     // ── Export pane ────────────────────────────────────────────────────────────
-    // No PDF/export back-end exists in FreeW yet, so this is an honest placeholder (heading + note)
-    // rather than invented IO. Save As is offered as the available way to write the document out.
+    // No PDF/export back-end exists in FreeW yet, so this is an honest placeholder offering Save As.
     private UIElement BuildExportPane()
     {
-        var panel = new StackPanel();
+        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Heading("Export"));
         panel.Children.Add(new TextBlock
         {
@@ -227,8 +138,6 @@ internal sealed class BackstageView : UserControl
                  + "Use Save As to write a Word document (.docx).",
             Foreground = MutedBrush,
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth = 520,
-            HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 16)
         });
         panel.Children.Add(LinkButton("Save As…", () => { Hide(); _actions.SaveAs(); }));
@@ -236,11 +145,10 @@ internal sealed class BackstageView : UserControl
     }
 
     // ── Recent pane ────────────────────────────────────────────────────────────
-    // Lists entries from the shared RecentFilesStore (the same source MainWindow uses); a click opens
-    // the file through the host's existing OpenPath path and closes the backstage.
+    // Lists RecentFilesStore entries (name + path); a click opens via the host and closes the backstage.
     private UIElement BuildRecentPane()
     {
-        var panel = new StackPanel();
+        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Heading("Recent"));
 
         var entries = _file.RecentEntries;
@@ -258,23 +166,21 @@ internal sealed class BackstageView : UserControl
         foreach (var entry in entries)
         {
             var path = entry.Path;
-            var item = new StackPanel { Margin = new Thickness(0, 0, 0, 12), Cursor = Cursors.Hand };
+            var item = new StackPanel { Margin = new Thickness(0, 0, 0, 12), Cursor = System.Windows.Input.Cursors.Hand };
 
-            var name = new TextBlock
+            item.Children.Add(new TextBlock
             {
                 Text = Path.GetFileName(path),
                 Foreground = LinkBrush,
                 FontSize = 14
-            };
-            var location = new TextBlock
+            });
+            item.Children.Add(new TextBlock
             {
                 Text = path,
                 Foreground = MutedBrush,
                 FontSize = 11,
                 TextTrimming = TextTrimming.CharacterEllipsis
-            };
-            item.Children.Add(name);
-            item.Children.Add(location);
+            });
             item.MouseLeftButtonUp += (_, _) => { Hide(); _actions.OpenPath(path); };
             panel.Children.Add(item);
         }
@@ -282,12 +188,30 @@ internal sealed class BackstageView : UserControl
         return Scroll(panel);
     }
 
+    // ── New pane ───────────────────────────────────────────────────────────────
+    // A "Blank document" tile (the only template FreeW ships), styled like Office's New gallery.
+    private UIElement BuildNewPane()
+    {
+        var panel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left };
+        panel.Children.Add(Heading("New"));
+
+        var gallery = new WrapPanel { Orientation = Orientation.Horizontal };
+        gallery.Children.Add(TemplateTile("Blank document", () => { Hide(); _actions.New(); }));
+        panel.Children.Add(gallery);
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = "More templates are not available in this build.",
+            Foreground = MutedBrush,
+            Margin = new Thickness(0, 18, 0, 0)
+        });
+        return panel;
+    }
+
     // ── Options pane ───────────────────────────────────────────────────────────
-    // FreeW has no dedicated Options dialog; show a short placeholder describing where settings live,
-    // plus the data-folder location the shared storage helpers resolve for FreeW.
     private UIElement BuildOptionsPane()
     {
-        var panel = new StackPanel();
+        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Heading("Options"));
         panel.Children.Add(new TextBlock
         {
@@ -295,15 +219,13 @@ internal sealed class BackstageView : UserControl
                  + "settings are available on the ribbon tabs.",
             Foreground = MutedBrush,
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth = 520,
-            HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 16)
         });
         panel.Children.Add(Field("Data folder", _actions.DataFolder()));
         return panel;
     }
 
-    // ── Small visual helpers (reusing the app's accent / muted vocabulary) ───────
+    // ── Small visual helpers ─────────────────────────────────────────────────────
     private static TextBlock Heading(string text) => new()
     {
         Text = text,
@@ -319,7 +241,7 @@ internal sealed class BackstageView : UserControl
         FontSize = 15,
         FontWeight = FontWeights.SemiBold,
         Foreground = HeadingBrush,
-        Margin = new Thickness(0, 14, 0, 6)
+        Margin = new Thickness(0, 16, 0, 6)
     };
 
     private static UIElement Field(string label, string value)
@@ -344,6 +266,39 @@ internal sealed class BackstageView : UserControl
         return grid;
     }
 
+    // An Office-style New tile: a bordered card with a blank "page" preview and a caption under it.
+    private static UIElement TemplateTile(string caption, Action onClick)
+    {
+        var preview = new Border
+        {
+            Width = 150,
+            Height = 190,
+            Background = Brushes.White,
+            BorderBrush = TileBorderBrush,
+            BorderThickness = new Thickness(1),
+            Child = new Border
+            {
+                Margin = new Thickness(18),
+                Background = Brushes.White,
+                BorderBrush = Freeze(Color.FromRgb(0xE2, 0xE6, 0xEF)),
+                BorderThickness = new Thickness(1)
+            }
+        };
+
+        var stack = new StackPanel { Margin = new Thickness(0, 0, 18, 0), Cursor = System.Windows.Input.Cursors.Hand };
+        stack.Children.Add(preview);
+        stack.Children.Add(new TextBlock
+        {
+            Text = caption,
+            Foreground = HeadingBrush,
+            FontSize = 13,
+            Margin = new Thickness(0, 8, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
+        stack.MouseLeftButtonUp += (_, _) => onClick();
+        return stack;
+    }
+
     private static Button LinkButton(string text, Action onClick)
     {
         var button = new Button
@@ -355,7 +310,7 @@ internal sealed class BackstageView : UserControl
             FontSize = 13,
             Padding = new Thickness(0),
             HorizontalAlignment = HorizontalAlignment.Left,
-            Cursor = Cursors.Hand,
+            Cursor = System.Windows.Input.Cursors.Hand,
             FocusVisualStyle = null
         };
         button.Click += (_, _) => onClick();

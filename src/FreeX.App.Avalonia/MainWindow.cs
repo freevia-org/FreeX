@@ -746,6 +746,37 @@ public sealed partial class MainWindow : Window
                     ["pageLayout.scale"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.width"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.height"] = () => _ = ShowPageSetupDialogAsync(),
+                    // Review: New Note / New Comment on the active cell.
+                    ["review.newNote"] = () => _ = ShowNewNoteDialogAsync(),
+                    ["review.newComment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
+                    // Insert: Sparklines — reuse the existing Quick-Analysis sparkline insertion.
+                    ["insert.sparklineLine"] = () => InsertQuickAnalysisSparklines(SparklineKind.Line),
+                    ["insert.sparklineColumn"] = () => InsertQuickAnalysisSparklines(SparklineKind.Column),
+                    ["insert.sparklineWinLoss"] = () => InsertQuickAnalysisSparklines(SparklineKind.WinLoss),
+                    // Data: Outline Group / Ungroup.
+                    ["data.group"] = GroupSelectedRows,
+                    ["data.ungroup"] = ClearWorksheetOutline,
+                    // Home ▸ Cells: Insert / Delete Cells (with shift-direction prompt).
+                    ["home.insertCells"] = () => _ = ShowInsertCellsDialogAsync(),
+                    ["home.deleteCells"] = () => _ = ShowDeleteCellsDialogAsync(),
+                    // Home ▸ Styles: Cell Styles gallery.
+                    ["home.cellStyles"] = () => _ = ShowCellStylesGalleryAsync(),
+                    // Review ▸ Delete Comment; View ▸ Split / Normal.
+                    ["review.deleteComment"] = DeleteActiveCellComment,
+                    ["view.split"] = SplitPanesAtActiveCell,
+                    ["view.normal"] = SetNormalView,
+                    // Insert ▸ Comment (reuse New Comment); Insert ▸ Header & Footer (Page Setup).
+                    ["insert.comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
+                    ["insert.headerFooter"] = () => _ = ShowPageSetupDialogAsync(),
+                    // Page Layout ▸ Themes (Office / Colorful / Grayscale picker).
+                    ["pageLayout.themes"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeColors"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeFonts"] = () => _ = ShowThemesGalleryAsync(),
+                    ["pageLayout.themeEffects"] = () => _ = ShowThemesGalleryAsync(),
+                    // Insert ▸ Symbol.
+                    ["insert.symbol"] = () => _ = ShowSymbolPickerAsync(),
+                    // Formulas ▸ Error Checking.
+                    ["formulas.errorChecking"] = CheckFormulaErrors,
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
