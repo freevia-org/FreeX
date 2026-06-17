@@ -86,6 +86,9 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Insert ▸ Shapes — insert the default drawing shape at the active cell.</summary>
     public Action? InsertShape { get; init; }
 
+    /// <summary>Insert ▸ Text Box — insert a text box at the active cell.</summary>
+    public Action? InsertTextBox { get; init; }
+
     /// <summary>Home ▸ Clipboard ▸ Format Painter — capture the selection's format for a one-shot apply.</summary>
     public Action? FormatPainter { get; init; }
 
@@ -500,6 +503,7 @@ internal static class SampleRibbon
         Bind("insert.pivotTable", callbacks.InsertPivotTable);
         Bind("insert.picture", callbacks.InsertPicture);
         Bind("insert.shapes", callbacks.InsertShape);
+        Bind("insert.textBox", callbacks.InsertTextBox);
         Bind("home.formatPainter", callbacks.FormatPainter);
 
         if (callbacks.SetFontSize is { } setFontSize)

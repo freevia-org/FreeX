@@ -130,6 +130,30 @@ public sealed partial class MainWindow
         RefreshShell($"Inserted {kind} shape at {FormatCellReference(anchor)}");
     }
 
+    /// <summary>
+    /// Inserts a text box anchored at the active cell through the shared session command path and the Core
+    /// <see cref="FreeX.Core.Commands.AddTextBoxCommand"/> the drawing overlay already renders. The box is
+    /// selectable and editable (move/resize/rotate) like other drawing objects. Surfaces the Core guard
+    /// message on failure.
+    /// </summary>
+    private void InsertTextBoxAtActiveCell()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var anchor = _session.ActiveCell;
+        var command = InsertTextBoxCommandFactory.Build(_session.ActiveSheet.Id, anchor);
+        var result = _session.ExecuteReviewCommand(command);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Insert Text Box failed.");
+            return;
+        }
+
+        ClearSelectedDrawingObject();
+        RefreshShell($"Inserted text box at {FormatCellReference(anchor)}");
+    }
+
     /// <summary>Decodes the image's native pixel size via Avalonia, or (0,0) when decoding fails.</summary>
     private static (double Width, double Height) DecodePictureSize(byte[] imageBytes)
     {

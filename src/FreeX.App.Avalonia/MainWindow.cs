@@ -431,6 +431,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _insertPivotTableMenuItem = new();
     private readonly NativeMenuItem _insertPictureMenuItem = new();
     private readonly NativeMenuItem _insertShapeMenuItem = new();
+    private readonly NativeMenuItem _insertTextBoxMenuItem = new();
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
@@ -608,6 +609,7 @@ public sealed partial class MainWindow : Window
                 InsertPivotTable = () => _ = ShowInsertPivotTableDialogAsync(),
                 InsertPicture = () => _ = InsertPictureFromFileAsync(),
                 InsertShape = () => InsertShapeAtActiveCell(InsertShapeCommandFactory.DefaultShape),
+                InsertTextBox = InsertTextBoxAtActiveCell,
                 FormatPainter = () => CaptureFormatPainterSource(persistent: false),
                 SetFontSize = ApplyRibbonFontSize,
                 SetFontName = ApplyRibbonFontName,
@@ -979,6 +981,9 @@ public sealed partial class MainWindow : Window
 
         _insertShapeMenuItem.Header = "Shape";
         _insertShapeMenuItem.Menu = CreateNativeShapeMenu();
+
+        _insertTextBoxMenuItem.Header = "Text Box";
+        _insertTextBoxMenuItem.Click += (_, _) => InsertTextBoxAtActiveCell();
 
         _sortAscendingMenuItem.Header = "Sort A to Z";
         _sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);
@@ -1381,6 +1386,7 @@ public sealed partial class MainWindow : Window
         insertMenu.Items.Add(new NativeMenuItemSeparator());
         insertMenu.Items.Add(_insertPictureMenuItem);
         insertMenu.Items.Add(_insertShapeMenuItem);
+        insertMenu.Items.Add(_insertTextBoxMenuItem);
 
         var dataMenu = new NativeMenu();
         dataMenu.Items.Add(_sortAscendingMenuItem);
@@ -2199,6 +2205,7 @@ public sealed partial class MainWindow : Window
         _insertPivotTableMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
         _insertPictureMenuItem.IsEnabled = isIdle && StorageProvider.CanOpen;
         _insertShapeMenuItem.IsEnabled = isIdle;
+        _insertTextBoxMenuItem.IsEnabled = isIdle;
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
