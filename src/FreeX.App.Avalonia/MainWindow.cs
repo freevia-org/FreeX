@@ -308,6 +308,10 @@ public sealed partial class MainWindow : Window
     internal static readonly global::Avalonia.Media.Color ChromeSurfaceColor =
         global::Avalonia.Media.Color.FromRgb(0xF5, 0xF6, 0xF7);
     private static readonly IBrush ChromeSurface = new SolidColorBrush(ChromeSurfaceColor);
+
+    // Status-bar text token — the muted header foreground, applied uniformly to the status / selection-stats
+    // / zoom texts so the status bar reads consistently (was scattered inline 73,80,93 magic values).
+    private static readonly IBrush StatusBarForeground = HeaderForeground;
     private static readonly IBrush SelectionBorder = Brush(11, 112, 116);
     private static readonly IBrush SelectionHeaderBackground = Brush(225, 244, 242);
     private static readonly IBrush SelectionHeaderForeground = Brush(13, 86, 89);
@@ -1630,6 +1634,7 @@ public sealed partial class MainWindow : Window
         _detailText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
 
         _statusText.FontSize = 12;
+        _statusText.Foreground = StatusBarForeground;
         _statusText.MaxWidth = 180;
         _statusText.TextTrimming = TextTrimming.CharacterEllipsis;
         _statusText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -1638,7 +1643,7 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetHelpText(_statusText, "Shows the current workbook status.");
 
         _selectionStatsText.FontSize = 12;
-        _selectionStatsText.Foreground = Brush(73, 80, 93);
+        _selectionStatsText.Foreground = StatusBarForeground;
         _selectionStatsText.MaxWidth = 420;
         _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
         _selectionStatsText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -1648,7 +1653,7 @@ public sealed partial class MainWindow : Window
 
         _zoomText.FontSize = 12;
         _zoomText.FontWeight = FontWeight.SemiBold;
-        _zoomText.Foreground = Brush(73, 80, 93);
+        _zoomText.Foreground = StatusBarForeground;
         _zoomText.MinWidth = 44;
         _zoomText.TextAlignment = TextAlignment.Right;
         _zoomText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
