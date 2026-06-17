@@ -86,6 +86,21 @@ internal static class Ooxml
     /// <summary>The a:graphicData/@uri that marks a DrawingML graphic frame as a SmartArt diagram.</summary>
     public const string DiagramGraphicDataUri = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
 
+    /// <summary>
+    /// The Microsoft "diagram drawing" namespace (dsp), root of the SmartArt rendered-geometry part
+    /// (word/diagrams/drawingN.xml — dsp:drawing/dsp:spTree/dsp:sp). This fifth diagram part carries
+    /// pre-laid-out shapes (text + a:xfrm offsets/extents) so a viewer can show the diagram without re-running
+    /// SmartArt auto-layout. It is referenced from the DATA part via a diagramDrawing relationship plus a
+    /// dgm:dataModelExt element inside the dgm:dataModel.
+    /// </summary>
+    public static readonly XNamespace Dsp = "http://schemas.microsoft.com/office/drawing/2008/diagram";
+
+    /// <summary>Content type of the SmartArt rendered-geometry part (word/diagrams/drawingN.xml).</summary>
+    public const string DiagramDrawingContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml";
+
+    /// <summary>Relationship type (data part → drawing part) for the SmartArt rendered-geometry part.</summary>
+    public const string DiagramDrawingRelType = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
+
     // OPC core properties (docProps/core.xml): Dublin Core + the cp / dcterms / xsi vocabularies.
     public static readonly XNamespace Cp = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
     public static readonly XNamespace Dc = "http://purl.org/dc/elements/1.1/";
