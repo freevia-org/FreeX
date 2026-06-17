@@ -1676,6 +1676,9 @@ public static class DocxWriter
         // Widow/orphan control (w:widowControl); only emitted when enabled (FreeW defaults it off).
         if (f.WidowControl)
             pPr.Add(new XElement(W + "widowControl"));
+        // Right-to-left paragraph direction (w:bidi); emitted only when set, like the other pPr toggles.
+        if (f.Rtl)
+            pPr.Add(new XElement(W + "bidi"));
         if (f.ListKind != ListKind.None)
         {
             var numId = f.ListKind switch
@@ -3060,6 +3063,10 @@ public static class DocxWriter
         if (f.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
             rPr.Add(new XElement(W + "vertAlign",
                 new XAttribute(W + "val", f.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript")));
+        // w:rtl (right-to-left run direction) — a toggle that sits after w:vertAlign in EG_RPrBase, before
+        // the w14 extension region. Emitted only when set so default runs round-trip byte-unchanged.
+        if (f.Rtl)
+            rPr.Add(new XElement(W + "rtl"));
 
         // --- w14 OpenType extension region (after the core EG_RPrBase elements) ---
         // w14:ligatures

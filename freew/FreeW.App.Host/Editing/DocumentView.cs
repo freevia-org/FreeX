@@ -2696,6 +2696,10 @@ public sealed class DocumentView : RichTextBox
         var paraFmt = Resolve(paragraph, document);
         var wpf = new WpfParagraph
         {
+            // Right-to-left paragraph direction (w:bidi). WPF lays the inline content out RTL and, because
+            // TextAlignment is interpreted relative to FlowDirection, the model's default (Left = leading)
+            // alignment lands at the right edge — matching Word's default for a bidi paragraph.
+            FlowDirection = paraFmt.Rtl ? System.Windows.FlowDirection.RightToLeft : System.Windows.FlowDirection.LeftToRight,
             TextAlignment = ToWpfAlignment(paraFmt.Alignment),
             // WPF's Block.Margin (unlike FrameworkElement.Margin) rejects negative components with an
             // ArgumentException, so clamp at >= 0. Real docs do carry negative indents/spacing (e.g. a
@@ -2814,6 +2818,9 @@ public sealed class DocumentView : RichTextBox
             FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal
         };
+        // Right-to-left run direction (w:rtl): force this run RTL even inside an LTR paragraph.
+        if (fmt.Rtl)
+            wpf.FlowDirection = System.Windows.FlowDirection.RightToLeft;
         if (fmt.FontFamily is { Length: > 0 } family)
             wpf.FontFamily = new FontFamily(family);
         var fontSizePx = (fmt.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
@@ -5109,6 +5116,8 @@ public sealed class DocumentView : RichTextBox
             SmallCaps = capitals == FontCapitals.SmallCaps,
             AllCaps = capitals == FontCapitals.AllSmallCaps,
             VerticalAlign = verticalAlign,
+            // Right-to-left run direction reads back off the WPF run's FlowDirection (set in BuildRun).
+            Rtl = run.FlowDirection == System.Windows.FlowDirection.RightToLeft,
             FontFamily = run.FontFamily.Source,
             FontSizePt = fontSizePt,
             ColorHex = run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
@@ -5139,6 +5148,9 @@ public sealed class DocumentView : RichTextBox
         return ParagraphFormatting.Default with
         {
             Alignment = FromWpfAlignment(paragraph.TextAlignment),
+            // Right-to-left direction reads straight back off the WPF Paragraph's FlowDirection (set in
+            // BuildParagraph), so an RTL paragraph survives an edit/commit cycle.
+            Rtl = paragraph.FlowDirection == System.Windows.FlowDirection.RightToLeft,
             KeepWithNext = paragraph.KeepWithNext,
             KeepLinesTogether = paragraph.KeepTogether,
             WidowControl = widowControl,

@@ -129,6 +129,13 @@ public sealed record RunFormatting
     public VerticalAlign VerticalAlign { get; init; } = VerticalAlign.Baseline;
 
     /// <summary>
+    /// Right-to-left run direction (rPr/w:rtl). When true the run's characters lay out right-to-left
+    /// (Arabic/Hebrew). Defaults to false so LTR runs are unaffected and round-trip byte-unchanged.
+    /// Mirrors how <see cref="Bold"/> models a docx toggle element.
+    /// </summary>
+    public bool Rtl { get; init; }
+
+    /// <summary>
     /// Renders lowercase letters as small capitals (rPr/w:smallCaps toggle). Mirrors how
     /// <see cref="Bold"/> models a docx toggle element.
     /// </summary>
@@ -204,6 +211,14 @@ public sealed record RunFormatting
 public sealed record ParagraphFormatting
 {
     public TextAlignment Alignment { get; init; } = TextAlignment.Left;
+
+    /// <summary>
+    /// Right-to-left paragraph direction (pPr/w:bidi). When true the paragraph lays out right-to-left
+    /// (Arabic/Hebrew) and its default alignment is the right edge. Defaults to false so LTR paragraphs are
+    /// unaffected and round-trip byte-unchanged. Maps to WPF <c>FlowDirection.RightToLeft</c> in the editor.
+    /// </summary>
+    public bool Rtl { get; init; }
+
     public double SpaceBeforePt { get; init; }
     public double SpaceAfterPt { get; init; } = 8;
     public double LineSpacing { get; init; } = 1.15;

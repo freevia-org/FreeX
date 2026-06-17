@@ -2150,6 +2150,8 @@ public static class DocxReader
         var keepWithNext = ReadToggle(pPr, "keepNext");
         var keepLinesTogether = ReadToggle(pPr, "keepLines");
         var widowControl = ReadToggle(pPr, "widowControl");
+        // Right-to-left paragraph direction (w:bidi), read as a toggle like the flow-control flags.
+        var rtl = ReadToggle(pPr, "bidi");
 
         return ParagraphFormatting.Default with
         {
@@ -2158,6 +2160,7 @@ public static class DocxReader
             KeepWithNext = keepWithNext,
             KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
+            Rtl = rtl,
             ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
             Alignment = jc switch
             {
@@ -2391,6 +2394,7 @@ public static class DocxReader
             Strikethrough = ReadToggle(rPr, "strike"),
             SmallCaps = ReadToggle(rPr, "smallCaps"),
             AllCaps = ReadToggle(rPr, "caps"),
+            Rtl = ReadToggle(rPr, "rtl"),
             FontFamily = rPr.Element(W + "rFonts")?.Attribute(W + "ascii")?.Value,
             FontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value),
             ColorHex = color is null or "auto" ? null : "#" + color.TrimStart('#'),
