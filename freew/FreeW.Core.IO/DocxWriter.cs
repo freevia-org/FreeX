@@ -27,6 +27,7 @@ public static class DocxWriter
     private const string FooterRelationshipId = "rIdFooter1";
     private const string FootnotesRelationshipId = "rIdFootnotes";
     private const string CommentsRelationshipId = "rIdComments";
+    private const string SettingsRelationshipId = "rIdSettings";
     private const string HeaderPartName = "word/header1.xml";
     private const string FooterPartName = "word/footer1.xml";
 
@@ -67,15 +68,21 @@ public static class DocxWriter
         // emitted only when a watermark is set.
         var hasWatermark = !string.IsNullOrEmpty(document.Page.Watermark);
 
+        // A word/settings.xml part (carrying w:documentProtection) is emitted only when the document is
+        // protected, so unprotected documents round-trip exactly as before (no settings part).
+        var hasProtection = document.Protection.IsProtected;
+
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments, hasWatermark));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments, hasWatermark, hasProtection));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments, hasProtection));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks, hasHeader, hasFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
+        if (hasProtection)
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection));
         if (hasLists)
             WritePart(archive, "word/numbering.xml", BuildNumbering());
         if (hasHeader)
@@ -146,7 +153,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasComments, bool hasWatermark) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasComments, bool hasWatermark, bool hasProtection) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -179,6 +186,10 @@ public static class DocxWriter
             hasComments
                 ? new XElement(Ct + "Override", new XAttribute("PartName", CommentsPartName),
                     new XAttribute("ContentType", CommentsContentType))
+                : null,
+            hasProtection
+                ? new XElement(Ct + "Override", new XAttribute("PartName", SettingsPartName),
+                    new XAttribute("ContentType", SettingsContentType))
                 : null,
             new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
                 new XAttribute("ContentType", CorePropertiesContentType)),
@@ -261,13 +272,19 @@ public static class DocxWriter
         bool hasHeader,
         bool hasFooter,
         bool hasFootnotes,
-        bool hasComments)
+        bool hasComments,
+        bool hasProtection)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rId1"),
                 new XAttribute("Type", StylesRel),
                 new XAttribute("Target", "styles.xml")));
+        if (hasProtection)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", SettingsRelationshipId),
+                new XAttribute("Type", SettingsRelType),
+                new XAttribute("Target", "settings.xml")));
         if (includeNumbering)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rIdNumbering"),
@@ -985,6 +1002,22 @@ public static class DocxWriter
             Num(NumberNumId, 1));
 
         return new XDocument(numbering);
+    }
+
+    /// <summary>
+    /// Builds word/settings.xml (w:settings) carrying the document-protection element. The caller only
+    /// emits this part when the document is protected, so <paramref name="protection"/> is assumed to be
+    /// a non-None mode; the w:documentProtection records w:edit (the mode token) and w:enforcement="1".
+    /// </summary>
+    private static XDocument BuildSettings(ProtectionSettings protection)
+    {
+        var settings = new XElement(W + "settings",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
+        if (ProtectionEditToken(protection.Mode) is { } edit)
+            settings.Add(new XElement(W + "documentProtection",
+                new XAttribute(W + "edit", edit),
+                new XAttribute(W + "enforcement", "1")));
+        return new XDocument(settings);
     }
 
     private static XDocument BuildStyles(TextDocument document)

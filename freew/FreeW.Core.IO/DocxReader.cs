@@ -55,8 +55,56 @@ public static class DocxReader
         ReadHeaderFooter(documentXml, archive, document, imageRelationships, hyperlinkRelationships);
         ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, imageRelationships, hyperlinkRelationships);
+        ReadSettings(archive, document);
 
         return document;
+    }
+
+    /// <summary>
+    /// Resolves the settings part (via the officeDocument's "/settings" relationship, falling back to the
+    /// conventional word/settings.xml path), loads w:settings, and maps w:documentProtection/@w:edit back
+    /// into <see cref="TextDocument.Protection"/>. A missing part — or one without an enforced
+    /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>.
+    /// </summary>
+    private static void ReadSettings(ZipArchive archive, TextDocument document)
+    {
+        var settingsXml = LoadPart(archive, ResolveSettingsPartPath(archive) ?? "word/settings.xml");
+        var protection = settingsXml?.Root?.Element(W + "documentProtection");
+        if (protection is null)
+            return;
+
+        // Honour protection only when enforced (w:enforcement on/absent-with-edit); an explicit
+        // enforcement="0"/"off"/"false" means the restriction is not active, so treat it as None.
+        var enforcement = protection.Attribute(W + "enforcement")?.Value;
+        if (enforcement is "0" or "false" or "off")
+            return;
+
+        var mode = ProtectionModeFromEditToken(protection.Attribute(W + "edit")?.Value);
+        if (mode != ProtectionMode.None)
+            document.Protection = new ProtectionSettings(mode);
+    }
+
+    /// <summary>
+    /// Finds the settings part path from the document relationships (the rel whose Type ends with
+    /// "/settings"), resolved relative to the word/ folder. Returns null when no such relationship exists.
+    /// </summary>
+    private static string? ResolveSettingsPartPath(ZipArchive archive)
+    {
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return null;
+
+        foreach (var rel in relationships)
+        {
+            var type = rel.Attribute("Type")?.Value;
+            if (type is null || !type.EndsWith("/settings", StringComparison.Ordinal))
+                continue;
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(target))
+                return "word/" + target.TrimStart('/');
+        }
+        return null;
     }
 
     /// <summary>

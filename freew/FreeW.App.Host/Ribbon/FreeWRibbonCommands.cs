@@ -8,6 +8,7 @@ using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
+using FreeW.Core.IO;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -172,6 +173,18 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.accept-all", new ActionCommand(() => { editor.Focus(); editor.AcceptAllRevisions(); }));
         registry.Register("freew.reject-all", new ActionCommand(() => { editor.Focus(); editor.RejectAllRevisions(); }));
 
+        // Review tab — Protect: Restrict Editing. A stateful toggle over document protection: turning it
+        // on locks the document read-only (RichTextBox IsReadOnly) and emits word/settings.xml's
+        // w:documentProtection on save; turning it off clears protection. The toggle reflects whether
+        // the document is currently protected.
+        var restrictEditing = new RestrictEditingToggleCommand(editor);
+        registry.Register("freew.restrict-editing", restrictEditing);
+        stateful.Add(("freew.restrict-editing", restrictEditing));
+
+        // Review tab — Compare: open a second .docx and load a comparison of the current document against
+        // it as tracked changes (insertions/deletions relative to the opened "original").
+        registry.Register("freew.compare", new CompareDocumentsCommand(editor));
+
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
         registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false));
@@ -203,6 +216,15 @@ internal static class FreeWRibbonCommands
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
         registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
         registry.Register("freew.para-shading", new ParagraphShadingCommand(editor));
+
+        // Layout > Sort: open a small dialog (A→Z / Z→A + case-sensitive option) and sort the selected
+        // paragraphs in place through the view's undo/redo bus.
+        registry.Register("freew.sort", new SortCommand(editor));
+
+        // Layout > Table conversions: turn the selected paragraphs into a table (splitting on a chosen
+        // delimiter) and turn the caret's table back into delimited paragraphs. Both route through the bus.
+        registry.Register("freew.text-to-table", new TextToTableCommand(editor));
+        registry.Register("freew.table-to-text", new TableToTextCommand(editor));
 
         registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
         registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
@@ -256,6 +278,18 @@ internal static class FreeWRibbonCommands
         // reflects whether the chrome-light reading column is currently active.
         if (onToggleReadMode is not null && isReadModeActive is not null)
             registry.Register("freew.read-mode", new ToggleActionCommand(onToggleReadMode, isReadModeActive));
+
+        // Mailings tab — a simple mail merge. Field placeholders are the literal text «FieldName»
+        // (ordinary run text, so they round-trip through docx as plain text). The four commands share a
+        // MailMergeSession: "Set Data" captures the CSV/typed records; "Insert Merge Field" drops a
+        // «Name» placeholder at the caret; "Preview Record" loads MergeRecord(template, row) into the
+        // editor with next/prev (restoring the template when exited); "Finish & Merge" concatenates every
+        // merged record into one document.
+        var mergeSession = new MailMergeSession();
+        registry.Register("freew.merge-data", new SetMergeDataCommand(editor, mergeSession));
+        registry.Register("freew.merge-field", new InsertMergeFieldCommand(editor));
+        registry.Register("freew.merge-preview", new PreviewMergeRecordCommand(editor, mergeSession));
+        registry.Register("freew.merge-finish", new FinishMergeCommand(editor, mergeSession));
 
         return registry;
     }
@@ -1016,6 +1050,70 @@ internal static class FreeWRibbonCommands
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.TrackChangesEnabled);
     }
 
+    // Review > Protect > Restrict Editing: a stateful toggle over document protection. Executing flips
+    // the document between unprotected and read-only (the common restrict-editing gesture): turning it
+    // ON makes the RichTextBox read-only and emits word/settings.xml's w:documentProtection on save;
+    // turning it OFF clears protection and restores editing. The checked state reflects whether the
+    // document is currently protected, so the ribbon button shows the lock state at a glance.
+    private sealed class RestrictEditingToggleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.ToggleReadOnlyProtection();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.Model.Protection.IsProtected);
+    }
+
+    // Review > Compare: prompt the user to open a second .docx, read it, and load a comparison of the
+    // current document against it into the editor. The opened document is treated as the "original" and
+    // the current document as the "revised"; differences load as tracked insertions/deletions (rendered
+    // with the existing track-changes styling). The author comes from the document Author property
+    // (falling back to the OS user); the revision date is stamped at compare time (UI side, not the pure
+    // helper). Pending edits are committed first so the comparison reflects the on-screen text.
+    private sealed class CompareDocumentsCommand(DocumentView editor) : IRibbonCommand
+    {
+        private const string Filter = "Word documents (*.docx)|*.docx|All files (*.*)|*.*";
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+            var dialog = new OpenFileDialog
+            {
+                Filter = Filter,
+                DefaultExt = ".docx",
+                Title = "Compare With Document"
+            };
+            if (dialog.ShowDialog(owner) != true)
+                return;
+
+            try
+            {
+                editor.CommitToModel();
+                var original = DocxReader.Read(dialog.FileName);
+                var revised = editor.Model;
+
+                var author = revised.Properties.Author;
+                if (string.IsNullOrWhiteSpace(author))
+                    author = Environment.UserName;
+                author = author?.Trim() ?? string.Empty;
+
+                var dateXml = DateTimeOffset.UtcNow.ToString(
+                    "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+
+                var compared = DocumentCompare.Compare(original, revised, author, dateXml);
+                editor.LoadModel(compared);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(owner, $"Could not compare the documents:\n{ex.Message}",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+
     // Insert > Links > Bookmark: name the caret's paragraph as a bookmark target. Seeds the prompt
     // with any existing bookmark on that paragraph; an empty entry clears it.
     private sealed class InsertBookmarkCommand(DocumentView editor) : IRibbonCommand
@@ -1474,6 +1572,327 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Mailings: the shared mail-merge state across the four Mailings commands. Holds the data source
+    // and, while previewing, the original template document plus the current record index so previewing
+    // can step through records and restore the template when the preview ends.
+    private sealed class MailMergeSession
+    {
+        public MergeData? Data { get; set; }
+
+        // Non-null only while a preview is active: the document that was in the editor before the first
+        // Preview, so leaving the preview restores it (the user's editable template).
+        public TextDocument? Template { get; set; }
+
+        public int CurrentIndex { get; set; }
+
+        public bool IsPreviewing => Template is not null;
+    }
+
+    // Mailings > Insert Merge Field: prompt for a field name and insert the placeholder «Name» at the
+    // caret as ordinary text (through the editor's normal edit/undo path, so it is reversible). The
+    // guillemets are added automatically; a name the user already wrapped in « » is accepted as-is.
+    private sealed class InsertMergeFieldCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var name = TextPrompt.Ask(Window.GetWindow(editor), "Insert Merge Field", "Field name:", string.Empty);
+            if (string.IsNullOrWhiteSpace(name))
+                return; // cancelled or blank — nothing to insert
+
+            var trimmed = name.Trim().Trim(MailMerge.FieldOpen, MailMerge.FieldClose).Trim();
+            if (trimmed.Length == 0)
+                return;
+
+            editor.Focus();
+            editor.InsertText($"{MailMerge.FieldOpen}{trimmed}{MailMerge.FieldClose}");
+        }
+    }
+
+    // Mailings > Set Data: open a dialog to paste/type CSV (first line = headers). The parsed MergeData
+    // is stored on the session. If the document already has merge fields, they are shown as a hint so the
+    // user knows which columns to provide.
+    private sealed class SetMergeDataCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.CommitToModel();
+            var fields = MailMerge.FieldNames(editor.Model);
+            var seed = session.Data is { } data ? DescribeAsCsv(data) : SeedFromFields(fields);
+
+            var csv = MergeDataDialog.Ask(Window.GetWindow(editor), fields, seed);
+            if (csv is null)
+                return; // cancelled
+
+            var parsed = MergeData.FromCsv(csv);
+            session.Data = parsed;
+            session.Template = null; // any in-progress preview is invalidated by new data
+            session.CurrentIndex = 0;
+
+            MessageBox.Show(Window.GetWindow(editor),
+                $"Loaded {parsed.Count} record(s) with {parsed.Header.Count} field(s).",
+                "Mail Merge", MessageBoxButton.OK, MessageBoxImage.Information);
+            editor.Focus();
+        }
+
+        // Suggest a header line from the document's discovered fields so the user can fill rows in.
+        private static string SeedFromFields(IReadOnlyList<string> fields) =>
+            fields.Count == 0 ? string.Empty : string.Join(",", fields);
+
+        // Render the current data back to CSV so re-opening the dialog shows what was entered.
+        private static string DescribeAsCsv(MergeData data)
+        {
+            var lines = new List<string> { string.Join(",", data.Header.Select(CsvCell)) };
+            foreach (var row in data.Rows)
+                lines.Add(string.Join(",", data.Header.Select(h => CsvCell(row.TryGetValue(h, out var v) ? v : string.Empty))));
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        private static string CsvCell(string value) =>
+            value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r')
+                ? "\"" + value.Replace("\"", "\"\"") + "\""
+                : value;
+    }
+
+    // Mailings > Preview Record: load MergeRecord(template, currentRow) into the editor so the user sees
+    // a real record. The original (template) document is stashed on first preview so stepping to the next
+    // record re-renders from the template, and leaving the preview restores it. With no data, prompts the
+    // user to Set Data first.
+    private sealed class PreviewMergeRecordCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (session.Data is not { Count: > 0 } data)
+            {
+                MessageBox.Show(Window.GetWindow(editor),
+                    "Set the merge data first (Mailings ▸ Set Data), then preview a record.",
+                    "Mail Merge", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // On first preview, capture the editable template and immediately show record 0; subsequent
+            // previews reuse the template and resume at the last viewed record.
+            if (!session.IsPreviewing)
+            {
+                editor.CommitToModel();
+                session.Template = editor.Model;
+                session.CurrentIndex = 0;
+            }
+
+            var template = session.Template!;
+            var index = Math.Clamp(session.CurrentIndex, 0, data.Count - 1);
+            session.CurrentIndex = index;
+            editor.LoadModel(MailMerge.MergeRecord(template, data.Rows[index]));
+
+            var action = PreviewNavigationDialog.Ask(Window.GetWindow(editor), index, data.Count);
+            switch (action.Kind)
+            {
+                case PreviewAction.Move:
+                    index = Math.Clamp(action.TargetIndex, 0, data.Count - 1);
+                    session.CurrentIndex = index;
+                    editor.LoadModel(MailMerge.MergeRecord(template, data.Rows[index]));
+                    break;
+                case PreviewAction.Done:
+                    // Restore the editable template so the user can keep editing fields.
+                    editor.LoadModel(template);
+                    session.Template = null;
+                    break;
+                case PreviewAction.Cancel:
+                    // Leave whatever is currently shown; do not change the session.
+                    break;
+            }
+
+            editor.Focus();
+        }
+    }
+
+    // Mailings > Finish & Merge: produce the merged documents and load the concatenation of every record
+    // into the editor as a single document (records separated by a page break), so the result is visible
+    // and saveable. This replaces the editor's content; the template is no longer needed afterwards.
+    private sealed class FinishMergeCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (session.Data is not { Count: > 0 } data)
+            {
+                MessageBox.Show(Window.GetWindow(editor),
+                    "Set the merge data first (Mailings ▸ Set Data), then Finish & Merge.",
+                    "Mail Merge", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // Use the stashed template if previewing; otherwise the current editor content is the template.
+            TextDocument template;
+            if (session.IsPreviewing)
+            {
+                template = session.Template!;
+            }
+            else
+            {
+                editor.CommitToModel();
+                template = editor.Model;
+            }
+
+            var merged = MailMerge.MergeAll(template, data);
+            var combined = Concatenate(merged);
+
+            editor.LoadModel(combined);
+            session.Template = null;
+            session.CurrentIndex = 0;
+
+            MessageBox.Show(Window.GetWindow(editor),
+                $"Merged {merged.Count} record(s) into a single document.",
+                "Mail Merge", MessageBoxButton.OK, MessageBoxImage.Information);
+            editor.Focus();
+        }
+
+        // Concatenate the per-record documents into one, starting each record (after the first) on a new
+        // page. The first record's page settings / styles / header / footer carry the combined document.
+        private static TextDocument Concatenate(IReadOnlyList<TextDocument> docs)
+        {
+            if (docs.Count == 0)
+                return TextDocument.CreateEmpty();
+
+            var first = docs[0];
+            for (var d = 1; d < docs.Count; d++)
+            {
+                var blocks = docs[d].Blocks;
+                // Force a page break before each subsequent record's first paragraph (Word's "Start each
+                // record on a new page"). Falls back to a dedicated break paragraph if the record leads
+                // with a non-paragraph block (e.g. a table).
+                if (blocks.Count > 0 && blocks[0] is FreeW.Core.Model.Paragraph lead)
+                {
+                    lead.Formatting = lead.Formatting with { PageBreakBefore = true };
+                }
+                else
+                {
+                    first.Blocks.Add(DocumentOps.CreatePageBreak());
+                }
+
+                foreach (var block in blocks)
+                    first.Blocks.Add(block);
+            }
+            return first;
+        }
+    }
+
+    // The user's choice from the preview navigation dialog.
+    private enum PreviewAction { Move, Done, Cancel }
+
+    private readonly record struct PreviewChoice(PreviewAction Kind, int TargetIndex);
+
+    // A small modeless-feeling modal that shows the current record and offers Previous / Next / Done.
+    // Returns a Move (to a new index), Done (end preview, restore template), or Cancel (no change).
+    private static class PreviewNavigationDialog
+    {
+        public static PreviewChoice Ask(Window? owner, int index, int count)
+        {
+            var result = new PreviewChoice(PreviewAction.Cancel, index);
+            var dialog = new Window
+            {
+                Title = "Preview Results",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var label = new System.Windows.Controls.TextBlock
+            {
+                Text = $"Record {index + 1} of {count}",
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+
+            var prev = new System.Windows.Controls.Button { Content = "◀ Previous", MinWidth = 88, Margin = new Thickness(0, 0, 8, 0), IsEnabled = index > 0 };
+            var next = new System.Windows.Controls.Button { Content = "Next ▶", MinWidth = 88, Margin = new Thickness(0, 0, 8, 0), IsEnabled = index < count - 1 };
+            var done = new System.Windows.Controls.Button { Content = "Done", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+
+            prev.Click += (_, _) => { result = new PreviewChoice(PreviewAction.Move, index - 1); dialog.DialogResult = true; };
+            next.Click += (_, _) => { result = new PreviewChoice(PreviewAction.Move, index + 1); dialog.DialogResult = true; };
+            done.Click += (_, _) => { result = new PreviewChoice(PreviewAction.Done, index); dialog.DialogResult = true; };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(prev);
+            buttons.Children.Add(next);
+            buttons.Children.Add(done);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 320 };
+            panel.Children.Add(label);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            if (dialog.ShowDialog() == true)
+                return result;
+            return new PreviewChoice(PreviewAction.Cancel, index);
+        }
+    }
+
+    // A dialog to enter the mail-merge data as CSV (first line = headers). Shows the document's discovered
+    // merge fields as a hint. Returns the CSV text, or null if cancelled.
+    private static class MergeDataDialog
+    {
+        public static string? Ask(Window? owner, IReadOnlyList<string> fields, string seed)
+        {
+            var hint = fields.Count > 0
+                ? "Fields in this document: " + string.Join(", ", fields)
+                : "Tip: the first line is the header row of field names.";
+
+            var box = new System.Windows.Controls.TextBox
+            {
+                Text = seed,
+                AcceptsReturn = true,
+                AcceptsTab = false,
+                MinWidth = 420,
+                MinHeight = 160,
+                TextWrapping = TextWrapping.NoWrap,
+                VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
+                FontFamily = new FontFamily("Consolas"),
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+
+            string? result = null;
+            var dialog = new Window
+            {
+                Title = "Mail Merge Data",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.CanResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Paste or type CSV (first line = field names):", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(box);
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = hint, Margin = new Thickness(0, 0, 0, 12), Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap });
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            box.Focus();
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
     // Insert > Header & Footer: prompt for the header/footer text and store it on the model. An empty
     // entry clears the header/footer. A page-number field already present is preserved by re-appending.
     private sealed class HeaderFooterCommand(DocumentView editor, bool isFooter) : IRibbonCommand
@@ -1560,6 +1979,182 @@ internal static class FreeWRibbonCommands
 
             model.Footer = footer;
             editor.Focus();
+        }
+    }
+
+    // Layout > Sort: open the sort dialog (order + case option) and sort the selected paragraphs in
+    // place. The view reorders the paragraph blocks through its undo/redo bus and re-renders.
+    private sealed class SortCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var options = SortDialog.Ask(Window.GetWindow(editor));
+            if (options is null)
+                return; // cancelled
+            editor.Focus();
+            editor.SortSelectedParagraphs(options.Value.Ascending, options.Value.CaseSensitive);
+        }
+    }
+
+    // The options captured by the sort dialog: sort direction and whether the comparison is case-sensitive.
+    private readonly record struct SortOptions(bool Ascending, bool CaseSensitive);
+
+    // A small modal dialog for Sort: A→Z / Z→A radios plus a "Case sensitive" checkbox. Returns the
+    // chosen options, or null if cancelled.
+    private static class SortDialog
+    {
+        public static SortOptions? Ask(Window? owner)
+        {
+            var ascending = new System.Windows.Controls.RadioButton
+            {
+                Content = "Ascending (A → Z)",
+                IsChecked = true,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            var descending = new System.Windows.Controls.RadioButton
+            {
+                Content = "Descending (Z → A)",
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            var caseSensitive = new System.Windows.Controls.CheckBox
+            {
+                Content = "Case sensitive",
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+
+            SortOptions? result = null;
+            var dialog = new Window
+            {
+                Title = "Sort",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                result = new SortOptions(ascending.IsChecked == true, caseSensitive.IsChecked == true);
+                dialog.DialogResult = true;
+            };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 240 };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Sort selected paragraphs by text:", Margin = new Thickness(0, 0, 0, 8) });
+            panel.Children.Add(ascending);
+            panel.Children.Add(descending);
+            panel.Children.Add(caseSensitive);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // Layout > Convert Text to Table: ask for a delimiter, then turn the selected paragraphs into a
+    // table (splitting each paragraph on that delimiter). The view routes the change through its bus.
+    private sealed class TextToTableCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (DelimiterDialog.Ask(Window.GetWindow(editor), "Convert Text to Table") is not { } delimiter)
+                return; // cancelled
+            editor.Focus();
+            editor.ConvertSelectionToTable(delimiter);
+        }
+    }
+
+    // Layout > Convert Table to Text: ask for a delimiter, then turn the caret's table into delimited
+    // paragraphs (one per row). The view routes the change through its bus.
+    private sealed class TableToTextCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (DelimiterDialog.Ask(Window.GetWindow(editor), "Convert Table to Text") is not { } delimiter)
+                return; // cancelled
+            editor.Focus();
+            editor.ConvertTableToText(delimiter);
+        }
+    }
+
+    // A small modal dialog choosing the cell delimiter for text/table conversion: Tab, Comma, or
+    // Semicolon. Returns the chosen delimiter character, or null if cancelled.
+    private static class DelimiterDialog
+    {
+        private sealed record Choice(string Label, char Delimiter);
+
+        public static char? Ask(Window? owner, string title)
+        {
+            var choices = new[]
+            {
+                new Choice("Tab", '\t'),
+                new Choice("Comma  ,", ','),
+                new Choice("Semicolon  ;", ';'),
+            };
+
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 240,
+                MinHeight = 90,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            foreach (var choice in choices)
+                list.Items.Add(choice.Label);
+            list.SelectedIndex = 0;
+
+            char? result = null;
+            var dialog = new Window
+            {
+                Title = title,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            void Commit()
+            {
+                var index = list.SelectedIndex;
+                if (index >= 0 && index < choices.Length)
+                {
+                    result = choices[index].Delimiter;
+                    dialog.DialogResult = true;
+                }
+            }
+            ok.Click += (_, _) => Commit();
+            list.MouseDoubleClick += (_, _) => Commit();
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Separate cells at:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(list);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 

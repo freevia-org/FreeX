@@ -155,6 +155,12 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.print-preview", "Print Preview");
                 });
+                tab.Group("data", "Data", "D", 88, g =>
+                {
+                    g.Button("freew.sort", "Sort");
+                    g.Button("freew.text-to-table", "Text to Table");
+                    g.Button("freew.table-to-text", "Table to Text");
+                });
             })
             .Tab("design", "Design", "G", tab =>
             {
@@ -178,6 +184,25 @@ internal static class FreeWRibbon
                     g.Toggle("freew.read-mode", "Read Mode");
                 });
             })
+            .Tab("mailings", "Mailings", "M", tab =>
+            {
+                tab.Group("merge-data", "Start Mail Merge", "D", 100, g =>
+                {
+                    g.Button("freew.merge-data", "Set Data");
+                });
+                tab.Group("merge-write", "Write & Insert Fields", "W", 90, g =>
+                {
+                    g.Button("freew.merge-field", "Insert Merge Field");
+                });
+                tab.Group("merge-preview", "Preview Results", "P", 80, g =>
+                {
+                    g.Button("freew.merge-preview", "Preview Record");
+                });
+                tab.Group("merge-finish", "Finish", "F", 70, g =>
+                {
+                    g.Button("freew.merge-finish", "Finish & Merge");
+                });
+            })
             .Tab("review", "Review", "R", tab =>
             {
                 tab.Group("proofing", "Proofing", "P", 100, g =>
@@ -193,6 +218,14 @@ internal static class FreeWRibbon
                     g.Toggle("freew.track-changes", "Track Changes");
                     g.Button("freew.accept-all", "Accept All");
                     g.Button("freew.reject-all", "Reject All");
+                });
+                tab.Group("protect", "Protect", "T", 90, g =>
+                {
+                    g.Toggle("freew.restrict-editing", "Restrict Editing");
+                });
+                tab.Group("compare", "Compare", "M", 80, g =>
+                {
+                    g.Button("freew.compare", "Compare");
                 });
             })
             .Build();

@@ -44,6 +44,48 @@ public sealed class DeleteParagraphCommand(int index) : IDocumentCommand
     }
 }
 
+/// <summary>
+/// Replace the contiguous span of blocks [<paramref name="index"/>, <paramref name="index"/> +
+/// <paramref name="count"/>) with <paramref name="replacement"/>, snapshotting the removed blocks so
+/// undo restores the exact originals at their original position. The building block for edits that
+/// restructure a run of body blocks in one reversible step — reordering paragraphs after a sort, or
+/// swapping a paragraph span for a table (and vice versa) in the text/table converters. The span is
+/// clamped to the body so a stale index can never throw.
+/// </summary>
+public sealed class ReplaceBlocksCommand(int index, int count, IReadOnlyList<Block> replacement) : IDocumentCommand
+{
+    private Block[]? _removed;
+    private int _appliedAt = -1;
+
+    public string Label => "Edit";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var blocks = context.Document.Blocks;
+        var at = Math.Clamp(index, 0, blocks.Count);
+        var take = Math.Clamp(count, 0, blocks.Count - at);
+
+        _appliedAt = at;
+        _removed = new Block[take];
+        for (var i = 0; i < take; i++)
+            _removed[i] = blocks[at + i];
+
+        blocks.RemoveRange(at, take);
+        blocks.InsertRange(at, replacement);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_removed is null || _appliedAt < 0)
+            return;
+        var blocks = context.Document.Blocks;
+        blocks.RemoveRange(_appliedAt, replacement.Count);
+        blocks.InsertRange(_appliedAt, _removed);
+        _removed = null;
+        _appliedAt = -1;
+    }
+}
+
 /// <summary>Replace a paragraph's formatting, snapshotting the previous value for undo.</summary>
 public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting formatting) : IDocumentCommand
 {

@@ -530,6 +530,103 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    /// <summary>
+    /// Sort the paragraphs spanned by the current selection (or, with a bare caret, the paragraph the
+    /// caret sits in) by their text, in place. Tables interleaved in the selected span are left fixed at
+    /// their own positions — only the paragraph blocks are reordered among their own slots — so the
+    /// operation stays well-defined over a mixed body. Routes through the undo/redo bus (one reversible
+    /// <see cref="ReplaceBlocksCommand"/>) and re-renders. No-op without at least two sortable paragraphs.
+    /// </summary>
+    public void SortSelectedParagraphs(bool ascending, bool caseSensitive)
+    {
+        Focus();
+        CommitToModel();
+
+        var indices = SelectedModelParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        // The contiguous block span the selection covers (first..last selected index, inclusive).
+        var first = indices[0];
+        var last = indices[indices.Count - 1];
+        if (first < 0 || last >= _model.Blocks.Count)
+            return;
+
+        // The paragraph blocks within that span, in document order — only these get reordered.
+        var paragraphs = new List<ModelParagraph>();
+        for (var i = first; i <= last; i++)
+        {
+            if (_model.Blocks[i] is ModelParagraph paragraph)
+                paragraphs.Add(paragraph);
+        }
+        if (paragraphs.Count < 2)
+            return; // nothing to reorder
+
+        var sorted = ParagraphSort.Sort(paragraphs, ascending, caseSensitive);
+
+        // Rebuild the span: drop sorted paragraphs back into the paragraph slots, keeping any
+        // interleaved tables fixed at their own positions.
+        var replacement = new List<ModelBlock>(last - first + 1);
+        var nextSorted = 0;
+        for (var i = first; i <= last; i++)
+            replacement.Add(_model.Blocks[i] is ModelParagraph ? sorted[nextSorted++] : _model.Blocks[i]);
+
+        _commands.Execute(new ReplaceBlocksCommand(first, replacement.Count, replacement));
+    }
+
+    /// <summary>
+    /// Replace the paragraphs spanned by the current selection with a single table built from their
+    /// text (split on <paramref name="delimiter"/>, ragged rows padded — see
+    /// <see cref="TextTableConvert.TextToTable"/>). Routes through the undo/redo bus (one reversible
+    /// <see cref="ReplaceBlocksCommand"/>) and re-renders. No-op when the selection spans no paragraphs.
+    /// </summary>
+    public void ConvertSelectionToTable(char delimiter)
+    {
+        Focus();
+        CommitToModel();
+
+        var indices = SelectedModelParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        var first = indices[0];
+        var last = indices[indices.Count - 1];
+        if (first < 0 || last >= _model.Blocks.Count)
+            return;
+
+        // Only paragraphs convert; if the span contains no paragraph there is nothing to turn into a table.
+        var paragraphs = new List<ModelParagraph>();
+        for (var i = first; i <= last; i++)
+        {
+            if (_model.Blocks[i] is ModelParagraph paragraph)
+                paragraphs.Add(paragraph);
+        }
+        if (paragraphs.Count == 0)
+            return;
+
+        var table = TextTableConvert.TextToTable(paragraphs, delimiter);
+        _commands.Execute(new ReplaceBlocksCommand(first, last - first + 1, new ModelBlock[] { table }));
+    }
+
+    /// <summary>
+    /// Replace the table containing the caret with paragraphs built from its rows (cells joined by
+    /// <paramref name="delimiter"/>, one paragraph per row — see
+    /// <see cref="TextTableConvert.TableToText"/>). Routes through the undo/redo bus (one reversible
+    /// <see cref="ReplaceBlocksCommand"/>) and re-renders. No-op when the caret is not inside a table.
+    /// </summary>
+    public void ConvertTableToText(char delimiter)
+    {
+        Focus();
+        CommitToModel();
+
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+
+        var paragraphs = TextTableConvert.TableToText(table, delimiter);
+        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, [.. paragraphs]));
+    }
+
     /// <summary>True while Format Painter is armed (captured formatting waiting to be stamped).</summary>
     public bool FormatPainterActive => _formatPainter is not null;
 
@@ -890,6 +987,56 @@ public sealed class DocumentView : RichTextBox
 
         Document = flow;
         ApplyPageChrome();
+        ApplyProtection();
+    }
+
+    /// <summary>
+    /// Honour the model's document-protection (restrict-editing) state on the editing surface. In
+    /// <see cref="ProtectionMode.ReadOnly"/> the RichTextBox is made read-only and given a faint amber
+    /// frame so the lock is visible. <see cref="ProtectionMode.CommentsOnly"/> and
+    /// <see cref="ProtectionMode.TrackChangesOnly"/> are approximated as read-only too (live
+    /// comments-only / forced-tracking editing is out of scope for the RichTextBox), so any protected
+    /// mode locks typing; <see cref="ProtectionMode.None"/> restores normal editing. Called from
+    /// <see cref="Render"/> (and so from <see cref="LoadModel"/>) and after protection changes.
+    /// </summary>
+    public void ApplyProtection()
+    {
+        var protectedDoc = _model.Protection.IsProtected;
+        IsReadOnly = protectedDoc;
+
+        // A protected document gets a distinct amber frame so the read-only state is visible. An
+        // unprotected document keeps whatever frame ApplyPageChrome set (page border or default grey).
+        if (protectedDoc)
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0x8A, 0x00));
+            BorderThickness = new Thickness(Math.Max(2, BorderThickness.Top));
+        }
+    }
+
+    /// <summary>
+    /// Set the document's protection (restrict-editing) mode, committing pending edits first (only while
+    /// still editable) so they are not lost, then re-rendering so the read-only state and frame update
+    /// immediately. The change round-trips through docx save (word/settings.xml). Used by the Review
+    /// ribbon's Restrict Editing command.
+    /// </summary>
+    public void SetProtection(ProtectionMode mode)
+    {
+        if (!IsReadOnly)
+            CommitToModel();
+        _model.Protection = new ProtectionSettings(mode);
+        Render();
+    }
+
+    /// <summary>
+    /// Cycle the document protection: None → ReadOnly → None. Returns the mode now in effect so the
+    /// caller (the Review ribbon's Restrict Editing button) can report it. A simple on/off toggle of
+    /// read-only protection, the common restrict-editing gesture.
+    /// </summary>
+    public ProtectionMode ToggleReadOnlyProtection()
+    {
+        var next = _model.Protection.Mode == ProtectionMode.None ? ProtectionMode.ReadOnly : ProtectionMode.None;
+        SetProtection(next);
+        return next;
     }
 
     /// <summary>
