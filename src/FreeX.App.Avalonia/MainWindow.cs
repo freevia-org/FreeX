@@ -439,6 +439,7 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _consolidateMenuItem = new();
     private readonly NativeMenuItem _dataValidationPreviewMenuItem = new();
     private readonly NativeMenuItem _dataValidationMenuItem = new();
+    private readonly NativeMenuItem _quickAnalysisMenuItem = new();
     private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();
     private readonly NativeMenuItem _goalSeekMenuItem = new();
     private readonly NativeMenuItem _scenarioManagerMenuItem = new();
@@ -953,6 +954,9 @@ public sealed partial class MainWindow : Window
         _dataValidationMenuItem.Header = "Data Validation...";
         _dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationDialogAsync();
 
+        _quickAnalysisMenuItem.Header = "Quick Analysis...";
+        _quickAnalysisMenuItem.Click += async (_, _) => await ShowQuickAnalysisDialogAsync();
+
         _goalSeekMenuItem.Header = "Goal Seek...";
         _goalSeekMenuItem.Click += async (_, _) => await ShowGoalSeekDialogAsync();
 
@@ -1325,6 +1329,8 @@ public sealed partial class MainWindow : Window
         dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_dataValidationPreviewMenuItem);
         dataMenu.Items.Add(_dataValidationMenuItem);
+        dataMenu.Items.Add(new NativeMenuItemSeparator());
+        dataMenu.Items.Add(_quickAnalysisMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_whatIfAnalysisMenuItem);
         dataMenu.Items.Add(_forecastSheetMenuItem);
@@ -2133,6 +2139,7 @@ public sealed partial class MainWindow : Window
         _consolidateMenuItem.IsEnabled = isIdle;
         _dataValidationPreviewMenuItem.IsEnabled = isIdle;
         _dataValidationMenuItem.IsEnabled = isIdle;
+        _quickAnalysisMenuItem.IsEnabled = isIdle && _session.SelectedRange.CellCount > 1;
         _whatIfAnalysisMenuItem.IsEnabled = isIdle;
         _goalSeekMenuItem.IsEnabled = isIdle;
         _scenarioManagerMenuItem.IsEnabled = isIdle;
