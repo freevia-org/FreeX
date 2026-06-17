@@ -21,12 +21,13 @@ namespace Free.Shared.Ribbon.Wpf;
 /// </summary>
 public static class RibbonTabControlFactory
 {
-    // The ribbon surface (selected-tab fill) and accent/hover washes. These match the FreeX palette
-    // (FreeXRibbonSurfaceBrush / FreeXAccentBrush / FreeXAccentSoftBrush) so FreeW reads identically.
+    // The ribbon surface (selected-tab fill) and accent/hover washes, matching the FreeX palette exactly
+    // (FreeXRibbonSurfaceBrush #FFFFFF / FreeXAccentBrush #0F6D8C / FreeXAccentSoftBrush #E6F6FA /
+    // FreeXBorderBrush #DADCE0) so FreeW's ribbon reads identically to FreeX.
     private static readonly Brush SurfaceBrush = Freeze(Color.FromRgb(0xFF, 0xFF, 0xFF));
-    private static readonly Brush AccentBrush = Freeze(Color.FromRgb(0x2B, 0x57, 0x9A));
-    private static readonly Brush AccentSoftBrush = Freeze(Color.FromRgb(0xEA, 0xF1, 0xFB));
-    private static readonly Brush BorderBrush = Freeze(Color.FromRgb(0xD0, 0xD0, 0xD0));
+    private static readonly Brush AccentBrush = Freeze(Color.FromRgb(0x0F, 0x6D, 0x8C));
+    private static readonly Brush AccentSoftBrush = Freeze(Color.FromRgb(0xE6, 0xF6, 0xFA));
+    private static readonly Brush BorderBrush = Freeze(Color.FromRgb(0xDA, 0xDC, 0xE0));
     private static readonly Brush TextBrush = Freeze(Color.FromRgb(0x1A, 0x1A, 0x1A));
 
     /// <summary>

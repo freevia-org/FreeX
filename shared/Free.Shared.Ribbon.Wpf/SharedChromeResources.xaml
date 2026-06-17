@@ -19,20 +19,20 @@
            ChromeStatusToggleButtonStyle  — clean status-bar toggle button
          ════════════════════════════════════════════════════════════════════ -->
 
-    <!-- ── Brushes (self-contained; tuned to the FreeW #2B579A title bar) ──── -->
+    <!-- ── Brushes (self-contained; tuned to the FreeX #17324D navy title/status bar) ──── -->
     <SolidColorBrush x:Key="ChromeWhiteBrush" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="ChromeTextBrush" Color="#1F1F1F"/>
     <SolidColorBrush x:Key="ChromeMutedTextBrush" Color="#5F6368"/>
     <!-- Flat (light-background) command-button hover/press fills -->
-    <SolidColorBrush x:Key="ChromeButtonHoverBrush" Color="#D6E4F7"/>
-    <SolidColorBrush x:Key="ChromeButtonPressedBrush" Color="#BFD4F0"/>
-    <SolidColorBrush x:Key="ChromeButtonBorderBrush" Color="#9DB8DC"/>
-    <SolidColorBrush x:Key="ChromeAccentBrush" Color="#2B579A"/>
-    <!-- Title-bar / status-bar (dark-background) hover/press fills -->
-    <SolidColorBrush x:Key="ChromeCaptionHoverBrush" Color="#3C68AB"/>
-    <SolidColorBrush x:Key="ChromeCaptionPressedBrush" Color="#1F4377"/>
+    <SolidColorBrush x:Key="ChromeButtonHoverBrush" Color="#D6EEF4"/>
+    <SolidColorBrush x:Key="ChromeButtonPressedBrush" Color="#BFE2EC"/>
+    <SolidColorBrush x:Key="ChromeButtonBorderBrush" Color="#8FC3D2"/>
+    <SolidColorBrush x:Key="ChromeAccentBrush" Color="#0F6D8C"/>
+    <!-- Title-bar / status-bar (dark-background) hover/press fills — FreeX #17324D navy family -->
+    <SolidColorBrush x:Key="ChromeCaptionHoverBrush" Color="#264B6B"/>
+    <SolidColorBrush x:Key="ChromeCaptionPressedBrush" Color="#0F2438"/>
     <SolidColorBrush x:Key="ChromeCaptionButtonBorderBrush" Color="#55FFFFFF"/>
-    <SolidColorBrush x:Key="ChromeCaptionDisabledBrush" Color="#9DB4D2"/>
+    <SolidColorBrush x:Key="ChromeCaptionDisabledBrush" Color="#7E97B4"/>
     <!-- Close-button red hover/press -->
     <SolidColorBrush x:Key="ChromeCloseHoverBrush" Color="#E81123"/>
     <SolidColorBrush x:Key="ChromeClosePressedBrush" Color="#C42B1C"/>
