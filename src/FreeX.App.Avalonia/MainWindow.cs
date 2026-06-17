@@ -2990,10 +2990,11 @@ public sealed partial class MainWindow : Window
         var stroke = Brush(drawingObject.OutlineColor ?? new CellColor(0x2F, 0x55, 0x97));
         var w = Math.Max(1, width);
         var h = Math.Max(1, height);
+        Control visual;
         switch (drawingObject.ShapeKind)
         {
             case DrawingShapeKind.Ellipse:
-                return new AvaloniaEllipse
+                visual = new AvaloniaEllipse
                 {
                     Width = w,
                     Height = h,
@@ -3002,35 +3003,74 @@ public sealed partial class MainWindow : Window
                     StrokeThickness = 1.5,
                     IsHitTestVisible = false,
                 };
+                break;
             case DrawingShapeKind.Line:
-                return CreateDrawingLineVisual(stroke, width);
+                visual = CreateDrawingLineVisual(stroke, width);
+                break;
+            default:
+                if (drawingObject.ShapeKind is { } shapeKind &&
+                    AvaloniaDrawingShapeGeometryFactory.CreateGeometry(shapeKind, w, h) is { } geometry)
+                {
+                    visual = new global::Avalonia.Controls.Shapes.Path
+                    {
+                        Data = geometry,
+                        // Geometry is authored inside a (0,0,w,h) box, so render it 1:1.
+                        Stretch = Stretch.None,
+                        Width = w,
+                        Height = h,
+                        Fill = fill,
+                        Stroke = stroke,
+                        StrokeThickness = 1.5,
+                        IsHitTestVisible = false,
+                    };
+                }
+                else
+                {
+                    visual = new AvaloniaRectangle
+                    {
+                        Width = w,
+                        Height = h,
+                        Fill = fill,
+                        Stroke = stroke,
+                        StrokeThickness = 1.5,
+                        IsHitTestVisible = false,
+                    };
+                }
+
+                break;
         }
 
-        if (drawingObject.ShapeKind is { } shapeKind &&
-            AvaloniaDrawingShapeGeometryFactory.CreateGeometry(shapeKind, w, h) is { } geometry)
+        ApplyDrawingObjectEffect(visual, drawingObject.Effect);
+        return visual;
+    }
+
+    // Approximates the authored shape effect (shadow / glow / soft-edges / bevel / reflection / 3-D)
+    // using Avalonia's bitmap effects. Faithful: outer/inner shadow, glow (offsetless colored shadow),
+    // soft-edges (blur). Approximated: bevel / reflection / 3-D fall back to a light drop shadow so the
+    // shape still reads as "lifted" without the full WPF authored geometry.
+    private static void ApplyDrawingObjectEffect(Control visual, DrawingObjectEffect? effect)
+    {
+        if (effect is null)
+            return;
+
+        var color = effect.Color ?? new CellColor(0, 0, 0);
+        var avColor = Color.FromRgb(color.R, color.G, color.B);
+
+        if (effect.HasSoftEdges)
         {
-            return new global::Avalonia.Controls.Shapes.Path
-            {
-                Data = geometry,
-                // Geometry is authored inside a (0,0,w,h) box, so render it 1:1.
-                Stretch = Stretch.None,
-                Width = w,
-                Height = h,
-                Fill = fill,
-                Stroke = stroke,
-                StrokeThickness = 1.5,
-                IsHitTestVisible = false,
-            };
+            visual.Effect = new BlurEffect { Radius = effect.BlurRadius };
+            return;
         }
 
-        return new AvaloniaRectangle
+        // Shadow, glow, and the bevel/reflection/3-D approximations all map onto a drop shadow.
+        // Glow simply uses a zero offset and the glow colour so it reads as a symmetric halo.
+        visual.Effect = new DropShadowEffect
         {
-            Width = w,
-            Height = h,
-            Fill = fill,
-            Stroke = stroke,
-            StrokeThickness = 1.5,
-            IsHitTestVisible = false,
+            Color = avColor,
+            BlurRadius = effect.BlurRadius,
+            OffsetX = effect.OffsetX,
+            OffsetY = effect.OffsetY,
+            Opacity = effect.Opacity,
         };
     }
 
