@@ -296,6 +296,12 @@ internal static class FreeWRibbonCommands
         // (reversible via the bus), then re-renders so the style's run/paragraph formatting resolves.
         registry.Register("freew.style", new ApplyParagraphStyleCommand(editor));
 
+        // Home > Styles: New Style opens a dialog capturing name + formatting + based-on, creates a custom
+        // DocumentStyle via the pure StyleManager and applies it to the selection. Manage Styles lets the
+        // user modify or delete the catalog's styles (built-ins are guarded against deletion).
+        registry.Register("freew.new-style", new NewStyleCommand(editor));
+        registry.Register("freew.manage-styles", new ManageStylesCommand(editor));
+
         // Design > Document Formatting: the Themes dropdown. Picking a theme name applies that built-in
         // colour/font scheme to the document's style catalog (rewriting heading/title colours + fonts and
         // the body face) and re-renders so the change is visible at once.
@@ -556,6 +562,76 @@ internal static class FreeWRibbonCommands
 
         private static string Compact(string value) => value.Replace(" ", string.Empty);
     }
+
+    // Home > Styles: New Style. Opens a dialog capturing a name + a few formatting options + a based-on
+    // style, then creates a custom DocumentStyle via the pure StyleManager and applies it to the
+    // selection through the same reversible StyleId path the styles dropdown uses. Newly created styles
+    // appear in the Style dropdown after reopening the document (the ribbon combo's item list is built
+    // once from the immutable definition); the create + immediate apply is the must-have and works now.
+    private sealed class NewStyleCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var catalog = StyleNamesById(editor.Model);
+            var def = StyleDialog.AskNew(owner, catalog, editor.CurrentParagraphStyleId);
+            if (def is null)
+                return;
+
+            var created = StyleManager.CreateStyle(editor.Model, def.Name, def.BasedOnId, def.Run, def.Paragraph);
+            editor.Focus();
+            editor.SetParagraphStyle(created.Id);
+        }
+    }
+
+    // Home > Styles: Manage Styles. Lists the document's styles; the selected one can be modified (name is
+    // fixed, formatting/based-on editable), deleted (built-ins are refused by StyleManager), or applied to
+    // the selection. Pragmatic by design — the pure StyleManager carries the rules; this is the surface.
+    private sealed class ManageStylesCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+
+            while (true)
+            {
+                var action = ManageStylesDialog.Ask(owner, editor.Model, editor.CurrentParagraphStyleId);
+                if (action is null)
+                    return;
+
+                switch (action)
+                {
+                    case ManageStyleAction.Apply apply:
+                        editor.Focus();
+                        editor.SetParagraphStyle(apply.StyleId);
+                        return;
+
+                    case ManageStyleAction.Delete del:
+                        StyleManager.DeleteStyle(editor.Model, del.StyleId);
+                        editor.RefreshStyles();
+                        continue; // reopen the list so the user sees the removal
+
+                    case ManageStyleAction.Modify mod:
+                        if (!editor.Model.Styles.TryGetValue(mod.StyleId, out var existing))
+                            continue;
+                        var def = StyleDialog.AskModify(owner, StyleNamesById(editor.Model), existing);
+                        if (def is null)
+                            continue;
+                        StyleManager.ModifyStyle(editor.Model, mod.StyleId,
+                            run: def.Run, para: def.Paragraph, basedOnId: def.BasedOnId,
+                            clearBasedOn: def.BasedOnId is null);
+                        editor.RefreshStyles();
+                        continue;
+                }
+            }
+        }
+    }
+
+    // The document's style catalog as id -> display name, for the dialogs' based-on / style lists.
+    private static IReadOnlyDictionary<string, string> StyleNamesById(TextDocument model) =>
+        model.Styles.ToDictionary(kv => kv.Key, kv => kv.Value.Name);
 
     // Design > Document Formatting: apply a built-in document theme. The dropdown's value is a theme
     // name (e.g. "Slate"); this resolves it to a DocumentTheme in the catalog and asks the view to
