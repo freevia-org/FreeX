@@ -24,7 +24,9 @@ pwsh tools/Fetch-FidelityCorpus.ps1 -Force # re-download everything
 
 - `license` is **required** for every downloaded row and must be permissive or public-domain. The current
   catalogue is Apache POI test data (Apache-2.0), chosen for broad feature coverage (charts, pivots,
-  conditional formatting, tables, data validation, formatting/themes, comments, merges, formulas).
+  conditional formatting, tables, data validation, formatting/themes, comments, merges, formulas,
+  sparklines, drawings, images, text boxes, embedded objects, hyperlinks, protection, page setup, and
+  sizeable worksheet data).
 - `feature_tags` is space-separated (same convention as `test-corpus/manifest.csv`).
 
 ## Adding your own complex local workbooks

@@ -387,7 +387,7 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-linux-launch-smoke.txt
             artifacts/freex-${{ matrix.runtime }}-linux-tester-instructions.md
             artifacts/freex-${{ matrix.runtime }}-linux-screenshot.png
-          if-no-files-found: ignore
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Upload app diagnostics
@@ -420,7 +420,7 @@ jobs:
           persist-credentials: false
 
       - name: Download Linux app artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: downloaded-artifacts
           pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-linux-app
