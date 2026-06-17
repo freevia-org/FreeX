@@ -1,0 +1,520 @@
+using System.Globalization;
+
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+
+using FreeX.App.Presentation.PivotUI;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
+using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+
+namespace FreeX.App.Avalonia;
+
+/// <summary>
+/// Windows-parity PivotTable field-filter dialogs for the Avalonia/macOS shell. The field-pane header
+/// dropdown (built in <see cref="BuildPivotFieldChip"/> / <see cref="ShowPivotHeaderDropdown"/>) exposes
+/// "Label Filters…", "Value Filters…" and a manual item (checkbox) filter; each opens a modal dialog and
+/// applies the result through <see cref="ConfigurePivotTableFieldFiltersCommand"/> — the one Core command
+/// that carries the row/column/page field lists (for manual <see cref="PivotFieldModel.SelectedItems"/>),
+/// the <see cref="PivotLabelFilterModel"/> list and the <see cref="PivotValueFilterModel"/> list together.
+/// Member text for the checkbox list is read from the pivot's source range and formatted to match the
+/// engine's key text (see <see cref="ReadPivotFieldMembers"/> / <see cref="MemberKeyText"/>), so a checked
+/// item agrees with what the refresh service keeps.
+/// </summary>
+public sealed partial class MainWindow
+{
+    /// <summary>
+    /// Entry point for the field pane's header dropdown. Opens the manual item (checkbox) filter, the label
+    /// filter, or the value filter dialog for <paramref name="target"/> depending on <paramref name="action"/>.
+    /// Returns true when the action was a filter action this partial handled (so the caller skips the
+    /// deferred path), false otherwise.
+    /// </summary>
+    internal bool TryOpenPivotFieldFilter(
+        PivotTableModel pivot,
+        IReadOnlyList<string> headers,
+        PivotHeaderDropdownTargetModel target,
+        PivotHeaderMenuAction action)
+    {
+        switch (action)
+        {
+            case PivotHeaderMenuAction.LabelFilter:
+                _ = OpenPivotLabelFilterDialogAsync(pivot, target);
+                return true;
+            case PivotHeaderMenuAction.ValueFilter:
+                _ = OpenPivotValueFilterDialogAsync(pivot, target);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Opens the manual item (checkbox) filter for the field. Wired to a dedicated "Item Filter…" pane menu
+    /// entry / field-pane affordance. Reads the field's distinct members, lets the user check the ones to
+    /// keep, and writes them to the field's <see cref="PivotFieldModel.SelectedItems"/>.
+    /// </summary>
+    internal void OpenPivotItemFilter(
+        PivotTableModel pivot,
+        IReadOnlyList<string> headers,
+        PivotHeaderDropdownTargetModel target)
+    {
+        _ = OpenPivotItemFilterDialogAsync(pivot, headers, target);
+    }
+
+    // ── Manual item (checkbox) filter ─────────────────────────────────────────
+    private async Task OpenPivotItemFilterDialogAsync(
+        PivotTableModel pivot,
+        IReadOnlyList<string> headers,
+        PivotHeaderDropdownTargetModel target)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        var caption = PivotFieldListPaneBuilder.FieldCaption(headers, target.SourceFieldIndex);
+        var members = ReadPivotFieldMembers(pivot, target.SourceFieldIndex);
+        if (members.Count == 0)
+        {
+            ShowEditIssue("This field has no items to filter.");
+            return;
+        }
+
+        var current = FindFieldSelection(pivot, target);
+        // No explicit selection (or "(All)") means every item is shown.
+        var currentSet = current is { Count: > 0 }
+            ? new HashSet<string>(current.Where(item =>
+                !string.IsNullOrWhiteSpace(item) &&
+                !string.Equals(item, "(All)", StringComparison.OrdinalIgnoreCase)),
+                StringComparer.CurrentCultureIgnoreCase)
+            : null;
+
+        var checkBoxes = new List<CheckBox>();
+        var listPanel = new StackPanel();
+        foreach (var member in members)
+        {
+            var box = new CheckBox
+            {
+                Content = member,
+                Tag = member,
+                IsChecked = currentSet is null || currentSet.Contains(member),
+            };
+            checkBoxes.Add(box);
+            listPanel.Children.Add(box);
+        }
+
+        var selectAll = new CheckBox
+        {
+            Content = "(Select All)",
+            IsChecked = checkBoxes.All(box => box.IsChecked == true),
+        };
+        selectAll.IsCheckedChanged += (_, _) =>
+        {
+            if (selectAll.IsChecked is { } value)
+                foreach (var box in checkBoxes)
+                    box.IsChecked = value;
+        };
+
+        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
+        content.Children.Add(new TextBlock
+        {
+            Text = $"Filter “{caption}”",
+            FontWeight = FontWeight.SemiBold,
+            Foreground = HeaderForeground,
+        });
+        content.Children.Add(selectAll);
+        content.Children.Add(new ScrollViewer
+        {
+            MaxHeight = 280,
+            Content = listPanel,
+        });
+
+        var dialog = new Window
+        {
+            Title = "Filter Items",
+            Width = 300,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+        };
+
+        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80 };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
+        cancel.Click += (_, _) => dialog.Close(false);
+        ok.Click += (_, _) => dialog.Close(true);
+
+        content.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Spacing = 8,
+            Children = { ok, cancel },
+        });
+        dialog.Content = content;
+
+        var confirmed = await dialog.ShowDialog<bool>(this);
+        if (!confirmed)
+            return;
+
+        var checked_ = checkBoxes.Where(box => box.IsChecked == true).Select(box => (string)box.Tag!).ToList();
+        // Selecting every item is "no filter": clear the selection so new members stay visible.
+        IReadOnlyList<string>? selection = checked_.Count == members.Count ? null : checked_;
+        ApplyPivotItemFilter(pivot, target, selection);
+    }
+
+    private void ApplyPivotItemFilter(
+        PivotTableModel pivot,
+        PivotHeaderDropdownTargetModel target,
+        IReadOnlyList<string>? selectedItems)
+    {
+        var rows = CloneFieldsWithSelection(pivot.RowFields, target.SourceFieldIndex, target.Area, PivotHeaderArea.Row, selectedItems);
+        var columns = CloneFieldsWithSelection(pivot.ColumnFields, target.SourceFieldIndex, target.Area, PivotHeaderArea.Column, selectedItems);
+        var pages = CloneFieldsWithSelection(pivot.PageFields, target.SourceFieldIndex, target.Area, PivotHeaderArea.Page, selectedItems);
+
+        ExecutePivotFilterCommand(pivot, rows, columns, pages, pivot.LabelFilters.ToList(), pivot.ValueFilters.ToList());
+    }
+
+    private static IReadOnlyList<PivotFieldModel> CloneFieldsWithSelection(
+        IReadOnlyList<PivotFieldModel> fields,
+        int sourceFieldIndex,
+        PivotHeaderArea targetArea,
+        PivotHeaderArea thisArea,
+        IReadOnlyList<string>? selectedItems)
+    {
+        var result = new List<PivotFieldModel>(fields.Count);
+        foreach (var field in fields)
+        {
+            if (targetArea == thisArea && field.SourceFieldIndex == sourceFieldIndex)
+                result.Add(field with { SelectedItem = null, SelectedItems = selectedItems });
+            else
+                result.Add(field);
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<string>? FindFieldSelection(PivotTableModel pivot, PivotHeaderDropdownTargetModel target)
+    {
+        var fields = target.Area switch
+        {
+            PivotHeaderArea.Row => pivot.RowFields,
+            PivotHeaderArea.Column => pivot.ColumnFields,
+            PivotHeaderArea.Page => pivot.PageFields,
+            _ => (IReadOnlyList<PivotFieldModel>)[],
+        };
+
+        foreach (var field in fields)
+        {
+            if (field.SourceFieldIndex != target.SourceFieldIndex)
+                continue;
+            if (field.SelectedItems is { Count: > 0 } items)
+                return items;
+            if (!string.IsNullOrWhiteSpace(field.SelectedItem))
+                return [field.SelectedItem];
+            return null;
+        }
+
+        return null;
+    }
+
+    // ── Label filter (Equals / Contains / Begins With / …) ─────────────────────
+    private async Task OpenPivotLabelFilterDialogAsync(PivotTableModel pivot, PivotHeaderDropdownTargetModel target)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        var existing = pivot.LabelFilters.FirstOrDefault(filter => filter.SourceFieldIndex == target.SourceFieldIndex);
+
+        var kindBox = new ComboBox { MinWidth = 200 };
+        foreach (var kind in Enum.GetValues<PivotLabelFilterKind>())
+            kindBox.Items.Add(kind);
+        kindBox.SelectedItem = existing?.Kind ?? PivotLabelFilterKind.Equals;
+
+        var value1 = new TextBox { MinWidth = 200, Text = existing?.Value ?? string.Empty, PlaceholderText = "Value" };
+        var value2 = new TextBox { MinWidth = 200, Text = existing?.Value2 ?? string.Empty, PlaceholderText = "Second value (Between)" };
+
+        void SyncSecond()
+        {
+            value2.IsVisible = kindBox.SelectedItem is PivotLabelFilterKind.Between;
+        }
+
+        kindBox.SelectionChanged += (_, _) => SyncSecond();
+        SyncSecond();
+
+        var dialog = new Window
+        {
+            Title = $"Label Filter ({target.FieldCaption})",
+            Width = 320,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+        };
+
+        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80 };
+        var clear = new Button { Content = "Clear", MinWidth = 80, IsEnabled = existing is not null };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
+        cancel.Click += (_, _) => dialog.Close(0);
+        ok.Click += (_, _) => dialog.Close(1);
+        clear.Click += (_, _) => dialog.Close(2);
+
+        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
+        content.Children.Add(new TextBlock
+        {
+            Text = $"Show items where the label:",
+            Foreground = HeaderForeground,
+        });
+        content.Children.Add(kindBox);
+        content.Children.Add(value1);
+        content.Children.Add(value2);
+        content.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Spacing = 8,
+            Children = { ok, clear, cancel },
+        });
+        dialog.Content = content;
+
+        var result = await dialog.ShowDialog<int>(this);
+        if (result == 0)
+            return;
+
+        var labelFilters = pivot.LabelFilters
+            .Where(filter => filter.SourceFieldIndex != target.SourceFieldIndex)
+            .ToList();
+
+        if (result == 1)
+        {
+            var kind = (PivotLabelFilterKind)(kindBox.SelectedItem ?? PivotLabelFilterKind.Equals);
+            var v1 = value1.Text ?? string.Empty;
+            var v2 = kind == PivotLabelFilterKind.Between ? value2.Text : null;
+            labelFilters.Add(new PivotLabelFilterModel(target.SourceFieldIndex, kind, v1, v2));
+        }
+
+        ExecutePivotFilterCommand(
+            pivot,
+            pivot.RowFields.ToList(),
+            pivot.ColumnFields.ToList(),
+            pivot.PageFields.ToList(),
+            labelFilters,
+            pivot.ValueFilters.ToList());
+    }
+
+    // ── Value filter (Top N / Greater Than / Between / …) ──────────────────────
+    private async Task OpenPivotValueFilterDialogAsync(PivotTableModel pivot, PivotHeaderDropdownTargetModel target)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (pivot.DataFields.Count == 0)
+        {
+            ShowEditIssue("Add a value field before applying a value filter.");
+            return;
+        }
+
+        var existing = pivot.ValueFilters
+            .FirstOrDefault(filter => filter.SourceFieldIndex == target.SourceFieldIndex);
+
+        var kindBox = new ComboBox { MinWidth = 200 };
+        foreach (var kind in Enum.GetValues<PivotValueFilterKind>())
+            kindBox.Items.Add(kind);
+        kindBox.SelectedItem = existing?.Kind ?? PivotValueFilterKind.GreaterThan;
+
+        var dataFieldBox = new ComboBox { MinWidth = 200 };
+        for (var index = 0; index < pivot.DataFields.Count; index++)
+            dataFieldBox.Items.Add(pivot.DataFields[index].Name);
+        dataFieldBox.SelectedIndex = existing is { } e && e.DataFieldIndex >= 0 && e.DataFieldIndex < pivot.DataFields.Count
+            ? e.DataFieldIndex
+            : 0;
+
+        var primary = new TextBox
+        {
+            MinWidth = 200,
+            PlaceholderText = "Count / value",
+            Text = existing is null
+                ? string.Empty
+                : existing.Kind is PivotValueFilterKind.Top or PivotValueFilterKind.Bottom
+                    ? existing.Count.ToString(CultureInfo.CurrentCulture)
+                    : (existing.ComparisonValue?.ToString(CultureInfo.CurrentCulture) ?? string.Empty),
+        };
+        var secondary = new TextBox
+        {
+            MinWidth = 200,
+            PlaceholderText = "Second value (Between)",
+            Text = existing?.ComparisonValue2?.ToString(CultureInfo.CurrentCulture) ?? string.Empty,
+        };
+
+        void SyncInputs()
+        {
+            var kind = (PivotValueFilterKind)(kindBox.SelectedItem ?? PivotValueFilterKind.GreaterThan);
+            primary.IsVisible = kind is not (PivotValueFilterKind.AboveAverage or PivotValueFilterKind.BelowAverage);
+            secondary.IsVisible = kind is PivotValueFilterKind.Between or PivotValueFilterKind.NotBetween;
+        }
+
+        kindBox.SelectionChanged += (_, _) => SyncInputs();
+        SyncInputs();
+
+        var dialog = new Window
+        {
+            Title = $"Value Filter ({target.FieldCaption})",
+            Width = 320,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+        };
+
+        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80 };
+        var clear = new Button { Content = "Clear", MinWidth = 80, IsEnabled = existing is not null };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
+        cancel.Click += (_, _) => dialog.Close(0);
+        ok.Click += (_, _) => dialog.Close(1);
+        clear.Click += (_, _) => dialog.Close(2);
+
+        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
+        content.Children.Add(new TextBlock { Text = "Summarize by:", Foreground = HeaderForeground });
+        content.Children.Add(dataFieldBox);
+        content.Children.Add(new TextBlock { Text = "where the value is:", Foreground = HeaderForeground });
+        content.Children.Add(kindBox);
+        content.Children.Add(primary);
+        content.Children.Add(secondary);
+        content.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Spacing = 8,
+            Children = { ok, clear, cancel },
+        });
+        dialog.Content = content;
+
+        var result = await dialog.ShowDialog<int>(this);
+        if (result == 0)
+            return;
+
+        var valueFilters = pivot.ValueFilters
+            .Where(filter => filter.SourceFieldIndex != target.SourceFieldIndex)
+            .ToList();
+
+        if (result == 1)
+        {
+            var kind = (PivotValueFilterKind)(kindBox.SelectedItem ?? PivotValueFilterKind.GreaterThan);
+            var dataFieldIndex = Math.Max(0, dataFieldBox.SelectedIndex);
+            var count = 0;
+            double? comparison = null;
+            double? comparison2 = null;
+
+            if (kind is PivotValueFilterKind.Top or PivotValueFilterKind.Bottom)
+            {
+                if (!int.TryParse(primary.Text, NumberStyles.Integer, CultureInfo.CurrentCulture, out count) || count <= 0)
+                {
+                    ShowEditIssue("Enter a positive item count for a Top/Bottom filter.");
+                    return;
+                }
+            }
+            else if (kind is not (PivotValueFilterKind.AboveAverage or PivotValueFilterKind.BelowAverage))
+            {
+                if (!double.TryParse(primary.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out var parsed))
+                {
+                    ShowEditIssue("Enter a numeric comparison value.");
+                    return;
+                }
+
+                comparison = parsed;
+                if (kind is PivotValueFilterKind.Between or PivotValueFilterKind.NotBetween)
+                {
+                    if (!double.TryParse(secondary.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out var parsed2))
+                    {
+                        ShowEditIssue("Enter a numeric second value for a Between filter.");
+                        return;
+                    }
+
+                    comparison2 = parsed2;
+                }
+            }
+
+            valueFilters.Add(new PivotValueFilterModel(
+                dataFieldIndex,
+                kind,
+                count,
+                comparison,
+                comparison2,
+                target.SourceFieldIndex));
+        }
+
+        ExecutePivotFilterCommand(
+            pivot,
+            pivot.RowFields.ToList(),
+            pivot.ColumnFields.ToList(),
+            pivot.PageFields.ToList(),
+            pivot.LabelFilters.ToList(),
+            valueFilters);
+    }
+
+    // ── Shared command execution + member reading ─────────────────────────────
+    private void ExecutePivotFilterCommand(
+        PivotTableModel pivot,
+        IReadOnlyList<PivotFieldModel> rowFields,
+        IReadOnlyList<PivotFieldModel> columnFields,
+        IReadOnlyList<PivotFieldModel> pageFields,
+        IReadOnlyList<PivotLabelFilterModel> labelFilters,
+        IReadOnlyList<PivotValueFilterModel> valueFilters)
+    {
+        var command = new ConfigurePivotTableFieldFiltersCommand(
+            _session.ActiveSheet.Id,
+            pivot.Name,
+            rowFields,
+            columnFields,
+            pageFields,
+            labelFilters,
+            valueFilters,
+            pivot.Sorts.ToList());
+
+        var result = _session.ExecuteReviewCommand(command);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "PivotTable filter failed.");
+            return;
+        }
+
+        _pivotPaneSignature = null;
+        RefreshShell(command.Label);
+    }
+
+    /// <summary>
+    /// Distinct member labels of a source field, in first-seen order, formatted to match the refresh
+    /// service's group-key text (so a checked item agrees with what the engine keeps). Reads the source
+    /// range column below the header row.
+    /// </summary>
+    private IReadOnlyList<string> ReadPivotFieldMembers(PivotTableModel pivot, int sourceFieldIndex)
+    {
+        var sourceSheet = _session.Workbook.GetSheet(pivot.SourceRange.Start.Sheet);
+        if (sourceSheet is null || sourceFieldIndex < 0)
+            return [];
+
+        var col = pivot.SourceRange.Start.Col + (uint)sourceFieldIndex;
+        if (col > pivot.SourceRange.End.Col)
+            return [];
+
+        var seen = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
+        var members = new List<string>();
+        for (var row = pivot.SourceRange.Start.Row + 1; row <= pivot.SourceRange.End.Row; row++)
+        {
+            var text = MemberKeyText(sourceSheet.GetCell(row, col)?.Value);
+            if (seen.Add(text))
+                members.Add(text);
+        }
+
+        return members;
+    }
+
+    // Mirrors PivotTableRefreshService.KeyText so checkbox labels match the engine's group keys.
+    private static string MemberKeyText(ScalarValue? value) => value switch
+    {
+        TextValue text => text.Value,
+        NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
+        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+        DateTimeValue date => date.ToDateTime().ToShortDateString(),
+        ErrorValue error => error.Code,
+        _ => "(blank)",
+    };
+}

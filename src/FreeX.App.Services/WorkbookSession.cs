@@ -2582,6 +2582,13 @@ public sealed class WorkbookSession
         Viewport = BuildViewport();
     }
 
+    /// <summary>Forces a full recalculation of all formulas (Formulas ▸ Calculate Now / F9) and refreshes the view.</summary>
+    public void RecalculateWorkbook()
+    {
+        _cellEditService.RecalculateAll(Workbook);
+        RefreshViewport();
+    }
+
     private HashSet<SheetId> CaptureSheetIds() =>
         Workbook.Sheets.Select(sheet => sheet.Id).ToHashSet();
 

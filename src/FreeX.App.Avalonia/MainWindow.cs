@@ -669,6 +669,7 @@ public sealed partial class MainWindow : Window
                     ["formulas.defineName"] = DefineName,
                     ["formulas.createFromSelection"] = CreateNamesFromSelection,
                     // Review tab.
+                    ["review.spelling"] = () => _ = ShowSpellingDialogAsync(),
                     ["review.checkAccessibility"] = () => _ = ShowReviewSummaryDialogAsync(focusAccessibility: true),
                     ["review.protectSheet"] = () => _ = ShowProtectSheetDialogAsync(),
                     ["review.protectWorkbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
@@ -680,6 +681,8 @@ public sealed partial class MainWindow : Window
                     ["view.zoomToSelection"] = ZoomToSelection,
                     ["view.freezePanes"] = FreezePanesAtActiveCell,
                     ["view.pageBreakPreview"] = TogglePageBreakPreview,
+                    ["view.formulaBar"] = ToggleFormulaBarVisibility,
+                    ["view.pageLayoutView"] = SetPageLayoutView,
                     // Home tab (Editing group).
                     ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
                     ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
@@ -782,6 +785,13 @@ public sealed partial class MainWindow : Window
                     ["formulas.errorChecking"] = CheckFormulaErrors,
                     // Formulas ▸ Evaluate Formula (read-only diagnostics dialog).
                     ["formulas.evaluateFormula"] = () => _ = ShowEvaluateFormulaDialogAsync(),
+                    // Formulas ▸ Formula Auditing trace arrows.
+                    ["formulas.tracePrecedents"] = TraceFormulaPrecedents,
+                    ["formulas.traceDependents"] = TraceFormulaDependents,
+                    ["formulas.removeArrows"] = RemoveFormulaTraceArrows,
+                    // Formulas ▸ Calculation group.
+                    ["formulas.calcOptions"] = ToggleCalculationMode,
+                    ["formulas.calcNow"] = CalculateNow,
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
@@ -2736,6 +2746,10 @@ public sealed partial class MainWindow : Window
         // Legacy form controls (checkbox/option/spinner/scrollbar/groupbox/label) live on the sheet,
         // not in viewport.DrawingObjects — paint them before the early-out so they render standalone.
         AddFormControlOverlays(overlay, viewport);
+
+        // Formula-auditing trace arrows live in an app-side set, not in viewport.DrawingObjects —
+        // paint them before the early-out so they render even with no other drawing objects.
+        AddFormulaTraceArrowOverlay(overlay, viewport);
 
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;
