@@ -205,8 +205,13 @@ internal sealed class HeaderFooterPaginator(
         var hasWatermark = !string.IsNullOrEmpty(page.Watermark);
         var hasBorder = page.PageBorder is not null;
         var hasLineNumbers = page.LineNumberMode != LineNumberMode.None && lineHeightDip > 0;
+        // Footnote/endnote bodies are drawn at the page foot only for single-page documents, where every
+        // note belongs to the one (last) page — sidestepping the per-page note→page mapping and the
+        // page-bottom space reservation that a general implementation needs.
+        var hasNotesAtFoot = inner.PageCount == 1
+            && (model.Footnotes.Count > 0 || model.Endnotes.Count > 0);
         if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
-            && !hasWatermark && !hasBorder && !hasLineNumbers)
+            && !hasWatermark && !hasBorder && !hasLineNumbers && !hasNotesAtFoot)
             return basePage;
 
         var size = basePage.Size;
@@ -237,7 +242,60 @@ internal sealed class HeaderFooterPaginator(
             visual.Children.Add(BuildOverlay(footerText, marginLeft, bottom, contentWidth));
         }
 
+        if (hasNotesAtFoot)
+            visual.Children.Add(BuildNotesAtFoot(size, marginLeft, contentWidth));
+
         return new DocumentPage(visual, size, basePage.BleedBox, basePage.ContentBox);
+    }
+
+    /// <summary>
+    /// Draws footnote/endnote bodies at the foot of a single-page document: a short separator rule just
+    /// below the content area, then each note as "N. text" in 9pt, stacked into the bottom margin. Word
+    /// reserves space inside the content area for these; FreeW approximates by drawing them in the
+    /// otherwise-empty bottom margin so the note text is visible (previously only the reference marker was).
+    /// </summary>
+    private DrawingVisual BuildNotesAtFoot(Size size, double marginLeft, double contentWidth)
+    {
+        var visual = new DrawingVisual();
+        if (contentWidth <= 0)
+            return visual;
+
+        var notes = model.Footnotes.OrderBy(kv => kv.Key).Select(kv => (kv.Key, kv.Value.PlainText))
+            .Concat(model.Endnotes.OrderBy(kv => kv.Key).Select(kv => (kv.Key, kv.Value.PlainText)))
+            .Where(n => !string.IsNullOrEmpty(n.Item2))
+            .ToList();
+        if (notes.Count == 0)
+            return visual;
+
+        var contentBottom = size.Height - PageLayout.PointsToDip(page.MarginBottomPt);
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.5);
+        using var dc = visual.RenderOpen();
+        var sepY = contentBottom + PageLayout.PointsToDip(3);
+        dc.DrawLine(pen, new Point(marginLeft, sepY), new Point(marginLeft + contentWidth * 0.3, sepY));
+
+        var y = sepY + PageLayout.PointsToDip(2);
+        var maxY = size.Height - PageLayout.PointsToDip(4); // stay on the sheet
+        foreach (var (id, text) in notes)
+        {
+            if (y >= maxY)
+                break;
+            var formatted = new FormattedText(
+                $"{id}. {text}",
+                System.Globalization.CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                new Typeface("Calibri"),
+                PageLayout.PointsToDip(9.0),
+                Brushes.Black,
+                1.0)
+            {
+                MaxTextWidth = contentWidth,
+                MaxLineCount = 2,
+                Trimming = TextTrimming.CharacterEllipsis
+            };
+            dc.DrawText(formatted, new Point(marginLeft, y));
+            y += formatted.Height + PageLayout.PointsToDip(1);
+        }
+        return visual;
     }
 
     /// <summary>
