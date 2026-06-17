@@ -3005,6 +3005,13 @@ public sealed class DocumentView : RichTextBox
 
         if (control.Kind == ContentControlKind.CheckBox)
         {
+            // Synthesise the checkbox glyph from the control's checked state and render it in a symbol font.
+            // Word stores the box glyph in the SDT content run using a symbol font (often a Wingdings/MS
+            // Gothic codepoint), so the raw run text rendered in the body font showed nothing. Driving the
+            // glyph from the state (☒/☐ in Segoe UI Symbol, which has U+2610/U+2612) guarantees a visible,
+            // correct checkbox and matches how FreeW renders its own inserted checkboxes.
+            wpf.Text = control.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
+            wpf.FontFamily = new System.Windows.Media.FontFamily("Segoe UI Symbol");
             wpf.Cursor = System.Windows.Input.Cursors.Hand;
             wpf.MouseLeftButtonUp += OnCheckBoxControlClicked;
         }

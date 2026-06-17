@@ -1137,6 +1137,29 @@ public static class DocxReader
             return;
         }
 
+        // A legacy form-field checkbox (FORMCHECKBOX): w:fldChar(begin)/w:ffData/w:checkBox. Map it to a
+        // checkbox content control so it renders and round-trips as a checkbox; the field's other runs
+        // (the FORMCHECKBOX instrText and the separate/end fldChar) carry no visible text and are dropped.
+        // Checked state = the w:checked toggle when present, else the w:default toggle.
+        var ffCheckBox = r.Element(W + "fldChar")?.Element(W + "ffData")?.Element(W + "checkBox");
+        if (ffCheckBox is not null)
+        {
+            static bool Toggle(XElement? e) =>
+                e is not null && e.Attribute(W + "val")?.Value is null or "1" or "true" or "on";
+            var isChecked = ffCheckBox.Element(W + "checked") is { } checkedEl
+                ? Toggle(checkedEl)
+                : Toggle(ffCheckBox.Element(W + "default"));
+            var name = r.Element(W + "fldChar")?.Element(W + "ffData")?.Element(W + "name")?.Attribute(W + "val")?.Value;
+            var checkboxRun = Run.CheckBoxControl(isChecked, name);
+            checkboxRun.Formatting = ReadRunFormatting(r.Element(W + "rPr"));
+            checkboxRun.HyperlinkUrl = hyperlinkUrl;
+            checkboxRun.HyperlinkAnchor = hyperlinkAnchor;
+            checkboxRun.CommentId = commentId;
+            ApplyRevision(checkboxRun);
+            paragraph.Runs.Add(checkboxRun);
+            return;
+        }
+
         // A manual page break (w:br w:type="page") forces the following content onto a new page. It is
         // emitted as its own break-only run; recover it as a page-break run (otherwise it — and any
         // text-less run holding it — would be dropped, making FreeW under-paginate versus Word).
