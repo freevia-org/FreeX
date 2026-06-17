@@ -49,6 +49,85 @@ internal static class GridDrawingObjectPlanner
         return true;
     }
 
+    /// <summary>
+    /// Builds an anchor rect that spans from the from-cell's top-left to the bottom-right of the
+    /// to-cell (i.e. inclusive of the to-cell's full width/height). Unlike
+    /// <see cref="TryCreateDrawingAnchorRect(ViewportModel?, DrawingAnchorRange, double, double, out Rect)"/>
+    /// — which points at the to-cell's top-left and therefore collapses to zero size when the from
+    /// and to cells are the same row/column — this never degenerates for a one-cell anchor. Used for
+    /// legacy form controls, whose modeled anchor drops the sub-cell EMU offsets.
+    /// </summary>
+    public static bool TryCreateSpanningAnchorRect(
+        ViewportModel? viewport,
+        DrawingAnchorRange anchor,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        out Rect rect)
+    {
+        rect = default;
+        if (viewport is null ||
+            anchor.From.Column == uint.MaxValue ||
+            anchor.To.Column == uint.MaxValue ||
+            anchor.From.Row == uint.MaxValue ||
+            anchor.To.Row == uint.MaxValue)
+            return false;
+
+        if (!TryFindAnchorColumns(viewport.ColMetrics, anchor.From.Column + 1, anchor.To.Column + 1, out var fromColumn, out var toColumn) ||
+            !TryFindAnchorRows(viewport.RowMetrics, anchor.From.Row + 1, anchor.To.Row + 1, out var fromRow, out var toRow))
+            return false;
+
+        return TryBuildSpanningRect(rowHeaderWidth, columnHeaderHeight, fromColumn, toColumn, fromRow, toRow, out rect);
+    }
+
+    public static bool TryCreateSpanningAnchorRect(
+        IReadOnlyDictionary<uint, RowMetric> rows,
+        IReadOnlyDictionary<uint, ColMetric> columns,
+        DrawingAnchorRange anchor,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        out Rect rect)
+    {
+        rect = default;
+        if (anchor.From.Column == uint.MaxValue ||
+            anchor.To.Column == uint.MaxValue ||
+            anchor.From.Row == uint.MaxValue ||
+            anchor.To.Row == uint.MaxValue)
+            return false;
+
+        if (!columns.TryGetValue(anchor.From.Column + 1, out var fromColumn) ||
+            !columns.TryGetValue(anchor.To.Column + 1, out var toColumn) ||
+            !rows.TryGetValue(anchor.From.Row + 1, out var fromRow) ||
+            !rows.TryGetValue(anchor.To.Row + 1, out var toRow))
+            return false;
+
+        return TryBuildSpanningRect(rowHeaderWidth, columnHeaderHeight, fromColumn, toColumn, fromRow, toRow, out rect);
+    }
+
+    private static bool TryBuildSpanningRect(
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        ColMetric fromColumn,
+        ColMetric toColumn,
+        RowMetric fromRow,
+        RowMetric toRow,
+        out Rect rect)
+    {
+        var left = rowHeaderWidth + fromColumn.LeftOffset;
+        var top = columnHeaderHeight + fromRow.TopOffset;
+        var right = rowHeaderWidth + toColumn.LeftOffset + toColumn.Width;
+        var bottom = columnHeaderHeight + toRow.TopOffset + toRow.Height;
+        var width = right - left;
+        var height = bottom - top;
+        if (width <= 0 || height <= 0)
+        {
+            rect = default;
+            return false;
+        }
+
+        rect = new Rect(left, top, width, height);
+        return true;
+    }
+
     public static Rect EnsureMinimumControlRect(Rect rect) =>
         new(rect.Left, rect.Top, Math.Max(80, rect.Width), Math.Max(44, rect.Height));
 
