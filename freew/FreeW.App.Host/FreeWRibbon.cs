@@ -129,6 +129,7 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.save-quickpart", "Save Selection");
                     g.Button("freew.insert-quickpart", "Insert Quick Part");
+                    g.Button("freew.insert-file", "Text from File");
                 });
                 tab.Group("references", "References", "R", 65, g =>
                 {

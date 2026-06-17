@@ -384,6 +384,38 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Insert the body content of another document (<paramref name="source"/>, typically a just-opened
+    /// .docx) at the caret. The source's blocks are deep-cloned via <see cref="DocumentMerge.CloneBlocks"/>
+    /// (so the source is never aliased), then each clone is inserted after the caret's block — one
+    /// reversible <see cref="InsertBlockCommand"/> per block, in order — and the surface re-renders.
+    /// Any named styles the source defines that the target lacks are also brought over so the inserted
+    /// paragraphs resolve their styling (existing target styles are never overwritten).
+    /// </summary>
+    public void InsertDocument(TextDocument source)
+    {
+        if (source is null)
+            return;
+
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+
+        // Bring over any styles the source has that the target is missing, so style-referencing
+        // paragraphs (e.g. Heading1) render correctly. Never clobber a style the target already defines.
+        foreach (var (id, style) in source.Styles)
+            _model.Styles.TryAdd(id, style);
+
+        var clones = DocumentMerge.CloneBlocks(source);
+
+        // Insert after the block the caret sits in (else at the end), keeping document order.
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+
+        foreach (var block in clones)
+            _commands.Execute(new InsertBlockCommand(index++, block));
+    }
+
+    /// <summary>
     /// Insert a Table of Contents generated from the document's heading outline. The TOC paragraphs
     /// (built by <see cref="TableOfContents.Build"/>) are inserted at the caret's block (else at the
     /// document start), routed one-by-one through the undo/redo bus so the insert is reversible. The
