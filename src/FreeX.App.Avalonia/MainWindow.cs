@@ -602,6 +602,10 @@ public sealed partial class MainWindow : Window
         DockPanel.SetDock(sheetTabs, Dock.Bottom);
         root.Children.Add(sheetTabs);
 
+        var pivotFieldPane = BuildPivotFieldPaneChrome();
+        DockPanel.SetDock(pivotFieldPane, Dock.Right);
+        root.Children.Add(pivotFieldPane);
+
         root.Children.Add(BuildWorksheetViewportChrome());
 
         return root;
@@ -1961,6 +1965,7 @@ public sealed partial class MainWindow : Window
             : Brush(67, 113, 83);
         Title = $"FreeX - {FormatWindowWorkbookTitle()}{(_session.IsDirty ? " *" : "")}";
         UpdateViewportScrollBars();
+        RefreshPivotFieldPane();
         UpdateSaveButton();
     }
 
