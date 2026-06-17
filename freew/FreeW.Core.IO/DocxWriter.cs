@@ -29,6 +29,7 @@ public static class DocxWriter
     private const string EndnotesRelationshipId = "rIdEndnotes";
     private const string CommentsRelationshipId = "rIdComments";
     private const string SettingsRelationshipId = "rIdSettings";
+    private const string ThemeRelationshipId = "rIdTheme1";
     private const string HeaderPartName = "word/header1.xml";
     private const string FooterPartName = "word/footer1.xml";
 
@@ -90,6 +91,8 @@ public static class DocxWriter
         var hasProtection = document.Protection.IsProtected;
         var hasSettings = hasProtection || document.Page.AutoHyphenation;
 
+        // A word/theme/theme1.xml part is always emitted (real Word documents always carry one); it
+        // serialises the document's DocumentTheme as a real clrScheme/fontScheme/fmtScheme.
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
         WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
@@ -99,6 +102,7 @@ public static class DocxWriter
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, hasHeader, hasFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
+        WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
             WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation));
         if (hasLists)
@@ -336,6 +340,9 @@ public static class DocxWriter
                 ? new XElement(Ct + "Override", new XAttribute("PartName", SettingsPartName),
                     new XAttribute("ContentType", SettingsContentType))
                 : null,
+            // The theme part is always present (one per document).
+            new XElement(Ct + "Override", new XAttribute("PartName", ThemePartName),
+                new XAttribute("ContentType", ThemeContentType)),
             new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
                 new XAttribute("ContentType", CorePropertiesContentType)),
             hasWatermark
@@ -454,6 +461,11 @@ public static class DocxWriter
                 new XAttribute("Id", SettingsRelationshipId),
                 new XAttribute("Type", SettingsRelType),
                 new XAttribute("Target", "settings.xml")));
+        // The theme part is always present, so its relationship is unconditional.
+        relationships.Add(new XElement(Rel + "Relationship",
+            new XAttribute("Id", ThemeRelationshipId),
+            new XAttribute("Type", ThemeRelType),
+            new XAttribute("Target", "theme/theme1.xml")));
         if (includeNumbering)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rIdNumbering"),
@@ -2375,6 +2387,83 @@ public static class DocxWriter
         if (autoHyphenation)
             settings.Add(new XElement(W + "autoHyphenation"));
         return new XDocument(settings);
+    }
+
+    /// <summary>
+    /// Builds word/theme/theme1.xml (a:theme): the document's <see cref="DocumentTheme"/> serialised as a
+    /// real DrawingML theme — an a:clrScheme (the twelve <see cref="ThemeColorScheme"/> colour slots), an
+    /// a:fontScheme (major = the theme's heading font, minor = its body font) and a minimal-but-valid
+    /// a:fmtScheme (one fill/line/effect/bg-fill entry each, as Word requires at least one of each). The
+    /// reader recovers the colour + font scheme and infers the preset (see DocxReader.ReadTheme).
+    /// </summary>
+    private static XDocument BuildTheme(DocumentTheme theme)
+    {
+        var scheme = theme.ColorScheme;
+
+        XElement Srgb(string slot, string hex) =>
+            new(A + slot, new XElement(A + "srgbClr", new XAttribute("val", hex)));
+
+        var clrScheme = new XElement(A + "clrScheme",
+            new XAttribute("name", theme.Name),
+            // dk1/lt1 are conventionally emitted as window/windowText sysClr with an srgb lastClr; using a
+            // plain srgbClr is equally valid and keeps the reader's parse uniform across all twelve slots.
+            Srgb("dk1", scheme.Dark1),
+            Srgb("lt1", scheme.Light1),
+            Srgb("dk2", scheme.Dark2),
+            Srgb("lt2", scheme.Light2),
+            Srgb("accent1", scheme.Accent1),
+            Srgb("accent2", scheme.Accent2),
+            Srgb("accent3", scheme.Accent3),
+            Srgb("accent4", scheme.Accent4),
+            Srgb("accent5", scheme.Accent5),
+            Srgb("accent6", scheme.Accent6),
+            Srgb("hlink", scheme.Hyperlink),
+            Srgb("folHlink", scheme.FollowedHyperlink));
+
+        XElement Font(string element, string typeface) =>
+            new(A + element,
+                new XElement(A + "latin", new XAttribute("typeface", typeface)),
+                new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
+                new XElement(A + "cs", new XAttribute("typeface", string.Empty)));
+
+        var fontScheme = new XElement(A + "fontScheme",
+            new XAttribute("name", theme.Name),
+            new XElement(A + "majorFont", Font("latin", theme.HeadingFont).Elements()),
+            new XElement(A + "minorFont", Font("latin", theme.BodyFont).Elements()));
+
+        // A minimal-but-valid format scheme: one of each style the schema requires at least one of
+        // (fill / line / effect / background fill). A flat solid fill keyed to phClr is the simplest
+        // shape Word accepts; the document never reads these back (only the clr/font schemes round-trip).
+        XElement SolidPhClr() => new(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr")));
+
+        var fmtScheme = new XElement(A + "fmtScheme",
+            new XAttribute("name", theme.Name),
+            new XElement(A + "fillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr()),
+            new XElement(A + "lnStyleLst",
+                Line(), Line(), Line()),
+            new XElement(A + "effectStyleLst",
+                new XElement(A + "effectStyle", new XElement(A + "effectLst")),
+                new XElement(A + "effectStyle", new XElement(A + "effectLst")),
+                new XElement(A + "effectStyle", new XElement(A + "effectLst"))),
+            new XElement(A + "bgFillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr()));
+
+        var themeElements = new XElement(A + "themeElements", clrScheme, fontScheme, fmtScheme);
+
+        return new XDocument(
+            new XElement(A + "theme",
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute("name", theme.Name),
+                themeElements,
+                new XElement(A + "objectDefaults"),
+                new XElement(A + "extraClrSchemeLst")));
+
+        static XElement Line() => new(A + "ln",
+            new XAttribute("w", 6350),
+            new XAttribute("cap", "flat"),
+            new XAttribute("cmpd", "sng"),
+            new XAttribute("algn", "ctr"),
+            new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
+            new XElement(A + "prstDash", new XAttribute("val", "solid")));
     }
 
     private static XDocument BuildStyles(TextDocument document)

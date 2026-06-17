@@ -57,8 +57,76 @@ public static class DocxReader
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, imageRelationships, hyperlinkRelationships);
         ReadSettings(archive, document);
+        ReadTheme(archive, document);
 
         return document;
+    }
+
+    /// <summary>
+    /// Resolves and parses word/theme/theme1.xml (via the document's "/theme" relationship, falling back
+    /// to the conventional path), recovering the a:clrScheme colours and the a:fontScheme major/minor
+    /// fonts, then inferring the closest <see cref="DocumentTheme"/> preset (see
+    /// <see cref="DocumentTheme.InferPreset"/>). A missing or unparseable theme part leaves the document
+    /// at <see cref="DocumentTheme.Default"/> ("Office"). Inference is best-effort: a theme whose accent
+    /// colours / fonts match no FreeW preset falls back to "Office".
+    /// </summary>
+    private static void ReadTheme(ZipArchive archive, TextDocument document)
+    {
+        var themeXml = LoadPart(archive, ResolveThemePartPath(archive) ?? "word/theme/theme1.xml");
+        var elements = themeXml?.Root?.Element(A + "themeElements");
+        if (elements is null)
+            return;
+
+        var clr = elements.Element(A + "clrScheme");
+        var fonts = elements.Element(A + "fontScheme");
+        if (clr is null || fonts is null)
+            return;
+
+        // Each clrScheme slot wraps a single colour element; recover its RRGGBB (srgbClr/@val) or, for a
+        // sysClr (e.g. windowText/window), its lastClr fallback. Anything else is treated as absent.
+        string Slot(string name)
+        {
+            var slot = clr.Element(A + name);
+            var srgb = slot?.Element(A + "srgbClr")?.Attribute("val")?.Value;
+            if (!string.IsNullOrEmpty(srgb))
+                return srgb.ToUpperInvariant();
+            var sys = slot?.Element(A + "sysClr")?.Attribute("lastClr")?.Value;
+            return string.IsNullOrEmpty(sys) ? string.Empty : sys.ToUpperInvariant();
+        }
+
+        var scheme = new ThemeColorScheme(
+            Slot("dk1"), Slot("lt1"), Slot("dk2"), Slot("lt2"),
+            Slot("accent1"), Slot("accent2"), Slot("accent3"),
+            Slot("accent4"), Slot("accent5"), Slot("accent6"),
+            Slot("hlink"), Slot("folHlink"));
+
+        string LatinFont(string fontElement) =>
+            fonts.Element(A + fontElement)?.Element(A + "latin")?.Attribute("typeface")?.Value ?? string.Empty;
+
+        document.Theme = DocumentTheme.InferPreset(scheme, LatinFont("majorFont"), LatinFont("minorFont"));
+    }
+
+    /// <summary>
+    /// Finds the theme part path from the document relationships (the rel whose Type ends with "/theme"),
+    /// resolved relative to the word/ folder. Returns null when no such relationship exists.
+    /// </summary>
+    private static string? ResolveThemePartPath(ZipArchive archive)
+    {
+        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
+        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
+        if (relationships is null)
+            return null;
+
+        foreach (var rel in relationships)
+        {
+            var type = rel.Attribute("Type")?.Value;
+            if (type is null || !type.EndsWith("/theme", StringComparison.Ordinal))
+                continue;
+            var target = rel.Attribute("Target")?.Value;
+            if (!string.IsNullOrEmpty(target))
+                return "word/" + target.TrimStart('/');
+        }
+        return null;
     }
 
     /// <summary>
