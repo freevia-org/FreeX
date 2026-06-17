@@ -83,6 +83,9 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Insert ▸ Picture — choose an image file and place it on the sheet.</summary>
     public Action? InsertPicture { get; init; }
 
+    /// <summary>Insert ▸ Shapes — insert the default drawing shape at the active cell.</summary>
+    public Action? InsertShape { get; init; }
+
     /// <summary>Home ▸ Clipboard ▸ Format Painter — capture the selection's format for a one-shot apply.</summary>
     public Action? FormatPainter { get; init; }
 
@@ -493,6 +496,7 @@ internal static class SampleRibbon
         Bind("data.quickAnalysis", callbacks.QuickAnalysis);
         Bind("insert.pivotTable", callbacks.InsertPivotTable);
         Bind("insert.picture", callbacks.InsertPicture);
+        Bind("insert.shapes", callbacks.InsertShape);
         Bind("home.formatPainter", callbacks.FormatPainter);
 
         if (callbacks.SetFontSize is { } setFontSize)
