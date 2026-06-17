@@ -254,6 +254,21 @@ public sealed class Source
 }
 
 /// <summary>
+/// A marked index entry: a single term the document wants to list in its generated index (see
+/// <see cref="DocumentIndex"/>). Kept deliberately small (just the <see cref="Term"/>) and as a model
+/// side-store on <see cref="TextDocument.IndexEntries"/> rather than a run-level mark, so marking text
+/// for the index never disturbs run storage and needs no docx I/O changes — the generated index is
+/// ordinary styled paragraphs that already round-trip.
+/// </summary>
+public sealed class IndexEntry
+{
+    /// <summary>The term to list in the index. Trimmed of surrounding whitespace at construction.</summary>
+    public string Term { get; }
+
+    public IndexEntry(string term) => Term = (term ?? string.Empty).Trim();
+}
+
+/// <summary>
 /// The kind of simple field a <see cref="Run"/> represents. <see cref="None"/> is an ordinary text
 /// run; <see cref="PageNumber"/> maps to a WordprocessingML PAGE field (w:fldSimple w:instr=" PAGE ").
 /// </summary>
@@ -573,6 +588,14 @@ public sealed class TextDocument
     /// </summary>
     public List<Source> Sources { get; } = [];
 
+    /// <summary>
+    /// The terms marked for the document index, in mark order. <see cref="DocumentIndex.Build(TextDocument)"/>
+    /// renders the distinct, alphabetically sorted terms as ordinary styled paragraphs. Like
+    /// <see cref="Sources"/> these are pure model data (no docx part of their own) — the generated index is
+    /// ordinary styled paragraphs that already round-trip. Empty when nothing has been marked.
+    /// </summary>
+    public List<IndexEntry> IndexEntries { get; } = [];
+
     /// <summary>The body's paragraphs (top-level only; table cell paragraphs are not included).</summary>
     public IEnumerable<Paragraph> Paragraphs => Blocks.OfType<Paragraph>();
 
@@ -652,5 +675,7 @@ public sealed class TextDocument
         };
         // The built-in figure/table caption style (round-trips via styles.xml like the others).
         Styles[Captions.StyleId] = Captions.BuildCaptionStyle();
+        // The built-in index heading/entry styles used by DocumentIndex (round-trip via styles.xml).
+        DocumentIndex.EnsureStyles(this);
     }
 }
