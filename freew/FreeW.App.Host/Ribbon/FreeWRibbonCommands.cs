@@ -182,6 +182,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
         registry.Register("freew.link-bookmark", new LinkToBookmarkCommand(editor));
+        // Insert tab — Links: open the Bookmark Manager (list bookmarks with Go To + Delete).
+        registry.Register("freew.bookmark-manager", new BookmarkManagerCommand(editor));
 
         // Insert tab — Quick Parts (AutoText): a shared snippet library persisted under FreeW's data
         // folder. "Save Selection" captures the selection's text and stores it under a prompted name;
@@ -1583,6 +1585,17 @@ internal static class FreeWRibbonCommands
             var chosen = BookmarkPicker.Ask(Window.GetWindow(editor), bookmarks);
             if (!string.IsNullOrWhiteSpace(chosen))
                 editor.ApplyInternalLink(chosen!);
+        }
+    }
+
+    // Insert > Links > Bookmark Manager: open the modal Bookmark Manager listing the document's
+    // bookmarks with Go To (scroll/caret via BringBlockIntoView) and Delete (clear the marker).
+    private sealed class BookmarkManagerCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            BookmarkManagerDialog.Show(Window.GetWindow(editor), editor);
         }
     }
 

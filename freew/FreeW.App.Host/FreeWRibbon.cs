@@ -124,6 +124,7 @@ internal static class FreeWRibbon
                     g.Button("freew.hyperlink-tooltip", "ScreenTip");
                     g.Button("freew.bookmark", "Bookmark");
                     g.Button("freew.link-bookmark", "Link to Bookmark");
+                    g.Button("freew.bookmark-manager", "Bookmark Manager");
                 });
                 tab.Group("quick-parts", "Quick Parts", "Q", 67, g =>
                 {
