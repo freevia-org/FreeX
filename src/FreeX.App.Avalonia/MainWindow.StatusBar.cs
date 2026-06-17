@@ -46,8 +46,11 @@ public sealed partial class MainWindow
     {
         var model = BuildStatusBarViewModel(status);
 
-        _statusText.IsVisible = GetStatusBarOption("CellMode");
+        // Render the neutral StatusBarViewModel: the readout is the model's visible aggregate readouts
+        // (filtered by the customize toggles); zoom comes from the model; CellMode/Zoom toggles gate the
+        // status / zoom controls — mirroring the WPF host's per-option StatusBarShow* gating.
         _statusText.Text = status;
+        _statusText.IsVisible = GetStatusBarOption("CellMode");
 
         var readouts = AvaloniaStatusBarSource.FormatVisibleReadouts(model, _statusBarOptionVisibility);
         _selectionStatsText.Text = readouts;
