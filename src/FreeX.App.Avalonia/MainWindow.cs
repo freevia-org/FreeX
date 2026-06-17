@@ -701,6 +701,17 @@ public sealed partial class MainWindow : Window
                     ["pageLayout.gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
                     ["pageLayout.headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
                     ["review.showNotes"] = () => _ = ShowNotesListAsync(),
+                    // Insert ▸ PivotChart (charts the active pivot's result range).
+                    ["insert.pivotChart"] = InsertPivotChart,
+                    // View ▸ Window group (multi-window).
+                    ["view.newWindow"] = NewWindow,
+                    ["view.arrangeAll"] = ArrangeAllWindows,
+                    ["view.hide"] = HideActiveWindow,
+                    // Review proofing (built-in thesaurus / offline-honest translate) + Insert equation/object.
+                    ["review.thesaurus"] = () => _ = ShowThesaurusDialogAsync(),
+                    ["review.translate"] = () => _ = ShowTranslateDialogAsync(),
+                    ["insert.equation"] = () => _ = ShowEquationDialogAsync(),
+                    ["insert.object"] = ShowInsertObjectUnsupported,
                     // Home tab (Editing group).
                     ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
                     ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
