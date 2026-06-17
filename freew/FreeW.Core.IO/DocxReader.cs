@@ -237,29 +237,9 @@ public static class DocxReader
         if (sectPr is null)
             return;
 
-        // Equal-width column layout (w:cols/@w:num + @w:space) lives alongside the header/footer
-        // references in w:sectPr, so recover it here while we already hold the section element.
-        var cols = sectPr.Element(W + "cols");
-        if (cols is not null)
-        {
-            if (int.TryParse(cols.Attribute(W + "num")?.Value, out var num) && num >= 1)
-                document.Page.ColumnCount = num;
-            if (cols.Attribute(W + "space") is { } space)
-                document.Page.ColumnSpacingPt = DxaToPoints(space.Value);
-        }
-
-        // Page border (w:pgBorders) lives in the same w:sectPr; recover it into PageSettings.PageBorder.
-        document.Page.PageBorder = ReadPageBorder(sectPr.Element(W + "pgBorders"));
-
-        // Line numbering (w:lnNumType) lives in the same w:sectPr; recover the mode + interval.
-        ReadLineNumbering(sectPr.Element(W + "lnNumType"), document.Page);
-
-        // Page vertical alignment (w:vAlign): map the val token back ("both"→Justified); absent → Top.
-        document.Page.VerticalAlignment =
-            VerticalAlignmentFromToken(sectPr.Element(W + "vAlign")?.Attribute(W + "val")?.Value);
-
-        // "Different first page" (w:titlePg): a bare toggle; absent → false.
-        document.Page.DifferentFirstPage = ReadToggle(sectPr, "titlePg");
+        // The body-level w:sectPr is the final/only section: recover its page geometry + layout into
+        // document.Page. The same parse feeds non-final sections (see ReadSectionBreak in ReadParagraph).
+        ReadPageSettings(sectPr, document.Page);
 
         var partsById = ReadHeaderFooterRelationships(archive);
 
@@ -268,6 +248,96 @@ public static class DocxReader
         document.Footer = ReadHeaderFooterPart(
             sectPr, "footerReference", W + "ftr", partsById, archive, imageRelationships, hyperlinkRelationships);
     }
+
+    /// <summary>
+    /// Reads one w:sectPr's page geometry + layout into <paramref name="page"/>. Shared by the body-level
+    /// final section (<see cref="ReadHeaderFooter"/>) and each non-final paragraph-level section break
+    /// (<see cref="ReadSectionBreak"/>), so all per-section properties are parsed in one place. Recovers
+    /// page size + orientation (w:pgSz), margins (w:pgMar), columns (w:cols), page borders (w:pgBorders),
+    /// line numbering (w:lnNumType), vertical alignment (w:vAlign) and the different-first-page toggle
+    /// (w:titlePg). Each property is only applied when present, so absent properties keep the defaults.
+    /// </summary>
+    private static void ReadPageSettings(XElement sectPr, PageSettings page)
+    {
+        // Page size + orientation (w:pgSz). w:orient="landscape" sets the flag; width/height carry the
+        // already-oriented dimensions Word writes.
+        var pgSz = sectPr.Element(W + "pgSz");
+        if (pgSz is not null)
+        {
+            if (pgSz.Attribute(W + "w") is { } w)
+                page.WidthPt = DxaToPoints(w.Value);
+            if (pgSz.Attribute(W + "h") is { } h)
+                page.HeightPt = DxaToPoints(h.Value);
+            page.Landscape = pgSz.Attribute(W + "orient")?.Value == "landscape";
+        }
+
+        // Page margins (w:pgMar).
+        var pgMar = sectPr.Element(W + "pgMar");
+        if (pgMar is not null)
+        {
+            if (pgMar.Attribute(W + "left") is { } left)
+                page.MarginLeftPt = DxaToPoints(left.Value);
+            if (pgMar.Attribute(W + "right") is { } right)
+                page.MarginRightPt = DxaToPoints(right.Value);
+            if (pgMar.Attribute(W + "top") is { } top)
+                page.MarginTopPt = DxaToPoints(top.Value);
+            if (pgMar.Attribute(W + "bottom") is { } bottom)
+                page.MarginBottomPt = DxaToPoints(bottom.Value);
+        }
+
+        // Equal-width column layout (w:cols/@w:num + @w:space).
+        var cols = sectPr.Element(W + "cols");
+        if (cols is not null)
+        {
+            if (int.TryParse(cols.Attribute(W + "num")?.Value, out var num) && num >= 1)
+                page.ColumnCount = num;
+            if (cols.Attribute(W + "space") is { } space)
+                page.ColumnSpacingPt = DxaToPoints(space.Value);
+        }
+
+        // Page border (w:pgBorders) → PageSettings.PageBorder (null when absent/off).
+        page.PageBorder = ReadPageBorder(sectPr.Element(W + "pgBorders"));
+
+        // Line numbering (w:lnNumType): recover the mode + interval.
+        ReadLineNumbering(sectPr.Element(W + "lnNumType"), page);
+
+        // Page vertical alignment (w:vAlign): map the val token back ("both"→Justified); absent → Top.
+        page.VerticalAlignment =
+            VerticalAlignmentFromToken(sectPr.Element(W + "vAlign")?.Attribute(W + "val")?.Value);
+
+        // "Different first page" (w:titlePg): a bare toggle; absent → false.
+        page.DifferentFirstPage = ReadToggle(sectPr, "titlePg");
+    }
+
+    /// <summary>
+    /// Reads a non-final section break from a paragraph's w:pPr/w:sectPr into a <see cref="Section"/>:
+    /// the section's page settings (via <see cref="ReadPageSettings"/>) plus its break kind (w:type),
+    /// or null when the paragraph carries no section break. The body-level final section is read
+    /// separately into <see cref="TextDocument.Page"/> (see <see cref="ReadHeaderFooter"/>).
+    /// </summary>
+    private static Section? ReadSectionBreak(XElement? pPr)
+    {
+        var sectPr = pPr?.Element(W + "sectPr");
+        if (sectPr is null)
+            return null;
+
+        var page = new PageSettings();
+        ReadPageSettings(sectPr, page);
+        var breakKind = SectionBreakFromToken(sectPr.Element(W + "type")?.Attribute(W + "val")?.Value);
+        return new Section(page, breakKind);
+    }
+
+    /// <summary>
+    /// Maps a w:sectPr/w:type/@w:val token to a <see cref="SectionBreakKind"/>. A null/unknown token
+    /// (including the absent default) maps to <see cref="SectionBreakKind.NextPage"/>, Word's default.
+    /// </summary>
+    private static SectionBreakKind SectionBreakFromToken(string? token) => token switch
+    {
+        "continuous" => SectionBreakKind.Continuous,
+        "evenPage" => SectionBreakKind.EvenPage,
+        "oddPage" => SectionBreakKind.OddPage,
+        _ => SectionBreakKind.NextPage
+    };
 
     private static HeaderFooter? ReadHeaderFooterPart(
         XElement sectPr,
@@ -346,6 +416,9 @@ public static class DocxReader
         {
             paragraph.StyleId = pPr.Element(W + "pStyle")?.Attribute(W + "val")?.Value;
             paragraph.Formatting = ReadParagraphFormatting(pPr, numbering);
+            // A paragraph carrying a w:pPr/w:sectPr ends a non-final section; recover that section's page
+            // setup + break kind onto the paragraph (the body-level final section is read elsewhere).
+            paragraph.SectionBreak = ReadSectionBreak(pPr);
         }
 
         // Iterate in document order so runs nested inside a w:hyperlink keep their position, and so a

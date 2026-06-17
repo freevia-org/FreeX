@@ -418,6 +418,15 @@ public sealed class Paragraph : Block
     /// </summary>
     public string? BookmarkName { get; set; }
 
+    /// <summary>
+    /// Optional section break carried by this paragraph. When non-null this paragraph is the <em>last</em>
+    /// paragraph of a section, and the marker holds that section's <see cref="Section.Page"/> setup and
+    /// <see cref="Section.BreakKind"/>. On save the section's w:sectPr is emitted inside this paragraph's
+    /// w:pPr (with w:type), exactly as WordprocessingML stores a non-final section's properties. Null (the
+    /// default) means the paragraph does not end a section, so single-section documents are unaffected.
+    /// </summary>
+    public Section? SectionBreak { get; set; }
+
     public Paragraph() { }
 
     public Paragraph(string text)
@@ -747,6 +756,70 @@ public sealed class PageSettings
     /// header/footer (a genuinely separate first-page header part is out of scope).
     /// </summary>
     public bool DifferentFirstPage { get; set; }
+
+    /// <summary>
+    /// Returns a deep copy of these page settings. Used when a document is split into multiple
+    /// sections (see <see cref="Section"/>) so each section owns an independent <see cref="PageSettings"/>
+    /// that can be edited without disturbing the others. <see cref="PageBorder"/> is an immutable record,
+    /// so copying the reference is safe.
+    /// </summary>
+    public PageSettings Clone() => new()
+    {
+        WidthPt = WidthPt,
+        HeightPt = HeightPt,
+        MarginLeftPt = MarginLeftPt,
+        MarginRightPt = MarginRightPt,
+        MarginTopPt = MarginTopPt,
+        MarginBottomPt = MarginBottomPt,
+        Landscape = Landscape,
+        ColumnCount = ColumnCount,
+        ColumnSpacingPt = ColumnSpacingPt,
+        PageBorder = PageBorder,
+        Watermark = Watermark,
+        LineNumberMode = LineNumberMode,
+        LineNumberCountBy = LineNumberCountBy,
+        AutoHyphenation = AutoHyphenation,
+        VerticalAlignment = VerticalAlignment,
+        DifferentFirstPage = DifferentFirstPage
+    };
+}
+
+/// <summary>
+/// The kind of section break that begins a WordprocessingML section (w:sectPr/w:type w:val).
+/// <see cref="NextPage"/> (Word's default for an inserted section break) starts the new section on the
+/// next page; <see cref="Continuous"/> starts it on the same page (no page break); <see cref="EvenPage"/>
+/// / <see cref="OddPage"/> start it on the next even/odd page. The final (body-level) section carries a
+/// break kind too, but Word ignores it there — it only matters for non-final sections.
+/// </summary>
+public enum SectionBreakKind
+{
+    Continuous,
+    NextPage,
+    EvenPage,
+    OddPage
+}
+
+/// <summary>
+/// One section of a multi-section document: its own <see cref="PageSettings"/> (page size, margins,
+/// orientation, columns, borders, line numbers, …) plus the <see cref="BreakKind"/> describing how the
+/// section begins (continuous / next-page / even-page / odd-page).
+///
+/// Sections are modelled as a <em>marker on the paragraph that ends them</em>: setting
+/// <see cref="Paragraph.SectionBreak"/> on a paragraph makes that paragraph the last paragraph of a
+/// section, carrying the section's page setup — exactly mirroring WordprocessingML, where a non-final
+/// section's w:sectPr lives in the w:pPr of its last paragraph. The document-wide
+/// <see cref="TextDocument.Page"/> remains the <em>final</em> section's settings (the body-level
+/// w:sectPr), so a document with no <see cref="Paragraph.SectionBreak"/> markers behaves exactly as a
+/// single-section document did before. <see cref="TextDocument.Sections"/> exposes the ordered section
+/// view reconstructed from these markers plus the final <see cref="TextDocument.Page"/>.
+/// </summary>
+public sealed class Section(PageSettings page, SectionBreakKind breakKind = SectionBreakKind.NextPage)
+{
+    /// <summary>This section's page geometry / layout. Each section owns an independent instance.</summary>
+    public PageSettings Page { get; set; } = page;
+
+    /// <summary>How this section begins relative to the previous one (w:sectPr/w:type).</summary>
+    public SectionBreakKind BreakKind { get; set; } = breakKind;
 }
 
 /// <summary>
@@ -761,7 +834,35 @@ public sealed class TextDocument
     public Dictionary<string, DocumentStyle> Styles { get; } = [];
     public RunFormatting DefaultRun { get; set; } = new() { FontFamily = "Calibri", FontSizePt = 11 };
     public ParagraphFormatting DefaultParagraph { get; set; } = ParagraphFormatting.Default;
+
+    /// <summary>
+    /// The page settings of the <em>final</em> (or only) section — the body-level w:sectPr. A document
+    /// with no <see cref="Paragraph.SectionBreak"/> markers is single-section and these are its only page
+    /// settings, so existing single-section behaviour is unchanged. Earlier sections carry their own
+    /// <see cref="PageSettings"/> on their ending paragraph's <see cref="Paragraph.SectionBreak"/>.
+    /// </summary>
     public PageSettings Page { get; } = new();
+
+    /// <summary>
+    /// The document's sections in order. Reconstructed from the <see cref="Paragraph.SectionBreak"/>
+    /// markers (one section per top-level paragraph that ends a section) followed by the final section,
+    /// whose settings are <see cref="Page"/>. A document with no markers yields a single section whose
+    /// page settings are <see cref="Page"/>, matching the single-section model exactly.
+    /// </summary>
+    public IReadOnlyList<Section> Sections
+    {
+        get
+        {
+            var sections = new List<Section>();
+            foreach (var block in Blocks)
+                if (block is Paragraph { SectionBreak: { } sectionBreak })
+                    sections.Add(sectionBreak);
+            // The trailing section is always the body-level page settings (the final w:sectPr). Its break
+            // kind is not meaningful (Word ignores w:type on the last section), so report it as NextPage.
+            sections.Add(new Section(Page, SectionBreakKind.NextPage));
+            return sections;
+        }
+    }
 
     /// <summary>
     /// The default page header (top margin), or null when the document has no header. Maps to a
