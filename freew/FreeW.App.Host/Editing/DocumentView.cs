@@ -55,6 +55,23 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private FormatPainterClipboard? _formatPainter;
 
+    /// <summary>
+    /// Model block indices of headings the user has collapsed in the outline. Collapse is purely a
+    /// view concern: while a heading is collapsed, <see cref="Render"/> skips building the body blocks
+    /// beneath it (down to the next same-or-higher heading), and <see cref="CommitToModel"/> re-inserts
+    /// those hidden model blocks so the model document stays complete. Toggling re-renders.
+    /// </summary>
+    private readonly HashSet<int> _collapsedHeadings = new();
+
+    /// <summary>
+    /// Model blocks the most recent <see cref="Render"/> hid because of <see cref="_collapsedHeadings"/>,
+    /// each tagged with the number of <em>visible</em> blocks that preceded it at render time. On the
+    /// next <see cref="CommitToModel"/> these are spliced back into the rebuilt model at the matching
+    /// visible offset, so a collapsed region survives an edit/commit cycle intact. Empty when nothing
+    /// is collapsed (the common case), so normal commit is completely unaffected.
+    /// </summary>
+    private readonly List<(int VisibleOffset, ModelBlock Block)> _hiddenBlocks = new();
+
     public DocumentView()
     {
         AcceptsTab = true;
@@ -659,6 +676,111 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Promote the heading at <paramref name="modelBlockIndex"/> one rank toward the top of the outline
+    /// (Heading3 → Heading2 → Heading1 → Title; Title stays). The paragraph's <see cref="ModelParagraph.StyleId"/>
+    /// is changed through the reversible <see cref="SetParagraphStyleCommand"/> (the same path the styles
+    /// dropdown uses) so it is undoable, then the view re-renders. No-op when the index is not a paragraph
+    /// or the style does not change (e.g. a non-heading paragraph, which has nothing to promote).
+    /// </summary>
+    public void PromoteHeading(int modelBlockIndex) =>
+        ShiftHeadingStyle(modelBlockIndex, OutlineTools.Promote);
+
+    /// <summary>
+    /// Demote the heading at <paramref name="modelBlockIndex"/> one rank toward the bottom of the outline
+    /// (Title → Heading1 → Heading2 → … → Heading6; a non-heading paragraph becomes Heading1). Routed
+    /// through the reversible <see cref="SetParagraphStyleCommand"/> and re-rendered. No-op when the index
+    /// is not a paragraph or the style does not change (already at the deepest level).
+    /// </summary>
+    public void DemoteHeading(int modelBlockIndex) =>
+        ShiftHeadingStyle(modelBlockIndex, OutlineTools.Demote);
+
+    // Apply a pure style-id shift (promote/demote) to a single model paragraph via the undo/redo bus.
+    private void ShiftHeadingStyle(int modelBlockIndex, Func<string?, string?> shift)
+    {
+        CommitToModel();
+        if (modelBlockIndex < 0 || modelBlockIndex >= _model.Blocks.Count
+            || _model.Blocks[modelBlockIndex] is not ModelParagraph paragraph)
+            return;
+
+        var next = shift(paragraph.StyleId);
+        if (string.Equals(next, paragraph.StyleId, StringComparison.Ordinal))
+            return; // no change (e.g. promoting Title, or demoting past the cap)
+
+        _commands.Execute(new SetParagraphStyleCommand(modelBlockIndex, next));
+    }
+
+    /// <summary>
+    /// Collapse the heading at <paramref name="modelBlockIndex"/>: its body blocks (everything down to
+    /// the next same-or-higher-level heading) are hidden in the rendered view only. The model document is
+    /// untouched — the hidden blocks are restored on the next commit (see <see cref="CommitToModel"/>).
+    /// Re-renders. No-op when the index is not a heading paragraph.
+    /// </summary>
+    public void CollapseHeading(int modelBlockIndex)
+    {
+        if (!IsHeadingBlock(modelBlockIndex) || !_collapsedHeadings.Add(modelBlockIndex))
+            return;
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Expand a previously collapsed heading at <paramref name="modelBlockIndex"/>, showing its hidden
+    /// body blocks again. Re-renders. No-op when the heading was not collapsed.
+    /// </summary>
+    public void ExpandHeading(int modelBlockIndex)
+    {
+        if (!_collapsedHeadings.Remove(modelBlockIndex))
+            return;
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>True when the heading at <paramref name="modelBlockIndex"/> is currently collapsed.</summary>
+    public bool IsHeadingCollapsed(int modelBlockIndex) => _collapsedHeadings.Contains(modelBlockIndex);
+
+    // Whether the model block at the given index is a heading/title paragraph (an outline entry).
+    private bool IsHeadingBlock(int modelBlockIndex) =>
+        modelBlockIndex >= 0 && modelBlockIndex < _model.Blocks.Count
+        && _model.Blocks[modelBlockIndex] is ModelParagraph paragraph
+        && DocumentOutline.TryGetLevel(paragraph.StyleId, out _);
+
+    // Compute the set of model block indices hidden by the currently collapsed headings. For each
+    // collapsed heading, every following block is hidden until (but not including) the next heading whose
+    // level is the same or higher (a smaller-or-equal level number), matching how an outline nests.
+    // Collapsed headings nested inside another collapsed region stay tracked but contribute no extra
+    // hidden blocks (their descendants are already hidden). A heading index that no longer points at a
+    // heading (the document changed underneath us) is ignored.
+    private HashSet<int> HiddenBlockIndices()
+    {
+        var hidden = new HashSet<int>();
+        if (_collapsedHeadings.Count == 0)
+            return hidden;
+
+        var blocks = _model.Blocks;
+        // Snapshot the indices so stale ones (no longer pointing at a heading) can be pruned in place.
+        foreach (var headingIndex in _collapsedHeadings.ToArray())
+        {
+            if (headingIndex < 0 || headingIndex >= blocks.Count
+                || blocks[headingIndex] is not ModelParagraph heading
+                || !DocumentOutline.TryGetLevel(heading.StyleId, out var headingLevel))
+            {
+                _collapsedHeadings.Remove(headingIndex); // heading moved or is no longer a heading
+                continue;
+            }
+
+            for (var j = headingIndex + 1; j < blocks.Count; j++)
+            {
+                if (blocks[j] is ModelParagraph p
+                    && DocumentOutline.TryGetLevel(p.StyleId, out var level)
+                    && level <= headingLevel)
+                    break; // reached the next same-or-higher heading: the collapsed region ends here
+                hidden.Add(j);
+            }
+        }
+        return hidden;
+    }
+
+    /// <summary>
     /// Apply a drop cap to the caret's paragraph: the leading letter is split into its own enlarged,
     /// bold run (see <see cref="DropCap.ApplyDropCap"/>), the remainder keeping its formatting. Routes
     /// through the undo/redo bus (reversible) and re-renders so the enlarged letter shows immediately.
@@ -1120,21 +1242,40 @@ public sealed class DocumentView : RichTextBox
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
         ApplyColumnLayout(flow, _model.Page);
 
+        // Outline collapse is view-only: compute the model blocks hidden beneath collapsed headings,
+        // skip building them, and remember them (with their preceding-visible-block count) so
+        // CommitToModel can restore them. With nothing collapsed both collections are empty and this is
+        // a no-op, leaving the original rendering path unchanged.
+        var blocks = _model.Blocks;
+        var hidden = HiddenBlockIndices();
+        _hiddenBlocks.Clear();
+        var visibleCount = 0;
+
         // Coalesce consecutive list paragraphs of the same kind into one WPF List so they render with
         // shared bullet/number decoration; everything else maps one-to-one via BuildBlock.
-        var blocks = _model.Blocks;
         var i = 0;
         while (i < blocks.Count)
         {
+            if (hidden.Contains(i))
+            {
+                // Skip the hidden block but retain it (anchored to the visible blocks rendered so far)
+                // so the model is reconstructed faithfully on the next commit.
+                _hiddenBlocks.Add((visibleCount, blocks[i]));
+                i++;
+                continue;
+            }
+
             if (blocks[i] is ModelParagraph { Formatting.ListKind: not ListKind.None } first)
             {
                 var kind = first.Formatting.ListKind;
                 var list = new WpfList { MarkerStyle = ToMarkerStyle(kind) };
                 while (i < blocks.Count
+                    && !hidden.Contains(i)
                     && blocks[i] is ModelParagraph { Formatting.ListKind: var k } listParagraph
                     && k == kind)
                 {
                     list.ListItems.Add(new WpfListItem(BuildParagraph(listParagraph, _model)));
+                    visibleCount++;
                     i++;
                 }
                 flow.Blocks.Add(list);
@@ -1142,6 +1283,7 @@ public sealed class DocumentView : RichTextBox
             else
             {
                 flow.Blocks.Add(BuildBlock(blocks[i], _model));
+                visibleCount++;
                 i++;
             }
         }
@@ -1324,25 +1466,62 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
     {
-        _model.Blocks.Clear();
+        // Read the (visible) FlowDocument blocks back into a fresh list first. When outline collapse is
+        // active the view only holds the visible blocks, so the hidden model blocks are spliced back in
+        // afterwards (see MergeHiddenBlocks) to keep the model document complete.
+        var visible = new List<ModelBlock>();
         foreach (var block in Document.Blocks)
         {
             switch (block)
             {
                 case WpfList wpfList:
-                    ReadList(_model.Blocks, wpfList, _model);
+                    ReadList(visible, wpfList, _model);
                     break;
                 case WpfParagraph wpfParagraph:
-                    _model.Blocks.Add(ReadParagraph(wpfParagraph, _model));
+                    visible.Add(ReadParagraph(wpfParagraph, _model));
                     break;
                 case WpfTable wpfTable:
-                    _model.Blocks.Add(ReadTable(wpfTable, _model));
+                    visible.Add(ReadTable(wpfTable, _model));
                     break;
             }
         }
 
+        _model.Blocks.Clear();
+        if (_hiddenBlocks.Count == 0)
+        {
+            foreach (var block in visible)
+                _model.Blocks.Add(block);
+        }
+        else
+        {
+            MergeHiddenBlocks(visible);
+        }
+
         if (_model.Blocks.Count == 0)
             _model.Blocks.Add(new ModelParagraph());
+    }
+
+    // Reconstruct the full model from the committed visible blocks plus the blocks that Render hid for
+    // collapsed headings. Each hidden block was recorded with the count of visible blocks that preceded
+    // it; we re-insert it once that many visible blocks have been emitted, so a collapsed region lands
+    // back in document order even if the user split/merged visible paragraphs while it was collapsed.
+    private void MergeHiddenBlocks(IReadOnlyList<ModelBlock> visible)
+    {
+        var hiddenIndex = 0;
+        for (var emitted = 0; emitted <= visible.Count; emitted++)
+        {
+            // Drop in every hidden block anchored at this visible offset before the next visible block.
+            while (hiddenIndex < _hiddenBlocks.Count && _hiddenBlocks[hiddenIndex].VisibleOffset == emitted)
+                _model.Blocks.Add(_hiddenBlocks[hiddenIndex++].Block);
+
+            if (emitted < visible.Count)
+                _model.Blocks.Add(visible[emitted]);
+        }
+
+        // Any hidden blocks anchored past the last visible block (e.g. the document ended inside a
+        // collapsed region) are appended so nothing is lost.
+        while (hiddenIndex < _hiddenBlocks.Count)
+            _model.Blocks.Add(_hiddenBlocks[hiddenIndex++].Block);
     }
 
     private static ModelParagraph ReadParagraph(WpfParagraph wpfParagraph, TextDocument document)
