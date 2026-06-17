@@ -162,6 +162,15 @@ public static partial class ChartRenderer
 
         if (chart.Type is ChartType.StackedColumn or ChartType.PercentStackedColumn)
         {
+            // Progress-bar idiom: N single-cell series in one column with no categories — synthesize
+            // one segment per row in a single category instead of rendering blank.
+            if (IsSingleColumnStackedSeriesShape(chart, categories, dataStartRow, endRow, dataStartCol, endCol))
+            {
+                var synthesized = BuildSingleColumnStackedModel(chart, model, cellLookup, dataStartRow, endRow, dataStartCol, startRow, isBar: false, chart.Type == ChartType.PercentStackedColumn, theme);
+                ApplyAxisBounds(synthesized, chart, theme);
+                return synthesized;
+            }
+
             var stackedColumnModel = BuildStackedColumnModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedColumn, theme, pointDataLabelFormats);
             ApplyAxisBounds(stackedColumnModel, chart, theme);
             AddChartDataTableAnnotations(stackedColumnModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
@@ -170,6 +179,13 @@ public static partial class ChartRenderer
 
         if (chart.Type is ChartType.StackedBar or ChartType.PercentStackedBar)
         {
+            if (IsSingleColumnStackedSeriesShape(chart, categories, dataStartRow, endRow, dataStartCol, endCol))
+            {
+                var synthesized = BuildSingleColumnStackedModel(chart, model, cellLookup, dataStartRow, endRow, dataStartCol, startRow, isBar: true, chart.Type == ChartType.PercentStackedBar, theme);
+                ApplyAxisBounds(synthesized, chart, theme);
+                return synthesized;
+            }
+
             var stackedBarModel = BuildStackedBarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedBar, theme, pointDataLabelFormats);
             ApplyAxisBounds(stackedBarModel, chart, theme);
             AddChartDataTableAnnotations(stackedBarModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
@@ -765,7 +781,7 @@ public static partial class ChartRenderer
     {
         var series = new LineSeries
         {
-            Title = title,
+            Title = IsLegendEntryDeleted(chart, seriesIndex) ? "" : title,
             LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 1),
             LabelMargin = ToLabelMargin(chart.DataLabelPosition),
             YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null

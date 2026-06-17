@@ -192,16 +192,32 @@ public static partial class ChartRenderer
     }
 
     /// <summary>
-    /// Returns true when the series legend entry at <paramref name="seriesIndex"/> is
-    /// marked deleted in the chart XML (Excel's way to hide helper series from the legend).
+    /// Returns true when the series with chart-XML index <paramref name="seriesIndex"/> has its
+    /// legend entry marked deleted (Excel's way to hide helper series from the legend).
+    /// <para>
+    /// The OOXML <c>&lt;c:legendEntry&gt;&lt;c:idx&gt;</c> is a <em>legend-position</em> index — the
+    /// order the series are DECLARED in the chart XML — NOT the series' own <c>&lt;c:idx&gt;</c>.
+    /// Excel can declare series out of idx order (e.g. a "shaded target band" combo chart whose
+    /// line series has idx 0 but is declared last, so legend position 0 is actually the first
+    /// declared helper series). When <see cref="ChartModel.SeriesPlotOrder"/> is populated the
+    /// legend-entry idx is resolved through it to the matching series idx; when empty (the legacy
+    /// single-plot-group case where declaration order equals idx order, e.g. bullet-chart helper
+    /// series) the legend-entry idx is matched against the series idx directly.
+    /// </para>
     /// </summary>
     private static bool IsLegendEntryDeleted(ChartModel chart, int seriesIndex)
     {
         var entries = chart.LegendEntries;
+        var plotOrder = chart.SeriesPlotOrder;
         for (var i = 0; i < entries.Count; i++)
         {
             var entry = entries[i];
-            if (entry.Index == seriesIndex)
+            // Resolve the legend-position index to the series chart-XML idx via the declaration
+            // order when available; otherwise treat the entry idx as the series idx (legacy).
+            var resolvedSeriesIndex = plotOrder.Count > 0 && entry.Index >= 0 && entry.Index < plotOrder.Count
+                ? plotOrder[entry.Index]
+                : entry.Index;
+            if (resolvedSeriesIndex == seriesIndex)
                 return entry.IsDeleted == true;
         }
 
