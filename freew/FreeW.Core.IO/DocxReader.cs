@@ -585,7 +585,14 @@ public static class DocxReader
         var result = new HeaderFooter();
         // Header/footer paragraphs carry no list numbering context (numbering.xml targets the body).
         var noNumbering = new Dictionary<int, ListKind>();
-        foreach (var p in root.Elements(W + "p"))
+        // Use Descendants, not direct children: real Word headers/footers routinely wrap their content in a
+        // w:tbl (and/or w:sdt content controls), so the visible text lives in paragraphs NESTED inside table
+        // cells / SDTs rather than as direct children of w:hdr/w:ftr. Reading only direct-child w:p (as before)
+        // recovered just the trailing empty paragraph, making the part IsEmpty so the writer dropped it — the
+        // "headers dropped on round-trip" bug. Paragraphs never nest inside paragraphs in OOXML, so Descendants
+        // yields each content paragraph exactly once, in document order; we flatten any table/SDT structure to
+        // the model's paragraph list (the model carries no per-header table) but preserve all text + runs.
+        foreach (var p in root.Descendants(W + "p"))
             result.Paragraphs.Add(ReadParagraph(p, archive, partImageRelationships, hyperlinkRelationships, noNumbering));
         return result;
     }
