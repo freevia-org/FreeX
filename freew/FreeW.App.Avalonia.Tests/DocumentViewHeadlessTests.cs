@@ -90,6 +90,25 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task Insert_table_adds_a_table_block()
+    {
+        var tables = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var view = new DocumentView();
+            view.LoadDocument(SampleDocument.Create());
+            view.Measure(new Size(800, 4000));
+            var before = view.Document.Blocks.OfType<FreeW.Core.Model.Table>().Count();
+            view.InsertTable(2, 2);
+            tables = view.Document.Blocks.OfType<FreeW.Core.Model.Table>().Count() - before;
+        });
+
+        if (!ran)
+            return;
+        tables.Should().Be(1);
+    }
+
+    [Fact]
     public async Task Find_selects_a_match()
     {
         var found = false;
