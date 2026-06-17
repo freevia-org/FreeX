@@ -139,28 +139,43 @@ public sealed class RibbonAdaptivePanel : Panel
     {
         var children = Children.Cast<UIElement>().ToList();
         var hosts = children.OfType<RibbonGroupHost>().ToList();
-
-        foreach (var host in hosts)
-            host.Collapsed = false;
-
         var infinite = new Size(double.PositiveInfinity, availableSize.Height);
-        foreach (var child in children)
-            child.Measure(infinite);
-        foreach (var host in hosts)
-            host.FullWidth = host.DesiredSize.Width;
 
-        var total = children.Sum(c => c.DesiredSize.Width) + GroupSpacing * Math.Max(0, children.Count - 1);
+        // Cache each group's full (uncollapsed) width once. Group content is static after the ribbon is
+        // built, so this natural-width measure happens on the first pass and is reused on every later
+        // resize tick. The old code reset every host to full and measured the whole strip at infinite
+        // width TWICE on every measure pass, thrashing Content swaps — that was the slow-resize cause.
+        foreach (var host in hosts)
+        {
+            if (host.FullWidth > 0)
+                continue;
+            var wasCollapsed = host.Collapsed;
+            host.Collapsed = false;
+            host.Measure(infinite);
+            host.FullWidth = host.DesiredSize.Width;
+            host.Collapsed = wasCollapsed;
+        }
 
         var available = double.IsInfinity(availableSize.Width) ? double.MaxValue : availableSize.Width;
+
+        // Decide the collapse set from the cached widths (lowest priority collapses first — Office
+        // behaviour) WITHOUT touching Content yet, then apply only the hosts whose state actually flips.
+        // The Collapsed setter no-ops when unchanged, so resizing within one band swaps nothing.
+        var collapsed = new HashSet<RibbonGroupHost>();
+        var total = hosts.Sum(h => h.FullWidth) + GroupSpacing * Math.Max(0, children.Count - 1);
         foreach (var host in hosts.OrderBy(h => h.Priority))
         {
             if (total <= available)
                 break;
-            host.Collapsed = true;
+            collapsed.Add(host);
             total += RibbonGroupHost.CollapsedWidth - host.FullWidth;
         }
 
-        // Re-measure the controls whose collapsed/full state just changed, for arrangement.
+        foreach (var host in hosts)
+            host.Collapsed = collapsed.Contains(host);
+
+        // Measure children in their final (post-flip) state. Hosts whose state did not change are already
+        // measure-valid, so WPF short-circuits these — only the flipped ones do real work.
         foreach (var child in children)
             child.Measure(infinite);
 

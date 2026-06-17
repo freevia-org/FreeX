@@ -2988,27 +2988,91 @@ public sealed partial class MainWindow : Window
     {
         var fill = Brush(drawingObject.FillColor ?? new CellColor(0x5B, 0x9B, 0xD5));
         var stroke = Brush(drawingObject.OutlineColor ?? new CellColor(0x2F, 0x55, 0x97));
-        return drawingObject.ShapeKind switch
+        var w = Math.Max(1, width);
+        var h = Math.Max(1, height);
+        Control visual = drawingObject.ShapeKind switch
         {
             DrawingShapeKind.Ellipse => new AvaloniaEllipse
             {
-                Width = Math.Max(1, width),
-                Height = Math.Max(1, height),
+                Width = w,
+                Height = h,
                 Fill = fill,
                 Stroke = stroke,
                 StrokeThickness = 1.5,
                 IsHitTestVisible = false,
             },
             DrawingShapeKind.Line => CreateDrawingLineVisual(stroke, width),
-            _ => new AvaloniaRectangle
+            _ => CreateDrawingShapeGeometryVisual(drawingObject.ShapeKind, fill, stroke, w, h),
+        };
+
+        ApplyDrawingObjectEffect(visual, drawingObject.Effect);
+        return visual;
+    }
+
+    // Non-ellipse/line shapes: render the true preset outline via the geometry factory when available,
+    // falling back to a plain rectangle for kinds the factory does not cover.
+    private static Control CreateDrawingShapeGeometryVisual(
+        DrawingShapeKind? shapeKind,
+        IBrush fill,
+        IBrush stroke,
+        double w,
+        double h)
+    {
+        if (shapeKind is { } kind &&
+            AvaloniaDrawingShapeGeometryFactory.CreateGeometry(kind, w, h) is { } geometry)
+        {
+            return new global::Avalonia.Controls.Shapes.Path
             {
-                Width = Math.Max(1, width),
-                Height = Math.Max(1, height),
+                Data = geometry,
+                // Geometry is authored inside a (0,0,w,h) box, so render it 1:1.
+                Stretch = Stretch.None,
+                Width = w,
+                Height = h,
                 Fill = fill,
                 Stroke = stroke,
                 StrokeThickness = 1.5,
                 IsHitTestVisible = false,
-            }
+            };
+        }
+
+        return new AvaloniaRectangle
+        {
+            Width = w,
+            Height = h,
+            Fill = fill,
+            Stroke = stroke,
+            StrokeThickness = 1.5,
+            IsHitTestVisible = false,
+        };
+    }
+
+    // Approximates the authored shape effect (shadow / glow / soft-edges / bevel / reflection / 3-D)
+    // using Avalonia's bitmap effects. Faithful: outer/inner shadow, glow (offsetless colored shadow),
+    // soft-edges (blur). Approximated: bevel / reflection / 3-D fall back to a light drop shadow so the
+    // shape still reads as "lifted" without the full WPF authored geometry.
+    private static void ApplyDrawingObjectEffect(Control visual, DrawingObjectEffect? effect)
+    {
+        if (effect is null)
+            return;
+
+        var color = effect.Color ?? new CellColor(0, 0, 0);
+        var avColor = Color.FromRgb(color.R, color.G, color.B);
+
+        if (effect.HasSoftEdges)
+        {
+            visual.Effect = new BlurEffect { Radius = effect.BlurRadius };
+            return;
+        }
+
+        // Shadow, glow, and the bevel/reflection/3-D approximations all map onto a drop shadow.
+        // Glow simply uses a zero offset and the glow colour so it reads as a symmetric halo.
+        visual.Effect = new DropShadowEffect
+        {
+            Color = avColor,
+            BlurRadius = effect.BlurRadius,
+            OffsetX = effect.OffsetX,
+            OffsetY = effect.OffsetY,
+            Opacity = effect.Opacity,
         };
     }
 
