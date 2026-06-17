@@ -2086,4 +2086,152 @@ public class DocxRoundTripTests
         result.Protection.Mode.Should().Be(ProtectionMode.None);
         result.Protection.IsProtected.Should().BeFalse();
     }
+
+    // --- Page setup polish: hyphenation (settings.xml), vertical alignment + titlePg (sectPr) ---
+
+    [Fact]
+    public void AutoHyphenation_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hyphenate me"));
+        doc.Page.AutoHyphenation = true;
+
+        var page = RoundTrip(doc).Page;
+
+        page.AutoHyphenation.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AutoHyphenation_EmitsSettingsPart_WithAutoHyphenationToggle()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hyphenate me"));
+        doc.Page.AutoHyphenation = true;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/settings.xml").Should().NotBeNull();
+
+        using var settingsReader = new StreamReader(zip.GetEntry("word/settings.xml")!.Open());
+        settingsReader.ReadToEnd().Should().Contain("autoHyphenation");
+
+        using var ctReader = new StreamReader(zip.GetEntry("[Content_Types].xml")!.Open());
+        ctReader.ReadToEnd().Should().Contain("wordprocessingml.settings+xml");
+
+        using var relsReader = new StreamReader(zip.GetEntry("word/_rels/document.xml.rels")!.Open());
+        relsReader.ReadToEnd().Should().Contain("relationships/settings");
+    }
+
+    [Fact]
+    public void DefaultPage_HasNoHyphenation_AndNoSettingsPart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            // Unprotected + no hyphenation => no settings part at all (existing behaviour preserved).
+            zip.GetEntry("word/settings.xml").Should().BeNull();
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).Page.AutoHyphenation.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(PageVerticalAlignment.Top)]
+    [InlineData(PageVerticalAlignment.Center)]
+    [InlineData(PageVerticalAlignment.Justified)]
+    [InlineData(PageVerticalAlignment.Bottom)]
+    public void PageVerticalAlignment_RoundTrips(PageVerticalAlignment alignment)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("vertically aligned"));
+        doc.Page.VerticalAlignment = alignment;
+
+        RoundTrip(doc).Page.VerticalAlignment.Should().Be(alignment);
+    }
+
+    [Fact]
+    public void PageVerticalAlignment_Justified_EmitsVAlignBoth()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("spread me"));
+        doc.Page.VerticalAlignment = PageVerticalAlignment.Justified;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var documentXml = reader.ReadToEnd();
+
+        documentXml.Should().Contain("w:vAlign");
+        documentXml.Should().Contain("w:val=\"both\"");
+    }
+
+    [Fact]
+    public void DefaultPage_TopAlignment_EmitsNoVAlign()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+        doc.Page.VerticalAlignment.Should().Be(PageVerticalAlignment.Top); // default
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        reader.ReadToEnd().Should().NotContain("vAlign");
+    }
+
+    [Fact]
+    public void DifferentFirstPage_RoundTrips_AndEmitsTitlePg()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("first page differs"));
+        doc.Page.DifferentFirstPage = true;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+            reader.ReadToEnd().Should().Contain("w:titlePg");
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).Page.DifferentFirstPage.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DefaultPage_HasNoTitlePg()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain page"));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            using var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+            reader.ReadToEnd().Should().NotContain("titlePg");
+        }
+
+        stream.Position = 0;
+        DocxReader.Read(stream).Page.DifferentFirstPage.Should().BeFalse();
+    }
 }

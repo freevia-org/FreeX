@@ -74,21 +74,23 @@ public static class DocxWriter
         // emitted only when a watermark is set.
         var hasWatermark = !string.IsNullOrEmpty(document.Page.Watermark);
 
-        // A word/settings.xml part (carrying w:documentProtection) is emitted only when the document is
-        // protected, so unprotected documents round-trip exactly as before (no settings part).
+        // A word/settings.xml part is emitted only when something needs it — document protection
+        // (w:documentProtection) and/or automatic hyphenation (w:autoHyphenation) — so documents that
+        // need neither round-trip exactly as before (no settings part).
         var hasProtection = document.Protection.IsProtected;
+        var hasSettings = hasProtection || document.Page.AutoHyphenation;
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasProtection));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasProtection));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks, hasHeader, hasFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
-        if (hasProtection)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection));
+        if (hasSettings)
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation));
         if (hasLists)
             WritePart(archive, "word/numbering.xml", BuildNumbering());
         if (hasHeader)
@@ -161,7 +163,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasProtection) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -199,7 +201,7 @@ public static class DocxWriter
                 ? new XElement(Ct + "Override", new XAttribute("PartName", CommentsPartName),
                     new XAttribute("ContentType", CommentsContentType))
                 : null,
-            hasProtection
+            hasSettings
                 ? new XElement(Ct + "Override", new XAttribute("PartName", SettingsPartName),
                     new XAttribute("ContentType", SettingsContentType))
                 : null,
@@ -286,14 +288,14 @@ public static class DocxWriter
         bool hasFootnotes,
         bool hasEndnotes,
         bool hasComments,
-        bool hasProtection)
+        bool hasSettings)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
                 new XAttribute("Id", "rId1"),
                 new XAttribute("Type", StylesRel),
                 new XAttribute("Target", "styles.xml")));
-        if (hasProtection)
+        if (hasSettings)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", SettingsRelationshipId),
                 new XAttribute("Type", SettingsRelType),
@@ -1163,7 +1165,24 @@ public static class DocxWriter
             // Emitted unconditionally; w:num="1" is harmless and keeps the section shape stable.
             new XElement(W + "cols",
                 new XAttribute(W + "num", Math.Max(1, page.ColumnCount)),
-                new XAttribute(W + "space", PointsToDxa(page.ColumnSpacingPt))));
+                new XAttribute(W + "space", PointsToDxa(page.ColumnSpacingPt))),
+            // Vertical alignment of the page content (w:vAlign): emitted only when not Top, so existing
+            // documents round-trip unchanged. Schema order places it after w:cols. Justified maps to "both".
+            page.VerticalAlignment != PageVerticalAlignment.Top
+                ? new XElement(W + "vAlign", new XAttribute(W + "val", VerticalAlignmentToken(page.VerticalAlignment)))
+                : null,
+            // "Different first page" (w:titlePg): a toggle emitted only when set, after w:vAlign. FreeW
+            // still stores a single header/footer; the flag lets Word honour a distinct first-page header.
+            page.DifferentFirstPage ? new XElement(W + "titlePg") : null);
+
+    /// <summary>Maps a <see cref="PageVerticalAlignment"/> to its w:vAlign w:val token (Justified→"both").</summary>
+    private static string VerticalAlignmentToken(PageVerticalAlignment alignment) => alignment switch
+    {
+        PageVerticalAlignment.Center => "center",
+        PageVerticalAlignment.Justified => "both",
+        PageVerticalAlignment.Bottom => "bottom",
+        _ => "top"
+    };
 
     /// <summary>
     /// Builds the w:lnNumType element (line numbering in the page margin), or null when line numbering
@@ -1259,11 +1278,13 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Builds word/settings.xml (w:settings) carrying the document-protection element. The caller only
-    /// emits this part when the document is protected, so <paramref name="protection"/> is assumed to be
-    /// a non-None mode; the w:documentProtection records w:edit (the mode token) and w:enforcement="1".
+    /// Builds word/settings.xml (w:settings) carrying the document-protection element and/or the
+    /// automatic-hyphenation toggle. The caller only emits this part when something needs it (a non-None
+    /// protection mode and/or <paramref name="autoHyphenation"/>). w:documentProtection records w:edit
+    /// (the mode token) and w:enforcement="1"; w:autoHyphenation is a bare toggle. Schema order places
+    /// w:documentProtection before w:autoHyphenation.
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation)
     {
         var settings = new XElement(W + "settings",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
@@ -1271,6 +1292,8 @@ public static class DocxWriter
             settings.Add(new XElement(W + "documentProtection",
                 new XAttribute(W + "edit", edit),
                 new XAttribute(W + "enforcement", "1")));
+        if (autoHyphenation)
+            settings.Add(new XElement(W + "autoHyphenation"));
         return new XDocument(settings);
     }
 

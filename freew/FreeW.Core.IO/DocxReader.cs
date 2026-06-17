@@ -64,13 +64,22 @@ public static class DocxReader
     /// <summary>
     /// Resolves the settings part (via the officeDocument's "/settings" relationship, falling back to the
     /// conventional word/settings.xml path), loads w:settings, and maps w:documentProtection/@w:edit back
-    /// into <see cref="TextDocument.Protection"/>. A missing part — or one without an enforced
-    /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>.
+    /// into <see cref="TextDocument.Protection"/> and the w:autoHyphenation toggle into
+    /// <see cref="PageSettings.AutoHyphenation"/>. A missing part — or one without an enforced
+    /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>; a missing
+    /// autoHyphenation leaves it disabled.
     /// </summary>
     private static void ReadSettings(ZipArchive archive, TextDocument document)
     {
         var settingsXml = LoadPart(archive, ResolveSettingsPartPath(archive) ?? "word/settings.xml");
-        var protection = settingsXml?.Root?.Element(W + "documentProtection");
+        var root = settingsXml?.Root;
+        if (root is null)
+            return;
+
+        // Automatic hyphenation (w:autoHyphenation) is an on/off toggle: present + not explicitly off.
+        document.Page.AutoHyphenation = ReadToggle(root, "autoHyphenation");
+
+        var protection = root.Element(W + "documentProtection");
         if (protection is null)
             return;
 
@@ -244,6 +253,13 @@ public static class DocxReader
 
         // Line numbering (w:lnNumType) lives in the same w:sectPr; recover the mode + interval.
         ReadLineNumbering(sectPr.Element(W + "lnNumType"), document.Page);
+
+        // Page vertical alignment (w:vAlign): map the val token back ("both"→Justified); absent → Top.
+        document.Page.VerticalAlignment =
+            VerticalAlignmentFromToken(sectPr.Element(W + "vAlign")?.Attribute(W + "val")?.Value);
+
+        // "Different first page" (w:titlePg): a bare toggle; absent → false.
+        document.Page.DifferentFirstPage = ReadToggle(sectPr, "titlePg");
 
         var partsById = ReadHeaderFooterRelationships(archive);
 
@@ -904,6 +920,19 @@ public static class DocxReader
         if (int.TryParse(lnNumType.Attribute(W + "countBy")?.Value, out var countBy) && countBy >= 1)
             page.LineNumberCountBy = countBy;
     }
+
+    /// <summary>
+    /// Maps a w:vAlign/@w:val token back to a <see cref="PageVerticalAlignment"/> ("both"→Justified).
+    /// A null/unknown token (including the absent default and "top") maps to
+    /// <see cref="PageVerticalAlignment.Top"/>.
+    /// </summary>
+    private static PageVerticalAlignment VerticalAlignmentFromToken(string? token) => token switch
+    {
+        "center" => PageVerticalAlignment.Center,
+        "both" => PageVerticalAlignment.Justified,
+        "bottom" => PageVerticalAlignment.Bottom,
+        _ => PageVerticalAlignment.Top
+    };
 
     /// <summary>
     /// Maps each w:num id in word/numbering.xml to a <see cref="ListKind"/> by following its
