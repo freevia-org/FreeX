@@ -25,6 +25,8 @@ public static class DocxWriter
 
     private const string HeaderRelationshipId = "rIdHeader1";
     private const string FooterRelationshipId = "rIdFooter1";
+    private const string EvenHeaderRelationshipId = "rIdHeader2";
+    private const string EvenFooterRelationshipId = "rIdFooter2";
     private const string FootnotesRelationshipId = "rIdFootnotes";
     private const string EndnotesRelationshipId = "rIdEndnotes";
     private const string CommentsRelationshipId = "rIdComments";
@@ -32,6 +34,8 @@ public static class DocxWriter
     private const string ThemeRelationshipId = "rIdTheme1";
     private const string HeaderPartName = "word/header1.xml";
     private const string FooterPartName = "word/footer1.xml";
+    private const string EvenHeaderPartName = "word/header2.xml";
+    private const string EvenFooterPartName = "word/footer2.xml";
 
     // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
     // abstractNumId 0 / numId 1; decimal numbering uses abstractNumId 1 / numId 2; multilevel (legal
@@ -72,6 +76,12 @@ public static class DocxWriter
         var hasHeader = document.Header is { IsEmpty: false };
         var hasFooter = document.Footer is { IsEmpty: false };
 
+        // The even-page header/footer parts are emitted only when "different odd/even pages" is on AND the
+        // even content carries something visible, so a document that toggles the setting without distinct
+        // even content still round-trips minimally (the toggle alone is enough for Word).
+        var hasEvenHeader = document.Page.DifferentOddEvenPages && document.EvenHeader is { IsEmpty: false };
+        var hasEvenFooter = document.Page.DifferentOddEvenPages && document.EvenFooter is { IsEmpty: false };
+
         // A footnotes part is emitted only when the document actually carries footnotes.
         var hasFootnotes = document.Footnotes.Count > 0;
 
@@ -86,31 +96,40 @@ public static class DocxWriter
         var hasWatermark = !string.IsNullOrEmpty(document.Page.Watermark);
 
         // A word/settings.xml part is emitted only when something needs it — document protection
-        // (w:documentProtection) and/or automatic hyphenation (w:autoHyphenation) — so documents that
-        // need neither round-trip exactly as before (no settings part).
+        // (w:documentProtection), automatic hyphenation (w:autoHyphenation), the different-odd/even-headers
+        // toggle (w:evenAndOddHeaders) and/or a page background to display (w:displayBackgroundShape) — so
+        // documents that need none round-trip exactly as before (no settings part).
         var hasProtection = document.Protection.IsProtected;
-        var hasSettings = hasProtection || document.Page.AutoHyphenation;
+        var hasBackground = !string.IsNullOrEmpty(document.Page.BackgroundColorHex);
+        var hasSettings = hasProtection
+            || document.Page.AutoHyphenation
+            || document.Page.DifferentOddEvenPages
+            || hasBackground;
 
         // A word/theme/theme1.xml part is always emitted (real Word documents always carry one); it
         // serialises the document's DocumentTheme as a real clrScheme/fontScheme/fmtScheme.
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, hasHeader, hasFooter));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, embeddedObjects, smartArts));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation, document.Page.DifferentOddEvenPages, hasBackground));
         if (hasLists)
             WritePart(archive, "word/numbering.xml", BuildNumbering());
         if (hasHeader)
             WritePart(archive, HeaderPartName, BuildHeaderFooter(W + "hdr", document.Header!));
         if (hasFooter)
             WritePart(archive, FooterPartName, BuildHeaderFooter(W + "ftr", document.Footer!));
+        if (hasEvenHeader)
+            WritePart(archive, EvenHeaderPartName, BuildHeaderFooter(W + "hdr", document.EvenHeader!));
+        if (hasEvenFooter)
+            WritePart(archive, EvenFooterPartName, BuildHeaderFooter(W + "ftr", document.EvenFooter!));
         if (hasFootnotes)
             WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document));
         if (hasEndnotes)
@@ -293,7 +312,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasEvenHeader, bool hasEvenFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -322,6 +341,15 @@ public static class DocxWriter
                 : null,
             hasFooter
                 ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + FooterPartName),
+                    new XAttribute("ContentType", FooterContentType))
+                : null,
+            // Even-page header/footer parts (header2.xml / footer2.xml) for "different odd/even pages".
+            hasEvenHeader
+                ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + EvenHeaderPartName),
+                    new XAttribute("ContentType", HeaderContentType))
+                : null,
+            hasEvenFooter
+                ? new XElement(Ct + "Override", new XAttribute("PartName", "/" + EvenFooterPartName),
                     new XAttribute("ContentType", FooterContentType))
                 : null,
             hasFootnotes
@@ -443,6 +471,8 @@ public static class DocxWriter
         bool includeNumbering,
         bool hasHeader,
         bool hasFooter,
+        bool hasEvenHeader,
+        bool hasEvenFooter,
         bool hasFootnotes,
         bool hasEndnotes,
         bool hasComments,
@@ -481,6 +511,17 @@ public static class DocxWriter
                 new XAttribute("Id", FooterRelationshipId),
                 new XAttribute("Type", FooterRel),
                 new XAttribute("Target", "footer1.xml")));
+        // Even-page header/footer relationships (header2.xml / footer2.xml) for "different odd/even pages".
+        if (hasEvenHeader)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", EvenHeaderRelationshipId),
+                new XAttribute("Type", HeaderRel),
+                new XAttribute("Target", "header2.xml")));
+        if (hasEvenFooter)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", EvenFooterRelationshipId),
+                new XAttribute("Type", FooterRel),
+                new XAttribute("Target", "footer2.xml")));
         if (hasFootnotes)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", FootnotesRelationshipId),
@@ -550,7 +591,9 @@ public static class DocxWriter
         IReadOnlyList<SmartArtPart> smartArts,
         IReadOnlyDictionary<string, string> hyperlinks,
         bool hasHeader,
-        bool hasFooter)
+        bool hasFooter,
+        bool hasEvenHeader,
+        bool hasEvenFooter)
     {
         // Reset the document-scoped bookmark + revision id counters so ids start at 1 each write.
         System.Threading.Interlocked.Exchange(ref _bookmarkId, 0);
@@ -587,7 +630,13 @@ public static class DocxWriter
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
             body.Add(BuildBlock(block, drawings, hyperlinks));
-        body.Add(BuildSectionProperties(document.Page, hasHeader, hasFooter));
+        body.Add(BuildSectionProperties(document.Page, hasHeader, hasFooter, hasEvenHeader, hasEvenFooter));
+
+        // Page background colour (w:background): it is positionally the FIRST child of w:document, before
+        // w:body. Emitted only when a background colour is set so existing documents are unaffected.
+        var background = document.Page.BackgroundColorHex is { Length: > 0 } bg
+            ? new XElement(W + "background", new XAttribute(W + "color", bg.TrimStart('#')))
+            : null;
 
         return new XDocument(
             new XElement(W + "document",
@@ -606,6 +655,8 @@ public static class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "o", O.NamespaceName),
                 // dgm carries the SmartArt diagram reference (w:drawing/.../a:graphicData/dgm:relIds).
                 new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                // w:background (page background colour) must precede w:body in the document schema order.
+                background,
                 body));
     }
 
@@ -1230,7 +1281,7 @@ public static class DocxWriter
         // not reference header/footer parts (only the body-level section does in FreeW). Reuses the shared
         // sectPr builder so per-section properties are emitted from one code path.
         if (paragraph.SectionBreak is { } section)
-            pPr.Add(BuildSectionProperties(section.Page, hasHeader: false, hasFooter: false, section.BreakKind));
+            pPr.Add(BuildSectionProperties(section.Page, hasHeader: false, hasFooter: false, breakKind: section.BreakKind));
 
         return pPr.HasElements ? pPr : null;
     }
@@ -2210,18 +2261,31 @@ public static class DocxWriter
         PageSettings page,
         bool hasHeader,
         bool hasFooter,
+        bool hasEvenHeader = false,
+        bool hasEvenFooter = false,
         SectionBreakKind? breakKind = null) =>
         new(W + "sectPr",
-            // Header/footer references must precede pgSz/pgMar in the sectPr schema order.
+            // Header/footer references must precede pgSz/pgMar in the sectPr schema order. The "even"
+            // references (for "different odd/even pages") sit alongside the "default" ones.
             hasHeader
                 ? new XElement(W + "headerReference",
                     new XAttribute(W + "type", "default"),
                     new XAttribute(R + "id", HeaderRelationshipId))
                 : null,
+            hasEvenHeader
+                ? new XElement(W + "headerReference",
+                    new XAttribute(W + "type", "even"),
+                    new XAttribute(R + "id", EvenHeaderRelationshipId))
+                : null,
             hasFooter
                 ? new XElement(W + "footerReference",
                     new XAttribute(W + "type", "default"),
                     new XAttribute(R + "id", FooterRelationshipId))
+                : null,
+            hasEvenFooter
+                ? new XElement(W + "footerReference",
+                    new XAttribute(W + "type", "even"),
+                    new XAttribute(R + "id", EvenFooterRelationshipId))
                 : null,
             // The section break kind (w:type) precedes pgSz in the schema. "nextPage" is Word's default and
             // is emitted explicitly only for non-final sections (the body-level final section passes null).
@@ -2370,22 +2434,28 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Builds word/settings.xml (w:settings) carrying the document-protection element and/or the
-    /// automatic-hyphenation toggle. The caller only emits this part when something needs it (a non-None
-    /// protection mode and/or <paramref name="autoHyphenation"/>). w:documentProtection records w:edit
-    /// (the mode token) and w:enforcement="1"; w:autoHyphenation is a bare toggle. Schema order places
-    /// w:documentProtection before w:autoHyphenation.
+    /// Builds word/settings.xml (w:settings) carrying any combination of: the page-background display
+    /// toggle (w:displayBackgroundShape, when <paramref name="displayBackground"/> so Word paints the
+    /// w:background), the automatic-hyphenation toggle (w:autoHyphenation), the different-odd/even-headers
+    /// toggle (w:evenAndOddHeaders, when <paramref name="differentOddEvenPages"/>) and the document-protection
+    /// element (w:documentProtection: w:edit + w:enforcement="1"). The caller only emits this part when at
+    /// least one is needed. Children are emitted in CT_Settings schema order
+    /// (displayBackgroundShape → autoHyphenation → evenAndOddHeaders → documentProtection).
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool autoHyphenation, bool differentOddEvenPages, bool displayBackground)
     {
         var settings = new XElement(W + "settings",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
+        if (displayBackground)
+            settings.Add(new XElement(W + "displayBackgroundShape"));
+        if (autoHyphenation)
+            settings.Add(new XElement(W + "autoHyphenation"));
+        if (differentOddEvenPages)
+            settings.Add(new XElement(W + "evenAndOddHeaders"));
         if (ProtectionEditToken(protection.Mode) is { } edit)
             settings.Add(new XElement(W + "documentProtection",
                 new XAttribute(W + "edit", edit),
                 new XAttribute(W + "enforcement", "1")));
-        if (autoHyphenation)
-            settings.Add(new XElement(W + "autoHyphenation"));
         return new XDocument(settings);
     }
 

@@ -147,6 +147,10 @@ public static class DocxReader
         // Automatic hyphenation (w:autoHyphenation) is an on/off toggle: present + not explicitly off.
         document.Page.AutoHyphenation = ReadToggle(root, "autoHyphenation");
 
+        // Different odd/even page headers/footers (w:evenAndOddHeaders): an on/off toggle. When set, the
+        // even header/footer references in w:sectPr are honoured (see ReadHeaderFooter).
+        document.Page.DifferentOddEvenPages = ReadToggle(root, "evenAndOddHeaders");
+
         var protection = root.Element(W + "documentProtection");
         if (protection is null)
             return;
@@ -309,12 +313,24 @@ public static class DocxReader
         // document.Page. The same parse feeds non-final sections (see ReadSectionBreak in ReadParagraph).
         ReadPageSettings(sectPr, document.Page);
 
+        // Page background colour (w:document/w:background/@w:color): a body-level (document-wide) setting,
+        // null when absent. Restored with a '#' prefix to mirror the model's hex convention.
+        var backgroundColor = documentXml.Root?.Element(W + "background")?.Attribute(W + "color")?.Value;
+        document.Page.BackgroundColorHex = backgroundColor is { Length: > 0 } ? "#" + backgroundColor : null;
+
         var partsById = ReadHeaderFooterRelationships(archive);
 
         document.Header = ReadHeaderFooterPart(
-            sectPr, "headerReference", W + "hdr", partsById, archive, imageRelationships, hyperlinkRelationships);
+            sectPr, "headerReference", "default", W + "hdr", partsById, archive, imageRelationships, hyperlinkRelationships);
         document.Footer = ReadHeaderFooterPart(
-            sectPr, "footerReference", W + "ftr", partsById, archive, imageRelationships, hyperlinkRelationships);
+            sectPr, "footerReference", "default", W + "ftr", partsById, archive, imageRelationships, hyperlinkRelationships);
+        // Even-page header/footer (w:type="even") for "different odd/even pages". Present only when the
+        // document carried the even references + parts; null otherwise so single-header documents are
+        // unaffected.
+        document.EvenHeader = ReadHeaderFooterPart(
+            sectPr, "headerReference", "even", W + "hdr", partsById, archive, imageRelationships, hyperlinkRelationships);
+        document.EvenFooter = ReadHeaderFooterPart(
+            sectPr, "footerReference", "even", W + "ftr", partsById, archive, imageRelationships, hyperlinkRelationships);
     }
 
     /// <summary>
@@ -410,17 +426,24 @@ public static class DocxReader
     private static HeaderFooter? ReadHeaderFooterPart(
         XElement sectPr,
         string referenceName,
+        string referenceType,
         XName rootName,
         IReadOnlyDictionary<string, string> partsById,
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
-        // Prefer the default reference; fall back to the first reference of this kind if present.
+        // Select the reference of the requested type (e.g. "default" or "even"). For the default type a
+        // type-less reference also counts (Word treats an absent w:type as "default"); the "even" type must
+        // match explicitly so an odd-only document does not pick up the default header as its even header.
         var references = sectPr.Elements(W + referenceName).ToList();
         if (references.Count == 0)
             return null;
-        var reference = references.FirstOrDefault(r => r.Attribute(W + "type")?.Value == "default") ?? references[0];
+        var reference = referenceType == "default"
+            ? references.FirstOrDefault(r => (r.Attribute(W + "type")?.Value ?? "default") == "default")
+            : references.FirstOrDefault(r => r.Attribute(W + "type")?.Value == referenceType);
+        if (reference is null)
+            return null;
 
         var id = reference.Attribute(R + "id")?.Value;
         if (id is null || !partsById.TryGetValue(id, out var partPath))
