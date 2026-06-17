@@ -687,6 +687,23 @@ public sealed partial class MainWindow : Window
                     ["home.findSelect"] = () => _ = ShowFindDialogAsync(),
                     // Insert tab (Links / Text groups).
                     ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
+                    // Home Font group (added buttons).
+                    ["home.strikethrough"] = ToggleSelectedRangeStrikethrough,
+                    ["home.increaseFont"] = IncreaseSelectedRangeFontSize,
+                    ["home.decreaseFont"] = DecreaseSelectedRangeFontSize,
+                    ["home.fontColorAuto"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
+                    ["home.fontColorRed"] = () => ApplySelectedRangeFontColor(new CellColor(255, 0, 0)),
+                    ["home.fontColorGreen"] = () => ApplySelectedRangeFontColor(new CellColor(0, 128, 0)),
+                    ["home.fontColorBlue"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 255)),
+                    // Home Alignment group (added buttons).
+                    ["home.alignTop"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Top),
+                    ["home.alignMiddle"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Center),
+                    ["home.alignBottom"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom),
+                    ["home.increaseIndent"] = IncreaseSelectedRangeIndent,
+                    ["home.decreaseIndent"] = DecreaseSelectedRangeIndent,
+                    // Home Number group (added buttons).
+                    ["home.increaseDecimal"] = IncreaseSelectedRangeDecimalPlaces,
+                    ["home.decreaseDecimal"] = DecreaseSelectedRangeDecimalPlaces,
                     // Formulas tab (Formula Auditing group).
                     ["formulas.showFormulas"] = ToggleShowFormulas,
                     // Data tab (Forecast / Outline groups).

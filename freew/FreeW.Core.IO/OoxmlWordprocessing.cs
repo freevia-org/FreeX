@@ -150,6 +150,16 @@ internal static class Ooxml
     public const string SettingsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings";
     public const string SettingsPartName = "/word/settings.xml";
 
+    // word/webSettings.xml carries web-page-export settings FreeW does not model; preserved verbatim.
+    public const string WebSettingsContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml";
+    public const string WebSettingsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings";
+
+    // customXml/itemN.xml stores arbitrary custom XML data parts FreeW does not model; preserved verbatim.
+    // Each item references its own customXml/itemPropsN.xml (the data-store item id/schema) via the item's
+    // own customXml/_rels/itemN.xml.rels. The document→item relationship uses the customXml rel type.
+    public const string CustomXmlRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
+    public const string CustomXmlPropsContentType = "application/vnd.openxmlformats-officedocument.customXmlProperties+xml";
+
     // word/fontTable.xml lists the embedded font families (w:font/w:embedRegular/…). Each embed references an
     // obfuscated font part (word/fonts/fontN.odttf, content type obfuscatedFont) via the fontTable's own rels.
     public const string FontTableContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml";
@@ -221,6 +231,23 @@ internal static class Ooxml
     public const string ThemeContentType = "application/vnd.openxmlformats-officedocument.theme+xml";
     public const string ThemeRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
     public const string ThemePartName = "/word/theme/theme1.xml";
+
+    /// <summary>
+    /// The OPC content type for a media-part image extension (png/jpeg/gif/bmp/tiff/emf/wmf), used to emit the
+    /// matching <c>[Content_Types].xml</c> Default for each image format a document actually carries. The
+    /// extension is the lower-case file extension (no dot) produced by <c>InlineImage.ExtensionFor</c>.
+    /// Defaults to <c>image/png</c> for an unrecognised extension (the historical behaviour).
+    /// </summary>
+    public static string ImageContentTypeForExtension(string extension) => extension switch
+    {
+        "jpeg" or "jpg" => "image/jpeg",
+        "gif" => "image/gif",
+        "bmp" => "image/bmp",
+        "tiff" or "tif" => "image/tiff",
+        "emf" => "image/x-emf",
+        "wmf" => "image/x-wmf",
+        _ => "image/png"
+    };
 
     /// <summary>W3CDTF as used by dcterms:created/modified (UTC, second precision, trailing 'Z').</summary>
     public static string ToW3CDtf(DateTimeOffset value) =>

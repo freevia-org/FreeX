@@ -77,9 +77,9 @@ public static class DocumentMerge
 
     private static Run CloneRun(Run source) => new(source.Text, source.Formatting)
     {
-        // InlineImage is mutable (its size can change), so give the clone its own instance; the PNG
-        // bytes are immutable content and may be shared.
-        Image = source.Image is { } img ? new InlineImage(img.PngBytes, img.WidthPt, img.HeightPt) : null,
+        // InlineImage is mutable (its size can change), so give the clone its own instance; the image
+        // bytes + format are immutable content and may be shared.
+        Image = source.Image is { } img ? new InlineImage(img.Bytes, img.WidthPt, img.HeightPt, img.Format) : null,
         HyperlinkUrl = source.HyperlinkUrl,
         HyperlinkAnchor = source.HyperlinkAnchor,
         HyperlinkTooltip = source.HyperlinkTooltip,

@@ -42,6 +42,27 @@ pwsh tools/Fetch-FreeWFidelityCorpus.ps1 -Force
   `tables`, `images`, `drawings`, `charts`, `embedded-objects`, `attachments`, `styles`,
   and `stress`.
 
+## Fidelity runs
+
+**Round-trip (no Word needed):** the corpus-gated test
+`freew/FreeW.Core.IO.Tests/FreeWFidelityCorpusRoundTripTests.cs` opens + round-trips every `files/` doc and
+asserts no modelled-content loss (it no-ops when `files/` is absent). Findings:
+`docs/fidelity/2026-06-17-freew-corpus-roundtrip.md`.
+
+**Visual vs MS Word / LibreOffice:** run on a machine that has MS Word (preferred) or LibreOffice installed:
+
+```powershell
+pwsh freew-fidelity-corpus/tools/Run-VisualFidelity.ps1
+# options: -Baseline word|libreoffice|auto  -Docs bookmarks.docx,delins.docx  -FilesDir ...  -OutDir ...
+```
+
+It (1) renders FreeW's side with the `freew/tools/FreeW.FidelityRender` tool (docx → PNG via the real
+`DocumentView`/`FlowDocument` path), (2) renders the ground truth via Word COM (`ExportAsFixedFormat`) or
+`soffice --convert-to pdf` and rasterizes to PNG (needs `pdftoppm`, `magick`, or `soffice`), and (3) diffs
+each page pair (mean abs pixel delta + % changed) into `runs/visual-<timestamp>/visual-fidelity.csv`, with
+the per-page PNGs kept under `freew/` and `baseline/` for eyeballing. The render tool can also be run alone:
+`dotnet run --project freew/tools/FreeW.FidelityRender -- <docx|dir> <outDir> [maxPages]`.
+
 ## Local/private additions
 
 For truly messy real-world documents that cannot be redistributed, drop files into
