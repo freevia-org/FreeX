@@ -73,9 +73,19 @@ public partial class MainWindow
             var renderedByName = CollectControlsByName();
             _renderedRibbonControls = renderedByName;
             WireDeclarativeStateSync(originals, renderedByName);
+            // The Insert Shapes gallery menu is built imperatively (InitializeInsertShapeGalleryContextMenu)
+            // before the ribbon exists, so attach it to the now-rendered "Shapes" button here.
+            AttachInsertShapeGalleryContextMenu();
+            // The Format as Table / Table Styles galleries are likewise populated imperatively
+            // (PopulateFormatTableGalleryMenu / PopulateTableDesignStyleGalleryMenu, which may run before
+            // the ribbon exists), so attach them to the now-rendered gallery buttons; their click handlers
+            // (FormatTableBtn_Click / TableDesignStylesBtn_Click) open the attached menu.
+            AttachFormatTableGalleryContextMenu();
+            AttachTableDesignStyleGalleryContextMenu();
             RepointBackplaneNamesToRenderedControls(renderedByName);
             WireRenderedMenuOpenedHandlers(renderedByName);
             PopulateAndWireRenderedHomeCombos(renderedByName);
+            PopulateAndWireRenderedPageLayoutCombos(renderedByName);
 
             if (Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_CAPTURE") == "1")
                 Dispatcher.BeginInvoke(new Action(CaptureDeclarativeRibbon), DispatcherPriority.ContextIdle);
@@ -243,6 +253,11 @@ public partial class MainWindow
     private Control? FindRenderedRibbonControl(string commandName) =>
         _renderedRibbonControls.TryGetValue(commandName, out var control) ? control : null;
 
+    /// <summary>Test hook: returns the visible rendered ribbon control for a command name (e.g. a
+    /// gallery button) so functional tests can assert its attached context menu.</summary>
+    internal Control? FindRenderedRibbonCommandControlForTest(string commandName) =>
+        FindRenderedRibbonControl(commandName);
+
     /// <summary>
     /// Shares imperatively-built context menus from the legacy backplane buttons onto the rendered
     /// buttons. Toggle/combo/enablement state is no longer mirrored here — it flows from the
@@ -336,6 +351,58 @@ public partial class MainWindow
         }
 
         _renderedHomeCombosWired = true;
+    }
+
+    /// <summary>Guards against re-wiring the rendered Page Layout combos if the ribbon is rebuilt.</summary>
+    private bool _renderedPageLayoutCombosWired;
+
+    /// <summary>
+    /// Populates the three editable Page Layout Scale-to-Fit combos (Scale Width, Scale Height,
+    /// Scale Percent) on the *rendered* declarative ribbon with their item sources and wires their
+    /// commit events to the existing host handlers. Typing/selecting drives
+    /// <see cref="ApplyPageLayoutScaleToFit"/> through the rendered control (its <c>sender</c>), so the
+    /// combos are functional without any hidden backplane stub. After population the current sheet's
+    /// scale values are synced into the rendered combos for the initial display.
+    /// </summary>
+    private void PopulateAndWireRenderedPageLayoutCombos(IReadOnlyDictionary<string, Control> rendered)
+    {
+        if (rendered.TryGetValue("Scale Width", out var widthControl) && widthControl is ComboBox widthBox)
+        {
+            PopulateRenderedComboItems(widthBox, PageLayoutInputParser.ScalePageCountOptions);
+            if (!_renderedPageLayoutCombosWired)
+            {
+                widthBox.SelectionChanged += PageLayoutScaleWidthBox_SelectionChanged;
+                widthBox.KeyDown += PageLayoutScaleWidthBox_KeyDown;
+                widthBox.LostKeyboardFocus += PageLayoutScaleWidthBox_LostKeyboardFocus;
+            }
+        }
+
+        if (rendered.TryGetValue("Scale Height", out var heightControl) && heightControl is ComboBox heightBox)
+        {
+            PopulateRenderedComboItems(heightBox, PageLayoutInputParser.ScalePageCountOptions);
+            if (!_renderedPageLayoutCombosWired)
+            {
+                heightBox.SelectionChanged += PageLayoutScaleHeightBox_SelectionChanged;
+                heightBox.KeyDown += PageLayoutScaleHeightBox_KeyDown;
+                heightBox.LostKeyboardFocus += PageLayoutScaleHeightBox_LostKeyboardFocus;
+            }
+        }
+
+        if (rendered.TryGetValue("Scale Percent", out var percentControl) && percentControl is ComboBox percentBox)
+        {
+            PopulateRenderedComboItems(percentBox, PageLayoutInputParser.ScalePercentOptions);
+            if (!_renderedPageLayoutCombosWired)
+            {
+                percentBox.SelectionChanged += PageLayoutScalePercentBox_SelectionChanged;
+                percentBox.KeyDown += PageLayoutScalePercentBox_KeyDown;
+                percentBox.LostKeyboardFocus += PageLayoutScalePercentBox_LostKeyboardFocus;
+            }
+        }
+
+        _renderedPageLayoutCombosWired = true;
+
+        // The rendered combos now exist; push the current sheet's scale values into them for display.
+        SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId));
     }
 
     /// <summary>System font families (sorted), cached for the rendered Home Font combo.</summary>

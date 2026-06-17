@@ -1,11 +1,17 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    /// <summary>The Insert Shapes gallery context menu, built imperatively. Attached to the rendered
+    /// declarative "Shapes" button once the ribbon is built (see <see cref="AttachInsertShapeGalleryContextMenu"/>),
+    /// which happens after this menu is constructed during window load.</summary>
+    private ContextMenu? _insertShapeGalleryMenu;
+
     private void InitializeInsertShapeGalleryContextMenu()
     {
         var menu = new ContextMenu();
@@ -31,7 +37,23 @@ public partial class MainWindow
             menu.Items.Add(groupItem);
         }
 
-        ShapesBtn.ContextMenu = menu;
+        _insertShapeGalleryMenu = menu;
+
+        // The rendered declarative "Shapes" button may not exist yet (the ribbon is built later in
+        // MainWindow_Loaded); AttachInsertShapeGalleryContextMenu is also called from
+        // TryApplyDeclarativeRibbon once the rendered controls are collected.
+        AttachInsertShapeGalleryContextMenu();
+    }
+
+    /// <summary>Attaches the imperatively-built Insert Shapes gallery menu to the rendered declarative
+    /// "Shapes" button. No-op until both the menu and the rendered button exist.</summary>
+    private void AttachInsertShapeGalleryContextMenu()
+    {
+        if (_insertShapeGalleryMenu is { } menu &&
+            FindRenderedRibbonControl("Shapes") is ButtonBase shapesBtn)
+        {
+            shapesBtn.ContextMenu = menu;
+        }
     }
 
     private void ShapeGalleryMenuItem_Click(object sender, RoutedEventArgs e)

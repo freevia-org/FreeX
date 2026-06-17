@@ -97,9 +97,9 @@ public partial class MainWindow
                 ["UI-CAT-PAGE-001", "UI-CMD-PAGE-001"]));
 
             ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(null, 1, 2));
-            PageLayoutScaleWidthBox.Text = "1 page";
-            PageLayoutScaleHeightBox.Text = "2 pages";
-            PageLayoutScalePercentBox.Text = "100%";
+            if (FindRenderedRibbonControl("Scale Width") is ComboBox outScaleWidthBox) outScaleWidthBox.Text = "1 page";
+            if (FindRenderedRibbonControl("Scale Height") is ComboBox outScaleHeightBox) outScaleHeightBox.Text = "2 pages";
+            if (FindRenderedRibbonControl("Scale Percent") is ComboBox outScalePercentBox) outScalePercentBox.Text = "100%";
             SyncPageLayoutSetupTourControls(sheet);
             captures.Add(await CapturePageLayoutOutputWindowStateAsync(
                 outputDir,

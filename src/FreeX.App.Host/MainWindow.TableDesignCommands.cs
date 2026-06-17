@@ -281,11 +281,21 @@ public partial class MainWindow
             OpenRibbonContextMenu(btn, cm);
     }
 
+    /// <summary>The Table Design ▸ Table Styles gallery context menu, built imperatively from
+    /// <see cref="TableStyleGalleryPlanner"/>. Attached to the rendered declarative "Table Styles"
+    /// button once the ribbon is built (see <see cref="AttachTableDesignStyleGalleryContextMenu"/>); the
+    /// rendered button's click handler (<see cref="TableDesignStylesBtn_Click"/>) opens it.</summary>
+    private ContextMenu? _tableDesignStyleGalleryMenu;
+
     private void PopulateTableDesignStyleGalleryMenu()
     {
-        if (TableDesignStyleGalleryMenu is null || TableDesignStyleGalleryMenu.Items.Count > 0)
+        if (_tableDesignStyleGalleryMenu is { Items.Count: > 0 })
+        {
+            AttachTableDesignStyleGalleryContextMenu();
             return;
+        }
 
+        var menu = _tableDesignStyleGalleryMenu ??= new ContextMenu();
         var options = TableStyleGalleryPlanner.GetOptions(_workbook.Theme);
         string? currentFamily = null;
         for (var index = 0; index < options.Count; index++)
@@ -294,9 +304,9 @@ public partial class MainWindow
             var family = option.Label.Split(' ', 2)[0];
             if (!string.Equals(currentFamily, family, StringComparison.Ordinal))
             {
-                if (TableDesignStyleGalleryMenu.Items.Count > 0)
-                    TableDesignStyleGalleryMenu.Items.Add(new Separator());
-                TableDesignStyleGalleryMenu.Items.Add(CreateFormatTableGallerySectionHeader(family));
+                if (menu.Items.Count > 0)
+                    menu.Items.Add(new Separator());
+                menu.Items.Add(CreateFormatTableGallerySectionHeader(family));
                 currentFamily = family;
             }
 
@@ -308,7 +318,25 @@ public partial class MainWindow
             };
             RibbonTooltip.SetKeyTip(menuItem, $"{family[0]}{option.Label[(family.Length + 1)..]}");
             menuItem.Click += TableDesignStyleGalleryMenuItem_Click;
-            TableDesignStyleGalleryMenu.Items.Add(menuItem);
+            menu.Items.Add(menuItem);
+        }
+
+        AttachTableDesignStyleGalleryContextMenu();
+    }
+
+    /// <summary>Test hook: builds + attaches the Table Styles gallery to the rendered button, mirroring
+    /// what happens when the contextual Table Design button is engaged.</summary>
+    internal void PopulateTableDesignStyleGalleryMenuForTest() => PopulateTableDesignStyleGalleryMenu();
+
+    /// <summary>Attaches the imperatively-built Table Styles gallery menu to the rendered declarative
+    /// "Table Styles" button. No-op until both the menu and the rendered button exist; the rendered
+    /// button's click runs <see cref="TableDesignStylesBtn_Click"/>, which opens this menu.</summary>
+    private void AttachTableDesignStyleGalleryContextMenu()
+    {
+        if (_tableDesignStyleGalleryMenu is { } menu &&
+            FindRenderedRibbonControl("Table Styles") is System.Windows.Controls.Primitives.ButtonBase tableStylesBtn)
+        {
+            tableStylesBtn.ContextMenu = menu;
         }
     }
 

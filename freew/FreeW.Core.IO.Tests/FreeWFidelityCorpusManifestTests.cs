@@ -22,7 +22,7 @@ public class FreeWFidelityCorpusManifestTests
     {
         var rows = ReadManifest();
 
-        rows.Should().HaveCountGreaterThanOrEqualTo(20);
+        rows.Should().HaveCountGreaterThanOrEqualTo(45);
         rows.Select(row => row.Id).Should().OnlyHaveUniqueItems();
         rows.Select(row => row.File).Should().OnlyHaveUniqueItems();
 
@@ -32,7 +32,7 @@ public class FreeWFidelityCorpusManifestTests
             row.File.Should().EndWith(".docx");
             Path.GetFileName(row.File).Should().Be(row.File);
             row.Source.Should().NotBeNullOrWhiteSpace();
-            row.License.Should().BeOneOf("Apache-2.0", "CC0-1.0", "Public-Domain", "local-private");
+            row.License.Should().BeOneOf("Apache-2.0", "CC0-1.0", "MIT", "Public-Domain", "local-private");
             row.Notes.Should().NotBeNullOrWhiteSpace();
             row.FeatureTags.Should().NotBeEmpty();
 
@@ -64,23 +64,40 @@ public class FreeWFidelityCorpusManifestTests
 
         tags.Should().Contain([
             "attachments",
+            "altchunk",
             "bookmarks",
             "charts",
+            "checkboxes",
             "comments",
             "content-controls",
+            "custom-xml",
             "drawings",
             "embedded-objects",
             "endnotes",
+            "equations",
+            "external-relationships",
             "fields",
             "footnotes",
+            "glossary",
             "headers-footers",
+            "hyperlinks",
             "images",
+            "legacy-forms",
+            "mail-merge",
             "nested-tables",
             "numbering",
             "page-breaks",
+            "settings",
+            "shapes",
+            "smartart",
             "styles",
             "tables",
-            "tracked-changes"
+            "text-boxes",
+            "theme",
+            "tracked-changes",
+            "vml",
+            "watermarks",
+            "web-settings"
         ]);
     }
 

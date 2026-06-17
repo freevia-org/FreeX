@@ -771,20 +771,22 @@ public partial class MainWindow
                 "window-full",
                 "Home Alignment group focused with rendered left/center/right, top/middle/bottom, wrap, indent, rotation, and merged-center worksheet examples."));
 
-            OpenRibbonContextMenu(OrientationPickerButton, OrientationPickerButton.ContextMenu);
-            OrientationPickerButton.ContextMenu!.UpdateLayout();
+            var orientationButton = FindRenderedRibbonControl("Orientation") as Button
+                ?? throw new InvalidOperationException("Home alignment/number tour could not locate the rendered Orientation button.");
+            OpenRibbonContextMenu(orientationButton, orientationButton.ContextMenu!);
+            orientationButton.ContextMenu!.UpdateLayout();
             await Task.Delay(350);
             await WaitForRibbonScreenshotRenderPassAsync();
-            await CaptureElementAsync(OrientationPickerButton.ContextMenu!, outputDir, "freex_home_alignment_orientation_menu_opened");
+            await CaptureElementAsync(orientationButton.ContextMenu!, outputDir, "freex_home_alignment_orientation_menu_opened");
             captures.Add(CreateHomeAlignmentNumberTourCapture(
                 "orientation-menu-opened",
                 "freex_home_alignment_orientation_menu_opened",
                 "orientation-menu",
                 "RenderTargetBitmap-context-menu",
-                OrientationPickerButton.ContextMenu!.ActualWidth,
-                OrientationPickerButton.ContextMenu!.ActualHeight,
+                orientationButton.ContextMenu!.ActualWidth,
+                orientationButton.ContextMenu!.ActualHeight,
                 "Production Orientation menu opened from the Home Alignment group."));
-            OrientationPickerButton.ContextMenu!.IsOpen = false;
+            orientationButton.ContextMenu!.IsOpen = false;
 
             SetSelectionRange(context.NumberRange, context.NumberRange.Start);
             RefreshToolbar();
@@ -866,7 +868,7 @@ public partial class MainWindow
         }
         finally
         {
-            if (OrientationPickerButton.ContextMenu is { IsOpen: true } menu)
+            if ((FindRenderedRibbonControl("Orientation") as Button)?.ContextMenu is { IsOpen: true } menu)
                 menu.IsOpen = false;
             alignmentDialog?.Close();
             numberDialog?.Close();
@@ -1044,18 +1046,20 @@ public partial class MainWindow
 
         var homeTab = RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home");
         SelectRibbonTourTab(homeTab);
-        BordersMenuButton.Focus();
-        BordersMenuButton.UpdateLayout();
+        var bordersButton = FindRenderedRibbonControl("Borders") as Button
+            ?? throw new InvalidOperationException("Home Borders dropdown tour could not locate the rendered Borders button.");
+        bordersButton.Focus();
+        bordersButton.UpdateLayout();
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
 
-        var menu = BordersMenuButton.ContextMenu
+        var menu = bordersButton.ContextMenu
             ?? throw new InvalidOperationException("Home Borders dropdown tour could not locate the Borders context menu.");
 
         try
         {
-            menu.PlacementTarget = BordersMenuButton;
+            menu.PlacementTarget = bordersButton;
             menu.Placement = PlacementMode.Bottom;
             menu.IsOpen = true;
             menu.UpdateLayout();
@@ -1116,6 +1120,10 @@ public partial class MainWindow
             ?? throw new InvalidOperationException("Home font/colors tour could not locate the rendered Font combo.");
         var fontSizeBox = FindRenderedRibbonControl("Font Size") as ComboBox
             ?? throw new InvalidOperationException("Home font/colors tour could not locate the rendered Font Size combo.");
+        var underlineButton = FindRenderedRibbonControl("Underline") as ButtonBase
+            ?? throw new InvalidOperationException("Home font/colors tour could not locate the rendered Underline button.");
+        var bordersButton = FindRenderedRibbonControl("Borders") as ButtonBase
+            ?? throw new InvalidOperationException("Home font/colors tour could not locate the rendered Borders button.");
 
         try
         {
@@ -1150,14 +1158,14 @@ public partial class MainWindow
 
             captures.Add(await CaptureHomeFontColorsMenuAsync(
                 outputDir,
-                UnderlineButton,
+                underlineButton,
                 "underline-menu",
                 "freex_home_underline_menu_opened",
                 "Underline split-menu with single and double underline choices."));
 
             var borderMenuCapture = await CaptureHomeFontColorsMenuAsync(
                 outputDir,
-                BordersMenuButton,
+                bordersButton,
                 "borders-menu",
                 "freex_home_borders_full_menu_opened",
                 "Full Home Borders menu with presets, draw/erase commands, line color, line style, and More Borders.");
@@ -1179,9 +1187,9 @@ public partial class MainWindow
         {
             fontNameBox.IsDropDownOpen = false;
             fontSizeBox.IsDropDownOpen = false;
-            if (UnderlineButton.ContextMenu is { } underlineMenu)
+            if (underlineButton.ContextMenu is { } underlineMenu)
                 underlineMenu.IsOpen = false;
-            if (BordersMenuButton.ContextMenu is { } bordersMenu)
+            if (bordersButton.ContextMenu is { } bordersMenu)
                 bordersMenu.IsOpen = false;
         }
     }
@@ -1317,10 +1325,12 @@ public partial class MainWindow
 
     private async Task<HomeFontColorsTourManifestCapture> CaptureHomeFontColorsBorderLineColorSubmenuAsync(string outputDir, string fileName)
     {
-        var menu = BordersMenuButton.ContextMenu
+        var bordersButton = FindRenderedRibbonControl("Borders") as ButtonBase
+            ?? throw new InvalidOperationException("Home font/colors tour could not locate the rendered Borders button.");
+        var menu = bordersButton.ContextMenu
             ?? throw new InvalidOperationException("Home font/colors tour could not locate the Borders context menu.");
 
-        menu.PlacementTarget = BordersMenuButton;
+        menu.PlacementTarget = bordersButton;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
         menu.UpdateLayout();
@@ -1430,8 +1440,8 @@ public partial class MainWindow
     private IReadOnlyList<string> CaptureOpenMenuHeaders()
     {
         var headers = new List<string>();
-        AddMenuHeaders(UnderlineButton.ContextMenu, headers);
-        AddMenuHeaders(BordersMenuButton.ContextMenu, headers);
+        AddMenuHeaders((FindRenderedRibbonControl("Underline") as ButtonBase)?.ContextMenu, headers);
+        AddMenuHeaders((FindRenderedRibbonControl("Borders") as ButtonBase)?.ContextMenu, headers);
         return headers;
     }
 
@@ -3491,8 +3501,10 @@ public partial class MainWindow
         await Task.Delay(700);
 
         SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Help"));
-        HelpOnlineButton.Focus();
-        Keyboard.Focus(HelpOnlineButton);
+        var helpOnlineButton = FindRenderedRibbonControl("Help Online")
+            ?? throw new InvalidOperationException("Help/About/Legal tour could not locate the rendered Help Online control.");
+        helpOnlineButton.Focus();
+        Keyboard.Focus(helpOnlineButton);
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
@@ -3511,7 +3523,7 @@ public partial class MainWindow
                 EntryPath: "Help tab",
                 EvidenceSummary: "Help tab command context shows Help Online, Feedback, Copy Diagnostics, Check for Updates, About FreeX, and Legal Notices.",
                 Url: null,
-                FocusedElementAutomationId: AutomationProperties.GetAutomationId(HelpOnlineButton),
+                FocusedElementAutomationId: AutomationProperties.GetAutomationId(helpOnlineButton),
                 CaptureLogicalWidth: ActualWidth,
                 CaptureLogicalHeight: ScreenshotTourCaptureHeight)
         };
@@ -3553,8 +3565,10 @@ public partial class MainWindow
     {
         Activate();
         SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Help"));
-        HelpOnlineButton.Focus();
-        Keyboard.Focus(HelpOnlineButton);
+        var helpOnlineButton = FindRenderedRibbonControl("Help Online")
+            ?? throw new InvalidOperationException("Help/About/Legal tour could not locate the rendered Help Online control.");
+        helpOnlineButton.Focus();
+        Keyboard.Focus(helpOnlineButton);
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(250);
@@ -3572,7 +3586,7 @@ public partial class MainWindow
             EntryPath: "Help tab after owned dialog close",
             EvidenceSummary: "Focus returns to the FreeX Help ribbon context after owned About/Legal dialogs close, with the Ready status bar still visible.",
             Url: null,
-            FocusedElementAutomationId: AutomationProperties.GetAutomationId(HelpOnlineButton),
+            FocusedElementAutomationId: AutomationProperties.GetAutomationId(helpOnlineButton),
             CaptureLogicalWidth: ActualWidth,
             CaptureLogicalHeight: ActualHeight);
     }
@@ -6374,9 +6388,9 @@ public partial class MainWindow
             }
 
             ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(null, 1, 2));
-            PageLayoutScaleWidthBox.Text = "1 page";
-            PageLayoutScaleHeightBox.Text = "2 pages";
-            PageLayoutScalePercentBox.Text = "85%";
+            if (FindRenderedRibbonControl("Scale Width") is ComboBox tourScaleWidthBox) tourScaleWidthBox.Text = "1 page";
+            if (FindRenderedRibbonControl("Scale Height") is ComboBox tourScaleHeightBox) tourScaleHeightBox.Text = "2 pages";
+            if (FindRenderedRibbonControl("Scale Percent") is ComboBox tourScalePercentBox) tourScalePercentBox.Text = "85%";
             captures.Add(await CapturePageLayoutSetupWindowStateAsync(
                 outputDir,
                 "scale-to-fit-state",
@@ -6490,9 +6504,12 @@ public partial class MainWindow
         _suppressToolbarSync = true;
         try
         {
-            PageLayoutScaleWidthBox.Text = sheet.ScaleToFit.FitToPagesWide is { } wide ? $"{wide} page" : "Automatic";
-            PageLayoutScaleHeightBox.Text = sheet.ScaleToFit.FitToPagesTall is { } tall ? $"{tall} page" : "Automatic";
-            PageLayoutScalePercentBox.Text = $"{sheet.ScaleToFit.ScalePercent ?? 100}%";
+            if (FindRenderedRibbonControl("Scale Width") is ComboBox syncScaleWidthBox)
+                syncScaleWidthBox.Text = sheet.ScaleToFit.FitToPagesWide is { } wide ? $"{wide} page" : "Automatic";
+            if (FindRenderedRibbonControl("Scale Height") is ComboBox syncScaleHeightBox)
+                syncScaleHeightBox.Text = sheet.ScaleToFit.FitToPagesTall is { } tall ? $"{tall} page" : "Automatic";
+            if (FindRenderedRibbonControl("Scale Percent") is ComboBox syncScalePercentBox)
+                syncScalePercentBox.Text = $"{sheet.ScaleToFit.ScalePercent ?? 100}%";
             _ribbonState.SetChecked("View Gridlines", sheet.ShowGridlines);
             _ribbonState.SetChecked("View Headings", sheet.ShowHeadings);
             _ribbonState.SetChecked("Print Gridlines", sheet.PrintGridlines);
@@ -6577,9 +6594,9 @@ public partial class MainWindow
             ShowHeadings: sheet?.ShowHeadings ?? true,
             PrintGridlines: sheet?.PrintGridlines ?? false,
             PrintHeadings: sheet?.PrintHeadings ?? false,
-            ScaleWidthText: PageLayoutScaleWidthBox.Text,
-            ScaleHeightText: PageLayoutScaleHeightBox.Text,
-            ScalePercentText: PageLayoutScalePercentBox.Text,
+            ScaleWidthText: (FindRenderedRibbonControl("Scale Width") as ComboBox)?.Text ?? string.Empty,
+            ScaleHeightText: (FindRenderedRibbonControl("Scale Height") as ComboBox)?.Text ?? string.Empty,
+            ScalePercentText: (FindRenderedRibbonControl("Scale Percent") as ComboBox)?.Text ?? string.Empty,
             MenuHeaders: menuHeaders,
             EvidencePurpose: evidencePurpose);
     }

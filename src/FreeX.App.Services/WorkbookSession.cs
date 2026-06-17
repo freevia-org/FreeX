@@ -1963,6 +1963,34 @@ public sealed class WorkbookSession
         return result;
     }
 
+    /// <summary>Set (or replace) the legacy note on the active cell.</summary>
+    public WorkbookCellEditResult SetActiveCellNote(string text)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SetCommentCommand(ActiveSheet.Id, ActiveCell, text));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    /// <summary>Add (or replace) a threaded comment on the active cell.</summary>
+    public WorkbookCellEditResult SetActiveCellThreadedComment(string text)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SetThreadedCommentCommand(ActiveSheet.Id, ActiveCell, text));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public WorkbookCellEditResult ClearSelectedRangeHyperlinks()
     {
         var range = SelectedRange;
