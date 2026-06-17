@@ -160,7 +160,9 @@ public partial class FileAdapterSmokeTests
         var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         chart.ExplodedSliceIndex.Should().Be(-1);
         chart.SecondaryAxisSeriesIndexes.Should().Equal(1);
-        chart.ComboLineSeriesIndexes.Should().Equal(1);
+        // Combo line membership now keeps index 0 (Excel can draw the line series first); only the
+        // out-of-range (-1, 2) and duplicate entries are dropped. Secondary axis still excludes 0.
+        chart.ComboLineSeriesIndexes.Should().Equal(0, 1);
         chart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
             new ChartSeriesFormat(0, FillColor: new CellColor(0, 114, 178), StrokeThickness: 0.5));
         chart.PointDataLabelFormats.Should().ContainSingle().Which.Should().Be(
@@ -565,7 +567,9 @@ public partial class FileAdapterSmokeTests
             Type = ChartType.Column,
             DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3)),
             UseComboLineForSecondarySeries = true,
-            ComboLineSeriesIndexes = [-1, 0, 2]
+            // seriesCount is 2 (one category col + two value cols), so every index here is out of range
+            // (idx 0 is now a valid combo-line target and is exercised elsewhere).
+            ComboLineSeriesIndexes = [-1, 2, 3]
         });
 
         var ms = new MemoryStream();

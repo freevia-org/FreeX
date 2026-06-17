@@ -209,7 +209,8 @@ public sealed partial class ChartRendererTests
                 Cell(3, 2, "95")
             ],
             [],
-            theme));
+            []),
+            theme);
 
         var pie = model.Series.OfType<PieSeries>().Single();
         pie.Slices.Should().HaveCount(2);

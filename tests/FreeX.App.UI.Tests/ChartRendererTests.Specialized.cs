@@ -171,6 +171,7 @@ public sealed partial class ChartRendererTests
         var chart = new ChartModel
         {
             Type = ChartType.ThreeDPie,
+            ShowLegend = false,
             DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
         };
 
