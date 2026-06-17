@@ -6374,9 +6374,9 @@ public partial class MainWindow
             }
 
             ApplyPageLayoutScaleToFit(new WorksheetScaleToFit(null, 1, 2));
-            PageLayoutScaleWidthBox.Text = "1 page";
-            PageLayoutScaleHeightBox.Text = "2 pages";
-            PageLayoutScalePercentBox.Text = "85%";
+            if (FindRenderedRibbonControl("Scale Width") is ComboBox tourScaleWidthBox) tourScaleWidthBox.Text = "1 page";
+            if (FindRenderedRibbonControl("Scale Height") is ComboBox tourScaleHeightBox) tourScaleHeightBox.Text = "2 pages";
+            if (FindRenderedRibbonControl("Scale Percent") is ComboBox tourScalePercentBox) tourScalePercentBox.Text = "85%";
             captures.Add(await CapturePageLayoutSetupWindowStateAsync(
                 outputDir,
                 "scale-to-fit-state",
@@ -6490,9 +6490,12 @@ public partial class MainWindow
         _suppressToolbarSync = true;
         try
         {
-            PageLayoutScaleWidthBox.Text = sheet.ScaleToFit.FitToPagesWide is { } wide ? $"{wide} page" : "Automatic";
-            PageLayoutScaleHeightBox.Text = sheet.ScaleToFit.FitToPagesTall is { } tall ? $"{tall} page" : "Automatic";
-            PageLayoutScalePercentBox.Text = $"{sheet.ScaleToFit.ScalePercent ?? 100}%";
+            if (FindRenderedRibbonControl("Scale Width") is ComboBox syncScaleWidthBox)
+                syncScaleWidthBox.Text = sheet.ScaleToFit.FitToPagesWide is { } wide ? $"{wide} page" : "Automatic";
+            if (FindRenderedRibbonControl("Scale Height") is ComboBox syncScaleHeightBox)
+                syncScaleHeightBox.Text = sheet.ScaleToFit.FitToPagesTall is { } tall ? $"{tall} page" : "Automatic";
+            if (FindRenderedRibbonControl("Scale Percent") is ComboBox syncScalePercentBox)
+                syncScalePercentBox.Text = $"{sheet.ScaleToFit.ScalePercent ?? 100}%";
             _ribbonState.SetChecked("View Gridlines", sheet.ShowGridlines);
             _ribbonState.SetChecked("View Headings", sheet.ShowHeadings);
             _ribbonState.SetChecked("Print Gridlines", sheet.PrintGridlines);
@@ -6577,9 +6580,9 @@ public partial class MainWindow
             ShowHeadings: sheet?.ShowHeadings ?? true,
             PrintGridlines: sheet?.PrintGridlines ?? false,
             PrintHeadings: sheet?.PrintHeadings ?? false,
-            ScaleWidthText: PageLayoutScaleWidthBox.Text,
-            ScaleHeightText: PageLayoutScaleHeightBox.Text,
-            ScalePercentText: PageLayoutScalePercentBox.Text,
+            ScaleWidthText: (FindRenderedRibbonControl("Scale Width") as ComboBox)?.Text ?? string.Empty,
+            ScaleHeightText: (FindRenderedRibbonControl("Scale Height") as ComboBox)?.Text ?? string.Empty,
+            ScalePercentText: (FindRenderedRibbonControl("Scale Percent") as ComboBox)?.Text ?? string.Empty,
             MenuHeaders: menuHeaders,
             EvidencePurpose: evidencePurpose);
     }

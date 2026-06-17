@@ -16,9 +16,6 @@ public partial class MainWindow
     private readonly System.Windows.Controls.Button OrientationPickerButton = new();
     private readonly System.Windows.Controls.ContextMenu FormatTableGalleryMenu = new();
     private readonly System.Windows.Controls.Button ShapesBtn = new();
-    private readonly System.Windows.Controls.ComboBox PageLayoutScaleWidthBox = new();
-    private readonly System.Windows.Controls.ComboBox PageLayoutScaleHeightBox = new();
-    private readonly System.Windows.Controls.ComboBox PageLayoutScalePercentBox = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatCropMenuItem = new();
     private readonly System.Windows.Controls.MenuItem PictureFormatResetCropMenuItem = new();
     private readonly System.Windows.Controls.ContextMenu TableDesignStyleGalleryMenu = new();
@@ -69,17 +66,11 @@ public partial class MainWindow
         RibbonMetadata.SetCommandName(ShapesBtn, "Shapes");
         RibbonBackplaneControls["Shapes"] = ShapesBtn;
         RibbonBackplaneControlNames["Shapes"] = "ShapesBtn";
-        try { RegisterName("PageLayoutScaleWidthBox", PageLayoutScaleWidthBox); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(PageLayoutScaleWidthBox, "Scale Width");
-        RibbonBackplaneControls["Scale Width"] = PageLayoutScaleWidthBox;
+        // Page Layout Scale-to-Fit combos are driven through the rendered declarative combos
+        // (populated + wired by PopulateAndWireRenderedPageLayoutCombos); only the x:Name mapping
+        // survives so RepointBackplaneNamesToRenderedControls can resolve FindName to the on-screen control.
         RibbonBackplaneControlNames["Scale Width"] = "PageLayoutScaleWidthBox";
-        try { RegisterName("PageLayoutScaleHeightBox", PageLayoutScaleHeightBox); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(PageLayoutScaleHeightBox, "Scale Height");
-        RibbonBackplaneControls["Scale Height"] = PageLayoutScaleHeightBox;
         RibbonBackplaneControlNames["Scale Height"] = "PageLayoutScaleHeightBox";
-        try { RegisterName("PageLayoutScalePercentBox", PageLayoutScalePercentBox); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(PageLayoutScalePercentBox, "Scale Percent");
-        RibbonBackplaneControls["Scale Percent"] = PageLayoutScalePercentBox;
         RibbonBackplaneControlNames["Scale Percent"] = "PageLayoutScalePercentBox";
         RibbonBackplaneControlNames["View Gridlines"] = "PageLayoutViewGridlinesChk";
         RibbonBackplaneControlNames["Print Gridlines"] = "PageLayoutPrintGridlinesChk";
