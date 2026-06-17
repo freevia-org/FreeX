@@ -773,6 +773,8 @@ public sealed partial class MainWindow : Window
                     ["pageLayout.themeColors"] = () => _ = ShowThemesGalleryAsync(),
                     ["pageLayout.themeFonts"] = () => _ = ShowThemesGalleryAsync(),
                     ["pageLayout.themeEffects"] = () => _ = ShowThemesGalleryAsync(),
+                    // Insert ▸ Symbol.
+                    ["insert.symbol"] = () => _ = ShowSymbolPickerAsync(),
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
