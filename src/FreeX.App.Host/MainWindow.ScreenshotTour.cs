@@ -677,19 +677,21 @@ public partial class MainWindow
 
         var homeTab = RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home");
         SelectRibbonTourTab(homeTab);
-        NumberFormatBox.SelectedIndex = HomeNumberFormatDropdownPlanner.DefaultSelectionIndex;
-        NumberFormatBox.Focus();
-        NumberFormatBox.ApplyTemplate();
-        NumberFormatBox.IsDropDownOpen = true;
-        NumberFormatBox.UpdateLayout();
+        var numberFormatBox = FindRenderedRibbonControl("Number Format") as ComboBox
+            ?? throw new InvalidOperationException("Home number format dropdown tour could not locate the rendered Number Format combo.");
+        numberFormatBox.SelectedIndex = HomeNumberFormatDropdownPlanner.DefaultSelectionIndex;
+        numberFormatBox.Focus();
+        numberFormatBox.ApplyTemplate();
+        numberFormatBox.IsDropDownOpen = true;
+        numberFormatBox.UpdateLayout();
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
         await Task.Delay(350);
-        NumberFormatBox.UpdateLayout();
+        numberFormatBox.UpdateLayout();
 
         try
         {
-            var popupChild = FindOpenPopupChild(NumberFormatBox)
+            var popupChild = FindOpenPopupChild(numberFormatBox)
                 ?? throw new InvalidOperationException("Home number format dropdown tour could not locate the open ComboBox popup.");
 
             await CaptureElementAsync(popupChild, outputDir, HomeNumberFormatDropdownTourCaptureFileName);
@@ -703,7 +705,7 @@ public partial class MainWindow
         }
         finally
         {
-            NumberFormatBox.IsDropDownOpen = false;
+            numberFormatBox.IsDropDownOpen = false;
         }
     }
 
@@ -1110,6 +1112,11 @@ public partial class MainWindow
         var sampleRange = EnsureHomeFontColorsTourContext();
         var captures = new List<HomeFontColorsTourManifestCapture>();
 
+        var fontNameBox = FindRenderedRibbonControl("Font") as ComboBox
+            ?? throw new InvalidOperationException("Home font/colors tour could not locate the rendered Font combo.");
+        var fontSizeBox = FindRenderedRibbonControl("Font Size") as ComboBox
+            ?? throw new InvalidOperationException("Home font/colors tour could not locate the rendered Font Size combo.");
+
         try
         {
             var homeTab = RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home");
@@ -1129,14 +1136,14 @@ public partial class MainWindow
 
             captures.Add(await CaptureHomeFontColorsComboPopupAsync(
                 outputDir,
-                FontNameBox,
+                fontNameBox,
                 "font-family-dropdown",
                 "freex_home_font_family_dropdown_opened",
                 "Font family dropdown opened from the production Home Font combo box."));
 
             captures.Add(await CaptureHomeFontColorsComboPopupAsync(
                 outputDir,
-                FontSizeBox,
+                fontSizeBox,
                 "font-size-dropdown",
                 "freex_home_font_size_dropdown_opened",
                 "Font size dropdown opened from the production Home Font Size combo box."));
@@ -1170,8 +1177,8 @@ public partial class MainWindow
         }
         finally
         {
-            FontNameBox.IsDropDownOpen = false;
-            FontSizeBox.IsDropDownOpen = false;
+            fontNameBox.IsDropDownOpen = false;
+            fontSizeBox.IsDropDownOpen = false;
             if (UnderlineButton.ContextMenu is { } underlineMenu)
                 underlineMenu.IsOpen = false;
             if (BordersMenuButton.ContextMenu is { } bordersMenu)

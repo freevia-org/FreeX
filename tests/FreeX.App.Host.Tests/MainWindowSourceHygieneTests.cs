@@ -145,8 +145,9 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR");
         source.Should().Contain("CaptureHomeNumberFormatDropdownTourAsync");
         source.Should().Contain("home-number-format-dropdown-tour");
-        source.Should().Contain("NumberFormatBox.IsDropDownOpen = true");
-        source.Should().Contain("FindOpenPopupChild(NumberFormatBox)");
+        source.Should().Contain("numberFormatBox.IsDropDownOpen = true");
+        source.Should().Contain("FindOpenPopupChild(numberFormatBox)");
+        source.Should().Contain("FindRenderedRibbonControl(\"Number Format\") as ComboBox");
         source.Should().Contain("HomeNumberFormatDropdownTourManifest");
         source.Should().Contain("interactive:home-number-format:opened");
         source.Should().Contain("RenderTargetBitmap-combobox-popup-child");

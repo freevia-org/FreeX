@@ -224,8 +224,8 @@ public partial class MainWindow
             _ribbonState.SetChecked("Center", state.HorizontalAlignment == CellHAlign.Center);
             _ribbonState.SetChecked("Align Right", state.HorizontalAlignment == CellHAlign.Right);
             _ribbonState.SetChecked("Wrap Text", state.WrapText);
-            SetRibbonComboValue("Font", state.FontName, FontNameBox);
-            SetRibbonComboValue("Font Size", state.FontSizeText, FontSizeBox);
+            SetRibbonComboValue("Font", state.FontName);
+            SetRibbonComboValue("Font Size", state.FontSizeText);
             _lastToolbarVisualState = state;
         }
         finally
@@ -255,31 +255,13 @@ public partial class MainWindow
             state == _lastToolbarVisualState;
     }
 
-    /// <summary>Pushes a combo's display value into the neutral state store (which drives the rendered
-    /// ribbon combo) and mirrors it onto the legacy <paramref name="backplaneBox"/> that handlers still
-    /// read via <c>SelectedItem</c>/<c>Text</c>. The store dedups, so unchanged values are no-ops.</summary>
-    private void SetRibbonComboValue(string commandId, object? value, ComboBox backplaneBox)
+    /// <summary>Pushes a combo's display value into the neutral state store, which drives the rendered
+    /// ribbon combo's <c>Text</c> via the renderer's store binding. The store dedups, so unchanged
+    /// values are no-ops. There is no hidden backplane combo to mirror onto anymore.</summary>
+    private void SetRibbonComboValue(string commandId, object? value)
     {
         var text = value?.ToString() ?? string.Empty;
         _ribbonState.SetValue(commandId, text);
-        SetSelectedItemIfChanged(backplaneBox, value);
-    }
-
-    private static void SetSelectedItemIfChanged(ComboBox comboBox, object? value)
-    {
-        var textValue = value?.ToString() ?? string.Empty;
-        if (Equals(comboBox.SelectedItem, value) ||
-            string.Equals(comboBox.Text, textValue, StringComparison.Ordinal))
-            return;
-
-        if (comboBox.Items.Contains(value))
-        {
-            comboBox.SelectedItem = value;
-            return;
-        }
-
-        if (comboBox.IsEditable)
-            comboBox.Text = textValue;
     }
 
     private void ApplyStyleDiff(StyleDiff diff)
