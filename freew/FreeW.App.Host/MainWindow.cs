@@ -6,6 +6,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Shell;
 using Free.Shared.Ribbon.Wpf;
@@ -80,6 +81,7 @@ public sealed class MainWindow : Window
         Width = 1040;
         Height = 720;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Resources/FreeW.ico", UriKind.Absolute));
 
         // Custom window chrome: a single integrated title bar with embedded window buttons (like FreeX),
         // replacing the default OS caption + the separate blue command strip. WindowChrome lets the client
