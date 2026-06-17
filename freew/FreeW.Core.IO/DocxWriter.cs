@@ -55,6 +55,9 @@ public static class DocxWriter
         // Assign a relationship + part name to every inline chart the same way (charts are a separate XML
         // part referenced from the run drawing by r:id, mirroring how images add a media part + r:embed).
         var charts = CollectCharts(document);
+        // Assign four relationship ids + four part names to every inline SmartArt diagram the same way
+        // (a diagram is four separate XML parts referenced from the run drawing by dgm:relIds).
+        var smartArts = CollectSmartArts(document);
         // Assign an external relationship id to every distinct hyperlink target the same way.
         var hyperlinks = CollectHyperlinks(document);
         // Emit a numbering part only when at least one paragraph is decorated as a list.
@@ -84,13 +87,13 @@ public static class DocxWriter
         var hasSettings = hasProtection || document.Page.AutoHyphenation;
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, smartArts));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, hyperlinks, hasHeader, hasFooter));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasSettings, charts, smartArts));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, smartArts, hyperlinks, hasHeader, hasFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         if (hasSettings)
             WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page.AutoHyphenation));
@@ -110,6 +113,13 @@ public static class DocxWriter
             WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
         foreach (var chart in charts)
             WritePart(archive, "word/charts/" + chart.FileName, BuildChartSpace(chart.Chart));
+        foreach (var smartArt in smartArts)
+        {
+            WritePart(archive, "word/diagrams/" + smartArt.DataFileName, BuildDiagramData(smartArt.SmartArt));
+            WritePart(archive, "word/diagrams/" + smartArt.LayoutFileName, BuildDiagramLayout(smartArt.SmartArt.Kind));
+            WritePart(archive, "word/diagrams/" + smartArt.QuickStyleFileName, BuildDiagramQuickStyle());
+            WritePart(archive, "word/diagrams/" + smartArt.ColorsFileName, BuildDiagramColors());
+        }
     }
 
     /// <summary>An inline image paired with the relationship id, media file name and a unique drawing id.</summary>
@@ -132,6 +142,47 @@ public static class DocxWriter
                     charts.Add(new ChartPart(chart, $"rIdChart{index}", $"chart{index}.xml", (uint)index));
                 }
         return charts;
+    }
+
+    /// <summary>
+    /// An inline SmartArt diagram paired with its four document relationship ids and four part file names
+    /// (relative to <c>word/diagrams/</c>) plus a unique drawing id. The diagram is four separate XML parts
+    /// — data (the node text/structure), layout, quickStyle and colors — referenced together from the run
+    /// drawing's <c>dgm:relIds</c>. Mirrors <see cref="ChartPart"/>.
+    /// </summary>
+    private sealed record SmartArtPart(
+        SmartArt SmartArt,
+        string DataRelationshipId,
+        string LayoutRelationshipId,
+        string QuickStyleRelationshipId,
+        string ColorsRelationshipId,
+        string DataFileName,
+        string LayoutFileName,
+        string QuickStyleFileName,
+        string ColorsFileName,
+        uint DrawingId);
+
+    private static List<SmartArtPart> CollectSmartArts(TextDocument document)
+    {
+        var smartArts = new List<SmartArtPart>();
+        foreach (var paragraph in EnumerateParagraphs(document))
+            foreach (var run in paragraph.Runs)
+                if (run.SmartArt is { } smartArt)
+                {
+                    var index = smartArts.Count + 1;
+                    smartArts.Add(new SmartArtPart(
+                        smartArt,
+                        $"rIdDgmData{index}",
+                        $"rIdDgmLayout{index}",
+                        $"rIdDgmStyle{index}",
+                        $"rIdDgmColors{index}",
+                        $"data{index}.xml",
+                        $"layout{index}.xml",
+                        $"quickStyle{index}.xml",
+                        $"colors{index}.xml",
+                        (uint)index));
+                }
+        return smartArts;
     }
 
     private static List<ImagePart> CollectImages(TextDocument document)
@@ -187,7 +238,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, IReadOnlyList<SmartArtPart> smartArts) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -238,7 +289,23 @@ public static class DocxWriter
             // One Override per chart part declares the DrawingML chart content type.
             charts.Select(chart => new XElement(Ct + "Override",
                 new XAttribute("PartName", "/word/charts/" + chart.FileName),
-                new XAttribute("ContentType", ChartContentType)))));
+                new XAttribute("ContentType", ChartContentType))),
+            // Four Overrides per SmartArt diagram declare the data / layout / quickStyle / colors content types.
+            smartArts.SelectMany(s => new[]
+            {
+                new XElement(Ct + "Override",
+                    new XAttribute("PartName", "/word/diagrams/" + s.DataFileName),
+                    new XAttribute("ContentType", DiagramDataContentType)),
+                new XElement(Ct + "Override",
+                    new XAttribute("PartName", "/word/diagrams/" + s.LayoutFileName),
+                    new XAttribute("ContentType", DiagramLayoutContentType)),
+                new XElement(Ct + "Override",
+                    new XAttribute("PartName", "/word/diagrams/" + s.QuickStyleFileName),
+                    new XAttribute("ContentType", DiagramStyleContentType)),
+                new XElement(Ct + "Override",
+                    new XAttribute("PartName", "/word/diagrams/" + s.ColorsFileName),
+                    new XAttribute("ContentType", DiagramColorsContentType))
+            })));
 
     private static XDocument BuildPackageRels(bool hasWatermark) => new(
         new XElement(Rel + "Relationships",
@@ -317,7 +384,8 @@ public static class DocxWriter
         bool hasEndnotes,
         bool hasComments,
         bool hasSettings,
-        IReadOnlyList<ChartPart> charts)
+        IReadOnlyList<ChartPart> charts,
+        IReadOnlyList<SmartArtPart> smartArts)
     {
         var relationships = new XElement(Rel + "Relationships",
             new XElement(Rel + "Relationship",
@@ -369,6 +437,27 @@ public static class DocxWriter
                 new XAttribute("Id", chart.RelationshipId),
                 new XAttribute("Type", ChartRelType),
                 new XAttribute("Target", "charts/" + chart.FileName)));
+        // Each SmartArt diagram contributes four relationships (data / layout / quickStyle / colors), all
+        // referenced together by the inline drawing's dgm:relIds.
+        foreach (var s in smartArts)
+        {
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", s.DataRelationshipId),
+                new XAttribute("Type", DiagramDataRelType),
+                new XAttribute("Target", "diagrams/" + s.DataFileName)));
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", s.LayoutRelationshipId),
+                new XAttribute("Type", DiagramLayoutRelType),
+                new XAttribute("Target", "diagrams/" + s.LayoutFileName)));
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", s.QuickStyleRelationshipId),
+                new XAttribute("Type", DiagramStyleRelType),
+                new XAttribute("Target", "diagrams/" + s.QuickStyleFileName)));
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", s.ColorsRelationshipId),
+                new XAttribute("Type", DiagramColorsRelType),
+                new XAttribute("Target", "diagrams/" + s.ColorsFileName)));
+        }
         foreach (var (url, relationshipId) in hyperlinks)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", relationshipId),
@@ -382,6 +471,7 @@ public static class DocxWriter
         TextDocument document,
         IReadOnlyList<ImagePart> images,
         IReadOnlyList<ChartPart> charts,
+        IReadOnlyList<SmartArtPart> smartArts,
         IReadOnlyDictionary<string, string> hyperlinks,
         bool hasHeader,
         bool hasFooter)
@@ -397,8 +487,10 @@ public static class DocxWriter
         // CollectCharts used, so document.xml and the rels agree on which rId belongs to which run.
         var imagesByRun = new Dictionary<Run, ImagePart>();
         var chartsByRun = new Dictionary<Run, ChartPart>();
+        var smartArtsByRun = new Dictionary<Run, SmartArtPart>();
         var nextImage = 0;
         var nextChart = 0;
+        var nextSmartArt = 0;
         foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
             {
@@ -406,9 +498,11 @@ public static class DocxWriter
                     imagesByRun[run] = images[nextImage++];
                 if (run.Chart is not null)
                     chartsByRun[run] = charts[nextChart++];
+                if (run.SmartArt is not null)
+                    smartArtsByRun[run] = smartArts[nextSmartArt++];
             }
 
-        var drawings = new RunDrawings(imagesByRun, chartsByRun);
+        var drawings = new RunDrawings(imagesByRun, chartsByRun, smartArtsByRun);
 
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
@@ -427,6 +521,8 @@ public static class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "wps", Wps.NamespaceName),
+                // dgm carries the SmartArt diagram reference (w:drawing/.../a:graphicData/dgm:relIds).
+                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
                 body));
     }
 
@@ -437,11 +533,13 @@ public static class DocxWriter
     /// </summary>
     private sealed record RunDrawings(
         IReadOnlyDictionary<Run, ImagePart> Images,
-        IReadOnlyDictionary<Run, ChartPart> Charts)
+        IReadOnlyDictionary<Run, ChartPart> Charts,
+        IReadOnlyDictionary<Run, SmartArtPart> SmartArts)
     {
         public static readonly RunDrawings None = new(
             new Dictionary<Run, ImagePart>(),
-            new Dictionary<Run, ChartPart>());
+            new Dictionary<Run, ChartPart>(),
+            new Dictionary<Run, SmartArtPart>());
     }
 
     /// <summary>Builds a header (w:hdr) or footer (w:ftr) part from its model paragraphs.</summary>
@@ -1172,6 +1270,8 @@ public static class DocxWriter
             r.Add(BuildDrawing(imagePart));
         else if (run.Chart is not null && drawings.Charts.TryGetValue(run, out var chartPart))
             r.Add(BuildChartDrawing(chartPart));
+        else if (run.SmartArt is not null && drawings.SmartArts.TryGetValue(run, out var smartArtPart))
+            r.Add(BuildSmartArtDrawing(smartArtPart));
         else
         {
             // A tracked deletion stores its text in w:delText (so Word renders it as deleted content);
@@ -1567,6 +1667,163 @@ public static class DocxWriter
                             new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
                             new XAttribute(R + "id", part.RelationshipId))))));
     }
+
+    /// <summary>
+    /// Builds the inline w:drawing for a SmartArt diagram: an a:graphicData[uri=diagram] whose body is a
+    /// dgm:relIds carrying the four relationship ids (r:dm=data, r:lo=layout, r:qs=quickStyle, r:cs=colors).
+    /// Mirrors <see cref="BuildChartDrawing"/> but references four parts instead of one.
+    /// </summary>
+    private static XElement BuildSmartArtDrawing(SmartArtPart part)
+    {
+        var cx = PointsToEmu(part.SmartArt.WidthPt);
+        var cy = PointsToEmu(part.SmartArt.HeightPt);
+        var name = $"Diagram {part.DrawingId}";
+
+        return new XElement(W + "drawing",
+            new XElement(Wp + "inline",
+                new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                new XAttribute("distT", 0), new XAttribute("distB", 0),
+                new XAttribute("distL", 0), new XAttribute("distR", 0),
+                new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(Wp + "effectExtent",
+                    new XAttribute("l", 0), new XAttribute("t", 0),
+                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", name)),
+                new XElement(A + "graphic",
+                    new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                    new XElement(A + "graphicData",
+                        new XAttribute("uri", DiagramGraphicDataUri),
+                        new XElement(Dgm + "relIds",
+                            new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                            new XAttribute(R + "dm", part.DataRelationshipId),
+                            new XAttribute(R + "lo", part.LayoutRelationshipId),
+                            new XAttribute(R + "qs", part.QuickStyleRelationshipId),
+                            new XAttribute(R + "cs", part.ColorsRelationshipId))))));
+    }
+
+    /// <summary>
+    /// Builds the SmartArt DATA part (word/diagrams/dataN.xml — dgm:dataModel). This is the only diagram
+    /// part with real content: a dgm:ptLst holding one document point (type="doc") and one node point per
+    /// model node (each carrying its text in a dgm:t/a:p/a:r/a:t body), plus a dgm:cxnLst whose parOf
+    /// connections record the parent→child structure (used to recover the Hierarchy tree on read). Node ids
+    /// are deterministic ("node0", "node1", …) in a stable pre-order walk so write/read agree.
+    /// SIMPLIFICATION (Y1): no presentation-layer points (type="pres") or dsp:dataModelExt rendered geometry
+    /// are emitted — Word re-runs auto-layout on open. The node text + structure here is the round-trip unit.
+    /// </summary>
+    private static XDocument BuildDiagramData(SmartArt smartArt)
+    {
+        const string docId = "doc0";
+        var ptLst = new XElement(Dgm + "ptLst",
+            new XElement(Dgm + "pt",
+                new XAttribute("modelId", docId),
+                new XAttribute("type", "doc")));
+        var cxnLst = new XElement(Dgm + "cxnLst");
+
+        var nextId = 0;
+        var nextCxn = 0;
+        // Pre-order walk: emit a node point + a parOf connection from its parent, then recurse children.
+        void Emit(SmartArtNode node, string parentId)
+        {
+            var id = $"node{nextId++}";
+            ptLst.Add(new XElement(Dgm + "pt",
+                new XAttribute("modelId", id),
+                new XElement(Dgm + "t",
+                    new XElement(A + "bodyPr"),
+                    new XElement(A + "lstStyle"),
+                    new XElement(A + "p",
+                        new XElement(A + "r",
+                            new XElement(A + "t", node.Text))))));
+            cxnLst.Add(new XElement(Dgm + "cxn",
+                new XAttribute("modelId", $"cxn{nextCxn++}"),
+                new XAttribute("type", "parOf"),
+                new XAttribute("srcId", parentId),
+                new XAttribute("destId", id)));
+            foreach (var child in node.Children)
+                Emit(child, id);
+        }
+
+        foreach (var node in smartArt.Nodes)
+            Emit(node, docId);
+
+        return new XDocument(
+            new XElement(Dgm + "dataModel",
+                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                ptLst,
+                cxnLst,
+                new XElement(Dgm + "bg"),
+                new XElement(Dgm + "whole")));
+    }
+
+    /// <summary>
+    /// Builds a minimal-but-valid SmartArt LAYOUT part (word/diagrams/layoutN.xml — dgm:layoutDef). The
+    /// uniqueId records which stock layout the diagram intends (list / process / hierarchy); the layout body
+    /// is intentionally near-empty (Word substitutes the built-in layout for the known uniqueId). The node
+    /// text never lives here, so an empty layout does not lose data.
+    /// </summary>
+    private static XDocument BuildDiagramLayout(SmartArtKind kind)
+    {
+        var uniqueId = kind switch
+        {
+            SmartArtKind.Process => "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+            SmartArtKind.Hierarchy => "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
+            _ => "urn:microsoft.com/office/officeart/2005/8/layout/list1"
+        };
+        return new XDocument(
+            new XElement(Dgm + "layoutDef",
+                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute("uniqueId", uniqueId),
+                new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
+                new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
+                new XElement(Dgm + "catLst"),
+                new XElement(Dgm + "sampData"),
+                new XElement(Dgm + "styleData"),
+                new XElement(Dgm + "clrData"),
+                new XElement(Dgm + "layoutNode",
+                    new XAttribute("name", "diagram"))));
+    }
+
+    /// <summary>
+    /// Builds a minimal-but-valid SmartArt QUICKSTYLE part (word/diagrams/quickStyleN.xml — dgm:styleDef).
+    /// Stock/near-empty: carries no node data, so an empty style does not lose round-trip content.
+    /// </summary>
+    private static XDocument BuildDiagramQuickStyle() => new(
+        new XElement(Dgm + "styleDef",
+            new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XAttribute("uniqueId", "urn:microsoft.com/office/officeart/2005/8/quickstyle/simple1"),
+            new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
+            new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
+            new XElement(Dgm + "catLst"),
+            new XElement(Dgm + "scene3d",
+                new XElement(A + "camera", new XAttribute("prst", "orthographicFront")),
+                new XElement(A + "lightRig", new XAttribute("rig", "threePt"), new XAttribute("dir", "t"))),
+            new XElement(Dgm + "style")));
+
+    /// <summary>
+    /// Builds a minimal-but-valid SmartArt COLORS part (word/diagrams/colorsN.xml — dgm:colorsDef).
+    /// Stock/near-empty: carries no node data, so an empty colour set does not lose round-trip content.
+    /// </summary>
+    private static XDocument BuildDiagramColors() => new(
+        new XElement(Dgm + "colorsDef",
+            new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XAttribute("uniqueId", "urn:microsoft.com/office/officeart/2005/8/colors/accent0_1"),
+            new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
+            new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
+            new XElement(Dgm + "catLst"),
+            new XElement(Dgm + "styleLbl", new XAttribute("name", "node0"),
+                new XElement(Dgm + "fillClrLst", new XAttribute("meth", "repeat"),
+                    new XElement(A + "schemeClr", new XAttribute("val", "accent1"))),
+                new XElement(Dgm + "linClrLst", new XAttribute("meth", "repeat"),
+                    new XElement(A + "schemeClr", new XAttribute("val", "accent1"))),
+                new XElement(Dgm + "txFillClrLst", new XAttribute("meth", "repeat"),
+                    new XElement(A + "schemeClr", new XAttribute("val", "lt1"))),
+                new XElement(Dgm + "txLinClrLst", new XAttribute("meth", "repeat"),
+                    new XElement(A + "schemeClr", new XAttribute("val", "lt1"))))));
 
     /// <summary>
     /// Builds a self-contained DrawingML chart part (c:chartSpace) for <paramref name="chart"/>. Emits one

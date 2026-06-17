@@ -48,6 +48,28 @@ internal static class Ooxml
     /// <summary>The a:graphicData/@uri that marks a DrawingML graphic frame as a chart.</summary>
     public const string ChartGraphicDataUri = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
+    /// <summary>
+    /// The DrawingML diagram namespace (dgm / "diagram"), used by the SmartArt data/layout/quickStyle/colors
+    /// parts (dgm:dataModel / dgm:ptLst / dgm:pt / dgm:t / …) and the dgm:relIds element that references the
+    /// four diagram parts from the inline w:drawing.
+    /// </summary>
+    public static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+
+    // The four SmartArt diagram parts each have their own content type + relationship type. The data part
+    // carries the dgm:dataModel (node text + structure); layout/quickStyle/colors are stock-but-valid.
+    public const string DiagramDataContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml";
+    public const string DiagramLayoutContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml";
+    public const string DiagramStyleContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml";
+    public const string DiagramColorsContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml";
+
+    public const string DiagramDataRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
+    public const string DiagramLayoutRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout";
+    public const string DiagramStyleRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle";
+    public const string DiagramColorsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
+
+    /// <summary>The a:graphicData/@uri that marks a DrawingML graphic frame as a SmartArt diagram.</summary>
+    public const string DiagramGraphicDataUri = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+
     // OPC core properties (docProps/core.xml): Dublin Core + the cp / dcterms / xsi vocabularies.
     public static readonly XNamespace Cp = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
     public static readonly XNamespace Dc = "http://purl.org/dc/elements/1.1/";
