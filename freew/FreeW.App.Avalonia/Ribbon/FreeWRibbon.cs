@@ -45,6 +45,13 @@ internal static class FreeWRibbon
                     g.Button("freew.align-center", "Center");
                     g.Button("freew.align-right", "Right");
                 });
+                tab.Group("styles", "Styles", null, 75, g =>
+                {
+                    g.Button("freew.style-normal", "Normal");
+                    g.Button("freew.style-heading1", "Heading 1");
+                    g.Button("freew.style-heading2", "Heading 2");
+                    g.Button("freew.style-title", "Title");
+                });
                 tab.Group("editing", "Editing", null, 70, g =>
                 {
                     g.Button("freew.undo", "Undo");
@@ -67,6 +74,10 @@ internal static class FreeWRibbon
         registry.Register("freew.align-right", new RelayCommand(() => editor.SetAlignment(TextAlignment.Right)));
         registry.Register("freew.undo", new RelayCommand(editor.Undo));
         registry.Register("freew.redo", new RelayCommand(editor.Redo));
+        registry.Register("freew.style-normal", new RelayCommand(() => editor.ApplyQuickStyle(11, bold: false)));
+        registry.Register("freew.style-heading1", new RelayCommand(() => editor.ApplyQuickStyle(16, bold: true)));
+        registry.Register("freew.style-heading2", new RelayCommand(() => editor.ApplyQuickStyle(14, bold: true)));
+        registry.Register("freew.style-title", new RelayCommand(() => editor.ApplyQuickStyle(24, bold: true)));
         registry.Register("freew.font-size", new RelayValueCommand(value =>
         {
             if (double.TryParse(value, out var points) && points > 0)
