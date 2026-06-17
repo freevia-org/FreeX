@@ -11,8 +11,6 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     private readonly System.Windows.Controls.StackPanel HomeRibbonPanel = new();
-    private readonly System.Windows.Controls.MenuItem PictureFormatCropMenuItem = new();
-    private readonly System.Windows.Controls.MenuItem PictureFormatResetCropMenuItem = new();
 
     /// <summary>Backplane controls that carry a ribbon CommandName, keyed by it.</summary>
     private readonly Dictionary<string, Control> RibbonBackplaneControls = new(System.StringComparer.Ordinal);
@@ -87,13 +85,7 @@ public partial class MainWindow
         RibbonBackplaneControlNames["Shape Gradient"] = "ShapeFormatGradientButton";
         RibbonBackplaneControlNames["Shape Effects"] = "ShapeFormatEffectsButton";
         RibbonBackplaneControlNames["Crop Picture"] = "PictureFormatCropButton";
-        try { RegisterName("PictureFormatCropMenuItem", PictureFormatCropMenuItem); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(PictureFormatCropMenuItem, "Crop");
-        RibbonBackplaneControls["Crop"] = PictureFormatCropMenuItem;
         RibbonBackplaneControlNames["Crop"] = "PictureFormatCropMenuItem";
-        try { RegisterName("PictureFormatResetCropMenuItem", PictureFormatResetCropMenuItem); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(PictureFormatResetCropMenuItem, "Reset Crop");
-        RibbonBackplaneControls["Reset Crop"] = PictureFormatResetCropMenuItem;
         RibbonBackplaneControlNames["Reset Crop"] = "PictureFormatResetCropMenuItem";
         RibbonBackplaneControlNames["Total Row"] = "TableDesignTotalRowBtn";
         RibbonBackplaneControlNames["First Column"] = "TableDesignFirstColumnBtn";
