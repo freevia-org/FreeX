@@ -54,6 +54,7 @@ public static class DocxReader
 
         ReadHeaderFooter(documentXml, archive, document, imageRelationships, hyperlinkRelationships);
         ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
+        ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, imageRelationships, hyperlinkRelationships);
         ReadSettings(archive, document);
 
@@ -178,6 +179,41 @@ public static class DocxReader
     }
 
     /// <summary>
+    /// Loads word/endnotes.xml (if present) into <see cref="TextDocument.Endnotes"/>, reconstructing
+    /// each w:endnote's paragraphs. The conventional separator endnotes (type separator /
+    /// continuationSeparator, ids -1 and 0) are skipped — only real content endnotes are kept. Mirrors
+    /// <see cref="ReadFootnotes"/>.
+    /// </summary>
+    private static void ReadEndnotes(
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+    {
+        var endnotesXml = LoadPart(archive, "word/endnotes.xml");
+        var root = endnotesXml?.Root;
+        if (root is null)
+            return;
+
+        var noNumbering = new Dictionary<int, ListKind>();
+        foreach (var element in root.Elements(W + "endnote"))
+        {
+            var type = element.Attribute(W + "type")?.Value;
+            if (type is "separator" or "continuationSeparator")
+                continue;
+            if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
+                continue;
+
+            var endnote = new Endnote(id);
+            foreach (var p in element.Elements(W + "p"))
+                endnote.Content.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+            if (endnote.Content.Count == 0)
+                endnote.Content.Add(new Paragraph());
+            document.Endnotes[id] = endnote;
+        }
+    }
+
+    /// <summary>
     /// Resolves the default header/footer references in w:sectPr (r:id → document rels → part path),
     /// loads those parts (w:hdr / w:ftr) and reconstructs <see cref="TextDocument.Header"/> / Footer.
     /// </summary>
@@ -205,6 +241,9 @@ public static class DocxReader
 
         // Page border (w:pgBorders) lives in the same w:sectPr; recover it into PageSettings.PageBorder.
         document.Page.PageBorder = ReadPageBorder(sectPr.Element(W + "pgBorders"));
+
+        // Line numbering (w:lnNumType) lives in the same w:sectPr; recover the mode + interval.
+        ReadLineNumbering(sectPr.Element(W + "lnNumType"), document.Page);
 
         var partsById = ReadHeaderFooterRelationships(archive);
 
@@ -476,6 +515,16 @@ public static class DocxReader
             return;
         }
 
+        // A run wrapping a w:endnoteReference is an endnote marker; recover its id into the model.
+        var endnoteRef = r.Element(W + "endnoteReference");
+        if (endnoteRef is not null && int.TryParse(endnoteRef.Attribute(W + "id")?.Value, out var endnoteId))
+        {
+            var endnoteRun = Run.EndnoteReference(endnoteId, ReadRunFormatting(r.Element(W + "rPr")));
+            ApplyRevision(endnoteRun);
+            paragraph.Runs.Add(endnoteRun);
+            return;
+        }
+
         // A tracked deletion stores its text in w:delText; ordinary/inserted runs use w:t.
         var text = string.Concat(r.Elements(W + "t").Select(t => t.Value))
             + string.Concat(r.Elements(W + "delText").Select(t => t.Value));
@@ -740,6 +789,24 @@ public static class DocxReader
         return new PageBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
             width > 0 ? width : 1.0);
+    }
+
+    /// <summary>
+    /// Reads line numbering (w:lnNumType) into <paramref name="page"/>. Absent leaves the default
+    /// (<see cref="LineNumberMode.None"/>). @w:restart="newPage" maps to RestartEachPage; anything else
+    /// (including the default "continuous") maps to Continuous. @w:countBy sets the interval (min 1).
+    /// </summary>
+    private static void ReadLineNumbering(XElement? lnNumType, PageSettings page)
+    {
+        if (lnNumType is null)
+            return;
+
+        page.LineNumberMode = lnNumType.Attribute(W + "restart")?.Value == "newPage"
+            ? LineNumberMode.RestartEachPage
+            : LineNumberMode.Continuous;
+
+        if (int.TryParse(lnNumType.Attribute(W + "countBy")?.Value, out var countBy) && countBy >= 1)
+            page.LineNumberCountBy = countBy;
     }
 
     /// <summary>

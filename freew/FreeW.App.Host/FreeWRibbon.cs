@@ -59,6 +59,9 @@ internal static class FreeWRibbon
                     });
                     g.Button("freew.space-before-toggle", "Space Before");
                     g.Button("freew.space-after-toggle", "Space After");
+                    g.Button("freew.indent-increase", "Increase Indent");
+                    g.Button("freew.indent-decrease", "Decrease Indent");
+                    g.Button("freew.paragraph-dialog", "Paragraph…");
                     g.Button("freew.para-border", "Border");
                     g.Button("freew.para-shading", "Shading");
                 });
@@ -113,12 +116,15 @@ internal static class FreeWRibbon
                 tab.Group("references", "References", "R", 65, g =>
                 {
                     g.Button("freew.footnote", "Footnote");
+                    g.Button("freew.endnote", "Endnote");
                     g.Button("freew.toc", "Table of Contents");
                     g.Button("freew.toc-refresh", "Update TOC");
                     g.Button("freew.citation", "Citation");
                     g.Button("freew.bibliography", "Bibliography");
                     g.Button("freew.caption", "Caption");
                     g.Button("freew.cross-reference", "Cross-reference");
+                    g.Button("freew.index-mark", "Mark Entry");
+                    g.Button("freew.index-insert", "Insert Index");
                 });
                 tab.Group("controls", "Controls", "O", 62, g =>
                 {
@@ -145,6 +151,7 @@ internal static class FreeWRibbon
                     g.Button("freew.orientation", "Orientation");
                     g.Button("freew.size", "Size");
                     g.Button("freew.columns", "Columns");
+                    g.Button("freew.line-numbers", "Line Numbers");
                 });
                 tab.Group("page-background", "Page Background", "B", 95, g =>
                 {

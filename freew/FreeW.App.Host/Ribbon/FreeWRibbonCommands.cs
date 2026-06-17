@@ -128,6 +128,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
         // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
         registry.Register("freew.footnote", new InsertFootnoteCommand(editor));
+        // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.
+        registry.Register("freew.endnote", new InsertEndnoteCommand(editor));
         // Insert tab — References: generate a Table of Contents from the heading outline at the caret,
         // and rebuild it in place (remove the prior TOC region + re-insert). Both route through the bus.
         registry.Register("freew.toc", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));
@@ -140,6 +142,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.caption", new InsertCaptionCommand(editor));
         // Insert tab — References: insert a cross-reference (heading/bookmark/caption/footnote) at the caret.
         registry.Register("freew.cross-reference", new InsertCrossReferenceCommand(editor));
+        // Insert tab — References: mark the selection (or a prompted term) for the document index, and
+        // insert an alphabetical index built from the marked terms at the caret (reversibly via the bus).
+        registry.Register("freew.index-mark", new MarkIndexEntryCommand(editor));
+        registry.Register("freew.index-insert", new ActionCommand(() => { editor.Focus(); editor.InsertIndex(); }));
         // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
         registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
@@ -213,6 +219,12 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.space-before-toggle", new ActionCommand(() => editor.ToggleSpaceBefore()));
         registry.Register("freew.space-after-toggle", new ActionCommand(() => editor.ToggleSpaceAfter()));
 
+        // Home > Paragraph: increase/decrease the left indent by one 0.5in step over the selection, and
+        // open the Paragraph dialog to set left/right/first-line (incl. hanging) indents. All reversible.
+        registry.Register("freew.indent-increase", new ActionCommand(() => { editor.Focus(); editor.IncreaseIndent(); }));
+        registry.Register("freew.indent-decrease", new ActionCommand(() => { editor.Focus(); editor.DecreaseIndent(); }));
+        registry.Register("freew.paragraph-dialog", new ParagraphIndentCommand(editor));
+
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
         registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
         registry.Register("freew.para-shading", new ParagraphShadingCommand(editor));
@@ -258,6 +270,8 @@ internal static class FreeWRibbonCommands
         }));
         // Columns: cycle 1 -> 2 -> 3 -> 1 equal-width columns, re-rendering so the layout shows at once.
         registry.Register("freew.columns", new ColumnCountCommand(editor));
+        // Line Numbers: cycle None -> Continuous -> RestartEachPage -> None (shown in print preview).
+        registry.Register("freew.line-numbers", new LineNumberCommand(editor));
 
         // Layout tab — Page Background: toggle a whole-page border (w:pgBorders) and set/clear the
         // page watermark. Both mutate PageSettings via ApplyPageSettings (commit + re-render) and
@@ -402,6 +416,23 @@ internal static class FreeWRibbonCommands
             {
                 editor.Focus();
                 editor.SetLineSpacing(multiplier);
+            }
+        }
+    }
+
+    // Home > Paragraph > Paragraph…: open the indent dialog seeded with the first selected paragraph's
+    // current left/right/first-line indents, and apply the chosen values to every selected paragraph
+    // through the view (reversible via the bus). A negative first-line value is a hanging indent.
+    private sealed class ParagraphIndentCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var (left, right, firstLine) = editor.CurrentParagraphIndents();
+            if (ParagraphIndentDialog.Prompt(Window.GetWindow(editor), left, right, firstLine) is { } chosen)
+            {
+                editor.Focus();
+                editor.SetParagraphIndents(chosen.Left, chosen.Right, chosen.FirstLine);
             }
         }
     }
@@ -713,6 +744,20 @@ internal static class FreeWRibbonCommands
             editor.ApplyPageSettings(page => page.ColumnCount = page.ColumnCount >= 3 ? 1 : page.ColumnCount + 1);
     }
 
+    // Cycles page line numbering None -> Continuous -> RestartEachPage -> None. Routes through
+    // ApplyPageSettings so the editor commits pending edits, mutates PageSettings, and re-renders;
+    // the numbers themselves surface in the print preview / print output.
+    private sealed class LineNumberCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.LineNumberMode = page.LineNumberMode switch
+            {
+                LineNumberMode.None => LineNumberMode.Continuous,
+                LineNumberMode.Continuous => LineNumberMode.RestartEachPage,
+                _ => LineNumberMode.None
+            });
+    }
+
     // Inserts a table at the caret. Delegates to the view, which routes through the undo/redo bus.
     private sealed class InsertTableCommand(DocumentView editor, int rows, int columns) : IRibbonCommand
     {
@@ -849,6 +894,21 @@ internal static class FreeWRibbonCommands
                 return; // cancelled or empty — nothing to anchor a footnote to
             editor.Focus();
             editor.InsertFootnote(text.Trim());
+        }
+    }
+
+    // Insert > References > Endnote: prompt for the endnote text, then insert an endnote reference
+    // at the caret. The view allocates the next id, stores the content and drops a superscript marker.
+    private sealed class InsertEndnoteCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var text = TextPrompt.Ask(Window.GetWindow(editor), "Insert Endnote", "Endnote text:", string.Empty);
+            if (string.IsNullOrWhiteSpace(text))
+                return; // cancelled or empty — nothing to anchor an endnote to
+            editor.Focus();
+            editor.InsertEndnote(text.Trim());
         }
     }
 
@@ -1222,6 +1282,23 @@ internal static class FreeWRibbonCommands
                 editor.InsertInternalLink(text, pick.Value.Anchor!);
             else
                 editor.InsertText(text);
+        }
+    }
+
+    // Insert > References > Mark Entry: mark a term for the document index. Seeds from the current
+    // selection's text (the usual "select then mark" gesture) and lets the user confirm or edit the term;
+    // with no selection the prompt starts blank. The view appends the term to the model's index entries
+    // (ignoring blanks/duplicates). The matching index is built later by Insert Index.
+    private sealed class MarkIndexEntryCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var seed = editor.Selection.Text?.Trim() ?? string.Empty;
+            var term = TextPrompt.Ask(Window.GetWindow(editor), "Mark Index Entry", "Index term:", seed);
+            if (string.IsNullOrWhiteSpace(term))
+                return; // cancelled or empty — nothing to mark
+            editor.MarkIndexEntry(term.Trim());
         }
     }
 

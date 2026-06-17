@@ -56,6 +56,14 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public int? FootnoteId { get; set; }
 
     /// <summary>
+    /// When set, this run is an endnote reference marker pointing at the endnote with this id in
+    /// <see cref="TextDocument.Endnotes"/>. It carries no literal text of its own; the marker number
+    /// is the id. Serialises as a superscript run wrapping a w:endnoteReference w:id="N". Mirrors
+    /// <see cref="FootnoteId"/> but collected at the document end (word/endnotes.xml).
+    /// </summary>
+    public int? EndnoteId { get; set; }
+
+    /// <summary>
     /// When set, this run is covered by the review comment with this id in
     /// <see cref="TextDocument.Comments"/>. The covered span serialises with a w:commentRangeStart /
     /// w:commentRangeEnd pair bracketing the run(s), and a trailing reference run (see
@@ -119,6 +127,18 @@ public sealed class Run(string text, RunFormatting? formatting = null)
             formatting ?? new RunFormatting { VerticalAlign = VerticalAlign.Superscript })
         {
             FootnoteId = footnoteId
+        };
+
+    /// <summary>
+    /// Creates an endnote-reference run for the endnote with id <paramref name="endnoteId"/>. The
+    /// run renders as a superscript marker; its <see cref="Text"/> mirrors the id for field-unaware
+    /// consumers. The matching content lives in <see cref="TextDocument.Endnotes"/>.
+    /// </summary>
+    public static Run EndnoteReference(int endnoteId, RunFormatting? formatting = null) =>
+        new(endnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            formatting ?? new RunFormatting { VerticalAlign = VerticalAlign.Superscript })
+        {
+            EndnoteId = endnoteId
         };
 
     /// <summary>
@@ -195,6 +215,21 @@ public sealed class Footnote(int id)
 }
 
 /// <summary>
+/// A single endnote: an id (matching a body <see cref="Run.EndnoteId"/>) and its block content,
+/// a list of paragraphs. Maps onto a w:endnote element inside word/endnotes.xml. Mirrors
+/// <see cref="Footnote"/> but collected at the document end.
+/// </summary>
+public sealed class Endnote(int id)
+{
+    public int Id { get; } = id;
+    public List<Paragraph> Content { get; } = [];
+
+    public Endnote(int id, string text) : this(id) => Content.Add(new Paragraph(text));
+
+    public string PlainText => string.Join("\n", Content.Select(p => p.PlainText));
+}
+
+/// <summary>
 /// A single review comment: an id (matching the body runs' <see cref="Run.CommentId"/>), an author
 /// and initials, an optional explicit date, and the comment's block content as a list of paragraphs.
 /// Maps onto a w:comment element inside word/comments.xml. The date is an explicit model value (never
@@ -251,6 +286,21 @@ public sealed class Source
 
     /// <summary>The publisher of the work, or null when unknown / not applicable.</summary>
     public string? Publisher { get; init; }
+}
+
+/// <summary>
+/// A marked index entry: a single term the document wants to list in its generated index (see
+/// <see cref="DocumentIndex"/>). Kept deliberately small (just the <see cref="Term"/>) and as a model
+/// side-store on <see cref="TextDocument.IndexEntries"/> rather than a run-level mark, so marking text
+/// for the index never disturbs run storage and needs no docx I/O changes — the generated index is
+/// ordinary styled paragraphs that already round-trip.
+/// </summary>
+public sealed class IndexEntry
+{
+    /// <summary>The term to list in the index. Trimmed of surrounding whitespace at construction.</summary>
+    public string Term { get; }
+
+    public IndexEntry(string term) => Term = (term ?? string.Empty).Trim();
 }
 
 /// <summary>
@@ -470,6 +520,19 @@ public sealed class HeaderFooter
 /// </summary>
 public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.0);
 
+/// <summary>
+/// How (and whether) lines are numbered in the page margin (w:sectPr/w:lnNumType).
+/// <see cref="None"/> emits no w:lnNumType (the default — existing documents are unaffected);
+/// <see cref="Continuous"/> numbers lines continuously across pages (w:restart="continuous");
+/// <see cref="RestartEachPage"/> restarts numbering at 1 on every page (w:restart="newPage").
+/// </summary>
+public enum LineNumberMode
+{
+    None,
+    Continuous,
+    RestartEachPage
+}
+
 /// <summary>Page geometry for a section (points; US Letter with 1in margins by default).</summary>
 public sealed class PageSettings
 {
@@ -506,6 +569,21 @@ public sealed class PageSettings
     /// and rendered as an editor/preview visual. Nullable so existing documents are unaffected.
     /// </summary>
     public string? Watermark { get; set; }
+
+    /// <summary>
+    /// Line-numbering mode shown in the left page margin (w:sectPr/w:lnNumType). Defaults to
+    /// <see cref="LineNumberMode.None"/> so existing documents round-trip unchanged — no w:lnNumType
+    /// is emitted. When not None the writer emits w:lnNumType with the matching w:restart, and the
+    /// print preview draws line numbers in the margin.
+    /// </summary>
+    public LineNumberMode LineNumberMode { get; set; } = LineNumberMode.None;
+
+    /// <summary>
+    /// The interval at which line numbers are shown (w:lnNumType/@w:countBy): every Nth line is
+    /// numbered. Defaults to 1 (every line). Only meaningful when <see cref="LineNumberMode"/> is not
+    /// <see cref="LineNumberMode.None"/>. Always at least 1.
+    /// </summary>
+    public int LineNumberCountBy { get; set; } = 1;
 }
 
 /// <summary>
@@ -556,6 +634,16 @@ public sealed class TextDocument
     public int NextFootnoteId() => Footnotes.Count == 0 ? 1 : Math.Max(0, Footnotes.Keys.Max()) + 1;
 
     /// <summary>
+    /// The document's endnotes, keyed by endnote id (matching <see cref="Run.EndnoteId"/> on the
+    /// body reference runs). Maps to word/endnotes.xml (w:endnotes / w:endnote w:id="N"). Empty
+    /// when the document has no endnotes, in which case no endnotes part is emitted.
+    /// </summary>
+    public Dictionary<int, Endnote> Endnotes { get; } = [];
+
+    /// <summary>The next unused endnote id (1-based; ignores the reserved separator ids -1 and 0).</summary>
+    public int NextEndnoteId() => Endnotes.Count == 0 ? 1 : Math.Max(0, Endnotes.Keys.Max()) + 1;
+
+    /// <summary>
     /// The document's review comments, keyed by comment id (matching the body runs' <see cref="Run.CommentId"/>).
     /// Maps to word/comments.xml (w:comments / w:comment w:id="N"). Empty when the document has no
     /// comments, in which case no comments part is emitted.
@@ -572,6 +660,14 @@ public sealed class TextDocument
     /// in-text citations and the bibliography are ordinary text/paragraphs that already round-trip.
     /// </summary>
     public List<Source> Sources { get; } = [];
+
+    /// <summary>
+    /// The terms marked for the document index, in mark order. <see cref="DocumentIndex.Build(TextDocument)"/>
+    /// renders the distinct, alphabetically sorted terms as ordinary styled paragraphs. Like
+    /// <see cref="Sources"/> these are pure model data (no docx part of their own) — the generated index is
+    /// ordinary styled paragraphs that already round-trip. Empty when nothing has been marked.
+    /// </summary>
+    public List<IndexEntry> IndexEntries { get; } = [];
 
     /// <summary>The body's paragraphs (top-level only; table cell paragraphs are not included).</summary>
     public IEnumerable<Paragraph> Paragraphs => Blocks.OfType<Paragraph>();
@@ -652,5 +748,7 @@ public sealed class TextDocument
         };
         // The built-in figure/table caption style (round-trips via styles.xml like the others).
         Styles[Captions.StyleId] = Captions.BuildCaptionStyle();
+        // The built-in index heading/entry styles used by DocumentIndex (round-trip via styles.xml).
+        DocumentIndex.EnsureStyles(this);
     }
 }

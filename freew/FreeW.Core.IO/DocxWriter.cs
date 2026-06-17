@@ -26,6 +26,7 @@ public static class DocxWriter
     private const string HeaderRelationshipId = "rIdHeader1";
     private const string FooterRelationshipId = "rIdFooter1";
     private const string FootnotesRelationshipId = "rIdFootnotes";
+    private const string EndnotesRelationshipId = "rIdEndnotes";
     private const string CommentsRelationshipId = "rIdComments";
     private const string SettingsRelationshipId = "rIdSettings";
     private const string HeaderPartName = "word/header1.xml";
@@ -61,6 +62,9 @@ public static class DocxWriter
         // A footnotes part is emitted only when the document actually carries footnotes.
         var hasFootnotes = document.Footnotes.Count > 0;
 
+        // An endnotes part is emitted only when the document actually carries endnotes.
+        var hasEndnotes = document.Endnotes.Count > 0;
+
         // A comments part is emitted only when the document actually carries review comments.
         var hasComments = document.Comments.Count > 0;
 
@@ -73,12 +77,12 @@ public static class DocxWriter
         var hasProtection = document.Protection.IsProtected;
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments, hasWatermark, hasProtection));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(images.Count > 0, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasProtection));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Page.Watermark!));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasComments, hasProtection));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, hasLists, hasHeader, hasFooter, hasFootnotes, hasEndnotes, hasComments, hasProtection));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, hyperlinks, hasHeader, hasFooter));
         WritePart(archive, "word/styles.xml", BuildStyles(document));
         if (hasProtection)
@@ -91,6 +95,8 @@ public static class DocxWriter
             WritePart(archive, FooterPartName, BuildHeaderFooter(W + "ftr", document.Footer!));
         if (hasFootnotes)
             WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document));
+        if (hasEndnotes)
+            WritePart(archive, EndnotesPartName.TrimStart('/'), BuildEndnotes(document));
         if (hasComments)
             WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document));
         foreach (var image in images)
@@ -153,7 +159,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasComments, bool hasWatermark, bool hasProtection) => new(
+    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, bool hasHeader, bool hasFooter, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasProtection) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -182,6 +188,10 @@ public static class DocxWriter
             hasFootnotes
                 ? new XElement(Ct + "Override", new XAttribute("PartName", FootnotesPartName),
                     new XAttribute("ContentType", FootnotesContentType))
+                : null,
+            hasEndnotes
+                ? new XElement(Ct + "Override", new XAttribute("PartName", EndnotesPartName),
+                    new XAttribute("ContentType", EndnotesContentType))
                 : null,
             hasComments
                 ? new XElement(Ct + "Override", new XAttribute("PartName", CommentsPartName),
@@ -272,6 +282,7 @@ public static class DocxWriter
         bool hasHeader,
         bool hasFooter,
         bool hasFootnotes,
+        bool hasEndnotes,
         bool hasComments,
         bool hasProtection)
     {
@@ -305,6 +316,11 @@ public static class DocxWriter
                 new XAttribute("Id", FootnotesRelationshipId),
                 new XAttribute("Type", FootnotesRelType),
                 new XAttribute("Target", "footnotes.xml")));
+        if (hasEndnotes)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", EndnotesRelationshipId),
+                new XAttribute("Type", EndnotesRelType),
+                new XAttribute("Target", "endnotes.xml")));
         if (hasComments)
             relationships.Add(new XElement(Rel + "Relationship",
                 new XAttribute("Id", CommentsRelationshipId),
@@ -414,6 +430,46 @@ public static class DocxWriter
         }
 
         return new XDocument(footnotes);
+    }
+
+    /// <summary>
+    /// Builds word/endnotes.xml (w:endnotes). Emits the two conventional separator endnotes
+    /// (w:endnoteSeparator id=-1, w:continuationSeparator id=0) for Word-friendliness, then one
+    /// w:endnote w:id="N" per modelled endnote (ascending id), each holding its paragraphs. Mirrors
+    /// <see cref="BuildFootnotes"/>.
+    /// </summary>
+    private static XDocument BuildEndnotes(TextDocument document)
+    {
+        var endnotes = new XElement(W + "endnotes",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+
+        XElement Separator(int id, string type) =>
+            new(W + "endnote",
+                new XAttribute(W + "type", type),
+                new XAttribute(W + "id", id),
+                new XElement(W + "p",
+                    new XElement(W + "r", new XElement(W + type))));
+
+        endnotes.Add(Separator(-1, "separator"));
+        endnotes.Add(Separator(0, "continuationSeparator"));
+
+        // Endnote paragraphs carry no inline images or hyperlinks (those walks target the body).
+        var noImages = new Dictionary<Run, ImagePart>();
+        var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var endnote in document.Endnotes.Values.OrderBy(e => e.Id))
+        {
+            var element = new XElement(W + "endnote", new XAttribute(W + "id", endnote.Id));
+            if (endnote.Content.Count == 0)
+                element.Add(new XElement(W + "p"));
+            else
+                foreach (var paragraph in endnote.Content)
+                    element.Add(BuildParagraph(paragraph, noImages, noHyperlinks));
+            endnotes.Add(element);
+        }
+
+        return new XDocument(endnotes);
     }
 
     /// <summary>
@@ -819,6 +875,14 @@ public static class DocxWriter
                     new XElement(W + "vertAlign", new XAttribute(W + "val", "superscript"))),
                 new XElement(W + "footnoteReference", new XAttribute(W + "id", footnoteId)));
 
+        // An endnote reference is a superscript run carrying a w:endnoteReference (no literal text);
+        // the rPr forces vertAlign=superscript so field-unaware viewers still show a raised marker.
+        if (run.EndnoteId is { } endnoteId)
+            return new XElement(W + "r",
+                new XElement(W + "rPr",
+                    new XElement(W + "vertAlign", new XAttribute(W + "val", "superscript"))),
+                new XElement(W + "endnoteReference", new XAttribute(W + "id", endnoteId)));
+
         // The textless comment anchor run carries the w:commentReference for its id (no literal text).
         if (run is { IsCommentReference: true, CommentId: { } commentRefId })
             return new XElement(W + "r",
@@ -944,11 +1008,32 @@ public static class DocxWriter
             // Page border (w:pgBorders): a uniform box on all four edges, offset from the page edge.
             // Emitted only when set; w:sz is in eighths of a point, matching w:pBdr edges.
             BuildPageBorders(page.PageBorder),
+            // Line numbering (w:lnNumType): emitted only when enabled. Schema order places it after
+            // pgBorders and before cols. @w:countBy is the numbering interval; @w:restart is
+            // "continuous" (across pages) or "newPage" (restart each page).
+            BuildLineNumbering(page),
             // Equal-width columns: w:cols carries the count (w:num) and inter-column gap (w:space, dxa).
             // Emitted unconditionally; w:num="1" is harmless and keeps the section shape stable.
             new XElement(W + "cols",
                 new XAttribute(W + "num", Math.Max(1, page.ColumnCount)),
                 new XAttribute(W + "space", PointsToDxa(page.ColumnSpacingPt))));
+
+    /// <summary>
+    /// Builds the w:lnNumType element (line numbering in the page margin), or null when line numbering
+    /// is off (<see cref="LineNumberMode.None"/>). @w:countBy is the interval (every Nth line numbered),
+    /// @w:restart maps the mode to "continuous" (across pages) or "newPage" (restart per page).
+    /// </summary>
+    private static XElement? BuildLineNumbering(PageSettings page)
+    {
+        if (page.LineNumberMode == LineNumberMode.None)
+            return null;
+
+        var restart = page.LineNumberMode == LineNumberMode.RestartEachPage ? "newPage" : "continuous";
+        return new XElement(W + "lnNumType",
+            new XAttribute(W + "countBy", Math.Max(1, page.LineNumberCountBy)),
+            new XAttribute(W + "restart", restart),
+            new XAttribute(W + "start", 1));
+    }
 
     /// <summary>
     /// Builds the w:pgBorders element (a uniform box on all four edges) for a page border, or null when

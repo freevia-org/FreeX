@@ -52,6 +52,10 @@ internal static class Ooxml
     public const string FootnotesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes";
     public const string FootnotesPartName = "/word/footnotes.xml";
 
+    public const string EndnotesContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml";
+    public const string EndnotesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes";
+    public const string EndnotesPartName = "/word/endnotes.xml";
+
     public const string CommentsContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml";
     public const string CommentsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
     public const string CommentsPartName = "/word/comments.xml";

@@ -479,6 +479,44 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Increase the left indent of every paragraph spanned by the selection by one step
+    /// (<paramref name="stepPt"/> points, default 36pt = 0.5in), via the pure
+    /// <see cref="Indentation.IncreaseIndent"/> helper. Reversible through the undo/redo bus, then re-rendered.
+    /// </summary>
+    public void IncreaseIndent(double stepPt = Indentation.DefaultStepPt) =>
+        FormatSelectedModelParagraphs(f => Indentation.IncreaseIndent(f, stepPt));
+
+    /// <summary>
+    /// Decrease the left indent of every paragraph spanned by the selection by one step
+    /// (<paramref name="stepPt"/> points, default 36pt = 0.5in), clamped at zero, via the pure
+    /// <see cref="Indentation.DecreaseIndent"/> helper. Reversible through the undo/redo bus, then re-rendered.
+    /// </summary>
+    public void DecreaseIndent(double stepPt = Indentation.DefaultStepPt) =>
+        FormatSelectedModelParagraphs(f => Indentation.DecreaseIndent(f, stepPt));
+
+    /// <summary>
+    /// Set the left, right, and first-line indents (points) on every paragraph spanned by the selection,
+    /// via the pure <see cref="Indentation.SetIndents"/> helper. A negative <paramref name="firstLine"/>
+    /// is a hanging indent (see the convention on <see cref="Indentation"/>); it maps straight to the
+    /// rendered paragraph's <see cref="System.Windows.Documents.Paragraph.TextIndent"/>. Reversible via
+    /// the bus, then re-rendered.
+    /// </summary>
+    public void SetParagraphIndents(double left, double right, double firstLine) =>
+        FormatSelectedModelParagraphs(f => Indentation.SetIndents(f, left, right, firstLine));
+
+    /// <summary>
+    /// The left/right/first-line indents (points) of the first paragraph spanned by the current
+    /// selection, or <see cref="ParagraphFormatting.Default"/>'s indents if there is none. Used to seed
+    /// the Paragraph dialog with the current values.
+    /// </summary>
+    public (double Left, double Right, double FirstLine) CurrentParagraphIndents()
+    {
+        var first = SelectedModelParagraphs().FirstOrDefault();
+        var f = first?.Formatting ?? ParagraphFormatting.Default;
+        return (f.IndentLeftPt, f.IndentRightPt, f.FirstLineIndentPt);
+    }
+
+    /// <summary>
     /// Apply a named paragraph style (its <paramref name="styleId"/>) to every model paragraph spanned
     /// by the selection, routing one reversible <see cref="SetParagraphStyleCommand"/> per paragraph
     /// through the undo/redo bus. The view re-renders so the style's run/paragraph formatting resolves.
@@ -1249,6 +1287,9 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: FootnoteMarker marker }:
                 modelParagraph.Runs.Add(ModelRun.FootnoteReference(marker.FootnoteId));
                 break;
+            case WpfRun { Tag: EndnoteMarker endnoteMarker }:
+                modelParagraph.Runs.Add(ModelRun.EndnoteReference(endnoteMarker.EndnoteId));
+                break;
             case WpfRun { Tag: CommentMarker { IsReference: true } reference }:
                 // The textless comment anchor: round-trips as a comment-reference run.
                 modelParagraph.Runs.Add(ModelRun.CommentReference(reference.CommentId));
@@ -1468,6 +1509,9 @@ public sealed class DocumentView : RichTextBox
 
         if (run.FootnoteId is { } footnoteId)
             return BuildFootnoteReference(footnoteId, document);
+
+        if (run.EndnoteId is { } endnoteId)
+            return BuildEndnoteReference(endnoteId, document);
 
         // The textless comment anchor round-trips as an empty, tagged run carrying its reference flag.
         if (run is { IsCommentReference: true, CommentId: { } refId })
@@ -1737,6 +1781,28 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Carried on a footnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
     private sealed record FootnoteMarker(int FootnoteId);
 
+    /// <summary>
+    /// Renders an endnote reference as a small superscript marker showing the endnote number, tagged
+    /// with an <see cref="EndnoteMarker"/> so <see cref="ReadInline"/> can recover the id on commit.
+    /// A tooltip surfaces the endnote text when the document carries it. Mirrors
+    /// <see cref="BuildFootnoteReference"/>.
+    /// </summary>
+    private static WpfRun BuildEndnoteReference(int endnoteId, TextDocument document)
+    {
+        var marker = new WpfRun(endnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture))
+        {
+            BaselineAlignment = BaselineAlignment.Superscript,
+            FontSize = (document.DefaultRun.FontSizePt ?? DefaultFontSizePt) * PxPerPoint * SuperSubScale,
+            Tag = new EndnoteMarker(endnoteId)
+        };
+        if (document.Endnotes.TryGetValue(endnoteId, out var endnote) && endnote.PlainText is { Length: > 0 } text)
+            marker.ToolTip = text;
+        return marker;
+    }
+
+    /// <summary>Carried on an endnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
+    private sealed record EndnoteMarker(int EndnoteId);
+
     /// <summary>Renders an inline image as an InlineUIContainer hosting a WPF Image (PNG-decoded).</summary>
     private static InlineUIContainer BuildImageRun(InlineImage image)
     {
@@ -1823,6 +1889,35 @@ public sealed class DocumentView : RichTextBox
         _model.Footnotes[id] = footnote;
 
         var marker = BuildFootnoteReference(id, _model);
+        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
+        var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
+        if (paragraph is null)
+        {
+            paragraph = new WpfParagraph();
+            Document.Blocks.Add(paragraph);
+        }
+        paragraph.Inlines.Add(marker);
+
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Inserts an endnote at the caret: allocates the next endnote id, stores <paramref name="text"/>
+    /// as the endnote's content in the model, and drops a superscript reference marker at the caret.
+    /// Re-renders so the marker round-trips through the model on the next commit. Mirrors
+    /// <see cref="InsertFootnote"/> but collected at the document end (word/endnotes.xml).
+    /// </summary>
+    public void InsertEndnote(string text)
+    {
+        CommitToModel();
+
+        var id = _model.NextEndnoteId();
+        var endnote = new Endnote(id);
+        endnote.Content.Add(new ModelParagraph(text));
+        _model.Endnotes[id] = endnote;
+
+        var marker = BuildEndnoteReference(id, _model);
         var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
         var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
         if (paragraph is null)
@@ -2008,6 +2103,46 @@ public sealed class DocumentView : RichTextBox
 
         var bibliography = Citations.BuildBibliography(_model);
         foreach (var paragraph in bibliography)
+            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+    }
+
+    /// <summary>
+    /// Marks <paramref name="term"/> for the document index (appends it to
+    /// <see cref="TextDocument.IndexEntries"/>). Blank terms and exact case-insensitive duplicates are
+    /// ignored so the side-store stays clean; the generated index also de-duplicates. Does not touch the
+    /// visible flow.
+    /// </summary>
+    public void MarkIndexEntry(string term)
+    {
+        CommitToModel();
+        var trimmed = term?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0)
+            return;
+        if (_model.IndexEntries.Any(e => string.Equals(e.Term, trimmed, StringComparison.OrdinalIgnoreCase)))
+            return;
+        _model.IndexEntries.Add(new IndexEntry(trimmed));
+    }
+
+    /// <summary>
+    /// Insert an index generated from the document's marked <see cref="TextDocument.IndexEntries"/> at the
+    /// caret's block (else at the document end), routed one-by-one through the undo/redo bus so the insert
+    /// is reversible — mirroring <see cref="InsertBibliography"/>. The paragraphs carry dedicated index
+    /// styles (registered via <see cref="DocumentIndex.EnsureStyles"/>) which both give them distinct
+    /// formatting and mark the region.
+    /// </summary>
+    public void InsertIndex()
+    {
+        // Capture the user's in-progress edits before mutating the model out from under the view.
+        CommitToModel();
+        DocumentIndex.EnsureStyles(_model);
+
+        // Insert at the caret's block (an index reads as back-matter); fall back to the document end.
+        var index = CaretBlockIndex();
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+
+        var entries = DocumentIndex.Build(_model);
+        foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
     }
 
