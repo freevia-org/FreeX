@@ -1,9 +1,56 @@
 namespace FreeW.Core.Model;
 
 /// <summary>
+/// How an image relates to the surrounding text. <see cref="Inline"/> (the default) keeps the image in
+/// the text flow, serialised as <c>wp:inline</c> exactly as before. The remaining modes make the image
+/// <em>floating</em> (serialised as <c>wp:anchor</c>) with the matching OOXML wrap element:
+/// <see cref="Square"/> → <c>wp:wrapSquare</c>; <see cref="Tight"/> → <c>wp:wrapTight</c> (no wrap polygon —
+/// a deliberate simplification); <see cref="TopAndBottom"/> → <c>wp:wrapTopAndBottom</c>;
+/// <see cref="Behind"/> → <c>wp:wrapNone</c> with <c>behindDoc="1"</c> (behind the text);
+/// <see cref="InFront"/> → <c>wp:wrapNone</c> with <c>behindDoc="0"</c> (in front of the text).
+/// </summary>
+public enum ImageWrapping
+{
+    Inline,
+    Square,
+    Tight,
+    TopAndBottom,
+    Behind,
+    InFront
+}
+
+/// <summary>
+/// The horizontal frame a floating image's offset is measured from (<c>wp:positionH/@relativeFrom</c>).
+/// Maps to "column" / "margin" / "page". Defaults to <see cref="Column"/>.
+/// </summary>
+public enum HorizontalAnchor
+{
+    Column,
+    Margin,
+    Page
+}
+
+/// <summary>
+/// The vertical frame a floating image's offset is measured from (<c>wp:positionV/@relativeFrom</c>).
+/// Maps to "paragraph" / "margin" / "page". Defaults to <see cref="Paragraph"/>.
+/// </summary>
+public enum VerticalAnchor
+{
+    Paragraph,
+    Margin,
+    Page
+}
+
+/// <summary>
 /// An inline raster image carried by a <see cref="Run"/>. Modelled at the run level (rather than as
 /// a block) so it round-trips through docx as an inline w:drawing without touching paragraph storage.
 /// PNG bytes only; size is in points to match the rest of the FreeW unit model.
+///
+/// By default an image is inline (<see cref="ImageWrapping.Inline"/>) and serialises as <c>wp:inline</c>
+/// exactly as before. Setting <see cref="Wrapping"/> to a floating mode makes it serialise as a
+/// <c>wp:anchor</c> positioned by <see cref="HorizontalOffsetPt"/>/<see cref="VerticalOffsetPt"/> relative
+/// to <see cref="HorizontalAnchor"/>/<see cref="VerticalAnchor"/>. The position fields are ignored for an
+/// inline image, so existing inline-image construction and round-trips are fully unaffected.
 /// </summary>
 public sealed class InlineImage(byte[] pngBytes, double widthPt, double heightPt)
 {
@@ -18,6 +65,36 @@ public sealed class InlineImage(byte[] pngBytes, double widthPt, double heightPt
     /// Defaults to null so existing image construction and round-trips are unaffected.
     /// </summary>
     public string? AltText { get; set; }
+
+    /// <summary>
+    /// How the image relates to the surrounding text. Defaults to <see cref="ImageWrapping.Inline"/> so
+    /// existing images serialise as <c>wp:inline</c> unchanged; any other value makes the image floating
+    /// (<c>wp:anchor</c>) with the matching wrap element.
+    /// </summary>
+    public ImageWrapping Wrapping { get; set; } = ImageWrapping.Inline;
+
+    /// <summary>True when the image is floating (i.e. not <see cref="ImageWrapping.Inline"/>).</summary>
+    public bool IsFloating => Wrapping != ImageWrapping.Inline;
+
+    /// <summary>
+    /// Horizontal offset in points from <see cref="HorizontalAnchor"/> for a floating image
+    /// (<c>wp:positionH/wp:posOffset</c>). Ignored when <see cref="Wrapping"/> is
+    /// <see cref="ImageWrapping.Inline"/>. Defaults to 0.
+    /// </summary>
+    public double HorizontalOffsetPt { get; set; }
+
+    /// <summary>
+    /// Vertical offset in points from <see cref="VerticalAnchor"/> for a floating image
+    /// (<c>wp:positionV/wp:posOffset</c>). Ignored when <see cref="Wrapping"/> is
+    /// <see cref="ImageWrapping.Inline"/>. Defaults to 0.
+    /// </summary>
+    public double VerticalOffsetPt { get; set; }
+
+    /// <summary>The frame the horizontal offset is measured from (<c>wp:positionH/@relativeFrom</c>).</summary>
+    public HorizontalAnchor HorizontalAnchor { get; set; } = HorizontalAnchor.Column;
+
+    /// <summary>The frame the vertical offset is measured from (<c>wp:positionV/@relativeFrom</c>).</summary>
+    public VerticalAnchor VerticalAnchor { get; set; } = VerticalAnchor.Paragraph;
 }
 
 /// <summary>
