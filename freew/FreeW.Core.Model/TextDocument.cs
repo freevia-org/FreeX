@@ -908,6 +908,27 @@ public sealed class PageSettings
     public bool DifferentFirstPage { get; set; }
 
     /// <summary>
+    /// Whether the document uses distinct headers/footers on odd and even pages (the document-level
+    /// w:settings/w:evenAndOddHeaders toggle). Defaults to false so existing documents are unaffected —
+    /// no w:evenAndOddHeaders is emitted and no settings part is forced. When true the writer emits the
+    /// toggle in word/settings.xml, emits the even header/footer parts (header2.xml / footer2.xml) and
+    /// adds w:headerReference/w:footerReference w:type="even" to the section; the even content lives in
+    /// <see cref="TextDocument.EvenHeader"/> / <see cref="TextDocument.EvenFooter"/>. Unlike the other
+    /// page properties this is a document-wide setting, not a per-section one — it is read/written on the
+    /// body-level (final-section) page settings.
+    /// </summary>
+    public bool DifferentOddEvenPages { get; set; }
+
+    /// <summary>
+    /// Optional page background colour as an RRGGBB hex (e.g. <c>"#FFFFCC"</c>), or null for none (the
+    /// default — existing documents are unaffected). When set the writer emits w:background w:color as the
+    /// first child of w:document (before w:body) and w:displayBackgroundShape in word/settings.xml so Word
+    /// actually paints it. Like <see cref="DifferentOddEvenPages"/> this is a document-wide setting carried
+    /// on the body-level page settings. The '#' prefix is optional and stripped on write.
+    /// </summary>
+    public string? BackgroundColorHex { get; set; }
+
+    /// <summary>
     /// Returns a deep copy of these page settings. Used when a document is split into multiple
     /// sections (see <see cref="Section"/>) so each section owns an independent <see cref="PageSettings"/>
     /// that can be edited without disturbing the others. <see cref="PageBorder"/> is an immutable record,
@@ -930,7 +951,9 @@ public sealed class PageSettings
         LineNumberCountBy = LineNumberCountBy,
         AutoHyphenation = AutoHyphenation,
         VerticalAlignment = VerticalAlignment,
-        DifferentFirstPage = DifferentFirstPage
+        DifferentFirstPage = DifferentFirstPage,
+        DifferentOddEvenPages = DifferentOddEvenPages,
+        BackgroundColorHex = BackgroundColorHex
     };
 }
 
@@ -1025,6 +1048,22 @@ public sealed class TextDocument
     /// word/footer1.xml part referenced from w:sectPr via w:footerReference w:type="default".
     /// </summary>
     public HeaderFooter? Footer { get; set; }
+
+    /// <summary>
+    /// The even-page header, or null when the document has none. Only meaningful when
+    /// <see cref="PageSettings.DifferentOddEvenPages"/> is set (the default <see cref="Header"/> then
+    /// applies to odd pages). Maps to a word/header2.xml part referenced from w:sectPr via
+    /// w:headerReference w:type="even". Mirrors <see cref="Header"/>.
+    /// </summary>
+    public HeaderFooter? EvenHeader { get; set; }
+
+    /// <summary>
+    /// The even-page footer, or null when the document has none. Only meaningful when
+    /// <see cref="PageSettings.DifferentOddEvenPages"/> is set (the default <see cref="Footer"/> then
+    /// applies to odd pages). Maps to a word/footer2.xml part referenced from w:sectPr via
+    /// w:footerReference w:type="even". Mirrors <see cref="Footer"/>.
+    /// </summary>
+    public HeaderFooter? EvenFooter { get; set; }
 
     /// <summary>Document-level metadata (maps to docProps/core.xml).</summary>
     public DocumentProperties Properties { get; } = new();

@@ -129,13 +129,23 @@ internal static class FreeWRibbon
                     g.Button("freew.image-align-left", "Align Left", b => Icon(b, RibbonCommandIconKind.Align));
                     g.Button("freew.image-align-center", "Align Center", b => Icon(b, RibbonCommandIconKind.Align));
                     g.Button("freew.image-align-right", "Align Right", b => Icon(b, RibbonCommandIconKind.Align));
-                    g.Button("freew.shapes", "Shapes", b => Icon(b, RibbonCommandIconKind.Rectangle));
+                    // Shapes gallery: a dropdown of the preset shape kinds, each inserting the matching
+                    // Shape via DocumentView.InsertShape (the items dispatch their own freew.shape-* ids).
+                    g.Medium("freew.shapes", "Shapes", RibbonCommandIconKind.Rectangle, "SH", menu: m =>
+                    {
+                        m.Item("freew.shape-rectangle", "Rectangle", "R");
+                        m.Item("freew.shape-rounded", "Rounded Rectangle", "O");
+                        m.Item("freew.shape-ellipse", "Ellipse", "E");
+                        m.Item("freew.shape-textbox", "Text Box", "T");
+                    });
                 });
                 tab.Group("media", "Media", "M", 78, g =>
                 {
                     g.Button("freew.equation", "Equation", b => Icon(b, RibbonCommandIconKind.Function));
                     g.Button("freew.chart", "Chart", b => Icon(b, RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green));
                     g.Button("freew.wordart", "WordArt", b => Icon(b, RibbonCommandIconKind.TextBox));
+                    g.Button("freew.smartart", "SmartArt", b => Icon(b, RibbonCommandIconKind.Group));
+                    g.Button("freew.object", "Object", b => Icon(b, RibbonCommandIconKind.Grid));
                 });
                 tab.Group("links", "Links", "K", 70, g =>
                 {

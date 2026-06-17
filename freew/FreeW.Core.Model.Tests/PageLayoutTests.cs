@@ -77,4 +77,43 @@ public class PageLayoutTests
 
         PageLayout.PageCount(page, 5000).Should().Be(1);
     }
+
+    [Fact]
+    public void DifferentOddEvenPagesAndBackground_DefaultToOffAndNull()
+    {
+        var page = new PageSettings();
+
+        page.DifferentOddEvenPages.Should().BeFalse();
+        page.BackgroundColorHex.Should().BeNull();
+    }
+
+    [Fact]
+    public void Clone_CopiesDifferentOddEvenPagesAndBackground()
+    {
+        var page = new PageSettings
+        {
+            DifferentOddEvenPages = true,
+            BackgroundColorHex = "#FFEEDD"
+        };
+
+        var clone = page.Clone();
+
+        clone.DifferentOddEvenPages.Should().BeTrue();
+        clone.BackgroundColorHex.Should().Be("#FFEEDD");
+
+        // The clone is independent of the source.
+        clone.DifferentOddEvenPages = false;
+        clone.BackgroundColorHex = null;
+        page.DifferentOddEvenPages.Should().BeTrue();
+        page.BackgroundColorHex.Should().Be("#FFEEDD");
+    }
+
+    [Fact]
+    public void EvenHeaderFooter_DefaultToNull()
+    {
+        var doc = new TextDocument();
+
+        doc.EvenHeader.Should().BeNull();
+        doc.EvenFooter.Should().BeNull();
+    }
 }
