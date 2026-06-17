@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using System.Windows.Documents;
 using FreeW.App.Host.Editing;
@@ -148,6 +149,96 @@ public sealed class DocumentViewRoundTripTests
         run.Image!.WidthPt.Should().Be(96);
         run.Image.HeightPt.Should().Be(48);
         run.Image.AltText.Should().Be("diagram");
+    }
+
+    // Regression: an image in a format WPF's WIC pipeline cannot decode (e.g. a WMF metafile, or just
+    // corrupt bytes) must NOT fail the whole document render. The undecodable image renders as a sized
+    // placeholder, the rest of the document still renders, and the image run still round-trips.
+    [StaFact]
+    public void UndecodableImage_DoesNotFailRender_AndRoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Before "));
+        para.Runs.Add(Run.FromImage(new InlineImage(new byte[] { 1, 2, 3, 4 }, 50, 30, ImageFormat.Wmf)));
+        para.Runs.Add(new Run(" After"));
+        doc.Blocks.Add(para);
+        doc.Blocks.Add(new Paragraph("Following paragraph"));
+
+        var view = new DocumentView();
+
+        // (a) Loading the model (which builds the FlowDocument, including the undecodable image) must not throw.
+        var load = () => view.LoadModel(doc);
+        load.Should().NotThrow();
+
+        // (b) The rest of the document's text still renders into the surface.
+        view.Document.Should().NotBeNull();
+        var rendered = new System.Windows.Documents.TextRange(
+            view.Document.ContentStart, view.Document.ContentEnd).Text;
+        rendered.Should().Contain("Before");
+        rendered.Should().Contain("After");
+        rendered.Should().Contain("Following paragraph");
+
+        // (c) The image run survives CommitToModel (the model Run.Image is preserved, never dropped).
+        view.CommitToModel();
+        var imageRun = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .SingleOrDefault(r => r.Image is not null);
+        imageRun.Should().NotBeNull();
+        imageRun!.Image!.Format.Should().Be(ImageFormat.Wmf);
+        imageRun.Image.WidthPt.Should().Be(50);
+        imageRun.Image.HeightPt.Should().Be(30);
+    }
+
+    // Best-effort metafile rendering: a genuine (GDI+-produced) EMF decodes and round-trips without
+    // falling back to the placeholder path or throwing.
+    [StaFact]
+    public void ValidEmfMetafile_RendersAndRoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromImage(new InlineImage(CreateEmf(), 60, 40, ImageFormat.Emf)));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var load = () => view.LoadModel(doc);
+        load.Should().NotThrow();
+
+        view.CommitToModel();
+        var run = FirstRun(view.Model);
+        run.Image.Should().NotBeNull();
+        run.Image!.Format.Should().Be(ImageFormat.Emf);
+    }
+
+    // Build a minimal valid EMF (enhanced metafile) via GDI+ that draws a single line, returning its bytes.
+    // The metafile is recorded straight into a MemoryStream (the robust idiom) so disposing it flushes the
+    // EMF bytes — no HENHMETAFILE handle juggling, which avoids GDI+ "generic error" flakiness.
+    private static byte[] CreateEmf()
+    {
+        var stream = new MemoryStream();
+        using (var reference = new System.Drawing.Bitmap(1, 1))
+        using (var refGraphics = System.Drawing.Graphics.FromImage(reference))
+        {
+            var hdc = refGraphics.GetHdc();
+            try
+            {
+                using var metafile = new System.Drawing.Imaging.Metafile(
+                    stream,
+                    hdc,
+                    new System.Drawing.RectangleF(0, 0, 10, 10),
+                    System.Drawing.Imaging.MetafileFrameUnit.Pixel,
+                    System.Drawing.Imaging.EmfType.EmfOnly);
+                using var g = System.Drawing.Graphics.FromImage(metafile);
+                g.DrawLine(System.Drawing.Pens.Black, 0, 0, 10, 10);
+            }
+            finally
+            {
+                refGraphics.ReleaseHdc(hdc);
+            }
+        }
+        return stream.ToArray();
     }
 
     [StaFact]
