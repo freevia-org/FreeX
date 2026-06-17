@@ -40,6 +40,16 @@ public sealed class FormControlModel
     public GridRange? Anchor { get; set; }
 
     /// <summary>
+    /// The control's sub-cell anchor offsets (per-cell <c>colOff</c>/<c>rowOff</c> in EMU), preserved
+    /// from the worksheet <c>controlPr/anchor</c> or the VML <c>x:ClientData/x:Anchor</c>. Mirrors how
+    /// pictures/slicers carry a <see cref="DrawingAnchorRange"/> so the control rect reflects the true
+    /// sub-cell position+size rather than snapping to whole-cell spans. The anchor's cell columns/rows
+    /// are 0-based (matching <see cref="DrawingAnchorRange"/>); <see langword="null"/> when no offsets
+    /// were recoverable, in which case the render falls back to a whole-cell span over <see cref="Anchor"/>.
+    /// </summary>
+    public DrawingAnchorRange? AnchorOffsets { get; set; }
+
+    /// <summary>
     /// The worksheet cell the control is linked to (its result/state is mirrored there).
     /// May be an A1 reference, a defined-name, or a cross-sheet reference. Preserved verbatim.
     /// </summary>

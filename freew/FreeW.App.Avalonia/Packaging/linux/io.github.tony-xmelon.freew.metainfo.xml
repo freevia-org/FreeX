@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.tony-xmelon.freew</id>
+  <metadata_license>LicenseRef-proprietary</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>FreeW</name>
+  <summary>Open, edit, and save documents</summary>
+  <description>
+    <p>
+      FreeW is a word processor: open, edit, and save documents, with rich text formatting,
+      paragraphs, tables, and Word-compatible DOCX files. This is the self-contained Linux build
+      of the cross-platform FreeW app; no system .NET runtime is required.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.tony-xmelon.freew.desktop</launchable>
+  <provides>
+    <binary>freew</binary>
+  </provides>
+  <categories>
+    <category>Office</category>
+    <category>WordProcessor</category>
+  </categories>
+  <url type="homepage">https://github.com/tony-xmelon/FreeX</url>
+  <url type="bugtracker">https://github.com/tony-xmelon/FreeX/issues</url>
+  <content_rating type="oars-1.1"/>
+  <developer id="io.github.tony-xmelon">
+    <name>FreeW contributors</name>
+  </developer>
+  <releases>
+    <release version="0.1.0" date="2026-06-17"/>
+  </releases>
+</component>

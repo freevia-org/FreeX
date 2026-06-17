@@ -308,6 +308,15 @@ public sealed partial class MainWindow : Window
     internal static readonly global::Avalonia.Media.Color ChromeSurfaceColor =
         global::Avalonia.Media.Color.FromRgb(0xF5, 0xF6, 0xF7);
     private static readonly IBrush ChromeSurface = new SolidColorBrush(ChromeSurfaceColor);
+
+    // Status-bar text token — the muted header foreground, applied uniformly to the status / selection-stats
+    // / zoom texts so the status bar reads consistently (was scattered inline 73,80,93 magic values).
+    private static readonly IBrush StatusBarForeground = HeaderForeground;
+
+    // Toolbar/chrome ink tokens — the primary (title text, glyph rules) and secondary (detail text) inks,
+    // named so the chrome typography stays consistent instead of repeating inline 25,31,40 / 94,103,116.
+    private static readonly IBrush PrimaryInk = Brush(25, 31, 40);
+    private static readonly IBrush SecondaryInk = Brush(94, 103, 116);
     private static readonly IBrush SelectionBorder = Brush(11, 112, 116);
     private static readonly IBrush SelectionHeaderBackground = Brush(225, 244, 242);
     private static readonly IBrush SelectionHeaderForeground = Brush(13, 86, 89);
@@ -671,6 +680,18 @@ public sealed partial class MainWindow : Window
                     ["view.zoomToSelection"] = ZoomToSelection,
                     ["view.freezePanes"] = FreezePanesAtActiveCell,
                     ["view.pageBreakPreview"] = TogglePageBreakPreview,
+                    // Home tab (Editing group).
+                    ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
+                    ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
+                    ["home.clear"] = ClearSelectedRangeContents,
+                    ["home.findSelect"] = () => _ = ShowFindDialogAsync(),
+                    // Insert tab (Links / Text groups).
+                    ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
+                    // Formulas tab (Formula Auditing group).
+                    ["formulas.showFormulas"] = ToggleShowFormulas,
+                    // Data tab (Forecast / Outline groups).
+                    ["data.forecastSheet"] = () => _ = ShowForecastSheetDialogAsync(),
+                    ["data.subtotal"] = () => _ = ShowSubtotalDialogAsync(),
                     // Page Layout tab (Page Setup dialog covers margins/orientation/size).
                     ["pageLayout.margins"] = () => _ = ShowPageSetupDialogAsync(),
                     ["pageLayout.orientation"] = () => _ = ShowPageSetupDialogAsync(),
@@ -1618,18 +1639,19 @@ public sealed partial class MainWindow : Window
     {
         _titleText.FontSize = 14;
         _titleText.FontWeight = FontWeight.SemiBold;
-        _titleText.Foreground = Brush(25, 31, 40);
+        _titleText.Foreground = PrimaryInk;
         _titleText.MaxWidth = 180;
         _titleText.TextTrimming = TextTrimming.CharacterEllipsis;
         _titleText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
 
         _detailText.FontSize = 12;
-        _detailText.Foreground = Brush(94, 103, 116);
+        _detailText.Foreground = SecondaryInk;
         _detailText.MaxWidth = 220;
         _detailText.TextTrimming = TextTrimming.CharacterEllipsis;
         _detailText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
 
         _statusText.FontSize = 12;
+        _statusText.Foreground = StatusBarForeground;
         _statusText.MaxWidth = 180;
         _statusText.TextTrimming = TextTrimming.CharacterEllipsis;
         _statusText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -1638,7 +1660,7 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetHelpText(_statusText, "Shows the current workbook status.");
 
         _selectionStatsText.FontSize = 12;
-        _selectionStatsText.Foreground = Brush(73, 80, 93);
+        _selectionStatsText.Foreground = StatusBarForeground;
         _selectionStatsText.MaxWidth = 420;
         _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
         _selectionStatsText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -1648,7 +1670,7 @@ public sealed partial class MainWindow : Window
 
         _zoomText.FontSize = 12;
         _zoomText.FontWeight = FontWeight.SemiBold;
-        _zoomText.Foreground = Brush(73, 80, 93);
+        _zoomText.Foreground = StatusBarForeground;
         _zoomText.MinWidth = 44;
         _zoomText.TextAlignment = TextAlignment.Right;
         _zoomText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -1820,13 +1842,13 @@ public sealed partial class MainWindow : Window
                 {
                     Height = 1,
                     Width = 12,
-                    Background = Brush(25, 31, 40),
+                    Background = PrimaryInk,
                 },
                 new Border
                 {
                     Height = 1,
                     Width = 12,
-                    Background = Brush(25, 31, 40),
+                    Background = PrimaryInk,
                 },
             },
         };

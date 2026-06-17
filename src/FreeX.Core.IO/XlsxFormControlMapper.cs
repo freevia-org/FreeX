@@ -79,7 +79,16 @@ internal static class XlsxFormControlMapper
         var controlPr = controlElement.Element(WorksheetNs + "controlPr");
         var anchor = controlPr?.Element(WorksheetNs + "anchor");
         if (anchor is not null)
+        {
             model.Anchor = ReadAnchor(anchor);
+            // Preserve the per-cell EMU sub-cell offsets so the render reflects the true sub-cell
+            // position+size rather than snapping to a whole-cell span.
+            model.AnchorOffsets = ReadAnchorOffsets(anchor);
+        }
+
+        // Fall back to the VML <x:ClientData><x:Anchor> (pixel offsets) when the worksheet controlPr
+        // carries no offset-bearing anchor (e.g. legacy files that anchor purely via VML).
+        model.AnchorOffsets ??= ReadVmlAnchorOffsets(archive, worksheetPath, model.ShapeId, worksheetRels);
 
         // controlPr can also carry the linked cell / list fill range when no ctrlProp part exists.
         model.LinkedCell ??= NullIfWhiteSpace(controlPr?.Attribute("fmlaLink")?.Value);
@@ -144,6 +153,173 @@ internal static class XlsxFormControlMapper
         var colValue = anchorCell.Element(DrawingNs + "col")?.Value;
         var rowValue = anchorCell.Element(DrawingNs + "row")?.Value;
         return uint.TryParse(colValue, out col) & uint.TryParse(rowValue, out row);
+    }
+
+    private const long EmusPerPixel = 9525;
+
+    /// <summary>
+    /// Reads a worksheet <c>controlPr/anchor</c> (from/to cell + EMU <c>colOff</c>/<c>rowOff</c>) into a
+    /// 0-based <see cref="DrawingAnchorRange"/> preserving the sub-cell offsets in EMU. Returns
+    /// <see langword="null"/> when the from/to cell markers are missing.
+    /// </summary>
+    public static DrawingAnchorRange? ReadAnchorOffsets(XElement anchor)
+    {
+        var from = anchor.Element(WorksheetNs + "from");
+        var to = anchor.Element(WorksheetNs + "to");
+        if (from is null || to is null)
+            return null;
+
+        if (!TryReadAnchorPoint(from, out var fromPoint) || !TryReadAnchorPoint(to, out var toPoint))
+            return null;
+
+        return new DrawingAnchorRange(fromPoint, toPoint);
+    }
+
+    private static bool TryReadAnchorPoint(XElement marker, out DrawingAnchorPoint point)
+    {
+        point = default!;
+        if (!uint.TryParse(marker.Element(DrawingNs + "col")?.Value, out var col) ||
+            !uint.TryParse(marker.Element(DrawingNs + "row")?.Value, out var row))
+        {
+            return false;
+        }
+
+        var colOff = ReadEmu(marker.Element(DrawingNs + "colOff")?.Value);
+        var rowOff = ReadEmu(marker.Element(DrawingNs + "rowOff")?.Value);
+        point = new DrawingAnchorPoint(col, colOff, row, rowOff);
+        return true;
+    }
+
+    private static long ReadEmu(string? value) =>
+        long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus) ? emus : 0;
+
+    /// <summary>
+    /// Parses a legacy VML <c>x:Anchor</c> value (comma-separated
+    /// <c>leftCol,leftColOff,topRow,topRowOff,rightCol,rightColOff,bottomRow,bottomRowOff</c>; cells
+    /// 0-based, offsets in PIXELS) into a 0-based <see cref="DrawingAnchorRange"/> with offsets
+    /// converted to EMU. Returns <see langword="null"/> for malformed input.
+    /// </summary>
+    public static DrawingAnchorRange? ParseVmlAnchor(string? anchorText)
+    {
+        if (string.IsNullOrWhiteSpace(anchorText))
+            return null;
+
+        var parts = anchorText.Split(',');
+        if (parts.Length != 8)
+            return null;
+
+        Span<long> values = stackalloc long[8];
+        for (var i = 0; i < 8; i++)
+        {
+            if (!long.TryParse(parts[i].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out values[i]) ||
+                values[i] < 0)
+            {
+                return null;
+            }
+        }
+
+        var from = new DrawingAnchorPoint((uint)values[0], values[1] * EmusPerPixel, (uint)values[2], values[3] * EmusPerPixel);
+        var to = new DrawingAnchorPoint((uint)values[4], values[5] * EmusPerPixel, (uint)values[6], values[7] * EmusPerPixel);
+        return new DrawingAnchorRange(from, to);
+    }
+
+    private static readonly XNamespace VmlNs = "urn:schemas-microsoft-com:vml";
+    private static readonly XNamespace ExcelVmlNs = "urn:schemas-microsoft-com:office:excel";
+    private const string VmlDrawingRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+
+    /// <summary>
+    /// Resolves the worksheet's legacy VML drawing and recovers the <c>x:Anchor</c> for the control's
+    /// shape (matched by its <c>shapeId</c>, encoded in the VML shape id as <c>_x0000_s{shapeId}</c>).
+    /// Used only as a fallback when the worksheet controlPr carries no offset-bearing anchor.
+    /// </summary>
+    private static DrawingAnchorRange? ReadVmlAnchorOffsets(
+        ZipArchive archive,
+        string worksheetPath,
+        uint? shapeId,
+        IReadOnlyDictionary<string, string> worksheetRels)
+    {
+        if (shapeId is null)
+            return null;
+
+        var vmlPath = ResolveVmlDrawingPath(archive, worksheetPath, worksheetRels);
+        if (vmlPath is null)
+            return null;
+
+        var vmlEntry = archive.GetEntry(vmlPath);
+        if (vmlEntry is null)
+            return null;
+
+        XDocument vmlDoc;
+        try
+        {
+            vmlDoc = XlsxPackageXmlEditor.LoadXml(vmlEntry);
+        }
+        catch
+        {
+            return null;
+        }
+
+        var root = vmlDoc.Root;
+        if (root is null)
+            return null;
+
+        var targetSuffix = "s" + shapeId.Value.ToString(CultureInfo.InvariantCulture);
+        foreach (var shape in root.Descendants(VmlNs + "shape"))
+        {
+            var id = shape.Attribute("id")?.Value;
+            if (string.IsNullOrEmpty(id) || !id.EndsWith(targetSuffix, StringComparison.Ordinal))
+                continue;
+
+            var clientData = shape.Element(ExcelVmlNs + "ClientData");
+            var anchorText = clientData?.Element(ExcelVmlNs + "Anchor")?.Value;
+            var parsed = ParseVmlAnchor(anchorText);
+            if (parsed is not null)
+                return parsed;
+        }
+
+        return null;
+    }
+
+    private static string? ResolveVmlDrawingPath(
+        ZipArchive archive,
+        string worksheetPath,
+        IReadOnlyDictionary<string, string> worksheetRels)
+    {
+        // worksheetRels (loaded with the package relationship namespace) maps relId -> resolved target.
+        // The control block points at the VML via the worksheet <legacyDrawing r:id>, which resolves to
+        // a vmlDrawing part; we identify it by the ".vml" target since the rel-type isn't surfaced here.
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
+        var relsEntry = archive.GetEntry(relsPath);
+        if (relsEntry is null)
+            return null;
+
+        XDocument relsXml;
+        try
+        {
+            relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+        }
+        catch
+        {
+            return null;
+        }
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        foreach (var rel in relsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+        {
+            if (!string.Equals(rel.Attribute("Type")?.Value, VmlDrawingRelationshipType, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var target = rel.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target))
+                continue;
+
+            var resolved = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
+            if (!string.IsNullOrWhiteSpace(resolved))
+                return resolved;
+        }
+
+        return null;
     }
 
     /// <summary>
