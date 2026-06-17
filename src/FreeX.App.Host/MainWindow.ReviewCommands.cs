@@ -499,16 +499,18 @@ public partial class MainWindow
         var hasAnyThreadedComments = (sheet?.ThreadedComments.Count ?? 0) > 0;
         var hasAnyNotes = (sheet?.Comments.Count ?? 0) > 0;
 
-        SetButtonEnabledIfChanged(ReviewNewThreadedCommentButton, hasSelection);
-        SetButtonEnabledIfChanged(ReviewDeleteThreadedCommentButton, selectedHasThreadedComment);
-        SetButtonEnabledIfChanged(ReviewPreviousThreadedCommentButton, hasAnyThreadedComments);
-        SetButtonEnabledIfChanged(ReviewNextThreadedCommentButton, hasAnyThreadedComments);
+        // Enablement flows through the neutral RibbonStateStore to the rendered ribbon buttons
+        // (keyed by CommandName), so no hidden backplane control is needed.
+        _ribbonState.SetEnabled("New Comment", hasSelection);
+        _ribbonState.SetEnabled("Delete Comment", selectedHasThreadedComment);
+        _ribbonState.SetEnabled("Previous Comment", hasAnyThreadedComments);
+        _ribbonState.SetEnabled("Next Comment", hasAnyThreadedComments);
 
-        SetButtonEnabledIfChanged(ReviewNewNoteButton, hasSelection);
-        SetButtonEnabledIfChanged(ReviewEditNoteButton, selectedHasNote);
-        SetButtonEnabledIfChanged(ReviewDeleteNoteButton, selectedHasNote);
-        SetButtonEnabledIfChanged(ReviewPreviousNoteButton, hasAnyNotes);
-        SetButtonEnabledIfChanged(ReviewNextNoteButton, hasAnyNotes);
+        _ribbonState.SetEnabled("New Note", hasSelection);
+        _ribbonState.SetEnabled("Edit Note", selectedHasNote);
+        _ribbonState.SetEnabled("Delete Note", selectedHasNote);
+        _ribbonState.SetEnabled("Previous Note", hasAnyNotes);
+        _ribbonState.SetEnabled("Next Note", hasAnyNotes);
     }
 
     private static bool SheetHasThreadedCommentAtSelection(Sheet? sheet, CellAddress address) =>
@@ -516,12 +518,6 @@ public partial class MainWindow
 
     private static bool SheetHasNoteAtSelection(Sheet? sheet, CellAddress address) =>
         sheet?.Comments.ContainsKey(address) == true;
-
-    private static void SetButtonEnabledIfChanged(System.Windows.Controls.Primitives.ButtonBase button, bool isEnabled)
-    {
-        if (button.IsEnabled != isEnabled)
-            button.IsEnabled = isEnabled;
-    }
 
     private void RefreshOpenReviewCommentNoteWindows()
     {

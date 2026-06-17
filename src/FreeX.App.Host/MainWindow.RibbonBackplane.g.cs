@@ -30,15 +30,6 @@ public partial class MainWindow
     private readonly System.Windows.Controls.CheckBox PageLayoutViewHeadingsChk = new();
     private readonly System.Windows.Controls.CheckBox PageLayoutPrintHeadingsChk = new();
     private readonly System.Windows.Controls.Primitives.ToggleButton ShowFormulasButton = new();
-    private readonly System.Windows.Controls.Button ReviewNewThreadedCommentButton = new();
-    private readonly System.Windows.Controls.Button ReviewDeleteThreadedCommentButton = new();
-    private readonly System.Windows.Controls.Button ReviewPreviousThreadedCommentButton = new();
-    private readonly System.Windows.Controls.Button ReviewNextThreadedCommentButton = new();
-    private readonly System.Windows.Controls.Button ReviewNewNoteButton = new();
-    private readonly System.Windows.Controls.Button ReviewEditNoteButton = new();
-    private readonly System.Windows.Controls.Button ReviewDeleteNoteButton = new();
-    private readonly System.Windows.Controls.Button ReviewPreviousNoteButton = new();
-    private readonly System.Windows.Controls.Button ReviewNextNoteButton = new();
     private readonly System.Windows.Controls.Button ProtectSheetButton = new();
     private readonly System.Windows.Controls.Button ProtectWorkbookButton = new();
     private readonly System.Windows.Controls.Button AllowEditRangesButton = new();
@@ -151,41 +142,14 @@ public partial class MainWindow
         RibbonMetadata.SetCommandName(ShowFormulasButton, "Show Formulas");
         RibbonBackplaneControls["Show Formulas"] = ShowFormulasButton;
         RibbonBackplaneControlNames["Show Formulas"] = "ShowFormulasButton";
-        try { RegisterName("ReviewNewThreadedCommentButton", ReviewNewThreadedCommentButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ReviewNewThreadedCommentButton, "New Comment");
-        RibbonBackplaneControls["New Comment"] = ReviewNewThreadedCommentButton;
         RibbonBackplaneControlNames["New Comment"] = "ReviewNewThreadedCommentButton";
-        try { RegisterName("ReviewDeleteThreadedCommentButton", ReviewDeleteThreadedCommentButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ReviewDeleteThreadedCommentButton, "Delete Comment");
-        RibbonBackplaneControls["Delete Comment"] = ReviewDeleteThreadedCommentButton;
         RibbonBackplaneControlNames["Delete Comment"] = "ReviewDeleteThreadedCommentButton";
-        try { RegisterName("ReviewPreviousThreadedCommentButton", ReviewPreviousThreadedCommentButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ReviewPreviousThreadedCommentButton, "Previous Comment");
-        RibbonBackplaneControls["Previous Comment"] = ReviewPreviousThreadedCommentButton;
         RibbonBackplaneControlNames["Previous Comment"] = "ReviewPreviousThreadedCommentButton";
-        try { RegisterName("ReviewNextThreadedCommentButton", ReviewNextThreadedCommentButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ReviewNextThreadedCommentButton, "Next Comment");
-        RibbonBackplaneControls["Next Comment"] = ReviewNextThreadedCommentButton;
         RibbonBackplaneControlNames["Next Comment"] = "ReviewNextThreadedCommentButton";
-        try { RegisterName("ReviewNewNoteButton", ReviewNewNoteButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ReviewNewNoteButton, "New Note");
-        RibbonBackplaneControls["New Note"] = ReviewNewNoteButton;
         RibbonBackplaneControlNames["New Note"] = "ReviewNewNoteButton";
-        try { RegisterName("ReviewEditNoteButton", ReviewEditNoteButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ReviewEditNoteButton, "Edit Note");
-        RibbonBackplaneControls["Edit Note"] = ReviewEditNoteButton;
         RibbonBackplaneControlNames["Edit Note"] = "ReviewEditNoteButton";
-        try { RegisterName("ReviewDeleteNoteButton", ReviewDeleteNoteButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ReviewDeleteNoteButton, "Delete Note");
-        RibbonBackplaneControls["Delete Note"] = ReviewDeleteNoteButton;
         RibbonBackplaneControlNames["Delete Note"] = "ReviewDeleteNoteButton";
-        try { RegisterName("ReviewPreviousNoteButton", ReviewPreviousNoteButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ReviewPreviousNoteButton, "Previous Note");
-        RibbonBackplaneControls["Previous Note"] = ReviewPreviousNoteButton;
         RibbonBackplaneControlNames["Previous Note"] = "ReviewPreviousNoteButton";
-        try { RegisterName("ReviewNextNoteButton", ReviewNextNoteButton); } catch (System.ArgumentException) { }
-        RibbonMetadata.SetCommandName(ReviewNextNoteButton, "Next Note");
-        RibbonBackplaneControls["Next Note"] = ReviewNextNoteButton;
         RibbonBackplaneControlNames["Next Note"] = "ReviewNextNoteButton";
         try { RegisterName("ProtectSheetButton", ProtectSheetButton); } catch (System.ArgumentException) { }
         RibbonMetadata.SetCommandName(ProtectSheetButton, "Protect Sheet");
