@@ -22,7 +22,10 @@ public sealed class MainWindow : Window
     private FileCommands _file = null!;
     private AutosaveCoordinator _autosave = null!;
     private DocumentView _editor = null!;
+    private Ruler _hRuler = null!;
+    private Ruler _vRuler = null!;
     private TextBlock _titleText = null!;
+    private TextBlock _pageText = null!;
     private TextBlock _countsText = null!;
     private Slider _zoomSlider = null!;
     private TextBlock _zoomLabel = null!;
@@ -49,6 +52,7 @@ public sealed class MainWindow : Window
     private UIElement _ribbon = null!;
     private StatusBar _status = null!;
     private StatusBarItem _dataFolderItem = null!;
+    private StatusBarItem _viewSwitchItem = null!;
     private StatusBarItem _zoomItem = null!;
     private bool _readMode;
     private bool _navPaneVisibleBeforeReadMode;
@@ -98,11 +102,20 @@ public sealed class MainWindow : Window
 
         var status = new StatusBar();
         _status = status;
+
+        // Word-style left cluster: "Page X of Y" then the live word/character counts.
+        _pageText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+        status.Items.Add(new StatusBarItem { Content = _pageText });
+        status.Items.Add(new Separator());
         _countsText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         status.Items.Add(new StatusBarItem { Content = _countsText });
         status.Items.Add(new Separator());
         _dataFolderItem = new StatusBarItem { Content = $"Data folder: {ResolveDataFolderLabel()}" };
         status.Items.Add(_dataFolderItem);
+
+        // Word-style right cluster: view-switch buttons (Read Mode / Print Layout) then the zoom control.
+        _viewSwitchItem = new StatusBarItem { HorizontalAlignment = HorizontalAlignment.Right, Content = BuildViewSwitchControl() };
+        status.Items.Add(_viewSwitchItem);
         _zoomItem = new StatusBarItem { HorizontalAlignment = HorizontalAlignment.Right, Content = BuildZoomControl() };
         status.Items.Add(_zoomItem);
         DockPanel.SetDock(status, Dock.Bottom);
@@ -116,12 +129,40 @@ public sealed class MainWindow : Window
         // desk. The editor sizes/centres itself to the page width in Print-Layout mode (see
         // DocumentView.ApplyPageChrome); the grey shows on either side. In plain/continuous mode the editor
         // stretches to fill, so the grey is fully covered and the look is unchanged. Purely host chrome.
+        // Word-style rulers (Print-Layout only): a horizontal tick scale above the page and a thinner
+        // vertical scale down its left edge. Both are passive, read-only chrome (see Ruler) that mirror the
+        // page geometry; the corner cell where they meet stays blank. The editor sits in the bottom-right
+        // cell so the page floats on the grey workspace exactly as before.
+        _hRuler = new Ruler(editor, Ruler.Orientation.Horizontal);
+        _vRuler = new Ruler(editor, Ruler.Orientation.Vertical);
+
+        var workspaceGrid = new Grid();
+        workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        workspaceGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        workspaceGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        Grid.SetRow(_hRuler, 0);
+        Grid.SetColumn(_hRuler, 1);
+        workspaceGrid.Children.Add(_hRuler);
+
+        Grid.SetRow(_vRuler, 1);
+        Grid.SetColumn(_vRuler, 0);
+        workspaceGrid.Children.Add(_vRuler);
+
+        Grid.SetRow(editor, 1);
+        Grid.SetColumn(editor, 1);
+        workspaceGrid.Children.Add(editor);
+
         _workspace = new Border
         {
             Background = WorkspaceBrush,
-            Child = editor
+            Child = workspaceGrid
         };
         root.Children.Add(_workspace);
+
+        // Keep the indent/tab markers on the horizontal ruler following the caret/selection.
+        editor.SelectionChanged += (_, _) => _hRuler.Refresh();
 
         CommandBindings.Add(new CommandBinding(ApplicationCommands.New, (_, _) => _file.New()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, (_, _) => _file.Open()));
@@ -237,6 +278,8 @@ public sealed class MainWindow : Window
     // (TextChanged), on selection change, and on document load.
     private void UpdateCounts()
     {
+        UpdatePageStatus();
+
         var selectionText = _editor.Selection.Text;
         if (!string.IsNullOrEmpty(selectionText))
         {
@@ -249,6 +292,34 @@ public sealed class MainWindow : Window
         _editor.CommitToModel();
         var stats = WordCount.Of(_editor.Model);
         _countsText.Text = $"Words: {stats.Words}   Characters: {stats.CharactersWithSpaces}   Paragraphs: {stats.Paragraphs}";
+    }
+
+    // Refresh the Word-style "Page X of Y" status: an approximate page position derived from the editor's
+    // single continuous flow against the page's printable height (see DocumentView.PageInfo). It tracks the
+    // on-screen page-break markers, which can differ by a page from the fully paginated Print Preview.
+    private void UpdatePageStatus()
+    {
+        var (current, total) = _editor.PageInfo();
+        _pageText.Text = $"Page {current} of {total}";
+    }
+
+    // The Word-style view-switch cluster on the right of the status bar: a Read Mode toggle and a Print
+    // Layout toggle. They reuse the existing MainWindow toggles (ToggleReadMode / TogglePrintLayout), so the
+    // ribbon View tab and these buttons drive the same state. No new view state is introduced here.
+    private UIElement BuildViewSwitchControl()
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+        Button ViewButton(string label, string tip, Action onClick)
+        {
+            var button = new Button { Content = label, Padding = new Thickness(8, 1, 8, 1), Margin = new Thickness(2, 0, 2, 0), ToolTip = tip };
+            button.Click += (_, _) => onClick();
+            return button;
+        }
+
+        panel.Children.Add(ViewButton("Read Mode", "Toggle distraction-free Read Mode", ToggleReadMode));
+        panel.Children.Add(ViewButton("Print Layout", "Toggle Print Layout page view", TogglePrintLayout));
+        return panel;
     }
 
     // The left navigation pane: a header plus a ListBox of heading outline entries (indented by level).
@@ -324,6 +395,7 @@ public sealed class MainWindow : Window
             _titleBar.Visibility = Visibility.Collapsed;
             _ribbon.Visibility = Visibility.Collapsed;
             _dataFolderItem.Visibility = Visibility.Collapsed;
+            _viewSwitchItem.Visibility = Visibility.Collapsed;
             _zoomItem.Visibility = Visibility.Collapsed;
 
             // Collapse the navigation pane while reading (without disturbing its remembered state).
@@ -342,6 +414,7 @@ public sealed class MainWindow : Window
             _titleBar.Visibility = Visibility.Visible;
             _ribbon.Visibility = Visibility.Visible;
             _dataFolderItem.Visibility = Visibility.Visible;
+            _viewSwitchItem.Visibility = Visibility.Visible;
             _zoomItem.Visibility = Visibility.Visible;
 
             // Restore the editor's original presentation (including any Print-Layout page sizing/shadow).
