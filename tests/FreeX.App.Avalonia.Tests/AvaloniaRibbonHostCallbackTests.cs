@@ -170,6 +170,12 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("view.freezePanes")]
     [InlineData("view.zoom100")]
     [InlineData("pageLayout.margins")]
+    [InlineData("home.strikethrough")]
+    [InlineData("home.increaseFont")]
+    [InlineData("home.fontColorRed")]
+    [InlineData("home.alignTop")]
+    [InlineData("home.increaseIndent")]
+    [InlineData("home.increaseDecimal")]
     public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
     {
         // The id exists in the ribbon definition (else it is not a NoOp default to begin with) ...

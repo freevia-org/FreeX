@@ -274,7 +274,23 @@ internal static class SampleRibbon
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Underline),
                     });
+                    g.Toggle("home.strikethrough", "Strikethrough", c => c with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Strikethrough),
+                    });
+                    g.Button("home.increaseFont", "Increase Font Size", c => c with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
+                    });
+                    g.Button("home.decreaseFont", "Decrease Font Size", c => c with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
+                    });
                     g.Separator();
+                    g.Dropdown("home.fontColor", "Font Color", FontColorMenu(), c => c with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
+                    });
                     g.Dropdown("home.fillColor", "Fill Color", FillColorMenu(), c => c with
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill),
@@ -287,6 +303,11 @@ internal static class SampleRibbon
 
                 home.Group("alignment", "Alignment", "A", 80, g =>
                 {
+                    g.Button("home.alignTop", "Top Align", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align) });
+                    g.Button("home.alignMiddle", "Middle Align", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align) });
+                    g.Button("home.alignBottom", "Bottom Align", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align) });
+                    g.Button("home.orientation", "Orientation", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Orientation) });
+                    g.Separator();
                     g.Button("home.alignLeft", "Align Left", c => c with
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align),
@@ -299,6 +320,8 @@ internal static class SampleRibbon
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align),
                     });
+                    g.Button("home.decreaseIndent", "Decrease Indent", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align) });
+                    g.Button("home.increaseIndent", "Increase Indent", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align) });
                     g.Button("home.wrapText", "Wrap Text", c => c with
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Wrap),
@@ -324,9 +347,21 @@ internal static class SampleRibbon
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Percent),
                     });
+                    g.Button("home.accounting", "Accounting", c => c with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Currency),
+                    });
                     g.Button("home.comma", "Comma", c => c with
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Comma),
+                    });
+                    g.Button("home.increaseDecimal", "Increase Decimal", c => c with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Decimal),
+                    });
+                    g.Button("home.decreaseDecimal", "Decrease Decimal", c => c with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Decimal),
                     });
                 });
 
@@ -814,6 +849,15 @@ internal static class SampleRibbon
         new RibbonMenuItem("Yellow", "home.fillYellow"),
         new RibbonMenuItem("Green", "home.fillGreen"),
         new RibbonMenuItem("More Colors...", "home.fillMore"),
+    });
+
+    private static RibbonMenu FontColorMenu() => new(new[]
+    {
+        new RibbonMenuItem("Automatic", "home.fontColorAuto"),
+        new RibbonMenuItem("Red", "home.fontColorRed"),
+        new RibbonMenuItem("Green", "home.fontColorGreen"),
+        new RibbonMenuItem("Blue", "home.fontColorBlue"),
+        new RibbonMenuItem("More Colors...", "home.fontColorMore"),
     });
 
     private static RibbonMenu BordersMenu() => new(new[]
