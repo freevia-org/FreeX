@@ -925,19 +925,11 @@ public static class DocxWriter
                 TextAlignment.Justify => "both",
                 _ => "left"
             })));
-        // Tab stops (w:tabs): one w:tab per stop, position in dxa, alignment via w:val. Mirrors how
-        // w:ind/w:spacing carry their dxa values.
+        // Tab stops (w:tabs): one w:tab per stop, position in dxa, alignment via w:val, and an
+        // optional w:leader fill. Mirrors how w:ind/w:spacing carry their dxa values.
         if (f.TabStops.Count > 0)
             pPr.Add(new XElement(W + "tabs",
-                f.TabStops.Select(t => new XElement(W + "tab",
-                    new XAttribute(W + "val", t.Alignment switch
-                    {
-                        TabStopAlignment.Center => "center",
-                        TabStopAlignment.Right => "right",
-                        TabStopAlignment.Decimal => "decimal",
-                        _ => "left"
-                    }),
-                    new XAttribute(W + "pos", PointsToDxa(t.PositionPt))))));
+                f.TabStops.Select(BuildTabStop)));
         if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
             pPr.Add(new XElement(W + "spacing",
                 new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)),
@@ -968,6 +960,33 @@ public static class DocxWriter
                 new XAttribute(W + "fill", shading.TrimStart('#'))));
 
         return pPr.HasElements ? pPr : null;
+    }
+
+    /// <summary>
+    /// Builds one <c>w:tab</c> for a paragraph tab stop: alignment in <c>w:val</c>, position in
+    /// <c>w:pos</c> (dxa), and an optional <c>w:leader</c> fill emitted only when the stop carries
+    /// one (so leaderless stops round-trip byte-for-byte as before).
+    /// </summary>
+    private static XElement BuildTabStop(TabStop stop)
+    {
+        var tab = new XElement(W + "tab",
+            new XAttribute(W + "val", stop.Alignment switch
+            {
+                TabStopAlignment.Center => "center",
+                TabStopAlignment.Right => "right",
+                TabStopAlignment.Decimal => "decimal",
+                _ => "left"
+            }),
+            new XAttribute(W + "pos", PointsToDxa(stop.PositionPt)));
+        if (stop.Leader != TabLeader.None)
+            tab.Add(new XAttribute(W + "leader", stop.Leader switch
+            {
+                TabLeader.Dots => "dot",
+                TabLeader.Dashes => "hyphen",
+                TabLeader.Underline => "underscore",
+                _ => "none"
+            }));
+        return tab;
     }
 
     /// <summary>

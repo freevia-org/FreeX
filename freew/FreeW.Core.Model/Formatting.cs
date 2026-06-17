@@ -15,13 +15,23 @@ public enum ListKind { None, Bullet, Number, MultiLevel }
 public enum TabStopAlignment { Left, Center, Right, Decimal }
 
 /// <summary>
+/// Leader fill drawn across the empty space a tab character jumps over (maps to OOXML
+/// w:tab/@w:leader). <see cref="None"/> leaves the gap blank.
+/// </summary>
+public enum TabLeader { None, Dots, Dashes, Underline }
+
+/// <summary>
 /// Immutable paragraph tab stop (pPr/w:tabs/w:tab). Round-trips to docx as a single
-/// <c>w:tab</c> with <c>w:pos</c> in dxa (twentieths of a point) and <c>w:val</c> giving the
-/// alignment.
+/// <c>w:tab</c> with <c>w:pos</c> in dxa (twentieths of a point), <c>w:val</c> giving the
+/// alignment, and an optional <c>w:leader</c> for the fill drawn across the tab gap.
 /// </summary>
 /// <param name="PositionPt">Tab-stop position from the left margin, in points.</param>
 /// <param name="Alignment">How text aligns at the stop.</param>
-public sealed record TabStop(double PositionPt, TabStopAlignment Alignment = TabStopAlignment.Left);
+/// <param name="Leader">Fill drawn across the tab gap; <see cref="TabLeader.None"/> leaves it blank.</param>
+public sealed record TabStop(
+    double PositionPt,
+    TabStopAlignment Alignment = TabStopAlignment.Left,
+    TabLeader Leader = TabLeader.None);
 
 /// <summary>
 /// Vertical alignment of a run's glyphs relative to the baseline (rPr/w:vertAlign). Maps to docx

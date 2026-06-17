@@ -809,8 +809,9 @@ public static class DocxReader
 
     /// <summary>
     /// Reads paragraph tab stops (w:tabs) into the model list, one <see cref="TabStop"/> per w:tab.
-    /// Positions come from w:pos (dxa -> points); the alignment from w:val. "clear" stops (which
-    /// remove an inherited stop) carry no real position and are skipped. Returns an empty list if absent.
+    /// Positions come from w:pos (dxa -> points); the alignment from w:val; the optional leader fill
+    /// from w:leader (absent -> <see cref="TabLeader.None"/>). "clear" stops (which remove an inherited
+    /// stop) carry no real position and are skipped. Returns an empty list if absent.
     /// </summary>
     private static IReadOnlyList<TabStop> ReadTabStops(XElement? tabs)
     {
@@ -829,7 +830,14 @@ public static class DocxReader
                 "decimal" => TabStopAlignment.Decimal,
                 _ => TabStopAlignment.Left
             };
-            stops.Add(new TabStop(DxaToPoints(tab.Attribute(W + "pos")?.Value), alignment));
+            var leader = tab.Attribute(W + "leader")?.Value switch
+            {
+                "dot" => TabLeader.Dots,
+                "hyphen" => TabLeader.Dashes,
+                "underscore" => TabLeader.Underline,
+                _ => TabLeader.None
+            };
+            stops.Add(new TabStop(DxaToPoints(tab.Attribute(W + "pos")?.Value), alignment, leader));
         }
         return stops;
     }
