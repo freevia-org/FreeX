@@ -109,12 +109,18 @@ public static class DocxWriter
 
         // A word/theme/theme1.xml part is always emitted (real Word documents always carry one); it
         // serialises the document's DocumentTheme as a real clrScheme/fontScheme/fmtScheme.
-        // The png Default content-type is needed when ANY part carries a png — body images or header/footer
-        // images.
-        var hasAnyPng = images.Count > 0 || headerFooterParts.Any(p => p.Images.Count > 0);
+        // [Content_Types].xml needs a Default for every image extension actually used by ANY part — body
+        // images or header/footer images — so non-PNG pictures (jpeg/gif/bmp/tiff/emf/wmf) are declared too.
+        // Ordered (png first) for deterministic output; only extensions present are emitted.
+        var imageExtensions = images
+            .Concat(headerFooterParts.SelectMany(p => p.Images))
+            .Select(p => InlineImage.ExtensionFor(p.Image.Format))
+            .Distinct()
+            .OrderBy(ext => ext, StringComparer.Ordinal)
+            .ToList();
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(hasAnyPng, hasLists, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, hasLists, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
@@ -146,7 +152,7 @@ public static class DocxWriter
             {
                 WritePart(archive, "word/_rels/" + part.FileName + ".rels", BuildHeaderFooterRels(part));
                 foreach (var image in part.Images)
-                    WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
+                    WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
             }
         }
         if (hasFootnotes)
@@ -156,7 +162,7 @@ public static class DocxWriter
         if (hasComments)
             WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document));
         foreach (var image in images)
-            WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.PngBytes);
+            WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
         foreach (var chart in charts)
         {
             WritePart(archive, "word/charts/" + chart.FileName, BuildChartSpace(chart));
@@ -244,7 +250,7 @@ public static class DocxWriter
                         // Continue the image numbering so the icon media file name never clashes with a body
                         // image; the appended part is emitted by the ordinary media/rel/content-type loops.
                         var imageIndex = images.Count + 1;
-                        iconPart = new ImagePart(icon, $"rIdImg{imageIndex}", $"image{imageIndex}.png", (uint)imageIndex);
+                        iconPart = new ImagePart(icon, $"rIdImg{imageIndex}", $"image{imageIndex}.{InlineImage.ExtensionFor(icon.Format)}", (uint)imageIndex);
                         images.Add(iconPart);
                     }
                     embedded.Add(new EmbeddedObjectPart(obj, $"rIdOle{index}", $"oleObject{index}.bin", $"_oleObj{index}", iconPart));
@@ -353,7 +359,7 @@ public static class DocxWriter
                 if (run.Image is { } image)
                 {
                     var index = images.Count + 1;
-                    images.Add(new ImagePart(image, $"rIdImg{index}", $"image{index}.png", (uint)index));
+                    images.Add(new ImagePart(image, $"rIdImg{index}", $"image{index}.{InlineImage.ExtensionFor(image.Format)}", (uint)index));
                 }
         return images;
     }
@@ -486,8 +492,9 @@ public static class DocxWriter
                     var index = images.Count + 1;
                     // The rId is part-local (lives in word/_rels/<part>.xml.rels), so a plain rIdImgN never
                     // collides with the document-level image ids. The media file name embeds the part stem so
-                    // each part's media files are unique within word/media/.
-                    images.Add(new ImagePart(image, $"rIdImg{index}", $"{stem}_image{index}.png", (uint)index));
+                    // each part's media files are unique within word/media/, and carries the image's real
+                    // extension so non-PNG header/footer images round-trip too.
+                    images.Add(new ImagePart(image, $"rIdImg{index}", $"{stem}_image{index}.{InlineImage.ExtensionFor(image.Format)}", (uint)index));
                 }
         return images;
     }
@@ -544,16 +551,17 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(bool includePng, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts) => new(
+    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
             new XElement(Ct + "Default", new XAttribute("Extension", "xml"),
                 new XAttribute("ContentType", "application/xml")),
-            includePng
-                ? new XElement(Ct + "Default", new XAttribute("Extension", "png"),
-                    new XAttribute("ContentType", "image/png"))
-                : null,
+            // One image Default per extension a body or header/footer part actually carries (png/jpeg/gif/
+            // bmp/tiff/emf/wmf). A PNG-only document emits exactly the single png Default as before.
+            imageExtensions.Select(ext => new XElement(Ct + "Default",
+                new XAttribute("Extension", ext),
+                new XAttribute("ContentType", ImageContentTypeForExtension(ext)))),
             // A single Default for the bin extension covers every embedded OLE payload part.
             hasEmbeddedObjects
                 ? new XElement(Ct + "Default", new XAttribute("Extension", "bin"),

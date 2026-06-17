@@ -42,9 +42,29 @@ public enum VerticalAnchor
 }
 
 /// <summary>
-/// An inline raster image carried by a <see cref="Run"/>. Modelled at the run level (rather than as
+/// The raster image format an <see cref="InlineImage"/> carries. Determines the media-part extension /
+/// content-type the writer emits and is recovered on read from the relationship target's extension and/or
+/// the bytes' magic number. <see cref="Png"/> is the historical default so existing images are unchanged.
+/// EMF/WMF are vector metafiles rather than raster, but are carried the same way (Word embeds them as
+/// pictures) so arbitrary picture formats round-trip without transcoding.
+/// </summary>
+public enum ImageFormat
+{
+    Png,
+    Jpeg,
+    Gif,
+    Bmp,
+    Tiff,
+    Emf,
+    Wmf
+}
+
+/// <summary>
+/// An inline image carried by a <see cref="Run"/>. Modelled at the run level (rather than as
 /// a block) so it round-trips through docx as an inline w:drawing without touching paragraph storage.
-/// PNG bytes only; size is in points to match the rest of the FreeW unit model.
+/// Carries the original image bytes plus their <see cref="Format"/>, so pictures in any supported format
+/// (PNG/JPEG/GIF/BMP/TIFF/EMF/WMF) round-trip verbatim — they are never transcoded. Size is in points to
+/// match the rest of the FreeW unit model.
 ///
 /// By default an image is inline (<see cref="ImageWrapping.Inline"/>) and serialises as <c>wp:inline</c>
 /// exactly as before. Setting <see cref="Wrapping"/> to a floating mode makes it serialise as a
@@ -52,12 +72,108 @@ public enum VerticalAnchor
 /// to <see cref="HorizontalAnchor"/>/<see cref="VerticalAnchor"/>. The position fields are ignored for an
 /// inline image, so existing inline-image construction and round-trips are fully unaffected.
 /// </summary>
-public sealed class InlineImage(byte[] pngBytes, double widthPt, double heightPt)
+public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, ImageFormat format = ImageFormat.Png)
 {
-    /// <summary>The raw PNG image bytes (the only supported format).</summary>
-    public byte[] PngBytes { get; } = pngBytes;
+    /// <summary>The raw image bytes, stored verbatim in their original <see cref="Format"/>.</summary>
+    public byte[] Bytes { get; } = bytes;
+
+    /// <summary>
+    /// The image's binary format. Defaults to <see cref="ImageFormat.Png"/> so existing construction is
+    /// unchanged. The writer emits the media part with the matching extension/content-type, and the reader
+    /// recovers it from the part extension and/or the bytes' magic number.
+    /// </summary>
+    public ImageFormat Format { get; } = format;
+
+    /// <summary>
+    /// Backward-compatible alias for <see cref="Bytes"/> (the image was historically PNG-only). Kept so
+    /// existing callers/tests that read <c>PngBytes</c> still compile; it returns the raw bytes whatever the
+    /// actual <see cref="Format"/> is.
+    /// </summary>
+    public byte[] PngBytes => Bytes;
+
     public double WidthPt { get; set; } = widthPt;
     public double HeightPt { get; set; } = heightPt;
+
+    /// <summary>
+    /// Detects an <see cref="ImageFormat"/> from the leading magic bytes of <paramref name="bytes"/>,
+    /// falling back to <see cref="ImageFormat.Png"/> for empty/unrecognised data (so callers always get a
+    /// usable format). Recognises PNG (89 50 4E 47), JPEG (FF D8 FF), GIF (47 49 46 38), BMP (42 4D),
+    /// TIFF (49 49 2A 00 / 4D 4D 00 2A), EMF (01 00 00 00 … " EMF" at offset 40) and the WMF placeable
+    /// header (D7 CD C6 9A) / classic WMF header (01 00 09 00 / 02 00 09 00).
+    /// </summary>
+    public static ImageFormat DetectFormat(byte[] bytes)
+    {
+        if (bytes is null || bytes.Length < 2)
+            return ImageFormat.Png;
+
+        bool Starts(params byte[] sig)
+        {
+            if (bytes.Length < sig.Length)
+                return false;
+            for (var i = 0; i < sig.Length; i++)
+                if (bytes[i] != sig[i])
+                    return false;
+            return true;
+        }
+
+        if (Starts(0x89, 0x50, 0x4E, 0x47))
+            return ImageFormat.Png;
+        if (Starts(0xFF, 0xD8, 0xFF))
+            return ImageFormat.Jpeg;
+        if (Starts(0x47, 0x49, 0x46, 0x38))
+            return ImageFormat.Gif;
+        if (Starts(0x42, 0x4D))
+            return ImageFormat.Bmp;
+        if (Starts(0x49, 0x49, 0x2A, 0x00) || Starts(0x4D, 0x4D, 0x00, 0x2A))
+            return ImageFormat.Tiff;
+        // EMF: a 0x00000001 record type then, at byte offset 40, the ASCII signature " EMF".
+        if (Starts(0x01, 0x00, 0x00, 0x00) && bytes.Length >= 44
+            && bytes[40] == 0x20 && bytes[41] == 0x45 && bytes[42] == 0x4D && bytes[43] == 0x46)
+            return ImageFormat.Emf;
+        // WMF: the placeable-metafile header (D7 CD C6 9A) or a classic WMF header (01/02 00 09 00).
+        if (Starts(0xD7, 0xCD, 0xC6, 0x9A) || Starts(0x01, 0x00, 0x09, 0x00) || Starts(0x02, 0x00, 0x09, 0x00))
+            return ImageFormat.Wmf;
+
+        return ImageFormat.Png;
+    }
+
+    /// <summary>
+    /// The lower-case media-part file extension (no dot) for an <see cref="ImageFormat"/>, e.g.
+    /// <c>"png"</c>, <c>"jpeg"</c>. Used by the writer to name <c>imageN.&lt;ext&gt;</c> and to emit the
+    /// matching <c>[Content_Types].xml</c> Default.
+    /// </summary>
+    public static string ExtensionFor(ImageFormat format) => format switch
+    {
+        ImageFormat.Jpeg => "jpeg",
+        ImageFormat.Gif => "gif",
+        ImageFormat.Bmp => "bmp",
+        ImageFormat.Tiff => "tiff",
+        ImageFormat.Emf => "emf",
+        ImageFormat.Wmf => "wmf",
+        _ => "png"
+    };
+
+    /// <summary>
+    /// Maps a media-part file extension (with or without a leading dot, case-insensitive) to an
+    /// <see cref="ImageFormat"/>. Recognises both <c>jpg</c> and <c>jpeg</c>, and <c>tif</c>/<c>tiff</c>.
+    /// Returns null for an unknown/empty extension so the caller can fall back to magic-byte detection.
+    /// </summary>
+    public static ImageFormat? FormatForExtension(string? extension)
+    {
+        if (string.IsNullOrEmpty(extension))
+            return null;
+        return extension.TrimStart('.').ToLowerInvariant() switch
+        {
+            "png" => ImageFormat.Png,
+            "jpg" or "jpeg" => ImageFormat.Jpeg,
+            "gif" => ImageFormat.Gif,
+            "bmp" => ImageFormat.Bmp,
+            "tif" or "tiff" => ImageFormat.Tiff,
+            "emf" => ImageFormat.Emf,
+            "wmf" => ImageFormat.Wmf,
+            _ => null
+        };
+    }
 
     /// <summary>
     /// Optional alternative text (accessibility description). When set it round-trips through docx as
