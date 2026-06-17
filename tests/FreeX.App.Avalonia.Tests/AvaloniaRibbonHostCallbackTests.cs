@@ -146,7 +146,18 @@ public sealed class AvaloniaRibbonHostCallbackTests
 
         Assert.Contains("Function Library", groups);
         Assert.Contains("Defined Names", groups);
+        Assert.Contains("Formula Auditing", groups);
         Assert.Contains("Calculation", groups);
+    }
+
+    [Fact]
+    public void BuildDefinition_ReviewTab_HasNotesAndProtectGroups()
+    {
+        var review = SampleRibbon.BuildDefinition().Tabs.Single(t => t.Header == "Review");
+        var groups = review.Groups.Select(g => g.Header).ToList();
+
+        Assert.Contains("Notes", groups);
+        Assert.Contains("Protect", groups);
     }
 
     [Theory]

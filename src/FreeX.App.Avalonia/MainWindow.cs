@@ -687,6 +687,8 @@ public sealed partial class MainWindow : Window
                     ["home.findSelect"] = () => _ = ShowFindDialogAsync(),
                     // Insert tab (Links / Text groups).
                     ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
+                    // Formulas tab (Formula Auditing group).
+                    ["formulas.showFormulas"] = ToggleShowFormulas,
                     // Data tab (Forecast / Outline groups).
                     ["data.forecastSheet"] = () => _ = ShowForecastSheetDialogAsync(),
                     ["data.subtotal"] = () => _ = ShowSubtotalDialogAsync(),

@@ -577,6 +577,14 @@ internal static class SampleRibbon
                     g.Button("formulas.defineName", "Define Name", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Label) });
                     g.Button("formulas.createFromSelection", "Create from Selection", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Label) });
                 });
+                formulas.Group("formulasFormulaAuditing", "Formula Auditing", "U", 85, g =>
+                {
+                    g.Button("formulas.tracePrecedents", "Trace Precedents", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Search) });
+                    g.Button("formulas.traceDependents", "Trace Dependents", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Search) });
+                    g.Toggle("formulas.showFormulas", "Show Formulas", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Function) });
+                    g.Button("formulas.errorChecking", "Error Checking", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Warning) });
+                    g.Button("formulas.evaluateFormula", "Evaluate Formula", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Function) });
+                });
                 formulas.Group("formulasCalculation", "Calculation", "C", 80, g =>
                 {
                     g.Button("formulas.calcOptions", "Calculation Options", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh) });
@@ -605,6 +613,11 @@ internal static class SampleRibbon
                 {
                     g.Button("review.newComment", "New Comment", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Comment) });
                     g.Button("review.deleteComment", "Delete", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Delete) });
+                });
+                review.Group("reviewNotes", "Notes", "N", 75, g =>
+                {
+                    g.Button("review.newNote", "New Note", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Comment) });
+                    g.Button("review.showNotes", "Show Notes", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.List) });
                 });
                 review.Group("reviewProtect", "Protect", "T", 70, g =>
                 {
