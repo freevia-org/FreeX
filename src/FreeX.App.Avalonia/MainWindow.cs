@@ -2988,27 +2988,49 @@ public sealed partial class MainWindow : Window
     {
         var fill = Brush(drawingObject.FillColor ?? new CellColor(0x5B, 0x9B, 0xD5));
         var stroke = Brush(drawingObject.OutlineColor ?? new CellColor(0x2F, 0x55, 0x97));
-        return drawingObject.ShapeKind switch
+        var w = Math.Max(1, width);
+        var h = Math.Max(1, height);
+        switch (drawingObject.ShapeKind)
         {
-            DrawingShapeKind.Ellipse => new AvaloniaEllipse
+            case DrawingShapeKind.Ellipse:
+                return new AvaloniaEllipse
+                {
+                    Width = w,
+                    Height = h,
+                    Fill = fill,
+                    Stroke = stroke,
+                    StrokeThickness = 1.5,
+                    IsHitTestVisible = false,
+                };
+            case DrawingShapeKind.Line:
+                return CreateDrawingLineVisual(stroke, width);
+        }
+
+        if (drawingObject.ShapeKind is { } shapeKind &&
+            AvaloniaDrawingShapeGeometryFactory.CreateGeometry(shapeKind, w, h) is { } geometry)
+        {
+            return new global::Avalonia.Controls.Shapes.Path
             {
-                Width = Math.Max(1, width),
-                Height = Math.Max(1, height),
+                Data = geometry,
+                // Geometry is authored inside a (0,0,w,h) box, so render it 1:1.
+                Stretch = Stretch.None,
+                Width = w,
+                Height = h,
                 Fill = fill,
                 Stroke = stroke,
                 StrokeThickness = 1.5,
                 IsHitTestVisible = false,
-            },
-            DrawingShapeKind.Line => CreateDrawingLineVisual(stroke, width),
-            _ => new AvaloniaRectangle
-            {
-                Width = Math.Max(1, width),
-                Height = Math.Max(1, height),
-                Fill = fill,
-                Stroke = stroke,
-                StrokeThickness = 1.5,
-                IsHitTestVisible = false,
-            }
+            };
+        }
+
+        return new AvaloniaRectangle
+        {
+            Width = w,
+            Height = h,
+            Fill = fill,
+            Stroke = stroke,
+            StrokeThickness = 1.5,
+            IsHitTestVisible = false,
         };
     }
 
