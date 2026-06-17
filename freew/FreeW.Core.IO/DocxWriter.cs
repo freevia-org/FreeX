@@ -2114,8 +2114,16 @@ public static class DocxWriter
     private static XElement? BuildRunProperties(RunFormatting f)
     {
         // Children MUST follow the CT_RPr (EG_RPrBase) schema sequence, otherwise Word's strict
-        // validator rejects the run: rFonts, b, i, caps, smallCaps, strike, color, sz, szCs, u, shd,
-        // vertAlign. (FreeW's own reader is order-independent, so order bugs only surface in Word.)
+        // validator rejects the run. The relevant slots, in order, are:
+        //   rFonts, b, i, caps, smallCaps, strike, color, spacing, kern, position, sz, szCs, u, shd,
+        //   vertAlign, <w14 extension region>.
+        // The advanced-typography elements added for Z1 occupy these slots:
+        //   * w:spacing / w:kern / w:position are core EG_RPrBase elements that sit AFTER w:color and
+        //     BEFORE w:sz (this exact order — spacing, then kern, then position — is the schema sequence).
+        //   * w14:ligatures / w14:numForm / w14:numSpacing / w14:stylisticSets are Office-2010 extension
+        //     elements that have no slot in the base CT_RPr sequence; Word emits them at the END of the run
+        //     properties (after the core elements above). We follow that placement, emitting them last.
+        // (FreeW's own reader is order-independent, so order bugs only surface in Word's strict validator.)
         var rPr = new XElement(W + "rPr");
         if (f.FontFamily is { Length: > 0 } family)
             rPr.Add(new XElement(W + "rFonts", new XAttribute(W + "ascii", family), new XAttribute(W + "hAnsi", family)));
@@ -2131,6 +2139,18 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "strike"));
         if (f.ColorHex is { Length: > 0 } color)
             rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
+        // w:spacing (character spacing, expand/condense) — value in twentieths of a point (dxa), signed.
+        // Emitted only when non-zero so default runs round-trip byte-unchanged.
+        if (f.CharacterSpacingPt != 0)
+            rPr.Add(new XElement(W + "spacing", new XAttribute(W + "val", PointsToDxa(f.CharacterSpacingPt))));
+        // w:kern (kerning minimum font size) — value in half-points. Emitted only when a positive
+        // threshold is set.
+        if (f.KerningMinSizePt is { } kern && kern > 0)
+            rPr.Add(new XElement(W + "kern", new XAttribute(W + "val", PointsToHalfPoints(kern))));
+        // w:position (raised/lowered baseline) — value in half-points, signed (positive raised). Emitted
+        // only when non-zero.
+        if (f.PositionPt != 0)
+            rPr.Add(new XElement(W + "position", new XAttribute(W + "val", PointsToHalfPoints(f.PositionPt))));
         if (f.FontSizePt is { } size)
         {
             var halfPoints = PointsToHalfPoints(size);
@@ -2147,6 +2167,21 @@ public static class DocxWriter
         if (f.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
             rPr.Add(new XElement(W + "vertAlign",
                 new XAttribute(W + "val", f.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript")));
+
+        // --- w14 OpenType extension region (after the core EG_RPrBase elements) ---
+        // w14:ligatures
+        if (LigaturesToken(f.Ligatures) is { } ligatures)
+            rPr.Add(new XElement(W14 + "ligatures", new XAttribute(W14 + "val", ligatures)));
+        // w14:numForm
+        if (NumberFormToken(f.NumberForm) is { } numForm)
+            rPr.Add(new XElement(W14 + "numForm", new XAttribute(W14 + "val", numForm)));
+        // w14:numSpacing
+        if (NumberSpacingToken(f.NumberSpacing) is { } numSpacing)
+            rPr.Add(new XElement(W14 + "numSpacing", new XAttribute(W14 + "val", numSpacing)));
+        // w14:stylisticSets — a container of w14:styleSet entries; we model a single optional set id.
+        if (f.StylisticSet is { } styleSetId)
+            rPr.Add(new XElement(W14 + "stylisticSets",
+                new XElement(W14 + "styleSet", new XAttribute(W14 + "id", styleSetId))));
 
         return rPr.HasElements ? rPr : null;
     }
