@@ -19,16 +19,31 @@ internal static class FormControlRenderPlanner
     public static bool TryCreateAnchorRange(FormControlModel control, out DrawingAnchorRange? anchor)
     {
         anchor = null;
+
+        // Prefer the preserved sub-cell EMU offsets (already a 0-based DrawingAnchorRange) so the
+        // control rect reflects its true sub-cell position+size rather than snapping to whole cells.
+        if (control.AnchorOffsets is { } offsets)
+        {
+            anchor = offsets;
+            return true;
+        }
+
         if (control.Anchor is not { } range)
             return false;
 
-        // CellAddress is 1-based (Excel convention); DrawingAnchorRange is 0-based
-        // (the planner re-adds +1 internally), so subtract one from each endpoint.
+        // Whole-cell fallback (offsets absent): CellAddress is 1-based (Excel convention);
+        // DrawingAnchorRange is 0-based (the planner re-adds +1 internally), so subtract one.
         anchor = new DrawingAnchorRange(
             new DrawingAnchorPoint(range.Start.Col - 1, 0, range.Start.Row - 1, 0),
             new DrawingAnchorPoint(range.End.Col - 1, 0, range.End.Row - 1, 0));
         return true;
     }
+
+    /// <summary>
+    /// Whether the control carries preserved sub-cell EMU offsets. When true the render uses the
+    /// offset-aware drawing-anchor rect; when false it falls back to a whole-cell span.
+    /// </summary>
+    public static bool HasSubCellOffsets(FormControlModel control) => control.AnchorOffsets is not null;
 
     /// <summary>
     /// Whether this control kind has a static-chrome renderer. Interactive-only or

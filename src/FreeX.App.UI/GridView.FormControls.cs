@@ -44,13 +44,27 @@ public partial class GridView
                 continue;
             if (!CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn))
                 continue;
-            if (!GridDrawingObjectPlanner.TryCreateSpanningAnchorRect(
+
+            // When sub-cell EMU offsets were preserved at load, use the offset-aware drawing-anchor
+            // rect (same path pictures/slicers use) so the control sits at its true sub-cell position
+            // and size. Otherwise fall back to the whole-cell span over the from/to anchor cells.
+            var hasOffsets = FormControlRenderPlanner.HasSubCellOffsets(control);
+            var built = hasOffsets
+                ? GridDrawingObjectPlanner.TryCreateDrawingAnchorRect(
                     metricLookups.Rows,
                     metricLookups.Columns,
                     anchor,
                     ActualRowHeaderWidth,
                     EffectiveColHeaderHeight,
-                    out var rect))
+                    out var rect)
+                : GridDrawingObjectPlanner.TryCreateSpanningAnchorRect(
+                    metricLookups.Rows,
+                    metricLookups.Columns,
+                    anchor,
+                    ActualRowHeaderWidth,
+                    EffectiveColHeaderHeight,
+                    out rect);
+            if (!built)
                 continue;
             if (!IntersectsDrawingViewport(rect, 0, visibleRight, visibleBottom))
                 continue;
