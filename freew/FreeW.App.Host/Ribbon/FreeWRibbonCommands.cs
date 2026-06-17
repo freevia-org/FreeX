@@ -171,6 +171,18 @@ internal static class FreeWRibbonCommands
         // edits first so the counts reflect the current text, then computes from the model.
         registry.Register("freew.statistics", new StatisticsCommand(editor));
 
+        // Review tab — Proofing: custom dictionary + spelling options. The custom dictionary is a
+        // word-per-line .lex file persisted under FreeW's data folder; its Uri is registered with the
+        // editor's WPF spell checker so those words stop being flagged. "Add to Dictionary" takes the
+        // misspelled word at the caret, adds it to the dictionary (+ persists), and re-reads the file so
+        // it is no longer underlined. "Spell Check" is a stateful toggle over SpellCheck.IsEnabled.
+        var customDictionary = CustomDictionaryStore.Load();
+        editor.RegisterCustomDictionary(customDictionary.EnsureFileExists());
+        registry.Register("freew.add-to-dictionary", new AddToDictionaryCommand(editor, customDictionary));
+        var spellCheckToggle = new SpellCheckToggleCommand(editor);
+        registry.Register("freew.spellcheck-toggle", spellCheckToggle);
+        stateful.Add(("freew.spellcheck-toggle", spellCheckToggle));
+
         // Review tab — Tracking: toggle Track Changes mode (stateful so the ribbon reflects it). When
         // ON, marking the current selection as a tracked insertion/deletion is offered; turning it on
         // with a non-empty selection marks that selection as an insertion (a pragmatic stand-in for live
@@ -1079,6 +1091,45 @@ internal static class FreeWRibbonCommands
             var dialog = new StatisticsDialog(Window.GetWindow(editor)!, stats);
             dialog.ShowDialog();
         }
+    }
+
+    // Review > Proofing > Add to Dictionary: take the misspelled word the caret currently sits on, add
+    // it to FreeW's custom dictionary (persisted to the .lex file under the data folder), and re-read the
+    // dictionary so the word stops being flagged. When the caret is not on a spelling error, tell the
+    // user to click into a flagged (red-underlined) word first. A no-op for a word already present.
+    private sealed class AddToDictionaryCommand(DocumentView editor, CustomDictionaryStore dictionary) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var word = editor.MisspelledWordAtCaret();
+            if (string.IsNullOrEmpty(word))
+            {
+                MessageBox.Show(Window.GetWindow(editor),
+                    "Click into a misspelled (red-underlined) word first, then choose Add to Dictionary.",
+                    "FreeW", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // Add + persist; only refresh the live spell-check when the word was newly added (a word
+            // already in the dictionary needs no reload).
+            if (dictionary.Add(word))
+                editor.RefreshCustomDictionary();
+        }
+    }
+
+    // Review > Proofing > Spell Check: a stateful toggle over the editor's built-in spell checking
+    // (SpellCheck.IsEnabled). Executing flips the red-squiggle checking on/off; the checked state
+    // reflects whether checking is currently on so the ribbon button shows it at a glance.
+    private sealed class SpellCheckToggleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.ToggleSpellCheck();
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.SpellCheckEnabled);
     }
 
     // Review > Tracking > Track Changes: a stateful toggle over the editor's Track Changes mode. Live

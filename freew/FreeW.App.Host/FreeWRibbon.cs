@@ -215,6 +215,8 @@ internal static class FreeWRibbon
                 tab.Group("proofing", "Proofing", "P", 100, g =>
                 {
                     g.Button("freew.statistics", "Word Count");
+                    g.Toggle("freew.spellcheck-toggle", "Spell Check");
+                    g.Button("freew.add-to-dictionary", "Add to Dictionary");
                 });
                 tab.Group("comments", "Comments", "C", 100, g =>
                 {
