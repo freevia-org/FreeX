@@ -2164,6 +2164,33 @@ public static class DocxReader
         // Right-to-left paragraph direction (w:bidi), read as a toggle like the flow-control flags.
         var rtl = ReadToggle(pPr, "bidi");
 
+        // Line spacing (w:spacing/@w:line + @w:lineRule). Only override the model default when w:line is
+        // explicitly present, so paragraphs that inherit spacing keep FreeW's 1.15 default unchanged.
+        var lineRuleAttr = spacing?.Attribute(W + "lineRule")?.Value;
+        var lineVal = spacing?.Attribute(W + "line")?.Value;
+        var lineRule = ParagraphFormatting.Default.LineRule;
+        var lineSpacing = ParagraphFormatting.Default.LineSpacing;
+        var lineHeightPt = 0.0;
+        if (lineVal is not null && double.TryParse(lineVal, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var lineRaw))
+        {
+            switch (lineRuleAttr)
+            {
+                case "exact":
+                    lineRule = LineSpacingRule.Exact;
+                    lineHeightPt = lineRaw / 20.0; // twentieths of a point -> points
+                    break;
+                case "atLeast":
+                    lineRule = LineSpacingRule.AtLeast;
+                    lineHeightPt = lineRaw / 20.0;
+                    break;
+                default: // "auto" or absent -> a multiple, value in 240ths of a line
+                    lineRule = LineSpacingRule.Multiple;
+                    lineSpacing = lineRaw / 240.0;
+                    break;
+            }
+        }
+
         return ParagraphFormatting.Default with
         {
             Border = ReadParagraphBorder(pPr.Element(W + "pBdr")),
@@ -2172,6 +2199,9 @@ public static class DocxReader
             KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
             Rtl = rtl,
+            LineRule = lineRule,
+            LineSpacing = lineSpacing,
+            LineHeightPt = lineHeightPt,
             ShadingColorHex = shading is null or "auto" ? null : "#" + shading.TrimStart('#'),
             Alignment = jc switch
             {

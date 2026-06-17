@@ -1717,10 +1717,32 @@ public static class DocxWriter
         if (f.TabStops.Count > 0)
             pPr.Add(new XElement(W + "tabs",
                 f.TabStops.Select(BuildTabStop)));
-        if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
-            pPr.Add(new XElement(W + "spacing",
-                new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)),
-                new XAttribute(W + "after", PointsToDxa(f.SpaceAfterPt))));
+        // w:spacing carries before/after AND line spacing. Line spacing is emitted only when it differs
+        // from the model default (a multiple of 1.15), so paragraphs with inherited/default spacing stay
+        // byte-unchanged; explicit single/1.5/double (auto) and exact/atLeast heights round-trip.
+        var hasLineSpacing = f.LineRule != LineSpacingRule.Multiple
+            || System.Math.Abs(f.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
+        if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0 || hasLineSpacing)
+        {
+            var spacingEl = new XElement(W + "spacing");
+            if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
+            {
+                spacingEl.Add(new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)));
+                spacingEl.Add(new XAttribute(W + "after", PointsToDxa(f.SpaceAfterPt)));
+            }
+            if (hasLineSpacing)
+            {
+                var (line, rule) = f.LineRule switch
+                {
+                    LineSpacingRule.Exact => ((int)System.Math.Round(f.LineHeightPt * 20), "exact"),
+                    LineSpacingRule.AtLeast => ((int)System.Math.Round(f.LineHeightPt * 20), "atLeast"),
+                    _ => ((int)System.Math.Round(f.LineSpacing * 240), "auto")
+                };
+                spacingEl.Add(new XAttribute(W + "line", line));
+                spacingEl.Add(new XAttribute(W + "lineRule", rule));
+            }
+            pPr.Add(spacingEl);
+        }
         if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt > 0)
             pPr.Add(new XElement(W + "ind",
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),

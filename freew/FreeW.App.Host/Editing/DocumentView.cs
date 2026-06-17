@@ -2721,9 +2721,18 @@ public sealed class DocumentView : RichTextBox
                 Math.Max(0, paraFmt.IndentRightPt * PxPerPoint),
                 Math.Max(0, paraFmt.SpaceAfterPt * PxPerPoint)),
             TextIndent = paraFmt.FirstLineIndentPt * PxPerPoint,
-            LineHeight = paraFmt.LineSpacing > 0
-                ? paraFmt.LineSpacing * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
-                : double.NaN,
+            // Line spacing. For the Multiple rule, LineHeight = multiple x font size. For Exact/AtLeast the
+            // model carries an absolute height in points; WPF only does absolute LineHeight, so both map to
+            // that height — and Exact additionally forces BlockLineHeight so the height is honoured even for
+            // taller content (AtLeast is approximated as exact, the closest FlowDocument behaviour).
+            LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple
+                ? (paraFmt.LineSpacing > 0
+                    ? paraFmt.LineSpacing * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
+                    : double.NaN)
+                : (paraFmt.LineHeightPt > 0 ? paraFmt.LineHeightPt * PxPerPoint : double.NaN),
+            LineStackingStrategy = paraFmt.LineRule == LineSpacingRule.Exact
+                ? LineStackingStrategy.BlockLineHeight
+                : LineStackingStrategy.MaxHeight,
             // Flow control: WPF's Paragraph exposes KeepWithNext/KeepTogether directly, so map them so
             // they survive an edit/commit cycle without a Tag. WidowControl has no FlowDocument slot and
             // is carried on the Tag instead (see below).
@@ -5173,7 +5182,18 @@ public sealed class DocumentView : RichTextBox
             WidowControl = widowControl,
             SpaceBeforePt = paragraph.Margin.Top / PxPerPoint,
             SpaceAfterPt = paragraph.Margin.Bottom / PxPerPoint,
-            LineSpacing = ReadLineSpacing(paragraph.LineHeight, document),
+            // An exact line height (BlockLineHeight, set for the Exact rule) reads back as an absolute
+            // height in points; otherwise the LineHeight is a multiple of the font size.
+            LineRule = paragraph.LineStackingStrategy == LineStackingStrategy.BlockLineHeight
+                ? LineSpacingRule.Exact
+                : LineSpacingRule.Multiple,
+            LineHeightPt = paragraph.LineStackingStrategy == LineStackingStrategy.BlockLineHeight
+                && !double.IsNaN(paragraph.LineHeight)
+                ? paragraph.LineHeight / PxPerPoint
+                : 0,
+            LineSpacing = paragraph.LineStackingStrategy == LineStackingStrategy.BlockLineHeight
+                ? ParagraphFormatting.Default.LineSpacing
+                : ReadLineSpacing(paragraph.LineHeight, document),
             IndentLeftPt = paragraph.Margin.Left / PxPerPoint,
             IndentRightPt = paragraph.Margin.Right / PxPerPoint,
             FirstLineIndentPt = paragraph.TextIndent / PxPerPoint,
