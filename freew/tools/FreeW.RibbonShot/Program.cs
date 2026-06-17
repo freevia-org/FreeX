@@ -36,6 +36,27 @@ static int Run(string outDir, string tabArg, double w, double h)
         win.UpdateLayout();
         win.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
 
+        // "backstage" mode: click the title-bar File button to open the Backstage overlay, then capture.
+        if (tabArg == "backstage")
+        {
+            var file = FindButtonByText(win, "File");
+            if (file is not null)
+            {
+                file.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                win.UpdateLayout();
+                win.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+            var bmp0 = new RenderTargetBitmap((int)w, (int)h, 96, 96, PixelFormats.Pbgra32);
+            bmp0.Render(win);
+            var p0 = Path.Combine(outDir, "backstage.png");
+            var enc0 = new PngBitmapEncoder();
+            enc0.Frames.Add(BitmapFrame.Create(bmp0));
+            using (var fs0 = File.Create(p0)) enc0.Save(fs0);
+            Console.WriteLine($"captured {p0}{(file is null ? " (File button not found!)" : "")}");
+            win.Close();
+            return 0;
+        }
+
         var tabs = FindTabControl(win);
         var indices = tabArg == "all"
             ? Enumerable.Range(0, tabs?.Items.Count ?? 1).ToList()
@@ -76,6 +97,22 @@ static TabControl? FindTabControl(DependencyObject root)
     for (int i = 0; i < n; i++)
     {
         var found = FindTabControl(VisualTreeHelper.GetChild(root, i));
+        if (found is not null) return found;
+    }
+    return null;
+}
+
+static System.Windows.Controls.Button? FindButtonByText(DependencyObject root, string text)
+{
+    if (root is System.Windows.Controls.Button b)
+    {
+        var s = b.Content as string ?? (b.Content as System.Windows.Controls.TextBlock)?.Text;
+        if (string.Equals(s, text, StringComparison.OrdinalIgnoreCase)) return b;
+    }
+    int n = VisualTreeHelper.GetChildrenCount(root);
+    for (int i = 0; i < n; i++)
+    {
+        var found = FindButtonByText(VisualTreeHelper.GetChild(root, i), text);
         if (found is not null) return found;
     }
     return null;
