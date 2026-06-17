@@ -2330,6 +2330,12 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult SetSelectedRangeFontColor(CellColor fontColor) =>
         ApplySelectedRangeStyle(new StyleDiff(FontColor: fontColor));
 
+    /// <summary>Applies a font family (typeface) to the selection. A blank name is a no-op success.</summary>
+    public WorkbookCellEditResult SetSelectedRangeFontName(string fontName) =>
+        string.IsNullOrWhiteSpace(fontName)
+            ? new WorkbookCellEditResult(true, null, [], null)
+            : ApplySelectedRangeStyle(new StyleDiff(FontName: fontName.Trim()));
+
     public WorkbookCellEditResult SetSelectedRangeFillColor(CellColor fillColor) =>
         ApplySelectedRangeStyle(new StyleDiff(FillColor: fillColor));
 

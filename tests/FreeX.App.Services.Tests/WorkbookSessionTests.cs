@@ -5476,6 +5476,37 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeFontName_AppliesFontFamilyToSelection()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook, "Book.fxl", "Opened .fxl.", IsFallback: false));
+        session.SelectRange(new GridRange(a1, a1));
+
+        var result = session.SetSelectedRangeFontName("  Arial  ");
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).FontName.Should().Be("Arial");
+    }
+
+    [Fact]
+    public void SetSelectedRangeFontName_BlankIsNoOpSuccess()
+    {
+        var workbook = CreateWorkbook();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook, "Book.fxl", "Opened .fxl.", IsFallback: false));
+
+        var result = session.SetSelectedRangeFontName("   ");
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetSelectedRangeFillColor_UsesStyleOnlyFormattingForEmptyCell()
     {
         var workbook = CreateWorkbook();

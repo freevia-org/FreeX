@@ -151,6 +151,29 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
+    public void SetFontName_BindsFontNameCombo_AndPassesSelectedValue()
+    {
+        string? applied = null;
+        var registry = SampleRibbon.BuildRegistry(
+            () => null, _ => { }, new AvaloniaRibbonHostCallbacks { SetFontName = v => applied = v });
+
+        Assert.True(registry.TryGet(new RibbonCommandId("home.fontName"), out var command));
+        Assert.IsType<RelayValueRibbonCommand>(command);
+
+        command!.Execute(RibbonCommandContext.ForSelectedValue("Arial"));
+        Assert.Equal("Arial", applied);
+    }
+
+    [Fact]
+    public void WithoutSetFontName_FontNameComboStaysNoOp()
+    {
+        var registry = SampleRibbon.BuildRegistry(() => null, _ => { });
+
+        Assert.True(registry.TryGet(new RibbonCommandId("home.fontName"), out var command));
+        Assert.IsType<NoOpRibbonCommand>(command);
+    }
+
+    [Fact]
     public void InsertTable_BindsBothRibbonAndHomeButtons_ToTheSameAction()
     {
         var count = 0;
