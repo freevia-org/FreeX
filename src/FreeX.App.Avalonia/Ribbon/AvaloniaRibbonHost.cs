@@ -522,10 +522,14 @@ internal static class SampleRibbon
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Filter),
                     });
+                    g.Button("data.reapply", "Reapply", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh) });
+                    g.Button("data.advancedFilter", "Advanced", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Filter) });
                 });
 
                 data.Group("tools", "Data Tools", "O", 80, g =>
                 {
+                    g.Button("data.flashFill", "Flash Fill", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Flash) });
+                    g.Button("data.removeDuplicates", "Remove Duplicates", c => c with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Delete) });
                     g.Dropdown("data.validation", "Data Validation", ValidationMenu(), c => c with
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Logical),

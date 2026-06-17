@@ -706,7 +706,11 @@ public sealed partial class MainWindow : Window
                     ["home.decreaseDecimal"] = DecreaseSelectedRangeDecimalPlaces,
                     // Formulas tab (Formula Auditing group).
                     ["formulas.showFormulas"] = ToggleShowFormulas,
-                    // Data tab (Forecast / Outline groups).
+                    // Data tab (Sort & Filter / Tools / Forecast / Outline groups).
+                    ["data.advancedFilter"] = () => _ = ShowAdvancedFilterDialogAsync(),
+                    ["data.flashFill"] = FlashFillSelectedRange,
+                    ["data.removeDuplicates"] = () => _ = ShowRemoveDuplicatesDialogAsync(),
+                    ["data.whatIf"] = () => _ = ShowGoalSeekDialogAsync(),
                     ["data.forecastSheet"] = () => _ = ShowForecastSheetDialogAsync(),
                     ["data.subtotal"] = () => _ = ShowSubtotalDialogAsync(),
                     // Page Layout tab (Page Setup dialog covers margins/orientation/size).
