@@ -759,6 +759,8 @@ public sealed partial class MainWindow : Window
                     // Home ▸ Cells: Insert / Delete Cells (with shift-direction prompt).
                     ["home.insertCells"] = () => _ = ShowInsertCellsDialogAsync(),
                     ["home.deleteCells"] = () => _ = ShowDeleteCellsDialogAsync(),
+                    // Home ▸ Styles: Cell Styles gallery.
+                    ["home.cellStyles"] = () => _ = ShowCellStylesGalleryAsync(),
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
