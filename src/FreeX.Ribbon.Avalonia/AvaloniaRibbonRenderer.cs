@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 namespace FreeX.Ribbon.Avalonia;
 
@@ -21,9 +22,19 @@ public static class AvaloniaRibbonRenderer
     private const double SmallRowHeight = 22;
     private const int MaxSmallRowsPerColumn = 3;
 
-    private static readonly IBrush SurfaceBrush = Brushes.White;
-    private static readonly IBrush DividerBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
-    private static readonly IBrush GroupLabelBrush = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
+    // Ribbon palette — a polished, Excel-like surface adapted to macOS conventions (light, low-contrast
+    // chrome with a single brand accent on the active tab). Exposed internally so the theme is unit-testable.
+    internal static readonly Color SurfaceColor = Color.FromRgb(0xF5, 0xF6, 0xF7);
+    internal static readonly Color AccentColor = Color.FromRgb(0x21, 0x73, 0x46);   // workbook brand green
+    internal static readonly Color DividerColor = Color.FromRgb(0xDA, 0xDC, 0xDF);
+    internal static readonly Color GroupLabelColor = Color.FromRgb(0x60, 0x60, 0x60);
+    internal static readonly Color HoverColor = Color.FromRgb(0xE6, 0xF2, 0xEC);     // light accent tint
+
+    private static readonly IBrush SurfaceBrush = new SolidColorBrush(SurfaceColor);
+    private static readonly IBrush AccentBrush = new SolidColorBrush(AccentColor);
+    private static readonly IBrush DividerBrush = new SolidColorBrush(DividerColor);
+    private static readonly IBrush GroupLabelBrush = new SolidColorBrush(GroupLabelColor);
+    private static readonly IBrush HoverBrush = new SolidColorBrush(HoverColor);
 
     /// <summary>Builds the content panel for one tab (the body shown under the tab header).</summary>
     public static Control BuildTabContent(RibbonTab tab, IRibbonCommandRegistry? registry = null)
@@ -55,6 +66,9 @@ public static class AvaloniaRibbonRenderer
         return new Border
         {
             Background = SurfaceBrush,
+            // A thin brand-accent rule under the tab strip, mirroring the desktop ribbon's active band.
+            BorderBrush = AccentBrush,
+            BorderThickness = new Thickness(0, 2, 0, 0),
             Padding = new Thickness(0, 4, 0, 0),
             Child = scroller,
         };
@@ -69,6 +83,7 @@ public static class AvaloniaRibbonRenderer
         {
             Background = SurfaceBrush,
         };
+        ApplyRibbonTheme(tabControl);
 
         foreach (var tab in definition.VisibleTabs)
         {
@@ -84,6 +99,39 @@ public static class AvaloniaRibbonRenderer
             tabControl.SelectedIndex = 0;
 
         return tabControl;
+    }
+
+    /// <summary>
+    /// Applies the ribbon theme styles to the tab control: the active tab takes the brand accent and a
+    /// semibold header, and ribbon buttons get a subtle accent-tinted hover — matching the desktop ribbon's
+    /// feedback while staying within the platform theme. Returns the styles applied (for tests/inspection).
+    /// </summary>
+    internal static void ApplyRibbonTheme(TabControl tabControl)
+    {
+        ArgumentNullException.ThrowIfNull(tabControl);
+
+        var selectedTab = new Style(x => x.OfType<TabItem>().Class(":selected"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.ForegroundProperty, AccentBrush),
+                new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold),
+            },
+        };
+
+        var buttonHover = new Style(x => x.OfType<Button>().Class(":pointerover"))
+        {
+            Setters = { new Setter(TemplatedControl.BackgroundProperty, HoverBrush) },
+        };
+
+        var toggleHover = new Style(x => x.OfType<ToggleButton>().Class(":pointerover"))
+        {
+            Setters = { new Setter(TemplatedControl.BackgroundProperty, HoverBrush) },
+        };
+
+        tabControl.Styles.Add(selectedTab);
+        tabControl.Styles.Add(buttonHover);
+        tabControl.Styles.Add(toggleHover);
     }
 
     private static Control BuildGroup(RibbonGroup group, IRibbonCommandRegistry? registry)
