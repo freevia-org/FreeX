@@ -440,6 +440,7 @@ public partial class MainWindow
             : null;
         SheetGrid.NativeSlicers = nativeVisualFilters?.Slicers;
         SheetGrid.NativeTimelines = nativeVisualFilters?.Timelines;
+        SheetGrid.FormControls = keepObjectData ? sheet?.FormControls : null;
         SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
         SheetGrid.Sparklines = sheet?.Sparklines;
         SheetGrid.SparklineValues = sheet is null
