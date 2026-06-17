@@ -1,0 +1,296 @@
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Text;
+using System.Xml.Linq;
+
+namespace FreeW.Core.IO.Tests;
+
+/// <summary>
+/// Round-trip coverage for the preserve-alongside strategy for numbering FreeW does not model: when a
+/// document's paragraphs reference a <c>word/numbering.xml</c> with rich (multilevel / custom-format) definitions
+/// FreeW's heuristic list model cannot represent, BOTH the original numbering.xml AND the paragraphs' w:numPr
+/// must survive a round-trip. FreeW's own authored lists keep using FreeW's fixed numIds (1/2/3); the preserved
+/// definitions are merged under a DISJOINT id range (abstractNumId&gt;=3 / numId&gt;=4) so the two never collide.
+/// An authored-from-scratch / FreeW-only-lists document carries no preserved numbering and is unaffected.
+/// </summary>
+public class PreservedNumberingRoundTripTests
+{
+    private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+    private static byte[] WriteBytes(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        return stream.ToArray();
+    }
+
+    private static TextDocument ReadDoc(byte[] docx)
+    {
+        using var stream = new MemoryStream(docx);
+        return DocxReader.Read(stream);
+    }
+
+    private static byte[] EntryBytes(byte[] docx, string entryPath)
+    {
+        using var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry(entryPath)!.Open();
+        using var buffer = new MemoryStream();
+        entry.CopyTo(buffer);
+        return buffer.ToArray();
+    }
+
+    private static XDocument EntryXml(byte[] docx, string entryPath) =>
+        XDocument.Load(new MemoryStream(EntryBytes(docx, entryPath)));
+
+    private static bool HasEntry(byte[] docx, string entryPath)
+    {
+        using var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read);
+        return zip.GetEntry(entryPath) is not null;
+    }
+
+    /// <summary>
+    /// Hand-authors a minimal-but-valid docx package whose two body paragraphs reference a numbering definition
+    /// (numId 12) that FreeW's reader does NOT map to one of its own list kinds — its w:num points at an abstract
+    /// (abstractNumId 99) that is not defined in the part, the way numbering carried by a referenced numbering
+    /// style is left unresolved. The same numbering.xml also carries a rich legal/multilevel abstract
+    /// (abstractNumId 5, upperRoman/decimal/lowerLetter custom level text + a w15 extension attribute) — the kind
+    /// of formatting FreeW cannot represent and drops today. Wired up through [Content_Types].xml +
+    /// document.xml.rels exactly as Word emits it.
+    /// </summary>
+    private static byte[] AuthorForeignNumberingPackage()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string content)
+            {
+                var entry = zip.CreateEntry(path, CompressionLevel.Optimal);
+                using var s = entry.Open();
+                var bytes = Encoding.UTF8.GetBytes(content);
+                s.Write(bytes, 0, bytes.Length);
+            }
+
+            Add("[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+                </Types>
+                """);
+
+            Add("_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+                </Relationships>
+                """);
+
+            Add("word/_rels/document.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+                </Relationships>
+                """);
+
+            // Two body paragraphs at two outline levels of the foreign numId 12 (which the reader leaves
+            // unmapped, so FreeW does not model these as its own lists).
+            Add("word/document.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:body>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="12"/></w:numPr></w:pPr><w:r><w:t>Article one</w:t></w:r></w:p>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="2"/><w:numId w:val="12"/></w:numPr></w:pPr><w:r><w:t>Sub clause</w:t></w:r></w:p>
+                    <w:sectPr/>
+                  </w:body>
+                </w:document>
+                """);
+
+            // A numbering.xml using arbitrary ids: a rich legal/multilevel abstract (abstractNumId 5: upperRoman
+            // / decimal / lowerLetter custom level text + a w15 extension attribute) FreeW cannot represent, and
+            // the num the paragraphs use (numId 12) points at abstractNumId 99 which is intentionally NOT defined
+            // here — so the reader leaves it unmapped (ListKind.None) and the preserve path must keep both the
+            // numbering.xml and the paragraphs' numPr. Both abstract + both nums survive verbatim (remapped).
+            Add("word/numbering.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">
+                  <w:abstractNum w:abstractNumId="5" w15:restartNumberingAfterBreak="0">
+                    <w:multiLevelType w:val="multilevel"/>
+                    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="Article %1."/><w:lvlJc w:val="left"/></w:lvl>
+                    <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1.%2"/><w:lvlJc w:val="left"/></w:lvl>
+                    <w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="%1.%2.%3"/><w:lvlJc w:val="left"/></w:lvl>
+                  </w:abstractNum>
+                  <w:num w:numId="7"><w:abstractNumId w:val="5"/></w:num>
+                  <w:num w:numId="12"><w:abstractNumId w:val="99"/></w:num>
+                </w:numbering>
+                """);
+        }
+        return stream.ToArray();
+    }
+
+    // --- Preserve-alongside: foreign numbering survives ---------------------------------------------
+
+    [Fact]
+    public void ForeignNumbering_PartAndNumPr_SurviveRoundTrip()
+    {
+        var read = ReadDoc(AuthorForeignNumberingPackage());
+
+        // The original numbering.xml was captured, and the two body paragraphs kept their original numPr
+        // (FreeW did NOT model their numbering as one of its own lists, so ListKind stays None).
+        read.Preserved.OriginalNumbering.Should().NotBeNull();
+        var paragraphs = read.Blocks.OfType<Paragraph>().ToList();
+        paragraphs[0].Formatting.ListKind.Should().Be(ListKind.None);
+        paragraphs[0].PreservedNumbering.Should().NotBeNull();
+        paragraphs[0].PreservedNumbering!.Value.NumId.Should().Be(12);
+        paragraphs[0].PreservedNumbering!.Value.Ilvl.Should().Be(0);
+        paragraphs[1].PreservedNumbering!.Value.Ilvl.Should().Be(2);
+
+        var rewritten = WriteBytes(read);
+
+        // numbering.xml survives, carrying the foreign definition's rich formatting (upperRoman, custom text).
+        HasEntry(rewritten, "word/numbering.xml").Should().BeTrue();
+        var numbering = EntryXml(rewritten, "word/numbering.xml").Root!;
+        numbering.Descendants(W + "numFmt").Attributes(W + "val").Select(a => a.Value)
+            .Should().Contain("upperRoman").And.Contain("lowerLetter");
+        numbering.Descendants(W + "lvlText").Attributes(W + "val").Select(a => a.Value)
+            .Should().Contain("Article %1.");
+
+        // Each body paragraph still carries a w:numPr that points at a w:num that actually EXISTS in the
+        // re-emitted numbering.xml (the remapped id), so the list still renders.
+        var emittedNumIds = numbering.Elements(W + "num")
+            .Select(n => n.Attribute(W + "numId")!.Value).ToHashSet();
+        var docParagraphs = EntryXml(rewritten, "word/document.xml").Root!
+            .Element(W + "body")!.Elements(W + "p").ToList();
+        foreach (var p in docParagraphs.Take(2))
+        {
+            var numId = p.Element(W + "pPr")!.Element(W + "numPr")!.Element(W + "numId")!.Attribute(W + "val")!.Value;
+            emittedNumIds.Should().Contain(numId);
+        }
+
+        // The two paragraphs reference the SAME (remapped) num and keep their distinct ilvls.
+        var n0 = docParagraphs[0].Element(W + "pPr")!.Element(W + "numPr")!;
+        var n1 = docParagraphs[1].Element(W + "pPr")!.Element(W + "numPr")!;
+        n0.Element(W + "numId")!.Attribute(W + "val")!.Value
+            .Should().Be(n1.Element(W + "numId")!.Attribute(W + "val")!.Value);
+        n0.Element(W + "ilvl")!.Attribute(W + "val")!.Value.Should().Be("0");
+        n1.Element(W + "ilvl")!.Attribute(W + "val")!.Value.Should().Be("2");
+    }
+
+    [Fact]
+    public void ForeignNumbering_SurvivesASecondRoundTrip()
+    {
+        // read → write → read → write: the preserved numbering + numPr must still resolve after a re-read of
+        // our own output, proving the capture is idempotent (our remapped output is itself captured on re-read).
+        var once = WriteBytes(ReadDoc(AuthorForeignNumberingPackage()));
+        var reread = ReadDoc(once);
+        reread.Preserved.OriginalNumbering.Should().NotBeNull();
+        reread.Blocks.OfType<Paragraph>().First().PreservedNumbering.Should().NotBeNull();
+
+        var twice = WriteBytes(reread);
+        HasEntry(twice, "word/numbering.xml").Should().BeTrue();
+        var emittedNumIds = EntryXml(twice, "word/numbering.xml").Root!.Elements(W + "num")
+            .Select(n => n.Attribute(W + "numId")!.Value).ToHashSet();
+        var p0 = EntryXml(twice, "word/document.xml").Root!.Element(W + "body")!.Elements(W + "p").First();
+        var numId = p0.Element(W + "pPr")!.Element(W + "numPr")!.Element(W + "numId")!.Attribute(W + "val")!.Value;
+        emittedNumIds.Should().Contain(numId);
+    }
+
+    // --- Disjoint id space: FreeW-authored list + foreign numbering coexist -------------------------
+
+    [Fact]
+    public void FreeWListAndForeignNumbering_Coexist_WithoutNumIdCollision()
+    {
+        // Start from a doc that ALREADY has foreign numbering, then add a FreeW-authored bullet list paragraph.
+        var read = ReadDoc(AuthorForeignNumberingPackage());
+        read.Blocks.Add(new Paragraph("FreeW bullet")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet }
+        });
+
+        var rewritten = WriteBytes(read);
+        var numbering = EntryXml(rewritten, "word/numbering.xml").Root!;
+
+        // No two w:num share a numId, and no two w:abstractNum share an abstractNumId (no collision).
+        var numIds = numbering.Elements(W + "num").Select(n => n.Attribute(W + "numId")!.Value).ToList();
+        numIds.Should().OnlyHaveUniqueItems();
+        var abstractIds = numbering.Elements(W + "abstractNum")
+            .Select(a => a.Attribute(W + "abstractNumId")!.Value).ToList();
+        abstractIds.Should().OnlyHaveUniqueItems();
+
+        // FreeW's own fixed ids (1/2/3) are present (FreeW authored a list); the foreign num was remapped clear
+        // of them (numId >= 4) so both render their own numbering.
+        numIds.Should().Contain("1");
+        numIds.Where(id => int.Parse(id) >= 4).Should().NotBeEmpty();
+
+        // Both lists render: the FreeW bullet paragraph points at numId 1; the foreign paragraphs point at the
+        // remapped (>=4) num that exists in numbering.xml.
+        var emitted = numIds.ToHashSet();
+        var docParas = EntryXml(rewritten, "word/document.xml").Root!.Element(W + "body")!.Elements(W + "p").ToList();
+        var foreign0 = docParas[0].Element(W + "pPr")!.Element(W + "numPr")!.Element(W + "numId")!.Attribute(W + "val")!.Value;
+        var freeWBullet = docParas[2].Element(W + "pPr")!.Element(W + "numPr")!.Element(W + "numId")!.Attribute(W + "val")!.Value;
+        emitted.Should().Contain(foreign0);
+        freeWBullet.Should().Be("1");
+        int.Parse(foreign0).Should().BeGreaterThanOrEqualTo(4);
+    }
+
+    // --- Regression: FreeW-authored lists are unaffected --------------------------------------------
+
+    [Fact]
+    public void FreeWAuthoredLists_RoundTripUnchanged_WithNoPreservedNumbering()
+    {
+        // A FreeW-authored bullet + number + multilevel document (no foreign numbering) must behave exactly as
+        // before: FreeW's fixed numIds 1/2/3, three abstractNums 0/1/2, and no preserved numbering captured.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("bullet") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet } });
+        doc.Blocks.Add(new Paragraph("number") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number, ListLevel = 1 } });
+        doc.Blocks.Add(new Paragraph("outline") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel, ListLevel = 1 } });
+
+        var bytes = WriteBytes(doc);
+        var numbering = EntryXml(bytes, "word/numbering.xml").Root!;
+
+        // Exactly FreeW's three abstractNums (0/1/2) and three nums (1/2/3), nothing extra.
+        numbering.Elements(W + "abstractNum").Select(a => a.Attribute(W + "abstractNumId")!.Value)
+            .Should().Equal("0", "1", "2");
+        numbering.Elements(W + "num").Select(n => n.Attribute(W + "numId")!.Value)
+            .Should().Equal("1", "2", "3");
+
+        // Read back: the kinds/levels survive and NO preserved numbering is captured.
+        var read = ReadDoc(bytes);
+        read.Preserved.OriginalNumbering.Should().NotBeNull(); // numbering.xml exists, so it is captured...
+        var paras = read.Blocks.OfType<Paragraph>().ToList();
+        // ...but FreeW maps each paragraph to its own ListKind, so none keeps a PreservedNumbering.
+        paras.Should().OnlyContain(p => p.PreservedNumbering == null);
+        paras[0].Formatting.ListKind.Should().Be(ListKind.Bullet);
+        paras[1].Formatting.ListKind.Should().Be(ListKind.Number);
+        paras[2].Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+
+        // Re-writing the read-back document yields the SAME FreeW-only numbering (no preserved merge kicked in,
+        // because no paragraph carries a PreservedNumbering).
+        var rewritten = WriteBytes(read);
+        var renumbering = EntryXml(rewritten, "word/numbering.xml").Root!;
+        renumbering.Elements(W + "num").Select(n => n.Attribute(W + "numId")!.Value)
+            .Should().Equal("1", "2", "3");
+    }
+
+    [Fact]
+    public void AuthoredFromScratch_NoNumbering_EmitsNoNumberingPart()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Plain body"));
+
+        var bytes = WriteBytes(doc);
+
+        HasEntry(bytes, "word/numbering.xml").Should().BeFalse();
+        var read = ReadDoc(bytes);
+        read.Preserved.OriginalNumbering.Should().BeNull();
+        read.Preserved.IsEmpty.Should().BeTrue();
+        read.Blocks.OfType<Paragraph>().Should().OnlyContain(p => p.PreservedNumbering == null);
+    }
+}
