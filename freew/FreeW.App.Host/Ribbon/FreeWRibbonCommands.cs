@@ -97,6 +97,12 @@ internal static class FreeWRibbonCommands
         Routed("freew.cut", ApplicationCommands.Cut);
         Routed("freew.copy", ApplicationCommands.Copy);
         Routed("freew.paste", ApplicationCommands.Paste);
+        // Home > Clipboard: paste-special. "Paste Text Only" strips all source formatting; "Merge
+        // Formatting" matches the destination. In FreeW both resolve to match-destination insertion at
+        // the caret (the pasted text inherits the caret run's formatting), routed through the editor's
+        // undoable InsertText path. See DocumentView.PastePlainText / PasteMergeFormatting.
+        registry.Register("freew.paste-plain", new ActionCommand(() => editor.PastePlainText()));
+        registry.Register("freew.paste-merge", new ActionCommand(() => editor.PasteMergeFormatting()));
 
         // Home > Clipboard > Format Painter: arm the painter from the current selection's run +
         // paragraph formatting; the editor stamps it onto the user's next mouse selection and disarms.

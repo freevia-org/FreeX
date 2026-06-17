@@ -2287,6 +2287,53 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Paste the clipboard's text as unformatted text at the caret ("Paste Text Only"). The clipboard
+    /// text is normalized (line endings canonicalized, control chars stripped — see
+    /// <see cref="PasteText.Normalize"/>) and inserted through <see cref="InsertText"/>, which joins the
+    /// run the caret sits in (so the pasted text inherits the destination formatting), replaces any active
+    /// selection, and is captured by the undo stack. All source/rich formatting is discarded. A no-op when
+    /// the clipboard holds no usable text. Reads <see cref="System.Windows.Clipboard"/> directly — no model
+    /// or docx changes.
+    /// </summary>
+    public void PastePlainText() => PasteFromClipboard();
+
+    /// <summary>
+    /// Paste the clipboard's text and merge it into the destination's formatting ("Merge Formatting"). In
+    /// FreeW, merging formatting means matching the destination: the pasted text takes the formatting of
+    /// the run the caret sits in (the same path <see cref="PastePlainText"/> uses), rather than carrying
+    /// the source's character formatting. The text is normalized (see <see cref="PasteText.Normalize"/>)
+    /// and inserted via <see cref="InsertText"/> so it is undoable. A no-op when the clipboard holds no
+    /// usable text.
+    /// </summary>
+    public void PasteMergeFormatting() => PasteFromClipboard();
+
+    // Shared body for the paste-special commands: read the clipboard's text (guarding the absent/empty
+    // case and the rare clipboard-access failure), normalize it, and insert it at the caret. Both
+    // "Paste Text Only" and "Merge Formatting" resolve to match-destination insertion in FreeW, so they
+    // share one implementation.
+    private void PasteFromClipboard()
+    {
+        string raw;
+        try
+        {
+            if (!System.Windows.Clipboard.ContainsText())
+                return;
+            raw = System.Windows.Clipboard.GetText();
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // The clipboard can be transiently locked by another process; treat that as nothing to paste.
+            return;
+        }
+
+        var text = PasteText.Normalize(raw);
+        if (text.Length == 0)
+            return;
+
+        InsertText(text);
+    }
+
+    /// <summary>
     /// Inserts a footnote at the caret: allocates the next footnote id, stores <paramref name="text"/>
     /// as the footnote's content in the model, and drops a superscript reference marker at the caret.
     /// Re-renders so the marker round-trips through the model on the next commit.

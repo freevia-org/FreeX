@@ -106,6 +106,11 @@ public sealed class MainWindow : Window
         InputBindings.Add(new KeyBinding(findReplace, new KeyGesture(Key.F, ModifierKeys.Control)));
         InputBindings.Add(new KeyBinding(findReplace, new KeyGesture(Key.H, ModifierKeys.Control)));
 
+        // Ctrl+Shift+V: Paste Text Only (paste-special), the Word-standard shortcut.
+        var pastePlain = new RoutedUICommand("Paste Text Only", "PastePlain", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(pastePlain, (_, _) => _editor.PastePlainText()));
+        InputBindings.Add(new KeyBinding(pastePlain, new KeyGesture(Key.V, ModifierKeys.Control | ModifierKeys.Shift)));
+
         UpdateTitle();
         UpdateCounts();
         RefreshOutline();

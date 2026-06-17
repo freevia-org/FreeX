@@ -16,6 +16,8 @@ internal static class FreeWRibbon
                 tab.Group("clipboard", "Clipboard", "C", 100, g =>
                 {
                     g.Button("freew.paste", "Paste");
+                    g.Button("freew.paste-plain", "Paste Text Only");
+                    g.Button("freew.paste-merge", "Merge Formatting");
                     g.Button("freew.cut", "Cut");
                     g.Button("freew.copy", "Copy");
                     g.Button("freew.format-painter", "Format Painter");
