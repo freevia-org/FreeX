@@ -445,6 +445,8 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _forecastSheetMenuItem = new();
     private readonly NativeMenuItem _reviewSummaryMenuItem = new();
     private readonly NativeMenuItem _checkAccessibilityMenuItem = new();
+    private readonly NativeMenuItem _protectSheetMenuItem = new();
+    private readonly NativeMenuItem _protectWorkbookMenuItem = new();
     private readonly NativeMenuItem _nextNoteMenuItem = new();
     private readonly NativeMenuItem _previousNoteMenuItem = new();
     private readonly NativeMenuItem _nextCommentMenuItem = new();
@@ -967,6 +969,12 @@ public sealed partial class MainWindow : Window
         _checkAccessibilityMenuItem.Header = "Check Accessibility...";
         _checkAccessibilityMenuItem.Click += async (_, _) => await ShowReviewSummaryDialogAsync(focusAccessibility: true);
 
+        _protectSheetMenuItem.Header = "Protect Sheet...";
+        _protectSheetMenuItem.Click += async (_, _) => await ShowProtectSheetDialogAsync();
+
+        _protectWorkbookMenuItem.Header = "Protect Workbook...";
+        _protectWorkbookMenuItem.Click += async (_, _) => await ShowProtectWorkbookDialogAsync();
+
         _nextNoteMenuItem.Header = "Next Note";
         _nextNoteMenuItem.Click += (_, _) => NavigateReviewNote(previous: false);
 
@@ -1324,6 +1332,9 @@ public sealed partial class MainWindow : Window
         var reviewMenu = new NativeMenu();
         reviewMenu.Items.Add(_reviewSummaryMenuItem);
         reviewMenu.Items.Add(_checkAccessibilityMenuItem);
+        reviewMenu.Items.Add(new NativeMenuItemSeparator());
+        reviewMenu.Items.Add(_protectSheetMenuItem);
+        reviewMenu.Items.Add(_protectWorkbookMenuItem);
         reviewMenu.Items.Add(new NativeMenuItemSeparator());
         reviewMenu.Items.Add(_nextNoteMenuItem);
         reviewMenu.Items.Add(_previousNoteMenuItem);
@@ -2118,6 +2129,8 @@ public sealed partial class MainWindow : Window
         _forecastSheetMenuItem.IsEnabled = isIdle;
         _reviewSummaryMenuItem.IsEnabled = isIdle;
         _checkAccessibilityMenuItem.IsEnabled = isIdle;
+        _protectSheetMenuItem.IsEnabled = isIdle;
+        _protectWorkbookMenuItem.IsEnabled = isIdle;
         _nextNoteMenuItem.IsEnabled = isIdle;
         _previousNoteMenuItem.IsEnabled = isIdle;
         _nextCommentMenuItem.IsEnabled = isIdle;
