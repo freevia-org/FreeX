@@ -783,7 +783,9 @@ public static class DocxReader
         if (pPr is not null)
         {
             paragraph.StyleId = pPr.Element(W + "pStyle")?.Attribute(W + "val")?.Value;
-            paragraph.Formatting = ReadParagraphFormatting(pPr, numbering);
+            // Body/table paragraphs inherit the document default spacing (w:docDefaults); header/footer/note
+            // paragraphs (preservedDrawingTarget == null) use the neutral fallback, as before.
+            paragraph.Formatting = ReadParagraphFormatting(pPr, numbering, preservedDrawingTarget?.DefaultParagraph);
             // When the paragraph carries a w:numPr that FreeW did NOT map to one of its own ListKinds, keep
             // the original numId+ilvl so the writer can re-emit it against the preserved numbering.xml (only
             // for body / table-cell paragraphs — header/footer/footnote numbering is not modelled).
@@ -2188,10 +2190,54 @@ public static class DocxReader
         return InlineImage.FormatForExtension(ext) ?? InlineImage.DetectFormat(bytes);
     }
 
+    /// <summary>
+    /// Reads the document default paragraph spacing from <c>w:docDefaults/w:pPrDefault/w:pPr</c> (only the
+    /// space-before/after and line spacing are needed). Components the default omits fall back to no extra
+    /// space / 1.15 multiple, matching FreeW's prior behaviour for documents without docDefaults.
+    /// </summary>
+    private static ParagraphFormatting ReadDocDefaultParagraph(XElement ddPr)
+    {
+        var spacing = ddPr.Element(W + "spacing");
+        var before = spacing?.Attribute(W + "before") is { } b ? DxaToPoints(b.Value) : 0.0;
+        var after = spacing?.Attribute(W + "after") is { } a ? DxaToPoints(a.Value) : 0.0;
+        var rule = LineSpacingRule.Multiple;
+        var ls = ParagraphFormatting.Default.LineSpacing;
+        var lh = 0.0;
+        var lineVal = spacing?.Attribute(W + "line")?.Value;
+        if (lineVal is not null && double.TryParse(lineVal, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var lineRaw))
+        {
+            switch (spacing?.Attribute(W + "lineRule")?.Value)
+            {
+                case "exact": rule = LineSpacingRule.Exact; lh = lineRaw / 20.0; break;
+                case "atLeast": rule = LineSpacingRule.AtLeast; lh = lineRaw / 20.0; break;
+                default: rule = LineSpacingRule.Multiple; ls = lineRaw / 240.0; break;
+            }
+        }
+        return ParagraphFormatting.Default with
+        {
+            SpaceBeforePt = before,
+            SpaceAfterPt = after,
+            LineRule = rule,
+            LineSpacing = ls,
+            LineHeightPt = lh,
+        };
+    }
+
     internal static ParagraphFormatting ReadParagraphFormatting(XElement pPr) =>
         ReadParagraphFormatting(pPr, new Dictionary<int, ListKind>());
 
     internal static ParagraphFormatting ReadParagraphFormatting(XElement pPr, IReadOnlyDictionary<int, ListKind> numbering)
+        => ReadParagraphFormatting(pPr, numbering, null);
+
+    /// <summary>
+    /// Reads paragraph formatting. <paramref name="docDefaults"/> (the document's w:docDefaults paragraph
+    /// spacing) supplies the space-before/after and line spacing for properties the paragraph does not set;
+    /// null falls back to no extra space / 1.15 line (used for style definitions and header/footer/note
+    /// paragraphs, which have no document context).
+    /// </summary>
+    internal static ParagraphFormatting ReadParagraphFormatting(
+        XElement pPr, IReadOnlyDictionary<int, ListKind> numbering, ParagraphFormatting? docDefaults)
     {
         var spacing = pPr.Element(W + "spacing");
         var indent = pPr.Element(W + "ind");
@@ -2223,13 +2269,13 @@ public static class DocxReader
         // Right-to-left paragraph direction (w:bidi), read as a toggle like the flow-control flags.
         var rtl = ReadToggle(pPr, "bidi");
 
-        // Line spacing (w:spacing/@w:line + @w:lineRule). Only override the model default when w:line is
-        // explicitly present, so paragraphs that inherit spacing keep FreeW's 1.15 default unchanged.
+        // Line spacing (w:spacing/@w:line + @w:lineRule). When w:line is absent the paragraph inherits the
+        // document default (w:docDefaults), falling back to FreeW's 1.15 multiple when there is none.
         var lineRuleAttr = spacing?.Attribute(W + "lineRule")?.Value;
         var lineVal = spacing?.Attribute(W + "line")?.Value;
-        var lineRule = ParagraphFormatting.Default.LineRule;
-        var lineSpacing = ParagraphFormatting.Default.LineSpacing;
-        var lineHeightPt = 0.0;
+        var lineRule = docDefaults?.LineRule ?? ParagraphFormatting.Default.LineRule;
+        var lineSpacing = docDefaults?.LineSpacing ?? ParagraphFormatting.Default.LineSpacing;
+        var lineHeightPt = docDefaults?.LineHeightPt ?? 0.0;
         if (lineVal is not null && double.TryParse(lineVal, System.Globalization.NumberStyles.Integer,
                 System.Globalization.CultureInfo.InvariantCulture, out var lineRaw))
         {
@@ -2250,6 +2296,20 @@ public static class DocxReader
             }
         }
 
+        // w:beforeAutospacing / w:afterAutospacing (ubiquitous in HTML-paste / web content): Word ignores
+        // the explicit before/after value and applies automatic spacing of about one line. FreeW used to
+        // take the literal value (often a tiny 100 dxa = 5pt), packing such paragraphs too tightly and
+        // drifting vs Word down the page (e.g. delins.docx's list). Approximate the auto value.
+        const double autoSpacingPt = 14.0;
+        var beforeAuto = spacing?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
+        var afterAuto = spacing?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
+        var spaceBeforePt = beforeAuto
+            ? autoSpacingPt
+            : spacing?.Attribute(W + "before") is { } sb ? DxaToPoints(sb.Value) : docDefaults?.SpaceBeforePt ?? 0;
+        var spaceAfterPt = afterAuto
+            ? autoSpacingPt
+            : spacing?.Attribute(W + "after") is { } sa ? DxaToPoints(sa.Value) : docDefaults?.SpaceAfterPt ?? 0;
+
         return ParagraphFormatting.Default with
         {
             Border = ReadParagraphBorder(pPr.Element(W + "pBdr")),
@@ -2269,8 +2329,9 @@ public static class DocxReader
                 "both" or "justify" => TextAlignment.Justify,
                 _ => TextAlignment.Left
             },
-            SpaceBeforePt = DxaToPoints(spacing?.Attribute(W + "before")?.Value),
-            SpaceAfterPt = DxaToPoints(spacing?.Attribute(W + "after")?.Value),
+            // Space before/after: automatic spacing, else the paragraph's own value, else the doc default.
+            SpaceBeforePt = spaceBeforePt,
+            SpaceAfterPt = spaceAfterPt,
             IndentLeftPt = DxaToPoints(indent?.Attribute(W + "left")?.Value ?? indent?.Attribute(W + "start")?.Value),
             IndentRightPt = DxaToPoints(indent?.Attribute(W + "right")?.Value ?? indent?.Attribute(W + "end")?.Value),
             FirstLineIndentPt = DxaToPoints(indent?.Attribute(W + "firstLine")?.Value),
@@ -2560,8 +2621,24 @@ public static class DocxReader
 
     private static void ReadStyles(ZipArchive archive, TextDocument document)
     {
+        // Baseline document default paragraph spacing: no extra space, 1.15 line — the behaviour for
+        // documents that declare no w:docDefaults (and FreeW's previous hardcoded behaviour). Real docs
+        // override this from w:docDefaults below.
+        document.DefaultParagraph = ParagraphFormatting.Default with { SpaceBeforePt = 0, SpaceAfterPt = 0 };
+
         var stylesXml = LoadPart(archive, "word/styles.xml");
-        var styles = stylesXml?.Root?.Elements(W + "style");
+        if (stylesXml is null)
+            return;
+
+        // w:docDefaults/w:pPrDefault/w:pPr supplies the document's default paragraph spacing, applied to any
+        // paragraph that does not set its own (Word's cascade root). FreeW ignored it, so every paragraph
+        // rendered at 0 space-after / 1.15 line regardless of the document — drifting vs Word down the page
+        // (e.g. delins.docx, whose docDefaults specify 10pt after).
+        var ddPr = stylesXml.Root?.Element(W + "docDefaults")?.Element(W + "pPrDefault")?.Element(W + "pPr");
+        if (ddPr is not null)
+            document.DefaultParagraph = ReadDocDefaultParagraph(ddPr);
+
+        var styles = stylesXml.Root?.Elements(W + "style");
         if (styles is null)
             return;
 

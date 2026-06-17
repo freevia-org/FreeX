@@ -27,6 +27,10 @@ Thumbs.db
 # XLSX corpus private samples
 test-corpus/local-private/
 
+# Contextures fidelity samples: kept locally for on-machine fidelity validation only;
+# redistribution rights are unconfirmed, so the workbooks are never committed.
+test-corpus/public/contextures/
+
 # On-demand real-world fidelity corpus: only the manifest + downloader are committed; the
 # downloaded/local workbooks and generated run outputs are never committed.
 fidelity-corpus/files/
