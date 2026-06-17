@@ -756,6 +756,9 @@ public sealed partial class MainWindow : Window
                     // Data: Outline Group / Ungroup.
                     ["data.group"] = GroupSelectedRows,
                     ["data.ungroup"] = ClearWorksheetOutline,
+                    // Home ▸ Cells: Insert / Delete Cells (with shift-direction prompt).
+                    ["home.insertCells"] = () => _ = ShowInsertCellsDialogAsync(),
+                    ["home.deleteCells"] = () => _ = ShowDeleteCellsDialogAsync(),
                 },
             });
         DockPanel.SetDock(ribbon, Dock.Top);
