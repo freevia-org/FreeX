@@ -95,6 +95,11 @@ public static class DocxWriter
         // A comments part is emitted only when the document actually carries review comments.
         var hasComments = document.Comments.Count > 0;
 
+        // Inline images carried by comment paragraphs (e.g. a pasted picture in a comment). Each becomes a
+        // part-local media file + a relationship in word/_rels/comments.xml.rels, so comment-part images
+        // round-trip referenced rather than orphaned. Empty for text-only comments.
+        var commentImages = hasComments ? CollectCommentImages(document) : new List<ImagePart>();
+
         // The watermark text is persisted best-effort as a custom document property (docProps/custom.xml),
         // emitted only when a watermark is set.
         var hasWatermark = !string.IsNullOrEmpty(document.Page.Watermark);
@@ -130,13 +135,14 @@ public static class DocxWriter
         // Ordered (png first) for deterministic output; only extensions present are emitted.
         var imageExtensions = images
             .Concat(headerFooterParts.SelectMany(p => p.Images))
+            .Concat(commentImages)
             .Select(p => InlineImage.ExtensionFor(p.Image.Format))
             .Distinct()
             .OrderBy(ext => ext, StringComparer.Ordinal)
             .ToList();
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, document.Preserved.Parts));
+        WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasWatermark, hasSettings, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, document.Preserved.Parts, document.Preserved.ContentTypeDefaults));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasWatermark));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasWatermark)
@@ -176,7 +182,16 @@ public static class DocxWriter
         if (hasEndnotes)
             WritePart(archive, EndnotesPartName.TrimStart('/'), BuildEndnotes(document));
         if (hasComments)
-            WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document));
+        {
+            WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document, commentImages));
+            // Comment media + the comments part's own _rels (only when a comment carries an image).
+            if (commentImages.Count > 0)
+            {
+                WritePart(archive, "word/_rels/comments.xml.rels", BuildCommentsRels(commentImages));
+                foreach (var image in commentImages)
+                    WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+            }
+        }
         foreach (var image in images)
             WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
         foreach (var chart in charts)
@@ -573,7 +588,7 @@ public static class DocxWriter
         entryStream.Write(content, 0, content.Length);
     }
 
-    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts) => new(
+    private static XDocument BuildContentTypes(IReadOnlyList<string> imageExtensions, bool includeNumbering, IReadOnlyList<HeaderFooterPart> headerFooterParts, bool hasFootnotes, bool hasEndnotes, bool hasComments, bool hasWatermark, bool hasSettings, IReadOnlyList<ChartPart> charts, bool hasEmbeddedObjects, IReadOnlyList<SmartArtPart> smartArts, bool hasEmbeddedFonts, IReadOnlyList<PreservedPart> preservedParts, IReadOnlyDictionary<string, string> preservedContentTypeDefaults) => new(
         new XElement(Ct + "Types",
             new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
@@ -584,6 +599,16 @@ public static class DocxWriter
             imageExtensions.Select(ext => new XElement(Ct + "Default",
                 new XAttribute("Extension", ext),
                 new XAttribute("ContentType", ImageContentTypeForExtension(ext)))),
+            // One Default per extension a verbatim-preserved part needs that FreeW would not otherwise declare
+            // (e.g. the png/emf media of a preserved chart, when the body carries no image of that kind). Skips
+            // extensions FreeW already emits above (rels/xml/image/bin/xlsx/odttf) so nothing is duplicated.
+            preservedContentTypeDefaults
+                .Where(kvp => kvp.Key is not ("rels" or "xml" or "bin" or "xlsx" or "odttf")
+                    && !imageExtensions.Contains(kvp.Key))
+                .OrderBy(kvp => kvp.Key, StringComparer.Ordinal)
+                .Select(kvp => new XElement(Ct + "Default",
+                    new XAttribute("Extension", kvp.Key),
+                    new XAttribute("ContentType", kvp.Value))),
             // A single Default for the bin extension covers every embedded OLE payload part.
             hasEmbeddedObjects
                 ? new XElement(Ct + "Default", new XAttribute("Extension", "bin"),
@@ -849,22 +874,36 @@ public static class DocxWriter
                 new XAttribute("Type", HyperlinkRel),
                 new XAttribute("Target", url),
                 new XAttribute("TargetMode", "External")));
-        // One document relationship per preserved part that the document references directly (customXml items
-        // and webSettings carry a RelationshipType; their props/_rels do not, being referenced from the item's
-        // own _rels instead). The Target is reconstructed relative to word/ (where document.xml lives), so a
-        // /word/* part targets its bare file name and a /customXml/* part targets "../customXml/…".
-        var preservedRelIndex = 0;
+        // One document relationship per preserved part that the document references directly (customXml items,
+        // webSettings and unmodelled chart/chartex parts carry a RelationshipType; their props/_rels/media do
+        // not, being referenced from the part's own _rels instead). The Target is reconstructed relative to
+        // word/ (where document.xml lives), so a /word/* part targets its bare file name and a /customXml/* part
+        // targets "../customXml/…". The id assigned here must match PreservedPartRelIds (consumed by the inline
+        // drawing rewrite) — both replay the same order, so a shared helper keeps them in lock-step.
+        foreach (var (part, relId) in PreservedPartRelIds(preservedParts))
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", relId),
+                new XAttribute("Type", part.RelationshipType!),
+                new XAttribute("Target", DocumentRelativeTarget(part.PartName))));
+        return new XDocument(relationships);
+    }
+
+    /// <summary>
+    /// Assigns each document-referenced preserved part (those carrying a <see cref="PreservedPart.RelationshipType"/>)
+    /// a deterministic <c>rIdPreserved{N}</c> in capture order, yielding (part, relId) pairs. Used by both
+    /// <see cref="BuildDocumentRels"/> (to emit the relationship) and the inline preserved-drawing rewrite (to
+    /// re-point the drawing's r:id at the same id), so the two never drift.
+    /// </summary>
+    private static IEnumerable<(PreservedPart Part, string RelId)> PreservedPartRelIds(IReadOnlyList<PreservedPart> preservedParts)
+    {
+        var index = 0;
         foreach (var part in preservedParts)
         {
             if (part.RelationshipType is null)
                 continue;
-            preservedRelIndex++;
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", $"rIdPreserved{preservedRelIndex}"),
-                new XAttribute("Type", part.RelationshipType),
-                new XAttribute("Target", DocumentRelativeTarget(part.PartName))));
+            index++;
+            yield return (part, $"rIdPreserved{index}");
         }
-        return new XDocument(relationships);
     }
 
     /// <summary>
@@ -929,7 +968,13 @@ public static class DocxWriter
                     smartArtsByRun[run] = smartArts[nextSmartArt++];
             }
 
-        var drawings = new RunDrawings(imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids);
+        // Map each document-referenced preserved part to its assigned rIdPreserved{N} (same order/ids as
+        // BuildDocumentRels), so a verbatim-preserved inline drawing can re-point its chart r:id at the
+        // re-emitted relationship. Empty for documents with no preserved drawings.
+        var preservedDrawingRelIds = PreservedPartRelIds(document.Preserved.Parts)
+            .ToDictionary(pair => pair.Part.PartName, pair => pair.RelId, StringComparer.Ordinal);
+
+        var drawings = new RunDrawings(imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids, preservedDrawingRelIds);
 
         var body = new XElement(W + "body");
         foreach (var block in document.Blocks)
@@ -997,7 +1042,8 @@ public static class DocxWriter
         IReadOnlyDictionary<Run, ChartPart> Charts,
         IReadOnlyDictionary<Run, EmbeddedObjectPart> EmbeddedObjects,
         IReadOnlyDictionary<Run, SmartArtPart> SmartArts,
-        IdAllocator Ids)
+        IdAllocator Ids,
+        IReadOnlyDictionary<string, string>? PreservedDrawingRelIds = null)
     {
         public static RunDrawings Empty() => new(
             new Dictionary<Run, ImagePart>(),
@@ -1125,18 +1171,66 @@ public static class DocxWriter
     }
 
     /// <summary>
+    /// Collects the inline images carried by ALL comment paragraphs (in comment-id then paragraph then run
+    /// order), assigning each a PART-LOCAL relationship id (<c>rIdImgN</c>, resolved against
+    /// <c>word/_rels/comments.xml.rels</c>) and a media file name (<c>comment_imageN.ext</c>) so comment media
+    /// never clashes with body/header/footer media. Mirrors <see cref="CollectHeaderFooterImages"/>. Empty when
+    /// no comment carries an image — so a text-only-comment document emits no comment media or rels.
+    /// </summary>
+    private static List<ImagePart> CollectCommentImages(TextDocument document)
+    {
+        var images = new List<ImagePart>();
+        foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
+            foreach (var paragraph in comment.Content)
+                foreach (var run in paragraph.Runs)
+                    if (run.Image is { } image)
+                    {
+                        var index = images.Count + 1;
+                        images.Add(new ImagePart(image, $"rIdImg{index}", $"comment_image{index}.{InlineImage.ExtensionFor(image.Format)}", (uint)index));
+                    }
+        return images;
+    }
+
+    /// <summary>Maps each image run across all comment paragraphs to its <see cref="ImagePart"/> (same walk as collection).</summary>
+    private static Dictionary<Run, ImagePart> BuildCommentImagesByRun(TextDocument document, IReadOnlyList<ImagePart> commentImages)
+    {
+        var map = new Dictionary<Run, ImagePart>();
+        var next = 0;
+        foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
+            foreach (var paragraph in comment.Content)
+                foreach (var run in paragraph.Runs)
+                    if (run.Image is not null && next < commentImages.Count)
+                        map[run] = commentImages[next++];
+        return map;
+    }
+
+    /// <summary>
     /// Builds word/comments.xml (w:comments): one w:comment w:id="N" per modelled comment (ascending
     /// id), each carrying w:author / w:initials and — when set — an explicit w:date, plus the comment's
     /// paragraphs. The date is only emitted when the model carries one, keeping the writer deterministic.
+    /// Any inline images a comment carries are emitted as part-local <c>w:drawing</c>s resolved against
+    /// <paramref name="commentImages"/> (their media + <c>comments.xml.rels</c> are written by <see cref="Write(TextDocument, Stream)"/>),
+    /// so comment-part images round-trip referenced rather than orphaned.
     /// </summary>
-    private static XDocument BuildComments(TextDocument document)
+    private static XDocument BuildComments(TextDocument document, IReadOnlyList<ImagePart> commentImages)
     {
         var comments = new XElement(W + "comments",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
 
-        // Comment paragraphs carry no inline images or hyperlinks (those walks target the body).
-        var noDrawings = RunDrawings.Empty();
+        // Comment images map their runs → part-local image parts; the picture drawing uses the wp/a/pic
+        // namespaces, declared on the root only when a comment actually carries an image (so a text-only
+        // comments part stays byte-equivalent to the historical output). Comments carry no hyperlinks.
+        if (commentImages.Count > 0)
+        {
+            comments.Add(new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName));
+            comments.Add(new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName));
+            comments.Add(new XAttribute(XNamespace.Xmlns + "pic", Pic.NamespaceName));
+        }
+        var imagesByRun = commentImages.Count > 0
+            ? BuildCommentImagesByRun(document, commentImages)
+            : new Dictionary<Run, ImagePart>();
+        var drawings = RunDrawings.Empty() with { Images = imagesByRun };
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var comment in document.Comments.Values.OrderBy(c => c.Id))
@@ -1152,11 +1246,23 @@ public static class DocxWriter
                 element.Add(new XElement(W + "p"));
             else
                 foreach (var paragraph in comment.Content)
-                    element.Add(BuildParagraph(paragraph, noDrawings, noHyperlinks));
+                    element.Add(BuildParagraph(paragraph, drawings, noHyperlinks));
             comments.Add(element);
         }
 
         return new XDocument(comments);
+    }
+
+    /// <summary>Builds word/_rels/comments.xml.rels: one image relationship per comment media part.</summary>
+    private static XDocument BuildCommentsRels(IReadOnlyList<ImagePart> commentImages)
+    {
+        var relationships = new XElement(Rel + "Relationships");
+        foreach (var image in commentImages)
+            relationships.Add(new XElement(Rel + "Relationship",
+                new XAttribute("Id", image.RelationshipId),
+                new XAttribute("Type", ImageRel),
+                new XAttribute("Target", "media/" + image.FileName)));
+        return new XDocument(relationships);
     }
 
     private static XElement BuildBlock(
@@ -1768,7 +1874,9 @@ public static class DocxWriter
         var rPr = BuildRunProperties(run.Formatting);
         if (rPr is not null)
             r.Add(rPr);
-        if (run.Image is not null && drawings.Images.TryGetValue(run, out var imagePart))
+        if (run.PreservedDrawing is { } preservedDrawing)
+            r.Add(BuildPreservedDrawing(preservedDrawing, drawings.PreservedDrawingRelIds));
+        else if (run.Image is not null && drawings.Images.TryGetValue(run, out var imagePart))
             r.Add(BuildDrawing(imagePart));
         else if (run.Chart is not null && drawings.Charts.TryGetValue(run, out var chartPart))
             r.Add(BuildChartDrawing(chartPart));
@@ -2172,6 +2280,37 @@ public static class DocxWriter
                         new XElement(C + "chart",
                             new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
                             new XAttribute(R + "id", part.RelationshipId))))));
+    }
+
+    /// <summary>
+    /// Re-emits a verbatim-preserved inline drawing (an unmodelled chart/chartex <c>w:drawing</c> captured on
+    /// read): the stored XML is reparsed and each reference's relationship id (the original <c>r:id</c>/
+    /// <c>r:embed</c> the drawing used) is re-pointed at the document relationship the writer freshly assigned to
+    /// the preserved chart part (<paramref name="preservedDrawingRelIds"/>: preserved part name →
+    /// <c>rIdPreserved{N}</c>). The chart part's own satellites (media, colours, styles) keep their original
+    /// part-local rels — those parts are preserved byte-for-byte — so only the document→chart hop is rewritten.
+    /// </summary>
+    private static XElement BuildPreservedDrawing(
+        Model.PreservedDrawing preservedDrawing,
+        IReadOnlyDictionary<string, string>? preservedDrawingRelIds)
+    {
+        var drawing = XElement.Parse(preservedDrawing.Xml, LoadOptions.PreserveWhitespace);
+
+        foreach (var reference in preservedDrawing.References)
+        {
+            if (preservedDrawingRelIds is null
+                || !preservedDrawingRelIds.TryGetValue(reference.PreservedPartName, out var newRelId))
+                continue;
+            foreach (var element in drawing.DescendantsAndSelf())
+            {
+                if (element.Attribute(R + "id")?.Value == reference.OriginalRelId)
+                    element.SetAttributeValue(R + "id", newRelId);
+                if (element.Attribute(R + "embed")?.Value == reference.OriginalRelId)
+                    element.SetAttributeValue(R + "embed", newRelId);
+            }
+        }
+
+        return drawing;
     }
 
     /// <summary>

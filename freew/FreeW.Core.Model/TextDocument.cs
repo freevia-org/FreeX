@@ -313,6 +313,20 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public static Run FromSmartArt(SmartArt smartArt) => new(string.Empty) { SmartArt = smartArt };
 
     /// <summary>
+    /// Optional verbatim-preserved inline drawing FreeW does not model (e.g. a <c>w:drawing</c> referencing a
+    /// <c>chart</c>/<c>chartex</c> part whose structure FreeW's reader does not recognise as a
+    /// <see cref="Chart"/>). When non-null this run re-emits the captured drawing XML unchanged inside the run,
+    /// rather than dropping it — keeping the inline reference alive while the chart part(s) + media it references
+    /// survive as <see cref="PreservedParts.Parts"/>. Carries no literal text of its own. Modelled at the run
+    /// level — mirroring <see cref="Chart"/> — so an unread chart round-trips instead of vanishing.
+    /// </summary>
+    public PreservedDrawing? PreservedDrawing { get; set; }
+
+    /// <summary>Creates a run that re-emits a verbatim-preserved inline drawing instead of text.</summary>
+    public static Run FromPreservedDrawing(PreservedDrawing drawing) =>
+        new(string.Empty) { PreservedDrawing = drawing };
+
+    /// <summary>
     /// Optional external hyperlink target (absolute URL). When non-null the run is wrapped in a
     /// w:hyperlink on save, with the URL stored as an external relationship, and rendered as a link.
     /// Mutually exclusive with <see cref="HyperlinkAnchor"/>: a run links either externally or
