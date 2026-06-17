@@ -42,6 +42,14 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public string? HyperlinkAnchor { get; set; }
 
     /// <summary>
+    /// Optional ScreenTip (tooltip) shown when hovering the hyperlink. Applies to either an external
+    /// (<see cref="HyperlinkUrl"/>) or internal (<see cref="HyperlinkAnchor"/>) link. When set it
+    /// serialises as the <c>w:tooltip</c> attribute on the wrapping <c>w:hyperlink</c>. Defaults to
+    /// null so existing hyperlinks (without a ScreenTip) round-trip unchanged.
+    /// </summary>
+    public string? HyperlinkTooltip { get; set; }
+
+    /// <summary>
     /// When set, this run is a simple field rather than literal text — e.g. a PAGE field whose value
     /// is the current page number. The run's <see cref="Text"/> doubles as cached/fallback display
     /// text (the last computed value), so non-field-aware consumers still render something sensible.

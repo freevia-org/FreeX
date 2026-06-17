@@ -145,6 +145,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-size", new ImageSizeCommand(editor));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
+        // Insert tab — Links: manage the hyperlink at the caret — change its URL, remove it, or set a ScreenTip.
+        registry.Register("freew.edit-hyperlink", new EditHyperlinkCommand(editor));
+        registry.Register("freew.remove-hyperlink", new RemoveHyperlinkCommand(editor));
+        registry.Register("freew.hyperlink-tooltip", new HyperlinkTooltipCommand(editor));
         // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
         registry.Register("freew.footnote", new InsertFootnoteCommand(editor));
         // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.
@@ -908,6 +912,49 @@ internal static class FreeWRibbonCommands
             var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed);
             if (!string.IsNullOrWhiteSpace(url))
                 editor.ApplyHyperlink(url!.Trim());
+        }
+    }
+
+    // Insert > Links > Edit Hyperlink: prompt for a new URL (seeded from the caret link's current URL),
+    // then re-target the hyperlink at the caret. A no-op when the caret is not on a link.
+    private sealed class EditHyperlinkCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (!editor.IsCaretOnHyperlink())
+                return;
+            var seed = editor.HyperlinkUrlAtCaret() is { Length: > 0 } current ? current : "https://";
+            var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, "Edit Hyperlink", "Address:");
+            if (!string.IsNullOrWhiteSpace(url))
+                editor.EditHyperlink(url!.Trim());
+        }
+    }
+
+    // Insert > Links > Remove Hyperlink: strip the hyperlink at the caret, leaving its text. No-op off a link.
+    private sealed class RemoveHyperlinkCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.RemoveHyperlink();
+        }
+    }
+
+    // Insert > Links > ScreenTip: prompt for a ScreenTip (seeded from the current one) and set it on the
+    // hyperlink at the caret. A blank entry clears the ScreenTip. No-op when the caret is not on a link.
+    private sealed class HyperlinkTooltipCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (!editor.IsCaretOnHyperlink())
+                return;
+            var seed = editor.HyperlinkTooltipAtCaret() ?? string.Empty;
+            var tip = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, "Set ScreenTip", "ScreenTip:");
+            // A null result is a cancel (leave unchanged); an empty/blank string clears the ScreenTip.
+            if (tip is not null)
+                editor.SetHyperlinkTooltip(tip);
         }
     }
 
@@ -2456,10 +2503,11 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // A tiny modal dialog asking for a URL. Returns the entered text, or null if cancelled.
+    // A tiny modal dialog asking for a single line of text (a URL, a ScreenTip, …). Returns the entered
+    // text, or null if cancelled. Title/label default to the insert-link wording for existing callers.
     private static class HyperlinkPrompt
     {
-        public static string? Ask(Window? owner, string seed)
+        public static string? Ask(Window? owner, string seed, string title = "Insert Link", string label = "Address:")
         {
             var box = new System.Windows.Controls.TextBox
             {
@@ -2472,7 +2520,7 @@ internal static class FreeWRibbonCommands
             string? result = null;
             var dialog = new Window
             {
-                Title = "Insert Link",
+                Title = title,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -2493,7 +2541,7 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Address:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(box);
             panel.Children.Add(buttons);
             dialog.Content = panel;
